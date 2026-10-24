@@ -174,6 +174,11 @@ impl Client {
     self.inner.tokens.next()
   }
 
+  /// raises `event` to every subscriber
+  pub(crate) fn emit(&self, event: Event) {
+    self.inner.emit(event);
+  }
+
   /// cancelled when the client is disposed or dropped; long-lived tasks stop with it
   pub fn cancellation(&self) -> &CancellationToken {
     &self.inner.lifetime

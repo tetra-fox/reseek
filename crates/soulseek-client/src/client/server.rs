@@ -141,9 +141,9 @@ impl Client {
           user_key(ServerCode::GetStatus, &status.username),
           status.clone(),
         );
-        inner.emit(Event::UserStatusChanged(status));
+        self.emit(Event::UserStatusChanged(status));
       }
-      R::SayInChatRoom(said) => inner.emit(Event::RoomMessageReceived {
+      R::SayInChatRoom(said) => self.emit(Event::RoomMessageReceived {
         room_name: said.room,
         username: said.username,
         message: said.message,
@@ -153,26 +153,26 @@ impl Client {
         self.complete(room_key(ServerCode::LeaveRoom, &left.room), ());
         // the server does not announce our own departure, so it is raised here
         match self.username() {
-          Some(username) => inner.emit(Event::RoomLeft {
+          Some(username) => self.emit(Event::RoomLeft {
             room_name: left.room,
             username,
           }),
           None => tracing::debug!(room = left.room, "room left after the session ended"),
         }
       }
-      R::UserJoinedRoom(joined) => inner.emit(Event::RoomJoined {
+      R::UserJoinedRoom(joined) => self.emit(Event::RoomJoined {
         room_name: joined.room,
         username: joined.user.username.clone(),
         user_data: joined.user,
       }),
-      R::UserLeftRoom(left) => inner.emit(Event::RoomLeft {
+      R::UserLeftRoom(left) => self.emit(Event::RoomLeft {
         room_name: left.room,
         username: left.username,
       }),
       R::ConnectToPeer(request) => self.hand_off(ServerHandoff::ConnectToPeer(request)),
       R::PrivateMessage(message) => {
         let id = message.id;
-        inner.emit(Event::PrivateMessageReceived(PrivateMessage {
+        self.emit(Event::PrivateMessageReceived(PrivateMessage {
           id,
           timestamp: UNIX_EPOCH + Duration::from_secs(message.timestamp.into()),
           username: message.username,
@@ -199,11 +199,11 @@ impl Client {
           user_key(ServerCode::GetUserStats, &statistics.username),
           statistics.clone(),
         );
-        inner.emit(Event::UserStatisticsChanged(statistics));
+        self.emit(Event::UserStatisticsChanged(statistics));
       }
       R::KickedFromServer => {
         tracing::warn!("Kicked from server.");
-        inner.emit(Event::KickedFromServer);
+        self.emit(Event::KickedFromServer);
         if let Some(teardown) = inner.begin_disconnect(
           Some("Kicked from server"),
           Some(ClientError::KickedFromServer),
@@ -230,10 +230,10 @@ impl Client {
       R::RoomList(list) => {
         let list = Arc::new(list);
         self.complete(WaitKey::Server(ServerCode::RoomList), list.clone());
-        inner.emit(Event::RoomListReceived(list));
+        self.emit(Event::RoomListReceived(list));
       }
-      R::GlobalAdminMessage(message) => inner.emit(Event::GlobalMessageReceived(message.message)),
-      R::PrivilegedUsers(users) => inner.emit(Event::PrivilegedUserListReceived(users.usernames)),
+      R::GlobalAdminMessage(message) => self.emit(Event::GlobalMessageReceived(message.message)),
+      R::PrivilegedUsers(users) => self.emit(Event::PrivilegedUserListReceived(users.usernames)),
       R::ParentMinSpeed(speed) => {
         inner.merge_server_info(|info| info.parent_min_speed = Some(speed.speed));
       }
@@ -263,7 +263,7 @@ impl Client {
           info.distributed_alive_interval = Some(value.seconds);
         });
       }
-      R::AddPrivilegedUser(user) => inner.emit(Event::PrivilegeNotificationReceived {
+      R::AddPrivilegedUser(user) => self.emit(Event::PrivilegeNotificationReceived {
         username: user.username,
         id: None,
         requires_acknowledgement: false,
@@ -288,15 +288,15 @@ impl Client {
         interest_key(ServerCode::GetInterestSimilarUsers, &users.interest),
         users,
       ),
-      R::RoomTickers(tickers) => inner.emit(Event::RoomTickerListReceived {
+      R::RoomTickers(tickers) => self.emit(Event::RoomTickerListReceived {
         room_name: tickers.room,
         tickers: tickers.tickers,
       }),
-      R::RoomTickerAdd(added) => inner.emit(Event::RoomTickerAdded {
+      R::RoomTickerAdd(added) => self.emit(Event::RoomTickerAdded {
         room_name: added.room,
         ticker: added.ticker,
       }),
-      R::RoomTickerRemove(removed) => inner.emit(Event::RoomTickerRemoved {
+      R::RoomTickerRemove(removed) => self.emit(Event::RoomTickerRemoved {
         room_name: removed.room,
         username: removed.username,
       }),
@@ -306,7 +306,7 @@ impl Client {
       ),
       R::NotifyPrivileges(notification) => {
         let id = notification.id;
-        inner.emit(Event::PrivilegeNotificationReceived {
+        self.emit(Event::PrivilegeNotificationReceived {
           username: notification.username,
           id: Some(id),
           requires_acknowledgement: true,
@@ -319,11 +319,11 @@ impl Client {
       }
       R::DistributedReset => {
         tracing::info!("the server reset the distributed network");
-        inner.emit(Event::DistributedNetworkReset);
+        self.emit(Event::DistributedNetworkReset);
         self.hand_off(ServerHandoff::DistributedReset);
       }
       R::PrivateRoomUsers(members) => {
-        inner.emit(Event::PrivateRoomUserListReceived(RoomMembers {
+        self.emit(Event::PrivateRoomUserListReceived(RoomMembers {
           room_name: members.room,
           users: members.usernames,
         }));
@@ -333,7 +333,7 @@ impl Client {
           room_user_key(ServerCode::PrivateRoomAddUser, &added.room, &added.username),
           (),
         );
-        inner.emit(Event::PrivateRoomUserAdded {
+        self.emit(Event::PrivateRoomUserAdded {
           room_name: added.room,
           username: added.username,
         });
@@ -347,15 +347,15 @@ impl Client {
           ),
           (),
         );
-        inner.emit(Event::PrivateRoomUserRemoved {
+        self.emit(Event::PrivateRoomUserRemoved {
           room_name: removed.room,
           username: removed.username,
         });
       }
-      R::PrivateRoomAdded(added) => inner.emit(Event::PrivateRoomMembershipAdded(added.room)),
+      R::PrivateRoomAdded(added) => self.emit(Event::PrivateRoomMembershipAdded(added.room)),
       R::PrivateRoomRemoved(removed) => {
         self.complete(room_key(ServerCode::PrivateRoomRemoved, &removed.room), ());
-        inner.emit(Event::PrivateRoomMembershipRemoved(removed.room));
+        self.emit(Event::PrivateRoomMembershipRemoved(removed.room));
       }
       R::PrivateRoomToggle(toggle) => self.complete(
         WaitKey::Server(ServerCode::PrivateRoomToggle),
@@ -373,7 +373,7 @@ impl Client {
           ),
           (),
         );
-        inner.emit(Event::PrivateRoomOperatorAdded {
+        self.emit(Event::PrivateRoomOperatorAdded {
           room_name: added.room,
           username: added.username,
         });
@@ -387,38 +387,38 @@ impl Client {
           ),
           (),
         );
-        inner.emit(Event::PrivateRoomOperatorRemoved {
+        self.emit(Event::PrivateRoomOperatorRemoved {
           room_name: removed.room,
           username: removed.username,
         });
       }
       R::PrivateRoomOperatorAdded(added) => {
-        inner.emit(Event::PrivateRoomModerationAdded(added.room));
+        self.emit(Event::PrivateRoomModerationAdded(added.room));
       }
       R::PrivateRoomOperatorRemoved(removed) => {
         self.complete(
           room_key(ServerCode::PrivateRoomOperatorRemoved, &removed.room),
           (),
         );
-        inner.emit(Event::PrivateRoomModerationRemoved(removed.room));
+        self.emit(Event::PrivateRoomModerationRemoved(removed.room));
       }
       R::PrivateRoomOwned(operators) => {
-        inner.emit(Event::PrivateRoomModeratedUserListReceived(RoomMembers {
+        self.emit(Event::PrivateRoomModeratedUserListReceived(RoomMembers {
           room_name: operators.room,
           users: operators.operators,
         }));
       }
-      R::PublicChat(said) => inner.emit(Event::PublicChatMessageReceived {
+      R::PublicChat(said) => self.emit(Event::PublicChatMessageReceived {
         room_name: said.room,
         username: said.username,
         message: said.message,
       }),
       R::ExcludedSearchPhrases(phrases) => {
-        inner.emit(Event::ExcludedSearchPhrasesReceived(phrases.phrases));
+        self.emit(Event::ExcludedSearchPhrasesReceived(phrases.phrases));
       }
       R::CannotConnect(failure) => {
         if let Some(username) = &failure.username {
-          inner.emit(Event::UserCannotConnect {
+          self.emit(Event::UserCannotConnect {
             token: failure.token,
             username: username.clone(),
           });
