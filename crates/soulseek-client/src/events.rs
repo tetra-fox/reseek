@@ -22,7 +22,7 @@ pub const EVENT_CAPACITY: usize = 4096;
 pub enum Event {
   /// the client moved from one state to another
   StateChanged {
-    previous: ClientState,
+    previous_state: ClientState,
     state: ClientState,
     message: String,
     error: Option<ClientError>,

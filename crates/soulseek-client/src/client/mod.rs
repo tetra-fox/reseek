@@ -282,10 +282,10 @@ impl Inner {
     message: String,
     error: Option<ClientError>,
   ) {
-    let previous = self.state.send_replace(next);
-    tracing::debug!(%previous, state = %next, message, "client state changed");
+    let previous_state = self.state.send_replace(next);
+    tracing::debug!(%previous_state, state = %next, message, "client state changed");
     self.emit(Event::StateChanged {
-      previous,
+      previous_state,
       state: next,
       message: message.clone(),
       error: error.clone(),

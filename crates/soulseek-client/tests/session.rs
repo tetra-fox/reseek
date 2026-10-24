@@ -46,11 +46,11 @@ fn transitions(events: &[Event]) -> Vec<(ClientState, ClientState, String)> {
     .iter()
     .filter_map(|event| match event {
       Event::StateChanged {
-        previous,
+        previous_state,
         state,
         message,
         ..
-      } => Some((*previous, *state, message.clone())),
+      } => Some((*previous_state, *state, message.clone())),
       _ => None,
     })
     .collect()
