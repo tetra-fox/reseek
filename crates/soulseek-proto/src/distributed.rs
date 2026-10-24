@@ -148,7 +148,8 @@ impl Wire for BranchRoot {
 }
 
 wire_struct! {
-  /// Distributed code 7: the depth below a child. Obsolete: parsed and ignored.
+  /// Distributed code 7: how many levels of children the sending child has below it. Obsolete:
+  /// parsed and ignored, the server works depth out itself.
   pub struct ChildDepth {
     pub depth: u32,
   }

@@ -11,8 +11,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 134: adds a member to a private room we own or operate; the server echoes it once
-  /// done.
+  /// Server code 134: adds a member to a private room we own or operate; the server sends the same
+  /// message to every member once done.
   pub struct PrivateRoomAddUser {
     pub room: String,
     pub username: String,
@@ -20,8 +20,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 135: removes a member from a private room we own or operate; the server echoes it
-  /// once done.
+  /// Server code 135: removes a member from a private room we own or operate; the server sends the
+  /// same message to every member once done.
   pub struct PrivateRoomRemoveUser {
     pub room: String,
     pub username: String,
@@ -43,8 +43,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 138: names a private room for a purpose nobody documented. Obsolete: no longer
-  /// used.
+  /// Server code 138: names a private room; its purpose is unknown. Obsolete: no longer used.
   pub struct PrivateRoomUnknown {
     pub room: String,
   }
@@ -73,8 +72,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 143: makes a member an operator of a private room we own; the server echoes it
-  /// once done.
+  /// Server code 143: makes a member an operator of a private room we own; the server sends the
+  /// same message to every member once done.
   pub struct PrivateRoomAddOperator {
     pub room: String,
     pub username: String,
@@ -82,7 +81,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 144: removes an operator of a private room we own; the server echoes it once done.
+  /// Server code 144: removes an operator of a private room we own; the server sends the same
+  /// message to every member once done.
   pub struct PrivateRoomRemoveOperator {
     pub room: String,
     pub username: String,

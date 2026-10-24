@@ -27,6 +27,7 @@ impl Wire for Recommendations {
 
   fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     let recommendations = Wire::read(r, "recommendations")?;
+    // an absent second block means no unrecommendations, the same as an empty one
     let unrecommendations = r.optional("unrecommendations")?.unwrap_or_default();
     Ok(Self {
       recommendations,

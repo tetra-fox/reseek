@@ -127,7 +127,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 129: the depth of our distributed children. Obsolete: never sent.
+  /// Server code 129: how many levels of distributed children we have below us. Obsolete: never
+  /// sent, the server works depth out itself.
   pub struct ChildDepth {
     pub depth: u32,
   }
