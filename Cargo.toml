@@ -1,0 +1,28 @@
+[workspace]
+resolver = "3"
+members = ["crates/soulseek-proto"]
+# cargo-fuzz needs nightly and its own lockfile, so the fuzz crate is a separate workspace
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+soulseek-proto = { path = "crates/soulseek-proto" }
+
+bitflags = "2"
+flate2 = "1"
+md-5 = "0.10"
+thiserror = "2"
+tracing = "0.1"
+
+proptest = "1"
+proptest-derive = "0.6"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
