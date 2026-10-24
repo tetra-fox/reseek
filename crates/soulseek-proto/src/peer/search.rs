@@ -117,7 +117,7 @@ pub fn peek_search_response(bytes: &[u8], limits: &Limits) -> Result<(String, u3
 
 fn peek_prefix(compressed: &[u8], limits: &Limits) -> Result<(String, u32), DecodeError> {
   let message = PeerCode::SearchResponse.name();
-  let zlib_error = |error| DecodeError::Field {
+  let body_error = |error| DecodeError::Field {
     message,
     field: "body",
     error: zlib_error(error),
@@ -127,12 +127,12 @@ fn peek_prefix(compressed: &[u8], limits: &Limits) -> Result<(String, u32), Deco
   (&mut decoder)
     .take(4)
     .read_to_end(&mut prefix)
-    .map_err(zlib_error)?;
+    .map_err(body_error)?;
   let len = Reader::new(&prefix, limits, message).string_len(LIMIT_STRING_BYTES, "username")?;
   decoder
     .take(len as u64 + 4)
     .read_to_end(&mut prefix)
-    .map_err(zlib_error)?;
+    .map_err(body_error)?;
   let mut r = Reader::new(&prefix, limits, message);
   Ok((r.string("username")?, r.u32("token")?))
 }
