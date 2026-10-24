@@ -1,24 +1,29 @@
-//! Private rooms on soulfind: creating one, the invitation setting, and members and operators
-//! added and removed as the owner and the member each see it.
+//! Private rooms on soulfind: creating one, the invitation setting, members and operators added
+//! and removed as the owner and the member each see it, and giving a room up.
 
 mod support;
 
 use soulseek_client::{Event, RoomMembers, WaitKey};
 use soulseek_proto::server::*;
 use soulseek_proto::{RoomType, ServerCode, ServerRequest};
+use support::options;
 use support::soulfind::{self, User};
-use support::{options, room_key, room_user_key};
 
 async fn join(user: &User, room: &str, room_type: RoomType) -> RoomData {
-  user
+  user.client.join_room(room, room_type).await.unwrap()
+}
+
+/// lets other users add `user` to their private rooms
+async fn accept_invitations(user: &User) {
+  let accepting: bool = user
     .ask(
-      room_key(ServerCode::JoinRoom, room),
-      ServerRequest::JoinRoom(JoinRoomRequest {
-        room: room.into(),
-        room_type,
+      WaitKey::Server(ServerCode::PrivateRoomToggle),
+      ServerRequest::PrivateRoomToggle(PrivateRoomToggle {
+        accept_invitations: true,
       }),
     )
-    .await
+    .await;
+  assert!(accepting);
 }
 
 /// waits for the room-and-user event `pick` names for `room`
@@ -79,25 +84,13 @@ async fn members_and_operators_are_added_and_removed_as_the_room_sees_it() {
   let mut alice = server.login("owner", options()).await;
   let mut bob = server.login("member", options()).await;
   join(&alice, &room, RoomType::Private).await;
-  let accepting: bool = bob
-    .ask(
-      WaitKey::Server(ServerCode::PrivateRoomToggle),
-      ServerRequest::PrivateRoomToggle(PrivateRoomToggle {
-        accept_invitations: true,
-      }),
-    )
-    .await;
-  assert!(accepting);
+  accept_invitations(&bob).await;
 
-  let () = alice
-    .ask(
-      room_user_key(ServerCode::PrivateRoomAddUser, &room, &bob.username),
-      ServerRequest::PrivateRoomAddUser(PrivateRoomAddUser {
-        room: room.clone(),
-        username: bob.username.clone(),
-      }),
-    )
-    .await;
+  alice
+    .client
+    .add_private_room_member(&room, &bob.username)
+    .await
+    .unwrap();
   let expected = (room.clone(), bob.username.clone());
   for user in [&mut alice, &mut bob] {
     let added = room_user(user, |event| match event {
@@ -116,15 +109,11 @@ async fn members_and_operators_are_added_and_removed_as_the_room_sees_it() {
     })
     .await;
 
-  let () = alice
-    .ask(
-      room_user_key(ServerCode::PrivateRoomAddOperator, &room, &bob.username),
-      ServerRequest::PrivateRoomAddOperator(PrivateRoomAddOperator {
-        room: room.clone(),
-        username: bob.username.clone(),
-      }),
-    )
-    .await;
+  alice
+    .client
+    .add_private_room_moderator(&room, &bob.username)
+    .await
+    .unwrap();
   let added = room_user(&mut bob, |event| match event {
     Event::PrivateRoomOperatorAdded {
       room_name,
@@ -154,15 +143,11 @@ async fn members_and_operators_are_added_and_removed_as_the_room_sees_it() {
   assert_eq!(private.owner, alice.username);
   assert_eq!(private.operators, [bob.username.clone()]);
 
-  let () = alice
-    .ask(
-      room_user_key(ServerCode::PrivateRoomRemoveOperator, &room, &bob.username),
-      ServerRequest::PrivateRoomRemoveOperator(PrivateRoomRemoveOperator {
-        room: room.clone(),
-        username: bob.username.clone(),
-      }),
-    )
-    .await;
+  alice
+    .client
+    .remove_private_room_moderator(&room, &bob.username)
+    .await
+    .unwrap();
   let removed = room_user(&mut bob, |event| match event {
     Event::PrivateRoomOperatorRemoved {
       room_name,
@@ -178,15 +163,11 @@ async fn members_and_operators_are_added_and_removed_as_the_room_sees_it() {
     })
     .await;
 
-  let () = alice
-    .ask(
-      room_user_key(ServerCode::PrivateRoomRemoveUser, &room, &bob.username),
-      ServerRequest::PrivateRoomRemoveUser(PrivateRoomRemoveUser {
-        room: room.clone(),
-        username: bob.username.clone(),
-      }),
-    )
-    .await;
+  alice
+    .client
+    .remove_private_room_member(&room, &bob.username)
+    .await
+    .unwrap();
   let removed = room_user(&mut alice, |event| match event {
     Event::PrivateRoomUserRemoved {
       room_name,
@@ -201,4 +182,36 @@ async fn members_and_operators_are_added_and_removed_as_the_room_sees_it() {
       matches!(event, Event::PrivateRoomMembershipRemoved(removed) if removed == room).then_some(())
     })
     .await;
+}
+
+#[tokio::test]
+async fn a_member_can_leave_a_private_room_and_its_owner_close_it() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let room = soulfind::username("private");
+  let alice = server.login("owner", options()).await;
+  let mut bob = server.login("member", options()).await;
+  join(&alice, &room, RoomType::Private).await;
+  accept_invitations(&bob).await;
+  alice
+    .client
+    .add_private_room_member(&room, &bob.username)
+    .await
+    .unwrap();
+  bob
+    .client
+    .drop_private_room_membership(&room)
+    .await
+    .unwrap();
+  bob
+    .event(|event| {
+      matches!(event, Event::PrivateRoomMembershipRemoved(removed) if removed == room).then_some(())
+    })
+    .await;
+  alice
+    .client
+    .drop_private_room_ownership(&room)
+    .await
+    .unwrap();
 }

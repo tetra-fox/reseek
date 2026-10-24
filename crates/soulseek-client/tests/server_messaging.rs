@@ -1,13 +1,13 @@
 //! Private messages and the public chat feed on soulfind: delivery, the acknowledgement that
-//! stops the server replaying a message at every login, and messages kept for an offline user.
+//! stops the server replaying a message at every login (sent at once, or by the application
+//! later), and messages kept for an offline user.
 
 mod support;
 
-use soulseek_client::{ClientOptions, Event, PrivateMessage};
-use soulseek_proto::server::*;
-use soulseek_proto::{RoomType, ServerCode, ServerRequest};
+use soulseek_client::{ClientError, ClientOptions, Event, PrivateMessage};
+use soulseek_proto::RoomType;
+use support::options;
 use support::soulfind::{self, PASSWORD, User};
-use support::{options, room_key};
 
 fn without_acknowledgement() -> ClientOptions {
   ClientOptions {
@@ -18,11 +18,10 @@ fn without_acknowledgement() -> ClientOptions {
 
 async fn message(to: &User, from: &User, text: &str) {
   from
-    .send(ServerRequest::PrivateMessage(PrivateMessageRequest {
-      username: to.username.clone(),
-      message: text.into(),
-    }))
-    .await;
+    .client
+    .send_private_message(&to.username, text)
+    .await
+    .unwrap();
 }
 
 async fn received(user: &mut User) -> PrivateMessage {
@@ -113,23 +112,18 @@ async fn the_public_chat_feed_carries_lines_from_rooms_we_are_not_in() {
   let room = soulfind::username("public");
   let alice = server.login("alice", options()).await;
   let mut carol = server.login("carol", options()).await;
-  let _: RoomData = alice
-    .ask(
-      room_key(ServerCode::JoinRoom, &room),
-      ServerRequest::JoinRoom(JoinRoomRequest {
-        room: room.clone(),
-        room_type: RoomType::Public,
-      }),
-    )
-    .await;
-  carol.send(ServerRequest::AskPublicChat).await;
+  alice
+    .client
+    .join_room(&room, RoomType::Public)
+    .await
+    .unwrap();
+  carol.client.start_public_chat().await.unwrap();
   carol.settle().await;
   alice
-    .send(ServerRequest::SayInChatRoom(SayInChatRoomRequest {
-      room: room.clone(),
-      message: "hello world".into(),
-    }))
-    .await;
+    .client
+    .send_room_message(&room, "hello world")
+    .await
+    .unwrap();
   let raised = carol
     .event(|event| match event {
       Event::PublicChatMessageReceived {
@@ -141,5 +135,39 @@ async fn the_public_chat_feed_carries_lines_from_rooms_we_are_not_in() {
     })
     .await;
   assert_eq!(raised, (room, alice.username.clone(), "hello world".into()));
-  carol.send(ServerRequest::StopPublicChat).await;
+  carol.client.stop_public_chat().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_message_the_application_acknowledges_later_is_not_replayed() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let alice = server.login("alice", options()).await;
+  let mut bob = server.login("bob", without_acknowledgement()).await;
+  message(&bob, &alice, "first").await;
+  let first = received(&mut bob).await;
+  bob
+    .client
+    .acknowledge_private_message(first.id)
+    .await
+    .unwrap();
+  bob.settle().await;
+  relogin(&server, &bob).await;
+  message(&bob, &alice, "second").await;
+  assert_eq!(received(&mut bob).await.message, "second");
+}
+
+#[tokio::test]
+async fn a_message_needs_a_recipient_and_a_text() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let alice = server.login("alice", options()).await;
+  for (username, text) in [(" ", "hi"), ("bob", "")] {
+    assert!(matches!(
+      alice.client.send_private_message(username, text).await,
+      Err(ClientError::InvalidArgument(_))
+    ));
+  }
 }

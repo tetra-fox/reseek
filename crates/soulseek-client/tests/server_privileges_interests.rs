@@ -1,34 +1,19 @@
 //! Privileges and interests on soulfind: the privileged list pushed at login, our own remaining
-//! privileges, another user's flag, interests, recommendations and similar users, and the
-//! password change echo.
+//! privileges, another user's flag, interests, recommendations sorted by score, similar users,
+//! and changing the password.
 
 mod support;
 
-use soulseek_client::{Event, WaitKey};
-use soulseek_proto::server::*;
-use soulseek_proto::{Secret, ServerCode, ServerRequest};
-use support::options;
-use support::soulfind::{self, User};
+use std::time::Duration;
 
-fn interest_key(code: ServerCode, interest: &str) -> WaitKey {
-  WaitKey::ServerInterest {
-    code,
-    interest: interest.into(),
-  }
-}
+use soulseek_client::{Client, ClientError, Event};
+use support::options;
+use support::soulfind::{self, PASSWORD, User};
 
 /// `user` likes `liked` and hates `hated`, and the server has recorded both
 async fn interests(user: &User, liked: &str, hated: &str) {
-  user
-    .send(ServerRequest::LikedInterestAdd(LikedInterestAdd {
-      interest: liked.into(),
-    }))
-    .await;
-  user
-    .send(ServerRequest::HatedInterestAdd(HatedInterestAdd {
-      interest: hated.into(),
-    }))
-    .await;
+  user.client.add_liked_interest(liked).await.unwrap();
+  user.client.add_hated_interest(hated).await.unwrap();
   user.settle().await;
 }
 
@@ -50,22 +35,24 @@ async fn privileges_of_a_new_account_and_of_another_user() {
   };
   let alice = server.login("alice", options()).await;
   let bob = server.login("bob", options()).await;
-  let seconds: u32 = alice
-    .ask(
-      WaitKey::Server(ServerCode::CheckPrivileges),
-      ServerRequest::CheckPrivileges,
-    )
-    .await;
-  assert_eq!(seconds, 0);
-  let privileged: bool = alice
-    .ask(
-      support::user_key(ServerCode::UserPrivileges, &bob.username),
-      ServerRequest::UserPrivileges(UserPrivilegesRequest {
-        username: bob.username.clone(),
-      }),
-    )
-    .await;
-  assert!(!privileged);
+  assert_eq!(alice.client.get_privileges().await.unwrap(), Duration::ZERO);
+  assert!(
+    !alice
+      .client
+      .get_user_privileged(&bob.username)
+      .await
+      .unwrap()
+  );
+  // nothing to give, which the server reports later, if at all, as a private message
+  alice
+    .client
+    .grant_user_privileges(&bob.username, 1)
+    .await
+    .unwrap();
+  assert!(matches!(
+    alice.client.grant_user_privileges(&bob.username, 0).await,
+    Err(ClientError::InvalidArgument(message)) if message == "The number of days granted must be greater than zero"
+  ));
 }
 
 #[tokio::test]
@@ -81,23 +68,16 @@ async fn interests_recommendations_and_similar_users() {
   interests(&alice, &liked, &hated).await;
   interests(&bob, &liked, &soulfind::username("polka")).await;
 
-  let got: UserInterests = bob
-    .ask(
-      support::user_key(ServerCode::GetUserInterests, &alice.username),
-      ServerRequest::GetUserInterests(GetUserInterestsRequest {
-        username: alice.username.clone(),
-      }),
-    )
-    .await;
+  let got = bob
+    .client
+    .get_user_interests(&alice.username)
+    .await
+    .unwrap();
   assert_eq!(got.likes, std::slice::from_ref(&liked));
   assert_eq!(got.hates, std::slice::from_ref(&hated));
+  assert_eq!(alice.client.get_interests().await.unwrap(), got);
 
-  let global: Recommendations = alice
-    .ask(
-      WaitKey::Server(ServerCode::GetGlobalRecommendations),
-      ServerRequest::GetGlobalRecommendations,
-    )
-    .await;
+  let global = alice.client.get_global_recommendations().await.unwrap();
   assert!(
     global
       .recommendations
@@ -105,60 +85,75 @@ async fn interests_recommendations_and_similar_users() {
       .any(|recommendation| recommendation.interest == liked && recommendation.count == 2),
     "{global:?}"
   );
-  let _: Recommendations = alice
-    .ask(
-      WaitKey::Server(ServerCode::GetPersonalRecommendations),
-      ServerRequest::GetPersonalRecommendations,
-    )
-    .await;
-
-  let similar: GetPersonalSimilarUsersResponse = alice
-    .ask(
-      WaitKey::Server(ServerCode::GetPersonalSimilarUsers),
-      ServerRequest::GetPersonalSimilarUsers,
-    )
-    .await;
+  // recommended interests come highest score first, the rest lowest first
   assert!(
-    similar
-      .users
+    global
+      .recommendations
+      .is_sorted_by(|a, b| a.count >= b.count)
+  );
+  assert!(
+    global
+      .recommendations
       .iter()
-      .any(|user| user.username == bob.username),
+      .all(|recommendation| recommendation.count > 0)
+  );
+  assert!(
+    global
+      .unrecommendations
+      .is_sorted_by_key(|recommendation| recommendation.count)
+  );
+  assert!(
+    global
+      .unrecommendations
+      .iter()
+      .all(|recommendation| recommendation.count <= 0)
+  );
+  alice.client.get_personal_recommendations().await.unwrap();
+
+  let similar = alice.client.get_similar_users().await.unwrap();
+  assert!(
+    similar.iter().any(|user| user.username == bob.username),
     "{similar:?}"
   );
-  let by_interest: GetInterestSimilarUsersResponse = alice
-    .ask(
-      interest_key(ServerCode::GetInterestSimilarUsers, &liked),
-      ServerRequest::GetInterestSimilarUsers(GetInterestSimilarUsersRequest {
-        interest: liked.clone(),
-      }),
-    )
-    .await;
+  let by_interest = alice
+    .client
+    .get_interest_similar_users(&liked)
+    .await
+    .unwrap();
   assert_eq!(by_interest.interest, liked);
   assert!(by_interest.usernames.contains(&bob.username));
-  let related: GetInterestRecommendationsResponse = alice
-    .ask(
-      interest_key(ServerCode::GetInterestRecommendations, &liked),
-      ServerRequest::GetInterestRecommendations(GetInterestRecommendationsRequest {
-        interest: liked.clone(),
-      }),
-    )
-    .await;
+  let related = alice
+    .client
+    .get_interest_recommendations(&liked)
+    .await
+    .unwrap();
   assert_eq!(related.interest, liked);
+
+  alice.client.remove_liked_interest(&liked).await.unwrap();
+  alice.client.remove_hated_interest(&hated).await.unwrap();
+  alice.settle().await;
+  let emptied = alice.client.get_interests().await.unwrap();
+  assert!(
+    emptied.likes.is_empty() && emptied.hates.is_empty(),
+    "{emptied:?}"
+  );
 }
 
 #[tokio::test]
-async fn a_password_change_is_echoed() {
+async fn a_changed_password_is_the_one_the_next_login_needs() {
   let Some(server) = soulfind::server() else {
     return;
   };
   let alice = server.login("alice", options()).await;
-  let echo: Secret = alice
-    .ask(
-      WaitKey::Server(ServerCode::NewPassword),
-      ServerRequest::NewPassword(NewPassword {
-        new_password: Secret::new("n3w password"),
-      }),
-    )
-    .await;
-  assert_eq!(echo.expose(), "n3w password");
+  alice.client.change_password("n3w password").await.unwrap();
+  alice.client.disconnect(None, None).await;
+  let again = Client::new(options()).unwrap();
+  assert!(matches!(
+    server.connect(&again, &alice.username, PASSWORD).await,
+    Err(ClientError::LoginRejected(_))
+  ));
+  server
+    .connect(&again, &alice.username, "n3w password")
+    .await
+    .unwrap();
 }

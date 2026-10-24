@@ -3,14 +3,20 @@
 //! something, and the parts that live across sessions: connections to other users, the
 //! distributed search tree, the search responder, the waiter and the tokens.
 
+mod account;
 mod connect;
 mod disconnect;
 mod endpoint;
 mod inbound;
+mod interests;
+mod messaging;
+mod private_rooms;
 mod reconfigure;
 mod request;
+mod rooms;
 mod search;
 mod server;
+mod users;
 
 pub use search::SearchScope;
 
