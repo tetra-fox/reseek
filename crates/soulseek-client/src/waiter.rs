@@ -409,7 +409,10 @@ mod tests {
   #[tokio::test]
   async fn an_offer_nobody_takes_is_handed_back() {
     let waiter = waiter();
-    assert_eq!(waiter.offer(&key("a"), String::from("conn")), Err("conn".into()));
+    assert_eq!(
+      waiter.offer(&key("a"), String::from("conn")),
+      Err("conn".into())
+    );
     let wait = waiter.wait::<String>(key("a"), None, CancellationToken::new());
     assert_eq!(waiter.offer(&key("a"), String::from("conn")), Ok(()));
     assert_eq!(wait.await.unwrap(), "conn");
