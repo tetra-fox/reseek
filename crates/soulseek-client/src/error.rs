@@ -75,10 +75,9 @@ pub enum ClientError {
   /// the server reports that the user does not exist
   #[error("{0}")]
   UserNotFound(String),
-  /// looking up a user's address failed
+  /// asking the server for a user's address failed
   #[error("{message}")]
   UserEndPoint {
-    kind: UserEndPointErrorKind,
     message: String,
     #[source]
     source: Option<ErrorSource>,
@@ -96,6 +95,12 @@ pub enum ClientError {
   /// a resolver refused to queue a download; the reason is sent to the peer as written
   #[error("{0}")]
   DownloadEnqueue(String),
+  /// the uploader refused or cancelled a file we asked for, with its reason
+  #[error("{0}")]
+  TransferRejected(String),
+  /// the uploader reported that the upload of a file to us failed
+  #[error("{0}")]
+  TransferReportedFailed(String),
   /// an operation failed for another reason; the message names the operation
   #[error("{message}")]
   Client {
@@ -132,15 +137,6 @@ pub enum MessageErrorKind {
   Read,
   /// a compressed payload could not be inflated
   Compression,
-}
-
-/// Which lookup failure a [`ClientError::UserEndPoint`] is
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UserEndPointErrorKind {
-  /// the server lookup failed
-  Other,
-  /// the endpoint cache failed
-  Cache,
 }
 
 /// Which room failure a [`ClientError::Room`] is

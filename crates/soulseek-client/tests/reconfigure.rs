@@ -131,7 +131,7 @@ async fn turning_the_distributed_network_off_needs_a_reconnect_and_on_does_not()
 
 #[tokio::test]
 async fn nothing_needs_a_reconnect_while_disconnected() {
-  let (client, _handoffs) = soulseek_client::Client::new(options()).unwrap();
+  let client = soulseek_client::Client::new(options()).unwrap();
   let off = ClientOptionsPatch {
     enable_distributed_network: Some(false),
     ..ClientOptionsPatch::default()

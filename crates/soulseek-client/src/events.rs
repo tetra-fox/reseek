@@ -8,10 +8,10 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use soulseek_proto::RemoteFilename;
-use soulseek_proto::peer::SearchResponse;
 use soulseek_proto::server::{RoomList, RoomTicker, UserData, UserStatistics, UserStatus};
 
 use crate::error::ClientError;
+use crate::resolvers::SearchReply;
 use crate::state::{ClientState, DistributedNetworkInfo, ServerInfo};
 
 /// how many events the channel holds for its slowest subscriber
@@ -190,12 +190,13 @@ pub struct DistributedParent {
   pub is_branch_root: bool,
 }
 
-/// Our results for another user's search and whom they were for
+/// Our answer to another user's search and whom it was for
 #[derive(Clone, Debug)]
 pub struct SearchDelivery {
   pub username: String,
+  /// the searcher's token
   pub token: u32,
   /// the query as the searcher sent it
   pub query: String,
-  pub response: Arc<SearchResponse>,
+  pub search_response: Arc<SearchReply>,
 }

@@ -260,33 +260,39 @@ impl Client {
         accept_invitations: options.accept_private_room_invitations,
       }))
       .await?;
-    self.update_distributed_status().await;
+    self.update_distributed_status(false).await;
     Ok(())
   }
 
   /// Binds the listener on the configured address. Accepted connections are classified on a
   /// task of their own and handed on.
   pub(super) fn start_listener(&self, options: &ClientOptions) -> Result<Listener, ClientError> {
-    let inner = Arc::downgrade(&self.inner);
+    let client = self.downgrade();
     Listener::start(
       SocketAddr::new(options.listen_ip_address, options.listen_port),
       options.listen_backlog,
       move |stream, remote| {
         // the client is gone; dropping the stream closes it
-        let Some(inner) = inner.upgrade() else {
+        let Some(client) = client.upgrade() else {
           return;
         };
-        let options = inner.options().incoming_connection_options.clone();
+        let options = client.options().incoming_connection_options.clone();
         let conn = Conn::accepted(stream, remote, options);
         let span = conn.handle().span().clone();
-        let classify = inbound::classify(conn, inner.inbound.clone());
-        let lifetime = inner.lifetime.clone();
-        // a disposed client drops the classification, and the connection with it
+        let lifetime = client.cancellation().clone();
+        let client = client.downgrade();
+        // a disposed client drops the connection with the classification
         tokio::spawn(
           async move {
             tokio::select! {
               () = lifetime.cancelled() => {}
-              () = classify => {}
+              () = async {
+                if let Some(inbound) = inbound::classify(conn).await
+                  && let Some(client) = client.upgrade()
+                {
+                  client.route_inbound(inbound).await;
+                }
+              } => {}
             }
           }
           .instrument(span),

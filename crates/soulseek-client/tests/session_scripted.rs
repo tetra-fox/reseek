@@ -44,7 +44,7 @@ fn connect(
 #[tokio::test]
 async fn the_login_and_the_configuration_sent_after_it() {
   let fake = FakeServer::start().await;
-  let (client, _handoffs) = Client::new(options()).unwrap();
+  let client = Client::new(options()).unwrap();
   let connecting = connect(&client, &fake, CancellationToken::new());
   let mut server = fake.accept().await;
 
@@ -87,7 +87,7 @@ async fn the_login_and_the_configuration_sent_after_it() {
 
 async fn rejected_login(response: LoginResponse) -> ClientError {
   let fake = FakeServer::start().await;
-  let (client, _handoffs) = Client::new(options()).unwrap();
+  let client = Client::new(options()).unwrap();
   let connecting = connect(&client, &fake, CancellationToken::new());
   let mut server = fake.accept().await;
   server.read_login().await;
@@ -110,7 +110,7 @@ async fn a_rejected_login_appends_the_detail() {
 #[tokio::test]
 async fn no_login_reply_is_reported_as_a_possible_ban() {
   let fake = FakeServer::start().await;
-  let (client, _handoffs) = Client::new(ClientOptions {
+  let client = Client::new(ClientOptions {
     message_timeout: Duration::from_millis(300),
     ..options()
   })
@@ -132,7 +132,7 @@ async fn no_login_reply_is_reported_as_a_possible_ban() {
 #[tokio::test]
 async fn the_server_closing_during_login_is_a_connect_error() {
   let fake = FakeServer::start().await;
-  let (client, _handoffs) = Client::new(options()).unwrap();
+  let client = Client::new(options()).unwrap();
   let connecting = connect(&client, &fake, CancellationToken::new());
   let mut server = fake.accept().await;
   server.read_login().await;
@@ -144,7 +144,7 @@ async fn the_server_closing_during_login_is_a_connect_error() {
 #[tokio::test]
 async fn cancelling_the_connect_while_logging_in() {
   let fake = FakeServer::start().await;
-  let (client, _handoffs) = Client::new(options()).unwrap();
+  let client = Client::new(options()).unwrap();
   let mut events = client.subscribe();
   let cancel = CancellationToken::new();
   let connecting = connect(&client, &fake, cancel.clone());
@@ -164,7 +164,7 @@ async fn cancelling_the_connect_while_logging_in() {
 #[tokio::test]
 async fn disconnecting_cancels_a_connect_in_progress() {
   let fake = FakeServer::start().await;
-  let (client, _handoffs) = Client::new(options()).unwrap();
+  let client = Client::new(options()).unwrap();
   let mut events = client.subscribe();
   let connecting = connect(&client, &fake, CancellationToken::new());
   let mut server = fake.accept().await;
@@ -231,7 +231,7 @@ async fn the_server_is_pinged_each_minute() {
 async fn a_busy_listen_port_fails_the_connect_before_the_server_is_contacted() {
   let fake = FakeServer::start().await;
   let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-  let (client, _handoffs) = Client::new(ClientOptions {
+  let client = Client::new(ClientOptions {
     enable_listener: true,
     listen_ip_address: [127, 0, 0, 1].into(),
     listen_port: taken.local_addr().unwrap().port(),

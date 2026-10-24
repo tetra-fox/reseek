@@ -1,7 +1,8 @@
 //! What the client does with each message the server sends: complete the wait of the request it
-//! answers, raise the event it carries, or hand it to the component that owns it. Frames are
-//! handled in order on the server connection's read loop and nothing here blocks; whatever needs
-//! a connection or a lookup is handed on through a bounded queue.
+//! answers, raise the event it carries, or pass it to the part of the client that owns it (peer
+//! connections, the distributed tree, the search responder). Frames are handled in order on the
+//! server connection's read loop and nothing here blocks; whatever needs a connection or a
+//! lookup runs on a task of its own or goes to the tree task.
 //!
 //! The waits each reply completes, and the value it completes them with:
 //!
@@ -31,18 +32,18 @@
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
-use soulseek_proto::distributed::Embedded;
 use soulseek_proto::server::{
   AcknowledgeNotifyPrivileges, AcknowledgePrivateMessage, CannotConnectResponse,
-  ConnectToPeerResponse, FileSearchResponse, LoginResponse, NetInfo,
+  ConnectToPeerResponse, LoginResponse,
 };
-use soulseek_proto::{DecodeError, ServerCode, ServerRequest, ServerResponse};
+use soulseek_proto::{DecodeError, PeerConnectionType, ServerCode, ServerRequest, ServerResponse};
 
 use super::Client;
 use super::disconnect::Cause;
-use crate::error::{ClientError, RoomErrorKind};
+use super::request::{interest_key, room_key, room_user_key, user_key};
+use crate::distributed::Command;
+use crate::error::{ClientError, ConnectionErrorKind, RoomErrorKind};
 use crate::events::{Event, PrivateMessage, RoomMembers};
-use crate::log::LogLimiter;
 use crate::state::{ClientState, ServerInfo};
 use crate::waiter::WaitKey;
 
@@ -62,39 +63,6 @@ const OBSOLETE: [ServerCode; 13] = [
   ServerCode::GlobalUserList,
   ServerCode::TunneledMessage,
 ];
-
-static HANDOFF_FULL: LogLimiter = LogLimiter::new();
-
-/// A server message whose handling belongs to the peer, distributed or search components
-#[derive(Debug)]
-pub enum ServerHandoff {
-  /// a peer asks us, through the server, to connect to it
-  ConnectToPeer(ConnectToPeerResponse),
-  /// another user's search, which the server delivers to us directly
-  FileSearch(FileSearchResponse),
-  /// a distributed message the server sends us as a branch root
-  EmbeddedMessage(Embedded),
-  /// candidates for our parent in the distributed tree
-  NetInfo(NetInfo),
-  /// the server tells every client to rebuild the distributed tree
-  DistributedReset,
-  /// a peer could not act on one of our connection requests; the event for it, when the
-  /// server names the peer, has been raised already
-  CannotConnect(CannotConnectResponse),
-}
-
-impl ServerHandoff {
-  fn name(&self) -> &'static str {
-    match self {
-      Self::ConnectToPeer(_) => "ConnectToPeer",
-      Self::FileSearch(_) => "FileSearch",
-      Self::EmbeddedMessage(_) => "EmbeddedMessage",
-      Self::NetInfo(_) => "NetInfo",
-      Self::DistributedReset => "DistributedReset",
-      Self::CannotConnect(_) => "CannotConnect",
-    }
-  }
-}
 
 impl Client {
   /// Handles one complete frame from the server. A frame that does not decode has been logged
@@ -169,7 +137,7 @@ impl Client {
         room_name: left.room,
         username: left.username,
       }),
-      R::ConnectToPeer(request) => self.hand_off(ServerHandoff::ConnectToPeer(request)),
+      R::ConnectToPeer(request) => self.connect_to_peer(request),
       R::PrivateMessage(message) => {
         let id = message.id;
         self.emit(Event::PrivateMessageReceived(PrivateMessage {
@@ -190,11 +158,15 @@ impl Client {
         if self.username().as_deref() == Some(search.username.as_str()) {
           tracing::debug!(token = search.token, "search from our own username dropped");
         } else {
-          self.hand_off(ServerHandoff::FileSearch(search));
+          self.respond_to_search(search.username, search.token, search.query);
         }
       }
       R::Ping => self.complete(WaitKey::Server(ServerCode::Ping), ()),
       R::GetUserStats(statistics) => {
+        if self.username().as_deref() == Some(statistics.username.as_str()) {
+          // our own speed decides how many distributed children we may take
+          self.distributed_command(Command::OwnSpeed(statistics.stats.average_speed));
+        }
         self.complete(
           user_key(ServerCode::GetUserStats, &statistics.username),
           statistics.clone(),
@@ -210,7 +182,7 @@ impl Client {
           Cause::Kicked,
         ) {
           let client = self.clone();
-          tokio::spawn(async move { teardown.finish(&client.inner).await });
+          tokio::spawn(async move { teardown.finish(&client).await });
         }
       }
       R::GetPersonalRecommendations(recommendations) => self.complete(
@@ -236,9 +208,11 @@ impl Client {
       R::PrivilegedUsers(users) => self.emit(Event::PrivilegedUserListReceived(users.usernames)),
       R::ParentMinSpeed(speed) => {
         inner.merge_server_info(|info| info.parent_min_speed = Some(speed.speed));
+        self.distributed_command(Command::Changed);
       }
       R::ParentSpeedRatio(ratio) => {
         inner.merge_server_info(|info| info.parent_speed_ratio = Some(ratio.ratio));
+        self.distributed_command(Command::Changed);
       }
       R::WishlistInterval(interval) => {
         inner.merge_server_info(|info| info.wishlist_interval = Some(interval.seconds));
@@ -272,8 +246,8 @@ impl Client {
         WaitKey::Server(ServerCode::CheckPrivileges),
         privileges.seconds_remaining,
       ),
-      R::EmbeddedMessage(embedded) => self.hand_off(ServerHandoff::EmbeddedMessage(embedded)),
-      R::NetInfo(candidates) => self.hand_off(ServerHandoff::NetInfo(candidates)),
+      R::EmbeddedMessage(embedded) => self.handle_embedded(&embedded),
+      R::NetInfo(candidates) => self.distributed_command(Command::NetInfo(candidates.parents)),
       R::GetPersonalSimilarUsers(users) => {
         self.complete(WaitKey::Server(ServerCode::GetPersonalSimilarUsers), users);
       }
@@ -320,7 +294,7 @@ impl Client {
       R::DistributedReset => {
         tracing::info!("the server reset the distributed network");
         self.emit(Event::DistributedNetworkReset);
-        self.hand_off(ServerHandoff::DistributedReset);
+        self.distributed_command(Command::Reset);
       }
       R::PrivateRoomUsers(members) => {
         self.emit(Event::PrivateRoomUserListReceived(RoomMembers {
@@ -416,15 +390,7 @@ impl Client {
       R::ExcludedSearchPhrases(phrases) => {
         self.emit(Event::ExcludedSearchPhrasesReceived(phrases.phrases));
       }
-      R::CannotConnect(failure) => {
-        if let Some(username) = &failure.username {
-          self.emit(Event::UserCannotConnect {
-            token: failure.token,
-            username: username.clone(),
-          });
-        }
-        self.hand_off(ServerHandoff::CannotConnect(failure));
-      }
+      R::CannotConnect(failure) => self.cannot_connect(&failure),
       R::CannotJoinRoom(refused) => {
         let faulted = inner.waiter.fault(
           &room_key(ServerCode::JoinRoom, &refused.room),
@@ -480,6 +446,57 @@ impl Client {
     self.complete(WaitKey::Server(ServerCode::Login), response);
   }
 
+  /// A peer asks, through the server, that we connect to it: for messages, for a file it is about
+  /// to upload to us, or to become our distributed child. Each is handled away from the read
+  /// loop, and a request we cannot honour is reported back so the peer stops waiting.
+  fn connect_to_peer(&self, request: ConnectToPeerResponse) {
+    tracing::debug!(
+      username = request.username,
+      connection_type = ?request.connection_type,
+      token = request.token,
+      "connection request relayed by the server"
+    );
+    match request.connection_type {
+      PeerConnectionType::Peer => self.connect_to_peer_for_messages(request),
+      PeerConnectionType::Transfer => self.connect_to_peer_for_transfer(request),
+      PeerConnectionType::Distributed => {
+        self.distributed_command(Command::ChildRequested(request));
+      }
+    }
+  }
+
+  /// A peer could not act on a connection request we had the server relay. A search answer
+  /// kept under that token is given up, and a solicitation still waiting fails at once rather
+  /// than at its timeout.
+  fn cannot_connect(&self, failure: &CannotConnectResponse) {
+    let token = failure.token;
+    if let Some(username) = &failure.username {
+      self.emit(Event::UserCannotConnect {
+        token,
+        username: username.clone(),
+      });
+    }
+    let discarded = self.try_discard(token);
+    let solicited = self
+      .peers()
+      .solicitations
+      .get(token)
+      .is_some_and(|solicitation| {
+        self.waiter().fault(
+          &solicitation.key(token),
+          ClientError::connection(
+            ConnectionErrorKind::Other,
+            format!("CannotConnect received for token {token}"),
+          ),
+        )
+      });
+    if solicited {
+      // a search answer riding on this request is not worth keeping for a late connection
+      self.responder().refuse(token);
+    }
+    tracing::debug!(token, discarded, solicited, "peer cannot connect");
+  }
+
   /// completes the oldest wait under `key`; a reply nobody waits for is normal for pushed
   /// messages and is dropped
   fn complete<T: Send + 'static>(&self, key: WaitKey, value: T) {
@@ -496,25 +513,6 @@ impl Client {
     );
     self.inner.merge_server_info(store);
   }
-
-  fn hand_off(&self, handoff: ServerHandoff) {
-    let name = handoff.name();
-    match self.inner.server_handoffs.try_send(handoff) {
-      Ok(()) => tracing::trace!(name, "server message handed on"),
-      Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-        if let Some(suppressed) = HANDOFF_FULL.allow() {
-          tracing::warn!(
-            name,
-            suppressed,
-            "server hand-off queue is full, message dropped"
-          );
-        }
-      }
-      Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-        tracing::debug!(name, "nothing takes server hand-offs, message dropped");
-      }
-    }
-  }
 }
 
 /// the debug line for a server message nothing handles, naming the code when it is one the
@@ -525,34 +523,5 @@ fn unhandled(code: u32, len: usize) {
       tracing::debug!(code, name = obsolete.name(), len, "obsolete server message");
     }
     None => tracing::debug!(code, len, "unhandled server message"),
-  }
-}
-
-fn user_key(code: ServerCode, username: &str) -> WaitKey {
-  WaitKey::ServerUser {
-    code,
-    username: username.to_owned(),
-  }
-}
-
-fn interest_key(code: ServerCode, interest: &str) -> WaitKey {
-  WaitKey::ServerInterest {
-    code,
-    interest: interest.to_owned(),
-  }
-}
-
-fn room_key(code: ServerCode, room: &str) -> WaitKey {
-  WaitKey::ServerRoom {
-    code,
-    room: room.to_owned(),
-  }
-}
-
-fn room_user_key(code: ServerCode, room: &str, username: &str) -> WaitKey {
-  WaitKey::ServerRoomUser {
-    code,
-    room: room.to_owned(),
-    username: username.to_owned(),
   }
 }

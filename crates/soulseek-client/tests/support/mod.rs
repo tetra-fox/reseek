@@ -3,21 +3,25 @@
 
 #![allow(dead_code)] // each test binary uses its own subset of these helpers
 
+pub mod peer;
 pub mod soulfind;
+pub mod tree;
 
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use soulseek_client::{
-  Client, ClientError, ClientOptions, ClientState, Event, Handoffs, ServerHandoff, WaitKey,
-};
+use soulseek_client::{Client, ClientError, ClientOptions, ClientState, Event, WaitKey};
 use soulseek_proto::frame::{self, FrameKind};
+use soulseek_proto::init::PeerInit;
 use soulseek_proto::server::{
   GlobalAdminMessage, LoginRequest, LoginResponse, UserData, UserStats,
 };
-use soulseek_proto::{Limits, Secret, ServerCode, ServerRequest, ServerResponse, UserPresence};
+use soulseek_proto::{
+  InitMessage, Limits, PeerConnectionType, Secret, ServerCode, ServerRequest, ServerResponse,
+  UserPresence,
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
@@ -34,6 +38,15 @@ pub const PATIENCE: Duration = Duration::from_secs(10);
 pub fn options() -> ClientOptions {
   ClientOptions {
     enable_listener: false,
+    ..ClientOptions::default()
+  }
+}
+
+/// options for a client that listens on loopback, on a free port
+pub fn listening_options() -> ClientOptions {
+  ClientOptions {
+    listen_ip_address: Ipv4Addr::LOCALHOST.into(),
+    listen_port: free_port(),
     ..ClientOptions::default()
   }
 }
@@ -97,6 +110,18 @@ impl ServerSide {
         .unwrap();
       assert!(read > 0, "the client closed the connection");
       self.buffer.extend_from_slice(&chunk[..read]);
+    }
+  }
+
+  /// the next message `pick` accepts, skipping the others
+  pub async fn request_matching<T>(
+    &mut self,
+    mut pick: impl FnMut(ServerRequest) -> Option<T>,
+  ) -> T {
+    loop {
+      if let Some(picked) = pick(self.request().await) {
+        return picked;
+      }
     }
   }
 
@@ -170,7 +195,6 @@ pub fn login_success() -> ServerResponse {
 /// a client logged in to a fake server, with everything a test looks at
 pub struct Session {
   pub client: Client,
-  pub handoffs: Handoffs,
   pub server: ServerSide,
   pub events: broadcast::Receiver<Event>,
   pub fake: FakeServer,
@@ -183,7 +207,7 @@ impl Session {
 
   pub async fn with_options(options: ClientOptions) -> Self {
     let fake = FakeServer::start().await;
-    let (client, handoffs) = Client::new(options).unwrap();
+    let client = Client::new(options).unwrap();
     let events = client.subscribe();
     let address = fake.address();
     let connecting = {
@@ -206,7 +230,6 @@ impl Session {
     connecting.await.unwrap().unwrap();
     Self {
       client,
-      handoffs,
       server,
       events,
       fake,
@@ -216,6 +239,23 @@ impl Session {
   /// the next event that `pick` accepts, skipping the others
   pub async fn event<T>(&mut self, pick: impl FnMut(Event) -> Option<T>) -> T {
     next_event(&mut self.events, pick).await
+  }
+
+  /// where the client listens, when it does
+  pub fn listen_address(&self) -> SocketAddr {
+    SocketAddr::from((Ipv4Addr::LOCALHOST, self.client.options().listen_port))
+  }
+
+  /// a scripted peer named `username` that connected to the client for messages
+  pub async fn peer(&self, username: &str) -> peer::PeerSide {
+    let mut peer = peer::PeerSide::connect(self.listen_address()).await;
+    let introduce = InitMessage::PeerInit(PeerInit {
+      username: username.into(),
+      connection_type: PeerConnectionType::Peer,
+      token: 0,
+    });
+    peer.send(&introduce.encode()).await;
+    peer
   }
 
   /// registers a wait under `key`, sends `response` and returns what the wait completed with
@@ -228,15 +268,6 @@ impl Session {
     tokio::time::timeout(PATIENCE, wait)
       .await
       .expect("the wait completes")
-      .unwrap()
-  }
-
-  /// sends `response` and returns the next server hand-off
-  pub async fn handoff(&mut self, response: ServerResponse) -> ServerHandoff {
-    self.server.send(&response).await;
-    tokio::time::timeout(PATIENCE, self.handoffs.server.recv())
-      .await
-      .expect("the message is handed on")
       .unwrap()
   }
 
@@ -372,6 +403,18 @@ impl Logs {
 
   pub fn text(&self) -> String {
     String::from_utf8_lossy(&self.lines.lock().unwrap_or_else(PoisonError::into_inner)).into_owned()
+  }
+
+  /// Waits until a line with every one of `parts` is written; for what another task logs as it
+  /// happens
+  pub async fn wait_for(&self, parts: &[&str]) {
+    let found = tokio::time::timeout(PATIENCE, async {
+      while self.lines_with(parts).is_empty() {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+      }
+    })
+    .await;
+    assert!(found.is_ok(), "no line with {parts:?} in\n{}", self.text());
   }
 
   /// the captured lines that contain every one of `parts`

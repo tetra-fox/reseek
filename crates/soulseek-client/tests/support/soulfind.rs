@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::{Duration, Instant};
 
-use soulseek_client::{Client, ClientOptions, Event, Handoffs, WaitKey};
+use soulseek_client::{Client, ClientOptions, Event, WaitKey};
 use soulseek_proto::server::{GetStatusRequest, UserStatus};
 use soulseek_proto::{ServerCode, ServerRequest};
 use tokio::sync::broadcast;
@@ -124,13 +124,16 @@ impl Soulfind {
   /// Logs in a fresh user named after `prefix` and returns it with its event receiver. The name
   /// is unique among the users of this server.
   pub async fn login(self: &Arc<Self>, prefix: &str, options: ClientOptions) -> User {
-    let username = username(prefix);
-    let (client, handoffs) = Client::new(options).unwrap();
+    self.login_as(username(prefix), options).await
+  }
+
+  /// Logs in as `username`, for a test that needs the name before the client exists
+  pub async fn login_as(self: &Arc<Self>, username: String, options: ClientOptions) -> User {
+    let client = Client::new(options).unwrap();
     let events = client.subscribe();
     self.connect(&client, &username, PASSWORD).await.unwrap();
     User {
       client,
-      handoffs,
       username,
       events,
       _server: self.clone(),
@@ -180,7 +183,6 @@ pub fn username(prefix: &str) -> String {
 /// A user logged in to soulfind, which keeps the server running while it exists
 pub struct User {
   pub client: Client,
-  pub handoffs: Handoffs,
   pub username: String,
   pub events: broadcast::Receiver<Event>,
   _server: Arc<Soulfind>,

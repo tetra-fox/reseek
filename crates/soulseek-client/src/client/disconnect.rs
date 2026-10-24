@@ -1,7 +1,8 @@
 //! Ending the server session. The state moves to disconnecting, waits on the server are failed
 //! and the session's resources are taken in one step under the session lock; stopping the
-//! listener and closing the server connection follow, and the state ends at disconnected. Peer
-//! connections are not part of the session and stay open.
+//! listener, closing the server connection, tearing down the distributed tree and forgetting the
+//! connection requests the server relayed follow, and the state ends at disconnected. Message
+//! and transfer connections to other users are not part of the session and stay open.
 
 use uuid::Uuid;
 
@@ -40,7 +41,7 @@ impl Client {
       .inner
       .begin_disconnect(message, error, Cause::Requested)
     {
-      teardown.finish(&self.inner).await;
+      teardown.finish(self).await;
     }
   }
 
@@ -51,7 +52,7 @@ impl Client {
         .inner
         .begin_disconnect(Some(&reason.message), reason.error, Cause::ServerLost(id))
     {
-      teardown.finish(&self.inner).await;
+      teardown.finish(self).await;
     }
   }
 }
@@ -111,7 +112,8 @@ impl Inner {
 }
 
 impl Teardown {
-  pub(super) async fn finish(self, inner: &Inner) {
+  pub(super) async fn finish(self, client: &Client) {
+    let inner = &*client.inner;
     let Self {
       message,
       error,
@@ -124,7 +126,9 @@ impl Teardown {
     if let Some(server) = server {
       server.handle().disconnect(message.clone(), error.clone());
     }
-    *inner.distributed_status.lock().await = None;
+    client.tear_down_distributed().await;
+    // answers to those requests would now be taken for a session that no longer exists
+    client.peers().solicitations.clear();
     match &error {
       None | Some(ClientError::Cancelled | ClientError::Disposed) => {
         tracing::info!(message, "disconnected from server");

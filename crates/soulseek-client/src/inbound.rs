@@ -1,17 +1,14 @@
 //! What an accepted connection is for, read from its first message: a peer introducing itself
 //! for messages, a file transfer or the distributed tree, or a peer answering a connection
-//! request we had the server relay. Classified connections go to the component that owns that
-//! kind; anything else is closed.
+//! request we had the server relay. Anything else is closed.
 
 use std::fmt::Write as _;
 
 use soulseek_proto::init::{PeerInit, PierceFirewall};
 use soulseek_proto::{DecodeError, FieldError, InitMessage, PeerConnectionType};
-use tokio::sync::mpsc;
 
 use crate::conn::Conn;
 use crate::error::{ClientError, ConnectionErrorKind};
-use crate::log::LogLimiter;
 
 /// The first message is at most a username and a connection type; anything longer is not one.
 const MAX_INIT_BYTES: u32 = 1024;
@@ -19,11 +16,9 @@ const MAX_INIT_BYTES: u32 = 1024;
 /// how many leading bytes of an unrecognised first message an error shows
 const SHOWN_BYTES: usize = 16;
 
-static QUEUE_FULL: LogLimiter = LogLimiter::new();
-
 /// An accepted connection and what its first message says it is for
 #[derive(Debug)]
-pub enum InboundConnection {
+pub(crate) enum InboundConnection {
   /// a peer opening a message connection to us
   Peer { username: String, conn: Conn },
   /// a peer opening a file transfer connection; the token it sent is its own, and the token we
@@ -40,31 +35,20 @@ pub enum InboundConnection {
   PierceFirewall { token: u32, conn: Conn },
 }
 
-impl InboundConnection {
-  /// the connection, whatever it is for
-  pub fn conn(&self) -> &Conn {
-    match self {
-      Self::Peer { conn, .. }
-      | Self::Transfer { conn, .. }
-      | Self::Distributed { conn, .. }
-      | Self::PierceFirewall { conn, .. } => conn,
-    }
-  }
-}
-
-/// Reads the first message of an accepted connection and passes the classified connection on.
-/// The connection's own inactivity timeout bounds how long a silent peer can hold it.
-pub(crate) async fn classify(mut conn: Conn, deliver: mpsc::Sender<InboundConnection>) {
+/// Reads the first message of an accepted connection and says what it is for, or closes it when
+/// it is for nothing we know. The connection's own inactivity timeout bounds how long a silent
+/// peer can hold it.
+pub(crate) async fn classify(mut conn: Conn) -> Option<InboundConnection> {
   let remote = conn.handle().remote();
   let init = match read_init(&mut conn).await {
     Ok(init) => init,
     // the connection logs why it closed, in its own span with the remote address
     Err(error) => {
       conn.handle().disconnect(error.to_string(), Some(error));
-      return;
+      return None;
     }
   };
-  let inbound = match init {
+  Some(match init {
     InitMessage::PeerInit(PeerInit {
       username,
       connection_type,
@@ -85,26 +69,7 @@ pub(crate) async fn classify(mut conn: Conn, deliver: mpsc::Sender<InboundConnec
       tracing::debug!(%remote, token, "inbound connection answers a relayed request");
       InboundConnection::PierceFirewall { token, conn }
     }
-  };
-  match deliver.try_send(inbound) {
-    Ok(()) => {}
-    Err(mpsc::error::TrySendError::Full(inbound)) => {
-      if let Some(suppressed) = QUEUE_FULL.allow() {
-        tracing::warn!(%remote, suppressed, "inbound connection queue is full, connection dropped");
-      }
-      inbound
-        .conn()
-        .handle()
-        .disconnect("inbound connection queue is full", None);
-    }
-    Err(mpsc::error::TrySendError::Closed(inbound)) => {
-      tracing::debug!(%remote, "nothing takes inbound connections, connection dropped");
-      inbound
-        .conn()
-        .handle()
-        .disconnect("inbound connections are not accepted", None);
-    }
-  }
+  })
 }
 
 async fn read_init(conn: &mut Conn) -> Result<InitMessage, ClientError> {
@@ -165,18 +130,14 @@ mod tests {
 
   async fn classified(bytes: &[u8]) -> InboundConnection {
     let (conn, _remote) = accepted_with(bytes).await;
-    let (deliver, mut delivered) = mpsc::channel(1);
-    classify(conn, deliver).await;
-    delivered.try_recv().unwrap()
+    classify(conn).await.expect("the connection is classified")
   }
 
   /// the reason a connection that sent `bytes` was closed with
   async fn rejection(bytes: &[u8]) -> String {
     let (conn, _remote) = accepted_with(bytes).await;
     let handle = conn.handle().clone();
-    let (deliver, mut delivered) = mpsc::channel(1);
-    classify(conn, deliver).await;
-    assert!(delivered.try_recv().is_err(), "nothing is delivered");
+    assert!(classify(conn).await.is_none(), "nothing is classified");
     handle.disconnected().await.message
   }
 
@@ -237,25 +198,6 @@ mod tests {
     assert_eq!(
       rejection(&[2, 0, 0, 0, 9, 9]).await,
       "Unrecognized initialization message: 020000000909 (6 bytes)"
-    );
-  }
-
-  #[tokio::test]
-  async fn a_full_queue_closes_the_connection() {
-    let (conn, _remote) = accepted_with(&peer_init("alice", "P", 0)).await;
-    let handle = conn.handle().clone();
-    let (filler, _filler_remote) = accepted_with(&[]).await;
-    let (deliver, _delivered) = mpsc::channel(1);
-    deliver
-      .try_send(InboundConnection::PierceFirewall {
-        token: 0,
-        conn: filler,
-      })
-      .unwrap();
-    classify(conn, deliver).await;
-    assert_eq!(
-      handle.disconnected().await.message,
-      "inbound connection queue is full"
     );
   }
 }

@@ -1,6 +1,6 @@
-//! The callbacks the application supplies so the client can answer peers (share listings, folder
-//! contents, user info, search results, upload queueing) and the caches its lookups go through.
-//! They are part of the client options; the peer and search handlers call them.
+//! The callbacks the application supplies so the client can answer peers: share listings,
+//! folder contents, user info, search results and upload queueing. They are part of the client
+//! options; the peer dispatcher and the search responder call them.
 
 use std::fmt;
 use std::future::Future;
@@ -11,19 +11,20 @@ use std::sync::Arc;
 use soulseek_proto::peer::{BrowseResponse, Directory, SearchResponse, UserInfo};
 use soulseek_proto::{RemoteFilename, SearchQuery};
 
+use crate::conn::EncodedFrame;
 use crate::error::ClientError;
 
 /// What a resolver returns: a boxed future of its answer
 pub type ResolverFuture<T> = Pin<Box<dyn Future<Output = Result<T, ClientError>> + Send>>;
 
-/// `(username, token, query)` to the response for a search a user sent us, or `None` when we
-/// have nothing that matches
+/// `(username, token, query)` to our answer to a search a user sent us, or `None` when we have
+/// nothing that matches
 pub type SearchResponseResolver =
-  Arc<dyn Fn(String, u32, SearchQuery) -> ResolverFuture<Option<SearchResponse>> + Send + Sync>;
+  Arc<dyn Fn(String, u32, SearchQuery) -> ResolverFuture<Option<SearchReply>> + Send + Sync>;
 
 /// `(username, endpoint)` to our share listing, for a peer that browses us
 pub type BrowseResponseResolver =
-  Arc<dyn Fn(String, SocketAddr) -> ResolverFuture<BrowseResponse> + Send + Sync>;
+  Arc<dyn Fn(String, SocketAddr) -> ResolverFuture<BrowseReply> + Send + Sync>;
 
 /// `(username, endpoint, token, directory)` to that directory and every directory below it, or
 /// `None` to send no reply
@@ -48,49 +49,50 @@ pub type EnqueueDownload =
 pub type PlaceInQueueResolver =
   Arc<dyn Fn(String, SocketAddr, RemoteFilename) -> ResolverFuture<Option<u32>> + Send + Sync>;
 
-/// Remembers the addresses the server returned for users, so repeated connects skip the lookup
-pub trait UserEndPointCache: Send + Sync {
-  /// the remembered address of `username`
-  fn get(&self, username: &str) -> Result<Option<SocketAddr>, ClientError>;
-
-  /// remembers the address the server just returned for `username`
-  fn insert(&self, username: String, endpoint: SocketAddr) -> Result<(), ClientError>;
+/// Our answer to another user's search
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SearchReply {
+  /// the files that matched, which the client encodes
+  Response(SearchResponse),
+  /// a complete `SearchResponse` frame the application encoded itself, sent as it is
+  Encoded(Vec<u8>),
 }
 
-/// A search response we could not deliver because the searcher was unreachable, kept so it can
-/// still be sent if the searcher connects to us later
-#[derive(Clone, Debug)]
-pub struct CachedSearchResponse {
-  pub username: String,
-  /// the searcher's token
-  pub token: u32,
-  /// the query as the searcher sent it
-  pub query: String,
-  pub response: SearchResponse,
+impl SearchReply {
+  /// the files the reply offers, locked ones included; unknown for an encoded reply
+  pub fn file_count(&self) -> Option<usize> {
+    match self {
+      Self::Response(response) => Some(response.files.len() + response.locked_files.len()),
+      Self::Encoded(_) => None,
+    }
+  }
+
+  /// the complete frame to write
+  pub(crate) fn frame(&self) -> Vec<u8> {
+    match self {
+      Self::Response(response) => {
+        soulseek_proto::PeerMessage::SearchResponse(response.clone()).encode()
+      }
+      Self::Encoded(frame) => frame.clone(),
+    }
+  }
 }
 
-/// Holds undelivered search responses under the token of the connection request we sent the
-/// searcher
-pub trait SearchResponseCache: Send + Sync {
-  /// keeps `response` under `response_token`
-  fn insert(&self, response_token: u32, response: CachedSearchResponse) -> Result<(), ClientError>;
-
-  /// the response kept under `response_token`, left in place
-  fn get(&self, response_token: u32) -> Result<Option<CachedSearchResponse>, ClientError>;
-
-  /// takes the response kept under `response_token` out of the cache
-  fn remove(&self, response_token: u32) -> Result<Option<CachedSearchResponse>, ClientError>;
+/// Our share listing for a peer that browses us
+#[derive(Debug)]
+pub enum BrowseReply {
+  /// the listing, which the client encodes
+  Response(BrowseResponse),
+  /// a complete `BrowseResponse` frame the application encoded ahead of time, streamed as it is
+  Encoded(EncodedFrame),
 }
 
-/// Every callback and cache the application can supply. An unset resolver falls back to the
-/// behaviour each one documents.
+/// Every callback the application can supply. An unset resolver falls back to the behaviour
+/// each one documents.
 #[derive(Clone, Default)]
 pub struct Resolvers {
-  pub user_end_point_cache: Option<Arc<dyn UserEndPointCache>>,
   /// unset: searches are never answered
   pub search_response_resolver: Option<SearchResponseResolver>,
-  /// unset: undeliverable search responses are dropped
-  pub search_response_cache: Option<Arc<dyn SearchResponseCache>>,
   /// unset: an empty share listing
   pub browse_response_resolver: Option<BrowseResponseResolver>,
   /// unset: folder requests get no reply
@@ -107,23 +109,15 @@ impl Resolvers {
   /// takes every callback `patch` sets and keeps the rest
   pub(crate) fn merge(&mut self, patch: Resolvers) {
     let Resolvers {
-      user_end_point_cache,
       search_response_resolver,
-      search_response_cache,
       browse_response_resolver,
       directory_contents_resolver,
       user_info_resolver,
       enqueue_download,
       place_in_queue_resolver,
     } = patch;
-    if user_end_point_cache.is_some() {
-      self.user_end_point_cache = user_end_point_cache;
-    }
     if search_response_resolver.is_some() {
       self.search_response_resolver = search_response_resolver;
-    }
-    if search_response_cache.is_some() {
-      self.search_response_cache = search_response_cache;
     }
     if browse_response_resolver.is_some() {
       self.browse_response_resolver = browse_response_resolver;
@@ -147,14 +141,9 @@ impl Resolvers {
 impl fmt::Debug for Resolvers {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("Resolvers")
-      .field("user_end_point_cache", &self.user_end_point_cache.is_some())
       .field(
         "search_response_resolver",
         &self.search_response_resolver.is_some(),
-      )
-      .field(
-        "search_response_cache",
-        &self.search_response_cache.is_some(),
       )
       .field(
         "browse_response_resolver",

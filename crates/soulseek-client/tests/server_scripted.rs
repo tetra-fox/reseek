@@ -1,13 +1,12 @@
 //! Server messages soulfind never sends, delivered by a scripted server: admin broadcasts,
-//! privilege notifications, the distributed tree's messages and tuning values, the shapes older
-//! or newer servers send, codes nothing handles, malformed frames and unread bytes.
+//! privilege notifications, the distributed tree's tuning values, the shapes older or newer
+//! servers send, codes nothing handles, malformed frames and unread bytes.
 
 mod support;
 
 use std::net::Ipv4Addr;
 
-use soulseek_client::{ClientOptions, Event, ServerHandoff, ServerInfo, WaitKey};
-use soulseek_proto::distributed::Embedded;
+use soulseek_client::{ClientOptions, Event, ServerInfo, WaitKey};
 use soulseek_proto::server::*;
 use soulseek_proto::{ServerCode, ServerRequest, ServerResponse};
 use support::{Logs, Session, options, user_key};
@@ -142,10 +141,10 @@ async fn cannot_connect_naming_the_user_is_raised() {
     token: 13,
     username: Some("bob".into()),
   };
-  let handoff = session
-    .handoff(ServerResponse::CannotConnect(named.clone()))
+  session
+    .server
+    .send(&ServerResponse::CannotConnect(named))
     .await;
-  assert!(matches!(handoff, ServerHandoff::CannotConnect(got) if got == named));
   let raised = session
     .event(|event| match event {
       Event::UserCannotConnect { token, username } => Some((token, username)),
@@ -153,45 +152,6 @@ async fn cannot_connect_naming_the_user_is_raised() {
     })
     .await;
   assert_eq!(raised, (13, "bob".into()));
-}
-
-#[tokio::test]
-async fn embedded_message_is_handed_on() {
-  let mut session = Session::start().await;
-  let embedded = Embedded {
-    distributed_code: 3,
-    payload: vec![49, 0, 0, 0, 1, 2, 3],
-  };
-  let handoff = session
-    .handoff(ServerResponse::EmbeddedMessage(embedded.clone()))
-    .await;
-  assert!(matches!(handoff, ServerHandoff::EmbeddedMessage(got) if got == embedded));
-}
-
-#[tokio::test]
-async fn net_info_is_handed_on() {
-  let mut session = Session::start().await;
-  let candidates = NetInfo {
-    parents: vec![ParentCandidate {
-      username: "bob".into(),
-      ip: Ipv4Addr::new(10, 0, 0, 2),
-      port: 2234,
-    }],
-  };
-  let handoff = session
-    .handoff(ServerResponse::NetInfo(candidates.clone()))
-    .await;
-  assert!(matches!(handoff, ServerHandoff::NetInfo(got) if got == candidates));
-}
-
-#[tokio::test]
-async fn distributed_reset_is_raised_and_handed_on() {
-  let mut session = Session::start().await;
-  let handoff = session.handoff(ServerResponse::DistributedReset).await;
-  assert!(matches!(handoff, ServerHandoff::DistributedReset));
-  session
-    .event(|event| matches!(event, Event::DistributedNetworkReset).then_some(()))
-    .await;
 }
 
 #[tokio::test]

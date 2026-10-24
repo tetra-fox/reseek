@@ -1,28 +1,35 @@
 //! The client: one server session at a time (connect, log in, disconnect), the listener that
-//! runs alongside it, the server message dispatcher, and the pieces the peer, distributed and
-//! search components build on (the waiter, tokens, server writes, events and hand-offs).
+//! runs alongside it, the server message dispatcher, the operations that ask the server for
+//! something, and the parts that live across sessions: connections to other users, the
+//! distributed search tree, the search responder, the waiter and the tokens.
 
 mod connect;
 mod disconnect;
-mod distributed;
+mod endpoint;
+mod inbound;
 mod reconfigure;
+mod request;
+mod search;
 mod server;
 
-pub use server::ServerHandoff;
+pub use search::SearchScope;
 
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, Weak};
 
 use soulseek_proto::ServerRequest;
-use tokio::sync::{broadcast, mpsc, watch};
+use tokio::sync::{broadcast, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::conn::MessageConn;
+use crate::distributed::DistributedNetwork;
 use crate::error::ClientError;
 use crate::events::{EVENT_CAPACITY, Event};
-use crate::inbound::InboundConnection;
 use crate::listener::Listener;
+use crate::lock;
 use crate::options::ClientOptions;
+use crate::peers::PeerConnections;
+use crate::responder::SearchResponder;
 use crate::state::{ClientState, ServerInfo};
 use crate::token::TokenGenerator;
 use crate::waiter::Waiter;
@@ -32,26 +39,22 @@ pub const DEFAULT_SERVER_ADDRESS: &str = "server.slsknet.org";
 /// The server port the library connects to when the application names none
 pub const DEFAULT_SERVER_PORT: u16 = 2271;
 
-/// Server messages the client hands on without waiting for them to be taken
-const SERVER_HANDOFF_CAPACITY: usize = 1024;
-/// Classified inbound connections waiting to be taken
-const INBOUND_CAPACITY: usize = 256;
-
-/// The receiving ends of what the client hands on: server messages that need the peer,
-/// distributed or search components, and accepted connections once their first message says
-/// what they are for. A full queue drops what does not fit (closing a connection), so the
-/// receivers must be drained promptly.
-pub struct Handoffs {
-  /// server messages for the peer, distributed and search components
-  pub server: mpsc::Receiver<ServerHandoff>,
-  /// accepted connections, classified by their first message
-  pub inbound: mpsc::Receiver<InboundConnection>,
-}
-
 /// A Soulseek client. Clones share one client.
 #[derive(Clone)]
 pub struct Client {
   inner: Arc<Inner>,
+}
+
+/// A client that does not keep it alive, for the tasks it starts
+#[derive(Clone)]
+pub(crate) struct WeakClient {
+  inner: Weak<Inner>,
+}
+
+impl WeakClient {
+  pub(crate) fn upgrade(&self) -> Option<Client> {
+    self.inner.upgrade().map(|inner| Client { inner })
+  }
 }
 
 struct Inner {
@@ -66,10 +69,10 @@ struct Inner {
   waiter: Waiter,
   tokens: TokenGenerator,
   events: broadcast::Sender<Event>,
-  server_handoffs: mpsc::Sender<ServerHandoff>,
-  inbound: mpsc::Sender<InboundConnection>,
-  /// the last distributed status sent to the server, to skip sending it again unchanged
-  distributed_status: tokio::sync::Mutex<Option<String>>,
+  peers: Arc<PeerConnections>,
+  distributed: DistributedNetwork,
+  responder: SearchResponder,
+  endpoints: endpoint::Endpoints,
   /// cancelled when the client is disposed or dropped
   lifetime: CancellationToken,
 }
@@ -89,36 +92,39 @@ struct Session {
 }
 
 impl Client {
-  /// A disconnected client with `options`, and the receivers of what it hands on. Fails when
-  /// the options do not validate.
-  pub fn new(options: ClientOptions) -> Result<(Self, Handoffs), ClientError> {
+  /// A disconnected client with `options`. Fails when the options do not validate. The client
+  /// starts tasks of its own, so it must be made inside a tokio runtime; they stop when it is
+  /// disposed or the last clone is dropped.
+  pub fn new(options: ClientOptions) -> Result<Self, ClientError> {
     options.validate()?;
     let (events, _) = broadcast::channel(EVENT_CAPACITY);
-    let (server_handoffs, server) = mpsc::channel(SERVER_HANDOFF_CAPACITY);
-    let (inbound, inbound_receiver) = mpsc::channel(INBOUND_CAPACITY);
+    let (distributed, commands) = DistributedNetwork::new();
     let inner = Inner {
       waiter: Waiter::new(options.message_timeout),
       tokens: TokenGenerator::new(options.starting_token),
+      peers: Arc::new(PeerConnections::new(
+        options.limits.max_concurrent_peer_connects,
+      )),
+      responder: SearchResponder::new(
+        options.limits.search_response_cache_size,
+        options.limits.max_concurrent_search_responses,
+      ),
+      endpoints: endpoint::Endpoints::new(options.limits.user_endpoint_cache_size),
       options: RwLock::new(Arc::new(options)),
       state: watch::Sender::new(ClientState::DISCONNECTED),
       session: Mutex::new(Session::default()),
       state_lock: tokio::sync::Mutex::new(()),
       server_info: Mutex::new(ServerInfo::default()),
       events,
-      server_handoffs,
-      inbound,
-      distributed_status: tokio::sync::Mutex::new(None),
+      distributed,
       lifetime: CancellationToken::new(),
     };
-    Ok((
-      Self {
-        inner: Arc::new(inner),
-      },
-      Handoffs {
-        server,
-        inbound: inbound_receiver,
-      },
-    ))
+    let client = Self {
+      inner: Arc::new(inner),
+    };
+    DistributedNetwork::run(client.downgrade(), commands);
+    client.start_endpoint_lock_cleanup();
+    Ok(client)
   }
 
   /// where the client is in its server session
@@ -176,6 +182,11 @@ impl Client {
     self.inner.tokens.next()
   }
 
+  /// every user with an established message connection, and its address
+  pub fn message_connections(&self) -> Vec<(String, SocketAddr)> {
+    self.inner.peers.message_connections()
+  }
+
   /// raises `event` to every subscriber
   pub(crate) fn emit(&self, event: Event) {
     self.inner.emit(event);
@@ -184,6 +195,42 @@ impl Client {
   /// cancelled when the client is disposed or dropped; long-lived tasks stop with it
   pub fn cancellation(&self) -> &CancellationToken {
     &self.inner.lifetime
+  }
+
+  pub(crate) fn downgrade(&self) -> WeakClient {
+    WeakClient {
+      inner: Arc::downgrade(&self.inner),
+    }
+  }
+
+  pub(crate) fn peers(&self) -> &PeerConnections {
+    &self.inner.peers
+  }
+
+  pub(crate) fn peers_arc(&self) -> Arc<PeerConnections> {
+    self.inner.peers.clone()
+  }
+
+  pub(crate) fn distributed(&self) -> &DistributedNetwork {
+    &self.inner.distributed
+  }
+
+  pub(crate) fn responder(&self) -> &SearchResponder {
+    &self.inner.responder
+  }
+
+  pub(crate) fn check_not_disposed(&self) -> Result<(), ClientError> {
+    self.inner.check_not_disposed()
+  }
+
+  /// our username, which `verb` needs; fails while not logged in
+  pub(crate) fn own_username(&self, verb: &str) -> Result<String, ClientError> {
+    self.username().ok_or_else(|| {
+      ClientError::InvalidOperation(format!(
+        "The server connection must be connected and logged in to {verb} (currently: {})",
+        self.state()
+      ))
+    })
   }
 
   /// writes one message to the server and waits until it is on the socket
@@ -209,9 +256,9 @@ impl Client {
     Ok(())
   }
 
-  /// Queues a message to the server without waiting for the write, for acknowledgements and
-  /// probes whose failure only matters to the connection itself.
-  fn send_server_message(&self, message: &ServerRequest) {
+  /// Queues a message to the server without waiting for the write, for acknowledgements,
+  /// probes and reports whose failure only matters to the connection itself.
+  pub(crate) fn send_server_message(&self, message: &ServerRequest) {
     let result = self
       .inner
       .server()
@@ -223,8 +270,9 @@ impl Client {
     }
   }
 
-  /// Disconnects and stops the client for good: every wait is cancelled and every task tied
-  /// to the client stops. Later calls fail with `Disposed`.
+  /// Disconnects and stops the client for good: every wait is cancelled, every connection to
+  /// another user is closed and every task tied to the client stops. Later calls fail with
+  /// `Disposed`.
   pub async fn dispose(&self) {
     self
       .disconnect(
@@ -233,6 +281,7 @@ impl Client {
       )
       .await;
     self.inner.lifetime.cancel();
+    self.inner.peers.remove_and_dispose_all();
     self.inner.waiter.cancel_all();
   }
 }
@@ -242,12 +291,15 @@ impl Inner {
     self
       .options
       .read()
-      .unwrap_or_else(PoisonError::into_inner)
+      .unwrap_or_else(std::sync::PoisonError::into_inner)
       .clone()
   }
 
   fn set_options(&self, options: Arc<ClientOptions>) {
-    *self.options.write().unwrap_or_else(PoisonError::into_inner) = options;
+    *self
+      .options
+      .write()
+      .unwrap_or_else(std::sync::PoisonError::into_inner) = options;
   }
 
   fn session(&self) -> MutexGuard<'_, Session> {
@@ -314,19 +366,15 @@ impl Inner {
 impl Drop for Inner {
   fn drop(&mut self) {
     self.lifetime.cancel();
+    self.peers.remove_and_dispose_all();
     let session = self
       .session
       .get_mut()
-      .unwrap_or_else(PoisonError::into_inner);
+      .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(server) = session.server.take() {
       server
         .handle()
         .disconnect("Client is being disposed", Some(ClientError::Disposed));
     }
   }
-}
-
-/// locks a mutex whose critical sections cannot leave its data half-updated
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-  mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
