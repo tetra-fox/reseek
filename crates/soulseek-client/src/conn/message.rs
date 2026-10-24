@@ -3,10 +3,13 @@
 //! interleave. A queue that fills up means the remote has stopped reading; the connection is
 //! closed rather than buffering without bound.
 
+use std::fmt;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use soulseek_proto::Limits;
 use soulseek_proto::frame::{self, FrameHeader, FrameKind};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::sync::{mpsc, oneshot};
 use tracing::Instrument;
 
@@ -28,8 +31,34 @@ pub enum ReadEvent {
   Frame(Vec<u8>),
 }
 
+/// A complete message frame, length prefix included, that was encoded ahead of time and is read
+/// from `reader` as it is written, so a large one is never held in memory whole
+pub struct EncodedFrame {
+  /// bytes the reader yields for the frame, length prefix included
+  pub len: u64,
+  /// where the frame is read from, a file for instance; it must yield `len` bytes
+  pub reader: Pin<Box<dyn AsyncRead + Send>>,
+}
+
+/// the reader has nothing worth printing
+impl fmt::Debug for EncodedFrame {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.debug_struct("EncodedFrame")
+      .field("len", &self.len)
+      .finish_non_exhaustive()
+  }
+}
+
+enum Payload {
+  Bytes(Vec<u8>),
+  Encoded(EncodedFrame),
+}
+
+/// resolves once the write it belongs to is on the socket, or with why it never got there
+pub(crate) type Receipt = oneshot::Receiver<Result<(), ClientError>>;
+
 struct Outgoing {
-  bytes: Vec<u8>,
+  payload: Payload,
   written: Option<oneshot::Sender<Result<(), ClientError>>>,
 }
 
@@ -47,6 +76,13 @@ pub struct MessageConn {
   queue: mpsc::Sender<Outgoing>,
   /// the read half until the read loop takes it
   reading: Arc<Mutex<Option<Reading>>>,
+}
+
+/// shows the connection underneath
+impl fmt::Debug for MessageConn {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    self.handle.fmt(f)
+  }
 }
 
 impl Conn {
@@ -105,19 +141,29 @@ impl MessageConn {
   /// Queues `bytes` to be written without waiting for the write. Fails at once when the queue
   /// is full, which closes the connection; a write that fails later closes it as well.
   pub fn send(&self, bytes: Vec<u8>) -> Result<(), ClientError> {
-    self.enqueue(bytes, None)
+    self.enqueue(Payload::Bytes(bytes), None)
   }
 
   /// queues `bytes` and waits until they are written
   pub async fn write(&self, bytes: Vec<u8>) -> Result<(), ClientError> {
+    settled(self.send_with_receipt(bytes)?).await
+  }
+
+  /// Queues `frame` and waits until all of it is written. A reader that fails or ends early
+  /// after part of the frame went out closes the connection, whose stream can no longer be
+  /// framed.
+  pub async fn write_encoded(&self, frame: EncodedFrame) -> Result<(), ClientError> {
     let (written, done) = oneshot::channel();
-    self.enqueue(bytes, Some(written))?;
-    done.await.unwrap_or_else(|_| {
-      Err(ClientError::connection(
-        ConnectionErrorKind::Write,
-        "Write aborted after 0 bytes written; the connection has been or is being disposed/disconnected",
-      ))
-    })
+    self.enqueue(Payload::Encoded(frame), Some(written))?;
+    settled(done).await
+  }
+
+  /// queues `bytes` and returns what resolves once they are written, so several writes can be
+  /// waited for together
+  pub(crate) fn send_with_receipt(&self, bytes: Vec<u8>) -> Result<Receipt, ClientError> {
+    let (written, done) = oneshot::channel();
+    self.enqueue(Payload::Bytes(bytes), Some(written))?;
+    Ok(done)
   }
 
   /// writes waiting in the queue
@@ -127,10 +173,14 @@ impl MessageConn {
 
   fn enqueue(
     &self,
-    bytes: Vec<u8>,
+    payload: Payload,
     written: Option<oneshot::Sender<Result<(), ClientError>>>,
   ) -> Result<(), ClientError> {
-    if bytes.is_empty() {
+    let empty = match &payload {
+      Payload::Bytes(bytes) => bytes.is_empty(),
+      Payload::Encoded(frame) => frame.len == 0,
+    };
+    if empty {
       return Err(ClientError::InvalidArgument(
         "Invalid attempt to send empty data".into(),
       ));
@@ -138,7 +188,7 @@ impl MessageConn {
     if !self.handle.is_connected() {
       return Err(self.handle.not_connected());
     }
-    match self.queue.try_send(Outgoing { bytes, written }) {
+    match self.queue.try_send(Outgoing { payload, written }) {
       Ok(()) => Ok(()),
       Err(mpsc::error::TrySendError::Full(_)) => {
         self.handle.disconnect("The write buffer is full", None);
@@ -163,19 +213,70 @@ async fn write_loop(mut half: ConnWriteHalf, mut queue: mpsc::Receiver<Outgoing>
       outgoing = queue.recv() => outgoing,
     };
     // every sender is gone, so nothing more can be written
-    let Some(Outgoing { bytes, written }) = outgoing else {
+    let Some(Outgoing { payload, written }) = outgoing else {
       return;
     };
-    let result = half.write_all(&bytes).await;
-    let failed = result.is_err();
+    let result = match payload {
+      Payload::Bytes(bytes) => half.write_all(&bytes).await,
+      Payload::Encoded(frame) => write_encoded(&mut half, frame).await,
+    };
     if let Some(written) = written {
       // the writer may have stopped waiting; the connection has logged the failure either way
       let _ = written.send(result);
     }
-    if failed {
+    // a failed socket write has closed the connection; an encoded frame whose reader failed
+    // before any of it was written leaves the connection usable
+    if !half.handle().is_connected() {
       return;
     }
   }
+}
+
+/// what a write that was queued comes to; a writer that went away took the connection with it
+async fn settled(done: Receipt) -> Result<(), ClientError> {
+  done.await.unwrap_or_else(|_| {
+    Err(ClientError::connection(
+      ConnectionErrorKind::Write,
+      "Write aborted after 0 bytes written; the connection has been or is being disposed/disconnected",
+    ))
+  })
+}
+
+/// Copies the frame from its reader in chunks of the write buffer size. Once part of it is on the
+/// socket the frame must be finished, so a reader that fails or ends early closes the connection.
+async fn write_encoded(half: &mut ConnWriteHalf, frame: EncodedFrame) -> Result<(), ClientError> {
+  let EncodedFrame { len, mut reader } = frame;
+  let mut chunk = vec![0; half.handle().options().write_buffer_size];
+  let mut total = 0;
+  while total < len {
+    let want = chunk
+      .len()
+      .min(usize::try_from(len - total).unwrap_or(usize::MAX));
+    let read = match reader.read(&mut chunk[..want]).await {
+      Ok(0) => Err(format!(
+        "the encoded message ended after {total} of {len} bytes"
+      )),
+      Ok(read) => Ok(read),
+      Err(error) => Err(format!(
+        "reading the encoded message failed after {total} of {len} bytes: {error}"
+      )),
+    };
+    let read = match read {
+      Ok(read) => read,
+      Err(reason) => {
+        let error = ClientError::connection(ConnectionErrorKind::Write, reason.clone());
+        if total > 0 {
+          half
+            .handle()
+            .disconnect(format!("Write error: {reason}"), Some(error.clone()));
+        }
+        return Err(error);
+      }
+    };
+    half.write_all(&chunk[..read]).await?;
+    total += read as u64;
+  }
+  Ok(())
 }
 
 async fn read_loop(reading: Reading, mut sink: impl FnMut(ReadEvent)) {
@@ -362,5 +463,74 @@ mod tests {
       Err(ClientError::InvalidOperation(_))
     ));
     assert!(matches!(conn.handle().state(), ConnState::Disconnected(_)));
+  }
+
+  #[tokio::test]
+  async fn an_encoded_frame_streams_whole_between_other_writes() {
+    let options = ConnectionOptions {
+      write_buffer_size: 4,
+      ..ConnectionOptions::default()
+    };
+    let (conn, mut remote) = pair(options, FrameKind::Peer).await;
+    let frame: Vec<u8> = (0..23).collect();
+    conn.send(vec![100]).unwrap();
+    conn
+      .write_encoded(EncodedFrame {
+        len: frame.len() as u64,
+        reader: Box::pin(std::io::Cursor::new(frame.clone())),
+      })
+      .await
+      .unwrap();
+    conn.write(vec![200]).await.unwrap();
+    let mut received = vec![0; 25];
+    remote.read_exact(&mut received).await.unwrap();
+    assert_eq!(received[0], 100);
+    assert_eq!(received[1..24], frame);
+    assert_eq!(received[24], 200);
+  }
+
+  #[tokio::test]
+  async fn an_encoded_frame_that_ends_early_closes_the_connection() {
+    let options = ConnectionOptions {
+      write_buffer_size: 4,
+      ..ConnectionOptions::default()
+    };
+    let (conn, _remote) = pair(options, FrameKind::Peer).await;
+    let error = conn
+      .write_encoded(EncodedFrame {
+        len: 10,
+        reader: Box::pin(std::io::Cursor::new(vec![1; 6])),
+      })
+      .await
+      .unwrap_err();
+    assert_eq!(
+      error.to_string(),
+      "the encoded message ended after 6 of 10 bytes"
+    );
+    let reason = conn.handle().disconnected().await;
+    assert_eq!(
+      reason.message,
+      "Write error: the encoded message ended after 6 of 10 bytes"
+    );
+  }
+
+  #[tokio::test]
+  async fn an_encoded_frame_with_nothing_to_read_leaves_the_connection_usable() {
+    let (conn, mut remote) = pair(ConnectionOptions::default(), FrameKind::Peer).await;
+    let error = conn
+      .write_encoded(EncodedFrame {
+        len: 10,
+        reader: Box::pin(std::io::Cursor::new(Vec::new())),
+      })
+      .await
+      .unwrap_err();
+    assert_eq!(
+      error.to_string(),
+      "the encoded message ended after 0 of 10 bytes"
+    );
+    conn.write(vec![7]).await.unwrap();
+    let mut received = [0; 1];
+    remote.read_exact(&mut received).await.unwrap();
+    assert_eq!(received, [7]);
   }
 }

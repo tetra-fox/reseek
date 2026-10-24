@@ -159,27 +159,29 @@ impl Shared {
       .unwrap_or_else(|poisoned| poisoned.into_inner())
   }
 
-  /// hands `outcome` to the oldest wait under `key` whose receiver is still there
-  fn settle(&self, key: &WaitKey, mut outcome: Outcome) -> bool {
+  /// hands `outcome` to the oldest wait under `key` whose receiver is still there, or back
+  /// when there is none
+  fn settle(&self, key: &WaitKey, mut outcome: Outcome) -> Result<(), Outcome> {
     let mut waits = self.lock();
     let Some(queue) = waits.get_mut(key) else {
-      return false;
+      return Err(outcome);
     };
-    let mut settled = false;
-    while let Some(pending) = queue.pop_front() {
+    loop {
+      let Some(pending) = queue.pop_front() else {
+        waits.remove(key);
+        return Err(outcome);
+      };
       match pending.settle.send(outcome) {
         Ok(()) => {
-          settled = true;
-          break;
+          if queue.is_empty() {
+            waits.remove(key);
+          }
+          return Ok(());
         }
         // that wait's future was dropped without removing itself yet; try the next one
         Err(returned) => outcome = returned,
       }
     }
-    if queue.is_empty() {
-      waits.remove(key);
-    }
-    settled
   }
 
   fn remove(&self, key: &WaitKey, id: u64) {
@@ -298,12 +300,26 @@ impl Waiter {
   /// Completes the oldest wait under `key` with `value`, returning whether a wait took it. A
   /// value nobody waits for is dropped.
   pub fn complete<T: Send + 'static>(&self, key: &WaitKey, value: T) -> bool {
-    self.shared.settle(key, Ok(Box::new(value)))
+    self.offer(key, value).is_ok()
+  }
+
+  /// Completes the oldest wait under `key` with `value`, or hands `value` back when nobody
+  /// waits, so a connection nobody took can be closed with a reason.
+  pub(crate) fn offer<T: Send + 'static>(&self, key: &WaitKey, value: T) -> Result<(), T> {
+    match self.shared.settle(key, Ok(Box::new(value))) {
+      Ok(()) => Ok(()),
+      Err(Ok(value)) => Err(
+        *value
+          .downcast::<T>()
+          .expect("the value handed back is the one offered"),
+      ),
+      Err(Err(_)) => unreachable!("an offered value is never an error"),
+    }
   }
 
   /// fails the oldest wait under `key` with `error`, returning whether there was one
   pub fn fault(&self, key: &WaitKey, error: ClientError) -> bool {
-    self.shared.settle(key, Err(error))
+    self.shared.settle(key, Err(error)).is_ok()
   }
 
   /// whether anything waits under `key`
@@ -388,6 +404,15 @@ mod tests {
     assert_eq!(first.await.unwrap(), 1);
     assert_eq!(second.await.unwrap(), 2);
     assert!(!waiter.has_wait(&key("a")));
+  }
+
+  #[tokio::test]
+  async fn an_offer_nobody_takes_is_handed_back() {
+    let waiter = waiter();
+    assert_eq!(waiter.offer(&key("a"), String::from("conn")), Err("conn".into()));
+    let wait = waiter.wait::<String>(key("a"), None, CancellationToken::new());
+    assert_eq!(waiter.offer(&key("a"), String::from("conn")), Ok(()));
+    assert_eq!(wait.await.unwrap(), "conn");
   }
 
   #[tokio::test]

@@ -10,7 +10,7 @@ mod socket;
 mod socks5;
 
 pub use handle::{ConnHandle, ConnKey, ConnKind, ConnState, Disconnect};
-pub use message::{MessageConn, ReadEvent};
+pub use message::{EncodedFrame, MessageConn, ReadEvent};
 pub(crate) use socket::{configure, resolve};
 
 use std::fmt;

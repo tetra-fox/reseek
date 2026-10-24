@@ -227,6 +227,11 @@ impl ConnHandle {
     matches!(*self.shared.state.borrow(), ConnState::Connected)
   }
 
+  /// the connection is up: neither closing nor closed
+  pub(crate) fn is_open(&self) -> bool {
+    self.is_connected()
+  }
+
   /// Closes the connection with `message` and `error` as the reason, returning whether this
   /// call closed it. Only the first call on an open connection does anything; the reason it
   /// gives is the one every observer sees.

@@ -7,11 +7,13 @@
 //! and hands server messages and accepted connections that belong to the peer, distributed and
 //! search components to the receivers in [`Handoffs`].
 
+mod cache;
 mod client;
 mod conn;
 mod error;
 mod events;
 mod inbound;
+mod limit;
 mod listener;
 mod log;
 mod options;
@@ -21,10 +23,12 @@ mod state;
 mod token;
 mod waiter;
 
+use std::sync::{Mutex, MutexGuard, PoisonError};
+
 pub use client::{Client, DEFAULT_SERVER_ADDRESS, DEFAULT_SERVER_PORT, Handoffs, ServerHandoff};
 pub use conn::{
   Conn, ConnHandle, ConnKey, ConnKind, ConnReadHalf, ConnState, ConnWriteHalf, Disconnect,
-  MessageConn, ReadEvent,
+  EncodedFrame, MessageConn, ReadEvent,
 };
 pub use error::{
   ClientError, ConnectionErrorKind, ErrorSource, MessageErrorKind, RoomErrorKind,
@@ -45,3 +49,8 @@ pub use resolvers::{
 };
 pub use state::{ClientState, DistributedNetworkInfo, ServerInfo};
 pub use waiter::{Scope, WaitKey, Waiter};
+
+/// locks a mutex whose critical sections cannot leave its data half-updated
+pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+  mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
