@@ -16,14 +16,14 @@ use soulseek_client::{Client, ClientError, ClientOptions, ClientState, Event, Wa
 use soulseek_proto::frame::{self, FrameKind};
 use soulseek_proto::init::PeerInit;
 use soulseek_proto::server::{
-  GlobalAdminMessage, LoginRequest, LoginResponse, UserData, UserStats,
+  GlobalAdminMessage, LoginRequest, LoginResponse, PrivateMessageRequest, UserData, UserStats,
 };
 use soulseek_proto::{
   InitMessage, Limits, PeerConnectionType, Secret, ServerCode, ServerRequest, ServerResponse,
   UserPresence,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpSocket, TcpStream};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
@@ -69,6 +69,17 @@ impl FakeServer {
   pub async fn start() -> Self {
     Self {
       listener: TcpListener::bind("127.0.0.1:0").await.unwrap(),
+    }
+  }
+
+  /// a server whose sockets take in at most about `bytes` while it is not reading, so a client
+  /// writing more soon waits on the write
+  pub async fn with_receive_buffer(bytes: u32) -> Self {
+    let socket = TcpSocket::new_v4().unwrap();
+    socket.set_recv_buffer_size(bytes).unwrap();
+    socket.bind((Ipv4Addr::LOCALHOST, 0).into()).unwrap();
+    Self {
+      listener: socket.listen(16).unwrap(),
     }
   }
 
@@ -168,6 +179,15 @@ impl ServerSide {
     messages
   }
 
+  /// reads and throws away everything the client sends, for as long as it is polled
+  pub async fn discard(&mut self) {
+    let mut chunk = vec![0; 64 << 10];
+    loop {
+      let read = self.stream.read(&mut chunk).await.unwrap();
+      assert!(read > 0, "the client closed the connection");
+    }
+  }
+
   /// waits for the client to close the connection, failing if it sends anything but pings
   pub async fn closed(&mut self) {
     loop {
@@ -206,7 +226,11 @@ impl Session {
   }
 
   pub async fn with_options(options: ClientOptions) -> Self {
-    let fake = FakeServer::start().await;
+    Self::on(FakeServer::start().await, options).await
+  }
+
+  /// a client logged in to `fake`
+  pub async fn on(fake: FakeServer, options: ClientOptions) -> Self {
     let client = Client::new(options).unwrap();
     let events = client.subscribe();
     let address = fake.address();
@@ -239,6 +263,23 @@ impl Session {
   /// the next event that `pick` accepts, skipping the others
   pub async fn event<T>(&mut self, pick: impl FnMut(Event) -> Option<T>) -> T {
     next_event(&mut self.events, pick).await
+  }
+
+  /// Has the client write more to the server than the sockets hold. Until the server reads
+  /// again, with [`ServerSide::discard`], every later write to it waits behind this one; the
+  /// server needs a small receive buffer and the client a write queue long enough for the
+  /// messages that pile up meanwhile.
+  pub fn stall_server_writes(&self) {
+    let filler = ServerRequest::PrivateMessage(PrivateMessageRequest {
+      username: "filler".into(),
+      message: "x".repeat(60 << 10),
+    });
+    // 15 MB, several times what a loopback socket pair holds with a small receive window
+    let client = self.client.clone();
+    tokio::spawn(async move {
+      // the server reads it only when the test is done with the stall, or never
+      let _ = client.write_server_messages(&vec![filler; 256]).await;
+    });
   }
 
   /// where the client listens, when it does

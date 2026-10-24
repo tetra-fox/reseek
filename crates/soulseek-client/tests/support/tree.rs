@@ -5,7 +5,7 @@ use std::net::Ipv4Addr;
 
 use soulseek_proto::distributed::{BranchRoot, Embedded, EmbeddedMessage, SearchRequest};
 use soulseek_proto::init::PeerInit;
-use soulseek_proto::server::{NetInfo, ParentCandidate};
+use soulseek_proto::server::{ConnectToPeerResponse, NetInfo, ParentCandidate};
 use soulseek_proto::{
   DistributedMessage, InitMessage, PeerConnectionType, ServerRequest, ServerResponse,
 };
@@ -105,6 +105,24 @@ pub fn branch_root(root: &str) -> Vec<u8> {
     username: root.into(),
   })
   .encode()
+}
+
+/// `count` relayed requests from peers that want the client as their parent, as one write
+pub fn child_requests(count: u32) -> Vec<u8> {
+  (0..count)
+    .flat_map(|n| {
+      ServerResponse::ConnectToPeer(ConnectToPeerResponse {
+        username: format!("flood{n}"),
+        connection_type: PeerConnectionType::Distributed,
+        ip: Ipv4Addr::LOCALHOST,
+        port: 1,
+        token: 10_000 + n,
+        privileged: false,
+        obfuscation: None,
+      })
+      .encode()
+    })
+    .collect()
 }
 
 /// the next connection the client makes to `candidate`, introduced as ours for the tree
