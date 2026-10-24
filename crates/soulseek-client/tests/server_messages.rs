@@ -1267,3 +1267,28 @@ async fn a_malformed_message_is_dropped_and_the_connection_stays_up() {
   session.settle().await;
   assert_eq!(session.client.state(), soulseek_client::ClientState::READY);
 }
+
+#[tokio::test]
+async fn unread_bytes_are_reported_when_asked_for() {
+  let logs = Logs::capture();
+  let mut session = Session::with_options(ClientOptions {
+    report_unread_message_data: true,
+    ..options()
+  })
+  .await;
+  let mut frame = ServerResponse::GlobalAdminMessage(GlobalAdminMessage {
+    message: "with a tail".into(),
+  })
+  .encode();
+  frame.extend([1, 2, 3]);
+  let len = (frame.len() - 4) as u32;
+  frame[..4].copy_from_slice(&len.to_le_bytes());
+  session.server.send_bytes(&frame).await;
+  session.settle().await;
+  assert_eq!(
+    logs
+      .lines_with(&["bytes past its fields", "code=66", "unread=3"])
+      .len(),
+    1
+  );
+}
