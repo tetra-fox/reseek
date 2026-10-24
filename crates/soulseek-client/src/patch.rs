@@ -7,9 +7,10 @@ use crate::error::ClientError;
 use crate::options::{ClientLimits, ClientOptions, ConnectionOptions, KeepAlive};
 use crate::resolvers::Resolvers;
 
-/// The options that can change while the client runs. `None` leaves an option as it is; the
-/// options fixed for the client's lifetime (concurrency limits, message timeout, starting token,
-/// protocol versions) have no field here.
+/// The options that can change while the client runs. Each field replaces the [`ClientOptions`]
+/// field of the same name, which says what it does; `None` leaves it as it is. The options fixed
+/// for the client's lifetime (concurrency limits, message timeout, starting token, protocol
+/// versions) have no field here.
 #[derive(Clone, Debug, Default)]
 pub struct ClientOptionsPatch {
   pub enable_listener: Option<bool>,

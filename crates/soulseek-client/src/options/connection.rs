@@ -101,6 +101,7 @@ impl ConnectionOptions {
 /// TCP keep-alive settings for a socket
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct KeepAlive {
+  /// send keep-alive probes; the other fields matter only when this is set
   pub enabled: bool,
   /// silence before the first probe; whole seconds
   pub idle: Duration,
@@ -133,7 +134,10 @@ impl KeepAlive {
 pub struct ProxyOptions {
   /// hostname or IP address
   pub address: String,
+  /// the port the proxy listens on
   pub port: u16,
+  /// username and password for proxies that ask for them; `None` offers only no
+  /// authentication
   pub credentials: Option<ProxyCredentials>,
 }
 
@@ -164,7 +168,9 @@ impl ProxyOptions {
 /// The username and password a SOCKS5 proxy asks for
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProxyCredentials {
+  /// 1 to 255 bytes
   pub username: String,
+  /// 1 to 255 bytes; never logged
   pub password: Secret,
 }
 

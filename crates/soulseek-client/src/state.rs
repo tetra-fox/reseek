@@ -73,6 +73,7 @@ pub struct ServerInfo {
   pub parent_inactivity_timeout: Option<u32>,
   /// seconds
   pub search_inactivity_timeout: Option<u32>,
+  /// how many parent candidates the server wanted a client to keep
   pub minimum_parents_in_cache: Option<u32>,
   /// seconds
   pub distributed_alive_interval: Option<u32>,
@@ -83,14 +84,21 @@ pub struct ServerInfo {
 pub struct DistributedNetworkInfo {
   /// milliseconds, a moving average of how long passing a search to every child takes
   pub average_broadcast_latency: Option<f64>,
+  /// our depth in the tree: our parent's level plus one, or 0 without a parent
   pub branch_level: u32,
+  /// the username at the top of our branch: our parent's root, or our own name without a parent
   pub branch_root: String,
+  /// the server sends us searches directly, so we are the top of a branch
   pub is_branch_root: bool,
+  /// the most children we take, the configured limit capped by our upload speed
   pub child_limit: u32,
+  /// whether we tell the server we take children
   pub can_accept_children: bool,
+  /// the username and address of every established child
   pub children: Vec<(String, SocketAddr)>,
   /// the parent's username and address; an empty name and no address when we have none
   pub parent: (String, Option<SocketAddr>),
+  /// a parent is connected
   pub has_parent: bool,
 }
 
