@@ -131,23 +131,23 @@ mod tests {
   use tokio::net::TcpListener;
 
   use super::*;
+  use crate::options::ClientOptions;
 
-  #[tokio::test]
-  async fn keepalive_and_segment_size_are_set_on_the_socket() {
+  /// a socket connected with the options the server connection is made with
+  async fn server_socket(options: ClientOptions) -> (TcpStream, TcpListener) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let options = ConnectionOptions {
-      keepalive: KeepAlive {
-        enabled: true,
-        idle: Duration::from_secs(10),
-        interval: Duration::from_secs(2),
-        probes: 3,
-      },
-      max_segment_size: Some(1200),
-      ..ConnectionOptions::default()
-    };
+    let options = options.effective_server_connection_options();
     let stream = connect(listener.local_addr().unwrap(), &options)
       .await
       .unwrap();
+    (stream, listener)
+  }
+
+  #[tokio::test]
+  async fn the_server_socket_gets_the_server_keepalive_and_segment_size() {
+    let mut options = ClientOptions::default();
+    options.server_connection_options.max_segment_size = Some(1200);
+    let (stream, _listener) = server_socket(options).await;
     let socket = SockRef::from(&stream);
     assert!(socket.keepalive().unwrap());
     #[cfg(target_os = "linux")]
@@ -164,6 +164,14 @@ mod tests {
       // the kernel reports the segment size it settled on, which can only be smaller
       assert!(socket.tcp_mss().unwrap() <= 1200);
     }
+  }
+
+  #[tokio::test]
+  async fn the_server_socket_has_no_keepalive_when_it_is_turned_off() {
+    let mut options = ClientOptions::default();
+    options.server_keepalive.enabled = false;
+    let (stream, _listener) = server_socket(options).await;
+    assert!(!SockRef::from(&stream).keepalive().unwrap());
   }
 
   #[tokio::test]
