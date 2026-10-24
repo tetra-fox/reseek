@@ -1,6 +1,8 @@
 //! Reaching a peer two ways at once: dialling it directly, and asking the server to have it dial
 //! us (a solicitation, answered by a connection that opens with `PierceFirewall` and the
-//! solicitation's token). Whichever connects first is kept; the other is dropped.
+//! solicitation's token). Whichever connects first is kept; the other is dropped. When a peer
+//! asks the server for us instead, we dial it and open with `PierceFirewall` and the token of
+//! its request.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -8,8 +10,9 @@ use std::net::SocketAddr;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use soulseek_proto::init::{PeerInit, PierceFirewall};
 use soulseek_proto::server::ConnectToPeerRequest;
-use soulseek_proto::{PeerConnectionType, ServerRequest};
+use soulseek_proto::{InitMessage, PeerConnectionType, ServerRequest};
 use tokio_util::sync::CancellationToken;
 
 use super::lock;
@@ -97,6 +100,27 @@ impl Via {
       Self::Indirect => ConnKind::OUTBOUND | ConnKind::INDIRECT,
     }
   }
+
+  /// What we write first on a connection made this way. One we dialled introduces us with our
+  /// name, what the connection is for and token 0; one the peer dialled answers our request and
+  /// is known to it already.
+  pub(crate) fn introduction(
+    self,
+    own: &str,
+    connection_type: PeerConnectionType,
+  ) -> Option<Vec<u8>> {
+    match self {
+      Self::Direct => Some(
+        InitMessage::PeerInit(PeerInit {
+          username: own.to_owned(),
+          connection_type,
+          token: 0,
+        })
+        .encode(),
+      ),
+      Self::Indirect => None,
+    }
+  }
 }
 
 /// Runs both attempts and returns the first connection either makes, dropping the other; fails
@@ -140,6 +164,31 @@ impl Client {
     let limit = self.options().limits.max_concurrent_peer_connects;
     let _permit = self.peers().connects.acquire(limit, cancel).await?;
     Conn::connect(remote, Some(username.to_owned()), kind, options, cancel).await
+  }
+
+  /// Dials a user that asked the server to have us connect to it, and opens the connection with
+  /// `PierceFirewall` and the token of that request, so the user knows which request it answers
+  pub(crate) async fn pierce(
+    &self,
+    username: &str,
+    endpoint: SocketAddr,
+    token: u32,
+    options: ConnectionOptions,
+    cancel: &CancellationToken,
+  ) -> Result<Conn, ClientError> {
+    let mut conn = self
+      .connect_to_peer_socket(
+        endpoint,
+        username,
+        ConnKind::INBOUND | ConnKind::INDIRECT,
+        options,
+        cancel,
+      )
+      .await?;
+    conn
+      .write_all(&InitMessage::PierceFirewall(PierceFirewall { token }).encode())
+      .await?;
+    Ok(conn)
   }
 
   /// Asks the server to have `username` connect to us with a `connection_type` connection and

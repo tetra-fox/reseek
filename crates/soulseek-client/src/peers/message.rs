@@ -5,9 +5,8 @@
 use std::net::SocketAddr;
 
 use soulseek_proto::frame::FrameKind;
-use soulseek_proto::init::{PeerInit, PierceFirewall};
 use soulseek_proto::server::{CannotConnectRequest, ConnectToPeerResponse};
-use soulseek_proto::{InitMessage, PeerConnectionType, ServerRequest};
+use soulseek_proto::{PeerConnectionType, ServerRequest};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
@@ -164,21 +163,16 @@ impl Client {
     tracing::debug!(?via, "message connection established");
     let conn = self.peer_message_connection(conn)?;
     self.start_peer_reading(&conn);
-    if via == Via::Direct {
-      let introduce = InitMessage::PeerInit(PeerInit {
-        username: own,
-        connection_type: PeerConnectionType::Peer,
-        token: 0,
-      });
-      if let Err(error) = conn.write(introduce.encode()).await {
-        conn
-          .handle()
-          .disconnect(format!("Write error: {error}"), Some(error.clone()));
-        return Err(ClientError::connection(
-          ConnectionErrorKind::Other,
-          format!("Failed to negotiate message connection to {username} ({endpoint}): {error}"),
-        ));
-      }
+    if let Some(introduction) = via.introduction(&own, PeerConnectionType::Peer)
+      && let Err(error) = conn.write(introduction).await
+    {
+      conn
+        .handle()
+        .disconnect(format!("Write error: {error}"), Some(error.clone()));
+      return Err(ClientError::connection(
+        ConnectionErrorKind::Other,
+        format!("Failed to negotiate message connection to {username} ({endpoint}): {error}"),
+      ));
     }
     Ok(conn)
   }
@@ -268,8 +262,9 @@ impl Client {
     let span = tracing::debug_span!("message_connection", username, %endpoint, token);
     tokio::spawn(
       async move {
+        let options = client.options().peer_connection_options.clone();
         let result = client
-          .pierce(&username, endpoint, token, &cancel)
+          .pierce(&username, endpoint, token, options, &cancel)
           .await
           .and_then(|conn| client.peer_message_connection(conn));
         {
@@ -296,29 +291,6 @@ impl Client {
       }
       .instrument(span),
     );
-  }
-
-  /// dials a user that asked for us through the server and answers with its token
-  async fn pierce(
-    &self,
-    username: &str,
-    endpoint: SocketAddr,
-    token: u32,
-    cancel: &CancellationToken,
-  ) -> Result<Conn, ClientError> {
-    let mut conn = self
-      .connect_to_peer_socket(
-        endpoint,
-        username,
-        ConnKind::INBOUND | ConnKind::INDIRECT,
-        self.options().peer_connection_options.clone(),
-        cancel,
-      )
-      .await?;
-    conn
-      .write_all(&InitMessage::PierceFirewall(PierceFirewall { token }).encode())
-      .await?;
-    Ok(conn)
   }
 
   /// Settles the attempt behind entry `id` with `result`. A connection whose entry was replaced

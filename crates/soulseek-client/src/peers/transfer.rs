@@ -7,9 +7,9 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use soulseek_proto::init::{FileTransferInit, PeerInit, PierceFirewall};
+use soulseek_proto::init::FileTransferInit;
 use soulseek_proto::server::ConnectToPeerResponse;
-use soulseek_proto::{InitMessage, PeerConnectionType, RemoteFilename};
+use soulseek_proto::{PeerConnectionType, RemoteFilename};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
@@ -60,15 +60,10 @@ impl Client {
       )
     })?;
     tracing::debug!(username, token, ?via, "transfer connection established");
-    let mut init = Vec::new();
-    if via == Via::Direct {
-      init = InitMessage::PeerInit(PeerInit {
-        username: own,
-        connection_type: PeerConnectionType::Transfer,
-        token: 0,
-      })
-      .encode();
-    }
+    // a connection the user dialled needs no introduction, only the transfer token
+    let mut init = via
+      .introduction(&own, PeerConnectionType::Transfer)
+      .unwrap_or_default();
     init.extend(FileTransferInit { token }.encode());
     conn.write_all(&init).await.map_err(|error| {
       ClientError::connection(
@@ -233,21 +228,12 @@ impl Client {
     let endpoint = request_endpoint(request.ip, request.port)
       .ok_or_else(|| failed("the port is out of range".into()))?;
     let mut conn = self
-      .connect_to_peer_socket(
-        endpoint,
+      .pierce(
         username,
-        ConnKind::INBOUND | ConnKind::INDIRECT,
+        endpoint,
+        request.token,
         self.options().transfer_connection_options.clone(),
         self.cancellation(),
-      )
-      .await
-      .map_err(|error| failed(error.to_string()))?;
-    conn
-      .write_all(
-        &InitMessage::PierceFirewall(PierceFirewall {
-          token: request.token,
-        })
-        .encode(),
       )
       .await
       .map_err(|error| failed(error.to_string()))?;

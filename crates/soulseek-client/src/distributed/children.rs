@@ -5,12 +5,10 @@
 
 use std::net::SocketAddr;
 
+use soulseek_proto::DistributedMessage;
 use soulseek_proto::distributed::{BranchLevel, BranchRoot};
 use soulseek_proto::frame::FrameKind;
-use soulseek_proto::init::PierceFirewall;
 use soulseek_proto::server::ConnectToPeerResponse;
-use soulseek_proto::{DistributedMessage, InitMessage};
-use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -141,9 +139,12 @@ impl Tree {
     let span = tracing::debug_span!("child_connection", username, %endpoint, token);
     tokio::spawn(
       async move {
+        let options = client.options().distributed_connection_options.clone();
+        let limits = client.options().limits.frame_limits();
         let result = client
-          .pierce_for_child(&username, endpoint, token, &cancel)
-          .await;
+          .pierce(&username, endpoint, token, options, &cancel)
+          .await
+          .and_then(|conn| conn.into_message(FrameKind::Distributed, limits));
         client.distributed_command(Command::ChildConnected {
           username,
           attempt,
@@ -258,30 +259,5 @@ impl Tree {
     });
     self.publish(false);
     self.update_status_eventually().await;
-  }
-}
-
-impl Client {
-  /// dials a peer that asked the server for us as its parent and answers with its token
-  async fn pierce_for_child(
-    &self,
-    username: &str,
-    endpoint: SocketAddr,
-    token: u32,
-    cancel: &CancellationToken,
-  ) -> Result<MessageConn, ClientError> {
-    let mut conn = self
-      .connect_to_peer_socket(
-        endpoint,
-        username,
-        ConnKind::INBOUND | ConnKind::INDIRECT,
-        self.options().distributed_connection_options.clone(),
-        cancel,
-      )
-      .await?;
-    conn
-      .write_all(&InitMessage::PierceFirewall(PierceFirewall { token }).encode())
-      .await?;
-    conn.into_message(FrameKind::Distributed, self.options().limits.frame_limits())
   }
 }

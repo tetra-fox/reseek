@@ -11,10 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::Duration;
 
 use soulseek_proto::frame::FrameKind;
-use soulseek_proto::init::PeerInit;
-use soulseek_proto::{
-  DecodeError, DistributedMessage, FieldError, InitMessage, PeerConnectionType,
-};
+use soulseek_proto::{DecodeError, DistributedMessage, FieldError, PeerConnectionType};
 use tokio::task::JoinSet;
 use tracing::Instrument;
 use uuid::Uuid;
@@ -163,13 +160,8 @@ impl Client {
     );
     let link = Arc::new(Link::candidate());
     self.start_upstream_reading(&conn, &link);
-    if via == Via::Direct {
-      let introduce = InitMessage::PeerInit(PeerInit {
-        username: own,
-        connection_type: PeerConnectionType::Distributed,
-        token: 0,
-      });
-      conn.write(introduce.encode()).await?;
+    if let Some(introduction) = via.introduction(&own, PeerConnectionType::Distributed) {
+      conn.write(introduction).await?;
     }
     let answered = async {
       let level = level.await?;
