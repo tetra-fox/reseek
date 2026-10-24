@@ -200,7 +200,7 @@ impl Client {
     }
     let reply = self.inner.waiter.wait::<LoginResponse>(
       WaitKey::Server(ServerCode::Login),
-      Some(options.message_timeout),
+      None,
       attempt.clone(),
     );
     // the listen port goes in the same write, so other users learn it as soon as we appear

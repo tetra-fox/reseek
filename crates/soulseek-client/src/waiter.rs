@@ -217,11 +217,33 @@ impl Waiter {
   }
 
   /// Registers a wait under `key` now and returns the future that resolves with the value the
-  /// key is completed with. It fails with `Timeout` after `timeout` (counted from now; `None`
-  /// waits indefinitely), with `Cancelled` when `cancel` fires, or with the error the key is
+  /// key is completed with. It fails with `Timeout` after `timeout`, or the default timeout when
+  /// `None`, counted from now; with `Cancelled` when `cancel` fires; or with the error the key is
   /// faulted with. Dropping the future withdraws the wait. Register before sending the request,
   /// so a fast reply cannot arrive first.
   pub fn wait<T: Send + 'static>(
+    &self,
+    key: WaitKey,
+    timeout: Option<Duration>,
+    cancel: CancellationToken,
+  ) -> impl Future<Output = Result<T, ClientError>> + Send + 'static {
+    self.register(
+      key,
+      Some(timeout.unwrap_or(self.shared.default_timeout)),
+      cancel,
+    )
+  }
+
+  /// [`Waiter::wait`] without a timeout: it ends only when completed, faulted or cancelled
+  pub fn wait_indefinitely<T: Send + 'static>(
+    &self,
+    key: WaitKey,
+    cancel: CancellationToken,
+  ) -> impl Future<Output = Result<T, ClientError>> + Send + 'static {
+    self.register(key, None, cancel)
+  }
+
+  fn register<T: Send + 'static>(
     &self,
     key: WaitKey,
     timeout: Option<Duration>,
@@ -423,6 +445,26 @@ mod tests {
     drop(dropped);
     assert!(waiter.complete(&key("a"), 7u32));
     assert_eq!(kept.await.unwrap(), 7);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn no_timeout_means_the_default_one() {
+    let waiter = waiter();
+    let wait = waiter.wait::<u32>(key("a"), None, CancellationToken::new());
+    assert!(matches!(
+      wait.await,
+      Err(ClientError::Timeout(message)) if message == "The wait timed out after 5000 milliseconds"
+    ));
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn an_indefinite_wait_outlasts_any_timeout() {
+    let waiter = waiter();
+    let wait = waiter.wait_indefinitely::<u32>(key("a"), CancellationToken::new());
+    let wait = tokio::spawn(wait);
+    tokio::time::sleep(Duration::from_secs(24 * 3600)).await;
+    assert!(waiter.complete(&key("a"), 7u32));
+    assert_eq!(wait.await.unwrap().unwrap(), 7);
   }
 
   #[tokio::test(start_paused = true)]
