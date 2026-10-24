@@ -8,15 +8,16 @@ mod support;
 
 use std::time::Duration;
 
-use soulseek_client::{ClientOptions, DistributedParent, Event};
+use soulseek_client::{ClientOptions, DistributedParent, Event, WaitKey};
 use soulseek_proto::distributed::Ping;
-use soulseek_proto::{DistributedMessage, ServerResponse};
+use soulseek_proto::{DistributedCode, DistributedMessage, ServerResponse};
 use support::peer::{FakePeer, PeerSide};
 use support::tree::{
   Status, approached, branch_information, branch_level, branch_root, join_as_child, net_info,
   search, status, wrapped_search,
 };
 use support::{Logs, Session, USERNAME, listening_options};
+use tokio_util::sync::CancellationToken;
 
 async fn session() -> Session {
   let mut options = listening_options();
@@ -89,10 +90,19 @@ async fn the_candidate_nearest_the_top_is_adopted_and_the_others_let_go() {
   assert!(info.has_parent);
   assert_eq!(info.parent.0, "near");
   assert_eq!((info.branch_level, info.branch_root.as_str()), (2, "top"));
-  // the parent's connection stays ours
+  // an older parent's ping carries a token, which is taken and not answered
+  let ping = session.client.waiter().wait::<Option<u32>>(
+    WaitKey::Distributed {
+      code: DistributedCode::Ping,
+      username: "near".into(),
+    },
+    None,
+    CancellationToken::new(),
+  );
   near
     .send(&DistributedMessage::Ping(Ping { token: Some(7) }).encode())
     .await;
+  assert_eq!(ping.await.unwrap(), Some(7));
   assert!(near.quiet_for(Duration::from_millis(100)).await);
 }
 
