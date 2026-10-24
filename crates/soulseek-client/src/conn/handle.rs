@@ -345,8 +345,8 @@ mod tests {
     }
   }
 
-  // The clock is paused only while nothing waits on the socket: a paused clock jumps to the
-  // next timer whenever the runtime is idle, which can be before loopback data is seen.
+  // the clock is paused only while nothing waits on the socket: a paused clock jumps to the
+  // next timer whenever the runtime is idle, which can be before loopback data is seen
 
   #[tokio::test]
   async fn inactivity_closes_a_silent_connection() {
