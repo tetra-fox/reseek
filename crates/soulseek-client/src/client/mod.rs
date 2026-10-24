@@ -105,12 +105,14 @@ impl Client {
     options.validate()?;
     let (events, _) = broadcast::channel(EVENT_CAPACITY);
     let (distributed, commands) = DistributedNetwork::new();
+    let waiter = Waiter::new(options.message_timeout);
     let inner = Inner {
-      waiter: Waiter::new(options.message_timeout),
-      tokens: TokenGenerator::new(options.starting_token),
       peers: Arc::new(PeerConnections::new(
         options.limits.max_concurrent_peer_connects,
+        waiter.clone(),
       )),
+      waiter,
+      tokens: TokenGenerator::new(options.starting_token),
       responder: SearchResponder::new(
         options.limits.search_response_cache_size,
         options.limits.max_concurrent_search_responses,

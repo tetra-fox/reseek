@@ -17,7 +17,6 @@ use super::{Entry, Outcome, PeerConnections, lock};
 use crate::client::Client;
 use crate::conn::{Conn, ConnKind, MessageConn};
 use crate::error::{ClientError, ConnectionErrorKind};
-use crate::waiter::Scope;
 
 /// how many times a caller follows a connection that was replaced while it waited for it
 const FOLLOW_REPLACEMENTS: usize = 3;
@@ -99,7 +98,7 @@ impl Client {
     if let Some(entry) = cache.get(username) {
       return entry.clone();
     }
-    PeerConnections::make_room(
+    peers.make_room(
       &mut cache,
       self.options().limits.max_cached_peer_connections as usize,
     );
@@ -216,7 +215,7 @@ impl Client {
     {
       let mut cache = peers.cache();
       if !cache.contains_key(username) {
-        PeerConnections::make_room(
+        peers.make_room(
           &mut cache,
           self.options().limits.max_cached_peer_connections as usize,
         );
@@ -255,7 +254,7 @@ impl Client {
       tracing::debug!(username, "connection request ignored; a connection exists");
       return;
     }
-    PeerConnections::make_room(
+    peers.make_room(
       &mut cache,
       self.options().limits.max_cached_peer_connections as usize,
     );
@@ -359,6 +358,7 @@ impl Client {
         let Some(client) = client.upgrade() else {
           return;
         };
+        // an entry that is gone was replaced, or closed with its waits failed already
         if !client.peers().remove_if_current(&username, id) {
           return;
         }
@@ -367,19 +367,7 @@ impl Client {
           reason = reason.message,
           "message connection closed"
         );
-        let faulted = client.waiter().fault_scope(
-          &Scope::Peer(username.clone()),
-          &ClientError::connection(
-            ConnectionErrorKind::Other,
-            format!(
-              "The message connection to {username} closed: {}",
-              reason.message
-            ),
-          ),
-        );
-        if faulted > 0 {
-          tracing::debug!(faulted, "failed the waits on the closed message connection");
-        }
+        client.peers().fail_waits(&username, &reason.message);
       }
       .instrument(conn.handle().span().clone()),
     );

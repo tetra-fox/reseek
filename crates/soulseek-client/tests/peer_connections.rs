@@ -1,6 +1,6 @@
 //! Message connections between two clients on soulfind: made directly, made through the server's
 //! relay when the other side cannot be dialled, shared by concurrent callers, cached, replaced
-//! on request, and carrying peer messages both ways.
+//! on request or when the cache is full, and carrying peer messages both ways.
 
 mod support;
 
@@ -52,6 +52,37 @@ async fn info_over(client: &Client, conn: &MessageConn, username: &str) -> UserI
     .await
     .expect("the peer answers")
     .unwrap()
+}
+
+/// a wait on `username`'s user info that nothing will answer, registered now
+fn unanswered_info(
+  client: &Client,
+  username: &str,
+) -> impl Future<Output = Result<UserInfo, ClientError>> {
+  client.waiter().wait::<UserInfo>(
+    WaitKey::Peer {
+      code: PeerCode::InfoResponse,
+      username: username.into(),
+    },
+    Some(PATIENCE * 6),
+    CancellationToken::new(),
+  )
+}
+
+/// the wait fails as soon as the connection to `username` closes, long before its own timeout
+async fn fails_on_close(
+  wait: impl Future<Output = Result<UserInfo, ClientError>>,
+  username: &str,
+  reason: &str,
+) {
+  let error = tokio::time::timeout(PATIENCE, wait)
+    .await
+    .expect("the wait ends when the connection closes")
+    .unwrap_err();
+  assert_eq!(
+    error.to_string(),
+    format!("The message connection to {username} closed: {reason}")
+  );
 }
 
 async fn two(
@@ -123,6 +154,7 @@ async fn invalidating_replaces_the_cached_connection() {
   };
   let (alice, bob) = two(&server, listening(), listening()).await;
   let old = connect(&bob.client, &alice).await;
+  let pending = unanswered_info(&bob.client, &alice.username);
   bob
     .client
     .connect_to_user(&alice.username, true)
@@ -132,9 +164,30 @@ async fn invalidating_replaces_the_cached_connection() {
     .await
     .unwrap();
   assert_eq!(reason.message, "Invalidated");
+  fails_on_close(pending, &alice.username, "Invalidated").await;
   let new = connect(&bob.client, &alice).await;
   assert_ne!(new.handle().id(), old.handle().id());
   info_over(&bob.client, &new, &alice.username).await;
+}
+
+#[tokio::test]
+async fn a_full_cache_evicts_the_idlest_connection() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let mut options = listening();
+  options.limits.max_cached_peer_connections = 1;
+  let (alice, bob) = two(&server, listening(), options).await;
+  let carol = server.login("carol", listening()).await;
+  let evicted = connect(&bob.client, &alice).await;
+  let pending = unanswered_info(&bob.client, &alice.username);
+  let kept = connect(&bob.client, &carol).await;
+  let reason = tokio::time::timeout(PATIENCE, evicted.handle().disconnected())
+    .await
+    .unwrap();
+  assert_eq!(reason.message, "Evicted");
+  fails_on_close(pending, &alice.username, "Evicted").await;
+  info_over(&bob.client, &kept, &carol.username).await;
 }
 
 #[tokio::test]

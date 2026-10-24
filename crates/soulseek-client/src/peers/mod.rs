@@ -23,9 +23,10 @@ use tokio::sync::{Semaphore, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::conn::MessageConn;
-use crate::error::ClientError;
+use crate::error::{ClientError, ConnectionErrorKind};
 use crate::limit::Limiter;
 use crate::lock;
+use crate::waiter::{Scope, Waiter};
 
 /// peer messages handled at once across every connection; past it a frame is dropped
 const PEER_HANDLERS: usize = 256;
@@ -79,10 +80,12 @@ pub(crate) struct PeerConnections {
   connects: Limiter,
   /// peer messages being handled at once
   handlers: Arc<Semaphore>,
+  /// fails the waits on a user's replies once their connection is gone
+  waiter: Waiter,
 }
 
 impl PeerConnections {
-  pub(crate) fn new(max_concurrent_connects: u32) -> Self {
+  pub(crate) fn new(max_concurrent_connects: u32, waiter: Waiter) -> Self {
     Self {
       cache: Mutex::new(HashMap::new()),
       next_entry: AtomicU64::new(0),
@@ -91,6 +94,7 @@ impl PeerConnections {
       awaited_transfers: Mutex::new(HashMap::new()),
       connects: Limiter::new(max_concurrent_connects),
       handlers: Arc::new(Semaphore::new(PEER_HANDLERS)),
+      waiter,
     }
   }
 
@@ -150,15 +154,41 @@ impl PeerConnections {
       return false;
     };
     if let Some(conn) = entry.connection() {
-      conn.handle().disconnect("Invalidated", None);
+      self.close(username, &conn, "Invalidated");
     }
     tracing::debug!(username, "message connection invalidated");
     true
   }
 
+  /// Closes the connection to `username` after its entry left the cache, and fails the waits
+  /// on that user's replies, which it can no longer bring. Its own watcher finds the entry gone
+  /// and leaves the waits alone, so ones registered for a replacement are kept.
+  fn close(&self, username: &str, conn: &MessageConn, reason: &str) {
+    conn.handle().disconnect(reason, None);
+    self.fail_waits(username, reason);
+  }
+
+  /// fails every wait on a reply from `username`, whose connection closed for `reason`
+  fn fail_waits(&self, username: &str, reason: &str) {
+    let faulted = self.waiter.fault_scope(
+      &Scope::Peer(username.to_owned()),
+      &ClientError::connection(
+        ConnectionErrorKind::Other,
+        format!("The message connection to {username} closed: {reason}"),
+      ),
+    );
+    if faulted > 0 {
+      tracing::debug!(
+        username,
+        faulted,
+        "failed the waits on the closed message connection"
+      );
+    }
+  }
+
   /// Makes room for one more entry when the cache is at `capacity`, by closing the established
   /// connection that has been idle longest. Attempts still connecting are never evicted.
-  fn make_room(cache: &mut HashMap<String, Entry>, capacity: usize) {
+  fn make_room(&self, cache: &mut HashMap<String, Entry>, capacity: usize) {
     if cache.len() < capacity {
       return;
     }
@@ -170,7 +200,7 @@ impl PeerConnections {
     if let Some((username, conn)) = idlest {
       cache.remove(&username);
       tracing::debug!(username, "message connection evicted from the full cache");
-      conn.handle().disconnect("Evicted", None);
+      self.close(&username, &conn, "Evicted");
     }
   }
 
