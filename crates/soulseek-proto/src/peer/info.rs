@@ -1,7 +1,7 @@
 //! The user info a peer shows about itself (spec 01 section 6.5).
 
 use crate::codec::Wire;
-use crate::error::DecodeError;
+use crate::error::{DecodeError, FieldError};
 use crate::limits::LIMIT_USER_INFO_PICTURE_BYTES;
 use crate::wire::{Reader, Writer};
 
@@ -31,30 +31,32 @@ impl UserInfo {
 impl Wire for UserInfo {
   const MIN_BYTES: usize = 14;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    let description = r.description()?;
-    let picture = if r.bool()? {
-      let len = r.u32()? as usize;
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    let description = r.description("description")?;
+    let picture = if r.bool("has_picture")? {
+      let len = r.u32("picture")? as usize;
       if len > LIMIT_USER_INFO_PICTURE_BYTES {
-        return Err(DecodeError::LimitExceeded {
-          what: "user info picture bytes",
-          value: len as u64,
-          limit: LIMIT_USER_INFO_PICTURE_BYTES as u64,
-        });
+        return Err(r.fail(
+          "picture",
+          FieldError::LimitExceeded {
+            value: len as u64,
+            limit: LIMIT_USER_INFO_PICTURE_BYTES as u64,
+          },
+        ));
       }
-      Some(r.bytes(len)?.to_vec())
+      Some(r.bytes(len, "picture")?.to_vec())
     } else {
       None
     };
     Ok(Self {
       description,
       picture,
-      upload_slots: r.u32()?,
-      queue_length: r.u32()?,
-      has_free_upload_slot: r.bool()?,
+      upload_slots: r.u32("upload_slots")?,
+      queue_length: r.u32("queue_length")?,
+      has_free_upload_slot: r.bool("has_free_upload_slot")?,
       // Museek+ writes the slot flag as a u32, leaving 3 stray bytes that must not be read as this
       upload_permitted: if r.remaining() >= 4 {
-        Some(r.u32()?)
+        Some(r.u32("upload_permitted")?)
       } else {
         None
       },
@@ -81,7 +83,7 @@ impl Wire for UserInfo {
 pub(crate) mod tests {
   use super::*;
   use crate::peer::PeerMessage;
-  use crate::testing::{decodes, p, vectors};
+  use crate::testing::{decodes, field, p, vectors};
 
   vectors! {
     info_request: PeerMessage::InfoRequest => p().frame(15);
@@ -114,6 +116,6 @@ pub(crate) mod tests {
         upload_permitted: None,
       }));
     info_response_rejects_a_picture_over_the_limit: PeerMessage, p().s("").u8(1).u32(16 << 20 | 1).frame(16)
-      => Err(DecodeError::LimitExceeded { what: "user info picture bytes", value: 16 << 20 | 1, limit: 16 << 20 });
+      => Err(field("InfoResponse", "picture", FieldError::LimitExceeded { value: 16 << 20 | 1, limit: 16 << 20 }));
   }
 }

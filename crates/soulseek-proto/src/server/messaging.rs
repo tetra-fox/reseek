@@ -32,13 +32,13 @@ impl Wire for PrivateMessageResponse {
   const MIN_BYTES: usize = 17;
 
   /// `is_new` is true only for exactly 1
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      id: r.u32()?,
-      timestamp: r.u32()?,
-      username: r.string()?,
-      message: r.string()?,
-      is_new: r.bool_exact()?,
+      id: r.u32("id")?,
+      timestamp: r.u32("timestamp")?,
+      username: r.string("username")?,
+      message: r.string("message")?,
+      is_new: r.bool_exact("is_new")?,
     })
   }
 

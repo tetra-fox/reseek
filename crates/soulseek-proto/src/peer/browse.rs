@@ -3,7 +3,7 @@
 
 use super::{read_compressed, write_compressed};
 use crate::codec::{Wire, wire_struct};
-use crate::error::DecodeError;
+use crate::error::{DecodeError, FieldError};
 use crate::limits::LIMIT_ATTRIBUTES_PER_FILE;
 use crate::log::KeyFields;
 use crate::model::FileAttributeType;
@@ -78,21 +78,23 @@ impl File {
 impl Wire for File {
   const MIN_BYTES: usize = 21;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    let code = r.u8()?;
-    let filename = r.filename()?;
-    let size = fix_file_size(r.u64()?);
-    let extension = r.string()?;
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    let code = r.u8("code")?;
+    let filename = r.filename("filename")?;
+    let size = fix_file_size(r.u64("size")?);
+    let extension = r.string("extension")?;
     let count = r.count(FileAttribute::MIN_BYTES, "attributes")?;
     if count > LIMIT_ATTRIBUTES_PER_FILE {
-      return Err(DecodeError::LimitExceeded {
-        what: "attributes of one file",
-        value: count as u64,
-        limit: LIMIT_ATTRIBUTES_PER_FILE as u64,
-      });
+      return Err(r.fail(
+        "attributes",
+        FieldError::LimitExceeded {
+          value: count as u64,
+          limit: LIMIT_ATTRIBUTES_PER_FILE as u64,
+        },
+      ));
     }
     let attributes = (0..count)
-      .map(|_| FileAttribute::read(r))
+      .map(|_| FileAttribute::read(r, "attributes"))
       .collect::<Result<_, _>>()?;
     Ok(Self {
       code,
@@ -123,10 +125,10 @@ fn fix_file_size(size: u64) -> u64 {
 }
 
 /// a file list, counted against the response's file limit
-pub(super) fn read_files(r: &mut Reader) -> Result<Vec<File>, DecodeError> {
-  let count = r.count(File::MIN_BYTES, "files")?;
-  r.take_files(count)?;
-  (0..count).map(|_| File::read(r)).collect()
+pub(super) fn read_files(r: &mut Reader, field: &'static str) -> Result<Vec<File>, DecodeError> {
+  let count = r.count(File::MIN_BYTES, field)?;
+  r.take_files(count, field)?;
+  (0..count).map(|_| File::read(r, field)).collect()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -147,10 +149,10 @@ impl Directory {
 impl Wire for Directory {
   const MIN_BYTES: usize = 8;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      name: r.filename()?,
-      files: read_files(r)?,
+      name: r.filename("name")?,
+      files: read_files(r, "files")?,
     })
   }
 
@@ -161,10 +163,10 @@ impl Wire for Directory {
 }
 
 /// a directory list, counted against the response's directory limit
-fn read_directories(r: &mut Reader) -> Result<Vec<Directory>, DecodeError> {
-  let count = r.count(Directory::MIN_BYTES, "directories")?;
-  r.take_directories(count)?;
-  (0..count).map(|_| Directory::read(r)).collect()
+fn read_directories(r: &mut Reader, field: &'static str) -> Result<Vec<Directory>, DecodeError> {
+  let count = r.count(Directory::MIN_BYTES, field)?;
+  r.take_directories(count, field)?;
+  (0..count).map(|_| Directory::read(r, field)).collect()
 }
 
 /// Peer code 5, spec 01 section 6.1
@@ -189,15 +191,15 @@ pub struct BrowseResponse {
 impl Wire for BrowseResponse {
   const MIN_BYTES: usize = 0;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     read_compressed(r, |r| {
-      let directories = read_directories(r)?;
+      let directories = read_directories(r, "directories")?;
       let mut locked_directories = Vec::new();
       if r.has_more() {
         // always 0, discarded
-        r.u32()?;
+        r.u32("unknown")?;
         if r.has_more() {
-          locked_directories = read_directories(r)?;
+          locked_directories = read_directories(r, "locked_directories")?;
         }
       }
       Ok(Self {
@@ -249,12 +251,12 @@ pub struct FolderContentsResponse {
 impl Wire for FolderContentsResponse {
   const MIN_BYTES: usize = 0;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     read_compressed(r, |r| {
       Ok(Self {
-        token: r.u32()?,
-        directory_name: r.filename()?,
-        directories: read_directories(r)?,
+        token: r.u32("token")?,
+        directory_name: r.filename("directory_name")?,
+        directories: read_directories(r, "directories")?,
       })
     })
   }
@@ -279,7 +281,7 @@ pub(crate) mod tests {
   use super::*;
   use crate::limits::LIMIT_DIRECTORIES_PER_RESPONSE;
   use crate::peer::PeerMessage;
-  use crate::testing::{P, decodes, p, vectors};
+  use crate::testing::{P, decodes, field, p, vectors};
 
   fn attr(attribute_type: FileAttributeType, value: u32) -> FileAttribute {
     FileAttribute {
@@ -391,7 +393,8 @@ pub(crate) mod tests {
         }],
         locked_directories: vec![],
       }));
-    browse_response_rejects_a_stream_that_is_not_zlib: PeerMessage, p().raw(b"plain").frame(5) => Err(DecodeError::InvalidZlib);
+    browse_response_rejects_a_stream_that_is_not_zlib: PeerMessage, p().raw(b"plain").frame(5)
+      => Err(field("BrowseResponse", "body", FieldError::InvalidZlib));
   }
 
   #[test]
@@ -428,11 +431,14 @@ pub(crate) mod tests {
     let frame = body.u32(0).u32(1).s("").u32(0).zframe(5);
     assert_eq!(
       PeerMessage::decode(&frame),
-      Err(DecodeError::LimitExceeded {
-        what: "directories in one response",
-        value: LIMIT_DIRECTORIES_PER_RESPONSE as u64 + 1,
-        limit: LIMIT_DIRECTORIES_PER_RESPONSE as u64,
-      })
+      Err(field(
+        "BrowseResponse",
+        "locked_directories",
+        FieldError::LimitExceeded {
+          value: LIMIT_DIRECTORIES_PER_RESPONSE as u64 + 1,
+          limit: LIMIT_DIRECTORIES_PER_RESPONSE as u64,
+        }
+      ))
     );
   }
 }

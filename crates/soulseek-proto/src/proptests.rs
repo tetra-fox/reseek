@@ -9,7 +9,7 @@ use proptest::strategy::BoxedStrategy;
 
 use crate::codes::{DistributedCode, InitCode, PeerCode, ServerCode};
 use crate::distributed::{DistributedMessage, Embedded};
-use crate::error::DecodeError;
+use crate::error::FieldError;
 use crate::frame::{self, FrameKind};
 use crate::init::InitMessage;
 use crate::limits::Limits;
@@ -256,7 +256,7 @@ proptest! {
       }
       Err(error) => {
         prop_assert!(body.len() > limit);
-        prop_assert_eq!(error, DecodeError::InflatedTooLarge { limit });
+        prop_assert_eq!(error, FieldError::InflatedTooLarge { limit });
       }
     }
   }

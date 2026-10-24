@@ -4,7 +4,7 @@
 use std::fmt;
 use std::net::Ipv4Addr;
 
-use crate::error::DecodeError;
+use crate::error::{DecodeError, FieldError};
 use crate::frame::FrameKind;
 use crate::limits::{
   LIMIT_DESCRIPTION_BYTES, LIMIT_DIRECTORIES_PER_RESPONSE, LIMIT_STRING_BYTES, Limits,
@@ -106,20 +106,23 @@ fn decode_text(bytes: &[u8]) -> (String, bool) {
   }
 }
 
-/// Reads one message. It carries the limits and what is left of the per-response file and
-/// directory allowance, so the counts of nested lists add up against one limit.
+/// Reads one message. It carries the message name for errors, the limits and what is left of
+/// the per-response file and directory allowance, so the counts of nested lists add up against
+/// one limit.
 pub(crate) struct Reader<'a> {
   buf: &'a [u8],
   limits: &'a Limits,
+  message: &'static str,
   files_left: usize,
   directories_left: usize,
 }
 
 impl<'a> Reader<'a> {
-  pub(crate) fn new(buf: &'a [u8], limits: &'a Limits) -> Self {
+  pub(crate) fn new(buf: &'a [u8], limits: &'a Limits, message: &'static str) -> Self {
     Self {
       buf,
       limits,
+      message,
       files_left: limits.files_per_response,
       directories_left: LIMIT_DIRECTORIES_PER_RESPONSE,
     }
@@ -129,30 +132,54 @@ impl<'a> Reader<'a> {
     self.limits
   }
 
-  pub(crate) fn take_files(&mut self, count: usize) -> Result<(), DecodeError> {
+  pub(crate) fn message(&self) -> &'static str {
+    self.message
+  }
+
+  /// the error for `field` of the message being read
+  pub(crate) fn fail(&self, field: &'static str, error: FieldError) -> DecodeError {
+    DecodeError::Field {
+      message: self.message,
+      field,
+      error,
+    }
+  }
+
+  pub(crate) fn take_files(
+    &mut self,
+    count: usize,
+    field: &'static str,
+  ) -> Result<(), DecodeError> {
     let limit = self.limits.files_per_response;
-    self.files_left = self
-      .files_left
-      .checked_sub(count)
-      .ok_or(DecodeError::LimitExceeded {
-        what: "files in one response",
-        value: (limit - self.files_left + count) as u64,
-        limit: limit as u64,
-      })?;
+    let Some(left) = self.files_left.checked_sub(count) else {
+      return Err(self.fail(
+        field,
+        FieldError::LimitExceeded {
+          value: (limit - self.files_left + count) as u64,
+          limit: limit as u64,
+        },
+      ));
+    };
+    self.files_left = left;
     Ok(())
   }
 
-  pub(crate) fn take_directories(&mut self, count: usize) -> Result<(), DecodeError> {
+  pub(crate) fn take_directories(
+    &mut self,
+    count: usize,
+    field: &'static str,
+  ) -> Result<(), DecodeError> {
     let limit = LIMIT_DIRECTORIES_PER_RESPONSE;
-    self.directories_left =
-      self
-        .directories_left
-        .checked_sub(count)
-        .ok_or(DecodeError::LimitExceeded {
-          what: "directories in one response",
+    let Some(left) = self.directories_left.checked_sub(count) else {
+      return Err(self.fail(
+        field,
+        FieldError::LimitExceeded {
           value: (limit - self.directories_left + count) as u64,
           limit: limit as u64,
-        })?;
+        },
+      ));
+    };
+    self.directories_left = left;
     Ok(())
   }
 
@@ -164,12 +191,15 @@ impl<'a> Reader<'a> {
     !self.buf.is_empty()
   }
 
-  pub(crate) fn bytes(&mut self, n: usize) -> Result<&'a [u8], DecodeError> {
+  pub(crate) fn bytes(&mut self, n: usize, field: &'static str) -> Result<&'a [u8], DecodeError> {
     if n > self.buf.len() {
-      return Err(DecodeError::Truncated {
-        needed: n,
-        remaining: self.buf.len(),
-      });
+      return Err(self.fail(
+        field,
+        FieldError::Truncated {
+          needed: n,
+          remaining: self.buf.len(),
+        },
+      ));
     }
     let (head, tail) = self.buf.split_at(n);
     self.buf = tail;
@@ -186,73 +216,73 @@ impl<'a> Reader<'a> {
     std::mem::take(&mut self.buf)
   }
 
-  fn array<const N: usize>(&mut self) -> Result<[u8; N], DecodeError> {
+  fn array<const N: usize>(&mut self, field: &'static str) -> Result<[u8; N], DecodeError> {
     let mut array = [0; N];
-    array.copy_from_slice(self.bytes(N)?);
+    array.copy_from_slice(self.bytes(N, field)?);
     Ok(array)
   }
 
-  pub(crate) fn u8(&mut self) -> Result<u8, DecodeError> {
-    Ok(self.array::<1>()?[0])
+  pub(crate) fn u8(&mut self, field: &'static str) -> Result<u8, DecodeError> {
+    Ok(self.array::<1>(field)?[0])
   }
 
-  pub(crate) fn u16(&mut self) -> Result<u16, DecodeError> {
-    self.array().map(u16::from_le_bytes)
+  pub(crate) fn u16(&mut self, field: &'static str) -> Result<u16, DecodeError> {
+    self.array(field).map(u16::from_le_bytes)
   }
 
-  pub(crate) fn u32(&mut self) -> Result<u32, DecodeError> {
-    self.array().map(u32::from_le_bytes)
+  pub(crate) fn u32(&mut self, field: &'static str) -> Result<u32, DecodeError> {
+    self.array(field).map(u32::from_le_bytes)
   }
 
-  pub(crate) fn i32(&mut self) -> Result<i32, DecodeError> {
-    self.array().map(i32::from_le_bytes)
+  pub(crate) fn i32(&mut self, field: &'static str) -> Result<i32, DecodeError> {
+    self.array(field).map(i32::from_le_bytes)
   }
 
-  pub(crate) fn u64(&mut self) -> Result<u64, DecodeError> {
-    self.array().map(u64::from_le_bytes)
+  pub(crate) fn u64(&mut self, field: &'static str) -> Result<u64, DecodeError> {
+    self.array(field).map(u64::from_le_bytes)
   }
 
   /// any non-zero byte is true
-  pub(crate) fn bool(&mut self) -> Result<bool, DecodeError> {
-    Ok(self.u8()? != 0)
+  pub(crate) fn bool(&mut self, field: &'static str) -> Result<bool, DecodeError> {
+    Ok(self.u8(field)? != 0)
   }
 
   /// only 1 is true; `Login.success`, `Login.is_supporter`, `TransferResponse.allowed` and
   /// `PrivateMessage.is_new` read this way
-  pub(crate) fn bool_exact(&mut self) -> Result<bool, DecodeError> {
-    Ok(self.u8()? == 1)
+  pub(crate) fn bool_exact(&mut self, field: &'static str) -> Result<bool, DecodeError> {
+    Ok(self.u8(field)? == 1)
   }
 
   /// the wire holds the octets reversed, so the little-endian value is the address as a
   /// big-endian number
-  pub(crate) fn ip4(&mut self) -> Result<Ipv4Addr, DecodeError> {
-    self.u32().map(Ipv4Addr::from)
+  pub(crate) fn ip4(&mut self, field: &'static str) -> Result<Ipv4Addr, DecodeError> {
+    self.u32(field).map(Ipv4Addr::from)
   }
 
-  fn raw_string(&mut self, limit: usize) -> Result<&'a [u8], DecodeError> {
-    let len = self.u32()?;
+  fn raw_string(&mut self, limit: usize, field: &'static str) -> Result<&'a [u8], DecodeError> {
+    let len = self.u32(field)?;
     if len as usize > limit {
-      return Err(DecodeError::StringTooLong { len, limit });
+      return Err(self.fail(field, FieldError::StringTooLong { len, limit }));
     }
-    self.bytes(len as usize)
+    self.bytes(len as usize, field)
   }
 
-  pub(crate) fn string(&mut self) -> Result<String, DecodeError> {
+  pub(crate) fn string(&mut self, field: &'static str) -> Result<String, DecodeError> {
     self
-      .raw_string(LIMIT_STRING_BYTES)
+      .raw_string(LIMIT_STRING_BYTES, field)
       .map(|bytes| decode_text(bytes).0)
   }
 
   /// the user-info description and the login greeting, which have a larger limit
-  pub(crate) fn description(&mut self) -> Result<String, DecodeError> {
+  pub(crate) fn description(&mut self, field: &'static str) -> Result<String, DecodeError> {
     self
-      .raw_string(LIMIT_DESCRIPTION_BYTES)
+      .raw_string(LIMIT_DESCRIPTION_BYTES, field)
       .map(|bytes| decode_text(bytes).0)
   }
 
-  pub(crate) fn filename(&mut self) -> Result<RemoteFilename, DecodeError> {
+  pub(crate) fn filename(&mut self, field: &'static str) -> Result<RemoteFilename, DecodeError> {
     self
-      .raw_string(LIMIT_STRING_BYTES)
+      .raw_string(LIMIT_STRING_BYTES, field)
       .map(|bytes| RemoteFilename::from_bytes(bytes.to_vec()))
   }
 
@@ -261,16 +291,12 @@ impl<'a> Reader<'a> {
   pub(crate) fn count(
     &mut self,
     min_size: usize,
-    what: &'static str,
+    field: &'static str,
   ) -> Result<usize, DecodeError> {
-    let count = self.u32()?;
+    let count = self.u32(field)?;
     let remaining = self.remaining();
     if u64::from(count) * min_size as u64 > remaining as u64 {
-      return Err(DecodeError::CountTooLarge {
-        what,
-        count,
-        remaining,
-      });
+      return Err(self.fail(field, FieldError::CountTooLarge { count, remaining }));
     }
     Ok(count as usize)
   }
@@ -359,6 +385,7 @@ impl Writer {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::testing::field;
 
   #[test]
   fn invalid_utf8_falls_back_to_latin1_and_keeps_bytes() {
@@ -384,8 +411,8 @@ mod tests {
 
   #[test]
   fn ip4_is_reversed_on_the_wire() {
-    let mut reader = Reader::new(&[4, 3, 2, 1], &Limits::DEFAULT);
-    assert_eq!(reader.ip4().unwrap(), Ipv4Addr::new(1, 2, 3, 4));
+    let mut reader = Reader::new(&[4, 3, 2, 1], &Limits::DEFAULT, "Test");
+    assert_eq!(reader.ip4("ip").unwrap(), Ipv4Addr::new(1, 2, 3, 4));
     let mut writer = Writer::body();
     writer.ip4(Ipv4Addr::new(1, 2, 3, 4));
     assert_eq!(writer.into_body(), [4, 3, 2, 1]);
@@ -393,13 +420,17 @@ mod tests {
 
   #[test]
   fn string_longer_than_remaining_is_truncated() {
-    let mut reader = Reader::new(&[5, 0, 0, 0, b'a'], &Limits::DEFAULT);
+    let mut reader = Reader::new(&[5, 0, 0, 0, b'a'], &Limits::DEFAULT, "Test");
     assert_eq!(
-      reader.string(),
-      Err(DecodeError::Truncated {
-        needed: 5,
-        remaining: 1
-      })
+      reader.string("name"),
+      Err(field(
+        "Test",
+        "name",
+        FieldError::Truncated {
+          needed: 5,
+          remaining: 1
+        }
+      ))
     );
   }
 
@@ -407,13 +438,17 @@ mod tests {
   fn string_over_limit_is_rejected_before_reading() {
     let len = (LIMIT_STRING_BYTES as u32) + 1;
     let prefix = len.to_le_bytes();
-    let mut reader = Reader::new(&prefix, &Limits::DEFAULT);
+    let mut reader = Reader::new(&prefix, &Limits::DEFAULT, "Test");
     assert_eq!(
-      reader.string(),
-      Err(DecodeError::StringTooLong {
-        len,
-        limit: LIMIT_STRING_BYTES
-      })
+      reader.string("name"),
+      Err(field(
+        "Test",
+        "name",
+        FieldError::StringTooLong {
+          len,
+          limit: LIMIT_STRING_BYTES
+        }
+      ))
     );
   }
 
@@ -422,28 +457,34 @@ mod tests {
     // 2 strings need at least 8 bytes, only 7 remain
     let mut buf = 2u32.to_le_bytes().to_vec();
     buf.extend_from_slice(&[0; 7]);
-    let mut reader = Reader::new(&buf, &Limits::DEFAULT);
+    let mut reader = Reader::new(&buf, &Limits::DEFAULT, "Test");
     assert_eq!(
       reader.count(4, "strings"),
-      Err(DecodeError::CountTooLarge {
-        what: "strings",
-        count: 2,
-        remaining: 7
-      })
+      Err(field(
+        "Test",
+        "strings",
+        FieldError::CountTooLarge {
+          count: 2,
+          remaining: 7
+        }
+      ))
     );
     // a count with bit 31 set is a protocol error, not zero iterations
     let max = u32::MAX.to_le_bytes();
-    let mut reader = Reader::new(&max, &Limits::DEFAULT);
+    let mut reader = Reader::new(&max, &Limits::DEFAULT, "Test");
     assert!(matches!(
       reader.count(1, "x"),
-      Err(DecodeError::CountTooLarge { .. })
+      Err(DecodeError::Field {
+        error: FieldError::CountTooLarge { .. },
+        ..
+      })
     ));
   }
 
   #[test]
   fn bool_reads_differ_for_values_above_one() {
-    let mut reader = Reader::new(&[2, 2], &Limits::DEFAULT);
-    assert!(reader.bool().unwrap());
-    assert!(!reader.bool_exact().unwrap());
+    let mut reader = Reader::new(&[2, 2], &Limits::DEFAULT, "Test");
+    assert!(reader.bool("a").unwrap());
+    assert!(!reader.bool_exact("b").unwrap());
   }
 }

@@ -76,19 +76,19 @@ impl Wire for LoginResponse {
   const MIN_BYTES: usize = 5;
 
   /// `success` and `is_supporter` are true only for exactly 1
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    Ok(if r.bool_exact()? {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    Ok(if r.bool_exact("success")? {
       Self::Success {
-        greeting: r.description()?,
-        ip: r.ip4()?,
-        hash: Secret::read(r)?,
-        is_supporter: r.bool_exact()?,
+        greeting: r.description("greeting")?,
+        ip: r.ip4("ip")?,
+        hash: Secret::read(r, "hash")?,
+        is_supporter: r.bool_exact("is_supporter")?,
       }
     } else {
       Self::Failure {
-        reason: r.string()?,
+        reason: r.string("reason")?,
         detail: if r.has_more() {
-          Some(r.string()?)
+          Some(r.string("detail")?)
         } else {
           None
         },
@@ -133,11 +133,11 @@ pub struct SetListenPort {
 impl Wire for SetListenPort {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      port: r.u32()?,
+      port: r.u32("port")?,
       obfuscation: if r.remaining() >= 8 {
-        Some((r.u32()?, r.u32()?))
+        Some((r.u32("obfuscation_type")?, r.u32("obfuscated_port")?))
       } else {
         None
       },

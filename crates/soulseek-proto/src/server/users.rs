@@ -26,16 +26,16 @@ pub struct UserStats {
 impl Wire for UserStats {
   const MIN_BYTES: usize = 20;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    let average_speed = r.u32()?;
-    let upload_count = r.u32()?;
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    let average_speed = r.u32("average_speed")?;
+    let upload_count = r.u32("upload_count")?;
     // always 0 on the live server
-    r.u32()?;
+    r.u32("unknown")?;
     Ok(Self {
       average_speed,
       upload_count,
-      file_count: r.u32()?,
-      directory_count: r.u32()?,
+      file_count: r.u32("file_count")?,
+      directory_count: r.u32("directory_count")?,
     })
   }
 
@@ -84,14 +84,14 @@ pub struct GetPeerAddressResponse {
 impl Wire for GetPeerAddressResponse {
   const MIN_BYTES: usize = 12;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      username: r.string()?,
-      ip: r.ip4()?,
-      port: r.u32()?,
+      username: r.string("username")?,
+      ip: r.ip4("ip")?,
+      port: r.u32("port")?,
       // the obfuscated port is two bytes here, four in ConnectToPeer
       obfuscation: if r.remaining() >= 6 {
-        Some((r.u32()?, r.u16()?))
+        Some((r.u32("obfuscation_type")?, r.u16("obfuscated_port")?))
       } else {
         None
       },
@@ -132,14 +132,14 @@ pub struct WatchUserResponse {
 impl Wire for WatchUserResponse {
   const MIN_BYTES: usize = 5;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    let username = r.string()?;
-    let user = if r.bool()? {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    let username = r.string("username")?;
+    let user = if r.bool("exists")? {
       Some(WatchedUser {
-        status: UserPresence::read(r)?,
-        stats: UserStats::read(r)?,
+        status: UserPresence::read(r, "status")?,
+        stats: UserStats::read(r, "stats")?,
         country_code: if r.has_more() {
-          Some(r.string()?)
+          Some(r.string("country_code")?)
         } else {
           None
         },
@@ -235,8 +235,9 @@ wire_struct! {
 #[cfg(test)]
 pub(crate) mod tests {
   use super::*;
+  use crate::error::FieldError;
   use crate::server::{ServerRequest as Q, ServerResponse as R};
-  use crate::testing::{IP, P, decodes, ip, p, vectors};
+  use crate::testing::{IP, P, decodes, field, ip, p, vectors};
 
   pub(crate) fn stats() -> UserStats {
     UserStats {
@@ -316,6 +317,6 @@ pub(crate) mod tests {
     get_status_response_bool_accepts_any_non_zero: R, p().s("bob").u32(2).u8(7).frame(7)
       => Ok(R::GetStatus(UserStatus { username: "bob".into(), presence: UserPresence::Online, is_privileged: true }));
     get_status_response_rejects_unknown_presence: R, p().s("bob").u32(3).u8(0).frame(7)
-      => Err(DecodeError::InvalidValue { what: "user presence", value: 3 });
+      => Err(field("GetStatus", "presence", FieldError::InvalidValue { value: 3 }));
   }
 }

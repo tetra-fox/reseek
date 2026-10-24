@@ -24,9 +24,13 @@ pub struct ParentsIP {
 impl Wire for ParentsIP {
   const MIN_BYTES: usize = 0;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      ip: if r.has_more() { Some(r.ip4()?) } else { None },
+      ip: if r.has_more() {
+        Some(r.ip4("ip")?)
+      } else {
+        None
+      },
     })
   }
 

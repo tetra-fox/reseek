@@ -27,9 +27,9 @@ pub struct QueuedDownloadsRequest {
 impl Wire for QueuedDownloadsRequest {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      slots_full: r.u32()? != 0,
+      slots_full: r.u32("slots_full")? != 0,
     })
   }
 
@@ -49,10 +49,10 @@ pub struct QueuedDownloadsResponse {
 impl Wire for QueuedDownloadsResponse {
   const MIN_BYTES: usize = 8;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      username: r.string()?,
-      slots_full: r.u32()? != 0,
+      username: r.string("username")?,
+      slots_full: r.u32("slots_full")? != 0,
     })
   }
 
@@ -102,7 +102,7 @@ pub struct GlobalUserListResponse {
 impl Wire for GlobalUserListResponse {
   const MIN_BYTES: usize = 20;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
       users: read_user_lists(r)?,
     })

@@ -12,7 +12,7 @@ use flate2::Compression;
 use flate2::bufread::{ZlibDecoder, ZlibEncoder};
 
 use crate::codes::{DistributedCode, InitCode, PeerCode, ServerCode};
-use crate::error::DecodeError;
+use crate::error::{DecodeError, FieldError};
 use crate::{DistributedMessage, InitMessage, PeerMessage, ServerRequest, ServerResponse};
 
 /// the address the server messages with an `ip4` field carry in their vectors
@@ -20,6 +20,15 @@ pub(crate) const IP: [u8; 4] = [192, 168, 1, 20];
 
 pub(crate) fn ip() -> Ipv4Addr {
   Ipv4Addr::from(IP)
+}
+
+/// the error a decoder returns for `field` of `message`
+pub(crate) fn field(message: &'static str, field: &'static str, error: FieldError) -> DecodeError {
+  DecodeError::Field {
+    message,
+    field,
+    error,
+  }
 }
 
 /// payload builder over wire primitives

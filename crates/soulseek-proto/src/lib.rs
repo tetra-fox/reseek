@@ -31,7 +31,7 @@ mod testing;
 
 pub use codes::{DistributedCode, InitCode, PeerCode, ServerCode};
 pub use distributed::DistributedMessage;
-pub use error::DecodeError;
+pub use error::{DecodeError, FieldError};
 pub use init::InitMessage;
 pub use limits::*;
 pub use model::*;

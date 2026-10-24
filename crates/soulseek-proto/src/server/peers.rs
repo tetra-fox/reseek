@@ -39,16 +39,16 @@ pub struct ConnectToPeerResponse {
 impl Wire for ConnectToPeerResponse {
   const MIN_BYTES: usize = 21;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      username: r.string()?,
-      connection_type: PeerConnectionType::read(r)?,
-      ip: r.ip4()?,
-      port: r.u32()?,
-      token: r.u32()?,
-      privileged: r.bool()?,
+      username: r.string("username")?,
+      connection_type: PeerConnectionType::read(r, "connection_type")?,
+      ip: r.ip4("ip")?,
+      port: r.u32("port")?,
+      token: r.u32("token")?,
+      privileged: r.bool("privileged")?,
       obfuscation: if r.remaining() >= 8 {
-        Some((r.u32()?, r.u32()?))
+        Some((r.u32("obfuscation_type")?, r.u32("obfuscated_port")?))
       } else {
         None
       },
@@ -103,11 +103,11 @@ pub struct CannotConnectResponse {
 impl Wire for CannotConnectResponse {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      token: r.u32()?,
+      token: r.u32("token")?,
       username: if r.has_more() {
-        Some(r.string()?)
+        Some(r.string("username")?)
       } else {
         None
       },
@@ -130,8 +130,9 @@ impl Wire for CannotConnectResponse {
 #[cfg(test)]
 pub(crate) mod tests {
   use super::*;
+  use crate::error::FieldError;
   use crate::server::{ServerRequest as Q, ServerResponse as R};
-  use crate::testing::{IP, decodes, ip, p, vectors};
+  use crate::testing::{IP, decodes, field, ip, p, vectors};
 
   vectors! {
     connect_to_peer_request:
@@ -163,6 +164,6 @@ pub(crate) mod tests {
   decodes! {
     connect_to_peer_response_rejects_unknown_type: R,
       p().s("bob").s("X").ip(IP).u32(1).u32(1).u8(0).frame(18)
-      => Err(DecodeError::UnknownConnectionType);
+      => Err(field("ConnectToPeer", "connection_type", FieldError::UnknownConnectionType));
   }
 }

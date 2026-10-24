@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 
 use bitflags::bitflags;
 
-use crate::error::DecodeError;
+use crate::error::FieldError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
@@ -15,15 +15,12 @@ pub enum UserPresence {
 }
 
 impl UserPresence {
-  pub(crate) fn from_u32(value: u32) -> Result<Self, DecodeError> {
+  pub(crate) fn from_u32(value: u32) -> Result<Self, FieldError> {
     match value {
       0 => Ok(Self::Offline),
       1 => Ok(Self::Away),
       2 => Ok(Self::Online),
-      _ => Err(DecodeError::InvalidValue {
-        what: "user presence",
-        value,
-      }),
+      _ => Err(FieldError::InvalidValue { value }),
     }
   }
 }
@@ -38,14 +35,11 @@ pub enum TransferDirection {
 }
 
 impl TransferDirection {
-  pub(crate) fn from_u32(value: u32) -> Result<Self, DecodeError> {
+  pub(crate) fn from_u32(value: u32) -> Result<Self, FieldError> {
     match value {
       0 => Ok(Self::Download),
       1 => Ok(Self::Upload),
-      _ => Err(DecodeError::InvalidValue {
-        what: "transfer direction",
-        value,
-      }),
+      _ => Err(FieldError::InvalidValue { value }),
     }
   }
 }
@@ -59,14 +53,11 @@ pub enum RoomType {
 }
 
 impl RoomType {
-  pub(crate) fn from_u32(value: u32) -> Result<Self, DecodeError> {
+  pub(crate) fn from_u32(value: u32) -> Result<Self, FieldError> {
     match value {
       0 => Ok(Self::Public),
       1 => Ok(Self::Private),
-      _ => Err(DecodeError::InvalidValue {
-        what: "room type",
-        value,
-      }),
+      _ => Err(FieldError::InvalidValue { value }),
     }
   }
 }
@@ -92,12 +83,12 @@ impl PeerConnectionType {
     }
   }
 
-  pub(crate) fn parse(value: &str) -> Result<Self, DecodeError> {
+  pub(crate) fn parse(value: &str) -> Result<Self, FieldError> {
     match value {
       "P" => Ok(Self::Peer),
       "F" => Ok(Self::Transfer),
       "D" => Ok(Self::Distributed),
-      _ => Err(DecodeError::UnknownConnectionType),
+      _ => Err(FieldError::UnknownConnectionType),
     }
   }
 }

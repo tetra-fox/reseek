@@ -15,14 +15,11 @@ pub(crate) trait Wire: Sized {
   /// the fewest bytes a value can take, which bounds a list count before its loop starts
   const MIN_BYTES: usize;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError>;
+  /// reads the value as `field` of a message; primitives and lists name it in their errors,
+  /// structs name their own fields
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError>;
 
   fn write(&self, w: &mut Writer);
-
-  /// reads the value as the field `name` of a message; lists name the field in their errors
-  fn read_field(r: &mut Reader, _name: &'static str) -> Result<Self, DecodeError> {
-    Self::read(r)
-  }
 
   /// adds the value to the logged fields when `name` is one of the logged field names
   fn log<'a>(&'a self, _name: &'static str, _fields: &mut KeyFields<'a>) {}
@@ -31,8 +28,8 @@ pub(crate) trait Wire: Sized {
 impl Wire for u8 {
   const MIN_BYTES: usize = 1;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    r.u8()
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    r.u8(field)
   }
 
   fn write(&self, w: &mut Writer) {
@@ -43,8 +40,8 @@ impl Wire for u8 {
 impl Wire for u32 {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    r.u32()
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    r.u32(field)
   }
 
   fn write(&self, w: &mut Writer) {
@@ -61,8 +58,8 @@ impl Wire for u32 {
 impl Wire for i32 {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    r.i32()
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    r.i32(field)
   }
 
   fn write(&self, w: &mut Writer) {
@@ -73,8 +70,8 @@ impl Wire for i32 {
 impl Wire for u64 {
   const MIN_BYTES: usize = 8;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    r.u64()
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    r.u64(field)
   }
 
   fn write(&self, w: &mut Writer) {
@@ -86,8 +83,8 @@ impl Wire for u64 {
 impl Wire for bool {
   const MIN_BYTES: usize = 1;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    r.bool()
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    r.bool(field)
   }
 
   fn write(&self, w: &mut Writer) {
@@ -98,8 +95,8 @@ impl Wire for bool {
 impl Wire for Ipv4Addr {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    r.ip4()
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    r.ip4(field)
   }
 
   fn write(&self, w: &mut Writer) {
@@ -110,8 +107,8 @@ impl Wire for Ipv4Addr {
 impl Wire for String {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    r.string()
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    r.string(field)
   }
 
   fn write(&self, w: &mut Writer) {
@@ -130,8 +127,8 @@ impl Wire for String {
 impl Wire for RemoteFilename {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    r.filename()
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    r.filename(field)
   }
 
   fn write(&self, w: &mut Writer) {
@@ -148,8 +145,8 @@ impl Wire for RemoteFilename {
 impl Wire for Secret {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    r.string().map(Secret::new)
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    r.string(field).map(Secret::new)
   }
 
   fn write(&self, w: &mut Writer) {
@@ -161,13 +158,9 @@ impl Wire for Secret {
 impl<T: Wire> Wire for Vec<T> {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    Self::read_field(r, "list")
-  }
-
-  fn read_field(r: &mut Reader, name: &'static str) -> Result<Self, DecodeError> {
-    let count = r.count(T::MIN_BYTES, name)?;
-    (0..count).map(|_| T::read(r)).collect()
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    let count = r.count(T::MIN_BYTES, field)?;
+    (0..count).map(|_| T::read(r, field)).collect()
   }
 
   fn write(&self, w: &mut Writer) {
@@ -185,8 +178,8 @@ impl<T: Wire> Wire for Vec<T> {
 impl Wire for UserPresence {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    Self::from_u32(r.u32()?)
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    Self::from_u32(r.u32(field)?).map_err(|error| r.fail(field, error))
   }
 
   fn write(&self, w: &mut Writer) {
@@ -197,8 +190,8 @@ impl Wire for UserPresence {
 impl Wire for TransferDirection {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    Self::from_u32(r.u32()?)
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    Self::from_u32(r.u32(field)?).map_err(|error| r.fail(field, error))
   }
 
   fn write(&self, w: &mut Writer) {
@@ -209,8 +202,8 @@ impl Wire for TransferDirection {
 impl Wire for RoomType {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    Self::from_u32(r.u32()?)
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    Self::from_u32(r.u32(field)?).map_err(|error| r.fail(field, error))
   }
 
   fn write(&self, w: &mut Writer) {
@@ -221,8 +214,8 @@ impl Wire for RoomType {
 impl Wire for FileAttributeType {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    r.u32().map(Self::from_u32)
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    r.u32(field).map(Self::from_u32)
   }
 
   fn write(&self, w: &mut Writer) {
@@ -234,8 +227,8 @@ impl Wire for FileAttributeType {
 impl Wire for PeerConnectionType {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    Self::parse(&r.string()?)
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    Self::parse(&r.string(field)?).map_err(|error| r.fail(field, error))
   }
 
   fn write(&self, w: &mut Writer) {
@@ -262,8 +255,11 @@ macro_rules! wire_struct {
     impl $crate::codec::Wire for $name {
       const MIN_BYTES: usize = 0 $( + <$ty as $crate::codec::Wire>::MIN_BYTES )*;
 
-      fn read(r: &mut $crate::wire::Reader) -> Result<Self, $crate::error::DecodeError> {
-        Ok(Self { $( $field: $crate::codec::Wire::read_field(r, stringify!($field))?, )* })
+      fn read(
+        r: &mut $crate::wire::Reader,
+        _field: &'static str,
+      ) -> Result<Self, $crate::error::DecodeError> {
+        Ok(Self { $( $field: $crate::codec::Wire::read(r, stringify!($field))?, )* })
       }
 
       fn write(&self, w: &mut $crate::wire::Writer) {
@@ -336,7 +332,7 @@ macro_rules! family {
         let frame = $crate::frame::exact($crate::frame::FrameKind::$kind, bytes, limits)?;
         let code = $code::from_code(frame.code);
         let message = match code {
-          Some(code) => Self::read(code, &mut $crate::wire::Reader::new(frame.payload, limits)),
+          Some(code) => Self::read(code, &mut $crate::wire::Reader::new(frame.payload, limits, code.name())),
           None => Err($crate::error::DecodeError::UnknownCode { code: frame.code }),
         }
         .inspect_err(|error| $crate::log::rejected($label, frame.code, code.map($code::name), error))?;
@@ -354,7 +350,7 @@ macro_rules! family {
         // the fallback is unreachable for a family that has a message for every code
         #[allow(unreachable_patterns)]
         Ok(match code {
-          $( $code::$variant => $name::$variant $((<$ty as $crate::codec::Wire>::read(r)?))?, )*
+          $( $code::$variant => $name::$variant $((<$ty as $crate::codec::Wire>::read(r, "")?))?, )*
           _ => return Err($crate::error::DecodeError::UnknownCode { code: code.code() }),
         })
       }

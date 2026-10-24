@@ -27,10 +27,10 @@ pub struct Recommendations {
 impl Wire for Recommendations {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    let recommendations = Wire::read_field(r, "recommendations")?;
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    let recommendations = Wire::read(r, "recommendations")?;
     let unrecommendations = if r.has_more() {
-      Wire::read_field(r, "unrecommendations")?
+      Wire::read(r, "unrecommendations")?
     } else {
       Vec::new()
     };

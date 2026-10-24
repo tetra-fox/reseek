@@ -20,7 +20,7 @@ use flate2::bufread::{ZlibDecoder, ZlibEncoder};
 
 use crate::codec::family;
 use crate::codes::PeerCode;
-use crate::error::DecodeError;
+use crate::error::{DecodeError, FieldError};
 use crate::limits::Limits;
 use crate::wire::{Reader, Writer};
 
@@ -73,23 +73,23 @@ fn compress(body: &[u8]) -> Vec<u8> {
 
 /// Inflates the whole payload, failing once it grows past `limit` bytes or when the stream is
 /// corrupt or ends before its end marker. Bytes after the end marker are ignored.
-pub(crate) fn inflate(compressed: &[u8], limit: usize) -> Result<Vec<u8>, DecodeError> {
+pub(crate) fn inflate(compressed: &[u8], limit: usize) -> Result<Vec<u8>, FieldError> {
   let mut inflated = Vec::new();
   ZlibDecoder::new(compressed)
     .take(limit as u64 + 1)
     .read_to_end(&mut inflated)
     .map_err(zlib_error)?;
   if inflated.len() > limit {
-    return Err(DecodeError::InflatedTooLarge { limit });
+    return Err(FieldError::InflatedTooLarge { limit });
   }
   Ok(inflated)
 }
 
-fn zlib_error(error: std::io::Error) -> DecodeError {
+fn zlib_error(error: std::io::Error) -> FieldError {
   // flate2 reports a stream that ends early as UnexpectedEof and anything else as InvalidInput
   match error.kind() {
-    std::io::ErrorKind::UnexpectedEof => DecodeError::TruncatedZlib,
-    _ => DecodeError::InvalidZlib,
+    std::io::ErrorKind::UnexpectedEof => FieldError::TruncatedZlib,
+    _ => FieldError::InvalidZlib,
   }
 }
 
@@ -100,8 +100,8 @@ fn read_compressed<T>(
   read: impl FnOnce(&mut Reader) -> Result<T, DecodeError>,
 ) -> Result<T, DecodeError> {
   let limits = r.limits();
-  let body = inflate(r.rest(), limits.inflated_bytes)?;
-  read(&mut Reader::new(&body, limits))
+  let body = inflate(r.rest(), limits.inflated_bytes).map_err(|error| r.fail("body", error))?;
+  read(&mut Reader::new(&body, limits, r.message()))
 }
 
 fn write_compressed(w: &mut Writer, write: impl FnOnce(&mut Writer)) {
@@ -133,7 +133,7 @@ pub(crate) mod tests {
     assert_eq!(inflate(&compressed, 1000), Ok(body));
     assert_eq!(
       inflate(&compressed, 999),
-      Err(DecodeError::InflatedTooLarge { limit: 999 })
+      Err(FieldError::InflatedTooLarge { limit: 999 })
     );
   }
 
@@ -142,22 +142,22 @@ pub(crate) mod tests {
     let compressed = compress(b"hello hello hello");
     assert_eq!(
       inflate(&compressed[..compressed.len() - 1], 1 << 20),
-      Err(DecodeError::TruncatedZlib)
+      Err(FieldError::TruncatedZlib)
     );
     assert_eq!(
       inflate(&compressed[..2], 1 << 20),
-      Err(DecodeError::TruncatedZlib)
+      Err(FieldError::TruncatedZlib)
     );
-    assert_eq!(inflate(&[], 1 << 20), Err(DecodeError::TruncatedZlib));
+    assert_eq!(inflate(&[], 1 << 20), Err(FieldError::TruncatedZlib));
     assert_eq!(
       inflate(b"not zlib at all", 1 << 20),
-      Err(DecodeError::InvalidZlib)
+      Err(FieldError::InvalidZlib)
     );
     let mut bad_checksum = compressed.clone();
     *bad_checksum.last_mut().unwrap() ^= 1;
     assert_eq!(
       inflate(&bad_checksum, 1 << 20),
-      Err(DecodeError::InvalidZlib)
+      Err(FieldError::InvalidZlib)
     );
   }
 
@@ -167,7 +167,7 @@ pub(crate) mod tests {
     assert!(compressed.len() < 100 << 10);
     assert_eq!(
       inflate(&compressed, 1 << 20),
-      Err(DecodeError::InflatedTooLarge { limit: 1 << 20 })
+      Err(FieldError::InflatedTooLarge { limit: 1 << 20 })
     );
   }
 }

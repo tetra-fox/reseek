@@ -8,7 +8,7 @@ use super::browse::{File, read_files};
 use super::{read_compressed, write_compressed, zlib_error};
 use crate::codec::{Wire, wire_struct};
 use crate::codes::PeerCode;
-use crate::error::DecodeError;
+use crate::error::{DecodeError, FieldError};
 use crate::frame::{self, FrameKind};
 use crate::limits::{LIMIT_STRING_BYTES, Limits};
 use crate::log::{self, KeyFields};
@@ -45,21 +45,21 @@ pub struct SearchResponse {
 impl Wire for SearchResponse {
   const MIN_BYTES: usize = 0;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     read_compressed(r, |r| {
-      let username = r.string()?;
-      let token = r.u32()?;
-      let files = read_files(r)?;
-      let has_free_upload_slot = r.bool()?;
-      let upload_speed = r.u32()?;
-      let queue_length = r.u32()?;
+      let username = r.string("username")?;
+      let token = r.u32("token")?;
+      let files = read_files(r, "files")?;
+      let has_free_upload_slot = r.bool("has_free_upload_slot")?;
+      let upload_speed = r.u32("upload_speed")?;
+      let queue_length = r.u32("queue_length")?;
       let mut locked_files = Vec::new();
       // `>= 4` rather than "has more" so a stray trailing byte is not a read error
       if r.remaining() >= 4 {
         // always 0, discarded
-        r.u32()?;
+        r.u32("unknown")?;
         if r.remaining() >= 4 {
-          locked_files = read_files(r)?;
+          locked_files = read_files(r, "locked_files")?;
         }
       }
       Ok(Self {
@@ -99,9 +99,10 @@ impl Wire for SearchResponse {
 pub fn peek_search_response(bytes: &[u8], limits: &Limits) -> Result<(String, u32), DecodeError> {
   let frame = frame::exact(FrameKind::Peer, bytes, limits)?;
   if frame.code != PeerCode::SearchResponse.code() {
-    return Err(DecodeError::InvalidValue {
-      what: "search response code",
-      value: frame.code,
+    return Err(DecodeError::Field {
+      message: PeerCode::SearchResponse.name(),
+      field: "code",
+      error: FieldError::InvalidValue { value: frame.code },
     });
   }
   peek_prefix(frame.payload, limits).inspect_err(|error| {
@@ -115,25 +116,35 @@ pub fn peek_search_response(bytes: &[u8], limits: &Limits) -> Result<(String, u3
 }
 
 fn peek_prefix(compressed: &[u8], limits: &Limits) -> Result<(String, u32), DecodeError> {
+  let message = PeerCode::SearchResponse.name();
+  let zlib_error = |error| DecodeError::Field {
+    message,
+    field: "body",
+    error: zlib_error(error),
+  };
   let mut decoder = ZlibDecoder::new(compressed);
   let mut prefix = Vec::new();
   (&mut decoder)
     .take(4)
     .read_to_end(&mut prefix)
     .map_err(zlib_error)?;
-  let len = Reader::new(&prefix, limits).u32()?;
+  let mut r = Reader::new(&prefix, limits, message);
+  let len = r.u32("username")?;
   if len as usize > LIMIT_STRING_BYTES {
-    return Err(DecodeError::StringTooLong {
-      len,
-      limit: LIMIT_STRING_BYTES,
-    });
+    return Err(r.fail(
+      "username",
+      FieldError::StringTooLong {
+        len,
+        limit: LIMIT_STRING_BYTES,
+      },
+    ));
   }
   decoder
     .take(u64::from(len) + 4)
     .read_to_end(&mut prefix)
     .map_err(zlib_error)?;
-  let mut r = Reader::new(&prefix, limits);
-  Ok((r.string()?, r.u32()?))
+  let mut r = Reader::new(&prefix, limits, message);
+  Ok((r.string("username")?, r.u32("token")?))
 }
 
 #[cfg(test)]
@@ -141,7 +152,7 @@ pub(crate) mod tests {
   use super::*;
   use crate::peer::PeerMessage;
   use crate::peer::browse::tests::{flac, flac_bytes, mp3, mp3_bytes};
-  use crate::testing::{decodes, p, vectors};
+  use crate::testing::{decodes, field, p, vectors};
 
   vectors! {
     search_request: PeerMessage::SearchRequest(SearchRequest { token: 3, query: "a".into() }) => p().u32(3).s("a").frame(8);
@@ -179,9 +190,9 @@ pub(crate) mod tests {
       }));
     search_response_rejects_too_many_attributes: PeerMessage,
       p().s("bob").u32(3).u32(1).u8(1).s("f").u64(1).s("").u32(65).raw(&[0; 65 * 8]).zframe(9)
-      => Err(DecodeError::LimitExceeded { what: "attributes of one file", value: 65, limit: 64 });
+      => Err(field("SearchResponse", "attributes", FieldError::LimitExceeded { value: 65, limit: 64 }));
     search_response_rejects_a_file_count_past_the_body: PeerMessage, p().s("bob").u32(3).u32(1_000_000).zframe(9)
-      => Err(DecodeError::CountTooLarge { what: "files", count: 1_000_000, remaining: 0 });
+      => Err(field("SearchResponse", "files", FieldError::CountTooLarge { count: 1_000_000, remaining: 0 }));
   }
 
   #[test]
@@ -201,10 +212,14 @@ pub(crate) mod tests {
     let short = p().s("bob").zframe(9);
     assert_eq!(
       peek_search_response(&short, &Limits::DEFAULT),
-      Err(DecodeError::Truncated {
-        needed: 4,
-        remaining: 0
-      })
+      Err(field(
+        "SearchResponse",
+        "token",
+        FieldError::Truncated {
+          needed: 4,
+          remaining: 0
+        }
+      ))
     );
     let wrong_code = p().s("bob").u32(42).zframe(5);
     assert!(peek_search_response(&wrong_code, &Limits::DEFAULT).is_err());
@@ -228,11 +243,11 @@ pub(crate) mod tests {
     };
     assert_eq!(
       PeerMessage::decode_with(&frame, &files),
-      Err(DecodeError::LimitExceeded {
-        what: "files in one response",
-        value: 3,
-        limit: 2
-      })
+      Err(field(
+        "SearchResponse",
+        "locked_files",
+        FieldError::LimitExceeded { value: 3, limit: 2 }
+      ))
     );
     let inflated = Limits {
       inflated_bytes: 16,
@@ -240,7 +255,11 @@ pub(crate) mod tests {
     };
     assert_eq!(
       PeerMessage::decode_with(&frame, &inflated),
-      Err(DecodeError::InflatedTooLarge { limit: 16 })
+      Err(field(
+        "SearchResponse",
+        "body",
+        FieldError::InflatedTooLarge { limit: 16 }
+      ))
     );
     let frame_len = Limits {
       peer_message_bytes: 16,

@@ -3,7 +3,7 @@
 
 use super::users::{UserData, UserStats};
 use crate::codec::{Wire, wire_struct};
-use crate::error::DecodeError;
+use crate::error::{DecodeError, FieldError};
 use crate::log::KeyFields;
 use crate::model::{RoomType, UserPresence};
 use crate::wire::{Reader, Writer};
@@ -60,14 +60,14 @@ impl RoomData {
 impl Wire for RoomData {
   const MIN_BYTES: usize = 24;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    let name = r.string()?;
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    let name = r.string("name")?;
     let users = read_user_lists(r)?;
     // only private rooms carry the owner and operators
     let private = if r.has_more() {
       Some(PrivateRoomData {
-        owner: r.string()?,
-        operators: Wire::read_field(r, "operators")?,
+        owner: r.string("owner")?,
+        operators: Wire::read(r, "operators")?,
       })
     } else {
       None
@@ -105,10 +105,10 @@ fn read_parallel_count(
   r: &mut Reader,
   min_bytes: usize,
   expected: usize,
-  what: &'static str,
+  field: &'static str,
 ) -> Result<(), DecodeError> {
-  if r.count(min_bytes, what)? != expected {
-    return Err(DecodeError::ListLengthMismatch { what });
+  if r.count(min_bytes, field)? != expected {
+    return Err(r.fail(field, FieldError::ListLengthMismatch));
   }
   Ok(())
 }
@@ -116,22 +116,24 @@ fn read_parallel_count(
 /// The five parallel per-user lists of `JoinRoom` and `GlobalUserList`, which must agree in
 /// length
 pub(super) fn read_user_lists(r: &mut Reader) -> Result<Vec<UserData>, DecodeError> {
-  let usernames: Vec<String> = Wire::read_field(r, "room users")?;
+  let usernames: Vec<String> = Wire::read(r, "usernames")?;
   let n = usernames.len();
-  read_parallel_count(r, UserPresence::MIN_BYTES, n, "user statuses")?;
+  read_parallel_count(r, UserPresence::MIN_BYTES, n, "statuses")?;
   let statuses = (0..n)
-    .map(|_| UserPresence::read(r))
+    .map(|_| UserPresence::read(r, "statuses"))
     .collect::<Result<Vec<_>, _>>()?;
-  read_parallel_count(r, UserStats::MIN_BYTES, n, "user stats")?;
+  read_parallel_count(r, UserStats::MIN_BYTES, n, "stats")?;
   let stats = (0..n)
-    .map(|_| UserStats::read(r))
+    .map(|_| UserStats::read(r, "stats"))
     .collect::<Result<Vec<_>, _>>()?;
-  read_parallel_count(r, 4, n, "user slots")?;
+  read_parallel_count(r, 4, n, "slots_full")?;
   let slots = (0..n)
-    .map(|_| Ok(r.u32()? != 0))
+    .map(|_| Ok(r.u32("slots_full")? != 0))
     .collect::<Result<Vec<_>, DecodeError>>()?;
-  read_parallel_count(r, String::MIN_BYTES, n, "user countries")?;
-  let countries = (0..n).map(|_| r.string()).collect::<Result<Vec<_>, _>>()?;
+  read_parallel_count(r, String::MIN_BYTES, n, "country_codes")?;
+  let countries = (0..n)
+    .map(|_| r.string("country_codes"))
+    .collect::<Result<Vec<_>, _>>()?;
   Ok(
     usernames
       .into_iter()
@@ -195,15 +197,15 @@ pub struct UserJoinedRoom {
 impl Wire for UserJoinedRoom {
   const MIN_BYTES: usize = 40;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      room: r.string()?,
+      room: r.string("room")?,
       user: UserData {
-        username: r.string()?,
-        status: UserPresence::read(r)?,
-        stats: UserStats::read(r)?,
-        slots_full: r.u32()? != 0,
-        country_code: r.string()?,
+        username: r.string("username")?,
+        status: UserPresence::read(r, "status")?,
+        stats: UserStats::read(r, "stats")?,
+        slots_full: r.u32("slots_full")? != 0,
+        country_code: r.string("country_code")?,
       },
     })
   }
@@ -256,15 +258,19 @@ pub struct RoomInfo {
 }
 
 /// the names and counts of one `RoomList` block, which must agree in length
-fn read_room_block(r: &mut Reader, what: &'static str) -> Result<Vec<RoomInfo>, DecodeError> {
-  let names: Vec<String> = Wire::read_field(r, what)?;
-  read_parallel_count(r, 4, names.len(), what)?;
+fn read_room_block(
+  r: &mut Reader,
+  names_field: &'static str,
+  counts_field: &'static str,
+) -> Result<Vec<RoomInfo>, DecodeError> {
+  let names: Vec<String> = Wire::read(r, names_field)?;
+  read_parallel_count(r, 4, names.len(), counts_field)?;
   names
     .into_iter()
     .map(|name| {
       Ok(RoomInfo {
         name,
-        user_count: r.u32()?,
+        user_count: r.u32(counts_field)?,
       })
     })
     .collect()
@@ -300,12 +306,12 @@ pub struct RoomList {
 impl Wire for RoomList {
   const MIN_BYTES: usize = 28;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      public: read_room_block(r, "public rooms")?,
-      owned: read_room_block(r, "owned rooms")?,
-      private: read_room_block(r, "private rooms")?,
-      moderated_room_names: Wire::read_field(r, "operated rooms")?,
+      public: read_room_block(r, "public", "public_user_counts")?,
+      owned: read_room_block(r, "owned", "owned_user_counts")?,
+      private: read_room_block(r, "private", "private_user_counts")?,
+      moderated_room_names: Wire::read(r, "moderated_room_names")?,
     })
   }
 
@@ -377,7 +383,7 @@ pub(crate) mod tests {
   use super::*;
   use crate::server::users::tests::{stats_bytes, user};
   use crate::server::{ServerRequest as Q, ServerResponse as R};
-  use crate::testing::{decodes, first, p, vectors};
+  use crate::testing::{decodes, field, first, p, vectors};
 
   vectors! {
     say_in_chat_room_request:
@@ -441,16 +447,16 @@ pub(crate) mod tests {
 
   decodes! {
     join_room_response_rejects_mismatched_lists: R, p().s("r").u32(2).s("a").s("b").u32(1).u32(2).frame(14)
-      => Err(DecodeError::ListLengthMismatch { what: "user statuses" });
+      => Err(field("JoinRoom", "statuses", FieldError::ListLengthMismatch));
     leave_room_response_ignores_trailing_fields: R, p().s("room").raw(&[1, 2, 3]).frame(15)
       => Ok(R::LeaveRoom(LeaveRoom { room: "room".into() }));
     leave_room_response_rejects_a_string_past_the_payload: R, p().u32(10).raw(b"abc").frame(15)
-      => Err(DecodeError::Truncated { needed: 10, remaining: 3 });
+      => Err(field("LeaveRoom", "room", FieldError::Truncated { needed: 10, remaining: 3 }));
     leave_room_response_rejects_a_cut_frame: R, first(p().s("room").frame(15), 10)
       => Err(DecodeError::IncompleteFrame { needed: 16, available: 10 });
     room_list_response_rejects_mismatched_lists: R, p().u32(1).s("a").u32(2).u32(1).u32(1).frame(64)
-      => Err(DecodeError::ListLengthMismatch { what: "public rooms" });
+      => Err(field("RoomList", "public_user_counts", FieldError::ListLengthMismatch));
     room_list_response_rejects_a_count_past_the_payload: R, p().u32(u32::MAX).frame(64)
-      => Err(DecodeError::CountTooLarge { what: "public rooms", count: u32::MAX, remaining: 0 });
+      => Err(field("RoomList", "public", FieldError::CountTooLarge { count: u32::MAX, remaining: 0 }));
   }
 }

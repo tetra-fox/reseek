@@ -1,6 +1,6 @@
 //! Log lines shared by the message decoders, so every family reports with the same fields
 
-use crate::error::DecodeError;
+use crate::error::{DecodeError, FieldError};
 
 /// remote strings are cut to this many bytes in log fields
 const MAX_LOGGED_BYTES: usize = 128;
@@ -53,7 +53,10 @@ pub(crate) fn rejected(
     DecodeError::UnknownCode { .. } => {
       tracing::debug!(family, code, kind, "message with unknown code ignored");
     }
-    DecodeError::BadSearchIdentifier { .. } => {
+    DecodeError::Field {
+      error: FieldError::BadSearchIdentifier { .. },
+      ..
+    } => {
       tracing::debug!(family, code, kind, error = %error, "distributed search rejected");
     }
     _ => tracing::warn!(family, code, kind, error = %error, "malformed message rejected"),

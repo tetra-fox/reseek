@@ -21,13 +21,13 @@ pub struct TransferRequest {
 impl Wire for TransferRequest {
   const MIN_BYTES: usize = 12;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    let direction = TransferDirection::read(r)?;
-    let token = r.u32()?;
-    let filename = r.filename()?;
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    let direction = TransferDirection::read(r, "direction")?;
+    let token = r.u32("token")?;
+    let filename = r.filename("filename")?;
     // a download request from an older client may carry a stray size of 0; it is ignored
     let file_size = match direction {
-      TransferDirection::Upload if r.remaining() >= 8 => Some(r.u64()?),
+      TransferDirection::Upload if r.remaining() >= 8 => Some(r.u64("file_size")?),
       _ => None,
     };
     Ok(Self {
@@ -82,13 +82,13 @@ impl Wire for TransferResponse {
   const MIN_BYTES: usize = 5;
 
   /// `allowed` is true only for exactly 1, and a denial must carry a reason
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    let token = r.u32()?;
-    Ok(if r.bool_exact()? {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    let token = r.u32("token")?;
+    Ok(if r.bool_exact("allowed")? {
       Self::Allowed {
         token,
         file_size: if r.remaining() >= 8 {
-          Some(r.u64()?)
+          Some(r.u64("file_size")?)
         } else {
           None
         },
@@ -96,7 +96,7 @@ impl Wire for TransferResponse {
     } else {
       Self::Denied {
         token,
-        reason: r.string()?,
+        reason: r.string("reason")?,
       }
     })
   }
@@ -171,8 +171,9 @@ wire_struct! {
 #[cfg(test)]
 pub(crate) mod tests {
   use super::*;
+  use crate::error::FieldError;
   use crate::peer::PeerMessage;
-  use crate::testing::{decodes, p, vectors};
+  use crate::testing::{decodes, field, p, vectors};
 
   vectors! {
     transfer_request_download:
@@ -223,7 +224,7 @@ pub(crate) mod tests {
     transfer_response_allowed_must_be_exactly_one: PeerMessage, p().u32(5).u8(2).s("Cancelled").frame(41)
       => Ok(PeerMessage::TransferResponse(TransferResponse::Denied { token: 5, reason: "Cancelled".into() }));
     transfer_response_denied_needs_a_reason: PeerMessage, p().u32(5).u8(0).frame(41)
-      => Err(DecodeError::Truncated { needed: 4, remaining: 0 });
+      => Err(field("TransferResponse", "reason", FieldError::Truncated { needed: 4, remaining: 0 }));
   }
 
   #[test]

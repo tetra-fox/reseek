@@ -3,7 +3,7 @@
 
 use crate::codec::{Wire, family, wire_struct};
 use crate::codes::DistributedCode;
-use crate::error::DecodeError;
+use crate::error::{DecodeError, FieldError};
 use crate::frame::FrameKind;
 use crate::log::KeyFields;
 use crate::names::is_valid_peer_username;
@@ -45,10 +45,10 @@ pub struct Ping {
 impl Wire for Ping {
   const MIN_BYTES: usize = 0;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
       token: if r.remaining() >= 4 {
-        Some(r.u32()?)
+        Some(r.u32("token")?)
       } else {
         None
       },
@@ -76,15 +76,15 @@ pub struct SearchRequest {
 impl Wire for SearchRequest {
   const MIN_BYTES: usize = 16;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    let identifier = r.u32()?;
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    let identifier = r.u32("identifier")?;
     if identifier != SEARCH_IDENTIFIER {
-      return Err(DecodeError::BadSearchIdentifier { identifier });
+      return Err(r.fail("identifier", FieldError::BadSearchIdentifier { identifier }));
     }
     Ok(Self {
-      username: r.string()?,
-      token: r.u32()?,
-      query: r.string()?,
+      username: r.string("username")?,
+      token: r.u32("token")?,
+      query: r.string("query")?,
     })
   }
 
@@ -114,9 +114,10 @@ pub struct BranchLevel {
 impl Wire for BranchLevel {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    let level = r.i32()?;
-    let level = u32::try_from(level).map_err(|_| DecodeError::NegativeBranchLevel { level })?;
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    let level = r.i32("level")?;
+    let level = u32::try_from(level)
+      .map_err(|_| r.fail("level", FieldError::NegativeBranchLevel { level }))?;
     Ok(Self { level })
   }
 
@@ -136,12 +137,10 @@ pub struct BranchRoot {
 impl Wire for BranchRoot {
   const MIN_BYTES: usize = 4;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
-    let root = r.string()?;
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
+    let root = r.string("root")?;
     if !is_valid_peer_username(&root) {
-      return Err(DecodeError::InvalidUsername {
-        what: "branch root",
-      });
+      return Err(r.fail("root", FieldError::InvalidUsername));
     }
     Ok(Self { root })
   }
@@ -187,9 +186,9 @@ impl Embedded {
 impl Wire for Embedded {
   const MIN_BYTES: usize = 1;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      distributed_code: r.u8()?,
+      distributed_code: r.u8("distributed_code")?,
       payload: r.rest().to_vec(),
     })
   }
@@ -214,13 +213,13 @@ pub struct EmbeddedMessage {
 impl Wire for EmbeddedMessage {
   const MIN_BYTES: usize = 1;
 
-  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+  fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     let padded = r.remaining() >= 4 && r.peek(3) == [0; 3];
     if padded {
-      r.bytes(3)?;
+      r.bytes(3, "padding")?;
     }
     Ok(Self {
-      embedded: Embedded::read(r)?,
+      embedded: Embedded::read(r, "embedded")?,
       padded,
     })
   }
@@ -236,7 +235,7 @@ impl Wire for EmbeddedMessage {
 #[cfg(test)]
 pub(crate) mod tests {
   use super::*;
-  use crate::testing::{decodes, p, vectors};
+  use crate::testing::{decodes, field, p, vectors};
 
   fn search() -> Vec<u8> {
     p().u32(49).s("bob").u32(5).s("q").0
@@ -267,11 +266,11 @@ pub(crate) mod tests {
 
   decodes! {
     search_request_rejects_an_identifier_other_than_49: DistributedMessage, p().u32(0).s("bob").u32(5).s("q").frame_u8(3)
-      => Err(DecodeError::BadSearchIdentifier { identifier: 0 });
+      => Err(field("SearchRequest", "identifier", FieldError::BadSearchIdentifier { identifier: 0 }));
     branch_level_rejects_a_negative_level: DistributedMessage, p().i32(-1).frame_u8(4)
-      => Err(DecodeError::NegativeBranchLevel { level: -1 });
+      => Err(field("BranchLevel", "level", FieldError::NegativeBranchLevel { level: -1 }));
     branch_root_rejects_a_non_printable_username: DistributedMessage, p().s("a\u{7}b").frame_u8(5)
-      => Err(DecodeError::InvalidUsername { what: "branch root" });
+      => Err(field("BranchRoot", "root", FieldError::InvalidUsername));
     embedded_message_with_a_short_zero_prefix_is_not_padded: DistributedMessage, p().raw(&[0, 0, 0]).frame_u8(93)
       => Ok(DistributedMessage::EmbeddedMessage(EmbeddedMessage {
         embedded: Embedded { distributed_code: 0, payload: vec![0, 0] },
