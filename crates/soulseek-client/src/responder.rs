@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use soulseek_proto::SearchQuery;
+use tokio::sync::OwnedSemaphorePermit;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
@@ -78,19 +79,28 @@ impl SearchResponder {
 }
 
 impl Client {
+  /// A permit to answer `username`'s search, or `None` when the bound on searches being answered
+  /// at once is reached and the request is to be dropped
+  fn responding(&self, username: &str, token: u32) -> Option<OwnedSemaphorePermit> {
+    let limit = self.options().limits.max_concurrent_search_responses;
+    let permit = self.responder().responding.try_acquire(limit);
+    if permit.is_none()
+      && let Some(suppressed) = RESPONDERS_BUSY.allow()
+    {
+      tracing::debug!(
+        username,
+        token,
+        suppressed,
+        "too many searches being answered, request dropped"
+      );
+    }
+    permit
+  }
+
   /// Answers another user's search on a task of its own, unless the bound on searches being
   /// answered at once is reached, when the request is dropped.
   pub(crate) fn respond_to_search(&self, username: String, token: u32, query: String) {
-    let limit = self.options().limits.max_concurrent_search_responses;
-    let Some(permit) = self.responder().responding.try_acquire(limit) else {
-      if let Some(suppressed) = RESPONDERS_BUSY.allow() {
-        tracing::debug!(
-          username,
-          token,
-          suppressed,
-          "too many searches being answered, request dropped"
-        );
-      }
+    let Some(permit) = self.responding(&username, token) else {
       return;
     };
     let client = self.clone();
@@ -170,16 +180,7 @@ impl Client {
     token: u32,
     query: &str,
   ) {
-    let limit = self.options().limits.max_concurrent_search_responses;
-    let Some(_permit) = self.responder().responding.try_acquire(limit) else {
-      if let Some(suppressed) = RESPONDERS_BUSY.allow() {
-        tracing::debug!(
-          username,
-          token,
-          suppressed,
-          "too many searches being answered, request dropped"
-        );
-      }
+    let Some(_permit) = self.responding(username, token) else {
       return;
     };
     if let Some(reply) = self.resolve_search(username, token, query).await {
