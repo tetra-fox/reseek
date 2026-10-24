@@ -1,0 +1,24 @@
+[package]
+name = "soulseek-client"
+description = "Soulseek client: connections, the server session, the listener and the keyed waits"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+soulseek-proto.workspace = true
+
+bitflags.workspace = true
+socket2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
