@@ -9,7 +9,7 @@ use crate::names::is_valid_peer_username;
 use crate::wire::{Reader, Writer};
 
 /// The constant first field of every distributed search request: ASCII `'1'`
-const SEARCH_IDENTIFIER: u32 = 49;
+pub const SEARCH_IDENTIFIER: u32 = 49;
 
 family! {
   /// Every message on a `D` connection, from our parent or our children
@@ -17,8 +17,8 @@ family! {
     code: DistributedCode,
     frame: Distributed,
     label: "distributed",
-    // pings are too frequent to log
-    quiet: [Ping],
+    // pings and searches are too frequent to log
+    quiet: [Ping, SearchRequest, EmbeddedMessage],
     messages: {
       /// deprecated
       Ping(Ping),

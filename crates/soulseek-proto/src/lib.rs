@@ -30,7 +30,7 @@ mod proptests;
 mod testing;
 
 pub use codes::{DistributedCode, InitCode, PeerCode, ServerCode};
-pub use distributed::DistributedMessage;
+pub use distributed::{DistributedMessage, SEARCH_IDENTIFIER};
 pub use error::{DecodeError, FieldError};
 pub use init::InitMessage;
 pub use limits::*;
