@@ -314,16 +314,25 @@ impl<'a> Reader<'a> {
   }
 
   pub(crate) fn string(&mut self, field: &'static str) -> Result<String, DecodeError> {
-    self
-      .raw_string(LIMIT_STRING_BYTES, field)
-      .map(|bytes| decode_text(bytes).0)
+    self.text(LIMIT_STRING_BYTES, field)
   }
 
   /// the user-info description and the login greeting, which have a larger limit
   pub(crate) fn description(&mut self, field: &'static str) -> Result<String, DecodeError> {
-    self
-      .raw_string(LIMIT_DESCRIPTION_BYTES, field)
-      .map(|bytes| decode_text(bytes).0)
+    self.text(LIMIT_DESCRIPTION_BYTES, field)
+  }
+
+  /// A string of at most `limit` bytes, also as it is written back: a Latin-1 string grows
+  /// when written as UTF-8, up to twice its bytes, and one that would outgrow the limit is
+  /// refused here so whatever decodes also encodes within it
+  fn text(&mut self, limit: usize, field: &'static str) -> Result<String, DecodeError> {
+    let text = decode_text(self.raw_string(limit, field)?).0;
+    if text.len() > limit {
+      // at most twice a limit of a few hundred KiB, which fits
+      let len = text.len() as u32;
+      return Err(self.fail(field, FieldError::StringTooLong { len, limit }));
+    }
+    Ok(text)
   }
 
   pub(crate) fn filename(&mut self, field: &'static str) -> Result<RemoteFilename, DecodeError> {
@@ -496,6 +505,30 @@ mod tests {
         }
       ))
     );
+  }
+
+  #[test]
+  fn a_latin1_string_too_long_once_written_as_utf8_is_rejected() {
+    // 40 000 bytes that are not utf-8 decode as latin-1 and write back as 80 000
+    let mut buf = 40_000u32.to_le_bytes().to_vec();
+    buf.extend(std::iter::repeat_n(0xe9, 40_000));
+    let mut reader = Reader::new(&buf, &Limits::DEFAULT, "Test");
+    assert_eq!(
+      reader.string("name"),
+      Err(field(
+        "Test",
+        "name",
+        FieldError::StringTooLong {
+          len: 80_000,
+          limit: LIMIT_STRING_BYTES
+        }
+      ))
+    );
+    // half of it fits either way
+    let mut buf = 20_000u32.to_le_bytes().to_vec();
+    buf.extend(std::iter::repeat_n(0xe9, 20_000));
+    let mut reader = Reader::new(&buf, &Limits::DEFAULT, "Test");
+    assert_eq!(reader.string("name").unwrap().len(), 40_000);
   }
 
   #[test]
