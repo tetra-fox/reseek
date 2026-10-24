@@ -195,12 +195,9 @@ impl Wire for BrowseResponse {
     read_compressed(r, |r| {
       let directories = read_directories(r, "directories")?;
       let mut locked_directories = Vec::new();
-      if r.has_more() {
-        // always 0, discarded
-        r.u32("unknown")?;
-        if r.has_more() {
-          locked_directories = read_directories(r, "locked_directories")?;
-        }
+      // the unknown u32 is always 0 and discarded
+      if r.optional::<u32>("unknown")?.is_some() && r.has_more() {
+        locked_directories = read_directories(r, "locked_directories")?;
       }
       Ok(Self {
         directories,

@@ -37,6 +37,18 @@ impl Wire for u8 {
   }
 }
 
+impl Wire for u16 {
+  const MIN_BYTES: usize = 2;
+
+  fn read(r: &mut Reader, field: &'static str) -> Result<Self, DecodeError> {
+    r.u16(field)
+  }
+
+  fn write(&self, w: &mut Writer) {
+    w.u16(*self);
+  }
+}
+
 impl Wire for u32 {
   const MIN_BYTES: usize = 4;
 

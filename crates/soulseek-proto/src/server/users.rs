@@ -138,11 +138,7 @@ impl Wire for WatchUserResponse {
       Some(WatchedUser {
         status: UserPresence::read(r, "status")?,
         stats: UserStats::read(r, "stats")?,
-        country_code: if r.has_more() {
-          Some(r.string("country_code")?)
-        } else {
-          None
-        },
+        country_code: r.optional("country_code")?,
       })
     } else {
       None

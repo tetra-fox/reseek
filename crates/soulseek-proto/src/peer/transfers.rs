@@ -27,8 +27,8 @@ impl Wire for TransferRequest {
     let filename = r.filename("filename")?;
     // a download request from an older client may carry a stray size of 0; it is ignored
     let file_size = match direction {
-      TransferDirection::Upload if r.remaining() >= 8 => Some(r.u64("file_size")?),
-      _ => None,
+      TransferDirection::Upload => r.optional_fixed("file_size")?,
+      TransferDirection::Download => None,
     };
     Ok(Self {
       direction,
@@ -87,11 +87,7 @@ impl Wire for TransferResponse {
     Ok(if r.bool_exact("allowed")? {
       Self::Allowed {
         token,
-        file_size: if r.remaining() >= 8 {
-          Some(r.u64("file_size")?)
-        } else {
-          None
-        },
+        file_size: r.optional_fixed("file_size")?,
       }
     } else {
       Self::Denied {

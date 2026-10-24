@@ -29,11 +29,7 @@ impl Wire for Recommendations {
 
   fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     let recommendations = Wire::read(r, "recommendations")?;
-    let unrecommendations = if r.has_more() {
-      Wire::read(r, "unrecommendations")?
-    } else {
-      Vec::new()
-    };
+    let unrecommendations = r.optional("unrecommendations")?.unwrap_or_default();
     Ok(Self {
       recommendations,
       unrecommendations,

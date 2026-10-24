@@ -4,6 +4,7 @@
 use std::fmt;
 use std::net::Ipv4Addr;
 
+use crate::codec::Wire;
 use crate::error::{DecodeError, FieldError};
 use crate::frame::FrameKind;
 use crate::limits::{
@@ -191,6 +192,36 @@ impl<'a> Reader<'a> {
     !self.buf.is_empty()
   }
 
+  /// enough bytes remain for the smallest `T`, which for a fixed-size `T` is all of it
+  pub(crate) fn fits<T: Wire>(&self) -> bool {
+    self.remaining() >= T::MIN_BYTES
+  }
+
+  /// a trailing field that is either absent or complete: read when any bytes remain, so a
+  /// partial one is an error
+  pub(crate) fn optional<T: Wire>(
+    &mut self,
+    field: &'static str,
+  ) -> Result<Option<T>, DecodeError> {
+    if self.has_more() {
+      T::read(self, field).map(Some)
+    } else {
+      Ok(None)
+    }
+  }
+
+  /// a fixed-size trailing field: read when it fits, and a shorter tail is ignored
+  pub(crate) fn optional_fixed<T: Wire>(
+    &mut self,
+    field: &'static str,
+  ) -> Result<Option<T>, DecodeError> {
+    if self.fits::<T>() {
+      T::read(self, field).map(Some)
+    } else {
+      Ok(None)
+    }
+  }
+
   pub(crate) fn bytes(&mut self, n: usize, field: &'static str) -> Result<&'a [u8], DecodeError> {
     if n > self.buf.len() {
       return Err(self.fail(
@@ -259,12 +290,22 @@ impl<'a> Reader<'a> {
     self.u32(field).map(Ipv4Addr::from)
   }
 
-  fn raw_string(&mut self, limit: usize, field: &'static str) -> Result<&'a [u8], DecodeError> {
+  /// the length prefix of a string, rejected over `limit` before any of the string is read
+  pub(crate) fn string_len(
+    &mut self,
+    limit: usize,
+    field: &'static str,
+  ) -> Result<usize, DecodeError> {
     let len = self.u32(field)?;
     if len as usize > limit {
       return Err(self.fail(field, FieldError::StringTooLong { len, limit }));
     }
-    self.bytes(len as usize, field)
+    Ok(len as usize)
+  }
+
+  fn raw_string(&mut self, limit: usize, field: &'static str) -> Result<&'a [u8], DecodeError> {
+    let len = self.string_len(limit, field)?;
+    self.bytes(len, field)
   }
 
   pub(crate) fn string(&mut self, field: &'static str) -> Result<String, DecodeError> {

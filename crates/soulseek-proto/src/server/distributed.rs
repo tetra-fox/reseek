@@ -26,11 +26,7 @@ impl Wire for ParentsIP {
 
   fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      ip: if r.has_more() {
-        Some(r.ip4("ip")?)
-      } else {
-        None
-      },
+      ip: r.optional("ip")?,
     })
   }
 

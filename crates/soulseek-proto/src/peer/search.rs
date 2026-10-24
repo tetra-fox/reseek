@@ -54,13 +54,10 @@ impl Wire for SearchResponse {
       let upload_speed = r.u32("upload_speed")?;
       let queue_length = r.u32("queue_length")?;
       let mut locked_files = Vec::new();
-      // `>= 4` rather than "has more" so a stray trailing byte is not a read error
-      if r.remaining() >= 4 {
-        // always 0, discarded
-        r.u32("unknown")?;
-        if r.remaining() >= 4 {
-          locked_files = read_files(r, "locked_files")?;
-        }
+      // read only when they fit, so a stray trailing byte is not an error; the unknown u32 is
+      // always 0 and discarded
+      if r.optional_fixed::<u32>("unknown")?.is_some() && r.fits::<Vec<File>>() {
+        locked_files = read_files(r, "locked_files")?;
       }
       Ok(Self {
         username,
@@ -128,19 +125,9 @@ fn peek_prefix(compressed: &[u8], limits: &Limits) -> Result<(String, u32), Deco
     .take(4)
     .read_to_end(&mut prefix)
     .map_err(zlib_error)?;
-  let mut r = Reader::new(&prefix, limits, message);
-  let len = r.u32("username")?;
-  if len as usize > LIMIT_STRING_BYTES {
-    return Err(r.fail(
-      "username",
-      FieldError::StringTooLong {
-        len,
-        limit: LIMIT_STRING_BYTES,
-      },
-    ));
-  }
+  let len = Reader::new(&prefix, limits, message).string_len(LIMIT_STRING_BYTES, "username")?;
   decoder
-    .take(u64::from(len) + 4)
+    .take(len as u64 + 4)
     .read_to_end(&mut prefix)
     .map_err(zlib_error)?;
   let mut r = Reader::new(&prefix, limits, message);

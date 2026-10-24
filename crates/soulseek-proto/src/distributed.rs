@@ -47,11 +47,7 @@ impl Wire for Ping {
 
   fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
-      token: if r.remaining() >= 4 {
-        Some(r.u32("token")?)
-      } else {
-        None
-      },
+      token: r.optional_fixed("token")?,
     })
   }
 

@@ -55,11 +55,7 @@ impl Wire for UserInfo {
       queue_length: r.u32("queue_length")?,
       has_free_upload_slot: r.bool("has_free_upload_slot")?,
       // Museek+ writes the slot flag as a u32, leaving 3 stray bytes that must not be read as this
-      upload_permitted: if r.remaining() >= 4 {
-        Some(r.u32("upload_permitted")?)
-      } else {
-        None
-      },
+      upload_permitted: r.optional_fixed("upload_permitted")?,
     })
   }
 

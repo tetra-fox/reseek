@@ -106,11 +106,7 @@ impl Wire for CannotConnectResponse {
   fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
       token: r.u32("token")?,
-      username: if r.has_more() {
-        Some(r.string("username")?)
-      } else {
-        None
-      },
+      username: r.optional("username")?,
     })
   }
 

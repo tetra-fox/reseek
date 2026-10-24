@@ -87,11 +87,7 @@ impl Wire for LoginResponse {
     } else {
       Self::Failure {
         reason: r.string("reason")?,
-        detail: if r.has_more() {
-          Some(r.string("detail")?)
-        } else {
-          None
-        },
+        detail: r.optional("detail")?,
       }
     })
   }

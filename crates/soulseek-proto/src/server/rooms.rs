@@ -64,14 +64,7 @@ impl Wire for RoomData {
     let name = r.string("name")?;
     let users = read_user_lists(r)?;
     // only private rooms carry the owner and operators
-    let private = if r.has_more() {
-      Some(PrivateRoomData {
-        owner: r.string("owner")?,
-        operators: Wire::read(r, "operators")?,
-      })
-    } else {
-      None
-    };
+    let private = r.optional("private")?;
     Ok(Self {
       name,
       users,
@@ -83,8 +76,7 @@ impl Wire for RoomData {
     w.string(&self.name);
     write_user_lists(w, &self.users);
     if let Some(private) = &self.private {
-      w.string(&private.owner);
-      private.operators.write(w);
+      private.write(w);
     }
   }
 
@@ -94,23 +86,23 @@ impl Wire for RoomData {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
-pub struct PrivateRoomData {
-  pub owner: String,
-  pub operators: Vec<String>,
+wire_struct! {
+  pub struct PrivateRoomData {
+    pub owner: String,
+    pub operators: Vec<String>,
+  }
 }
 
-fn read_parallel_count(
+/// a list that must have `n` elements, the length of the list it runs parallel to
+fn read_parallel<T: Wire>(
   r: &mut Reader,
-  min_bytes: usize,
-  expected: usize,
+  n: usize,
   field: &'static str,
-) -> Result<(), DecodeError> {
-  if r.count(min_bytes, field)? != expected {
+) -> Result<Vec<T>, DecodeError> {
+  if r.count(T::MIN_BYTES, field)? != n {
     return Err(r.fail(field, FieldError::ListLengthMismatch));
   }
-  Ok(())
+  (0..n).map(|_| T::read(r, field)).collect()
 }
 
 /// The five parallel per-user lists of `JoinRoom` and `GlobalUserList`, which must agree in
@@ -118,22 +110,12 @@ fn read_parallel_count(
 pub(super) fn read_user_lists(r: &mut Reader) -> Result<Vec<UserData>, DecodeError> {
   let usernames: Vec<String> = Wire::read(r, "usernames")?;
   let n = usernames.len();
-  read_parallel_count(r, UserPresence::MIN_BYTES, n, "statuses")?;
-  let statuses = (0..n)
-    .map(|_| UserPresence::read(r, "statuses"))
-    .collect::<Result<Vec<_>, _>>()?;
-  read_parallel_count(r, UserStats::MIN_BYTES, n, "stats")?;
-  let stats = (0..n)
-    .map(|_| UserStats::read(r, "stats"))
-    .collect::<Result<Vec<_>, _>>()?;
-  read_parallel_count(r, 4, n, "slots_full")?;
-  let slots = (0..n)
-    .map(|_| Ok(r.u32("slots_full")? != 0))
-    .collect::<Result<Vec<_>, DecodeError>>()?;
-  read_parallel_count(r, String::MIN_BYTES, n, "country_codes")?;
-  let countries = (0..n)
-    .map(|_| r.string("country_codes"))
-    .collect::<Result<Vec<_>, _>>()?;
+  let statuses: Vec<UserPresence> = read_parallel(r, n, "statuses")?;
+  let stats: Vec<UserStats> = read_parallel(r, n, "stats")?;
+  let slots = read_parallel::<u32>(r, n, "slots_full")?
+    .into_iter()
+    .map(|slots_full| slots_full != 0);
+  let countries: Vec<String> = read_parallel(r, n, "country_codes")?;
   Ok(
     usernames
       .into_iter()
@@ -264,16 +246,14 @@ fn read_room_block(
   counts_field: &'static str,
 ) -> Result<Vec<RoomInfo>, DecodeError> {
   let names: Vec<String> = Wire::read(r, names_field)?;
-  read_parallel_count(r, 4, names.len(), counts_field)?;
-  names
-    .into_iter()
-    .map(|name| {
-      Ok(RoomInfo {
-        name,
-        user_count: r.u32(counts_field)?,
-      })
-    })
-    .collect()
+  let counts: Vec<u32> = read_parallel(r, names.len(), counts_field)?;
+  Ok(
+    names
+      .into_iter()
+      .zip(counts)
+      .map(|(name, user_count)| RoomInfo { name, user_count })
+      .collect(),
+  )
 }
 
 fn write_room_block(w: &mut Writer, rooms: &[RoomInfo]) {
