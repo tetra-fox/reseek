@@ -132,6 +132,7 @@ impl Teardown {
       Some(error) => tracing::warn!(message, %error, "disconnected from server"),
     }
     let mut session = inner.session();
+    session.logging_in_as = None;
     session.username = None;
     session.address = None;
     session.ip_endpoint = None;

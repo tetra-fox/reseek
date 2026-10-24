@@ -81,6 +81,8 @@ struct Session {
   attempt: Option<CancellationToken>,
   listener: Option<Listener>,
   server: Option<MessageConn>,
+  /// the username of the login whose reply has not arrived yet
+  logging_in_as: Option<String>,
   username: Option<String>,
   address: Option<String>,
   ip_endpoint: Option<SocketAddr>,

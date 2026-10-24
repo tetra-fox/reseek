@@ -34,7 +34,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use soulseek_proto::distributed::Embedded;
 use soulseek_proto::server::{
   AcknowledgeNotifyPrivileges, AcknowledgePrivateMessage, CannotConnectResponse,
-  ConnectToPeerResponse, FileSearchResponse, NetInfo,
+  ConnectToPeerResponse, FileSearchResponse, LoginResponse, NetInfo,
 };
 use soulseek_proto::{DecodeError, ServerCode, ServerRequest, ServerResponse};
 
@@ -43,7 +43,7 @@ use super::disconnect::Cause;
 use crate::error::{ClientError, RoomErrorKind};
 use crate::events::{Event, PrivateMessage, RoomMembers};
 use crate::log::LogLimiter;
-use crate::state::ServerInfo;
+use crate::state::{ClientState, ServerInfo};
 use crate::waiter::WaitKey;
 
 /// codes the server no longer sends; seeing one is worth telling apart from a new code
@@ -123,7 +123,7 @@ impl Client {
     use ServerResponse as R;
     let inner = &self.inner;
     match message {
-      R::Login(response) => self.complete(WaitKey::Server(ServerCode::Login), response),
+      R::Login(response) => self.login_replied(response),
       R::GetPeerAddress(response) => {
         self.complete(
           user_key(ServerCode::GetPeerAddress, &response.username),
@@ -453,6 +453,31 @@ impl Client {
       | R::PrivateRoomUnknown(_)
       | R::RelatedSearch(_) => unhandled(message.code().code(), len),
     }
+  }
+
+  /// A successful login takes effect as its reply is read, before the next frame is handled, so
+  /// whatever the server sends right after it is raised after `LoggedIn`. The login in progress
+  /// then takes the reply from its wait.
+  fn login_replied(&self, response: LoginResponse) {
+    if let LoginResponse::Success {
+      ip, is_supporter, ..
+    } = &response
+    {
+      let mut session = self.inner.session();
+      if self.state() == ClientState::CONNECTED | ClientState::LOGGING_IN
+        && let Some(username) = session.logging_in_as.take()
+      {
+        self.inner.merge_server_info(|info| {
+          info.is_supporter = Some(*is_supporter);
+          info.own_public_ip = Some(*ip);
+        });
+        session.username = Some(username);
+        self
+          .inner
+          .transition(&mut session, ClientState::READY, "Logged in".into(), None);
+      }
+    }
+    self.complete(WaitKey::Server(ServerCode::Login), response);
   }
 
   /// completes the oldest wait under `key`; a reply nobody waits for is normal for pushed

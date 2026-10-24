@@ -191,6 +191,7 @@ impl Client {
     {
       let mut session = self.inner.session();
       self.check_attempt(attempt, ClientState::CONNECTED)?;
+      session.logging_in_as = Some(username.to_owned());
       self.inner.transition(
         &mut session,
         ClientState::CONNECTED | ClientState::LOGGING_IN,
@@ -219,24 +220,9 @@ impl Client {
       ])
       .await?;
     match reply.await {
-      Ok(LoginResponse::Success {
-        greeting,
-        ip,
-        is_supporter,
-        ..
-      }) => {
-        self.inner.merge_server_info(|info| {
-          info.is_supporter = Some(is_supporter);
-          info.own_public_ip = Some(ip);
-        });
-        {
-          let mut session = self.inner.session();
-          self.check_attempt(attempt, ClientState::CONNECTED | ClientState::LOGGING_IN)?;
-          session.username = Some(username.to_owned());
-          self
-            .inner
-            .transition(&mut session, ClientState::READY, "Logged in".into(), None);
-        }
+      Ok(LoginResponse::Success { greeting, ip, .. }) => {
+        // the dispatcher logged the session in as it read the reply
+        self.check_attempt(attempt, ClientState::READY)?;
         tracing::info!(username, public_ip = %ip, "logged in");
         tracing::debug!(greeting, "server greeting");
         Ok(())
