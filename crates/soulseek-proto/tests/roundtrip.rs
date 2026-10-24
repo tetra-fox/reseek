@@ -969,6 +969,16 @@ fn every_catalogue_code_with_a_layout_has_a_vector() {
 }
 
 #[test]
+fn peer_codes_without_layout_decode_as_unknown() {
+  for code in [1, 10, 14, 33, 34, 47, 48, 49] {
+    assert_eq!(
+      PeerMessage::decode(&p().u32(1).frame(code)),
+      Err(DecodeError::UnknownCode { code })
+    );
+  }
+}
+
+#[test]
 fn file_transfer_init_round_trip() {
   let raw = 77u32.to_le_bytes();
   assert_eq!(FileTransferInit { token: 77 }.encode(), raw);
