@@ -1,9 +1,5 @@
 //! The data model and enumerations of spec 01 section 8.
 
-use std::net::SocketAddr;
-
-use bitflags::bitflags;
-
 use crate::error::FieldError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -75,7 +71,7 @@ pub enum PeerConnectionType {
 }
 
 impl PeerConnectionType {
-  pub fn as_str(self) -> &'static str {
+  pub(crate) fn as_str(self) -> &'static str {
     match self {
       Self::Peer => "P",
       Self::Transfer => "F",
@@ -111,7 +107,7 @@ pub enum FileAttributeType {
 }
 
 impl FileAttributeType {
-  pub fn from_u32(value: u32) -> Self {
+  pub(crate) fn from_u32(value: u32) -> Self {
     match value {
       0 => Self::BitRate,
       1 => Self::Duration,
@@ -122,7 +118,7 @@ impl FileAttributeType {
     }
   }
 
-  pub fn to_u32(self) -> u32 {
+  pub(crate) fn to_u32(self) -> u32 {
     match self {
       Self::BitRate => 0,
       Self::Duration => 1,
@@ -131,36 +127,6 @@ impl FileAttributeType {
       Self::BitDepth => 5,
       Self::Unknown(other) => other,
     }
-  }
-}
-
-/// Server tuning values, all `None` until their message arrives after login
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ServerInfo {
-  pub parent_min_speed: Option<u32>,
-  pub parent_speed_ratio: Option<u32>,
-  /// seconds
-  pub wishlist_interval: Option<u32>,
-  /// from the login response
-  pub is_supporter: Option<bool>,
-}
-
-/// The distributed network state the API exposes; the distributed section produces it
-#[derive(Clone, Debug, PartialEq)]
-pub struct DistributedNetworkInfo {
-  pub average_broadcast_latency: Option<f64>,
-  pub branch_level: u32,
-  pub branch_root: String,
-  pub is_branch_root: bool,
-  pub child_limit: u32,
-  pub can_accept_children: bool,
-  pub children: Vec<(String, SocketAddr)>,
-  pub parent: Option<(String, SocketAddr)>,
-}
-
-impl DistributedNetworkInfo {
-  pub fn has_parent(&self) -> bool {
-    self.parent.is_some()
   }
 }
 
@@ -203,87 +169,6 @@ impl SearchQuery {
     }
     text
   }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum ConnectionKind {
-  Server,
-  Peer,
-  Distributed,
-  Transfer,
-}
-
-bitflags! {
-  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-  pub struct ConnectionTypes: u32 {
-    const OUTBOUND = 1;
-    const INBOUND = 2;
-    const DIRECT = 4;
-    const INDIRECT = 8;
-  }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum ConnectionState {
-  Pending = 0,
-  Connecting = 1,
-  Connected = 2,
-  Disconnecting = 3,
-  Disconnected = 4,
-}
-
-bitflags! {
-  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-  pub struct TransferStates: u32 {
-    const REQUESTED = 1;
-    const QUEUED = 2;
-    const INITIALIZING = 4;
-    const IN_PROGRESS = 8;
-    const COMPLETED = 16;
-    const SUCCEEDED = 32;
-    const CANCELLED = 64;
-    const TIMED_OUT = 128;
-    const ERRORED = 256;
-    const REJECTED = 512;
-    const ABORTED = 1024;
-    const LOCALLY = 2048;
-    const REMOTELY = 4096;
-  }
-}
-
-bitflags! {
-  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-  pub struct SearchStates: u32 {
-    const REQUESTED = 1;
-    const IN_PROGRESS = 2;
-    const COMPLETED = 4;
-    const CANCELLED = 8;
-    const TIMED_OUT = 16;
-    const RESPONSE_LIMIT_REACHED = 32;
-    const FILE_LIMIT_REACHED = 64;
-    const ERRORED = 128;
-    const QUEUED = 256;
-  }
-}
-
-bitflags! {
-  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-  pub struct SoulseekClientStates: u32 {
-    const DISCONNECTED = 1;
-    const CONNECTED = 2;
-    const LOGGED_IN = 4;
-    const CONNECTING = 8;
-    const LOGGING_IN = 16;
-    const DISCONNECTING = 32;
-  }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum SearchScopeType {
-  Network = 0,
-  User = 1,
-  Room = 2,
-  Wishlist = 3,
 }
 
 #[cfg(test)]

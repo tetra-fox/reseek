@@ -308,8 +308,7 @@ fn every_code_with_a_layout_has_a_round_trip_vector() {
     }
   }
   for code in DistributedCode::ALL {
-    // a placeholder of the original library, not a wire code
-    if *code != DistributedCode::Unknown && !has("distributed_message", code.code()) {
+    if !has("distributed_message", code.code()) {
       missing.push(format!("distributed {}", code.name()));
     }
   }

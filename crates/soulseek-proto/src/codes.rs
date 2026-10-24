@@ -184,7 +184,6 @@ codes! {
     SearchRequest = 3,
     BranchLevel = 4,
     BranchRoot = 5,
-    Unknown = 6,
     ChildDepth = 7,
     EmbeddedMessage = 93,
   }

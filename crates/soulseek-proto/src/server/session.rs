@@ -18,7 +18,7 @@ pub const PROTOCOL_MAJOR_VERSION: u32 = 177;
 pub const PROTOCOL_MINOR_VERSION: u32 = 760;
 
 /// Lowercase hex md5 of the utf-8 bytes of `username + password`, the `Login` hash field
-pub fn login_hash(username: &str, password: &str) -> String {
+pub(crate) fn login_hash(username: &str, password: &str) -> String {
   let mut md5 = Md5::new();
   md5.update(username.as_bytes());
   md5.update(password.as_bytes());
@@ -31,7 +31,7 @@ wire_struct! {
     pub username: String,
     pub password: Secret,
     pub major_version: u32,
-    /// [`login_hash`] of the username and password
+    /// `login_hash` of the username and password
     pub hash: Secret,
     pub minor_version: u32,
   }

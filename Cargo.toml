@@ -12,7 +12,6 @@ publish = false
 [workspace.dependencies]
 soulseek-proto = { path = "crates/soulseek-proto" }
 
-bitflags = "2"
 flate2 = "1"
 md-5 = "0.10"
 thiserror = "2"
