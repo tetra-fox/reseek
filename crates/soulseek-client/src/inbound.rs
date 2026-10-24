@@ -136,7 +136,7 @@ fn unrecognized(frame: &[u8], len: u32) -> ClientError {
     ConnectionErrorKind::Other,
     format!(
       "Unrecognized initialization message: {hex} ({} bytes)",
-      len as usize + 4
+      u64::from(len) + 4
     ),
   )
 }
