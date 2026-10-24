@@ -1,5 +1,4 @@
-//! Messages that set up connections between peers through the server (spec 01 sections 5.12, 5.48,
-//! 01a section 2.3).
+//! Messages that set up connections between peers through the server.
 
 use std::net::Ipv4Addr;
 
@@ -11,7 +10,8 @@ use crate::model::PeerConnectionType;
 use crate::wire::{Reader, Writer};
 
 wire_struct! {
-  /// Server code 18, spec 01 section 5.12
+  /// Server code 18: asks the server to tell a peer to connect to us, for when we cannot reach it
+  /// directly.
   pub struct ConnectToPeerRequest {
     /// fresh; the peer sends it back in `PierceFirewall`
     pub token: u32,
@@ -20,9 +20,8 @@ wire_struct! {
   }
 }
 
-/// Server code 18, spec 01 section 5.12
-///
-/// A peer asked the server to make us connect to it
+/// Server code 18: a peer asked the server to make us connect to it, with its address and the token
+/// to send back in `PierceFirewall`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct ConnectToPeerResponse {
@@ -71,7 +70,8 @@ impl Wire for ConnectToPeerResponse {
 }
 
 wire_struct! {
-  /// Server code 33, spec 01a section 2.3, obsolete
+  /// Server code 33: a token to check a peer connection against, relayed by the server. Obsolete:
+  /// no client sends it.
   pub struct SendConnectToken {
     pub username: String,
     pub token: u32,
@@ -79,7 +79,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 1001, spec 01 section 5.48
+  /// Server code 1001: tells the server we could not honour a peer's `ConnectToPeer`, so the server
+  /// can tell that peer.
   pub struct CannotConnectRequest {
     pub token: u32,
     /// the peer we could not reach
@@ -87,7 +88,7 @@ wire_struct! {
   }
 }
 
-/// Server code 1001, spec 01 section 5.48
+/// Server code 1001: the peer we asked, through the server, to connect to us could not reach us.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct CannotConnectResponse {

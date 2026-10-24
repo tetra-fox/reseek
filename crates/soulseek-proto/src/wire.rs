@@ -1,5 +1,5 @@
-//! Primitive encodings (spec 01 section 1): little-endian integers, length-prefixed strings with
-//! the utf-8 to iso-8859-1 read fallback, reversed ipv4 addresses.
+//! Primitive encodings: little-endian integers, length-prefixed strings with the utf-8 to
+//! iso-8859-1 read fallback, reversed ipv4 addresses.
 
 use std::fmt;
 use std::net::Ipv4Addr;
@@ -21,6 +21,7 @@ pub struct RemoteFilename {
 }
 
 impl RemoteFilename {
+  /// keeps the bytes as they are and decodes them for display
   pub fn from_bytes(bytes: Vec<u8>) -> Self {
     let (display, lossy) = decode_text(&bytes);
     Self {
@@ -30,10 +31,12 @@ impl RemoteFilename {
     }
   }
 
+  /// the bytes as the peer sent them, to echo back to it
   pub fn as_bytes(&self) -> &[u8] {
     &self.bytes
   }
 
+  /// the text for display, iso-8859-1 decoded when the bytes are not utf-8
   pub fn as_str(&self) -> &str {
     &self.display
   }
@@ -77,10 +80,12 @@ impl fmt::Display for RemoteFilename {
 pub struct Secret(String);
 
 impl Secret {
+  /// wraps a password or password hash
   pub fn new(secret: impl Into<String>) -> Self {
     Self(secret.into())
   }
 
+  /// the secret itself, for writing it to the wire
   pub fn expose(&self) -> &str {
     &self.0
   }

@@ -1,6 +1,5 @@
 //! Session messages: login, the listen port, online status, ping, share counts, being kicked,
-//! upload speed and password changes (spec 01 sections 5.1, 5.2, 5.16 to 5.18, 5.20, 5.39,
-//! 5.45).
+//! upload speed and password changes.
 
 use std::net::Ipv4Addr;
 
@@ -12,7 +11,7 @@ use crate::model::UserPresence;
 use crate::wire::{Reader, Secret, Writer};
 
 /// The major version sent in `Login`. 177 is the number the version registry keeps for
-/// experimental clients; 170 belongs to Soulseek.NET and must not be reused.
+/// experimental clients; 170 belongs to another client project and must not be reused.
 pub const PROTOCOL_MAJOR_VERSION: u32 = 177;
 /// The minor version sent in `Login`; the server only requires it to be non-zero
 pub const PROTOCOL_MINOR_VERSION: u32 = 760;
@@ -26,7 +25,8 @@ pub(crate) fn login_hash(username: &str, password: &str) -> String {
 }
 
 wire_struct! {
-  /// Server code 1, spec 01 section 5.1
+  /// Server code 1: our username, password and client version, the first message on the server
+  /// connection.
   pub struct LoginRequest {
     pub username: String,
     pub password: Secret,
@@ -51,10 +51,12 @@ impl LoginRequest {
   }
 }
 
-/// Server code 1, spec 01 section 5.1
+/// Server code 1: the server accepts the login with a greeting and our public address, or rejects
+/// it with a reason.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub enum LoginResponse {
+  /// the login was accepted
   Success {
     /// the server's multi-line greeting
     greeting: String,
@@ -65,6 +67,7 @@ pub enum LoginResponse {
     /// has ever bought privileges
     is_supporter: bool,
   },
+  /// the login was rejected
   Failure {
     /// `INVALIDUSERNAME`, `INVALIDPASS`, `SVRFULL`, ... shown verbatim
     reason: String,
@@ -117,7 +120,7 @@ impl Wire for LoginResponse {
   }
 }
 
-/// Server code 2, spec 01 section 5.2
+/// Server code 2: the port peers can reach us on, sent with the login and whenever it changes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct SetListenPort {
@@ -154,14 +157,15 @@ impl Wire for SetListenPort {
 }
 
 wire_struct! {
-  /// Server code 28, spec 01 section 5.16
+  /// Server code 28: our presence, away or online, sent whenever it changes.
   pub struct SetOnlineStatus {
     pub status: UserPresence,
   }
 }
 
 wire_struct! {
-  /// Server code 35, spec 01 section 5.18
+  /// Server code 35: how many folders and files we share, sent after login and after each share
+  /// scan.
   pub struct SharedFoldersAndFiles {
     pub directory_count: u32,
     pub file_count: u32,
@@ -169,7 +173,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 121, spec 01 section 5.39
+  /// Server code 121: the average speed of an upload we just finished, which the server folds into
+  /// our statistics.
   pub struct SendUploadSpeed {
     /// bytes/second
     pub speed: u32,
@@ -177,7 +182,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 142, spec 01 section 5.45
+  /// Server code 142: a new password for our account; the server echoes it back once it is changed.
   pub struct NewPassword {
     pub new_password: Secret,
   }

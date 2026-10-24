@@ -1,12 +1,16 @@
-//! The data model and enumerations of spec 01 section 8.
+//! The enumerations messages carry, and the parsing of a free-text search query.
 
 use crate::error::FieldError;
 
+/// A user's online state, as `GetStatus` and the room messages report it
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub enum UserPresence {
+  /// not logged in
   Offline = 0,
+  /// logged in and marked away
   Away = 1,
+  /// logged in and not away
   Online = 2,
 }
 
@@ -21,6 +25,7 @@ impl UserPresence {
   }
 }
 
+/// Which way a `TransferRequest` moves its file, seen from the sender of the request
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub enum TransferDirection {
@@ -44,7 +49,9 @@ impl TransferDirection {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub enum RoomType {
+  /// anyone can join
   Public = 0,
+  /// only members the owner or an operator added can join
   Private = 1,
 }
 
@@ -103,6 +110,7 @@ pub enum FileAttributeType {
   SampleRate,
   /// bits
   BitDepth,
+  /// any other type, kept so the attribute list re-encodes unchanged
   Unknown(u32),
 }
 
@@ -130,7 +138,7 @@ impl FileAttributeType {
   }
 }
 
-/// A free-text search query split into terms and exclusions (spec 01 section 8.15)
+/// A free-text search query split into terms and exclusions
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SearchQuery {
   /// in order, including empty terms from consecutive spaces and a lone `-`
@@ -157,10 +165,12 @@ impl SearchQuery {
     query
   }
 
+  /// the terms joined with single spaces, without the exclusions
   pub fn query(&self) -> String {
     self.terms.join(" ")
   }
 
+  /// the terms, then each exclusion with a leading `-`: the text a search request sends
   pub fn search_text(&self) -> String {
     let mut text = self.query();
     for exclusion in &self.exclusions {

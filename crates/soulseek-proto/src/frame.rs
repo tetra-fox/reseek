@@ -1,5 +1,5 @@
-//! Framing (spec 01 section 2): `[u32 len][code][payload]`, where the code is 4 bytes on server and
-//! peer connections and 1 byte on distributed connections and in the init frame.
+//! Framing: `[u32 len][code][payload]`, where the code is 4 bytes on server and peer connections
+//! and 1 byte on distributed connections and in the init frame.
 
 use crate::error::DecodeError;
 use crate::limits::Limits;
@@ -8,14 +8,18 @@ use crate::limits::Limits;
 /// init frame; the raw token and offset after it are in [`crate::init`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FrameKind {
+  /// the server connection
   Server,
+  /// a `P` connection between two clients
   Peer,
+  /// a `D` connection in the distributed search tree
   Distributed,
   /// the first frame on an inbound `P`, `F` or `D` socket
   Init,
 }
 
 impl FrameKind {
+  /// bytes of the message code that follow the length prefix
   pub fn code_width(self) -> usize {
     match self {
       Self::Server | Self::Peer => 4,
@@ -31,6 +35,7 @@ pub struct FrameHeader {
   pub code: u32,
 }
 
+/// One frame's code and payload, borrowed from the buffer it was split from
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Frame<'a> {
   pub code: u32,

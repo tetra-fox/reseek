@@ -1,5 +1,4 @@
-//! Chat room messages: joining, leaving, members, the room list and tickers (spec 01 sections 5.7
-//! to 5.11, 5.25, 5.37, 5.49, 01a section 2.10).
+//! Chat room messages: joining, leaving, members, the room list and tickers.
 
 use super::users::{UserData, UserStats};
 use crate::codec::{Wire, wire_struct};
@@ -9,7 +8,7 @@ use crate::model::{RoomType, UserPresence};
 use crate::wire::{Reader, Writer};
 
 wire_struct! {
-  /// Server code 13, spec 01 section 5.7
+  /// Server code 13: a chat message we send to a room.
   pub struct SayInChatRoomRequest {
     pub room: String,
     pub message: String,
@@ -17,7 +16,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 13, spec 01 section 5.7
+  /// Server code 13: a chat message in a room we are in, our own messages included.
   pub struct SayInChatRoomResponse {
     pub room: String,
     pub username: String,
@@ -26,7 +25,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 14, spec 01 section 5.8
+  /// Server code 14: asks to join a room, creating it with `room_type` if it does not exist.
   pub struct JoinRoomRequest {
     pub room: String,
     /// the type of room to create if it does not exist
@@ -34,9 +33,7 @@ wire_struct! {
   }
 }
 
-/// Server code 14, spec 01 section 5.8
-///
-/// The `JoinRoom` reply
+/// Server code 14: the members of a room we joined, and its owner and operators when it is private.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct RoomData {
@@ -48,10 +45,12 @@ pub struct RoomData {
 }
 
 impl RoomData {
+  /// how many members the room has
   pub fn user_count(&self) -> usize {
     self.users.len()
   }
 
+  /// the room is private, so its owner and operators are known
   pub fn is_private(&self) -> bool {
     self.private.is_some()
   }
@@ -87,6 +86,7 @@ impl Wire for RoomData {
 }
 
 wire_struct! {
+  /// The owner and operators that follow the member lists of a private room in `RoomData`
   pub struct PrivateRoomData {
     pub owner: String,
     pub operators: Vec<String>,
@@ -160,15 +160,13 @@ pub(super) fn write_user_lists(w: &mut Writer, users: &[UserData]) {
 }
 
 wire_struct! {
-  /// Server code 15, spec 01 section 5.9
+  /// Server code 15: asks to leave a room; the server echoes it once we have left.
   pub struct LeaveRoom {
     pub room: String,
   }
 }
 
-/// Server code 16, spec 01 section 5.10
-///
-/// Pushed when someone joins a room we are in, ourselves included
+/// Server code 16: someone joined a room we are in, ourselves included.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct UserJoinedRoom {
@@ -208,9 +206,7 @@ impl Wire for UserJoinedRoom {
 }
 
 wire_struct! {
-  /// Server code 17, spec 01 section 5.11
-  ///
-  /// Pushed when someone else leaves a room we are in
+  /// Server code 17: someone other than us left a room we are in.
   pub struct UserLeftRoom {
     pub room: String,
     pub username: String,
@@ -218,14 +214,14 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 62, spec 01a section 2.10, obsolete
+  /// Server code 62: a room was created. Obsolete: the live server no longer sends it.
   pub struct RoomAdded {
     pub room: String,
   }
 }
 
 wire_struct! {
-  /// Server code 63, spec 01a section 2.10, obsolete
+  /// Server code 63: a room was removed. Obsolete: the live server no longer sends it.
   pub struct RoomRemoved {
     pub room: String,
   }
@@ -267,10 +263,8 @@ fn write_room_block(w: &mut Writer, rooms: &[RoomInfo]) {
   }
 }
 
-/// Server code 64, spec 01 section 5.25
-///
-/// The `RoomList` reply. Each block is a list of names followed by a list of user counts of
-/// the same length.
+/// Server code 64: the server's list of public rooms with their user counts, and the private rooms
+/// we own, belong to and operate, sent after login and whenever we ask.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct RoomList {
@@ -308,9 +302,7 @@ impl Wire for RoomList {
 }
 
 wire_struct! {
-  /// Server code 113, spec 01 section 5.37
-  ///
-  /// All tickers of a room, pushed on join
+  /// Server code 113: every ticker of a room, pushed when we join it.
   pub struct RoomTickers {
     pub room: String,
     pub tickers: Vec<RoomTicker>,
@@ -318,6 +310,7 @@ wire_struct! {
 }
 
 wire_struct! {
+  /// A user's ticker, the short status line shown next to them in a room
   pub struct RoomTicker {
     pub username: String,
     pub message: String,
@@ -325,7 +318,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 114, spec 01 section 5.37
+  /// Server code 114: a user set their ticker in a room we are in.
   pub struct RoomTickerAdd {
     pub room: String,
     pub ticker: RoomTicker,
@@ -333,7 +326,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 115, spec 01 section 5.37
+  /// Server code 115: a user cleared their ticker in a room we are in.
   pub struct RoomTickerRemove {
     pub room: String,
     pub username: String,
@@ -341,7 +334,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 116, spec 01 section 5.37
+  /// Server code 116: sets or clears our ticker in a room.
   pub struct SetRoomTicker {
     pub room: String,
     /// empty clears the ticker
@@ -350,9 +343,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 1003, spec 01 section 5.49
-  ///
-  /// A `JoinRoom` would have created a room that clashes with an existing private room
+  /// Server code 1003: a `JoinRoom` would have created a room with the name of an existing private
+  /// room.
   pub struct CannotJoinRoom {
     pub room: String,
   }

@@ -1,5 +1,4 @@
-//! Private messages, admin broadcasts and the public chat feed (spec 01 sections 5.13, 5.14, 5.26,
-//! 5.46, 01a section 2.14).
+//! Private messages, admin broadcasts and the public chat feed.
 
 use crate::codec::{Wire, wire_struct};
 use crate::error::DecodeError;
@@ -7,14 +6,15 @@ use crate::log::KeyFields;
 use crate::wire::{Reader, Writer};
 
 wire_struct! {
-  /// Server code 22, spec 01 section 5.13
+  /// Server code 22: a private message we send to a user.
   pub struct PrivateMessageRequest {
     pub username: String,
     pub message: String,
   }
 }
 
-/// Server code 22, spec 01 section 5.13
+/// Server code 22: a private message to us, live or replayed from the server's offline store until
+/// we acknowledge it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct PrivateMessageResponse {
@@ -57,21 +57,23 @@ impl Wire for PrivateMessageResponse {
 }
 
 wire_struct! {
-  /// Server code 23, spec 01 section 5.14
+  /// Server code 23: tells the server we received a private message, so it is not replayed at the
+  /// next login.
   pub struct AcknowledgePrivateMessage {
     pub id: u32,
   }
 }
 
 wire_struct! {
-  /// Server code 66, spec 01 section 5.26
+  /// Server code 66: a notice from the server admins to every user.
   pub struct GlobalAdminMessage {
     pub message: String,
   }
 }
 
 wire_struct! {
-  /// Server code 149, spec 01a section 2.14, codec only
+  /// Server code 149: one private message to each listed online user. Codec only: this client never
+  /// sends it.
   pub struct MessageUsers {
     pub usernames: Vec<String>,
     pub message: String,
@@ -79,7 +81,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 152, spec 01 section 5.46
+  /// Server code 152: a message in any public room, pushed while we follow the public chat feed.
   pub struct PublicChat {
     pub room: String,
     pub username: String,

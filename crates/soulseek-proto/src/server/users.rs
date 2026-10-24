@@ -1,6 +1,5 @@
-//! Messages about other users: their address, status and statistics, watching and ignoring them
-//! (spec 01 sections 5.3 to 5.6, 5.19, 01a section 2.1). `UserStats` and `UserData`, which the
-//! room messages also carry, are here.
+//! Messages about other users: their address, status and statistics, watching and ignoring them.
+//! `UserStats` and `UserData`, which the room messages also carry, are here.
 
 use std::net::Ipv4Addr;
 
@@ -63,13 +62,13 @@ pub struct UserData {
 }
 
 wire_struct! {
-  /// Server code 3, spec 01 section 5.3
+  /// Server code 3: asks for the address and port a user's client listens on.
   pub struct GetPeerAddressRequest {
     pub username: String,
   }
 }
 
-/// Server code 3, spec 01 section 5.3
+/// Server code 3: the address and listen port of a user, `0.0.0.0` when they are offline.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct GetPeerAddressResponse {
@@ -118,13 +117,13 @@ impl Wire for GetPeerAddressResponse {
 }
 
 wire_struct! {
-  /// Server code 5, spec 01 section 5.4
+  /// Server code 5: asks the server to report a user's status changes to us.
   pub struct WatchUserRequest {
     pub username: String,
   }
 }
 
-/// Server code 5, spec 01 section 5.4
+/// Server code 5: whether a user we watch exists, with their status and statistics when they do.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct WatchUserResponse {
@@ -167,6 +166,7 @@ impl Wire for WatchUserResponse {
   }
 }
 
+/// The status and statistics `WatchUserResponse` carries for a user that exists
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct WatchedUser {
@@ -177,23 +177,22 @@ pub struct WatchedUser {
 }
 
 wire_struct! {
-  /// Server code 6, spec 01 section 5.5
+  /// Server code 6: stops the status reports a `WatchUser` started.
   pub struct UnwatchUser {
     pub username: String,
   }
 }
 
 wire_struct! {
-  /// Server code 7, spec 01 section 5.6
+  /// Server code 7: asks for a user's presence and privilege state.
   pub struct GetStatusRequest {
     pub username: String,
   }
 }
 
 wire_struct! {
-  /// Server code 7, spec 01 section 5.6
-  ///
-  /// The `GetStatus` reply, also pushed for watched users and room members
+  /// Server code 7: a user's presence and privilege state, in reply to `GetStatus` and pushed for
+  /// watched users and room members.
   pub struct UserStatus {
     pub username: String,
     pub presence: UserPresence,
@@ -202,30 +201,30 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 11, spec 01a section 2.1, obsolete
+  /// Server code 11: tells the server we ignore a user. Obsolete: it no longer has any effect.
   pub struct IgnoreUser {
     pub username: String,
   }
 }
 
 wire_struct! {
-  /// Server code 12, spec 01a section 2.1, obsolete
+  /// Server code 12: tells the server we stop ignoring a user. Obsolete: it no longer has any
+  /// effect.
   pub struct UnignoreUser {
     pub username: String,
   }
 }
 
 wire_struct! {
-  /// Server code 36, spec 01 section 5.19
+  /// Server code 36: asks for a user's upload speed and share counts.
   pub struct GetUserStatsRequest {
     pub username: String,
   }
 }
 
 wire_struct! {
-  /// Server code 36, spec 01 section 5.19
-  ///
-  /// The `GetUserStats` reply, also pushed for users who share a room with us
+  /// Server code 36: a user's upload speed and share counts, in reply to `GetUserStats` and pushed
+  /// for users who share a room with us.
   pub struct UserStatistics {
     pub username: String,
     pub stats: UserStats,

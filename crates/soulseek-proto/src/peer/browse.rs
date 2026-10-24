@@ -1,5 +1,5 @@
-//! Browsing a peer's shares and one of its folders (spec 01 sections 6.1, 6.6), and the `File` and
-//! `Directory` layouts every compressed response shares (6.8).
+//! Browsing a peer's shares and one of its folders, and the `File` and `Directory` layouts every
+//! compressed response shares.
 
 use super::{read_compressed, write_compressed};
 use crate::codec::{Wire, wire_struct};
@@ -10,6 +10,7 @@ use crate::model::FileAttributeType;
 use crate::wire::{Reader, RemoteFilename, Writer};
 
 wire_struct! {
+  /// One typed value of a shared file, such as its bit rate or duration
   pub struct FileAttribute {
     pub attribute_type: FileAttributeType,
     pub value: u32,
@@ -37,6 +38,7 @@ pub struct File {
 }
 
 impl File {
+  /// how many attributes the file carries, unknown types included
   pub fn attribute_count(&self) -> usize {
     self.attributes.len()
   }
@@ -51,6 +53,7 @@ impl File {
       .map(|a| a.value)
   }
 
+  /// kbit/s
   pub fn bit_rate(&self) -> Option<u32> {
     self.attribute(FileAttributeType::BitRate)
   }
@@ -60,16 +63,19 @@ impl File {
     self.attribute(FileAttributeType::Duration)
   }
 
+  /// whether the bit rate varies over the file
   pub fn is_variable_bit_rate(&self) -> Option<bool> {
     self
       .attribute(FileAttributeType::VariableBitRate)
       .map(|v| v != 0)
   }
 
+  /// Hz
   pub fn sample_rate(&self) -> Option<u32> {
     self.attribute(FileAttributeType::SampleRate)
   }
 
+  /// bits per sample
   pub fn bit_depth(&self) -> Option<u32> {
     self.attribute(FileAttributeType::BitDepth)
   }
@@ -131,6 +137,7 @@ pub(super) fn read_files(r: &mut Reader, field: &'static str) -> Result<Vec<File
   (0..count).map(|_| File::read(r, field)).collect()
 }
 
+/// A shared directory and the files directly in it
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct Directory {
@@ -141,6 +148,7 @@ pub struct Directory {
 }
 
 impl Directory {
+  /// how many files the directory holds
   pub fn file_count(&self) -> usize {
     self.files.len()
   }
@@ -169,9 +177,7 @@ fn read_directories(r: &mut Reader, field: &'static str) -> Result<Vec<Directory
   (0..count).map(|_| Directory::read(r, field)).collect()
 }
 
-/// Peer code 5, spec 01 section 6.1
-///
-/// The `BrowseResponse` body
+/// Peer code 5: the peer's whole share listing, zlib-compressed, in reply to `BrowseRequest`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct BrowseResponse {
@@ -220,7 +226,7 @@ impl Wire for BrowseResponse {
 }
 
 wire_struct! {
-  /// Peer code 36, spec 01 section 6.6
+  /// Peer code 36: asks for the files of one directory of the peer's shares.
   pub struct FolderContentsRequest {
     pub token: u32,
     /// the remote directory path exactly as it appeared in a browse or search
@@ -228,9 +234,7 @@ wire_struct! {
   }
 }
 
-/// Peer code 37, spec 01 section 6.6
-///
-/// The `FolderContentsResponse` body
+/// Peer code 37: the files of the directory a `FolderContentsRequest` asked for, zlib-compressed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct FolderContentsResponse {

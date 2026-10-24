@@ -2,8 +2,8 @@
 //! message, the compressed payloads and the data model. No I/O.
 //!
 //! One module per message family: [`server`], [`peer`], [`distributed`] and [`init`]. Each
-//! message is a struct, in the file of its spec topic for the larger families and reached through
-//! its family module, whose wire layout is read and written in one place;
+//! message is a struct, in the file of its topic for the larger families and reached through its
+//! family module, whose wire layout is read and written in one place;
 //! the family enum (`ServerRequest`, `PeerMessage`, ...) ties every variant to its code and has
 //! `encode(&self) -> Vec<u8>`, which produces a complete frame, and `decode(&[u8])`, which takes
 //! exactly one complete frame as [`frame::split`] returns it. Decoders enforce the `LIMIT_*`

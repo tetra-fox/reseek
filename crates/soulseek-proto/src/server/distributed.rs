@@ -1,5 +1,5 @@
-//! Server messages about our place in the distributed search tree (spec 01 sections 5.28 to 5.30,
-//! 5.33, 5.34, 5.43). The embedded message body is [`crate::distributed::Embedded`].
+//! Server messages about our place in the distributed search tree. The embedded message body is
+//! [`crate::distributed::Embedded`].
 
 use std::net::Ipv4Addr;
 
@@ -8,13 +8,15 @@ use crate::error::DecodeError;
 use crate::wire::{Reader, Writer};
 
 wire_struct! {
-  /// Server code 71, spec 01 section 5.28
+  /// Server code 71: whether we lack a distributed parent; while we do, the server sends `NetInfo`
+  /// candidates.
   pub struct HaveNoParents {
     pub have_no_parents: bool,
   }
 }
 
-/// Server code 73, spec 01 section 5.28, deprecated, never sent; an empty payload means no parent
+/// Server code 73: the address of our distributed parent, an empty payload when we have none.
+/// Deprecated: never sent.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct ParentsIP {
@@ -38,64 +40,70 @@ impl Wire for ParentsIP {
 }
 
 wire_struct! {
-  /// Server code 83, spec 01 section 5.29
+  /// Server code 83: the upload speed a client needs to become a distributed parent, sent after
+  /// login.
   pub struct ParentMinSpeed {
     pub speed: u32,
   }
 }
 
 wire_struct! {
-  /// Server code 84, spec 01 section 5.29
+  /// Server code 84: the ratio that sets how many distributed children we may take, sent after
+  /// login.
   pub struct ParentSpeedRatio {
     pub ratio: u32,
   }
 }
 
 wire_struct! {
-  /// Server code 86, spec 01 section 5.30, obsolete
+  /// Server code 86: a distributed parent timeout in seconds. Obsolete: the live server no longer
+  /// sends it.
   pub struct ParentInactivityTimeout {
     pub seconds: u32,
   }
 }
 
 wire_struct! {
-  /// Server code 87, spec 01 section 5.30, obsolete
+  /// Server code 87: a distributed search timeout in seconds. Obsolete: the live server no longer
+  /// sends it.
   pub struct SearchInactivityTimeout {
     pub seconds: u32,
   }
 }
 
 wire_struct! {
-  /// Server code 88, spec 01 section 5.30, obsolete
+  /// Server code 88: how many parent candidates to keep. Obsolete: the live server no longer sends
+  /// it.
   pub struct MinimumParentsInCache {
     pub count: u32,
   }
 }
 
 wire_struct! {
-  /// Server code 90, spec 01 section 5.30, obsolete
+  /// Server code 90: a distributed keep-alive interval in seconds. Obsolete: the live server no
+  /// longer sends it.
   pub struct DistributedAliveInterval {
     pub seconds: u32,
   }
 }
 
 wire_struct! {
-  /// Server code 100, spec 01 section 5.28
+  /// Server code 100: whether the server may hand us distributed children.
   pub struct AcceptChildren {
     pub accept: bool,
   }
 }
 
 wire_struct! {
-  /// Server code 102, spec 01 section 5.34
-  ///
-  /// Parent candidates, sent after `HaveNoParents(true)`
+  /// Server code 102: up to ten distributed parent candidates, sent after `HaveNoParents(true)`
+  /// until we have a parent.
   pub struct NetInfo {
     pub parents: Vec<ParentCandidate>,
   }
 }
 
 wire_struct! {
+  /// A user `NetInfo` offers as a distributed parent, with the address to connect to
   pub struct ParentCandidate {
     pub username: String,
     pub ip: Ipv4Addr,
@@ -104,21 +112,22 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 126, spec 01 section 5.28
+  /// Server code 126: our depth in the distributed tree, 0 when we are a branch root.
   pub struct BranchLevel {
     pub level: u32,
   }
 }
 
 wire_struct! {
-  /// Server code 127, spec 01 section 5.28
+  /// Server code 127: the username at the root of our distributed branch, our own when we are the
+  /// root.
   pub struct BranchRoot {
     pub root: String,
   }
 }
 
 wire_struct! {
-  /// Server code 129, spec 01 section 5.28, obsolete, never sent
+  /// Server code 129: the depth of our distributed children. Obsolete: never sent.
   pub struct ChildDepth {
     pub depth: u32,
   }

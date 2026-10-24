@@ -1,13 +1,11 @@
-//! The user info a peer shows about itself (spec 01 section 6.5).
+//! The user info a peer shows about itself.
 
 use crate::codec::Wire;
 use crate::error::{DecodeError, FieldError};
 use crate::limits::LIMIT_USER_INFO_PICTURE_BYTES;
 use crate::wire::{Reader, Writer};
 
-/// Peer code 16, spec 01 section 6.5
-///
-/// The `InfoResponse` body
+/// Peer code 16: the peer's description, picture and upload slots, in reply to `InfoRequest`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct UserInfo {
@@ -23,6 +21,7 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
+  /// the peer sent a picture
   pub fn has_picture(&self) -> bool {
     self.picture.is_some()
   }

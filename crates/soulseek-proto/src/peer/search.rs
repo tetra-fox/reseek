@@ -1,4 +1,4 @@
-//! Search requests between peers and the compressed search response (spec 01 sections 6.2 to 6.4).
+//! Search requests between peers and the compressed search response.
 
 use std::io::Read;
 
@@ -15,16 +15,14 @@ use crate::log::{self, KeyFields};
 use crate::wire::{Reader, Writer};
 
 wire_struct! {
-  /// Peer code 8, spec 01 section 6.2, obsolete, still answered
+  /// Peer code 8: a search of our shares sent directly by a peer. Obsolete, still answered.
   pub struct SearchRequest {
     pub token: u32,
     pub query: String,
   }
 }
 
-/// Peer code 9, spec 01 section 6.3
-///
-/// The `SearchResponse` body
+/// Peer code 9: the files a peer has that match one of our searches, zlib-compressed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct SearchResponse {

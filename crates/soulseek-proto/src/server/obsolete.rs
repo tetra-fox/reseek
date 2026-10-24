@@ -1,4 +1,4 @@
-//! Legacy messages kept as codecs only (spec 01a section 2) that belong to no current topic.
+//! Obsolete server messages kept as codecs only, which belong to none of the other topics.
 
 use std::net::Ipv4Addr;
 
@@ -10,14 +10,16 @@ use crate::log::KeyFields;
 use crate::wire::{Reader, Writer};
 
 wire_struct! {
-  /// Server code 34, spec 01a section 2.4, obsolete `SendDownloadSpeed`
+  /// Server code 34, also named `SendDownloadSpeed`: a download's speed, sent to update the
+  /// uploader's statistics. Obsolete: `SendUploadSpeed` replaced it.
   pub struct SendSpeed {
     pub username: String,
     pub speed: u32,
   }
 }
 
-/// Server code 40, spec 01a section 2.5, obsolete `UploadSlotsFull`, a boolean carried as `u32`
+/// Server code 40, also named `UploadSlotsFull`: whether all our upload slots are busy, a boolean
+/// carried as `u32`. Obsolete: no client sends it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct QueuedDownloadsRequest {
@@ -38,7 +40,8 @@ impl Wire for QueuedDownloadsRequest {
   }
 }
 
-/// Server code 40, spec 01a section 2.5
+/// Server code 40, also named `UploadSlotsFull`: whether all of a user's upload slots are busy.
+/// Obsolete: the live server no longer sends it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct QueuedDownloadsResponse {
@@ -67,7 +70,8 @@ impl Wire for QueuedDownloadsResponse {
 }
 
 wire_struct! {
-  /// Server code 58, spec 01a section 2.8, obsolete
+  /// Server code 58: a server admin command, for accounts with admin status. Obsolete: it no longer
+  /// has any effect.
   pub struct AdminCommand {
     pub command: String,
     pub args: Vec<String>,
@@ -75,7 +79,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 59, spec 01a section 2.9, obsolete
+  /// Server code 59: asks for a queue place by transfer token, relayed by the server. Obsolete:
+  /// peers ask with `PlaceInQueueRequest`.
   pub struct PlaceInLineRequest {
     pub username: String,
     pub token: u32,
@@ -83,7 +88,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 60, spec 01a section 2.9, obsolete
+  /// Server code 60: a queue place by transfer token, relayed by the server. Obsolete: peers answer
+  /// with `PlaceInQueueResponse`.
   pub struct PlaceInLineResponse {
     pub username: String,
     pub token: u32,
@@ -91,8 +97,8 @@ wire_struct! {
   }
 }
 
-/// Server code 67, spec 01a section 2.12, obsolete: the same five parallel lists as `JoinRoom`,
-/// without a room name
+/// Server code 67: every online user, in the five parallel lists of `JoinRoom` without a room name.
+/// Obsolete: no longer served.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct GlobalUserListResponse {
@@ -118,7 +124,8 @@ impl Wire for GlobalUserListResponse {
 }
 
 wire_struct! {
-  /// Server code 68, spec 01a section 2.13, obsolete; the field order differs from the response
+  /// Server code 68: a message tunnelled through the server to a peer we cannot reach; the field
+  /// order differs from the response. Obsolete.
   pub struct TunneledMessageRequest {
     pub username: String,
     pub token: u32,
@@ -128,7 +135,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 68, spec 01a section 2.13, obsolete
+  /// Server code 68: a message a peer tunnelled to us through the server. Obsolete: the live server
+  /// no longer sends it.
   pub struct TunneledMessageResponse {
     pub username: String,
     pub code: u32,

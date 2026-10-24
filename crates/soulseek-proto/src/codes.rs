@@ -23,10 +23,12 @@ macro_rules! codes {
         }
       }
 
+      /// the value on the wire
       pub fn code(self) -> u32 {
         self as u32
       }
 
+      /// the variant name, as logs and errors show it
       pub fn name(self) -> &'static str {
         match self {
           $(Self::$variant => stringify!($variant),)*
@@ -37,7 +39,8 @@ macro_rules! codes {
 }
 
 codes! {
-  /// Server connection codes (`u32` on the wire)
+  /// Server connection codes (`u32` on the wire). Each code's message struct carries its
+  /// description.
   ServerCode: u32 {
     Login = 1,
     SetListenPort = 2,
@@ -145,8 +148,9 @@ codes! {
 }
 
 codes! {
-  /// Peer connection codes (`u32` on the wire). 1, 10, 14, 33, 34, 47, 48 and 49 have no known
-  /// layout and are decoded as unknown codes.
+  /// Peer connection codes (`u32` on the wire). Each code's message struct carries its
+  /// description; 1, 10, 14, 33, 34, 47, 48 and 49 have no known layout and are decoded as unknown
+  /// codes.
   PeerCode: u32 {
     PrivateMessage = 1,
     BrowseRequest = 4,
@@ -177,8 +181,8 @@ codes! {
 }
 
 codes! {
-  /// Distributed connection codes (`u8` on the wire). 6 is a placeholder of the original library,
-  /// not a wire code, and is decoded as unknown.
+  /// Distributed connection codes (`u8` on the wire). Each code's message struct carries its
+  /// description.
   DistributedCode: u8 {
     Ping = 0,
     SearchRequest = 3,
@@ -190,7 +194,8 @@ codes! {
 }
 
 codes! {
-  /// Codes of the first frame on an inbound peer socket (`u8` on the wire)
+  /// Codes of the first frame on an inbound peer socket (`u8` on the wire). Each code's message
+  /// struct carries its description.
   InitCode: u8 {
     PierceFirewall = 0,
     PeerInit = 1,

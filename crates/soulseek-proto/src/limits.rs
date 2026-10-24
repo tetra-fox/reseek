@@ -1,5 +1,5 @@
-//! Hostile-input limits (spec 01 section 9). Each one is enforced where the decoder reads the field
-//! it bounds; exceeding one is a [`DecodeError`](crate::DecodeError).
+//! Hostile-input limits. Each one is enforced where the decoder reads the field it bounds;
+//! exceeding one is a [`DecodeError`](crate::DecodeError).
 
 use crate::frame::FrameKind;
 
@@ -28,15 +28,19 @@ pub const LIMIT_DIRECTORIES_PER_RESPONSE: usize = 1_000_000;
 /// `n_attributes` of one file
 pub const LIMIT_ATTRIBUTES_PER_FILE: usize = 64;
 
-/// The limits the spec marks configurable. Everything else is a constant.
+/// The limits an operator can configure. Everything else is a constant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
+  /// frame `len` on peer connections
   pub peer_message_bytes: u32,
+  /// decompressed size of a browse, search or folder response
   pub inflated_bytes: usize,
+  /// total files in one browse, search or folder response
   pub files_per_response: usize,
 }
 
 impl Limits {
+  /// the `LIMIT_*` constant of each field
   pub const DEFAULT: Self = Self {
     peer_message_bytes: LIMIT_PEER_MESSAGE_BYTES,
     inflated_bytes: LIMIT_INFLATED_BYTES,

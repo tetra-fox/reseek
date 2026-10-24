@@ -1,4 +1,4 @@
-//! Transfer negotiation: requests, queueing, queue places and refusals (spec 01 section 6.7).
+//! Transfer negotiation: requests, queueing, queue places and refusals.
 
 use crate::codec::{Wire, wire_struct};
 use crate::error::DecodeError;
@@ -6,7 +6,7 @@ use crate::log::KeyFields;
 use crate::model::TransferDirection;
 use crate::wire::{Reader, RemoteFilename, Writer};
 
-/// Peer code 40, spec 01 section 6.7
+/// Peer code 40: a request to download a file, or an uploader announcing it is about to send one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransferRequest {
   pub direction: TransferDirection,
@@ -53,16 +53,19 @@ impl Wire for TransferRequest {
   }
 }
 
-/// Peer code 41, spec 01 section 6.7
+/// Peer code 41: the answer to a `TransferRequest`, allowing the transfer or refusing it with a
+/// message.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub enum TransferResponse {
+  /// the transfer may start
   Allowed {
     token: u32,
     /// present in the deprecated reply to a download request, absent in the reply to an upload
     /// announcement
     file_size: Option<u64>,
   },
+  /// the transfer does not start now
   Denied {
     token: u32,
     /// `"Queued"` means accepted into the queue; anything else is display text
@@ -71,6 +74,7 @@ pub enum TransferResponse {
 }
 
 impl TransferResponse {
+  /// the token of the `TransferRequest` this answers
   pub fn token(&self) -> u32 {
     match self {
       Self::Allowed { token, .. } | Self::Denied { token, .. } => *token,
@@ -120,21 +124,22 @@ impl Wire for TransferResponse {
 }
 
 wire_struct! {
-  /// Peer code 42, spec 01 section 6.7, obsolete
+  /// Peer code 42: names a file. Obsolete: no client sends it.
   pub struct UploadPlacehold {
     pub filename: RemoteFilename,
   }
 }
 
 wire_struct! {
-  /// Peer code 43, spec 01 section 6.7
+  /// Peer code 43: asks the peer to queue a file for us to download.
   pub struct QueueDownload {
     pub filename: RemoteFilename,
   }
 }
 
 wire_struct! {
-  /// Peer code 44, spec 01 section 6.7
+  /// Peer code 44: our place in the peer's upload queue for a file, in reply to
+  /// `PlaceInQueueRequest`.
   pub struct PlaceInQueueResponse {
     pub filename: RemoteFilename,
     /// 1-based
@@ -143,14 +148,14 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Peer code 46, spec 01 section 6.7
+  /// Peer code 46: an upload of a file to us stopped before it completed.
   pub struct UploadFailed {
     pub filename: RemoteFilename,
   }
 }
 
 wire_struct! {
-  /// Peer code 50, spec 01 section 6.7
+  /// Peer code 50: the peer refuses or cancels an upload of a file to us, with the reason.
   pub struct UploadDenied {
     pub filename: RemoteFilename,
     pub reason: String,
@@ -158,7 +163,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Peer code 51, spec 01 section 6.7
+  /// Peer code 51: asks for our place in the peer's upload queue for a file.
   pub struct PlaceInQueueRequest {
     pub filename: RemoteFilename,
   }

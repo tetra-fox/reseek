@@ -1,7 +1,6 @@
-//! Messages on a `P` connection between two clients (spec 01 section 6), the same layout in both
-//! directions. Each message lives in the file of its spec topic; this file holds the catalogue
-//! and the zlib handling that browse, search and folder responses share, since each of them is
-//! one zlib stream after the code.
+//! Messages on a `P` connection between two clients, the same layout in both directions. Each
+//! message lives in the file of its topic; this file holds the catalogue and the zlib handling that
+//! browse, search and folder responses share, since each of them is one zlib stream after the code.
 
 pub(crate) mod browse;
 pub(crate) mod info;
@@ -25,17 +24,20 @@ use crate::limits::Limits;
 use crate::wire::{Reader, Writer};
 
 family! {
+  /// Every message two clients exchange on a `P` connection
   pub enum PeerMessage {
     code: PeerCode,
     frame: Peer,
     label: "peer",
     quiet: [],
     messages: {
+      /// asks for the peer's whole share listing
       BrowseRequest,
       BrowseResponse(BrowseResponse),
       /// obsolete, still answered
       SearchRequest(SearchRequest),
       SearchResponse(SearchResponse),
+      /// asks for the peer's user info
       InfoRequest,
       InfoResponse(UserInfo),
       FolderContentsRequest(FolderContentsRequest),

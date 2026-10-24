@@ -313,6 +313,7 @@ macro_rules! family {
     }
 
     impl $name {
+      /// the code this message is sent with
       pub fn code(&self) -> $code {
         match self {
           $( $name::$variant $(($crate::codec::family!(@bind $ty, _message)))? => $code::$variant, )*

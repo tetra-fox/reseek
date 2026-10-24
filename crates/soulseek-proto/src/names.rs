@@ -40,6 +40,7 @@ pub fn validate_login_username(username: &str) -> Result<(), LoginUsernameError>
   Ok(())
 }
 
+/// Why the server would reject a room name in `JoinRoom`
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RoomNameError {
   #[error("room name is empty")]

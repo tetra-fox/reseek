@@ -1,6 +1,6 @@
-//! The first frame on an inbound peer socket (spec 01 section 3.2), and the raw values a
-//! transfer (`F`) socket carries after it (3.3). Any init decode error means the socket should
-//! be closed, including an invalid username or an unknown connection type.
+//! The first frame on an inbound peer socket, and the raw values a transfer (`F`) socket carries
+//! after it. Any init decode error means the socket should be closed, including an invalid username
+//! or an unknown connection type.
 
 use crate::codec::{Wire, family, wire_struct};
 use crate::codes::InitCode;
@@ -11,6 +11,7 @@ use crate::names::is_valid_peer_username;
 use crate::wire::{Reader, Writer};
 
 family! {
+  /// The first frame on an inbound peer socket, which says why the peer connected
   pub enum InitMessage {
     code: InitCode,
     frame: Init,
@@ -26,14 +27,16 @@ family! {
 }
 
 wire_struct! {
-  /// Init code 0, spec 01 section 3.2
+  /// Init code 0: the first frame of a connection a peer made because the server relayed our
+  /// `ConnectToPeer`.
   pub struct PierceFirewall {
     /// the token of the `ConnectToPeer` that solicited the connection
     pub token: u32,
   }
 }
 
-/// Init code 1, spec 01 section 3.2
+/// Init code 1: the first frame of a connection a peer made directly, naming itself and the
+/// connection type.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct PeerInit {
@@ -71,18 +74,19 @@ impl Wire for PeerInit {
   }
 }
 
-/// The `u32` token the initiator of a transfer connection writes raw after the init frame (spec 01
-/// section 3.3)
+/// The `u32` token the initiator of a transfer connection writes raw after the init frame
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileTransferInit {
   pub token: u32,
 }
 
 impl FileTransferInit {
+  /// the four raw bytes, little-endian
   pub fn encode(&self) -> [u8; 4] {
     self.token.to_le_bytes()
   }
 
+  /// exactly the four raw bytes, nothing more
   pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
     raw_exact(bytes, "FileTransferInit", "token").map(|bytes| Self {
       token: u32::from_le_bytes(bytes),
@@ -90,19 +94,21 @@ impl FileTransferInit {
   }
 }
 
-/// The `u64` offset the downloader writes raw on a transfer connection (spec 01 section 3.3). It
-/// is for resuming only; an offset past the file size (Soulseek NS sends `u64::MAX` when resuming
-/// past 2 GiB) must be refused by the uploader.
+/// The `u64` offset the downloader writes raw on a transfer connection. It is for resuming only;
+/// an offset past the file size (Soulseek NS sends `u64::MAX` when resuming past 2 GiB) must be
+/// refused by the uploader.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileOffset {
   pub offset: u64,
 }
 
 impl FileOffset {
+  /// the eight raw bytes, little-endian
   pub fn encode(&self) -> [u8; 8] {
     self.offset.to_le_bytes()
   }
 
+  /// exactly the eight raw bytes, nothing more
   pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
     raw_exact(bytes, "FileOffset", "offset").map(|bytes| Self {
       offset: u64::from_le_bytes(bytes),

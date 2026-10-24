@@ -1,8 +1,7 @@
-//! The server connection (spec 01 section 5, 01a section 2): [`ServerRequest`] is what the client
-//! sends, [`ServerResponse`] what the server sends, pushed or in reply. A code whose layout
-//! differs between the two directions has a `...Request` and a `...Response` struct; a code with
-//! one layout both ways has one struct used by both enums. Each message lives in the file of its
-//! spec topic; this file holds only the catalogue.
+//! The server connection: [`ServerRequest`] is what the client sends, [`ServerResponse`] what the
+//! server sends, pushed or in reply. A code whose layout differs between the two directions has a
+//! `...Request` and a `...Response` struct; a code with one layout both ways has one struct used by
+//! both enums. Each message lives in the file of its topic; this file holds only the catalogue.
 
 pub(crate) mod distributed;
 pub(crate) mod interests;
@@ -33,6 +32,7 @@ use crate::codes::ServerCode;
 use crate::distributed::Embedded;
 
 family! {
+  /// Every message the client sends on the server connection
   pub enum ServerRequest {
     code: ServerCode,
     frame: Server,
@@ -74,9 +74,11 @@ family! {
       SimilarRecommendations(SimilarRecommendationsRequest),
       LikedInterestAdd(LikedInterestAdd),
       LikedInterestRemove(LikedInterestRemove),
+      /// asks for interests recommended for us
       GetPersonalRecommendations,
-      /// obsolete
+      /// asks for the likes the server has on record for us; obsolete
       MyRecommendations,
+      /// asks for interests recommended across the network
       GetGlobalRecommendations,
       GetUserInterests(GetUserInterestsRequest),
       /// obsolete
@@ -85,19 +87,22 @@ family! {
       PlaceInLineRequest(PlaceInLineRequest),
       /// obsolete
       PlaceInLineResponse(PlaceInLineResponse),
+      /// asks for the room list
       RoomList,
       /// obsolete
       ExactFileSearch(ExactFileSearchRequest),
-      /// obsolete
+      /// asks for every online user; obsolete
       GlobalUserList,
       /// obsolete
       TunneledMessage(TunneledMessageRequest),
       HaveNoParents(HaveNoParents),
       /// deprecated, never sent
       ParentsIP(ParentsIP),
+      /// asks how much privilege time we have left
       CheckPrivileges,
       AcceptChildren(AcceptChildren),
       WishlistSearch(WishlistSearch),
+      /// asks for users whose interests are similar to ours
       GetPersonalSimilarUsers,
       GetInterestRecommendations(GetInterestRecommendationsRequest),
       GetInterestSimilarUsers(GetInterestSimilarUsersRequest),
@@ -127,7 +132,9 @@ family! {
       PrivateRoomRemoveOperator(PrivateRoomRemoveOperator),
       /// codec only
       MessageUsers(MessageUsers),
+      /// starts the public chat feed
       AskPublicChat,
+      /// stops the public chat feed
       StopPublicChat,
       /// obsolete
       RelatedSearch(RelatedSearchRequest),
@@ -137,6 +144,7 @@ family! {
 }
 
 family! {
+  /// Every message the server sends, pushed or in reply
   pub enum ServerResponse {
     code: ServerCode,
     frame: Server,
@@ -221,6 +229,7 @@ family! {
       UserPrivileges(UserPrivilegesResponse),
       /// deprecated, acknowledge with `AcknowledgeNotifyPrivileges`
       NotifyPrivileges(NotifyPrivileges),
+      /// drop every distributed connection and look for a new parent
       DistributedReset,
       PrivateRoomUsers(PrivateRoomUsers),
       PrivateRoomAddUser(PrivateRoomAddUser),

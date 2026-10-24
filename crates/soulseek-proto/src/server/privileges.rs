@@ -1,38 +1,39 @@
-//! Privileges: who has them, how long ours last, and giving them away (spec 01 sections 5.27, 5.31,
-//! 5.32, 5.40 to 5.42).
+//! Privileges: who has them, how long ours last, and giving them away.
 
 use crate::codec::wire_struct;
 
 wire_struct! {
-  /// Server code 69, spec 01 section 5.27
+  /// Server code 69: every privileged user, sent after login.
   pub struct PrivilegedUsers {
     pub usernames: Vec<String>,
   }
 }
 
 wire_struct! {
-  /// Server code 91, spec 01 section 5.31, obsolete, the parser is kept
+  /// Server code 91: a user became privileged. Obsolete: the live server no longer sends it; the
+  /// parser is kept.
   pub struct AddPrivilegedUser {
     pub username: String,
   }
 }
 
 wire_struct! {
-  /// Server code 92, spec 01 section 5.32
+  /// Server code 92: how many seconds of privileges we have left, in reply to `CheckPrivileges`.
   pub struct CheckPrivilegesResponse {
     pub seconds_remaining: u32,
   }
 }
 
 wire_struct! {
-  /// Server code 122, spec 01 section 5.40, deprecated
+  /// Server code 122: asks whether a user is privileged. Deprecated: `GetStatus` carries the same
+  /// flag.
   pub struct UserPrivilegesRequest {
     pub username: String,
   }
 }
 
 wire_struct! {
-  /// Server code 122, spec 01 section 5.40, deprecated
+  /// Server code 122: whether a user is privileged. Deprecated: `GetStatus` carries the same flag.
   pub struct UserPrivilegesResponse {
     pub username: String,
     pub privileged: bool,
@@ -40,7 +41,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 123, spec 01 section 5.41
+  /// Server code 123: gives some of our privilege days to another user.
   pub struct GivePrivileges {
     pub username: String,
     pub days: u32,
@@ -48,7 +49,8 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 124, spec 01 section 5.42, deprecated
+  /// Server code 124: a user gave us privileges; acknowledge with `AcknowledgeNotifyPrivileges`.
+  /// Deprecated: only Soulseek NS sends it.
   pub struct NotifyPrivileges {
     pub id: u32,
     pub username: String,
@@ -56,7 +58,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 125, spec 01 section 5.42, deprecated
+  /// Server code 125: acknowledges a `NotifyPrivileges`. Deprecated with it.
   pub struct AcknowledgeNotifyPrivileges {
     pub id: u32,
   }

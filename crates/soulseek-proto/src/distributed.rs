@@ -1,5 +1,4 @@
-//! Messages on a `D` connection in the distributed search tree (spec 01 section 7), with 1-byte
-//! codes.
+//! Messages on a `D` connection in the distributed search tree, with 1-byte codes.
 
 use crate::codec::{Wire, family, wire_struct};
 use crate::codes::DistributedCode;
@@ -13,6 +12,7 @@ use crate::wire::{Reader, Writer};
 const SEARCH_IDENTIFIER: u32 = 49;
 
 family! {
+  /// Every message on a `D` connection, from our parent or our children
   pub enum DistributedMessage {
     code: DistributedCode,
     frame: Distributed,
@@ -33,9 +33,8 @@ family! {
   }
 }
 
-/// Distributed code 0, spec 01 section 7.1
-///
-/// Empty in the protocol reference; the original library replied with a `u32` token
+/// Distributed code 0: a keep-alive between a parent and a child. Deprecated: empty in the protocol
+/// reference, though some clients reply with a `u32` token.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct Ping {
@@ -58,9 +57,8 @@ impl Wire for Ping {
   }
 }
 
-/// Distributed code 3, spec 01 section 7.2
-///
-/// Written with the identifier 49; any other identifier is rejected
+/// Distributed code 3: a search passed down the tree, which we forward to our children and answer.
+/// Written with the identifier 49; any other identifier is rejected.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct SearchRequest {
@@ -97,9 +95,8 @@ impl Wire for SearchRequest {
   }
 }
 
-/// Distributed code 4, spec 01 section 7.3
-///
-/// A level of 0 means the sender is the branch root; negative levels are rejected
+/// Distributed code 4: the depth of our parent in the tree, 0 when it is the branch root. Negative
+/// levels are rejected.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct BranchLevel {
@@ -122,7 +119,7 @@ impl Wire for BranchLevel {
   }
 }
 
-/// Distributed code 5, spec 01 section 7.4
+/// Distributed code 5: the username at the root of our parent's branch.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct BranchRoot {
@@ -151,15 +148,14 @@ impl Wire for BranchRoot {
 }
 
 wire_struct! {
-  /// Distributed code 7, spec 01 section 7.5
+  /// Distributed code 7: the depth below a child. Obsolete: parsed and ignored.
   pub struct ChildDepth {
     pub depth: u32,
   }
 }
 
-/// Server code 93, spec 01 section 5.33
-///
-/// A distributed message wrapped in an `EmbeddedMessage`, by the server or by an old parent
+/// Server code 93: a distributed message the server wraps for us once we are a branch root, also
+/// carried by an old parent's `EmbeddedMessage`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct Embedded {
@@ -195,7 +191,8 @@ impl Wire for Embedded {
   }
 }
 
-/// Distributed code 93, spec 01 section 7.6
+/// Distributed code 93: a wrapped distributed message from a parent running an old SoulseekQt.
+/// Deprecated.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct EmbeddedMessage {
