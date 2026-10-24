@@ -47,6 +47,8 @@
           nightly = pkgs.rust-bin.selectLatestNightlyWith (
             toolchain: toolchain.minimal.override { extensions = [ "rust-src" ]; }
           );
+          # the Soulseek server the client and daemon test suites start
+          soulfind = pkgs.callPackage ./nix/soulfind.nix { };
         in
         {
           default = pkgs.mkShell {
@@ -60,6 +62,7 @@
               just
               typos
               sqlite
+              soulfind
 
               nodejs_24
               pnpm
