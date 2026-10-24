@@ -15,64 +15,6 @@ pub(crate) struct KeyFields<'a> {
   pub(crate) count: Option<usize>,
 }
 
-impl<'a> KeyFields<'a> {
-  pub(crate) fn username(username: &'a str) -> Self {
-    Self {
-      username: Some(username),
-      ..Self::default()
-    }
-  }
-
-  pub(crate) fn room(room: &'a str) -> Self {
-    Self {
-      room: Some(room),
-      ..Self::default()
-    }
-  }
-
-  pub(crate) fn token(token: u32) -> Self {
-    Self {
-      token: Some(token),
-      ..Self::default()
-    }
-  }
-
-  pub(crate) fn filename(filename: &'a str) -> Self {
-    Self {
-      filename: Some(filename),
-      ..Self::default()
-    }
-  }
-
-  pub(crate) fn count(count: usize) -> Self {
-    Self {
-      count: Some(count),
-      ..Self::default()
-    }
-  }
-
-  pub(crate) fn with_username(self, username: &'a str) -> Self {
-    Self {
-      username: Some(username),
-      ..self
-    }
-  }
-
-  pub(crate) fn with_token(self, token: u32) -> Self {
-    Self {
-      token: Some(token),
-      ..self
-    }
-  }
-
-  pub(crate) fn with_count(self, count: usize) -> Self {
-    Self {
-      count: Some(count),
-      ..self
-    }
-  }
-}
-
 fn truncate(text: &str) -> &str {
   if text.len() <= MAX_LOGGED_BYTES {
     return text;

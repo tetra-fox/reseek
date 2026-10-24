@@ -8,16 +8,15 @@ use proptest::prelude::*;
 use proptest::strategy::BoxedStrategy;
 
 use crate::codes::{DistributedCode, InitCode, PeerCode, ServerCode};
-use crate::compressed::{self, compress};
 use crate::distributed::{DistributedMessage, Embedded};
 use crate::error::DecodeError;
 use crate::frame::{self, FrameKind};
 use crate::init::InitMessage;
 use crate::limits::Limits;
 use crate::model::{FileAttributeType, TransferDirection};
-use crate::peer::{PeerMessage, TransferRequest, peek_search_response};
-use crate::server_request::ServerRequest;
-use crate::server_response::ServerResponse;
+use crate::peer::{self, PeerMessage, TransferRequest, peek_search_response};
+use crate::server::{ServerRequest, ServerResponse};
+use crate::testing::zlib as compress;
 use crate::wire::{RemoteFilename, Secret, Writer};
 
 pub(crate) fn small_vec<T: Arbitrary>() -> impl Strategy<Value = Vec<T>> {
@@ -109,18 +108,14 @@ impl Arbitrary for TransferRequest {
   }
 }
 
-/// `[u32 len][code][payload]` for a known code of the given width
+/// `[u32 len][code][payload]` for a known code of a connection kind
 fn framed(
   codes: Vec<u32>,
-  code_width: usize,
+  kind: FrameKind,
   payload: impl Strategy<Value = Vec<u8>>,
 ) -> impl Strategy<Value = Vec<u8>> {
   (proptest::sample::select(codes), payload).prop_map(move |(code, payload)| {
-    let mut w = if code_width == 4 {
-      Writer::frame(code)
-    } else {
-      Writer::frame_u8(code as u8)
-    };
+    let mut w = Writer::frame(kind, code);
     w.bytes(&payload);
     w.finish()
   })
@@ -133,7 +128,7 @@ fn codes<T: Copy>(all: &[T], code: fn(T) -> u32) -> Vec<u32> {
 fn server_frames() -> impl Strategy<Value = Vec<u8>> {
   framed(
     codes(ServerCode::ALL, ServerCode::code),
-    4,
+    FrameKind::Server,
     vec(any::<u8>(), 0..128),
   )
 }
@@ -141,7 +136,7 @@ fn server_frames() -> impl Strategy<Value = Vec<u8>> {
 fn peer_frames() -> impl Strategy<Value = Vec<u8>> {
   framed(
     codes(PeerCode::ALL, PeerCode::code),
-    4,
+    FrameKind::Peer,
     vec(any::<u8>(), 0..128),
   )
 }
@@ -150,7 +145,7 @@ fn peer_frames() -> impl Strategy<Value = Vec<u8>> {
 fn compressed_peer_frames() -> impl Strategy<Value = Vec<u8>> {
   framed(
     vec![5, 9, 37],
-    4,
+    FrameKind::Peer,
     vec(any::<u8>(), 0..256).prop_map(|body| compress(&body)),
   )
 }
@@ -158,7 +153,7 @@ fn compressed_peer_frames() -> impl Strategy<Value = Vec<u8>> {
 fn distributed_frames() -> impl Strategy<Value = Vec<u8>> {
   framed(
     codes(DistributedCode::ALL, DistributedCode::code),
-    1,
+    FrameKind::Distributed,
     vec(any::<u8>(), 0..96),
   )
 }
@@ -166,7 +161,7 @@ fn distributed_frames() -> impl Strategy<Value = Vec<u8>> {
 fn init_frames() -> impl Strategy<Value = Vec<u8>> {
   framed(
     codes(InitCode::ALL, InitCode::code),
-    1,
+    FrameKind::Init,
     vec(any::<u8>(), 0..64),
   )
 }
@@ -254,7 +249,7 @@ proptest! {
 
   #[test]
   fn inflate_never_exceeds_the_limit(body in vec(any::<u8>(), 0..2048), limit in 0usize..1024) {
-    match compressed::inflate(&compress(&body), limit) {
+    match peer::inflate(&compress(&body), limit) {
       Ok(inflated) => {
         prop_assert!(inflated.len() <= limit);
         prop_assert_eq!(inflated, body);
@@ -281,7 +276,7 @@ proptest! {
       body.u32(*count);
     }
     body.bytes(&tail);
-    let mut w = Writer::frame(code);
+    let mut w = Writer::frame(FrameKind::Peer, code);
     w.bytes(&compress(&body.into_body()));
     let frame = w.finish();
     let limits = Limits { files_per_response: 4, inflated_bytes: 4096, ..Limits::DEFAULT };

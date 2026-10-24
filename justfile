@@ -46,7 +46,7 @@ ci: lint test api-check
 
 # write the round-trip vectors into fuzz/corpus/<target> as seeds
 fuzz-seed:
-    cargo test -p soulseek-proto --test roundtrip -- --ignored --exact write_fuzz_corpus
+    cargo test -p soulseek-proto --lib -- --ignored --exact testing::write_fuzz_corpus
 
 # run every fuzz target for 30 seconds
 fuzz-smoke: fuzz-seed

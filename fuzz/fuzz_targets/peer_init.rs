@@ -1,7 +1,8 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use soulseek_proto::{FileOffset, FileTransferInit, InitMessage};
+use soulseek_proto::InitMessage;
+use soulseek_proto::init::{FileOffset, FileTransferInit};
 
 fuzz_target!(|data: &[u8]| {
   if let Ok(message) = InitMessage::decode(data) {

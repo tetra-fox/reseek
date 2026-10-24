@@ -5,7 +5,10 @@ use std::fmt;
 use std::net::Ipv4Addr;
 
 use crate::error::DecodeError;
-use crate::limits::{LIMIT_DESCRIPTION_BYTES, LIMIT_STRING_BYTES};
+use crate::frame::FrameKind;
+use crate::limits::{
+  LIMIT_DESCRIPTION_BYTES, LIMIT_DIRECTORIES_PER_RESPONSE, LIMIT_STRING_BYTES, Limits,
+};
 
 /// A path as a peer sent it. The bytes are what gets echoed back to that peer; `as_str` is for
 /// display and is iso-8859-1 decoded (`is_lossy`) when the bytes are not utf-8.
@@ -103,13 +106,54 @@ fn decode_text(bytes: &[u8]) -> (String, bool) {
   }
 }
 
+/// Reads one message. It carries the limits and what is left of the per-response file and
+/// directory allowance, so the counts of nested lists add up against one limit.
 pub(crate) struct Reader<'a> {
   buf: &'a [u8],
+  limits: &'a Limits,
+  files_left: usize,
+  directories_left: usize,
 }
 
 impl<'a> Reader<'a> {
-  pub(crate) fn new(buf: &'a [u8]) -> Self {
-    Self { buf }
+  pub(crate) fn new(buf: &'a [u8], limits: &'a Limits) -> Self {
+    Self {
+      buf,
+      limits,
+      files_left: limits.files_per_response,
+      directories_left: LIMIT_DIRECTORIES_PER_RESPONSE,
+    }
+  }
+
+  pub(crate) fn limits(&self) -> &'a Limits {
+    self.limits
+  }
+
+  pub(crate) fn take_files(&mut self, count: usize) -> Result<(), DecodeError> {
+    let limit = self.limits.files_per_response;
+    self.files_left = self
+      .files_left
+      .checked_sub(count)
+      .ok_or(DecodeError::LimitExceeded {
+        what: "files in one response",
+        value: (limit - self.files_left + count) as u64,
+        limit: limit as u64,
+      })?;
+    Ok(())
+  }
+
+  pub(crate) fn take_directories(&mut self, count: usize) -> Result<(), DecodeError> {
+    let limit = LIMIT_DIRECTORIES_PER_RESPONSE;
+    self.directories_left =
+      self
+        .directories_left
+        .checked_sub(count)
+        .ok_or(DecodeError::LimitExceeded {
+          what: "directories in one response",
+          value: (limit - self.directories_left + count) as u64,
+          limit: limit as u64,
+        })?;
+    Ok(())
   }
 
   pub(crate) fn remaining(&self) -> usize {
@@ -130,6 +174,11 @@ impl<'a> Reader<'a> {
     let (head, tail) = self.buf.split_at(n);
     self.buf = tail;
     Ok(head)
+  }
+
+  /// the next `n` bytes, or fewer if fewer remain, without consuming them
+  pub(crate) fn peek(&self, n: usize) -> &'a [u8] {
+    &self.buf[..n.min(self.buf.len())]
   }
 
   /// everything up to the end of the message
@@ -225,11 +274,6 @@ impl<'a> Reader<'a> {
     }
     Ok(count as usize)
   }
-
-  pub(crate) fn strings(&mut self, what: &'static str) -> Result<Vec<String>, DecodeError> {
-    let count = self.count(4, what)?;
-    (0..count).map(|_| self.string()).collect()
-  }
 }
 
 pub(crate) struct Writer {
@@ -237,17 +281,13 @@ pub(crate) struct Writer {
 }
 
 impl Writer {
-  /// a frame with a `u32` code; `finish` fills in the length prefix
-  pub(crate) fn frame(code: u32) -> Self {
+  /// a frame with the code width of `kind`; `finish` fills in the length prefix
+  pub(crate) fn frame(kind: FrameKind, code: u32) -> Self {
     let mut writer = Self { buf: vec![0; 4] };
-    writer.u32(code);
-    writer
-  }
-
-  /// a frame with a `u8` code
-  pub(crate) fn frame_u8(code: u8) -> Self {
-    let mut writer = Self { buf: vec![0; 4] };
-    writer.u8(code);
+    match kind.code_width() {
+      1 => writer.u8(code as u8),
+      _ => writer.u32(code),
+    }
     writer
   }
 
@@ -314,13 +354,6 @@ impl Writer {
   pub(crate) fn filename(&mut self, filename: &RemoteFilename) {
     self.raw_string(filename.as_bytes());
   }
-
-  pub(crate) fn strings(&mut self, values: &[String]) {
-    self.count(values.len());
-    for value in values {
-      self.string(value);
-    }
-  }
 }
 
 #[cfg(test)]
@@ -351,7 +384,7 @@ mod tests {
 
   #[test]
   fn ip4_is_reversed_on_the_wire() {
-    let mut reader = Reader::new(&[4, 3, 2, 1]);
+    let mut reader = Reader::new(&[4, 3, 2, 1], &Limits::DEFAULT);
     assert_eq!(reader.ip4().unwrap(), Ipv4Addr::new(1, 2, 3, 4));
     let mut writer = Writer::body();
     writer.ip4(Ipv4Addr::new(1, 2, 3, 4));
@@ -360,7 +393,7 @@ mod tests {
 
   #[test]
   fn string_longer_than_remaining_is_truncated() {
-    let mut reader = Reader::new(&[5, 0, 0, 0, b'a']);
+    let mut reader = Reader::new(&[5, 0, 0, 0, b'a'], &Limits::DEFAULT);
     assert_eq!(
       reader.string(),
       Err(DecodeError::Truncated {
@@ -374,7 +407,7 @@ mod tests {
   fn string_over_limit_is_rejected_before_reading() {
     let len = (LIMIT_STRING_BYTES as u32) + 1;
     let prefix = len.to_le_bytes();
-    let mut reader = Reader::new(&prefix);
+    let mut reader = Reader::new(&prefix, &Limits::DEFAULT);
     assert_eq!(
       reader.string(),
       Err(DecodeError::StringTooLong {
@@ -389,7 +422,7 @@ mod tests {
     // 2 strings need at least 8 bytes, only 7 remain
     let mut buf = 2u32.to_le_bytes().to_vec();
     buf.extend_from_slice(&[0; 7]);
-    let mut reader = Reader::new(&buf);
+    let mut reader = Reader::new(&buf, &Limits::DEFAULT);
     assert_eq!(
       reader.count(4, "strings"),
       Err(DecodeError::CountTooLarge {
@@ -400,7 +433,7 @@ mod tests {
     );
     // a count with bit 31 set is a protocol error, not zero iterations
     let max = u32::MAX.to_le_bytes();
-    let mut reader = Reader::new(&max);
+    let mut reader = Reader::new(&max, &Limits::DEFAULT);
     assert!(matches!(
       reader.count(1, "x"),
       Err(DecodeError::CountTooLarge { .. })
@@ -409,7 +442,7 @@ mod tests {
 
   #[test]
   fn bool_reads_differ_for_values_above_one() {
-    let mut reader = Reader::new(&[2, 2]);
+    let mut reader = Reader::new(&[2, 2], &Limits::DEFAULT);
     assert!(reader.bool().unwrap());
     assert!(!reader.bool_exact().unwrap());
   }
