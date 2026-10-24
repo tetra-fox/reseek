@@ -96,6 +96,11 @@ impl Wire for SearchResponse {
 pub fn peek_search_response(bytes: &[u8], limits: &Limits) -> Result<(String, u32), DecodeError> {
   let frame = frame::exact(FrameKind::Peer, bytes, limits)?;
   if frame.code != PeerCode::SearchResponse.code() {
+    // the caller handed over a frame of another message, not malformed remote input
+    tracing::debug!(
+      code = frame.code,
+      "search response peek given another message"
+    );
     return Err(DecodeError::Field {
       message: PeerCode::SearchResponse.name(),
       field: "code",
