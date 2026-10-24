@@ -58,8 +58,8 @@ pub(crate) async fn classify(mut conn: Conn, deliver: mpsc::Sender<InboundConnec
   let remote = conn.handle().remote();
   let init = match read_init(&mut conn).await {
     Ok(init) => init,
+    // the connection logs why it closed, in its own span with the remote address
     Err(error) => {
-      tracing::debug!(%remote, %error, "Failed to initialize direct connection");
       conn.handle().disconnect(error.to_string(), Some(error));
       return;
     }
