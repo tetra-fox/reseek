@@ -76,7 +76,8 @@ fn compress(body: &[u8]) -> Vec<u8> {
 pub(crate) fn inflate(compressed: &[u8], limit: usize) -> Result<Vec<u8>, FieldError> {
   let mut inflated = Vec::new();
   ZlibDecoder::new(compressed)
-    .take(limit as u64 + 1)
+    // one byte past the limit shows it was exceeded; with no effective limit the take saturates
+    .take((limit as u64).saturating_add(1))
     .read_to_end(&mut inflated)
     .map_err(zlib_error)?;
   if inflated.len() > limit {
@@ -135,6 +136,7 @@ pub(crate) mod tests {
       inflate(&compressed, 999),
       Err(FieldError::InflatedTooLarge { limit: 999 })
     );
+    assert_eq!(inflate(&compressed, usize::MAX), Ok(vec![7; 1000]));
   }
 
   #[test]
