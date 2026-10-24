@@ -55,6 +55,7 @@ impl Conn {
     let handle = ConnHandle::new(remote, username, kind, options, ConnState::Pending);
     handle.connecting();
     let span = handle.span().clone();
+    span.in_scope(|| tracing::debug!(proxy = handle.options().proxy.is_some(), "connecting"));
     let connect_timeout = handle.options().connect_timeout;
     let attempt = timeout(connect_timeout, socket::connect(remote, handle.options()));
     let result = tokio::select! {
