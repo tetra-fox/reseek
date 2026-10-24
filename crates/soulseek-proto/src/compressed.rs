@@ -1,5 +1,5 @@
-//! The zlib-compressed peer payloads (§01 §2.2, §6.1, §6.3, §6.6) and the `File` and `Directory`
-//! layouts they share (§6.8).
+//! The zlib-compressed peer payloads (spec 01 sections 2.2, 6.1, 6.3, 6.6) and the `File` and
+//! `Directory` layouts they share (6.8).
 
 use std::io::Read;
 

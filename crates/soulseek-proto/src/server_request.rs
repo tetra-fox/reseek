@@ -1,5 +1,5 @@
-//! Messages the client sends to the server (§01 §5, §01a §2). The server's replies, which often
-//! share a code but not a layout, are in [`crate::server_response`].
+//! Messages the client sends to the server (spec 01 section 5, 01a section 2). The server's
+//! replies, which often share a code but not a layout, are in [`crate::server_response`].
 
 use std::net::Ipv4Addr;
 

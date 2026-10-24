@@ -1,4 +1,5 @@
-//! Messages on a `D` connection in the distributed search tree (§01 §7), with 1-byte codes.
+//! Messages on a `D` connection in the distributed search tree (spec 01 section 7), with 1-byte
+//! codes.
 
 use crate::codes::DistributedCode;
 use crate::error::DecodeError;

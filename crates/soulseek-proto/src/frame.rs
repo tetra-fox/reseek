@@ -1,5 +1,5 @@
-//! Framing (§01 §2): `[u32 len][code][payload]`, where the code is 4 bytes on server and peer
-//! connections and 1 byte on distributed connections and in the init frame.
+//! Framing (spec 01 section 2): `[u32 len][code][payload]`, where the code is 4 bytes on server and
+//! peer connections and 1 byte on distributed connections and in the init frame.
 
 use crate::error::DecodeError;
 use crate::limits::Limits;

@@ -1,5 +1,5 @@
-//! Messages on a `P` connection between two clients (§01 §6). The layouts are the same in both
-//! directions.
+//! Messages on a `P` connection between two clients (spec 01 section 6). The layouts are the same
+//! in both directions.
 
 use crate::codes::PeerCode;
 use crate::compressed::{self, FolderContentsResponse};

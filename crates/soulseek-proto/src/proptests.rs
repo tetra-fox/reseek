@@ -213,6 +213,7 @@ proptest! {
     assert_canonical!(PeerMessage, &bytes);
     assert_canonical!(InitMessage, &bytes);
     assert_canonical!(DistributedMessage, &bytes);
+    // any result is fine, this only checks it does not panic
     let _ = peek_search_response(&bytes, &Limits::DEFAULT);
   }
 
@@ -225,6 +226,7 @@ proptest! {
   #[test]
   fn peer_frames_decode_or_fail(bytes in prop_oneof![peer_frames(), compressed_peer_frames()]) {
     assert_canonical!(PeerMessage, &bytes);
+    // any result is fine, this only checks it does not panic
     let _ = peek_search_response(&bytes, &Limits::DEFAULT);
   }
 

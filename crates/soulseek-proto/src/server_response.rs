@@ -1,5 +1,5 @@
-//! Messages the server sends to the client (§01 §5, §01a §2), pushed or in reply to a
-//! [`crate::ServerRequest`] with the same code.
+//! Messages the server sends to the client (spec 01 section 5, 01a section 2), pushed or in reply
+//! to a [`crate::ServerRequest`] with the same code.
 
 use std::net::Ipv4Addr;
 

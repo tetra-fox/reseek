@@ -1,5 +1,5 @@
-//! Primitive encodings (§01 §1): little-endian integers, length-prefixed strings with the utf-8
-//! to iso-8859-1 read fallback, reversed ipv4 addresses.
+//! Primitive encodings (spec 01 section 1): little-endian integers, length-prefixed strings with
+//! the utf-8 to iso-8859-1 read fallback, reversed ipv4 addresses.
 
 use std::fmt;
 use std::net::Ipv4Addr;

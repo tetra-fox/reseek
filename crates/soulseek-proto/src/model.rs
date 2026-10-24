@@ -1,4 +1,4 @@
-//! The data model and enumerations of §01 §8.
+//! The data model and enumerations of spec 01 section 8.
 
 use std::net::SocketAddr;
 
@@ -437,7 +437,7 @@ impl DistributedNetworkInfo {
   }
 }
 
-/// A free-text search query split into terms and exclusions (§01 §8.15)
+/// A free-text search query split into terms and exclusions (spec 01 section 8.15)
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SearchQuery {
   /// in order, including empty terms from consecutive spaces and a lone `-`

@@ -1,5 +1,5 @@
-//! The first frame on an inbound peer socket (§01 §3.2), and the raw values a transfer (`F`)
-//! socket carries after it (§3.3).
+//! The first frame on an inbound peer socket (spec 01 section 3.2), and the raw values a transfer
+//! (`F`) socket carries after it (3.3).
 
 use crate::codes::InitCode;
 use crate::error::DecodeError;
