@@ -3,6 +3,8 @@
 
 #![allow(dead_code)] // each test binary uses its own subset of these helpers
 
+pub mod soulfind;
+
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, PoisonError};
