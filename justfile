@@ -18,6 +18,7 @@ web-build:
 # cargo nextest, then vitest
 test:
     cargo nextest run --workspace
+    @[ -n "${SOULFIND_BIN:-}" ] || command -v soulfind >/dev/null || echo "soulfind not found at SOULFIND_BIN or on PATH: the soulfind suites were skipped"
     @echo "vitest: not yet (no web/)"
 
 # fmt --check, clippy -D warnings, oxlint, oxfmt --check
@@ -41,6 +42,11 @@ api-check:
 
 # the gate for every push
 ci: lint test api-check
+
+# soulfind on its default port 2242 with its data under target/soulfind, for trying things by hand
+soulfind:
+    mkdir -p target/soulfind
+    "${SOULFIND_BIN:-soulfind}" -p 2242 -d target/soulfind/soulfind.db
 
 # the fuzz recipes need nightly cargo and cargo-fuzz: run them inside `nix develop .#fuzz`
 
