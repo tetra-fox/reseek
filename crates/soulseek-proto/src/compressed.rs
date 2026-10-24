@@ -302,18 +302,22 @@ pub(crate) fn write_folder_contents_response(w: &mut Writer, response: &FolderCo
 /// for a token that is not a live search can be dropped without inflating the rest
 pub(crate) fn peek_search_response(compressed: &[u8]) -> Result<(String, u32), DecodeError> {
   let mut decoder = ZlibDecoder::new(compressed);
-  let mut len = [0; 4];
-  decoder.read_exact(&mut len).map_err(zlib_error)?;
-  let len = u32::from_le_bytes(len);
+  let mut prefix = Vec::new();
+  (&mut decoder)
+    .take(4)
+    .read_to_end(&mut prefix)
+    .map_err(zlib_error)?;
+  let len = Reader::new(&prefix).u32()?;
   if len as usize > LIMIT_STRING_BYTES {
     return Err(DecodeError::StringTooLong {
       len,
       limit: LIMIT_STRING_BYTES,
     });
   }
-  let mut prefix = len.to_le_bytes().to_vec();
-  prefix.resize(4 + len as usize + 4, 0);
-  decoder.read_exact(&mut prefix[4..]).map_err(zlib_error)?;
+  decoder
+    .take(u64::from(len) + 4)
+    .read_to_end(&mut prefix)
+    .map_err(zlib_error)?;
   let mut r = Reader::new(&prefix);
   Ok((r.string()?, r.u32()?))
 }
