@@ -100,6 +100,25 @@ impl DistributedNetwork {
   }
 }
 
+/// Hands `command` to the tree task, waiting while its queue is full; for a closed parent or
+/// child, a child connection made and a finished acquisition round, which nothing sends again.
+/// The caller lets go of the client first, so a wait never keeps it alive.
+async fn deliver(commands: mpsc::Sender<Command>, command: Command) {
+  let name = command.name();
+  let command = match commands.try_send(command) {
+    Ok(()) => return,
+    Err(mpsc::error::TrySendError::Full(command)) => command,
+    Err(mpsc::error::TrySendError::Closed(_)) => {
+      return tracing::debug!(name, "distributed network stopped, command dropped");
+    }
+  };
+  tracing::debug!(name, "distributed network command queue is full, waiting");
+  // the tree task stops only with the client
+  if commands.send(command).await.is_err() {
+    tracing::debug!(name, "distributed network stopped, command dropped");
+  }
+}
+
 impl Client {
   /// our place in the distributed search tree
   pub fn distributed_network(&self) -> DistributedNetworkInfo {
@@ -109,8 +128,10 @@ impl Client {
     info
   }
 
-  /// Hands `command` to the tree task without waiting. A full queue drops it, which only a
-  /// stuck tree task causes.
+  /// Hands `command` to the tree task without waiting, for read loops and dispatchers, which
+  /// must not block. A full queue, which a tree task held up on a server write causes, drops it;
+  /// a dropped one leaves the tree out of date until later news repeats it. Commands whose loss
+  /// would stick go through [`deliver`] instead.
   pub(crate) fn distributed_command(&self, command: Command) {
     let name = command.name();
     match self.distributed().commands.try_send(command) {

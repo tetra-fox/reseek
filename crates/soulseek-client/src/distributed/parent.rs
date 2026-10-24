@@ -16,6 +16,7 @@ use tokio::task::JoinSet;
 use tracing::Instrument;
 use uuid::Uuid;
 
+use super::deliver;
 use super::tree::{Command, Parent, Tree, watch_closing};
 use crate::client::Client;
 use crate::conn::{Disconnect, MessageConn, ReadEvent};
@@ -99,10 +100,13 @@ impl Client {
             Err(error) => tracing::error!(%error, "parent candidate negotiation task failed"),
           }
         }
-        client.distributed_command(Command::Negotiated {
+        let commands = client.distributed().commands.clone();
+        drop(client);
+        let negotiated = Command::Negotiated {
           round,
           candidates: answered,
-        });
+        };
+        deliver(commands, negotiated).await;
       }
       .in_current_span(),
     );

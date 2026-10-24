@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 
+use super::deliver;
 use super::parent::Candidate;
 use super::status::WATCHDOG;
 use crate::client::{Client, WeakClient};
@@ -438,9 +439,13 @@ pub(super) fn watch_closing(
   tokio::spawn(
     async move {
       let reason = handle.disconnected().await;
-      if let Some(client) = client.upgrade() {
-        client.distributed_command(closed(reason));
-      }
+      let Some(commands) = client
+        .upgrade()
+        .map(|client| client.distributed().commands.clone())
+      else {
+        return;
+      };
+      deliver(commands, closed(reason)).await;
     }
     .instrument(conn.handle().span().clone()),
   );

@@ -12,6 +12,7 @@ use soulseek_proto::server::ConnectToPeerResponse;
 use tracing::Instrument;
 use uuid::Uuid;
 
+use super::deliver;
 use super::tree::{Child, Command, Reservation, Tree, watch_closing};
 use crate::client::Client;
 use crate::conn::{Conn, ConnKind, Disconnect, MessageConn};
@@ -145,12 +146,15 @@ impl Tree {
           .pierce(&username, endpoint, token, options, &cancel)
           .await
           .and_then(|conn| conn.into_message(FrameKind::Distributed, limits));
-        client.distributed_command(Command::ChildConnected {
+        let commands = client.distributed().commands.clone();
+        drop(client);
+        let connected = Command::ChildConnected {
           username,
           attempt,
           token,
           result,
-        });
+        };
+        deliver(commands, connected).await;
       }
       .instrument(span),
     );

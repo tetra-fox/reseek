@@ -18,8 +18,10 @@ use soulseek_proto::{
   DistributedMessage, InitMessage, PeerConnectionType, ServerRequest, ServerResponse,
 };
 use support::peer::{FakePeer, PeerSide};
-use support::tree::{branch_information, embedded_search, join_as_child, search, status};
-use support::{Session, USERNAME, listening_options};
+use support::tree::{
+  branch_information, child_requests, embedded_search, join_as_child, search, status,
+};
+use support::{FakeServer, Logs, Session, USERNAME, listening_options, next_event};
 
 /// a client the server made a branch root, so it takes up to `limit` children
 async fn branch_root(limit: u32) -> Session {
@@ -28,6 +30,12 @@ async fn branch_root(limit: u32) -> Session {
     ..listening_options()
   })
   .await;
+  promote(&mut session).await;
+  session
+}
+
+/// sends a search straight to the client, which makes it a branch root
+async fn promote(session: &mut Session) {
   session
     .server
     .send(&embedded_search("someone", 1, "first"))
@@ -35,7 +43,6 @@ async fn branch_root(limit: u32) -> Session {
   session
     .event(|event| matches!(event, Event::PromotedToDistributedBranchRoot).then_some(()))
     .await;
-  session
 }
 
 async fn child(session: &Session, username: &str) -> PeerSide {
@@ -235,4 +242,46 @@ async fn a_child_that_leaves_is_accounted_for() {
     .await;
   assert_eq!(gone, "leaving");
   assert!(session.client.distributed_network().children.is_empty());
+}
+
+#[tokio::test]
+async fn a_child_lost_while_the_server_is_slow_still_frees_its_slot() {
+  let logs = Logs::capture();
+  let mut options = ClientOptions {
+    distributed_child_limit: 1,
+    ..listening_options()
+  };
+  options.server_connection_options.write_queue_size = 4096;
+  let mut session = Session::on(FakeServer::with_receive_buffer(4096).await, options).await;
+  promote(&mut session).await;
+  session.stall_server_writes();
+  let leaving = child(&session, "leaving").await;
+  assert_eq!(added(&mut session).await, "leaving");
+  // refusing one past the limit has the tree task write the status, and wait on it
+  let _refused = join_as_child(session.listen_address(), "refused").await;
+  logs
+    .wait_for(&["child connection refused", "refused"])
+    .await;
+  session.server.send_bytes(&child_requests(1100)).await;
+  logs
+    .wait_for(&["distributed network command queue is full, command dropped"])
+    .await;
+  drop(leaving);
+  logs
+    .wait_for(&[
+      "ChildLost",
+      "distributed network command queue is full, waiting",
+    ])
+    .await;
+  let Session { server, events, .. } = &mut session;
+  let gone = next_event(events, |event| match event {
+    Event::DistributedChildDisconnected { username, .. } => Some(username),
+    _ => None,
+  });
+  let gone = tokio::select! {
+    gone = gone => gone,
+    () = server.discard() => unreachable!("the server reads until the client closes"),
+  };
+  assert_eq!(gone, "leaving");
+  let _joined = child(&session, "joined").await;
 }

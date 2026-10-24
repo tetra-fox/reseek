@@ -13,16 +13,20 @@ use soulseek_proto::distributed::Ping;
 use soulseek_proto::{DistributedCode, DistributedMessage, ServerResponse};
 use support::peer::{FakePeer, PeerSide};
 use support::tree::{
-  Status, approached, branch_information, branch_level, branch_root, join_as_child, net_info,
-  search, status, wrapped_search,
+  Status, approached, branch_information, branch_level, branch_root, child_requests, join_as_child,
+  net_info, search, status, wrapped_search,
 };
-use support::{Logs, Session, USERNAME, listening_options};
+use support::{FakeServer, Logs, Session, USERNAME, listening_options, next_event};
 use tokio_util::sync::CancellationToken;
 
-async fn session() -> Session {
+fn parent_options() -> ClientOptions {
   let mut options = listening_options();
   options.limits.distributed_parent_negotiation_timeout = Duration::from_millis(300);
-  Session::with_options(ClientOptions { ..options }).await
+  options
+}
+
+async fn session() -> Session {
+  Session::with_options(parent_options()).await
 }
 
 /// a candidate that answers as a parent at `level` under `root`
@@ -339,4 +343,46 @@ async fn without_parent_or_branch_the_server_is_asked_again_every_fifteen_minute
       .len(),
     1
   );
+}
+
+#[tokio::test]
+async fn a_parent_lost_while_the_server_is_slow_is_still_replaced() {
+  let logs = Logs::capture();
+  let mut options = parent_options();
+  options.server_connection_options.write_queue_size = 4096;
+  let mut session = Session::on(FakeServer::with_receive_buffer(4096).await, options).await;
+  session.stall_server_writes();
+  let (first, second) = (FakePeer::start().await, FakePeer::start().await);
+  session
+    .server
+    .send(&net_info(&[("first", &first), ("second", &second)]))
+    .await;
+  let (lost, _) = tokio::join!(answers(&first, 1, "top"), answers(&second, 2, "top"));
+  // the tree task now waits on the status it writes for the adoption
+  assert_eq!(adopted(&mut session).await.username, "first");
+  session.server.send_bytes(&child_requests(1100)).await;
+  logs
+    .wait_for(&["distributed network command queue is full, command dropped"])
+    .await;
+  drop(lost);
+  logs
+    .wait_for(&[
+      "ParentLost",
+      "distributed network command queue is full, waiting",
+    ])
+    .await;
+  let Session { server, events, .. } = &mut session;
+  let replaced = async {
+    let _second = answers(&second, 2, "top").await;
+    next_event(events, |event| match event {
+      Event::DistributedParentAdopted(parent) => Some(parent.username),
+      _ => None,
+    })
+    .await
+  };
+  let replaced = tokio::select! {
+    replaced = replaced => replaced,
+    () = server.discard() => unreachable!("the server reads until the client closes"),
+  };
+  assert_eq!(replaced, "second");
 }
