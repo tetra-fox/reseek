@@ -129,7 +129,7 @@ impl Wire for String {
 
   fn log<'a>(&'a self, name: &'static str, fields: &mut KeyFields<'a>) {
     match name {
-      "username" | "root" => fields.username = Some(self),
+      "username" => fields.username = Some(self),
       "room" => fields.room = Some(self),
       _ => {}
     }

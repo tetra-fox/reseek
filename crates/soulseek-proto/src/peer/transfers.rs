@@ -66,7 +66,7 @@ pub enum TransferResponse {
   Denied {
     token: u32,
     /// `"Queued"` means accepted into the queue; anything else is display text
-    reason: String,
+    message: String,
   },
 }
 
@@ -81,7 +81,7 @@ impl TransferResponse {
 impl Wire for TransferResponse {
   const MIN_BYTES: usize = 5;
 
-  /// `allowed` is true only for exactly 1, and a denial must carry a reason
+  /// `allowed` is true only for exactly 1, and a denial must carry a message
   fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     let token = r.u32("token")?;
     Ok(if r.bool_exact("allowed")? {
@@ -92,7 +92,7 @@ impl Wire for TransferResponse {
     } else {
       Self::Denied {
         token,
-        reason: r.string("reason")?,
+        message: r.string("message")?,
       }
     })
   }
@@ -106,10 +106,10 @@ impl Wire for TransferResponse {
           w.u64(*file_size);
         }
       }
-      Self::Denied { token, reason } => {
+      Self::Denied { token, message } => {
         w.u32(*token);
         w.bool(false);
-        w.string(reason);
+        w.string(message);
       }
     }
   }
@@ -188,7 +188,7 @@ pub(crate) mod tests {
     transfer_response_allowed:
       PeerMessage::TransferResponse(TransferResponse::Allowed { token: 5, file_size: None }) => p().u32(5).u8(1).frame(41);
     transfer_response_denied:
-      PeerMessage::TransferResponse(TransferResponse::Denied { token: 5, reason: "Queued".into() })
+      PeerMessage::TransferResponse(TransferResponse::Denied { token: 5, message: "Queued".into() })
       => p().u32(5).u8(0).s("Queued").frame(41);
     upload_placehold: PeerMessage::UploadPlacehold(UploadPlacehold { filename: "a.mp3".into() }) => p().s("a.mp3").frame(42);
     queue_download:
@@ -218,9 +218,9 @@ pub(crate) mod tests {
         direction: TransferDirection::Upload, token: 5, filename: "a.mp3".into(), file_size: None,
       }));
     transfer_response_allowed_must_be_exactly_one: PeerMessage, p().u32(5).u8(2).s("Cancelled").frame(41)
-      => Ok(PeerMessage::TransferResponse(TransferResponse::Denied { token: 5, reason: "Cancelled".into() }));
-    transfer_response_denied_needs_a_reason: PeerMessage, p().u32(5).u8(0).frame(41)
-      => Err(field("TransferResponse", "reason", FieldError::Truncated { needed: 4, remaining: 0 }));
+      => Ok(PeerMessage::TransferResponse(TransferResponse::Denied { token: 5, message: "Cancelled".into() }));
+    transfer_response_denied_needs_a_message: PeerMessage, p().u32(5).u8(0).frame(41)
+      => Err(field("TransferResponse", "message", FieldError::Truncated { needed: 4, remaining: 0 }));
   }
 
   #[test]

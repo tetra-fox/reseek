@@ -77,8 +77,18 @@ pub struct GetPeerAddressResponse {
   /// `0.0.0.0` when the user is offline
   pub ip: Ipv4Addr,
   pub port: u32,
-  /// `(obfuscation_type, obfuscated_port)`, absent from older servers; never dialled
-  pub obfuscation: Option<(u32, u16)>,
+  /// absent from older servers; never dialled
+  pub obfuscation: Option<PeerAddressObfuscation>,
+}
+
+wire_struct! {
+  /// The obfuscated port trailer of `GetPeerAddressResponse`, where the port is two bytes. Type 0
+  /// is none and 1 is "rotated"; this client never advertises one and never dials the obfuscated
+  /// port.
+  pub struct PeerAddressObfuscation {
+    pub obfuscation_type: u32,
+    pub obfuscated_port: u16,
+  }
 }
 
 impl Wire for GetPeerAddressResponse {
@@ -89,12 +99,7 @@ impl Wire for GetPeerAddressResponse {
       username: r.string("username")?,
       ip: r.ip4("ip")?,
       port: r.u32("port")?,
-      // the obfuscated port is two bytes here, four in ConnectToPeer
-      obfuscation: if r.remaining() >= 6 {
-        Some((r.u32("obfuscation_type")?, r.u16("obfuscated_port")?))
-      } else {
-        None
-      },
+      obfuscation: r.optional_fixed("obfuscation")?,
     })
   }
 
@@ -102,9 +107,8 @@ impl Wire for GetPeerAddressResponse {
     w.string(&self.username);
     w.ip4(self.ip);
     w.u32(self.port);
-    if let Some((obfuscation_type, obfuscated_port)) = self.obfuscation {
-      w.u32(obfuscation_type);
-      w.u16(obfuscated_port);
+    if let Some(obfuscation) = &self.obfuscation {
+      obfuscation.write(w);
     }
   }
 
@@ -267,7 +271,9 @@ pub(crate) mod tests {
   vectors! {
     get_peer_address_request: Q::GetPeerAddress(GetPeerAddressRequest { username: "bob".into() }) => p().s("bob").frame(3);
     get_peer_address_response:
-      R::GetPeerAddress(GetPeerAddressResponse { username: "bob".into(), ip: ip(), port: 2234, obfuscation: Some((1, 2235)) })
+      R::GetPeerAddress(GetPeerAddressResponse { username: "bob".into(), ip: ip(), port: 2234,
+        obfuscation: Some(PeerAddressObfuscation { obfuscation_type: 1, obfuscated_port: 2235 }),
+      })
       => p().s("bob").ip(IP).u32(2234).u32(1).u16(2235).frame(3);
     get_peer_address_response_without_trailer:
       R::GetPeerAddress(GetPeerAddressResponse { username: "bob".into(), ip: Ipv4Addr::UNSPECIFIED, port: 0, obfuscation: None })

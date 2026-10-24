@@ -3,6 +3,7 @@
 
 use std::net::Ipv4Addr;
 
+use super::session::Obfuscation;
 use crate::codec::{Wire, wire_struct};
 use crate::error::DecodeError;
 use crate::log::KeyFields;
@@ -32,8 +33,8 @@ pub struct ConnectToPeerResponse {
   /// send back in `PierceFirewall`
   pub token: u32,
   pub privileged: bool,
-  /// `(obfuscation_type, obfuscated_port)`; never dialled
-  pub obfuscation: Option<(u32, u32)>,
+  /// never dialled
+  pub obfuscation: Option<Obfuscation>,
 }
 
 impl Wire for ConnectToPeerResponse {
@@ -47,11 +48,7 @@ impl Wire for ConnectToPeerResponse {
       port: r.u32("port")?,
       token: r.u32("token")?,
       privileged: r.bool("privileged")?,
-      obfuscation: if r.remaining() >= 8 {
-        Some((r.u32("obfuscation_type")?, r.u32("obfuscated_port")?))
-      } else {
-        None
-      },
+      obfuscation: r.optional_fixed("obfuscation")?,
     })
   }
 
@@ -62,9 +59,8 @@ impl Wire for ConnectToPeerResponse {
     w.u32(self.port);
     w.u32(self.token);
     w.bool(self.privileged);
-    if let Some((obfuscation_type, obfuscated_port)) = self.obfuscation {
-      w.u32(obfuscation_type);
-      w.u32(obfuscated_port);
+    if let Some(obfuscation) = &self.obfuscation {
+      obfuscation.write(w);
     }
   }
 
@@ -137,7 +133,7 @@ pub(crate) mod tests {
     connect_to_peer_response:
       R::ConnectToPeer(ConnectToPeerResponse {
         username: "bob".into(), connection_type: PeerConnectionType::Transfer, ip: ip(), port: 2234, token: 77,
-        privileged: false, obfuscation: Some((1, 2235)),
+        privileged: false, obfuscation: Some(Obfuscation { obfuscation_type: 1, obfuscated_port: 2235 }),
       })
       => p().s("bob").s("F").ip(IP).u32(2234).u32(77).u8(0).u32(1).u32(2235).frame(18);
     connect_to_peer_response_without_trailer:

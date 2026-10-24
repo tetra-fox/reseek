@@ -122,8 +122,17 @@ impl Wire for LoginResponse {
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct SetListenPort {
   pub port: u32,
-  /// `(obfuscation_type, obfuscated_port)`; never sent by this client
-  pub obfuscation: Option<(u32, u32)>,
+  /// never sent by this client
+  pub obfuscation: Option<Obfuscation>,
+}
+
+wire_struct! {
+  /// The obfuscated port trailer of `SetListenPort` and `ConnectToPeerResponse`. Type 0 is none
+  /// and 1 is "rotated"; this client never advertises one and never dials the obfuscated port.
+  pub struct Obfuscation {
+    pub obfuscation_type: u32,
+    pub obfuscated_port: u32,
+  }
 }
 
 impl Wire for SetListenPort {
@@ -132,19 +141,14 @@ impl Wire for SetListenPort {
   fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
     Ok(Self {
       port: r.u32("port")?,
-      obfuscation: if r.remaining() >= 8 {
-        Some((r.u32("obfuscation_type")?, r.u32("obfuscated_port")?))
-      } else {
-        None
-      },
+      obfuscation: r.optional_fixed("obfuscation")?,
     })
   }
 
   fn write(&self, w: &mut Writer) {
     w.u32(self.port);
-    if let Some((obfuscation_type, obfuscated_port)) = self.obfuscation {
-      w.u32(obfuscation_type);
-      w.u32(obfuscated_port);
+    if let Some(obfuscation) = &self.obfuscation {
+      obfuscation.write(w);
     }
   }
 }
@@ -175,7 +179,7 @@ wire_struct! {
 wire_struct! {
   /// Server code 142, spec 01 section 5.45
   pub struct NewPassword {
-    pub password: Secret,
+    pub new_password: Secret,
   }
 }
 
@@ -203,7 +207,7 @@ pub(crate) mod tests {
       => p().u8(0).s("INVALIDUSERNAME").s("Nick too long.").frame(1);
     set_listen_port_request: Q::SetListenPort(SetListenPort { port: 50_000, obfuscation: None }) => p().u32(50_000).frame(2);
     set_listen_port_request_obfuscated:
-      Q::SetListenPort(SetListenPort { port: 50_000, obfuscation: Some((1, 50_001)) })
+      Q::SetListenPort(SetListenPort { port: 50_000, obfuscation: Some(Obfuscation { obfuscation_type: 1, obfuscated_port: 50_001 }) })
       => p().u32(50_000).u32(1).u32(50_001).frame(2);
     set_online_status_request:
       Q::SetOnlineStatus(SetOnlineStatus { status: UserPresence::Away }) => p().u32(1).frame(28);
@@ -213,8 +217,8 @@ pub(crate) mod tests {
       Q::SharedFoldersAndFiles(SharedFoldersAndFiles { directory_count: 12, file_count: 345 }) => p().u32(12).u32(345).frame(35);
     kicked_from_server_response: R::KickedFromServer => p().frame(41);
     send_upload_speed_request: Q::SendUploadSpeed(SendUploadSpeed { speed: 123_456 }) => p().u32(123_456).frame(121);
-    new_password_request: Q::NewPassword(NewPassword { password: Secret::new("n3w") }) => p().s("n3w").frame(142);
-    new_password_response: R::NewPassword(NewPassword { password: Secret::new("n3w") }) => p().s("n3w").frame(142);
+    new_password_request: Q::NewPassword(NewPassword { new_password: Secret::new("n3w") }) => p().s("n3w").frame(142);
+    new_password_response: R::NewPassword(NewPassword { new_password: Secret::new("n3w") }) => p().s("n3w").frame(142);
   }
 
   decodes! {

@@ -127,26 +127,26 @@ impl Wire for BranchLevel {
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct BranchRoot {
   #[cfg_attr(test, proptest(strategy = "crate::proptests::peer_username()"))]
-  pub root: String,
+  pub username: String,
 }
 
 impl Wire for BranchRoot {
   const MIN_BYTES: usize = 4;
 
   fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
-    let root = r.string("root")?;
-    if !is_valid_peer_username(&root) {
-      return Err(r.fail("root", FieldError::InvalidUsername));
+    let username = r.string("username")?;
+    if !is_valid_peer_username(&username) {
+      return Err(r.fail("username", FieldError::InvalidUsername));
     }
-    Ok(Self { root })
+    Ok(Self { username })
   }
 
   fn write(&self, w: &mut Writer) {
-    w.string(&self.root);
+    w.string(&self.username);
   }
 
   fn log<'a>(&'a self, _name: &'static str, fields: &mut KeyFields<'a>) {
-    fields.username = Some(&self.root);
+    fields.username = Some(&self.username);
   }
 }
 
@@ -244,7 +244,7 @@ pub(crate) mod tests {
       DistributedMessage::SearchRequest(SearchRequest { username: "bob".into(), token: 5, query: "q".into() })
       => p().raw(&search()).frame_u8(3);
     branch_level: DistributedMessage::BranchLevel(BranchLevel { level: 3 }) => p().u32(3).frame_u8(4);
-    branch_root: DistributedMessage::BranchRoot(BranchRoot { root: "root".into() }) => p().s("root").frame_u8(5);
+    branch_root: DistributedMessage::BranchRoot(BranchRoot { username: "root".into() }) => p().s("root").frame_u8(5);
     child_depth: DistributedMessage::ChildDepth(ChildDepth { depth: 2 }) => p().u32(2).frame_u8(7);
     embedded_message:
       DistributedMessage::EmbeddedMessage(EmbeddedMessage {
@@ -266,7 +266,7 @@ pub(crate) mod tests {
     branch_level_rejects_a_negative_level: DistributedMessage, p().i32(-1).frame_u8(4)
       => Err(field("BranchLevel", "level", FieldError::NegativeBranchLevel { level: -1 }));
     branch_root_rejects_a_non_printable_username: DistributedMessage, p().s("a\u{7}b").frame_u8(5)
-      => Err(field("BranchRoot", "root", FieldError::InvalidUsername));
+      => Err(field("BranchRoot", "username", FieldError::InvalidUsername));
     embedded_message_with_a_short_zero_prefix_is_not_padded: DistributedMessage, p().raw(&[0, 0, 0]).frame_u8(93)
       => Ok(DistributedMessage::EmbeddedMessage(EmbeddedMessage {
         embedded: Embedded { distributed_code: 0, payload: vec![0, 0] },
