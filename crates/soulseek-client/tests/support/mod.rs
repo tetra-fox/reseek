@@ -8,10 +8,12 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use soulseek_client::{Client, ClientOptions, Event, Handoffs};
+use soulseek_client::{Client, ClientOptions, Event, Handoffs, ServerHandoff, WaitKey};
 use soulseek_proto::frame::{self, FrameKind};
-use soulseek_proto::server::{LoginRequest, LoginResponse};
-use soulseek_proto::{Limits, Secret, ServerRequest, ServerResponse};
+use soulseek_proto::server::{
+  GlobalAdminMessage, LoginRequest, LoginResponse, UserData, UserStats,
+};
+use soulseek_proto::{Limits, Secret, ServerCode, ServerRequest, ServerResponse, UserPresence};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
@@ -22,7 +24,7 @@ pub const PASSWORD: &str = "hunter2";
 pub const PUBLIC_IP: Ipv4Addr = Ipv4Addr::new(203, 0, 113, 7);
 
 /// how long a test waits for something that should happen promptly
-const PATIENCE: Duration = Duration::from_secs(10);
+pub const PATIENCE: Duration = Duration::from_secs(10);
 
 /// options for a client that does not listen, so tests need no free port
 pub fn options() -> ClientOptions {
@@ -210,6 +212,83 @@ impl Session {
   /// the next event that `pick` accepts, skipping the others
   pub async fn event<T>(&mut self, pick: impl FnMut(Event) -> Option<T>) -> T {
     next_event(&mut self.events, pick).await
+  }
+
+  /// registers a wait under `key`, sends `response` and returns what the wait completed with
+  pub async fn reply<T: Send + 'static>(&mut self, key: WaitKey, response: ServerResponse) -> T {
+    let wait = self
+      .client
+      .waiter()
+      .wait::<T>(key, None, CancellationToken::new());
+    self.server.send(&response).await;
+    tokio::time::timeout(PATIENCE, wait)
+      .await
+      .expect("the wait completes")
+      .unwrap()
+  }
+
+  /// sends `response` and returns the next server hand-off
+  pub async fn handoff(&mut self, response: ServerResponse) -> ServerHandoff {
+    self.server.send(&response).await;
+    tokio::time::timeout(PATIENCE, self.handoffs.server.recv())
+      .await
+      .expect("the message is handed on")
+      .unwrap()
+  }
+
+  /// sends a message every client handles by raising an event, and waits for that event, so
+  /// everything sent before it has been handled
+  pub async fn settle(&mut self) {
+    let marker = ServerResponse::GlobalAdminMessage(GlobalAdminMessage {
+      message: "marker".into(),
+    });
+    self.server.send(&marker).await;
+    self
+      .event(|event| {
+        matches!(event, Event::GlobalMessageReceived(message) if message == "marker").then_some(())
+      })
+      .await;
+  }
+}
+
+pub fn user_key(code: ServerCode, username: &str) -> WaitKey {
+  WaitKey::ServerUser {
+    code,
+    username: username.into(),
+  }
+}
+
+pub fn room_key(code: ServerCode, room: &str) -> WaitKey {
+  WaitKey::ServerRoom {
+    code,
+    room: room.into(),
+  }
+}
+
+pub fn room_user_key(code: ServerCode, room: &str, username: &str) -> WaitKey {
+  WaitKey::ServerRoomUser {
+    code,
+    room: room.into(),
+    username: username.into(),
+  }
+}
+
+pub fn stats() -> UserStats {
+  UserStats {
+    average_speed: 1000,
+    upload_count: 5,
+    file_count: 300,
+    directory_count: 20,
+  }
+}
+
+pub fn user_data(username: &str) -> UserData {
+  UserData {
+    username: username.into(),
+    status: UserPresence::Online,
+    stats: stats(),
+    slots_full: true,
+    country_code: "NL".into(),
   }
 }
 
