@@ -1,6 +1,6 @@
 [package]
 name = "soulseek-proto"
-description = "Soulseek wire protocol codecs and data model, no I/O"
+description = "Soulseek protocol codecs and data model"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

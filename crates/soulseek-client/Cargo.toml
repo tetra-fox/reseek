@@ -1,6 +1,6 @@
 [package]
 name = "soulseek-client"
-description = "Soulseek client: connections, the server session, the listener and the keyed waits"
+description = "Soulseek client"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
