@@ -196,7 +196,14 @@ impl Tree {
         self.candidates = candidates
           .into_iter()
           .filter_map(|candidate| {
-            let endpoint = request_endpoint(candidate.ip, candidate.port)?;
+            let Some(endpoint) = request_endpoint(candidate.ip, candidate.port) else {
+              tracing::debug!(
+                username = candidate.username,
+                port = candidate.port,
+                "parent candidate with an invalid port dropped"
+              );
+              return None;
+            };
             Some((candidate.username, endpoint))
           })
           .collect();
