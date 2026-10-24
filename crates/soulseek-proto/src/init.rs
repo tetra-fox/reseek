@@ -26,12 +26,14 @@ family! {
 }
 
 wire_struct! {
+  /// Init code 0, spec 01 section 3.2
   pub struct PierceFirewall {
     /// the token of the `ConnectToPeer` that solicited the connection
     pub token: u32,
   }
 }
 
+/// Init code 1, spec 01 section 3.2
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct PeerInit {
@@ -69,7 +71,8 @@ impl Wire for PeerInit {
   }
 }
 
-/// The `u32` token the initiator of a transfer connection writes raw after the init frame
+/// The `u32` token the initiator of a transfer connection writes raw after the init frame (spec 01
+/// section 3.3)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileTransferInit {
   pub token: u32,
@@ -87,9 +90,9 @@ impl FileTransferInit {
   }
 }
 
-/// The `u64` offset the downloader writes raw on a transfer connection. It is for resuming
-/// only; an offset past the file size (Soulseek NS sends `u64::MAX` when resuming past 2 GiB)
-/// must be refused by the uploader.
+/// The `u64` offset the downloader writes raw on a transfer connection (spec 01 section 3.3). It
+/// is for resuming only; an offset past the file size (Soulseek NS sends `u64::MAX` when resuming
+/// past 2 GiB) must be refused by the uploader.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileOffset {
   pub offset: u64,

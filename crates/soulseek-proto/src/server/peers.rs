@@ -1,0 +1,168 @@
+//! Messages that set up connections between peers through the server (spec 01 sections 5.12, 5.48,
+//! 01a section 2.3).
+
+use std::net::Ipv4Addr;
+
+use crate::codec::{Wire, wire_struct};
+use crate::error::DecodeError;
+use crate::log::KeyFields;
+use crate::model::PeerConnectionType;
+use crate::wire::{Reader, Writer};
+
+wire_struct! {
+  /// Server code 18, spec 01 section 5.12
+  pub struct ConnectToPeerRequest {
+    /// fresh; the peer sends it back in `PierceFirewall`
+    pub token: u32,
+    pub username: String,
+    pub connection_type: PeerConnectionType,
+  }
+}
+
+/// Server code 18, spec 01 section 5.12
+///
+/// A peer asked the server to make us connect to it
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
+pub struct ConnectToPeerResponse {
+  pub username: String,
+  pub connection_type: PeerConnectionType,
+  pub ip: Ipv4Addr,
+  pub port: u32,
+  /// send back in `PierceFirewall`
+  pub token: u32,
+  pub privileged: bool,
+  /// `(obfuscation_type, obfuscated_port)`; never dialled
+  pub obfuscation: Option<(u32, u32)>,
+}
+
+impl Wire for ConnectToPeerResponse {
+  const MIN_BYTES: usize = 21;
+
+  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+    Ok(Self {
+      username: r.string()?,
+      connection_type: PeerConnectionType::read(r)?,
+      ip: r.ip4()?,
+      port: r.u32()?,
+      token: r.u32()?,
+      privileged: r.bool()?,
+      obfuscation: if r.remaining() >= 8 {
+        Some((r.u32()?, r.u32()?))
+      } else {
+        None
+      },
+    })
+  }
+
+  fn write(&self, w: &mut Writer) {
+    w.string(&self.username);
+    self.connection_type.write(w);
+    w.ip4(self.ip);
+    w.u32(self.port);
+    w.u32(self.token);
+    w.bool(self.privileged);
+    if let Some((obfuscation_type, obfuscated_port)) = self.obfuscation {
+      w.u32(obfuscation_type);
+      w.u32(obfuscated_port);
+    }
+  }
+
+  fn log<'a>(&'a self, _name: &'static str, fields: &mut KeyFields<'a>) {
+    fields.username = Some(&self.username);
+    fields.token = Some(self.token);
+  }
+}
+
+wire_struct! {
+  /// Server code 33, spec 01a section 2.3, obsolete
+  pub struct SendConnectToken {
+    pub username: String,
+    pub token: u32,
+  }
+}
+
+wire_struct! {
+  /// Server code 1001, spec 01 section 5.48
+  pub struct CannotConnectRequest {
+    pub token: u32,
+    /// the peer we could not reach
+    pub username: String,
+  }
+}
+
+/// Server code 1001, spec 01 section 5.48
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
+pub struct CannotConnectResponse {
+  pub token: u32,
+  /// the live server sends only the token
+  pub username: Option<String>,
+}
+
+impl Wire for CannotConnectResponse {
+  const MIN_BYTES: usize = 4;
+
+  fn read(r: &mut Reader) -> Result<Self, DecodeError> {
+    Ok(Self {
+      token: r.u32()?,
+      username: if r.has_more() {
+        Some(r.string()?)
+      } else {
+        None
+      },
+    })
+  }
+
+  fn write(&self, w: &mut Writer) {
+    w.u32(self.token);
+    if let Some(username) = &self.username {
+      w.string(username);
+    }
+  }
+
+  fn log<'a>(&'a self, _name: &'static str, fields: &mut KeyFields<'a>) {
+    fields.token = Some(self.token);
+    fields.username = self.username.as_deref();
+  }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+  use super::*;
+  use crate::server::{ServerRequest as Q, ServerResponse as R};
+  use crate::testing::{IP, decodes, ip, p, vectors};
+
+  vectors! {
+    connect_to_peer_request:
+      Q::ConnectToPeer(ConnectToPeerRequest { token: 7, username: "bob".into(), connection_type: PeerConnectionType::Peer })
+      => p().u32(7).s("bob").s("P").frame(18);
+    connect_to_peer_response:
+      R::ConnectToPeer(ConnectToPeerResponse {
+        username: "bob".into(), connection_type: PeerConnectionType::Transfer, ip: ip(), port: 2234, token: 77,
+        privileged: false, obfuscation: Some((1, 2235)),
+      })
+      => p().s("bob").s("F").ip(IP).u32(2234).u32(77).u8(0).u32(1).u32(2235).frame(18);
+    connect_to_peer_response_without_trailer:
+      R::ConnectToPeer(ConnectToPeerResponse {
+        username: "bob".into(), connection_type: PeerConnectionType::Distributed, ip: ip(), port: 2234, token: 77,
+        privileged: true, obfuscation: None,
+      })
+      => p().s("bob").s("D").ip(IP).u32(2234).u32(77).u8(1).frame(18);
+    send_connect_token_request:
+      Q::SendConnectToken(SendConnectToken { username: "bob".into(), token: 5 }) => p().s("bob").u32(5).frame(33);
+    send_connect_token_response:
+      R::SendConnectToken(SendConnectToken { username: "bob".into(), token: 5 }) => p().s("bob").u32(5).frame(33);
+    cannot_connect_request:
+      Q::CannotConnect(CannotConnectRequest { token: 12, username: "bob".into() }) => p().u32(12).s("bob").frame(1001);
+    cannot_connect_response: R::CannotConnect(CannotConnectResponse { token: 12, username: None }) => p().u32(12).frame(1001);
+    cannot_connect_response_with_username:
+      R::CannotConnect(CannotConnectResponse { token: 12, username: Some("bob".into()) }) => p().u32(12).s("bob").frame(1001);
+  }
+
+  decodes! {
+    connect_to_peer_response_rejects_unknown_type: R,
+      p().s("bob").s("X").ip(IP).u32(1).u32(1).u8(0).frame(18)
+      => Err(DecodeError::UnknownConnectionType);
+  }
+}

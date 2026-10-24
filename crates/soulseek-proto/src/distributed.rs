@@ -33,6 +33,8 @@ family! {
   }
 }
 
+/// Distributed code 0, spec 01 section 7.1
+///
 /// Empty in the protocol reference; the original library replied with a `u32` token
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
@@ -60,6 +62,8 @@ impl Wire for Ping {
   }
 }
 
+/// Distributed code 3, spec 01 section 7.2
+///
 /// Written with the identifier 49; any other identifier is rejected
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
@@ -97,6 +101,8 @@ impl Wire for SearchRequest {
   }
 }
 
+/// Distributed code 4, spec 01 section 7.3
+///
 /// A level of 0 means the sender is the branch root; negative levels are rejected
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
@@ -119,6 +125,7 @@ impl Wire for BranchLevel {
   }
 }
 
+/// Distributed code 5, spec 01 section 7.4
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct BranchRoot {
@@ -149,11 +156,14 @@ impl Wire for BranchRoot {
 }
 
 wire_struct! {
+  /// Distributed code 7, spec 01 section 7.5
   pub struct ChildDepth {
     pub depth: u32,
   }
 }
 
+/// Server code 93, spec 01 section 5.33
+///
 /// A distributed message wrapped in an `EmbeddedMessage`, by the server or by an old parent
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
@@ -190,6 +200,7 @@ impl Wire for Embedded {
   }
 }
 
+/// Distributed code 93, spec 01 section 7.6
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub struct EmbeddedMessage {

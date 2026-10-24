@@ -5,6 +5,7 @@
 
 use std::fmt::Debug;
 use std::io::Read;
+use std::net::Ipv4Addr;
 use std::path::Path;
 
 use flate2::Compression;
@@ -13,6 +14,13 @@ use flate2::bufread::{ZlibDecoder, ZlibEncoder};
 use crate::codes::{DistributedCode, InitCode, PeerCode, ServerCode};
 use crate::error::DecodeError;
 use crate::{DistributedMessage, InitMessage, PeerMessage, ServerRequest, ServerResponse};
+
+/// the address the server messages with an `ip4` field carry in their vectors
+pub(crate) const IP: [u8; 4] = [192, 168, 1, 20];
+
+pub(crate) fn ip() -> Ipv4Addr {
+  Ipv4Addr::from(IP)
+}
 
 /// payload builder over wire primitives
 #[derive(Clone, Default)]
@@ -227,15 +235,42 @@ macro_rules! decodes {
 pub(crate) use decodes;
 
 fn all_vectors() -> Vec<Vector> {
+  use crate::server::{
+    distributed, interests, messaging, obsolete, peers, private_rooms, privileges, rooms, search,
+    session, users,
+  };
+  use crate::{init, peer};
   [
-    crate::server::tests::vectors(),
     crate::server::tests::decode_vectors(),
-    crate::peer::tests::vectors(),
-    crate::peer::tests::decode_vectors(),
+    session::tests::vectors(),
+    session::tests::decode_vectors(),
+    users::tests::vectors(),
+    users::tests::decode_vectors(),
+    peers::tests::vectors(),
+    peers::tests::decode_vectors(),
+    rooms::tests::vectors(),
+    rooms::tests::decode_vectors(),
+    private_rooms::tests::vectors(),
+    messaging::tests::vectors(),
+    messaging::tests::decode_vectors(),
+    search::tests::vectors(),
+    distributed::tests::vectors(),
+    privileges::tests::vectors(),
+    interests::tests::vectors(),
+    interests::tests::decode_vectors(),
+    obsolete::tests::vectors(),
+    peer::browse::tests::vectors(),
+    peer::browse::tests::decode_vectors(),
+    peer::search::tests::vectors(),
+    peer::search::tests::decode_vectors(),
+    peer::info::tests::vectors(),
+    peer::info::tests::decode_vectors(),
+    peer::transfers::tests::vectors(),
+    peer::transfers::tests::decode_vectors(),
     crate::distributed::tests::vectors(),
     crate::distributed::tests::decode_vectors(),
-    crate::init::tests::vectors(),
-    crate::init::tests::decode_vectors(),
+    init::tests::vectors(),
+    init::tests::decode_vectors(),
   ]
   .into_iter()
   .flatten()
