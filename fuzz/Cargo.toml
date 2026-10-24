@@ -1,0 +1,66 @@
+[package]
+name = "soulseek-proto-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+flate2 = "1"
+libfuzzer-sys = "0.4"
+soulseek-proto = { path = "../crates/soulseek-proto" }
+
+# its own workspace: cargo-fuzz builds with nightly and the main workspace stays on stable
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "frame"
+path = "fuzz_targets/frame.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "server_message"
+path = "fuzz_targets/server_message.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "peer_message"
+path = "fuzz_targets/peer_message.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "peer_init"
+path = "fuzz_targets/peer_init.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "distributed_message"
+path = "fuzz_targets/distributed_message.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "compressed_search_response"
+path = "fuzz_targets/compressed_search_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "compressed_browse_response"
+path = "fuzz_targets/compressed_browse_response.rs"
+test = false
+doc = false
+bench = false

@@ -23,6 +23,7 @@ test:
 # fmt --check, clippy -D warnings, oxlint, oxfmt --check
 lint:
     cargo fmt --all --check
+    cargo fmt --manifest-path fuzz/Cargo.toml --all --check
     cargo clippy --workspace --all-targets -- -D warnings
     @echo "oxlint, oxfmt: not yet (no web/)"
 
@@ -38,6 +39,7 @@ api:
 api-check:
     @echo "api-check: not yet (no api/openapi.json)"
 
+# the gate for every push
 ci: lint test api-check
 
 # the fuzz recipes need nightly cargo and cargo-fuzz: run them inside `nix develop .#fuzz`
