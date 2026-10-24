@@ -1,29 +1,34 @@
-//! Changing options while connected: the listener moves to a new port, stays where it was when
-//! the new port is taken, and changes that need a new session say so.
+//! Changing options while logged in to soulfind: the listener moves to a new port and the server
+//! hands the new one out, a taken port keeps the old listener and options, and changes that need
+//! a new session say so.
 
 mod support;
 
 use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 
 use soulseek_client::{ClientError, ClientOptions, ClientOptionsPatch};
-use soulseek_proto::ServerRequest;
-use soulseek_proto::server::{
-  AcceptChildren, BranchLevel, BranchRoot, HaveNoParents, PrivateRoomToggle, SetListenPort,
-};
-use support::{Session, USERNAME, free_port, options};
+use soulseek_proto::server::{GetPeerAddressRequest, GetPeerAddressResponse};
+use soulseek_proto::{ServerCode, ServerRequest};
+use support::soulfind::{self, Soulfind, User};
+use support::{free_port, options, user_key};
 use tokio::net::TcpStream;
 
 fn local(port: u16) -> SocketAddr {
   SocketAddr::from((Ipv4Addr::LOCALHOST, port))
 }
 
-async fn listening_on(port: u16) -> Session {
-  Session::with_options(ClientOptions {
-    listen_ip_address: Ipv4Addr::LOCALHOST.into(),
-    listen_port: port,
-    ..ClientOptions::default()
-  })
-  .await
+async fn listening_on(server: &Arc<Soulfind>, port: u16) -> User {
+  server
+    .login(
+      "moving",
+      ClientOptions {
+        listen_ip_address: Ipv4Addr::LOCALHOST.into(),
+        listen_port: port,
+        ..ClientOptions::default()
+      },
+    )
+    .await
 }
 
 fn listen_port(port: u16) -> ClientOptionsPatch {
@@ -33,24 +38,29 @@ fn listen_port(port: u16) -> ClientOptionsPatch {
   }
 }
 
-fn configuration(port: u16) -> [ServerRequest; 2] {
-  [
-    ServerRequest::SetListenPort(SetListenPort {
-      port: u32::from(port),
-      obfuscation: None,
-    }),
-    ServerRequest::PrivateRoomToggle(PrivateRoomToggle {
-      accept_invitations: false,
-    }),
-  ]
+/// the port the server gives out for `user`, as another user asks for it
+async fn advertised_port(server: &Arc<Soulfind>, user: &User) -> u32 {
+  let asker = server.login("asker", options()).await;
+  let address: GetPeerAddressResponse = asker
+    .ask(
+      user_key(ServerCode::GetPeerAddress, &user.username),
+      ServerRequest::GetPeerAddress(GetPeerAddressRequest {
+        username: user.username.clone(),
+      }),
+    )
+    .await;
+  address.port
 }
 
 #[tokio::test]
-async fn the_listener_moves_to_a_new_port_and_the_server_is_told() {
+async fn the_listener_moves_to_a_new_port_and_the_server_hands_it_out() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
   let old = free_port();
-  let mut session = listening_on(old).await;
+  let user = listening_on(&server, old).await;
   let new = free_port();
-  let reconnect = session
+  let reconnect = user
     .client
     .reconfigure_options(listen_port(new))
     .await
@@ -58,41 +68,38 @@ async fn the_listener_moves_to_a_new_port_and_the_server_is_told() {
   assert!(!reconnect);
   assert!(TcpStream::connect(local(new)).await.is_ok());
   assert!(TcpStream::connect(local(old)).await.is_err());
-  assert_eq!(session.client.options().listen_port, new);
-  // the distributed status has not changed, so it is not sent again
-  let sent = [
-    session.server.request().await,
-    session.server.request().await,
-  ];
-  assert_eq!(sent, configuration(new));
+  assert_eq!(user.client.options().listen_port, new);
+  assert_eq!(advertised_port(&server, &user).await, u32::from(new));
 }
 
 #[tokio::test]
 async fn a_taken_port_keeps_the_old_listener_and_options() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
   let old = free_port();
-  let mut session = listening_on(old).await;
+  let user = listening_on(&server, old).await;
   let taken = std::net::TcpListener::bind(local(0)).unwrap();
   let new = taken.local_addr().unwrap().port();
-  let error = session
+  let error = user
     .client
     .reconfigure_options(listen_port(new))
     .await
     .unwrap_err();
   assert!(matches!(error, ClientError::Listen { .. }), "{error:?}");
-  assert_eq!(session.client.options().listen_port, old);
+  assert_eq!(user.client.options().listen_port, old);
   assert!(TcpStream::connect(local(old)).await.is_ok());
-  let sent = [
-    session.server.request().await,
-    session.server.request().await,
-  ];
-  assert_eq!(sent, configuration(old));
+  assert_eq!(advertised_port(&server, &user).await, u32::from(old));
 }
 
 #[tokio::test]
 async fn rebinding_the_same_port_for_a_new_backlog() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
   let port = free_port();
-  let session = listening_on(port).await;
-  let reconnect = session
+  let user = listening_on(&server, port).await;
+  let reconnect = user
     .client
     .reconfigure_options(ClientOptionsPatch {
       listen_backlog: Some(256),
@@ -106,34 +113,20 @@ async fn rebinding_the_same_port_for_a_new_backlog() {
 
 #[tokio::test]
 async fn turning_the_distributed_network_off_needs_a_reconnect_and_on_does_not() {
-  let mut session = Session::start().await;
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let user = server.login("distributed", options()).await;
   let off = ClientOptionsPatch {
     enable_distributed_network: Some(false),
     ..ClientOptionsPatch::default()
   };
-  assert!(session.client.reconfigure_options(off).await.unwrap());
-  let mut sent = Vec::new();
-  for _ in 0..6 {
-    sent.push(session.server.request().await);
-  }
-  assert_eq!(
-    sent[2..],
-    [
-      ServerRequest::BranchLevel(BranchLevel { level: 0 }),
-      ServerRequest::BranchRoot(BranchRoot {
-        root: USERNAME.into()
-      }),
-      ServerRequest::AcceptChildren(AcceptChildren { accept: false }),
-      ServerRequest::HaveNoParents(HaveNoParents {
-        have_no_parents: false
-      }),
-    ]
-  );
+  assert!(user.client.reconfigure_options(off).await.unwrap());
   let on = ClientOptionsPatch {
     enable_distributed_network: Some(true),
     ..ClientOptionsPatch::default()
   };
-  assert!(!session.client.reconfigure_options(on).await.unwrap());
+  assert!(!user.client.reconfigure_options(on).await.unwrap());
 }
 
 #[tokio::test]

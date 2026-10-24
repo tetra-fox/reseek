@@ -10,7 +10,9 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use soulseek_client::{Client, ClientOptions, Event, Handoffs, ServerHandoff, WaitKey};
+use soulseek_client::{
+  Client, ClientError, ClientOptions, ClientState, Event, Handoffs, ServerHandoff, WaitKey,
+};
 use soulseek_proto::frame::{self, FrameKind};
 use soulseek_proto::server::{
   GlobalAdminMessage, LoginRequest, LoginResponse, UserData, UserStats,
@@ -308,6 +310,33 @@ pub async fn next_event<T>(
   })
   .await
   .expect("the event is raised")
+}
+
+/// the state transitions among `events`, as (previous, state, message)
+pub fn transitions(events: &[Event]) -> Vec<(ClientState, ClientState, String)> {
+  events
+    .iter()
+    .filter_map(|event| match event {
+      Event::StateChanged {
+        previous_state,
+        state,
+        message,
+        ..
+      } => Some((*previous_state, *state, message.clone())),
+      _ => None,
+    })
+    .collect()
+}
+
+/// the message and cause of the one `Disconnected` among `events`
+pub fn disconnected(events: &[Event]) -> (String, Option<ClientError>) {
+  let mut disconnects = events.iter().filter_map(|event| match event {
+    Event::Disconnected { message, error } => Some((message.clone(), error.clone())),
+    _ => None,
+  });
+  let disconnect = disconnects.next().expect("Disconnected is raised");
+  assert!(disconnects.next().is_none(), "Disconnected is raised once");
+  disconnect
 }
 
 /// every event received so far

@@ -1,71 +1,106 @@
-//! Server messages about private rooms, delivered by a fake server to a logged-in client: member
-//! and operator lists and changes, our own membership and moderation, and the invitation setting.
+//! Private rooms on soulfind: creating one, the invitation setting, and members and operators
+//! added and removed as the owner and the member each see it.
 
 mod support;
 
 use soulseek_client::{Event, RoomMembers, WaitKey};
 use soulseek_proto::server::*;
-use soulseek_proto::{ServerCode, ServerResponse};
-use support::{Session, room_key, room_user_key};
+use soulseek_proto::{RoomType, ServerCode, ServerRequest};
+use support::soulfind::{self, User};
+use support::{options, room_key, room_user_key};
+
+async fn join(user: &User, room: &str, room_type: RoomType) -> RoomData {
+  user
+    .ask(
+      room_key(ServerCode::JoinRoom, room),
+      ServerRequest::JoinRoom(JoinRoomRequest {
+        room: room.into(),
+        room_type,
+      }),
+    )
+    .await
+}
+
+/// waits for the room-and-user event `pick` names for `room`
+async fn room_user(
+  user: &mut User,
+  mut pick: impl FnMut(&Event) -> Option<(&String, &String)>,
+) -> (String, String) {
+  user
+    .event(|event| pick(&event).map(|(room, username)| (room.clone(), username.clone())))
+    .await
+}
+
 #[tokio::test]
-async fn private_room_member_and_operator_lists_are_raised() {
-  let mut session = Session::start().await;
-  session
-    .server
-    .send(&ServerResponse::PrivateRoomUsers(PrivateRoomUsers {
-      room: "secret".into(),
-      usernames: vec!["carol".into()],
-    }))
-    .await;
-  let raised = session
+async fn creating_a_private_room_lists_its_owner_and_empty_lists() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let room = soulfind::username("private");
+  let mut alice = server.login("owner", options()).await;
+  let data = join(&alice, &room, RoomType::Private).await;
+  let private = data.private.expect("the room is private");
+  assert_eq!(private.owner, alice.username);
+  assert!(private.operators.is_empty());
+  let members = alice
     .event(|event| match event {
       Event::PrivateRoomUserListReceived(members) => Some(members),
       _ => None,
     })
     .await;
   assert_eq!(
-    raised,
+    members,
     RoomMembers {
-      room_name: "secret".into(),
-      users: vec!["carol".into()]
+      room_name: room.clone(),
+      users: Vec::new()
     }
   );
-  session
-    .server
-    .send(&ServerResponse::PrivateRoomOwned(PrivateRoomOwned {
-      room: "secret".into(),
-      operators: vec!["dave".into()],
-    }))
-    .await;
-  let raised = session
+  let operators = alice
     .event(|event| match event {
-      Event::PrivateRoomModeratedUserListReceived(members) => Some(members),
+      Event::PrivateRoomModeratedUserListReceived(operators) => Some(operators),
       _ => None,
     })
     .await;
   assert_eq!(
-    raised,
+    operators,
     RoomMembers {
-      room_name: "secret".into(),
-      users: vec!["dave".into()]
+      room_name: room,
+      users: Vec::new()
     }
   );
 }
 
 #[tokio::test]
-async fn private_room_member_changes_complete_and_are_raised() {
-  let mut session = Session::start().await;
-  let () = session
-    .reply(
-      room_user_key(ServerCode::PrivateRoomAddUser, "secret", "carol"),
-      ServerResponse::PrivateRoomAddUser(PrivateRoomAddUser {
-        room: "secret".into(),
-        username: "carol".into(),
+async fn members_and_operators_are_added_and_removed_as_the_room_sees_it() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let room = soulfind::username("private");
+  let mut alice = server.login("owner", options()).await;
+  let mut bob = server.login("member", options()).await;
+  join(&alice, &room, RoomType::Private).await;
+  let accepting: bool = bob
+    .ask(
+      WaitKey::Server(ServerCode::PrivateRoomToggle),
+      ServerRequest::PrivateRoomToggle(PrivateRoomToggle {
+        accept_invitations: true,
       }),
     )
     .await;
-  let raised = session
-    .event(|event| match event {
+  assert!(accepting);
+
+  let () = alice
+    .ask(
+      room_user_key(ServerCode::PrivateRoomAddUser, &room, &bob.username),
+      ServerRequest::PrivateRoomAddUser(PrivateRoomAddUser {
+        room: room.clone(),
+        username: bob.username.clone(),
+      }),
+    )
+    .await;
+  let expected = (room.clone(), bob.username.clone());
+  for user in [&mut alice, &mut bob] {
+    let added = room_user(user, |event| match event {
       Event::PrivateRoomUserAdded {
         room_name,
         username,
@@ -73,143 +108,97 @@ async fn private_room_member_changes_complete_and_are_raised() {
       _ => None,
     })
     .await;
-  assert_eq!(raised, ("secret".into(), "carol".into()));
+    assert_eq!(added, expected);
+  }
+  bob
+    .event(|event| {
+      matches!(event, Event::PrivateRoomMembershipAdded(added) if added == room).then_some(())
+    })
+    .await;
 
-  let () = session
-    .reply(
-      room_user_key(ServerCode::PrivateRoomRemoveUser, "secret", "carol"),
-      ServerResponse::PrivateRoomRemoveUser(PrivateRoomRemoveUser {
-        room: "secret".into(),
-        username: "carol".into(),
+  let () = alice
+    .ask(
+      room_user_key(ServerCode::PrivateRoomAddOperator, &room, &bob.username),
+      ServerRequest::PrivateRoomAddOperator(PrivateRoomAddOperator {
+        room: room.clone(),
+        username: bob.username.clone(),
       }),
     )
     .await;
-  let raised = session
+  let added = room_user(&mut bob, |event| match event {
+    Event::PrivateRoomOperatorAdded {
+      room_name,
+      username,
+    } => Some((room_name, username)),
+    _ => None,
+  })
+  .await;
+  assert_eq!(added, expected);
+  bob
+    .event(|event| {
+      matches!(event, Event::PrivateRoomModerationAdded(added) if added == room).then_some(())
+    })
+    .await;
+  let operators = bob
     .event(|event| match event {
-      Event::PrivateRoomUserRemoved {
-        room_name,
-        username,
-      } => Some((room_name, username)),
+      Event::PrivateRoomModeratedUserListReceived(operators) if !operators.users.is_empty() => {
+        Some(operators)
+      }
       _ => None,
     })
     .await;
-  assert_eq!(raised, ("secret".into(), "carol".into()));
-}
+  assert_eq!(operators.users, [bob.username.clone()]);
 
-#[tokio::test]
-async fn private_room_operator_changes_complete_and_are_raised() {
-  let mut session = Session::start().await;
-  let () = session
-    .reply(
-      room_user_key(ServerCode::PrivateRoomAddOperator, "secret", "carol"),
-      ServerResponse::PrivateRoomAddOperator(PrivateRoomAddOperator {
-        room: "secret".into(),
-        username: "carol".into(),
+  let data = join(&bob, &room, RoomType::Public).await;
+  let private = data.private.expect("the room is private");
+  assert_eq!(private.owner, alice.username);
+  assert_eq!(private.operators, [bob.username.clone()]);
+
+  let () = alice
+    .ask(
+      room_user_key(ServerCode::PrivateRoomRemoveOperator, &room, &bob.username),
+      ServerRequest::PrivateRoomRemoveOperator(PrivateRoomRemoveOperator {
+        room: room.clone(),
+        username: bob.username.clone(),
       }),
     )
     .await;
-  let raised = session
-    .event(|event| match event {
-      Event::PrivateRoomOperatorAdded {
-        room_name,
-        username,
-      } => Some((room_name, username)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, ("secret".into(), "carol".into()));
-
-  let () = session
-    .reply(
-      room_user_key(ServerCode::PrivateRoomRemoveOperator, "secret", "carol"),
-      ServerResponse::PrivateRoomRemoveOperator(PrivateRoomRemoveOperator {
-        room: "secret".into(),
-        username: "carol".into(),
-      }),
-    )
-    .await;
-  let raised = session
-    .event(|event| match event {
-      Event::PrivateRoomOperatorRemoved {
-        room_name,
-        username,
-      } => Some((room_name, username)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, ("secret".into(), "carol".into()));
-}
-
-#[tokio::test]
-async fn our_private_room_membership_is_raised() {
-  let mut session = Session::start().await;
-  session
-    .server
-    .send(&ServerResponse::PrivateRoomAdded(PrivateRoomAdded {
-      room: "secret".into(),
-    }))
-    .await;
-  session
+  let removed = room_user(&mut bob, |event| match event {
+    Event::PrivateRoomOperatorRemoved {
+      room_name,
+      username,
+    } => Some((room_name, username)),
+    _ => None,
+  })
+  .await;
+  assert_eq!(removed, expected);
+  bob
     .event(|event| {
-      matches!(event, Event::PrivateRoomMembershipAdded(room) if room == "secret").then_some(())
+      matches!(event, Event::PrivateRoomModerationRemoved(removed) if removed == room).then_some(())
     })
     .await;
-  let () = session
-    .reply(
-      room_key(ServerCode::PrivateRoomRemoved, "secret"),
-      ServerResponse::PrivateRoomRemoved(PrivateRoomRemoved {
-        room: "secret".into(),
-      }),
-    )
-    .await;
-  session
-    .event(|event| {
-      matches!(event, Event::PrivateRoomMembershipRemoved(room) if room == "secret").then_some(())
-    })
-    .await;
-}
 
-#[tokio::test]
-async fn our_private_room_moderation_is_raised() {
-  let mut session = Session::start().await;
-  session
-    .server
-    .send(&ServerResponse::PrivateRoomOperatorAdded(
-      PrivateRoomOperatorAdded {
-        room: "secret".into(),
-      },
-    ))
-    .await;
-  session
-    .event(|event| {
-      matches!(event, Event::PrivateRoomModerationAdded(room) if room == "secret").then_some(())
-    })
-    .await;
-  let () = session
-    .reply(
-      room_key(ServerCode::PrivateRoomOperatorRemoved, "secret"),
-      ServerResponse::PrivateRoomOperatorRemoved(PrivateRoomOperatorRemoved {
-        room: "secret".into(),
+  let () = alice
+    .ask(
+      room_user_key(ServerCode::PrivateRoomRemoveUser, &room, &bob.username),
+      ServerRequest::PrivateRoomRemoveUser(PrivateRoomRemoveUser {
+        room: room.clone(),
+        username: bob.username.clone(),
       }),
     )
     .await;
-  session
+  let removed = room_user(&mut alice, |event| match event {
+    Event::PrivateRoomUserRemoved {
+      room_name,
+      username,
+    } => Some((room_name, username)),
+    _ => None,
+  })
+  .await;
+  assert_eq!(removed, expected);
+  bob
     .event(|event| {
-      matches!(event, Event::PrivateRoomModerationRemoved(room) if room == "secret").then_some(())
+      matches!(event, Event::PrivateRoomMembershipRemoved(removed) if removed == room).then_some(())
     })
     .await;
-}
-
-#[tokio::test]
-async fn private_room_toggle_completes_with_the_setting() {
-  let mut session = Session::start().await;
-  let got: bool = session
-    .reply(
-      WaitKey::Server(ServerCode::PrivateRoomToggle),
-      ServerResponse::PrivateRoomToggle(PrivateRoomToggle {
-        accept_invitations: true,
-      }),
-    )
-    .await;
-  assert!(got);
 }

@@ -1,5 +1,6 @@
-//! The listener a logged-in client runs: accepted connections are classified by their first
-//! message and handed on, unknown ones are closed, and the listener stops with the session.
+//! The listener a client logged in to soulfind runs: accepted connections are classified by
+//! their first message and handed on, unknown ones are closed, and the listener stops with the
+//! session.
 
 mod support;
 
@@ -10,30 +11,36 @@ use soulseek_client::{ClientOptions, InboundConnection};
 use soulseek_proto::InitMessage;
 use soulseek_proto::PeerConnectionType;
 use soulseek_proto::init::{PeerInit, PierceFirewall};
-use support::{Session, free_port};
+use support::free_port;
+use support::soulfind::{self, User};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-async fn listening() -> (Session, SocketAddr) {
+async fn listening() -> Option<(User, SocketAddr)> {
+  let server = soulfind::server()?;
   let port = free_port();
-  let session = Session::with_options(ClientOptions {
-    listen_ip_address: Ipv4Addr::LOCALHOST.into(),
-    listen_port: port,
-    ..ClientOptions::default()
-  })
-  .await;
-  (session, SocketAddr::from((Ipv4Addr::LOCALHOST, port)))
+  let user = server
+    .login(
+      "inbound",
+      ClientOptions {
+        listen_ip_address: Ipv4Addr::LOCALHOST.into(),
+        listen_port: port,
+        ..ClientOptions::default()
+      },
+    )
+    .await;
+  Some((user, SocketAddr::from((Ipv4Addr::LOCALHOST, port))))
 }
 
 /// connects to the listener, sends `first`, and returns what the client handed on
 async fn inbound(
-  session: &mut Session,
+  user: &mut User,
   address: SocketAddr,
   first: InitMessage,
 ) -> (InboundConnection, TcpStream) {
   let mut peer = TcpStream::connect(address).await.unwrap();
   peer.write_all(&first.encode()).await.unwrap();
-  let inbound = tokio::time::timeout(Duration::from_secs(10), session.handoffs.inbound.recv())
+  let inbound = tokio::time::timeout(Duration::from_secs(10), user.handoffs.inbound.recv())
     .await
     .expect("the connection is handed on")
     .unwrap();
@@ -50,16 +57,13 @@ fn peer_init(connection_type: PeerConnectionType, token: u32) -> InitMessage {
 
 #[tokio::test]
 async fn accepted_connections_are_handed_on_by_kind() {
-  let (mut session, address) = listening().await;
-  let (handed, _peer) = inbound(
-    &mut session,
-    address,
-    peer_init(PeerConnectionType::Peer, 0),
-  )
-  .await;
+  let Some((mut user, address)) = listening().await else {
+    return;
+  };
+  let (handed, _peer) = inbound(&mut user, address, peer_init(PeerConnectionType::Peer, 0)).await;
   assert!(matches!(handed, InboundConnection::Peer { username, .. } if username == "bob"));
   let (handed, _peer) = inbound(
-    &mut session,
+    &mut user,
     address,
     peer_init(PeerConnectionType::Transfer, 77),
   )
@@ -68,14 +72,14 @@ async fn accepted_connections_are_handed_on_by_kind() {
     matches!(handed, InboundConnection::Transfer { username, token: 77, .. } if username == "bob")
   );
   let (handed, _peer) = inbound(
-    &mut session,
+    &mut user,
     address,
     peer_init(PeerConnectionType::Distributed, 0),
   )
   .await;
   assert!(matches!(handed, InboundConnection::Distributed { username, .. } if username == "bob"));
   let (handed, _peer) = inbound(
-    &mut session,
+    &mut user,
     address,
     InitMessage::PierceFirewall(PierceFirewall { token: 42 }),
   )
@@ -88,12 +92,14 @@ async fn accepted_connections_are_handed_on_by_kind() {
 
 #[tokio::test]
 async fn the_handed_on_connection_carries_what_follows_the_first_message() {
-  let (mut session, address) = listening().await;
+  let Some((mut user, address)) = listening().await else {
+    return;
+  };
   let mut peer = TcpStream::connect(address).await.unwrap();
   let mut bytes = peer_init(PeerConnectionType::Transfer, 77).encode();
   bytes.extend(9u32.to_le_bytes());
   peer.write_all(&bytes).await.unwrap();
-  let handed = session.handoffs.inbound.recv().await.unwrap();
+  let handed = user.handoffs.inbound.recv().await.unwrap();
   let InboundConnection::Transfer { mut conn, .. } = handed else {
     panic!("expected a transfer connection");
   };
@@ -102,7 +108,9 @@ async fn the_handed_on_connection_carries_what_follows_the_first_message() {
 
 #[tokio::test]
 async fn an_unknown_connection_type_is_closed() {
-  let (mut session, address) = listening().await;
+  let Some((mut user, address)) = listening().await else {
+    return;
+  };
   let mut peer = TcpStream::connect(address).await.unwrap();
   let mut payload = vec![1];
   for text in ["bob", "X"] {
@@ -118,13 +126,15 @@ async fn an_unknown_connection_type_is_closed() {
     .await
     .expect("the client closes the connection");
   assert_eq!(read.unwrap(), 0);
-  assert!(session.handoffs.inbound.try_recv().is_err());
+  assert!(user.handoffs.inbound.try_recv().is_err());
 }
 
 #[tokio::test]
 async fn the_listener_stops_with_the_session() {
-  let (session, address) = listening().await;
+  let Some((user, address)) = listening().await else {
+    return;
+  };
   TcpStream::connect(address).await.unwrap();
-  session.client.disconnect(None, None).await;
+  user.client.disconnect(None, None).await;
   assert!(TcpStream::connect(address).await.is_err());
 }

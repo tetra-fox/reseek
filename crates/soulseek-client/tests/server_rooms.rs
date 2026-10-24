@@ -1,5 +1,5 @@
-//! Server messages about chat rooms, delivered by a fake server to a logged-in client: chat lines,
-//! joining and leaving, members, the room list, tickers and refused joins.
+//! Chat rooms on soulfind: joining and leaving as every member sees it, chat lines, tickers, the
+//! room list, and a join refused because a private room holds the name.
 
 mod support;
 
@@ -7,199 +7,173 @@ use std::sync::Arc;
 
 use soulseek_client::{ClientError, Event, RoomErrorKind, WaitKey};
 use soulseek_proto::server::*;
-use soulseek_proto::{ServerCode, ServerResponse};
-use support::{PATIENCE, Session, USERNAME, room_key, user_data};
+use soulseek_proto::{RoomType, ServerCode, ServerRequest};
+use support::soulfind::{self, User};
+use support::{PATIENCE, options, room_key};
 use tokio_util::sync::CancellationToken;
-#[tokio::test]
-async fn say_in_chat_room_raises_the_message() {
-  let mut session = Session::start().await;
-  session
-    .server
-    .send(&ServerResponse::SayInChatRoom(SayInChatRoomResponse {
-      room: "indie".into(),
-      username: "bob".into(),
-      message: "hi".into(),
-    }))
-    .await;
-  let raised = session
-    .event(|event| match event {
-      Event::RoomMessageReceived {
-        room_name,
-        username,
-        message,
-      } => Some((room_name, username, message)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, ("indie".into(), "bob".into(), "hi".into()));
-}
 
-#[tokio::test]
-async fn join_room_completes_with_the_room_and_its_private_block() {
-  let mut session = Session::start().await;
-  let room = RoomData {
-    name: "secret".into(),
-    users: vec![user_data("bob"), user_data(USERNAME)],
-    private: Some(PrivateRoomData {
-      owner: "bob".into(),
-      operators: vec!["carol".into()],
-    }),
-  };
-  let got: RoomData = session
-    .reply(
-      room_key(ServerCode::JoinRoom, "secret"),
-      ServerResponse::JoinRoom(room.clone()),
-    )
-    .await;
-  assert_eq!(got, room);
-  assert!(got.is_private());
-}
-
-#[tokio::test]
-async fn leave_room_completes_and_raises_our_own_departure() {
-  let mut session = Session::start().await;
-  let () = session
-    .reply(
-      room_key(ServerCode::LeaveRoom, "indie"),
-      ServerResponse::LeaveRoom(LeaveRoom {
-        room: "indie".into(),
+async fn join(user: &User, room: &str, room_type: RoomType) -> RoomData {
+  user
+    .ask(
+      room_key(ServerCode::JoinRoom, room),
+      ServerRequest::JoinRoom(JoinRoomRequest {
+        room: room.into(),
+        room_type,
       }),
     )
-    .await;
-  let raised = session
-    .event(|event| match event {
-      Event::RoomLeft {
-        room_name,
-        username,
-      } => Some((room_name, username)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, ("indie".into(), USERNAME.into()));
+    .await
 }
 
-#[tokio::test]
-async fn user_joined_room_raises_the_member_with_their_data() {
-  let mut session = Session::start().await;
-  session
-    .server
-    .send(&ServerResponse::UserJoinedRoom(UserJoinedRoom {
-      room: "indie".into(),
-      user: user_data("bob"),
-    }))
-    .await;
-  let raised = session
+/// waits for the event telling `user` that `username` joined `room`
+async fn joined(user: &mut User, room: &str, username: &str) -> UserData {
+  user
     .event(|event| match event {
       Event::RoomJoined {
         room_name,
-        username,
+        username: joined,
         user_data,
-      } => Some((room_name, username, user_data)),
+      } if room_name == room && joined == username => Some(user_data),
       _ => None,
     })
+    .await
+}
+
+async fn left(user: &mut User, room: &str, username: &str) {
+  user
+    .event(|event| {
+      matches!(event, Event::RoomLeft { room_name, username: gone } if room_name == room && gone == username)
+        .then_some(())
+    })
     .await;
-  assert_eq!(raised, ("indie".into(), "bob".into(), user_data("bob")));
-  assert!(raised.2.slots_full);
 }
 
 #[tokio::test]
-async fn user_left_room_raises_the_departure() {
-  let mut session = Session::start().await;
-  session
-    .server
-    .send(&ServerResponse::UserLeftRoom(UserLeftRoom {
-      room: "indie".into(),
-      username: "bob".into(),
-    }))
-    .await;
-  let raised = session
-    .event(|event| match event {
-      Event::RoomLeft {
-        room_name,
-        username,
-      } => Some((room_name, username)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, ("indie".into(), "bob".into()));
-}
-
-#[tokio::test]
-async fn room_list_completes_and_is_raised() {
-  let mut session = Session::start().await;
-  let list = RoomList {
-    public: vec![RoomInfo {
-      name: "indie".into(),
-      user_count: 12,
-    }],
-    owned: Vec::new(),
-    private: vec![RoomInfo {
-      name: "secret".into(),
-      user_count: 3,
-    }],
-    moderated_room_names: vec!["secret".into()],
+async fn joining_and_leaving_as_every_member_sees_it() {
+  let Some(server) = soulfind::server() else {
+    return;
   };
-  let got: Arc<RoomList> = session
-    .reply(
-      WaitKey::Server(ServerCode::RoomList),
-      ServerResponse::RoomList(list.clone()),
+  let room = soulfind::username("room");
+  let mut alice = server.login("alice", options()).await;
+  let mut bob = server.login("bob", options()).await;
+  let (alice_name, bob_name) = (alice.username.clone(), bob.username.clone());
+
+  let data = join(&alice, &room, RoomType::Public).await;
+  assert_eq!(data.name, room);
+  assert_eq!(data.users.len(), 1);
+  assert_eq!(data.users[0].username, alice.username);
+  assert!(!data.is_private());
+  // the server announces our own arrival too
+  joined(&mut alice, &room, &alice_name).await;
+
+  let data = join(&bob, &room, RoomType::Public).await;
+  let mut members: Vec<&str> = data
+    .users
+    .iter()
+    .map(|user| user.username.as_str())
+    .collect();
+  members.sort_unstable();
+  let mut expected = [alice_name.as_str(), bob_name.as_str()];
+  expected.sort_unstable();
+  assert_eq!(members, expected);
+  let user_data = joined(&mut alice, &room, &bob_name).await;
+  assert_eq!(user_data.username, bob_name);
+
+  let () = bob
+    .ask(
+      room_key(ServerCode::LeaveRoom, &room),
+      ServerRequest::LeaveRoom(LeaveRoom { room: room.clone() }),
     )
     .await;
-  assert_eq!(*got, list);
-  let raised = session
-    .event(|event| match event {
-      Event::RoomListReceived(list) => Some(list),
-      _ => None,
-    })
-    .await;
-  assert_eq!(*raised, list);
+  // the server does not announce our own departure; the client raises it
+  left(&mut bob, &room, &bob_name).await;
+  left(&mut alice, &room, &bob_name).await;
 }
 
 #[tokio::test]
-async fn room_tickers_are_raised() {
-  let mut session = Session::start().await;
-  let ticker = RoomTicker {
-    username: "bob".into(),
-    message: "listening".into(),
+async fn chat_lines_reach_every_member_including_the_speaker() {
+  let Some(server) = soulfind::server() else {
+    return;
   };
-  session
-    .server
-    .send(&ServerResponse::RoomTickers(RoomTickers {
-      room: "indie".into(),
-      tickers: vec![ticker.clone()],
+  let room = soulfind::username("chat");
+  let mut alice = server.login("alice", options()).await;
+  let mut bob = server.login("bob", options()).await;
+  join(&alice, &room, RoomType::Public).await;
+  join(&bob, &room, RoomType::Public).await;
+  let speaker = bob.username.clone();
+  bob
+    .send(ServerRequest::SayInChatRoom(SayInChatRoomRequest {
+      room: room.clone(),
+      message: "hi all".into(),
     }))
     .await;
-  let raised = session
+  for user in [&mut alice, &mut bob] {
+    let raised = user
+      .event(|event| match event {
+        Event::RoomMessageReceived {
+          room_name,
+          username,
+          message,
+        } => Some((room_name, username, message)),
+        _ => None,
+      })
+      .await;
+    assert_eq!(raised, (room.clone(), speaker.clone(), "hi all".into()));
+  }
+}
+
+#[tokio::test]
+async fn tickers_are_listed_on_join_and_pushed_when_set_and_cleared() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let room = soulfind::username("ticker");
+  let mut alice = server.login("alice", options()).await;
+  let bob = server.login("bob", options()).await;
+  join(&alice, &room, RoomType::Public).await;
+  let initial = alice
     .event(|event| match event {
-      Event::RoomTickerListReceived { room_name, tickers } => Some((room_name, tickers)),
+      Event::RoomTickerListReceived { room_name, tickers } if room_name == room => Some(tickers),
       _ => None,
     })
     .await;
-  assert_eq!(raised, ("indie".into(), vec![ticker.clone()]));
+  assert!(initial.is_empty());
+  join(&bob, &room, RoomType::Public).await;
 
-  session
-    .server
-    .send(&ServerResponse::RoomTickerAdd(RoomTickerAdd {
-      room: "indie".into(),
-      ticker: ticker.clone(),
+  bob
+    .send(ServerRequest::SetRoomTicker(SetRoomTicker {
+      room: room.clone(),
+      ticker: "listening".into(),
     }))
     .await;
-  let raised = session
+  let ticker = RoomTicker {
+    username: bob.username.clone(),
+    message: "listening".into(),
+  };
+  let added = alice
     .event(|event| match event {
       Event::RoomTickerAdded { room_name, ticker } => Some((room_name, ticker)),
       _ => None,
     })
     .await;
-  assert_eq!(raised, ("indie".into(), ticker));
+  assert_eq!(added, (room.clone(), ticker.clone()));
 
-  session
-    .server
-    .send(&ServerResponse::RoomTickerRemove(RoomTickerRemove {
-      room: "indie".into(),
-      username: "bob".into(),
+  let mut carol = server.login("carol", options()).await;
+  join(&carol, &room, RoomType::Public).await;
+  let listed = carol
+    .event(|event| match event {
+      Event::RoomTickerListReceived { room_name, tickers } if room_name == room => Some(tickers),
+      _ => None,
+    })
+    .await;
+  assert_eq!(listed, [ticker]);
+
+  bob
+    .send(ServerRequest::SetRoomTicker(SetRoomTicker {
+      room: room.clone(),
+      ticker: String::new(),
     }))
     .await;
-  let raised = session
+  let removed = carol
     .event(|event| match event {
       Event::RoomTickerRemoved {
         room_name,
@@ -208,21 +182,57 @@ async fn room_tickers_are_raised() {
       _ => None,
     })
     .await;
-  assert_eq!(raised, ("indie".into(), "bob".into()));
+  assert_eq!(removed, (room, bob.username.clone()));
 }
 
 #[tokio::test]
-async fn cannot_join_room_fails_the_join() {
-  let mut session = Session::start().await;
-  let wait = session.client.waiter().wait::<RoomData>(
-    room_key(ServerCode::JoinRoom, "secret"),
+async fn the_room_list_counts_the_members() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let room = soulfind::username("listed");
+  let alice = server.login("alice", options()).await;
+  join(&alice, &room, RoomType::Public).await;
+  let mut carol = server.login("carol", options()).await;
+  let list: Arc<RoomList> = carol
+    .ask(
+      WaitKey::Server(ServerCode::RoomList),
+      ServerRequest::RoomList,
+    )
+    .await;
+  assert!(
+    list.public.contains(&RoomInfo {
+      name: room.clone(),
+      user_count: 1
+    }),
+    "{list:?}"
+  );
+  // the answer is raised as well, as the very list the wait completed with
+  carol
+    .event(|event| {
+      matches!(event, Event::RoomListReceived(raised) if Arc::ptr_eq(&raised, &list)).then_some(())
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn joining_a_name_a_private_room_holds_is_refused() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let room = soulfind::username("held");
+  let alice = server.login("alice", options()).await;
+  join(&alice, &room, RoomType::Private).await;
+  let carol = server.login("carol", options()).await;
+  let wait = carol.client.waiter().wait::<RoomData>(
+    room_key(ServerCode::JoinRoom, &room),
     None,
     CancellationToken::new(),
   );
-  session
-    .server
-    .send(&ServerResponse::CannotJoinRoom(CannotJoinRoom {
-      room: "secret".into(),
+  carol
+    .send(ServerRequest::JoinRoom(JoinRoomRequest {
+      room: room.clone(),
+      room_type: RoomType::Public,
     }))
     .await;
   let error = tokio::time::timeout(PATIENCE, wait)

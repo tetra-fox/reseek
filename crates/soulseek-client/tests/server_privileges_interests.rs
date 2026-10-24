@@ -1,230 +1,164 @@
-//! Server messages about privileges and interests, delivered by a fake server to a logged-in
-//! client: privilege notifications and replies, recommendations and similar users.
+//! Privileges and interests on soulfind: the privileged list pushed at login, our own remaining
+//! privileges, another user's flag, interests, recommendations and similar users, and the
+//! password change echo.
 
 mod support;
 
 use soulseek_client::{Event, WaitKey};
 use soulseek_proto::server::*;
-use soulseek_proto::{ServerCode, ServerRequest, ServerResponse};
-use support::{Session, user_key};
-use tokio_util::sync::CancellationToken;
-#[tokio::test]
-async fn privileged_users_are_raised() {
-  let mut session = Session::start().await;
-  session
-    .server
-    .send(&ServerResponse::PrivilegedUsers(PrivilegedUsers {
-      usernames: vec!["bob".into(), "carol".into()],
-    }))
-    .await;
-  let raised = session
-    .event(|event| match event {
-      Event::PrivilegedUserListReceived(users) => Some(users),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, ["bob", "carol"]);
-}
+use soulseek_proto::{Secret, ServerCode, ServerRequest};
+use support::options;
+use support::soulfind::{self, User};
 
-#[tokio::test]
-async fn add_privileged_user_is_a_notification_without_acknowledgement() {
-  let mut session = Session::start().await;
-  session
-    .server
-    .send(&ServerResponse::AddPrivilegedUser(AddPrivilegedUser {
-      username: "bob".into(),
-    }))
-    .await;
-  let raised = session
-    .event(|event| match event {
-      Event::PrivilegeNotificationReceived {
-        username,
-        id,
-        requires_acknowledgement,
-      } => Some((username, id, requires_acknowledgement)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, ("bob".into(), None, false));
-}
-
-#[tokio::test]
-async fn check_privileges_completes_with_seconds() {
-  let mut session = Session::start().await;
-  let got: u32 = session
-    .reply(
-      WaitKey::Server(ServerCode::CheckPrivileges),
-      ServerResponse::CheckPrivileges(CheckPrivilegesResponse {
-        seconds_remaining: 86_400,
-      }),
-    )
-    .await;
-  assert_eq!(got, 86_400);
-}
-
-#[tokio::test]
-async fn user_privileges_completes_with_the_flag() {
-  let mut session = Session::start().await;
-  let got: bool = session
-    .reply(
-      user_key(ServerCode::UserPrivileges, "bob"),
-      ServerResponse::UserPrivileges(UserPrivilegesResponse {
-        username: "bob".into(),
-        privileged: true,
-      }),
-    )
-    .await;
-  assert!(got);
-}
-
-#[tokio::test]
-async fn notify_privileges_is_raised_and_acknowledged() {
-  let mut session = Session::start().await;
-  session
-    .server
-    .send(&ServerResponse::NotifyPrivileges(NotifyPrivileges {
-      id: 9,
-      username: "bob".into(),
-    }))
-    .await;
-  let raised = session
-    .event(|event| match event {
-      Event::PrivilegeNotificationReceived {
-        username,
-        id,
-        requires_acknowledgement,
-      } => Some((username, id, requires_acknowledgement)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, ("bob".into(), Some(9), true));
-  assert_eq!(
-    session.server.request().await,
-    ServerRequest::AcknowledgeNotifyPrivileges(AcknowledgeNotifyPrivileges { id: 9 })
-  );
-}
-
-fn recommendations(unrecommended: bool) -> Recommendations {
-  Recommendations {
-    recommendations: vec![Recommendation {
-      interest: "jazz".into(),
-      count: 4,
-    }],
-    unrecommendations: if unrecommended {
-      vec![Recommendation {
-        interest: "noise".into(),
-        count: -2,
-      }]
-    } else {
-      Vec::new()
-    },
+fn interest_key(code: ServerCode, interest: &str) -> WaitKey {
+  WaitKey::ServerInterest {
+    code,
+    interest: interest.into(),
   }
 }
 
-/// a recommendations frame without the optional second block
-fn recommendations_without_second_block(code: u32) -> Vec<u8> {
-  let mut payload = code.to_le_bytes().to_vec();
-  payload.extend(1u32.to_le_bytes());
-  payload.extend(4u32.to_le_bytes());
-  payload.extend(b"jazz");
-  payload.extend(4i32.to_le_bytes());
-  let mut frame = (payload.len() as u32).to_le_bytes().to_vec();
-  frame.extend(payload);
-  frame
+/// `user` likes `liked` and hates `hated`, and the server has recorded both
+async fn interests(user: &User, liked: &str, hated: &str) {
+  user
+    .send(ServerRequest::LikedInterestAdd(LikedInterestAdd {
+      interest: liked.into(),
+    }))
+    .await;
+  user
+    .send(ServerRequest::HatedInterestAdd(HatedInterestAdd {
+      interest: hated.into(),
+    }))
+    .await;
+  user.settle().await;
 }
 
 #[tokio::test]
-async fn personal_and_global_recommendations_with_and_without_the_second_block() {
-  let mut session = Session::start().await;
-  let got: Recommendations = session
-    .reply(
-      WaitKey::Server(ServerCode::GetPersonalRecommendations),
-      ServerResponse::GetPersonalRecommendations(recommendations(true)),
+async fn the_privileged_list_is_pushed_at_login() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let mut alice = server.login("alice", options()).await;
+  alice
+    .event(|event| matches!(event, Event::PrivilegedUserListReceived(_)).then_some(()))
+    .await;
+}
+
+#[tokio::test]
+async fn privileges_of_a_new_account_and_of_another_user() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let alice = server.login("alice", options()).await;
+  let bob = server.login("bob", options()).await;
+  let seconds: u32 = alice
+    .ask(
+      WaitKey::Server(ServerCode::CheckPrivileges),
+      ServerRequest::CheckPrivileges,
     )
     .await;
-  assert_eq!(got, recommendations(true));
-  let got: Recommendations = session
-    .reply(
+  assert_eq!(seconds, 0);
+  let privileged: bool = alice
+    .ask(
+      support::user_key(ServerCode::UserPrivileges, &bob.username),
+      ServerRequest::UserPrivileges(UserPrivilegesRequest {
+        username: bob.username.clone(),
+      }),
+    )
+    .await;
+  assert!(!privileged);
+}
+
+#[tokio::test]
+async fn interests_recommendations_and_similar_users() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  // interests are server-wide, so each run uses its own
+  let liked = soulfind::username("jazz");
+  let hated = soulfind::username("noise");
+  let alice = server.login("alice", options()).await;
+  let bob = server.login("bob", options()).await;
+  interests(&alice, &liked, &hated).await;
+  interests(&bob, &liked, &soulfind::username("polka")).await;
+
+  let got: UserInterests = bob
+    .ask(
+      support::user_key(ServerCode::GetUserInterests, &alice.username),
+      ServerRequest::GetUserInterests(GetUserInterestsRequest {
+        username: alice.username.clone(),
+      }),
+    )
+    .await;
+  assert_eq!(got.likes, std::slice::from_ref(&liked));
+  assert_eq!(got.hates, std::slice::from_ref(&hated));
+
+  let global: Recommendations = alice
+    .ask(
       WaitKey::Server(ServerCode::GetGlobalRecommendations),
-      ServerResponse::GetGlobalRecommendations(recommendations(true)),
+      ServerRequest::GetGlobalRecommendations,
     )
     .await;
-  assert_eq!(got, recommendations(true));
-
-  let wait = session.client.waiter().wait::<Recommendations>(
-    WaitKey::Server(ServerCode::GetGlobalRecommendations),
-    None,
-    CancellationToken::new(),
+  assert!(
+    global
+      .recommendations
+      .iter()
+      .any(|recommendation| recommendation.interest == liked && recommendation.count == 2),
+    "{global:?}"
   );
-  session
-    .server
-    .send_bytes(&recommendations_without_second_block(56))
-    .await;
-  assert_eq!(wait.await.unwrap(), recommendations(false));
-}
-
-#[tokio::test]
-async fn get_user_interests_completes_for_the_user() {
-  let mut session = Session::start().await;
-  let interests = UserInterests {
-    username: "bob".into(),
-    likes: vec!["jazz".into()],
-    hates: vec!["noise".into()],
-  };
-  let got: UserInterests = session
-    .reply(
-      user_key(ServerCode::GetUserInterests, "bob"),
-      ServerResponse::GetUserInterests(interests.clone()),
+  let _: Recommendations = alice
+    .ask(
+      WaitKey::Server(ServerCode::GetPersonalRecommendations),
+      ServerRequest::GetPersonalRecommendations,
     )
     .await;
-  assert_eq!(got, interests);
-}
 
-#[tokio::test]
-async fn similar_users_complete() {
-  let mut session = Session::start().await;
-  let users = GetPersonalSimilarUsersResponse {
-    users: vec![SimilarUser {
-      username: "bob".into(),
-      rating: 3,
-    }],
-  };
-  let got: GetPersonalSimilarUsersResponse = session
-    .reply(
+  let similar: GetPersonalSimilarUsersResponse = alice
+    .ask(
       WaitKey::Server(ServerCode::GetPersonalSimilarUsers),
-      ServerResponse::GetPersonalSimilarUsers(users.clone()),
+      ServerRequest::GetPersonalSimilarUsers,
     )
     .await;
-  assert_eq!(got, users);
+  assert!(
+    similar
+      .users
+      .iter()
+      .any(|user| user.username == bob.username),
+    "{similar:?}"
+  );
+  let by_interest: GetInterestSimilarUsersResponse = alice
+    .ask(
+      interest_key(ServerCode::GetInterestSimilarUsers, &liked),
+      ServerRequest::GetInterestSimilarUsers(GetInterestSimilarUsersRequest {
+        interest: liked.clone(),
+      }),
+    )
+    .await;
+  assert_eq!(by_interest.interest, liked);
+  assert!(by_interest.usernames.contains(&bob.username));
+  let related: GetInterestRecommendationsResponse = alice
+    .ask(
+      interest_key(ServerCode::GetInterestRecommendations, &liked),
+      ServerRequest::GetInterestRecommendations(GetInterestRecommendationsRequest {
+        interest: liked.clone(),
+      }),
+    )
+    .await;
+  assert_eq!(related.interest, liked);
 }
 
 #[tokio::test]
-async fn interest_recommendations_and_similar_users_complete_for_the_interest() {
-  let mut session = Session::start().await;
-  let interest_key = |code| WaitKey::ServerInterest {
-    code,
-    interest: "jazz".into(),
+async fn a_password_change_is_echoed() {
+  let Some(server) = soulfind::server() else {
+    return;
   };
-  let recommended = GetInterestRecommendationsResponse {
-    interest: "jazz".into(),
-    recommendations: recommendations(true),
-  };
-  let got: GetInterestRecommendationsResponse = session
-    .reply(
-      interest_key(ServerCode::GetInterestRecommendations),
-      ServerResponse::GetInterestRecommendations(recommended.clone()),
+  let alice = server.login("alice", options()).await;
+  let echo: Secret = alice
+    .ask(
+      WaitKey::Server(ServerCode::NewPassword),
+      ServerRequest::NewPassword(NewPassword {
+        new_password: Secret::new("n3w password"),
+      }),
     )
     .await;
-  assert_eq!(got, recommended);
-  let similar = GetInterestSimilarUsersResponse {
-    interest: "jazz".into(),
-    usernames: vec!["bob".into()],
-  };
-  let got: GetInterestSimilarUsersResponse = session
-    .reply(
-      interest_key(ServerCode::GetInterestSimilarUsers),
-      ServerResponse::GetInterestSimilarUsers(similar.clone()),
-    )
-    .await;
-  assert_eq!(got, similar);
+  assert_eq!(echo.expose(), "n3w password");
 }
