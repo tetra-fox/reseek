@@ -186,8 +186,9 @@ wire_struct! {
 #[cfg(test)]
 pub(crate) mod tests {
   use super::*;
+  use crate::error::FieldError;
   use crate::server::{ServerRequest as Q, ServerResponse as R};
-  use crate::testing::{IP, decodes, ip, p, vectors};
+  use crate::testing::{IP, decodes, field, ip, p, vectors};
 
   const MD5_USERNAME_PASSWORD: &str = "d51c9a7e9353746a6020f9602d452929";
 
@@ -224,6 +225,11 @@ pub(crate) mod tests {
   decodes! {
     login_response_success_must_be_exactly_one: R, p().u8(2).s("INVALIDPASS").frame(1)
       => Ok(R::Login(LoginResponse::Failure { reason: "INVALIDPASS".into(), detail: None }));
+    login_response_success_without_supporter_flag_is_truncated: R,
+      p().u8(1).s("welcome").ip(IP).s(MD5_USERNAME_PASSWORD).frame(1)
+      => Err(field("Login", "is_supporter", FieldError::Truncated { needed: 1, remaining: 0 }));
+    login_response_rejects_a_greeting_past_the_payload: R, p().u8(1).u32(100).raw(b"abc").frame(1)
+      => Err(field("Login", "greeting", FieldError::Truncated { needed: 100, remaining: 3 }));
     ping_response_rejects_bytes_after_the_frame: R, [p().frame(32), vec![0]].concat()
       => Err(DecodeError::TrailingBytes { extra: 1 });
     set_listen_port_response_is_not_a_server_message: R, p().u32(1).frame(2)

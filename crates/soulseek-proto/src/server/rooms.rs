@@ -108,7 +108,7 @@ fn read_parallel<T: Wire>(
 /// The five parallel per-user lists of `JoinRoom` and `GlobalUserList`, which must agree in
 /// length
 pub(super) fn read_user_lists(r: &mut Reader) -> Result<Vec<UserData>, DecodeError> {
-  let usernames: Vec<String> = Wire::read(r, "usernames")?;
+  let usernames: Vec<String> = Wire::read(r, "users")?;
   let n = usernames.len();
   let statuses: Vec<UserPresence> = read_parallel(r, n, "statuses")?;
   let stats: Vec<UserStats> = read_parallel(r, n, "stats")?;
@@ -434,6 +434,8 @@ pub(crate) mod tests {
       => Err(field("LeaveRoom", "room", FieldError::Truncated { needed: 10, remaining: 3 }));
     leave_room_response_rejects_a_cut_frame: R, first(p().s("room").frame(15), 10)
       => Err(DecodeError::IncompleteFrame { needed: 16, available: 10 });
+    join_room_response_rejects_a_count_past_the_payload: R, p().s("r").u32(u32::MAX).frame(14)
+      => Err(field("JoinRoom", "users", FieldError::CountTooLarge { count: u32::MAX, remaining: 0 }));
     room_list_response_rejects_mismatched_lists: R, p().u32(1).s("a").u32(2).u32(1).u32(1).frame(64)
       => Err(field("RoomList", "public_user_counts", FieldError::ListLengthMismatch));
     room_list_response_rejects_a_count_past_the_payload: R, p().u32(u32::MAX).frame(64)
