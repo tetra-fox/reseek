@@ -1,0 +1,29 @@
+# owner's working material: spec, docs and Claude session files stay local, never in history
+/spec/
+/docs/
+/CLAUDE.md
+/CLAUDE.local.md
+/.claude/
+/DECISIONS.md
+/DEVIATIONS.md
+/TODO.md
+/IDEAS.md
+
+# rust
+/target/
+**/*.rs.bk
+
+# web
+/web/node_modules/
+/web/build/
+/web/.svelte-kit/
+/web/vite.config.ts.timestamp-*
+
+# env, editors, nix
+.env
+.env.*
+!.env.example
+.direnv/
+result
+result-*
+.DS_Store
