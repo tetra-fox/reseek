@@ -65,14 +65,10 @@ async fn login(
     ));
   }
   let callback = callback_url(&app, &presented, &name)?;
-  let metadata = provider.metadata().await.map_err(|e| {
-    warn!(
-      provider = name,
-      error = e,
-      "OpenID Connect provider unavailable"
-    );
-    ApiError::service_unavailable("the identity provider is unavailable").logged()
-  })?;
+  let metadata = provider
+    .metadata()
+    .await
+    .map_err(|e| unavailable(&name, &e))?;
   let (location, sealed) = flow::begin(&provider, metadata, callback, redirect, &app.auth.secret);
   let scope = Scope::new(&app.url_base, presented.client.https);
   debug!(provider = name, "login sent to the identity provider");
@@ -157,14 +153,10 @@ async fn callback(
     ));
   };
   let callback = callback_url(&app, &presented, &name)?;
-  let metadata = provider.metadata().await.map_err(|e| {
-    warn!(
-      provider = name,
-      error = e,
-      "OpenID Connect provider unavailable"
-    );
-    ApiError::service_unavailable("the identity provider is unavailable").logged()
-  })?;
+  let metadata = provider
+    .metadata()
+    .await
+    .map_err(|e| unavailable(&name, &e))?;
   let claims = match flow::exchange(&provider, metadata.clone(), callback, code, &login).await {
     Ok(claims) => claims,
     Err(reason) => {
@@ -310,6 +302,15 @@ async fn test(
       }
     }
   }))
+}
+
+/// The 503 for a provider whose discovery document can not be read, logged with why.
+fn unavailable(name: &str, error: &str) -> ApiError {
+  warn!(
+    provider = name,
+    error, "OpenID Connect provider unavailable"
+  );
+  ApiError::service_unavailable("the identity provider is unavailable").logged()
 }
 
 /// The provider `name`, 404 when none is configured.

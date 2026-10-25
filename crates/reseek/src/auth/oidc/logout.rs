@@ -11,13 +11,10 @@ use serde_json::Value;
 use url::Url;
 
 use super::flow::payload;
-use super::{Metadata, Provider};
+use super::{LEEWAY, Metadata, Provider};
 
 /// The event a logout token carries.
 const BACKCHANNEL_EVENT: &str = "http://schemas.openid.net/event/backchannel-logout";
-
-/// How far the provider's clock may be from ours, in seconds.
-const LEEWAY: i64 = 300;
 
 /// Who a valid logout token signs out: a provider session, or else a subject.
 #[derive(Debug, PartialEq, Eq)]
@@ -59,15 +56,16 @@ pub async fn check_token(
     return Err("meant for another client".to_string());
   }
   let now = Utc::now().timestamp();
+  let leeway = LEEWAY.num_seconds();
   match claims.get("iat").and_then(Value::as_i64) {
-    Some(issued) if issued <= now + LEEWAY => {}
+    Some(issued) if issued <= now + leeway => {}
     Some(_) => return Err("issued in the future".to_string()),
     None => return Err("no issue time".to_string()),
   }
   if claims
     .get("exp")
     .and_then(Value::as_i64)
-    .is_some_and(|expires| expires + LEEWAY < now)
+    .is_some_and(|expires| expires + leeway < now)
   {
     return Err("expired".to_string());
   }

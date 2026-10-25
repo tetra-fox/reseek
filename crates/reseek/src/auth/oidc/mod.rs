@@ -46,6 +46,9 @@ const DISCOVERY_AGE: Duration = Duration::from_secs(24 * 3600);
 /// after one failed.
 const RETRY: Duration = Duration::from_secs(60);
 
+/// How far a provider's clock may be from ours when its tokens' times are checked.
+pub const LEEWAY: chrono::Duration = chrono::Duration::minutes(5);
+
 /// How long a call to a provider may take.
 const TIMEOUT: Duration = Duration::from_secs(10);
 

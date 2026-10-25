@@ -18,16 +18,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
-use super::{Metadata, Provider, error_chain};
+use super::{LEEWAY, Metadata, Provider, error_chain};
 use crate::auth::roles::{Mapping, claim_strings};
 use crate::auth::secret::Secret;
 use crate::crypto;
 
 /// How long a login may take between leaving for the provider and coming back.
 pub const LOGIN_TIME: Duration = Duration::from_secs(600);
-
-/// How far the provider's clock may be from ours.
-const LEEWAY: chrono::Duration = chrono::Duration::minutes(5);
 
 /// What the login cookie holds, sealed.
 #[derive(Serialize, Deserialize)]
