@@ -1,6 +1,7 @@
 //! An example configuration that uses every attribute, shared by the tests.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -162,4 +163,18 @@ pub(crate) struct Flags {
 /// The schema of [`Example`].
 pub(crate) fn example_schema() -> Schema {
   Schema::of::<Example>()
+}
+
+/// Whether a 0o555 directory refuses writes here; root and some filesystems ignore the mode,
+/// and then a test of a read-only directory proves nothing.
+#[cfg(unix)]
+pub(crate) fn read_only_dirs_hold(dir: &Path) -> bool {
+  use std::os::unix::fs::PermissionsExt;
+  std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+  let probe = dir.join(".probe");
+  let refused = std::fs::File::create(&probe).is_err();
+  // only exists when the mode was ignored, and then the test returns early anyway
+  drop(std::fs::remove_file(&probe));
+  std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+  refused
 }

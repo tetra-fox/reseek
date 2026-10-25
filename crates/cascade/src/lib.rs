@@ -26,15 +26,23 @@
 extern crate self as cascade;
 
 mod describe;
+mod edit;
+mod error;
+mod files;
 mod schema;
 mod tree;
+mod write;
 
 #[cfg(test)]
 mod testing;
 
 pub use cascade_derive::Cascade;
 pub use describe::{Apply, Cascade, Kind, Shape};
+pub use edit::FileEditor;
+pub use error::{Error, Invalid};
+pub use files::{LoadedFile, revision, revision_of};
 pub use schema::{Field, REDACTED, Schema};
+pub use write::writability;
 
 #[doc(hidden)]
 pub use describe::private as __private;
