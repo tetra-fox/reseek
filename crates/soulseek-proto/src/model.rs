@@ -141,18 +141,18 @@ impl FileAttributeType {
 /// A free-text search query split into terms and exclusions
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SearchQuery {
-  /// in order, including empty terms from consecutive spaces and a lone `-`
+  /// in order, including a lone `-`
   pub terms: Vec<String>,
   /// leading `-`s stripped, duplicates removed; matched case-insensitively
   pub exclusions: Vec<String>,
 }
 
 impl SearchQuery {
-  /// splits on single spaces; a token longer than one character that starts with `-` is an
+  /// splits on runs of whitespace; a token longer than one character that starts with `-` is an
   /// exclusion, anything else a term
   pub fn parse(text: &str) -> Self {
     let mut query = Self::default();
-    for token in text.split(' ') {
+    for token in text.split_whitespace() {
       if token.len() > 1 && token.starts_with('-') {
         let exclusion = token.trim_start_matches('-');
         if !query.exclusions.iter().any(|e| e == exclusion) {
@@ -198,11 +198,11 @@ mod tests {
 
   #[test]
   fn search_query_terms_and_exclusions() {
-    let query = SearchQuery::parse("a  b - -x --y -x");
-    assert_eq!(query.terms, ["a", "", "b", "-"]);
+    let query = SearchQuery::parse(" a  b\t- -x\n--y -x ");
+    assert_eq!(query.terms, ["a", "b", "-"]);
     assert_eq!(query.exclusions, ["x", "y"]);
-    assert_eq!(query.query(), "a  b -");
-    assert_eq!(query.search_text(), "a  b - -x -y");
+    assert_eq!(query.query(), "a b -");
+    assert_eq!(query.search_text(), "a b - -x -y");
   }
 
   #[test]
@@ -210,7 +210,7 @@ mod tests {
     let query = SearchQuery::parse("one two");
     assert_eq!(query.search_text(), "one two");
     assert!(query.exclusions.is_empty());
-    assert_eq!(SearchQuery::parse("").terms, [""]);
+    assert!(SearchQuery::parse("  ").terms.is_empty());
   }
 
   #[test]
