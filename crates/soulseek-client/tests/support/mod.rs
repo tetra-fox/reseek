@@ -4,6 +4,7 @@
 #![allow(dead_code)] // each test binary uses its own subset of these helpers
 
 pub mod peer;
+pub mod scripted;
 pub mod soulfind;
 pub mod transfers;
 pub mod tree;
