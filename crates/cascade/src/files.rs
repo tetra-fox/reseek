@@ -101,12 +101,32 @@ pub fn revision_of(contents: &[u8]) -> String {
 }
 
 /// The revision of the file at `path`, `None` when there is no file.
-pub fn revision(path: &Path) -> std::io::Result<Option<String>> {
+pub fn revision(path: &Path) -> Result<Option<String>, Error> {
+  Ok(read_optional(path)?.map(|contents| revision_of(&contents)))
+}
+
+/// The contents of the file at `path`, `None` when there is no file.
+pub(crate) fn read_optional(path: &Path) -> Result<Option<Vec<u8>>, Error> {
   match std::fs::read(path) {
-    Ok(contents) => Ok(Some(revision_of(&contents))),
+    Ok(contents) => Ok(Some(contents)),
     Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-    Err(e) => Err(e),
+    Err(source) => Err(Error::Read {
+      path: path.to_path_buf(),
+      source,
+    }),
   }
+}
+
+/// [`read_optional`] for a text file.
+pub(crate) fn read_optional_text(path: &Path) -> Result<Option<String>, Error> {
+  read_optional(path)?
+    .map(|contents| {
+      String::from_utf8(contents).map_err(|e| Error::Read {
+        path: path.to_path_buf(),
+        source: std::io::Error::new(std::io::ErrorKind::InvalidData, e),
+      })
+    })
+    .transpose()
 }
 
 fn split_last(pattern: &str) -> (&str, &str) {

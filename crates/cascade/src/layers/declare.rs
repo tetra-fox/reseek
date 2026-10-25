@@ -3,7 +3,6 @@
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
-use std::path::Path;
 
 use serde_json::Value;
 use tracing::debug;
@@ -50,7 +49,7 @@ impl<T: Root> Layers<T> {
           substituted = true;
           Some(text.to_string())
         }
-        _ => read(&path)?,
+        _ => files::read_optional_text(&path)?,
       };
       let revision = text.as_deref().map(|t| files::revision_of(t.as_bytes()));
       debug!(file = name, revision, "configuration file read");
@@ -283,17 +282,6 @@ fn drop_unknown(
   }
   for k in unknown {
     table.remove(&k);
-  }
-}
-
-fn read(path: &Path) -> Result<Option<String>, Error> {
-  match std::fs::read_to_string(path) {
-    Ok(text) => Ok(Some(text)),
-    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-    Err(source) => Err(Error::Read {
-      path: path.to_path_buf(),
-      source,
-    }),
   }
 }
 

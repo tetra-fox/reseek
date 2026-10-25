@@ -23,15 +23,7 @@ impl FileEditor<'_> {
   /// keeps its permissions; a new one is readable only by its owner when it holds a secret, and
   /// by its group as well otherwise.
   pub fn write(&self, path: &Path, revision: Option<&str>, text: &str) -> Result<String, Error> {
-    let read_error = |source| Error::Read {
-      path: path.to_path_buf(),
-      source,
-    };
-    let current = match fs::read(path) {
-      Ok(contents) => Some(contents),
-      Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-      Err(e) => return Err(read_error(e)),
-    };
+    let current = files::read_optional(path)?;
     if current.as_deref().map(files::revision_of).as_deref() != revision {
       return Err(Error::Stale);
     }

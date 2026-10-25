@@ -10,7 +10,7 @@ use tracing::{debug, info};
 use super::{Change, FileEdit, Shared, State, Written};
 use crate::describe::Apply;
 use crate::edit::FileEditor;
-use crate::files::revision_of;
+use crate::files::{read_optional_text, revision_of};
 use crate::overrides::Override;
 use crate::schema::{REDACTED, Schema};
 use crate::source::Source;
@@ -101,11 +101,7 @@ impl<T: Root> State<T> {
       .layers
       .file_path(name)?
       .ok_or_else(|| Error::UnknownFile(name.to_string()))?;
-    let current = match std::fs::read_to_string(&path) {
-      Ok(text) => Some(text),
-      Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-      Err(source) => return Err(Error::Read { path, source }),
-    };
+    let current = read_optional_text(&path)?;
     let base = current.as_deref().map(|t| revision_of(t.as_bytes()));
     if base.as_deref() != revision {
       return Err(Error::Stale);

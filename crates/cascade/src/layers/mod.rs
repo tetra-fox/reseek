@@ -242,13 +242,12 @@ impl<T: Root> Layers<T> {
   pub(crate) fn files_now(&self) -> Result<Vec<LoadedFile>, Error> {
     files::expand(&self.entries)?
       .into_iter()
-      .map(|(name, path)| match files::revision(&path) {
-        Ok(revision) => Ok(LoadedFile {
+      .map(|(name, path)| {
+        Ok(LoadedFile {
+          revision: files::revision(&path)?,
           name,
           path,
-          revision,
-        }),
-        Err(source) => Err(Error::Read { path, source }),
+        })
       })
       .collect()
   }

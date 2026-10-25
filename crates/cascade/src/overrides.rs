@@ -16,7 +16,7 @@ use tracing::warn;
 use crate::schema::Schema;
 use crate::source::Source;
 use crate::write::{self, Mode};
-use crate::{Error, Key, tree};
+use crate::{Error, Key, files, tree};
 
 /// One runtime override.
 #[derive(Clone, Debug, PartialEq)]
@@ -61,15 +61,11 @@ impl Overrides {
   /// The overrides kept at `path`, none when the file does not exist yet.
   pub fn load(path: impl Into<PathBuf>) -> Result<Self, Error> {
     let path = path.into();
-    let text = match std::fs::read_to_string(&path) {
-      Ok(text) => text,
-      Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-        return Ok(Self {
-          path: Some(path),
-          items: BTreeMap::new(),
-        });
-      }
-      Err(source) => return Err(Error::Read { path, source }),
+    let Some(text) = files::read_optional_text(&path)? else {
+      return Ok(Self {
+        path: Some(path),
+        items: BTreeMap::new(),
+      });
     };
     let invalid = |message: String| Error::Overrides {
       path: path.clone(),
