@@ -1,6 +1,7 @@
 //! The request pipeline, outermost first: CORS, the HTTPS redirect and HSTS, the URL base taken
 //! off the path, a span and log line per request, a panic turned into a 500, then the API
-//! with its authentication, `/health`, the 404 for unknown API paths, and the web UI.
+//! with its authentication, `/health`, the OpenAPI document and Swagger UI when
+//! `feature.swagger` is on, the 404 for unknown API paths, and the web UI.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -37,9 +38,14 @@ pub fn app(state: AppState, ui: Ui) -> Router {
   let startup = state.startup.values.clone();
   let base = state.url_base.clone();
   let ui = Arc::new(ui);
-  let inner = Router::new()
+  let mut inner = Router::new()
     .merge(api::router(state.clone()))
-    .route("/health", get(health))
+    .route("/health", get(health));
+  if startup.feature.swagger {
+    info!("Publishing Swagger documentation to /swagger");
+    inner = inner.merge(api::swagger(&base));
+  }
+  let inner = inner
     .fallback({
       let app = state.clone();
       move |request: Request| {
@@ -369,6 +375,43 @@ mod app_tests {
       app.send(request("GET", "/app/page", None)).await.status,
       404,
       "no UI"
+    );
+  }
+
+  #[tokio::test]
+  async fn swagger_is_served_only_when_turned_on() {
+    let on = app(
+      "[feature]\nswagger = true\n[web]\nurl_base = \"/reseek\"\n",
+      &[],
+    )
+    .await;
+    let document = on
+      .send(request("GET", "/reseek/swagger/v0/swagger.json", None))
+      .await;
+    assert_eq!(document.status, 200);
+    assert!(document.json()["paths"]["/api/v0/application"].is_object());
+    let page = on.send(request("GET", "/reseek/swagger/", None)).await;
+    assert_eq!(page.status, 200);
+    let config = on
+      .send(request(
+        "GET",
+        "/reseek/swagger/swagger-initializer.js",
+        None,
+      ))
+      .await;
+    let script = String::from_utf8_lossy(&config.body);
+    assert!(
+      script.contains("/reseek/swagger/v0/swagger.json"),
+      "{script}"
+    );
+    let off = app("", &[]).await;
+    let missing = off
+      .send(request("GET", "/swagger/v0/swagger.json", None))
+      .await;
+    assert_eq!(missing.status, 404);
+    assert_eq!(
+      off.send(request("GET", "/swagger/", None)).await.status,
+      404
     );
   }
 

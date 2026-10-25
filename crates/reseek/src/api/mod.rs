@@ -26,6 +26,7 @@ use axum::Router;
 use axum::middleware;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
+use utoipa_swagger_ui::{Config, SwaggerUi};
 
 use crate::app::AppState;
 use crate::auth;
@@ -102,6 +103,16 @@ pub fn router(state: AppState) -> Router {
       auth::authenticate,
     ))
     .with_state(state)
+}
+
+/// The OpenAPI document at `/swagger/v0/swagger.json` and the Swagger UI at `/swagger`, which
+/// reads the document from under `url_base`.
+pub fn swagger(url_base: &str) -> Router {
+  let document = format!("{url_base}/swagger/v0/swagger.json");
+  SwaggerUi::new("/swagger")
+    .url("/swagger/v0/swagger.json", openapi())
+    .config(Config::new([document]))
+    .into()
 }
 
 /// The OpenAPI document of every route.
