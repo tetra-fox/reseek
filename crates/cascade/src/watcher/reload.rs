@@ -11,7 +11,7 @@ use tracing::{debug, error, info};
 use super::{Attempt, ByApply, Change, Shared, State};
 use crate::describe::Apply;
 use crate::layers::{Declared, Failure, error_keys};
-use crate::loaded::Loaded;
+use crate::loaded::{Loaded, NotApplied};
 use crate::schema::Schema;
 use crate::{Error, Key, Root, tree};
 
@@ -142,7 +142,8 @@ impl<T: Root> State<T> {
             } else {
               message.clone()
             };
-            (key, reason)
+            let value = tree::get(tree, &key).cloned().unwrap_or(Value::Null);
+            (key, NotApplied { reason, value })
           })
           .collect()
       }
@@ -202,9 +203,15 @@ mod tests {
     let current = watcher.current();
     assert_eq!(current.values.server.port, 2000);
     assert_eq!(current.values.server.address, "localhost");
-    assert_eq!(current.not_applied["server.port"], "must be 1024 or more");
     assert_eq!(
-      current.not_applied["server.address"],
+      current.not_applied["server.port"],
+      NotApplied {
+        reason: "must be 1024 or more".into(),
+        value: json!(80),
+      }
+    );
+    assert_eq!(
+      current.not_applied["server.address"].reason,
       "invalid configuration: server.port: must be 1024 or more",
       "a key the failure is not about is held back with the whole reason"
     );

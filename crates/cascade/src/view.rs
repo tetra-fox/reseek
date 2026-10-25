@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use crate::Key;
 use crate::describe::{Apply, Kind};
-use crate::loaded::Loaded;
+use crate::loaded::{Loaded, NotApplied};
 use crate::source::Source;
 use crate::write::writability;
 
@@ -60,8 +60,9 @@ pub struct FieldView {
   pub apply: Apply,
   /// whether the value is shown as `*****`
   pub secret: bool,
-  /// why the files' value of the key is not the one in effect
-  pub not_applied: Option<String>,
+  /// the files' value of the key when it is not the one in effect, and why; a secret's value is
+  /// shown as `*****`
+  pub not_applied: Option<NotApplied>,
 }
 
 /// One configuration file.
@@ -118,7 +119,10 @@ impl ConfigView {
           doc: field.doc.clone(),
           apply: field.apply,
           secret: field.secret,
-          not_applied: loaded.not_applied.get(&field.key).cloned(),
+          not_applied: loaded.not_applied.get(&field.key).map(|n| NotApplied {
+            reason: n.reason.clone(),
+            value: schema.redact_value(&field.key, &n.value),
+          }),
         };
         (field.key.clone(), view)
       })
@@ -286,7 +290,21 @@ mod tests {
         expires_at: None,
       },
     );
+    loaded.not_applied.insert(
+      "server.password".into(),
+      NotApplied {
+        reason: "refused".into(),
+        value: json!("hunter2"),
+      },
+    );
     let view = ConfigView::new(&loaded);
+    assert_eq!(
+      view.fields["server.password"].not_applied,
+      Some(NotApplied {
+        reason: "refused".into(),
+        value: json!("*****"),
+      })
+    );
     assert_eq!(view.managed_by.as_deref(), Some("nixos"));
     assert!(!view.files[0].writable);
     assert_eq!(

@@ -26,9 +26,8 @@ pub struct Loaded<T> {
   pub load_error: Option<String>,
   /// when the last reload failed
   pub load_error_at: Option<DateTime<Utc>>,
-  /// keys whose value in the files is not the one in effect, because a reload with it failed,
-  /// and why
-  pub not_applied: BTreeMap<Key, String>,
+  /// keys whose value in the files is not the one in effect, because a reload with it failed
+  pub not_applied: BTreeMap<Key, NotApplied>,
   /// the configuration files, in the order they apply, as they were read
   pub files: Vec<LoadedFile>,
   /// the runtime overrides in effect
@@ -43,6 +42,17 @@ pub struct Loaded<T> {
   /// `values` as a tree
   pub(crate) tree: Value,
   pub(crate) file_of: BTreeMap<Key, String>,
+}
+
+/// A value the files hold that is not the one in effect.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub struct NotApplied {
+  /// why it is not in effect
+  pub reason: String,
+  /// the value the failed reload read, null for none
+  #[cfg_attr(feature = "utoipa", schema(value_type = Object))]
+  pub value: Value,
 }
 
 impl<T> Loaded<T> {
