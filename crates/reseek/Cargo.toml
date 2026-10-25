@@ -38,6 +38,7 @@ p12-keystore = "0.4"
 rand = "0.9"
 rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs", "pem"] }
 regex = "1"
+rusqlite = { version = "0.39", features = ["bundled", "trace"] }
 rust-embed = { version = "8", features = ["interpolate-folder-path", "mime-guess"], optional = true }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "logging", "std", "tls12"] }
 serde.workspace = true

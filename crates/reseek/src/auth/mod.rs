@@ -9,6 +9,7 @@
 pub mod client;
 pub mod keys;
 pub mod networks;
+pub mod store;
 
 use std::marker::PhantomData;
 
