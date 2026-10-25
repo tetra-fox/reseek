@@ -31,6 +31,16 @@ pub fn positive(name: &str, value: u32) -> Result<(), ApiError> {
   limit(name, value, u32::MAX)
 }
 
+/// Refuses a free text of more than `max` bytes.
+pub fn text_size(name: &str, text: &str, max: usize) -> Result<(), ApiError> {
+  if text.len() > max {
+    return Err(ApiError::bad_request(format!(
+      "{name} must be at most {max} bytes"
+    )));
+  }
+  Ok(())
+}
+
 /// A duration written as `"15s"`, `"2h 30m"` or `"7d"`.
 pub fn duration(name: &str, text: &str) -> Result<Duration, ApiError> {
   humantime::parse_duration(text.trim())

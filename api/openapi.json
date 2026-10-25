@@ -6621,6 +6621,2271 @@
           }
         }
       }
+    },
+    "/api/v0/users": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "A page of the users we know, filtered and sorted.",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "a substring of the username, a tag or the notes, matched ignoring case",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "blocked",
+            "in": "query",
+            "description": "only blocked users, or only users not blocked",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "description": "only users with this tag",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "group",
+            "in": "query",
+            "description": "only users in this group",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pinned",
+            "in": "query",
+            "description": "only pinned users, or only users not pinned",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "presence",
+            "in": "query",
+            "description": "only users last seen with this presence",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/UserPresence"
+            }
+          },
+          {
+            "name": "hasTransfers",
+            "in": "query",
+            "description": "only users with transfers, or only users without",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "what to sort by",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/UserSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "description": "the order, the sort's own default when left out",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "how many users to skip",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "how many users to return, at most 500",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 500,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/blocked": {
+      "get": {
+        "tags": [
+          "blocking"
+        ],
+        "summary": "The blocked users, those the configuration blocks with them unless `includeConfig` is\nfalse, and the configuration's blocking rules.",
+        "operationId": "blocked",
+        "parameters": [
+          {
+            "name": "includeConfig",
+            "in": "query",
+            "description": "also list the users the configuration's blacklisted group names, and its rules",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockedUsers"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/blocked/export": {
+      "get": {
+        "tags": [
+          "blocking"
+        ],
+        "summary": "The blocks made through the API, as JSON or as one username per line.",
+        "operationId": "export",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "description": "the form to write",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ExportFormat"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/blocked/import": {
+      "post": {
+        "tags": [
+          "blocking"
+        ],
+        "summary": "Blocks the users of a list: plain text with one username per line and `#` comments, or the\nJSON blocks an export wrote. Users blocked already are skipped.",
+        "operationId": "import",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Block"
+                }
+              }
+            },
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockImportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/cache": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "What is remembered of the users seen since the start.",
+        "operationId": "cache",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CachedUser"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/watched": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "The users being watched.",
+        "operationId": "watched",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}": {
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Forgets a user and their block; `purge` also removes their transfers from the listings and\ndeletes the conversation with them.",
+        "operationId": "remove",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "description": "also remove the user's transfers, close the conversation and delete its messages",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "forgotten"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/block": {
+      "put": {
+        "tags": [
+          "blocking"
+        ],
+        "summary": "Blocks a user, or replaces their block: from what (`scopes`), why, and until when, given as\n`expiresIn` or `expiresAt`.",
+        "operationId": "block",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlockRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Block"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "blocking"
+        ],
+        "summary": "Removes a user's block.",
+        "operationId": "unblock",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "unblocked"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "the configuration blocks the user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/browse": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Everything a user shares, asked of the user; the progress shows on\n`/users/{username}/browse/status` and the event stream while it arrives.",
+        "operationId": "browse",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowseResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/browse/status": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "How far the browse of a user got.",
+        "operationId": "browse_status",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowseProgress"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/directory": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "The contents of one of a user's directories, named exactly as their browse gave it. The\nanswer may hold its subdirectories as well.",
+        "operationId": "directory",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Directory"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/endpoint": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "The address the server gives for a user.",
+        "operationId": "endpoint",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserEndpoint"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/group": {
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Puts a user in one of the configuration's user-defined upload groups, or with `null` takes\nthem out of the one they were put in. A user the configuration lists for another group stays\nthere and the call is refused.",
+        "operationId": "set_group",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupAssignment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "assigned"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/info": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "A user's description, picture and upload slots, asked of the user.",
+        "operationId": "info",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/mute": {
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Mutes a user's notifications.",
+        "operationId": "mute",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "muted"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Unmutes a user.",
+        "operationId": "unmute",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "unmuted"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/notes": {
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Replaces our notes on a user, up to 64 KiB.",
+        "operationId": "set_notes",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserNotes"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "saved"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/picture": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "A user's picture as they last sent it.",
+        "operationId": "picture",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "image/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/pin": {
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Pins a user to the top of the directory.",
+        "operationId": "pin",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "pinned"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Unpins a user.",
+        "operationId": "unpin",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "unpinned"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/profile": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "A user's profile; `refresh` asks the network first.",
+        "operationId": "profile",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "description": "fetch the status, statistics and info from the network first, waiting 5 s at most",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/statistics": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "A user's share and speed figures, asked of the server now.",
+        "operationId": "statistics",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatisticsSnapshot"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/status": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "A user's presence, asked of the server now.",
+        "operationId": "status",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/summary": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "What we keep about a user, without asking the network; `known` is false for a user we have\nnot dealt with.",
+        "operationId": "summary",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/tags": {
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Replaces our tags on a user: up to 32, each 1 to 32 of `a-z`, `0-9`, `_` and `-` once made\nlower case.",
+        "operationId": "set_tags",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserTags"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "saved"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/transfers": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "A page of a user's transfers, newest first, removed ones included.",
+        "operationId": "transfers",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "description": "only transfers in this direction, both when left out",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TransferDirection"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "only transfers in this category, all when left out",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TransferStateCategory"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "how many transfers to skip",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "how many transfers to return",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserTransfers"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/users/{username}/watch": {
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Asks the server to report a user's presence and figures as they change.",
+        "operationId": "watch",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "watched"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Stops watching a user; refused while the user has uploads that have not completed.",
+        "operationId": "unwatch",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no longer watched"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7198,6 +9463,44 @@
           "Failed"
         ]
       },
+      "BlacklistRules": {
+        "type": "object",
+        "description": "The configuration's rules that block users by pattern, address or file.",
+        "required": [
+          "patterns",
+          "cidrs"
+        ],
+        "properties": {
+          "blocklistFile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BlocklistFile",
+                "description": "the managed blocklist file, null when none is configured"
+              }
+            ]
+          },
+          "cidrs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "networks whose addresses are blocked",
+            "example": [
+              "203.0.113.0/24"
+            ]
+          },
+          "patterns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "regular expressions matched against usernames"
+          }
+        }
+      },
       "Block": {
         "type": "object",
         "description": "A blocked user.",
@@ -7253,6 +9556,76 @@
           }
         }
       },
+      "BlockImportResult": {
+        "type": "object",
+        "description": "What `POST /users/blocked/import` did.",
+        "required": [
+          "added",
+          "skipped"
+        ],
+        "properties": {
+          "added": {
+            "type": "integer",
+            "format": "int32",
+            "description": "blocks created",
+            "minimum": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "format": "int32",
+            "description": "entries that made no block",
+            "minimum": 0
+          }
+        }
+      },
+      "BlockRequest": {
+        "type": "object",
+        "description": "Blocks a user or replaces their block, the body of `PUT /users/{username}/block`. At most\none of `expiresIn` and `expiresAt` is given; with neither the block is permanent.",
+        "properties": {
+          "cancelTransfers": {
+            "type": "boolean",
+            "description": "cancel the user's queued uploads now, and with `downloads` our downloads from them",
+            "default": true
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when the block ends"
+          },
+          "expiresIn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "how long the block lasts, such as `\"7d\"`",
+            "example": "7d"
+          },
+          "reason": {
+            "type": "string",
+            "description": "why, at most 500 characters"
+          },
+          "scopes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BlockScope"
+            },
+            "description": "what the block stops, the configured default scopes when null",
+            "example": [
+              "uploads",
+              "searches",
+              "browse",
+              "messages",
+              "rooms"
+            ]
+          }
+        }
+      },
       "BlockScope": {
         "type": "string",
         "description": "What a block stops.",
@@ -7273,6 +9646,47 @@
           "api",
           "config"
         ]
+      },
+      "BlockedUsers": {
+        "type": "object",
+        "description": "Every blocked user, and the configuration's rules that block users without naming them.",
+        "required": [
+          "users",
+          "rules"
+        ],
+        "properties": {
+          "rules": {
+            "$ref": "#/components/schemas/BlacklistRules",
+            "description": "the configuration's rules, empty when they were not asked for"
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "description": "the blocked users"
+          }
+        }
+      },
+      "BlocklistFile": {
+        "type": "object",
+        "description": "The managed blocklist file.",
+        "required": [
+          "path",
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many entries it holds",
+            "minimum": 0
+          },
+          "path": {
+            "type": "string",
+            "description": "where it is"
+          }
+        }
       },
       "BrowseProgress": {
         "type": "object",
@@ -7311,6 +9725,44 @@
           "username": {
             "type": "string",
             "description": "the user being browsed"
+          }
+        }
+      },
+      "BrowseResponse": {
+        "type": "object",
+        "description": "A user's whole share listing, as `GET /users/{username}/browse` returns it.",
+        "required": [
+          "directories",
+          "directoryCount",
+          "lockedDirectories",
+          "lockedDirectoryCount"
+        ],
+        "properties": {
+          "directories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Directory"
+            },
+            "description": "the directories we may download from, in the peer's order, each subdirectory its own\nentry"
+          },
+          "directoryCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many entries `directories` has",
+            "minimum": 0
+          },
+          "lockedDirectories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Directory"
+            },
+            "description": "the directories the peer shares only with some users"
+          },
+          "lockedDirectoryCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many entries `lockedDirectories` has",
+            "minimum": 0
           }
         }
       },
@@ -7410,6 +9862,48 @@
           "lagged",
           "shutdown"
         ]
+      },
+      "CachedUser": {
+        "type": "object",
+        "description": "A user the in-memory user cache holds, as `GET /users/cache` lists it.",
+        "required": [
+          "username"
+        ],
+        "properties": {
+          "group": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the user-defined group the configuration lists the user in, null when none"
+          },
+          "statistics": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StatisticsSnapshot",
+                "description": "the last statistics fetched or pushed, null before any"
+              }
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserStatus",
+                "description": "the last status fetched or pushed, null before any"
+              }
+            ]
+          },
+          "username": {
+            "type": "string",
+            "description": "the user"
+          }
+        }
       },
       "ChatUnread": {
         "type": "object",
@@ -7992,6 +10486,20 @@
           "name": {
             "type": "string",
             "description": "the full remote path with the peer's separators kept exactly; send it back unchanged",
+            "example": "@@abcd\\Music\\Pink Floyd\\Animals"
+          }
+        }
+      },
+      "DirectoryRequest": {
+        "type": "object",
+        "description": "Asks a user for the contents of one directory, the body of\n`POST /users/{username}/directory`.",
+        "required": [
+          "directory"
+        ],
+        "properties": {
+          "directory": {
+            "type": "string",
+            "description": "the directory's `name` exactly as a browse or search response gave it",
             "example": "@@abcd\\Music\\Pink Floyd\\Animals"
           }
         }
@@ -9388,6 +11896,19 @@
           "disconnected",
           "daemonDown"
         ]
+      },
+      "GroupAssignment": {
+        "type": "object",
+        "description": "Assigns a user to a user-defined group, the body of `PUT /users/{username}/group`.",
+        "properties": {
+          "group": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "a user-defined group from the configuration, null to remove the assignment"
+          }
+        }
       },
       "GroupSource": {
         "type": "string",
@@ -12920,6 +15441,49 @@
           }
         }
       },
+      "StatisticsSnapshot": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/UserStatistics",
+            "description": "the statistics"
+          },
+          {
+            "type": "object",
+            "required": [
+              "updatedAt"
+            ],
+            "properties": {
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "when the server's reply or push arrived; statistics of a watched user go stale between\npresence changes"
+              }
+            }
+          }
+        ],
+        "description": "A user's statistics with when the server sent them, as `GET /users/{username}/statistics`\nand the user cache return them."
+      },
+      "StoredInfo": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/StoredInfoSummary",
+            "description": "the rest of the info"
+          },
+          {
+            "type": "object",
+            "required": [
+              "description"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "the peer's free text, may be empty"
+              }
+            }
+          }
+        ],
+        "description": "The info stored for a user."
+      },
       "StoredInfoSummary": {
         "type": "object",
         "description": "The info stored for a user, without the description.",
@@ -13405,6 +15969,29 @@
           "Upload"
         ]
       },
+      "TransferFigures": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TransferCounts",
+            "description": "the counts"
+          },
+          {
+            "type": "object",
+            "required": [
+              "bytes"
+            ],
+            "properties": {
+              "bytes": {
+                "type": "integer",
+                "format": "int64",
+                "description": "bytes moved by the succeeded transfers",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "Counts of a user's transfers in one direction, with the bytes moved."
+      },
       "TransferMetrics": {
         "type": "object",
         "description": "Live transfer figures for both directions, as `metrics.update` frames carry them.",
@@ -13761,6 +16348,45 @@
           }
         }
       },
+      "UserFigures": {
+        "type": "object",
+        "description": "What we did with a user, computed when asked for.",
+        "required": [
+          "downloads",
+          "uploads",
+          "messages"
+        ],
+        "properties": {
+          "downloads": {
+            "$ref": "#/components/schemas/TransferFigures",
+            "description": "our downloads from the user"
+          },
+          "lastMessageAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when the latest private message either way was sent, null without one"
+          },
+          "lastTransferAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when the latest transfer either way was asked for, null without one"
+          },
+          "messages": {
+            "$ref": "#/components/schemas/MessageCounts",
+            "description": "our private messages with the user"
+          },
+          "uploads": {
+            "$ref": "#/components/schemas/TransferFigures",
+            "description": "our uploads to the user"
+          }
+        }
+      },
       "UserGroup": {
         "type": "object",
         "description": "The upload group a user is in.",
@@ -13787,6 +16413,95 @@
           }
         }
       },
+      "UserInfo": {
+        "type": "object",
+        "description": "What a peer says about itself, as `GET /users/{username}/info` returns it.",
+        "required": [
+          "description",
+          "hasPicture",
+          "uploadSlots",
+          "queueLength",
+          "hasFreeUploadSlot"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "the peer's free text, may be empty"
+          },
+          "hasFreeUploadSlot": {
+            "type": "boolean",
+            "description": "the peer has an upload slot free"
+          },
+          "hasPicture": {
+            "type": "boolean",
+            "description": "the peer sent a picture"
+          },
+          "picture": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the picture's bytes as the peer sent them, base64; null without one"
+          },
+          "queueLength": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many uploads the peer has queued",
+            "minimum": 0
+          },
+          "uploadPermitted": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "who may upload to the peer: 0 no one, 1 everyone, 2 users in their list, 3 users they\npermitted; null when the peer did not say",
+            "minimum": 0
+          },
+          "uploadSlots": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the peer's upload slots",
+            "minimum": 0
+          }
+        }
+      },
+      "UserList": {
+        "type": "object",
+        "description": "One page of the known-users directory.",
+        "required": [
+          "users",
+          "total"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "how many users match, on every page together",
+            "minimum": 0
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSummary"
+            },
+            "description": "the users on this page"
+          }
+        }
+      },
+      "UserNotes": {
+        "type": "object",
+        "description": "Our private notes about a user, the body of `PUT /users/{username}/notes`.",
+        "required": [
+          "notes"
+        ],
+        "properties": {
+          "notes": {
+            "type": "string",
+            "description": "the notes, at most 64 KiB"
+          }
+        }
+      },
       "UserPresence": {
         "type": "string",
         "description": "A user's online state.",
@@ -13795,6 +16510,43 @@
           "Away",
           "Online"
         ]
+      },
+      "UserProfile": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/KnownUser",
+            "description": "what the directory holds"
+          },
+          {
+            "type": "object",
+            "required": [
+              "notes",
+              "figures"
+            ],
+            "properties": {
+              "figures": {
+                "$ref": "#/components/schemas/UserFigures",
+                "description": "what we did with the user"
+              },
+              "info": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StoredInfo",
+                    "description": "the last info fetched, null when never"
+                  }
+                ]
+              },
+              "notes": {
+                "type": "string",
+                "description": "our private notes about the user"
+              }
+            }
+          }
+        ],
+        "description": "Everything known about a user, the reply of `GET /users/{username}/profile`."
       },
       "UserRemoved": {
         "type": "object",
@@ -13972,6 +16724,49 @@
           }
         ],
         "description": "A user as the directory lists them, the data of a `users.updated` frame and the reply of\n`GET /users/{username}/summary`. Built from stored data only."
+      },
+      "UserTags": {
+        "type": "object",
+        "description": "Our labels for a user, the body of `PUT /users/{username}/tags`.",
+        "required": [
+          "tags"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "at most 32 tags, each 1 to 32 of `a-z`, `0-9`, `_` and `-` after lower-casing",
+            "example": [
+              "friend",
+              "jazz"
+            ]
+          }
+        }
+      },
+      "UserTransfers": {
+        "type": "object",
+        "description": "One page of a user's transfers, newest first, removed ones included.",
+        "required": [
+          "transfers",
+          "total"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "how many transfers match, on every page together",
+            "minimum": 0
+          },
+          "transfers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transfer"
+            },
+            "description": "the transfers on this page"
+          }
+        }
       },
       "UserUnblocked": {
         "type": "object",
@@ -14236,6 +17031,14 @@
     {
       "name": "transfers",
       "description": "Downloads and uploads"
+    },
+    {
+      "name": "users",
+      "description": "Other users and the directory of users we know"
+    },
+    {
+      "name": "blocking",
+      "description": "Blocked users"
     },
     {
       "name": "shares",
