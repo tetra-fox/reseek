@@ -14,7 +14,7 @@ use crate::files::Entry;
 
 /// How long the files must be quiet after a change before they are read: a save is often
 /// several events.
-pub const DEBOUNCE: Duration = Duration::from_millis(250);
+pub(super) const DEBOUNCE: Duration = Duration::from_millis(250);
 
 /// Waits until `events` has been quiet for `period`. False when cancelled first.
 pub(super) async fn quiet(events: &Notify, period: Duration, cancel: &CancellationToken) -> bool {

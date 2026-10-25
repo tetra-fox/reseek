@@ -94,14 +94,14 @@ pub use cascade_derive::Cascade;
 pub use describe::{Apply, Cascade, Kind, Shape};
 pub use edit::FileEditor;
 pub use error::{Error, Invalid};
-pub use files::{LoadedFile, revision, revision_of};
+pub use files::LoadedFile;
 pub use layers::{Checked, LIST_SEPARATOR, Layers};
 pub use loaded::Loaded;
 pub use overrides::{Override, Overrides};
 pub use schema::{Field, REDACTED, Schema};
 pub use source::Source;
 pub use view::{ConfigView, FieldView, FileView, OverrideView};
-pub use watcher::{ByApply, Change, DEBOUNCE, Watch, Watcher, Written};
+pub use watcher::{ByApply, Change, Watch, Watcher, Written};
 pub use write::writability;
 
 #[doc(hidden)]

@@ -85,7 +85,7 @@ impl<'a> FileEditor<'a> {
 
   /// Whether `text` sets any secret to a non-empty value. Text that does not parse counts as
   /// holding one, so it is never written readable by others.
-  pub fn holds_secrets(&self, text: &str) -> bool {
+  pub(crate) fn holds_secrets(&self, text: &str) -> bool {
     let tree = match text.parse::<toml::Table>() {
       Ok(table) => tree::from_toml(toml::Value::Table(table)),
       Err(_) => return true,

@@ -94,14 +94,14 @@ pub(crate) fn expand(entries: &[Entry]) -> Result<Vec<(String, PathBuf)>, Error>
 }
 
 /// A hash of a file's contents, `sha256:` and hex.
-pub fn revision_of(contents: &[u8]) -> String {
+pub(crate) fn revision_of(contents: &[u8]) -> String {
   let digest = Sha256::digest(contents);
   let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
   format!("sha256:{hex}")
 }
 
 /// The revision of the file at `path`, `None` when there is no file.
-pub fn revision(path: &Path) -> Result<Option<String>, Error> {
+pub(crate) fn revision(path: &Path) -> Result<Option<String>, Error> {
   Ok(read_optional(path)?.map(|contents| revision_of(&contents)))
 }
 

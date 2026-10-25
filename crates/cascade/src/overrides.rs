@@ -6,7 +6,7 @@
 //! declaration wins over an older runtime change. An override also ends when it expires.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -100,11 +100,6 @@ impl Overrides {
   /// The overrides in effect, by key.
   pub fn items(&self) -> &BTreeMap<Key, Override> {
     &self.items
-  }
-
-  /// Where the overrides are kept, `None` when only in memory.
-  pub fn path(&self) -> Option<&Path> {
-    self.path.as_deref()
   }
 
   /// Writes `items` to the file, then makes them the ones in effect, so nothing is in effect

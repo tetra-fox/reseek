@@ -20,8 +20,7 @@ use crate::files::LoadedFile;
 use crate::layers::{Checked, Failure, Layers};
 use crate::loaded::Loaded;
 use crate::{Error, Key, Root, lock};
-pub use events::DEBOUNCE;
-use events::{FileEvents, quiet};
+use events::{DEBOUNCE, FileEvents, quiet};
 
 /// How long to wait before reading the files again after a reload failed, since an editor that
 /// truncates and then writes leaves a broken file for a moment.
