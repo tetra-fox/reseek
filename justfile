@@ -40,8 +40,21 @@ api:
 api-check:
     @echo "api-check: not yet (no api/openapi.json)"
 
+# soulfind and the soulseek-rs cli as the other user: search, browse and transfers both ways
+e2e:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    soulfind="${SOULFIND_BIN:-$(command -v soulfind || true)}"
+    soulseek_rs="${SOULSEEK_RS_BIN:-$(command -v soulseek-rs || true)}"
+    if [ -z "$soulfind" ] || [ -z "$soulseek_rs" ]; then
+      echo "e2e skipped: soulfind (SOULFIND_BIN or PATH) or soulseek-rs (SOULSEEK_RS_BIN or PATH) not found"
+      exit 0
+    fi
+    SOULFIND_BIN="$soulfind" SOULSEEK_RS_BIN="$soulseek_rs" \
+      cargo nextest run -p soulseek-client --test interop --run-ignored only
+
 # the gate for every push
-ci: lint test api-check
+ci: lint test api-check e2e
 
 # soulfind on its default port 2242 with its data under target/soulfind, for trying things by hand
 soulfind:
