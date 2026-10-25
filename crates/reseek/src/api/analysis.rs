@@ -6,8 +6,7 @@ use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
   RunAnalysisQuery, SetAnalysisOverride, SpectrogramQuery,
 };
-use api_types::files::{ContentQuery, FileRoot};
-use axum::Extension;
+use api_types::files::FileRoot;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -18,10 +17,10 @@ use uuid::Uuid;
 
 use super::error::ApiError;
 use super::extract::{Json, Path, Query};
-use super::files::{by_principal_or_link, root};
+use super::files::root;
 use super::validate;
 use crate::app::AppState;
-use crate::auth::{AnyRole, Authentication, Authorized, ReadWrite};
+use crate::auth::{AnyRole, Authorized, ReadWrite};
 use crate::services::FileTarget;
 
 /// The analysis routes.
@@ -163,13 +162,13 @@ async fn report_download(
     .map(Json)
 }
 
-/// A file's spectrogram as a PNG image, loaded as a file is: by the session or a link token.
+/// A file's spectrogram as a PNG image. A link token does not load it; the session does.
 #[utoipa::path(
   get, path = "/files/{root}/files/{path}/analysis/spectrogram.png", tag = "analysis",
   params(
     ("root" = FileRoot, Path, description = "the directory root"),
     ("path" = String, Path, description = "the file's path under the root, base64"),
-    SpectrogramQuery, ContentQuery
+    SpectrogramQuery
   ),
   responses(
     (status = 200, content_type = "image/png", body = api_types::files::FileContent),
@@ -179,12 +178,10 @@ async fn report_download(
 )]
 async fn spectrogram_file(
   State(app): State<AppState>,
-  Extension(authentication): Extension<Authentication>,
+  _caller: Authorized<AnyRole>,
   Path((name, path)): Path<(String, String)>,
   Query(query): Query<SpectrogramQuery>,
-  Query(link): Query<ContentQuery>,
 ) -> Result<Response, ApiError> {
-  by_principal_or_link(&authentication, &link)?;
   let target = file(&name, &path)?;
   app.services.analysis.spectrogram(target, query).await
 }
@@ -195,7 +192,7 @@ async fn spectrogram_file(
   params(
     ("username" = String, Path, description = "the peer"),
     ("id" = Uuid, Path, description = "the download's id"),
-    SpectrogramQuery, ContentQuery
+    SpectrogramQuery
   ),
   responses(
     (status = 200, content_type = "image/png", body = api_types::files::FileContent),
@@ -205,12 +202,10 @@ async fn spectrogram_file(
 )]
 async fn spectrogram_download(
   State(app): State<AppState>,
-  Extension(authentication): Extension<Authentication>,
+  _caller: Authorized<AnyRole>,
   Path((username, id)): Path<(String, Uuid)>,
   Query(query): Query<SpectrogramQuery>,
-  Query(link): Query<ContentQuery>,
 ) -> Result<Response, ApiError> {
-  by_principal_or_link(&authentication, &link)?;
   let target = FileTarget::Download { username, id };
   app.services.analysis.spectrogram(target, query).await
 }

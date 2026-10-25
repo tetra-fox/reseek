@@ -2561,7 +2561,7 @@
         "tags": [
           "analysis"
         ],
-        "summary": "A file's spectrogram as a PNG image, loaded as a file is: by the session or a link token.",
+        "summary": "A file's spectrogram as a PNG image. A link token does not load it; the session does.",
         "operationId": "spectrogram_file",
         "parameters": [
           {
@@ -2589,33 +2589,6 @@
             "required": false,
             "schema": {
               "type": "boolean"
-            }
-          },
-          {
-            "name": "disposition",
-            "in": "query",
-            "description": "whether the browser shows the file or saves it",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/ContentDisposition"
-            }
-          },
-          {
-            "name": "name",
-            "in": "query",
-            "description": "the name the browser saves the file under, null for the file's own name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "t",
-            "in": "query",
-            "description": "a file token for this file, for a link that carries no session",
-            "required": false,
-            "schema": {
-              "type": "string"
             }
           }
         ],
@@ -9978,33 +9951,6 @@
             "required": false,
             "schema": {
               "type": "boolean"
-            }
-          },
-          {
-            "name": "disposition",
-            "in": "query",
-            "description": "whether the browser shows the file or saves it",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/ContentDisposition"
-            }
-          },
-          {
-            "name": "name",
-            "in": "query",
-            "description": "the name the browser saves the file under, null for the file's own name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "t",
-            "in": "query",
-            "description": "a file token for this file, for a link that carries no session",
-            "required": false,
-            "schema": {
-              "type": "string"
             }
           }
         ],

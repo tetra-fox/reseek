@@ -76,7 +76,7 @@ fn serving(app: &AppState) -> Result<(), ApiError> {
 }
 
 /// A request for a file's bytes: by its principal, or else by its link token alone.
-pub(super) fn by_principal_or_link(
+fn by_principal_or_link(
   authentication: &Authentication,
   query: &ContentQuery,
 ) -> Result<Option<Principal>, ApiError> {
