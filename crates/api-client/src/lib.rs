@@ -1,9 +1,10 @@
 //! A typed client of reseek's HTTP API and its event stream, over the same `api-types` the
 //! daemon answers with, so a test or a tool and the daemon cannot disagree about a field.
 //!
-//! [`Client`] has one method per API call, named after what it does and documented with its
-//! route; [`Client::live`] opens the event stream, which reconnects with `Last-Event-ID` on its
-//! own. A call that is answered with an error returns [`Error::Api`] with the status and the
+//! [`Client`] has a method for every API call, named after what it does and documented with its
+//! route. A call that is the same for downloads and uploads takes the direction, and a route that
+//! answers in two forms, or as headers alone, has a method for each. [`Client::live`] opens the
+//! event stream, which reconnects with `Last-Event-ID` on its own. A call that is answered with an error returns [`Error::Api`] with the status and the
 //! error body.
 //!
 //! ```no_run

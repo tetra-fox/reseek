@@ -14,7 +14,10 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use bytes::Bytes;
 use uuid::Uuid;
 
-use super::{Client, Result, Route, bytes, done, json};
+use reqwest::Method;
+use reqwest::header::HeaderMap;
+
+use super::{Client, Result, Route, bytes, done, json, send};
 
 /// A file under a root, or the file a succeeded download was moved to.
 #[derive(Clone, Copy, Debug)]
@@ -73,6 +76,17 @@ impl Client {
   /// `GET .../content`: a file's bytes.
   pub async fn file_content(&self, target: LocalFile<'_>, query: &ContentQuery) -> Result<Bytes> {
     bytes(self.get(file(target).then("content").query(query)?)).await
+  }
+
+  /// `HEAD .../content`: a file's headers alone, such as its length and `ETag`.
+  pub async fn file_content_headers(
+    &self,
+    target: LocalFile<'_>,
+    query: &ContentQuery,
+  ) -> Result<HeaderMap> {
+    let route = file(target).then("content").query(query)?;
+    let mut response = send(self.request(Method::HEAD, &route)).await?;
+    Ok(std::mem::take(response.headers_mut()))
   }
 
   /// `GET /files/{root}/directories/{path}/archive`: a directory as a zip archive.
