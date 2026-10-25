@@ -5,9 +5,9 @@ command = ["cargo", "check", "--workspace", "--all-targets"]
 need_stdout = false
 
 [jobs.clippy]
-command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+command = ["cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
 need_stdout = false
 
 [jobs.test]
-command = ["cargo", "nextest", "run", "--workspace"]
+command = ["cargo", "nextest", "run", "--workspace", "--all-features"]
 need_stdout = true

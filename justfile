@@ -15,9 +15,10 @@ build: web-build
 web-build:
     @echo "web-build: not yet (no web/)"
 
-# cargo nextest, then vitest
+# cargo nextest, the doc examples nextest does not run, then vitest
 test:
-    cargo nextest run --workspace
+    cargo nextest run --workspace --all-features
+    cargo test --workspace --all-features --doc
     @[ -n "$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)" ] || echo "soulfind not found at SOULFIND_BIN or on PATH: the soulfind suites were skipped"
     @echo "vitest: not yet (no web/)"
 
@@ -25,7 +26,7 @@ test:
 lint:
     cargo fmt --all --check
     cargo fmt --manifest-path fuzz/Cargo.toml --all --check
-    cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
     @echo "oxlint, oxfmt: not yet (no web/)"
 
 # regenerate api/openapi.json from the handlers
