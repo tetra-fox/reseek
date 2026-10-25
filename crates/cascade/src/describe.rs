@@ -6,7 +6,10 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 /// What kind of value a leaf key holds; env vars and command-line values are read as this kind.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Written as its lowercase name, a list as `{ "list": <kind of each element> }`.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "lowercase")]
 pub enum Kind {
   /// `true` or `false`, in any case from an env var or flag
   Bool,

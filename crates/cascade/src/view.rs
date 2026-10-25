@@ -7,7 +7,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::Key;
-use crate::describe::Apply;
+use crate::describe::{Apply, Kind};
 use crate::loaded::Loaded;
 use crate::source::Source;
 use crate::write::writability;
@@ -52,6 +52,10 @@ pub struct FieldView {
   pub env_var: Option<String>,
   /// the long command-line flag that sets the key
   pub cli_flag: Option<String>,
+  /// what kind of value the key holds
+  pub kind: Kind,
+  /// the key's help text
+  pub doc: String,
   /// when a change to the value takes effect
   pub apply: Apply,
   /// whether the value is shown as `*****`
@@ -110,6 +114,8 @@ impl ConfigView {
           file: loaded.file_for(&field.key).map(str::to_string),
           env_var: field.env.clone(),
           cli_flag: field.cli.clone(),
+          kind: field.kind.clone(),
+          doc: field.doc.clone(),
           apply: field.apply,
           secret: field.secret,
           not_applied: loaded.not_applied.get(&field.key).cloned(),
@@ -199,6 +205,8 @@ mod tests {
         "file": "config.toml",
         "envVar": "APP_SERVER_PASSWORD",
         "cliFlag": "--password",
+        "kind": "string",
+        "doc": "The password to log in with.",
         "apply": "reconnect",
         "secret": true,
         "notApplied": null,
@@ -221,6 +229,16 @@ mod tests {
       json!("APP_VOLATILE")
     );
     assert_eq!(view["fields"]["api_keys"]["cliFlag"], json!(null));
+    assert_eq!(view["fields"]["api_keys"]["kind"], json!("map"));
+    assert_eq!(
+      view["fields"]["shares.limits"]["kind"],
+      json!({ "list": "integer" })
+    );
+    assert_eq!(
+      view["fields"]["webhooks"]["kind"],
+      json!({ "list": "table" })
+    );
+    assert_eq!(view["fields"]["server.buffer"]["kind"], json!("size"));
     assert_eq!(
       view["overrides"]["server.address"]["value"],
       json!("runtime")
@@ -296,6 +314,15 @@ mod schema_tests {
     for name in ["pendingRestart", "loadError", "managedBy", "overrides"] {
       assert!(view.contains(name), "{name}: {view}");
     }
+    let field = serde_json::to_string(&FieldView::schema()).unwrap();
+    for name in ["\"kind\"", "\"doc\"", "notApplied", "envVar"] {
+      assert!(field.contains(name), "{name}: {field}");
+    }
+    let kind = serde_json::to_string(&Kind::schema()).unwrap();
+    assert!(
+      kind.contains("\"list\"") && kind.contains("\"size\""),
+      "{kind}"
+    );
     let source = serde_json::to_string(&Source::schema()).unwrap();
     for name in ["\"layer\"", "\"runtime\"", "expiresAt", "setBy", "setAt"] {
       assert!(source.contains(name), "{name}: {source}");
