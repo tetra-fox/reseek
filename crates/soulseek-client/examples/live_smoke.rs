@@ -444,3 +444,88 @@ async fn verify(path: &Path, size: u64, transferred: u64) -> Result<(), Failure>
   tracing::info!(bytes = written, "download verified");
   Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+  use soulseek_proto::peer::File;
+
+  use super::*;
+
+  fn response(username: &str, free_slot: bool, files: &[(&str, u64)]) -> SearchResponse {
+    SearchResponse {
+      username: username.into(),
+      token: 1,
+      files: files
+        .iter()
+        .map(|&(filename, size)| File {
+          code: 1,
+          filename: filename.into(),
+          size,
+          extension: String::new(),
+          attributes: Vec::new(),
+        })
+        .collect(),
+      has_free_upload_slot: free_slot,
+      upload_speed: 0,
+      queue_length: 0,
+      locked_files: Vec::new(),
+    }
+  }
+
+  #[test]
+  fn pick_takes_the_smallest_allowed_file_and_breaks_ties_by_name_then_user() {
+    let cases = [
+      (
+        "a user without a free slot is passed over",
+        vec![
+          response("busy", false, &[("a", 10)]),
+          response("free", true, &[("b", 20)]),
+        ],
+        Some(("free", "b")),
+      ),
+      (
+        "an empty file is passed over",
+        vec![response("u", true, &[("empty", 0), ("b", 20)])],
+        Some(("u", "b")),
+      ),
+      (
+        "a file over the ceiling is passed over, leaving nothing",
+        vec![response("over", true, &[("a", 101)])],
+        None,
+      ),
+      (
+        "a file at the ceiling is taken",
+        vec![response("at", true, &[("b", 100)])],
+        Some(("at", "b")),
+      ),
+      (
+        "the smaller of two sizes wins",
+        vec![response("u", true, &[("a", 30), ("b", 20)])],
+        Some(("u", "b")),
+      ),
+      (
+        "one size: the file name decides, before the username",
+        vec![
+          response("a", true, &[("y", 20)]),
+          response("z", true, &[("x", 20)]),
+        ],
+        Some(("z", "x")),
+      ),
+      (
+        "one size and name: the username decides",
+        vec![
+          response("z", true, &[("x", 20)]),
+          response("a", true, &[("x", 20)]),
+        ],
+        Some(("a", "x")),
+      ),
+    ];
+    for (case, responses, expected) in cases {
+      let picked = pick(&responses, 100);
+      let picked = picked
+        .as_ref()
+        .map(|pick| (pick.username.as_str(), pick.filename.as_str()));
+      assert_eq!(picked, expected, "{case}");
+    }
+  }
+}

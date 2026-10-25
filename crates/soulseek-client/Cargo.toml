@@ -20,5 +20,10 @@ uuid.workspace = true
 tokio = { workspace = true, features = ["process", "test-util"] }
 tracing-subscriber.workspace = true
 
+# its pick rule has unit tests, which run with the rest
+[[example]]
+name = "live_smoke"
+test = true
+
 [lints]
 workspace = true
