@@ -27,11 +27,13 @@ soulseek-client.workspace = true
 
 aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
 argon2 = { version = "0.5", default-features = false, features = ["alloc", "password-hash"] }
-axum = "0.8"
+async-trait = "0.1"
+axum = { version = "0.8", features = ["multipart"] }
 base64 = "0.22"
 bytesize.workspace = true
 chrono.workspace = true
 directories = "6"
+form_urlencoded = "1"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 hmac = "0.12"
 http-body-util = "0.1"
@@ -53,6 +55,7 @@ rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", 
 serde.workspace = true
 serde_html_form = "0.2"
 serde_json.workspace = true
+serde_path_to_error.workspace = true
 sha2.workspace = true
 subtle = "2"
 thiserror.workspace = true

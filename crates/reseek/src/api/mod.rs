@@ -2,6 +2,7 @@
 //! handler answers failures with.
 
 pub mod error;
+pub mod extract;
 mod live;
 mod oidc;
 mod options;

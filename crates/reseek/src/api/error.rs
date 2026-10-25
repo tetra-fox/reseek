@@ -42,6 +42,11 @@ impl ApiError {
     Self::new(StatusCode::BAD_REQUEST, error, Some(detail.into()))
   }
 
+  /// A 415: the body is not of a type the call reads.
+  pub fn unsupported_media(error: impl Into<String>) -> Self {
+    Self::new(StatusCode::UNSUPPORTED_MEDIA_TYPE, error, None)
+  }
+
   /// A 401: no credential, or one that is not valid.
   pub fn unauthorized(error: impl Into<String>) -> Self {
     Self::new(StatusCode::UNAUTHORIZED, error, None)
@@ -50,6 +55,11 @@ impl ApiError {
   /// A 403: the principal's role or credential may not do this, or the feature is off.
   pub fn forbidden(error: impl Into<String>) -> Self {
     Self::new(StatusCode::FORBIDDEN, error, None)
+  }
+
+  /// A 403 with a fixed code and why, for a call this instance does not take at all.
+  pub fn disabled(error: impl Into<String>, detail: impl Into<String>) -> Self {
+    Self::new(StatusCode::FORBIDDEN, error, Some(detail.into()))
   }
 
   /// A 429 for an address that failed too often lately, telling it to wait a minute.
@@ -117,6 +127,11 @@ impl ApiError {
   /// The status that answers the error.
   pub fn status(&self) -> StatusCode {
     self.status
+  }
+
+  /// The longer explanation sent with the message, when there is one.
+  pub fn detail(&self) -> Option<&str> {
+    self.detail.as_deref()
   }
 }
 
