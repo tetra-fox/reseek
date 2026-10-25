@@ -1,9 +1,8 @@
-//! The live smoke example against a local soulfind instead of the real server. One user shares
-//! a few small files in a room and another offers a smaller one with no free upload slot; the
-//! example has to join that room, find the files, pick the smallest it may download, browse its
-//! sharer, download it and exit 0. Run by `just live-smoke-local`, which builds the example
-//! first.
-
+//! The live smoke example against a local soulfind instead of the real server: one user shares
+//! files in a room and another offers a smaller file with no free upload slot. The example has to
+//! log in, join that room, take both answers, ask the first for the file its pick rule names,
+//! receive it and exit 0. The pick rule's edges are tested in the example itself. Run by
+//! `just live-smoke-local`, which builds the example first.
 mod support;
 
 use std::path::PathBuf;
@@ -25,8 +24,8 @@ const ROOM: &str = "smoke";
 const PROBE: &str = "reseeksmoke";
 const DIRECTORY: &str = "@@smoke\\probe";
 const MAX_SIZE: u64 = 100_000;
-/// the file the example must pick: the smallest non-empty one under the ceiling from a user
-/// with a free slot, its name winning the tie with `TIED`
+/// the file the example must pick: the smallest non-empty one from a user with a free slot, its
+/// name winning the tie with `TIED`
 const PICKED: &str = "reseeksmoke a.flac";
 const TIED: &str = "reseeksmoke b.flac";
 const SMALL: u64 = 40_000;
@@ -71,15 +70,13 @@ fn answering(options: &mut ClientOptions, username: &str, free_slot: bool, files
   }));
 }
 
-/// The sharer: in the room, with an empty file, two small files of one size, a larger one and
-/// one over the ceiling; it lists them when browsed and queues every upload asked for
+/// The sharer: in the room, with an empty file and two files of one size; it lists them when
+/// browsed and queues every upload asked for
 async fn sharer(server: &Arc<Soulfind>) -> (User, Asked) {
   let files = vec![
     file("reseeksmoke empty.flac", 0),
     file(TIED, SMALL),
     file(PICKED, SMALL),
-    file("reseeksmoke larger.flac", SMALL * 2),
-    file("reseeksmoke over.flac", MAX_SIZE + 1),
   ];
   let mut options = ClientOptions {
     listen_port: free_port(),
@@ -205,7 +202,8 @@ async fn the_live_smoke_example_passes_against_soulfind() {
     status.success(),
     "the example ended with {status}:\n{written}"
   );
-  // the busy user's answer was there to pass over
+  // the busy user's answer was there to pass over; this reads the client's "search completed"
+  // log line, so renaming that line or its field means changing this
   assert!(
     written.contains("search completed") && written.contains("responses=2"),
     "{written}"
