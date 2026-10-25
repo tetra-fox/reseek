@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/soulseek-proto", "crates/soulseek-client"]
+members = [
+  "crates/cascade",
+  "crates/cascade-derive",
+  "crates/soulseek-proto",
+  "crates/soulseek-client",
+]
 # cargo-fuzz needs nightly and its own lockfile, so the fuzz crate is a separate workspace
 exclude = ["fuzz"]
 
@@ -10,20 +15,37 @@ edition = "2024"
 publish = false
 
 [workspace.dependencies]
+cascade-derive = { path = "crates/cascade-derive" }
 soulseek-proto = { path = "crates/soulseek-proto" }
 
 bitflags = "2"
+bytesize = { version = "2", features = ["serde"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 flate2 = "1"
+humantime-serde = "1"
 md-5 = "0.10"
+notify = "8"
+proc-macro2 = "1"
+quote = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_path_to_error = "0.1"
+sha2 = "0.10"
 socket2 = { version = "0.6", features = ["all"] }
+syn = { version = "2", features = ["full"] }
 thiserror = "2"
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
 tokio-util = "0.7"
+toml = "1"
+toml_edit = "0.25"
 tracing = "0.1"
+utoipa = { version = "5", features = ["chrono"] }
 uuid = { version = "1", features = ["v4"] }
 
 proptest = "1"
 proptest-derive = "0.6"
+tempfile = "3"
+trybuild = "1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
 
 [workspace.lints.rust]

@@ -1,0 +1,165 @@
+//! An example configuration that uses every attribute, shared by the tests.
+
+use std::collections::BTreeMap;
+use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
+
+use crate::{Cascade, Kind, Schema, Shape};
+
+/// The root of the example.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[cascade(env_alias_prefix(from = "APP_", to = "NEW_"))]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct Example {
+  /// Debug mode.
+  #[cascade(env = "APP_DEBUG", cli = "-d|--debug", apply = "restart")]
+  pub(crate) debug: bool,
+  /// Names this instance in logs.
+  #[cascade(
+    env = "APP_INSTANCE_NAME",
+    cli = "-i|--instance-name",
+    apply = "restart"
+  )]
+  pub(crate) instance_name: String,
+  #[cascade(apply = "reconnect")]
+  pub(crate) server: Server,
+  pub(crate) shares: Shares,
+  /// Keys that may call the API, by name.
+  #[cascade(user_keyed)]
+  pub(crate) api_keys: BTreeMap<String, ApiKey>,
+  /// Where events are sent.
+  pub(crate) webhooks: Vec<Webhook>,
+  #[cascade(apply = "restart")]
+  pub(crate) flags: Flags,
+}
+
+impl Default for Example {
+  fn default() -> Self {
+    Self {
+      debug: false,
+      instance_name: "default".into(),
+      server: Server::default(),
+      shares: Shares::default(),
+      api_keys: BTreeMap::new(),
+      webhooks: Vec::new(),
+      flags: Flags::default(),
+    }
+  }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct Server {
+  /// The server's host name.
+  #[cascade(env = "APP_SERVER_ADDRESS", cli = "--server-address")]
+  pub(crate) address: String,
+  /// The server's port.
+  #[cascade(env = "APP_SERVER_PORT", env_alias = "NEW_PORT", cli = "--server-port")]
+  pub(crate) port: u16,
+  /// The user to log in as.
+  #[cascade(env = "APP_USERNAME", cli = "--username")]
+  pub(crate) username: String,
+  /// The password to log in with.
+  #[cascade(env = "APP_SERVER_PASSWORD", cli = "--password", secret)]
+  pub(crate) password: Option<String>,
+  /// How long to wait for the server.
+  #[cascade(env = "APP_SERVER_TIMEOUT", apply = "live")]
+  #[serde(with = "humantime_serde")]
+  pub(crate) timeout: Duration,
+  /// The read buffer.
+  #[cascade(env = "APP_SERVER_BUFFER", kind = "size")]
+  pub(crate) buffer: bytesize::ByteSize,
+}
+
+impl Default for Server {
+  fn default() -> Self {
+    Self {
+      address: "localhost".into(),
+      port: 2242,
+      username: "reseek".into(),
+      password: None,
+      timeout: Duration::from_secs(5),
+      buffer: bytesize::ByteSize::kib(16),
+    }
+  }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct Shares {
+  /// Shared directories.
+  #[cascade(env = "APP_SHARED_DIR", cli = "-s|--shared")]
+  pub(crate) directories: Vec<String>,
+  /// Per-share limits.
+  #[cascade(env = "APP_SHARE_LIMITS", cli = "--share-limit")]
+  pub(crate) limits: Vec<u32>,
+  pub(crate) cache: Cache,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct Cache {
+  /// Scan workers.
+  #[cascade(env = "APP_CACHE_WORKERS", apply = "restart")]
+  pub(crate) workers: u32,
+  /// Where the cache lives.
+  #[cascade(env = "APP_CACHE_MODE")]
+  pub(crate) mode: Mode,
+}
+
+impl Default for Cache {
+  fn default() -> Self {
+    Self {
+      workers: 4,
+      mode: Mode::Memory,
+    }
+  }
+}
+
+/// A leaf enum that describes itself.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Mode {
+  Memory,
+  Disk,
+}
+
+impl Cascade for Mode {
+  fn shape() -> Shape {
+    Shape::leaf(Kind::String)
+  }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ApiKey {
+  #[cascade(secret)]
+  pub(crate) key: String,
+  #[serde(default)]
+  pub(crate) role: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Webhook {
+  pub(crate) url: String,
+  #[cascade(secret)]
+  pub(crate) token: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct Flags {
+  /// Do not connect at startup.
+  #[cascade(env = "APP_NO_CONNECT", cli = "--no-connect")]
+  pub(crate) no_connect: bool,
+  /// Keep nothing on disk.
+  #[cascade(env = "APP_VOLATILE", cli = "--volatile")]
+  pub(crate) volatile: bool,
+}
+
+/// The schema of [`Example`].
+pub(crate) fn example_schema() -> Schema {
+  Schema::of::<Example>()
+}

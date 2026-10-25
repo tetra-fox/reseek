@@ -1,0 +1,22 @@
+error[E0277]: `BTreeMap<std::string::String, std::string::String>` is neither a section nor a known leaf of a configuration
+ --> tests/ui/map_without_user_keyed.rs:5:13
+  |
+5 |   api_keys: BTreeMap<String, String>,
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Cascade` is not implemented for `BTreeMap<std::string::String, std::string::String>`
+  |
+  = note: derive Cascade on a section, mark a map `#[cascade(user_keyed)]`, or name a leaf's kind with `#[cascade(kind = "...")]`
+  = help: the following other types implement trait `Cascade`:
+            IpAddr
+            Ipv4Addr
+            Ipv6Addr
+            Option<T>
+            Options
+            PathBuf
+            Vec<T>
+            bool
+          and $N others
+note: required by a bound in `cascade::__private::push`
+ --> src/describe.rs
+  |
+  |   pub fn push<F: Cascade>(nodes: &mut Vec<Node>, attrs: Attrs) {
+  |                  ^^^^^^^ required by this bound in `push`
