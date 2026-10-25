@@ -1,5 +1,5 @@
 //! The application routes: the state document, the version and the release check, shutting
-//! down, the connection to the Soulseek server, and the log. Diagnostics that
+//! down and restarting, the connection to the Soulseek server, and the log. Diagnostics that
 //! the API document leaves out are here too.
 
 use api_types::application::{DisconnectReason, VersionLatestQuery};
@@ -27,7 +27,7 @@ use crate::services::Connected;
 /// The application routes in the API document.
 pub fn routes() -> OpenApiRouter<AppState> {
   OpenApiRouter::new()
-    .routes(routes!(get_state, shut_down))
+    .routes(routes!(get_state, shut_down, restart))
     .routes(routes!(get_version))
     .routes(routes!(get_latest_version))
     .routes(routes!(get_server, connect, disconnect))
@@ -72,6 +72,26 @@ async fn shut_down(
   require_interactive(&admin.principal)?;
   info!(by = admin.principal.subject, "shutdown asked for");
   app.shutdown.cancel();
+  Ok(StatusCode::NO_CONTENT)
+}
+
+/// Stops the daemon in order and exits so it starts again: with code 75 for a supervisor such
+/// as systemd to restart it, or by starting itself again when it runs unsupervised. Needs
+/// someone at the UI, not an API key.
+#[utoipa::path(
+  put, path = "/application", tag = "application",
+  responses(
+    (status = 204, description = "restarting"), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody)
+  )
+)]
+async fn restart(
+  State(app): State<AppState>,
+  admin: Authorized<Administrator>,
+) -> Result<StatusCode, ApiError> {
+  require_interactive(&admin.principal)?;
+  info!(by = admin.principal.subject, "restart asked for");
+  app.request_restart();
   Ok(StatusCode::NO_CONTENT)
 }
 
@@ -276,12 +296,28 @@ async fn debug_transfers(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::testing::{app, request};
+  use crate::testing::{app, request, with};
 
   /// Loopback is a trusted network, so it is an administrator at the UI; the key is not.
   const ADMIN: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n\
                        [web.authentication.api_keys.robot]\nkey = \"robot-key-0123456789\"\n\
                        role = \"administrator\"\n";
+
+  #[tokio::test]
+  async fn a_restart_stops_the_daemon_to_start_again_and_needs_someone_at_the_ui() {
+    let app = app(ADMIN, &[]).await;
+    let by_key = with(
+      request("PUT", "/api/v0/application", None),
+      "x-api-key",
+      "robot-key-0123456789",
+    );
+    assert_eq!(app.send_from("192.0.2.1:1", by_key).await.status, 403);
+    assert!(!app.state.shutdown.is_cancelled());
+    let answer = app.send(request("PUT", "/api/v0/application", None)).await;
+    assert_eq!(answer.status, 204);
+    assert!(app.state.restart_requested());
+    assert!(app.state.shutdown.is_cancelled());
+  }
 
   #[tokio::test]
   async fn a_shutdown_stops_the_daemon_for_good() {
@@ -291,6 +327,7 @@ mod tests {
       .await;
     assert_eq!(answer.status, 204);
     assert!(app.state.shutdown.is_cancelled());
+    assert!(!app.state.restart_requested());
   }
 
   #[test]

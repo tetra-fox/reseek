@@ -61,6 +61,9 @@ pub struct Invocation {
   pub config_files: Vec<PathBuf>,
   /// every other flag as `(long flag, value)`, in the order given
   pub flags: Vec<(String, String)>,
+  /// whether a supervisor restarts the daemon when it exits for a restart, from
+  /// `--supervised`; `None` to tell from the environment
+  pub supervised: Option<bool>,
 }
 
 /// A command line that can not be understood; printed as `Invalid command line input: ...`.
@@ -81,6 +84,7 @@ enum Bootstrap {
   Envars,
   GenerateCert,
   GenerateSecret,
+  Supervised,
 }
 
 /// A flag of the command line itself: its short form, long form, the value it takes and help.
@@ -136,6 +140,15 @@ const BOOTSTRAP: &[BootstrapFlag] = &[
     "--app-dir",
     Some("path"),
     "Keeps the configuration, data, cache and logs under this one directory.",
+  ),
+  (
+    Bootstrap::Supervised,
+    None,
+    "--supervised",
+    None,
+    "Exits with code 75 when a restart is asked for, for a supervisor such as systemd to start \
+     it again, instead of starting itself again; `--supervised=false` for the latter. Without the \
+     flag it is on under systemd or as a container's first process.",
   ),
   (
     Bootstrap::Config,
@@ -287,6 +300,18 @@ fn command(
       })?;
     return Ok(Command::GenerateSecret { length });
   }
+  if has(Bootstrap::Supervised) {
+    invocation.supervised = match value(Bootstrap::Supervised).as_deref() {
+      Some("true") => Some(true),
+      Some("false") => Some(false),
+      Some(other) => {
+        return Err(UsageError(format!(
+          "--supervised is true or false, not `{other}`"
+        )));
+      }
+      None => None,
+    };
+  }
   if invocation.app_dir.is_none() {
     invocation.app_dir = env("RESEEK_APP_DIR").map(PathBuf::from);
   }
@@ -395,6 +420,19 @@ mod tests {
       .iter()
       .map(|(f, v)| (f.to_string(), v.to_string()))
       .collect()
+  }
+
+  #[test]
+  fn supervised_is_a_boolean_left_out_by_default() {
+    let supervised = |args: &[&str]| match run(args) {
+      Ok(Command::Run(invocation)) => Ok(invocation.supervised),
+      Ok(other) => panic!("{other:?}"),
+      Err(e) => Err(e),
+    };
+    assert_eq!(supervised(&[]).unwrap(), None);
+    assert_eq!(supervised(&["--supervised"]).unwrap(), Some(true));
+    assert_eq!(supervised(&["--supervised=false"]).unwrap(), Some(false));
+    assert!(supervised(&["--supervised=maybe"]).is_err());
   }
 
   #[test]

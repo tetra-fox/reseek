@@ -181,6 +181,38 @@
           }
         }
       },
+      "put": {
+        "tags": [
+          "application"
+        ],
+        "summary": "Stops the daemon in order and exits so it starts again: with code 75 for a supervisor such\nas systemd to restart it, or by starting itself again when it runs unsupervised. Needs\nsomeone at the UI, not an API key.",
+        "operationId": "restart",
+        "responses": {
+          "204": {
+            "description": "restarting"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "application"

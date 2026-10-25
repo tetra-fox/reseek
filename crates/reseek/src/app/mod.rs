@@ -2,6 +2,7 @@
 //! directories, logging and the instance lock, opening the databases, serving HTTP until a
 //! signal, and shutting down.
 
+mod restart;
 mod signals;
 mod startup;
 mod tasks;
@@ -10,6 +11,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use cascade::{Loaded, Overrides, Schema, Watch, Watcher};
@@ -44,6 +46,7 @@ pub const EXIT_FILESYSTEM: u8 = 4;
 pub const EXIT_LOCKED: u8 = 5;
 /// Anything else that stops the start.
 pub const EXIT_FATAL: u8 = 1;
+pub use restart::EXIT_RESTART;
 
 /// How often the configuration files are read when they are polled.
 const POLL: Duration = Duration::from_secs(4);
@@ -73,6 +76,8 @@ pub struct AppState {
   pub shutdown: CancellationToken,
   /// the engine of every domain
   pub services: Services,
+  /// set when the daemon is to start again once it has stopped
+  restart: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -115,7 +120,19 @@ impl AppState {
       state,
       shutdown,
       services: Services::unavailable(),
+      restart: Arc::new(AtomicBool::new(false)),
     })
+  }
+
+  /// Stops the daemon so that it starts again.
+  pub fn request_restart(&self) {
+    self.restart.store(true, Ordering::Relaxed);
+    self.shutdown.cancel();
+  }
+
+  /// Whether the daemon is to start again once it has stopped.
+  pub fn restart_requested(&self) -> bool {
+    self.restart.load(Ordering::Relaxed)
   }
 
   /// Starts the background work every request relies on: the state and the stream follow the
@@ -171,7 +188,16 @@ pub fn main(bundle: Bundle) -> ExitCode {
         return ExitCode::from(EXIT_FATAL);
       }
     },
-    Command::Run(invocation) => return ExitCode::from(run(invocation, bundle)),
+    Command::Run(invocation) => {
+      let supervised = invocation
+        .supervised
+        .unwrap_or_else(|| restart::supervised_by_default(|n| std::env::var_os(n)));
+      let code = run(invocation, bundle);
+      if code == EXIT_RESTART && !supervised {
+        return ExitCode::from(restart::start_again());
+      }
+      return ExitCode::from(code);
+    }
   }
   ExitCode::SUCCESS
 }
@@ -370,6 +396,10 @@ async fn serve(
   info!("reseek started");
   http::serve(listeners, pipeline::app(state.clone(), ui), cancel, grace).await;
   state.auth.db.close().await;
+  if state.restart_requested() {
+    info!("reseek stopped to start again");
+    return EXIT_RESTART;
+  }
   info!("reseek stopped");
   0
 }
