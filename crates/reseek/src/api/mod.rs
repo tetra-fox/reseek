@@ -2,7 +2,11 @@
 //! handler answers failures with.
 
 pub mod error;
+mod live;
+mod oidc;
 mod options;
+mod session;
+mod tokens;
 
 use axum::Router;
 use axum::middleware;
@@ -21,13 +25,25 @@ use crate::auth;
                    shares.",
     license(name = "AGPL-3.0-only", identifier = "AGPL-3.0-only")
   ),
-  tags((name = "options", description = "The configuration and its files"))
+  tags(
+    (name = "options", description = "The configuration and its files"),
+    (name = "session", description = "Signing in and out, and browser sessions"),
+    (name = "auth", description = "Signing in with an OpenID Connect provider"),
+    (name = "tokens", description = "API tokens for scripts"),
+    (name = "live", description = "The event stream")
+  )
 )]
 struct ApiDoc;
 
 /// Every route with its OpenAPI description.
 fn routes() -> OpenApiRouter<AppState> {
-  OpenApiRouter::with_openapi(ApiDoc::openapi()).nest("/api/v0", options::routes())
+  let api = OpenApiRouter::new()
+    .merge(options::routes())
+    .merge(session::routes())
+    .merge(oidc::routes())
+    .merge(tokens::routes())
+    .merge(live::routes());
+  OpenApiRouter::with_openapi(ApiDoc::openapi()).nest("/api/v0", api)
 }
 
 /// The API's routes for `state`, each request authenticated first.

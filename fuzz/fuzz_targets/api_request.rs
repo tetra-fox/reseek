@@ -2,6 +2,8 @@
 
 use api_types::live::LiveFrame;
 use api_types::options::{FilePatch, FileReplace, FileValidate, OptionsPatch};
+use api_types::session::LoginRequest;
+use api_types::tokens::{CreateToken, UpdateToken};
 use api_types::transfers::TransferStates;
 use libfuzzer_sys::fuzz_target;
 use serde::Serialize;
@@ -22,12 +24,15 @@ fuzz_target!(|data: &[u8]| {
   let Some((&kind, rest)) = data.split_first() else {
     return;
   };
-  match kind % 6 {
+  match kind % 9 {
     0 => round_trip::<OptionsPatch>(rest),
     1 => round_trip::<FilePatch>(rest),
     2 => round_trip::<FileReplace>(rest),
     3 => round_trip::<FileValidate>(rest),
     4 => round_trip::<TransferStates>(rest),
+    5 => round_trip::<LoginRequest>(rest),
+    6 => round_trip::<CreateToken>(rest),
+    7 => round_trip::<UpdateToken>(rest),
     _ => round_trip::<LiveFrame>(rest),
   }
 });

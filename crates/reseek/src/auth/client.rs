@@ -15,6 +15,8 @@ pub struct Client {
   pub ip: IpAddr,
   /// the host the request was sent to, without its port
   pub host: Option<String>,
+  /// the host the request was sent to as the client wrote it, with any port
+  pub authority: Option<String>,
   /// whether the client spoke HTTPS, to us or to the proxy in front
   pub https: bool,
 }
@@ -35,6 +37,7 @@ pub fn resolve(peer: &Peer, uri: &Uri, headers: &HeaderMap, proxies: &[IpRange])
   let direct = Client {
     ip: peer_ip,
     host: host_header.as_deref().map(without_port),
+    authority: host_header,
     https: peer.transport == Transport::Tls,
   };
   let trusted = |ip: IpAddr| proxies.iter().any(|range| range.contains(ip));
@@ -68,10 +71,16 @@ pub fn resolve(peer: &Peer, uri: &Uri, headers: &HeaderMap, proxies: &[IpRange])
     Some(proto) => proto.eq_ignore_ascii_case("https"),
     None => direct.https,
   };
-  let host = forwarded("x-forwarded-host")
-    .map(without_port)
-    .or(direct.host);
-  Client { ip, host, https }
+  let (host, authority) = match forwarded("x-forwarded-host") {
+    Some(forwarded) => (Some(without_port(forwarded)), Some(forwarded.to_string())),
+    None => (direct.host, direct.authority),
+  };
+  Client {
+    ip,
+    host,
+    authority,
+    https,
+  }
 }
 
 /// `host` without a `:port`, and without the brackets of an IPv6 address.
@@ -125,10 +134,12 @@ mod tests {
     let via_proxy = resolve(&peer("127.0.0.1:40000"), &uri, &h, &proxies);
     assert_eq!(via_proxy.ip, "198.51.100.1".parse::<IpAddr>().unwrap());
     assert_eq!(via_proxy.host.as_deref(), Some("reseek.example.net"));
+    assert_eq!(via_proxy.authority.as_deref(), Some("reseek.example.net"));
     assert!(via_proxy.https);
     let direct = resolve(&peer("192.0.2.7:40000"), &uri, &h, &proxies);
     assert_eq!(direct.ip, "192.0.2.7".parse::<IpAddr>().unwrap());
     assert_eq!(direct.host.as_deref(), Some("127.0.0.1"));
+    assert_eq!(direct.authority.as_deref(), Some("127.0.0.1:5030"));
     assert!(!direct.https);
   }
 

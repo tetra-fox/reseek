@@ -12,6 +12,7 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use super::fields::{cidr, cidr_list, http_url, ip_addresses, length, range, required, url_path};
 use super::paths::{absolute, directory_under, readable_file};
 use super::{Context, Report};
+use crate::auth::local;
 use crate::config::api_key::PrimaryApiKey;
 use crate::config::{Authentication, Certificate, Web};
 
@@ -136,6 +137,33 @@ fn check_authentication(auth: &Authentication, report: &mut Report) {
   {
     report.add(&format!("{prefix}.api_key"), message);
   }
+  if let Some(phc) = &auth.password_hash
+    && let Err(e) = local::parses(phc)
+  {
+    let key = format!("{prefix}.password_hash");
+    report.add(
+      &key,
+      format!("The field {key} is not an argon2 password hash: {e}"),
+    );
+  }
+  let key = format!("{prefix}.local.users");
+  for (name, user) in &auth.local.users {
+    match (&user.password_hash, &user.password) {
+      (Some(phc), _) => {
+        if let Err(e) = local::parses(phc) {
+          report.add(
+            &key,
+            format!("The field {key}.{name}.password_hash is not an argon2 password hash: {e}"),
+          );
+        }
+      }
+      (None, Some(_)) => {}
+      (None, None) => report.add(
+        &key,
+        format!("The local account {name} needs password_hash or password"),
+      ),
+    }
+  }
   let key = format!("{prefix}.api_keys");
   for (name, api_key) in &auth.api_keys {
     let field = format!("{key}.{name}.key");
@@ -152,6 +180,17 @@ fn check_authentication(auth: &Authentication, report: &mut Report) {
   let key = format!("{prefix}.oidc");
   for (name, provider) in &auth.oidc {
     let field = |f: &str| format!("{key}.{name}.{f}");
+    // the name is a path segment of the login URLs and part of a cookie's name
+    if name.is_empty()
+      || !name
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    {
+      report.add(
+        &key,
+        format!("The OpenID Connect provider name {name:?} may hold only letters, digits, - and _"),
+      );
+    }
     report.check(
       &key,
       required(&field("client_id"), provider.client_id.as_deref()),
@@ -237,6 +276,31 @@ mod tests {
   }
 
   #[test]
+  fn local_accounts_need_a_password_and_hashes_must_be_argon2() {
+    let mut web = Web::default();
+    web.authentication.password_hash = Some("plain text".into());
+    web
+      .authentication
+      .local
+      .users
+      .insert("nobody".into(), crate::config::LocalUser::default());
+    web.authentication.local.users.insert(
+      "hashed".into(),
+      crate::config::LocalUser {
+        password_hash: Some(local::hash("x")),
+        ..crate::config::LocalUser::default()
+      },
+    );
+    let messages: Vec<String> = problems(&web).into_iter().map(|(_, m)| m).collect();
+    assert_eq!(messages.len(), 2, "{messages:?}");
+    assert!(messages[0].starts_with("The field web.authentication.password_hash is not"));
+    assert_eq!(
+      messages[1],
+      "The local account nobody needs password_hash or password"
+    );
+  }
+
+  #[test]
   fn issuers_are_https_unless_local_or_allowed() {
     let mut web = Web::default();
     let provider = |issuer: &str| Oidc {
@@ -258,6 +322,12 @@ mod tests {
       .oidc
       .insert("plain".into(), provider("http://auth.example.net/"));
     assert_eq!(problems(&web).len(), 1);
+    web
+      .authentication
+      .oidc
+      .insert("two words".into(), provider("https://auth.example.net/"));
+    assert_eq!(problems(&web).len(), 2, "a name that can not be a cookie's");
+    web.authentication.oidc.remove("two words");
     web
       .authentication
       .oidc

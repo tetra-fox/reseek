@@ -29,6 +29,11 @@ pub fn urls(value: &mut Value) {
   }
 }
 
+/// `text` with its credentials replaced when it is a URL that has some, else as it is.
+pub fn url(text: &str) -> String {
+  without_credentials(text).unwrap_or_else(|| text.to_string())
+}
+
 /// `text` with its credentials replaced, when it is a URL that has some.
 fn without_credentials(text: &str) -> Option<String> {
   let mut url = url::Url::parse(text).ok()?;

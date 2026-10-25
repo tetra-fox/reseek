@@ -16,6 +16,8 @@ pub struct ApiError {
   internal: Option<String>,
   /// the handler logged the failure itself, so the response does not log it again
   logged: bool,
+  /// seconds to send in `Retry-After`
+  retry_after: Option<u32>,
 }
 
 impl ApiError {
@@ -26,6 +28,7 @@ impl ApiError {
       detail,
       internal: None,
       logged: false,
+      retry_after: None,
     }
   }
 
@@ -47,6 +50,22 @@ impl ApiError {
   /// A 403: the principal's role or credential may not do this, or the feature is off.
   pub fn forbidden(error: impl Into<String>) -> Self {
     Self::new(StatusCode::FORBIDDEN, error, None)
+  }
+
+  /// A 429 for an address that failed too often lately, telling it to wait a minute.
+  pub fn rate_limited() -> Self {
+    let mut e = Self::new(
+      StatusCode::TOO_MANY_REQUESTS,
+      "too many failed attempts",
+      Some("try again in a minute".to_string()),
+    );
+    e.retry_after = Some(60);
+    e
+  }
+
+  /// A 429: the principal holds as many of something as it may.
+  pub fn too_many(error: impl Into<String>) -> Self {
+    Self::new(StatusCode::TOO_MANY_REQUESTS, error, None)
   }
 
   /// A 404: the thing asked for does not exist.
@@ -71,6 +90,11 @@ impl ApiError {
       "soulseek_unavailable",
       detail,
     )
+  }
+
+  /// A 503 for something other than the Soulseek connection that is not there now.
+  pub fn service_unavailable(error: impl Into<String>) -> Self {
+    Self::new(StatusCode::SERVICE_UNAVAILABLE, error, None)
   }
 
   /// A 500 for `error`, which is logged and not sent.
@@ -112,6 +136,11 @@ impl IntoResponse for ApiError {
       detail: self.detail,
     };
     let mut response = (status, Json(body)).into_response();
+    if let Some(seconds) = self.retry_after {
+      response
+        .headers_mut()
+        .insert(header::RETRY_AFTER, HeaderValue::from(seconds));
+    }
     if status == StatusCode::UNAUTHORIZED {
       response
         .headers_mut()

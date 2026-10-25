@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::analysis::AnalysisCompleted;
 use crate::auth::PrincipalSummary;
@@ -127,6 +127,19 @@ pub enum LiveFrame {
   /// an event was raised
   #[serde(rename = "events.raised")]
   EventsRaised(Box<EventRecord>),
+}
+
+/// The query of `GET /live`, which opens the event stream.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct LiveQuery {
+  /// the topics to follow, comma-separated: `application`, `logs`, `metrics`, `search`,
+  /// `search:<id>`, `transfers`, `conversations`, `rooms`, `users`, `events`; `application`
+  /// when left out
+  #[param(example = "application,transfers")]
+  pub topics: Option<String>,
+  /// an API token, for clients that can not set an `Authorization` header
+  pub access_token: Option<String>,
 }
 
 /// The first frame of every stream.

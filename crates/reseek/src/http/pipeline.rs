@@ -321,7 +321,7 @@ mod app_tests {
     let app = app(
       "[web]\nurl_base = \"/reseek/\"\n[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
       &[],
-    );
+    ).await;
     let health = app.send(request("GET", "/health", None)).await;
     assert_eq!(health.status, 200);
     assert_eq!(health.body, "Healthy");
@@ -348,7 +348,7 @@ mod app_tests {
 
   #[tokio::test]
   async fn forced_https_redirects_plain_requests() {
-    let app = app("[web.https]\nforce = true\nport = 8443\n", &[]);
+    let app = app("[web.https]\nforce = true\nport = 8443\n", &[]).await;
     let answer = app.send(request("GET", "/health?x=1", None)).await;
     assert_eq!(answer.status, 307);
     assert_eq!(
@@ -368,7 +368,8 @@ mod app_tests {
     let app = app(
       "[web]\ntrusted_proxies = [\"127.0.0.1/32\"]\n[web.https]\nforce = true\nport = 8443\n",
       &[],
-    );
+    )
+    .await;
     let proxied = |proto: &'static str| {
       let mut r = request("GET", "/health", None);
       r.headers_mut()

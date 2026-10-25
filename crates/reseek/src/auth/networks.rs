@@ -77,6 +77,7 @@ mod tests {
     Client {
       ip: ip.parse().unwrap(),
       host: host.map(str::to_string),
+      authority: host.map(str::to_string),
       https: false,
     }
   }

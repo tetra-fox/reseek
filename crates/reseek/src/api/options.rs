@@ -5,7 +5,6 @@
 //! needs `remote_configuration`; touching the files, or the authentication options, also needs
 //! someone at the UI rather than a stored API key.
 
-use api_types::auth::Principal;
 use api_types::options::{
   ConfigFile, ConfigView, FilePatch, FileQuery, FileReplace, FileValidate, FileWritten,
   OptionError, OptionsChanged, OptionsDocument, OptionsPatch, Validation,
@@ -22,7 +21,7 @@ use utoipa_axum::routes;
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::auth::{Administrator, Authorized, is_interactive};
+use crate::auth::{Administrator, Authorized, require_interactive};
 use crate::config::{Options, redact, view};
 
 /// The keys an API key or token may not change.
@@ -101,7 +100,7 @@ async fn patch_options(
   }
   let keys: Vec<String> = patch.set.keys().chain(&patch.unset).cloned().collect();
   if keys.iter().any(|k| is_authentication(k)) {
-    interactive(&admin.principal)?;
+    require_interactive(&admin.principal)?;
   }
   let expires_at = match &patch.expires_in {
     Some(text) => {
@@ -151,7 +150,7 @@ async fn delete_override(
     "Blocked runtime override removal; remote configuration is disabled",
   )?;
   if is_authentication(&key) {
-    interactive(&admin.principal)?;
+    require_interactive(&admin.principal)?;
   }
   let change = app.config.remove_override(&key).await?;
   info!(
@@ -179,7 +178,7 @@ async fn get_file(
     &current,
     "Blocked configuration file read; remote configuration is disabled",
   )?;
-  interactive(&admin.principal)?;
+  require_interactive(&admin.principal)?;
   let file = file(&current, query.file.as_deref())?;
   let text = match tokio::fs::read_to_string(&file.path).await {
     Ok(text) => Some(text),
@@ -219,7 +218,7 @@ async fn get_file_location(
     &current,
     "Blocked configuration file read; remote configuration is disabled",
   )?;
-  interactive(&admin.principal)?;
+  require_interactive(&admin.principal)?;
   Ok(Json(
     file(&current, query.file.as_deref())?
       .path
@@ -247,7 +246,7 @@ async fn patch_file(
     &current,
     "Blocked configuration file write; remote configuration is disabled",
   )?;
-  interactive(&admin.principal)?;
+  require_interactive(&admin.principal)?;
   let name = file(&current, patch.file.as_deref())?.name.clone();
   let written = app
     .config
@@ -283,7 +282,7 @@ async fn put_file(
     &current,
     "Blocked configuration file write; remote configuration is disabled",
   )?;
-  interactive(&admin.principal)?;
+  require_interactive(&admin.principal)?;
   let name = file(&current, replace.file.as_deref())?.name.clone();
   let written = app
     .config
@@ -339,17 +338,6 @@ fn remote(current: &Loaded<Options>, blocked: &str) -> Result<(), ApiError> {
   }
   warn!("{blocked}");
   Err(ApiError::forbidden("remote configuration is disabled").logged())
-}
-
-/// Refuses a principal that is a stored credential rather than someone at the UI.
-fn interactive(principal: &Principal) -> Result<(), ApiError> {
-  if is_interactive(principal) {
-    Ok(())
-  } else {
-    Err(ApiError::forbidden(
-      "needs a login session; an API key or token may not do this",
-    ))
-  }
 }
 
 fn is_authentication(key: &str) -> bool {
@@ -410,7 +398,8 @@ mod tests {
     let app = app(
       &format!("{TRUSTED}[relay.controller]\naddress = \"https://a:b@controller.lan/\"\n"),
       &[("RESEEK_HTTP_PORT", "6000")],
-    );
+    )
+    .await;
     let answer = app.send(request("GET", "/api/v0/options/view", None)).await;
     assert_eq!(answer.status, 200);
     let view = answer.json();
@@ -436,7 +425,7 @@ mod tests {
 
   #[tokio::test]
   async fn overrides_take_live_keys_and_refuse_restart_and_env_keys() {
-    let app = app(TRUSTED, &[("RESEEK_SLSK_DESCRIPTION", "from env")]);
+    let app = app(TRUSTED, &[("RESEEK_SLSK_DESCRIPTION", "from env")]).await;
     let set = |body| request("PATCH", "/api/v0/options", Some(body));
     let answer = app
       .send(set(
@@ -481,7 +470,8 @@ mod tests {
     let app = app(
       "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
       &[],
-    );
+    )
+    .await;
     assert_eq!(
       app
         .send(request("GET", "/api/v0/options", None))
@@ -515,7 +505,7 @@ mod tests {
 
   #[tokio::test]
   async fn file_writes_check_the_revision_validation_and_later_files() {
-    let app = app(TRUSTED, &[]);
+    let app = app(TRUSTED, &[]).await;
     std::fs::create_dir(app.dir.path().join("config.d")).unwrap();
     std::fs::write(
       app.dir.path().join("config.d/10-rooms.toml"),
@@ -577,7 +567,7 @@ mod tests {
 
   #[tokio::test]
   async fn a_managed_file_is_read_only() {
-    let app = app(TRUSTED, &[("RESEEK_CONFIG_MANAGED_BY", "nixos")]);
+    let app = app(TRUSTED, &[("RESEEK_CONFIG_MANAGED_BY", "nixos")]).await;
     let view = app
       .send(request("GET", "/api/v0/options/view", None))
       .await
@@ -598,7 +588,7 @@ mod tests {
 
   #[tokio::test]
   async fn validate_reports_errors_by_key_and_unknown_keys() {
-    let app = app(TRUSTED, &[]);
+    let app = app(TRUSTED, &[]).await;
     let check = |text: &str| {
       request(
         "POST",
@@ -621,7 +611,7 @@ mod tests {
 
   #[tokio::test]
   async fn an_api_key_may_read_but_not_touch_the_files() {
-    let app = app(TRUSTED, &[]);
+    let app = app(TRUSTED, &[]).await;
     let with_key = |method: &str, uri: &str, body| {
       let mut r = request(method, uri, body);
       r.headers_mut()

@@ -20,6 +20,7 @@ publish = false
 api-types = { path = "crates/api-types" }
 cascade = { path = "crates/cascade" }
 cascade-derive = { path = "crates/cascade-derive" }
+soulseek-client = { path = "crates/soulseek-client" }
 soulseek-proto = { path = "crates/soulseek-proto" }
 
 bitflags = "2"
@@ -57,3 +58,10 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+
+# argon2 is slow by design and much slower unoptimised; tests check passwords
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

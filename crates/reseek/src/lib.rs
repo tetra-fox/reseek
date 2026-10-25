@@ -11,6 +11,7 @@ pub mod crypto;
 pub mod db;
 pub mod events;
 pub mod http;
+pub mod live;
 pub mod logging;
 pub mod paths;
 pub mod state;

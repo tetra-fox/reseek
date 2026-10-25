@@ -1,5 +1,8 @@
 //! The daemon's life: reading the command line, loading the configuration, setting up the
-//! directories, logging and the instance lock, serving HTTP until a signal, and shutting down.
+//! directories, logging and the instance lock, opening the databases, serving HTTP until a
+//! signal, and shutting down.
+
+mod tasks;
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -11,13 +14,18 @@ use cascade::{Loaded, Overrides, Schema, Watch, Watcher};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
+use crate::auth::Auth;
 use crate::cli::{self, Command, Invocation};
 use crate::config::api_key::PrimaryApiKey;
 use crate::config::load::{self, ConfigFiles, Sources};
 use crate::config::{Options, redact, template};
+use crate::db::Location;
+use crate::events::EventBus;
 use crate::http::{self, pipeline};
+use crate::live::Live;
 use crate::logging::{self, LogBuffer, Logging, Sinks};
 use crate::paths::{Defaults, InstanceLock, Paths};
+use crate::state::StateOwner;
 use crate::ui::{Bundle, Ui};
 use crate::version;
 
@@ -48,11 +56,28 @@ pub struct AppState {
   pub logs: Arc<LogBuffer>,
   /// the URL base, with a leading `/` and no trailing one, empty for the root
   pub url_base: Arc<str>,
+  /// accounts, sessions, tokens and the failure limits
+  pub auth: Arc<Auth>,
+  /// the event bus
+  pub events: EventBus,
+  /// the event stream's hub
+  pub live: Live,
+  /// the application state document
+  pub state: StateOwner,
+  /// cancelled when the daemon shuts down
+  pub shutdown: CancellationToken,
 }
 
 impl AppState {
-  /// The state for a configuration that just loaded.
-  pub fn new(config: Watcher<Options>, logs: Arc<LogBuffer>) -> Result<Self, String> {
+  /// The state for a configuration that just loaded and an opened authentication database.
+  /// Raised events are pushed to the event stream from here on; [`AppState::spawn_tasks`]
+  /// starts the rest of the background work.
+  pub fn new(
+    config: Watcher<Options>,
+    logs: Arc<LogBuffer>,
+    auth: Auth,
+    shutdown: CancellationToken,
+  ) -> Result<Self, String> {
     let startup = config.current();
     let primary_key = match &startup.values.web.authentication.api_key {
       Some(text) => Some(Arc::new(
@@ -61,13 +86,34 @@ impl AppState {
       None => None,
     };
     let url_base = pipeline::url_base(&startup.values.web.url_base).into();
+    let live = Live::new(shutdown.clone());
+    let state = StateOwner::new(&startup, live.clone());
+    let events = EventBus::new(shutdown.clone());
+    let pushed = live.clone();
+    events.subscribe("live", None, move |record| {
+      pushed.publish(api_types::live::LiveFrame::EventsRaised(Box::new(
+        api_types::events::EventRecord::clone(&record),
+      )));
+      async { Ok(()) }
+    });
     Ok(Self {
       config,
       startup,
       primary_key,
       logs,
       url_base,
+      auth: Arc::new(auth),
+      events,
+      live,
+      state,
+      shutdown,
     })
+  }
+
+  /// Starts the background work every request relies on: the state and the stream follow the
+  /// configuration and the log, and ended sessions are pruned.
+  pub fn spawn_tasks(&self) {
+    tasks::spawn(self);
   }
 }
 
@@ -271,6 +317,19 @@ async fn serve(
   spawn_signals(watcher.clone(), cancel.clone());
 
   let grace = options.shutdown_timeout;
+  let location = Location {
+    data: paths.data.clone(),
+    backups: paths.backups.clone(),
+    volatile: options.flags.volatile,
+    log_sql: options.flags.log_sql,
+  };
+  let auth = match Auth::open(&location).await {
+    Ok(auth) => auth,
+    Err(e) => {
+      error!(error = %e, "the authentication database could not be opened");
+      return EXIT_FATAL;
+    }
+  };
   let ui = Ui::new(bundle, options, &load::program_dir());
   let listeners = match http::bind(&options.web).await {
     Ok(listeners) => listeners,
@@ -284,16 +343,18 @@ async fn serve(
     cancel.cancel();
     return 0;
   }
-  let state = match AppState::new(watcher, logging.buffer().clone()) {
+  let state = match AppState::new(watcher, logging.buffer().clone(), auth, cancel.clone()) {
     Ok(state) => state,
     Err(e) => {
       error!(error = e, "Invalid configuration");
       return EXIT_CONFIG;
     }
   };
+  state.spawn_tasks();
   info!(base = %state.url_base, "Using base url");
   info!("reseek started");
-  http::serve(listeners, pipeline::app(state, ui), cancel, grace).await;
+  http::serve(listeners, pipeline::app(state.clone(), ui), cancel, grace).await;
+  state.auth.db.close().await;
   info!("reseek stopped");
   0
 }
@@ -350,6 +411,27 @@ fn warn_about(options: &Options, logging: &Logging) {
   }
   if options.flags.log_sql {
     warn!("SQL logging is ENABLED; log files may contain sensitive data");
+  }
+  if options.flags.force_migrations {
+    warn!("force_migrations has no effect: migrations apply by version and none runs twice");
+  }
+  let authentication = &options.web.authentication;
+  if authentication.local.enabled
+    && authentication.password_hash.is_none()
+    && authentication.password == crate::config::Authentication::default().password
+  {
+    warn!(
+      username = authentication.username,
+      "the built-in account still has the default password; set web.authentication.password_hash"
+    );
+  }
+  for (name, user) in &authentication.local.users {
+    if user.password_hash.is_none() && user.password.is_some() {
+      warn!(
+        username = name,
+        "local account has its password in plain text; set password_hash from `reseek hash-password`"
+      );
+    }
   }
   if options.logger.loki.is_some() {
     warn!("forwarding logs to Grafana Loki is not available in this build; logger.loki ignored");
