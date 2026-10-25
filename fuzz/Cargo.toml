@@ -8,6 +8,7 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
+api-types = { path = "../crates/api-types" }
 cascade = { path = "../crates/cascade" }
 flate2 = "1"
 libfuzzer-sys = "0.4"
@@ -79,6 +80,13 @@ bench = false
 [[bin]]
 name = "config_edit"
 path = "fuzz_targets/config_edit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "api_request"
+path = "fuzz_targets/api_request.rs"
 test = false
 doc = false
 bench = false
