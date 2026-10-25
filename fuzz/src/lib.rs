@@ -1,5 +1,7 @@
 //! Helpers shared by the fuzz targets
 
+pub mod config;
+
 use std::io::Read;
 
 use flate2::Compression;

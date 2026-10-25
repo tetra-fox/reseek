@@ -1,8 +1,8 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
+use reseek_fuzz::{LIMITS, check_peer, compressed_frame};
 use soulseek_proto::PeerMessage;
-use soulseek_proto_fuzz::{LIMITS, check_peer, compressed_frame};
 
 // first byte: bit 0 picks a body to compress (0) or a raw zlib stream (1), bit 1 picks a
 // folder contents response (1) over a browse response (0)

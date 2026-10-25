@@ -1,5 +1,5 @@
 [package]
-name = "soulseek-proto-fuzz"
+name = "reseek-fuzz"
 version = "0.0.0"
 edition = "2024"
 publish = false
@@ -8,9 +8,13 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
+cascade = { path = "../crates/cascade" }
 flate2 = "1"
 libfuzzer-sys = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 soulseek-proto = { path = "../crates/soulseek-proto" }
+toml_edit = "0.25"
 
 # its own workspace: cargo-fuzz builds with nightly and the main workspace stays on stable
 [workspace]
@@ -61,6 +65,20 @@ bench = false
 [[bin]]
 name = "compressed_browse_response"
 path = "fuzz_targets/compressed_browse_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "config_file"
+path = "fuzz_targets/config_file.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "config_edit"
+path = "fuzz_targets/config_edit.rs"
 test = false
 doc = false
 bench = false

@@ -1,8 +1,8 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
+use reseek_fuzz::{LIMITS, check_peer, compressed_frame};
 use soulseek_proto::{PeerMessage, peek_search_response};
-use soulseek_proto_fuzz::{LIMITS, check_peer, compressed_frame};
 
 // first byte: 0 = the rest is a body to compress, 1 = the rest is a raw zlib stream
 fuzz_target!(|data: &[u8]| {
