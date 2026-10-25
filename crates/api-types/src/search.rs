@@ -106,8 +106,19 @@ pub struct Search {
   pub responses: Option<Vec<SearchResponse>>,
 }
 
-fn default_search_timeout() -> u64 {
-  15_000
+fn default_search_timeout() -> SearchTimeout {
+  SearchTimeout::Milliseconds(15_000)
+}
+
+/// How long a search waits for another response: a number of milliseconds, or a duration such
+/// as `"15s"` or `"1m 30s"`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(untagged)]
+pub enum SearchTimeout {
+  /// milliseconds
+  Milliseconds(u64),
+  /// a duration in words
+  Text(String),
 }
 
 fn default_response_limit() -> u32 {
@@ -137,11 +148,11 @@ pub struct SearchRequest {
   /// what to search for: whitespace-separated terms, a term starting with `-` excludes
   #[schema(example = "pink floyd animals -live")]
   pub search_text: String,
-  /// the search completes after this many milliseconds without an accepted response, at
-  /// least 1000
+  /// the search completes after this long without an accepted response, at least a second;
+  /// a number is milliseconds
   #[serde(default = "default_search_timeout")]
-  #[schema(default = 15000, example = 15000)]
-  pub search_timeout: u64,
+  #[schema(example = "15s")]
+  pub search_timeout: SearchTimeout,
   /// the search completes once this many responses were accepted
   #[serde(default = "default_response_limit")]
   #[schema(default = 250)]

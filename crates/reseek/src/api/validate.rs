@@ -2,6 +2,8 @@
 //! base64 paths of the files routes and room names. A domain's own checks are in its handler
 //! module.
 
+use std::time::Duration;
+
 use base64::Engine;
 use base64::alphabet;
 use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
@@ -27,6 +29,12 @@ pub fn limit(name: &str, value: u32, max: u32) -> Result<(), ApiError> {
 /// Refuses a page size of zero.
 pub fn positive(name: &str, value: u32) -> Result<(), ApiError> {
   limit(name, value, u32::MAX)
+}
+
+/// A duration written as `"15s"`, `"2h 30m"` or `"7d"`.
+pub fn duration(name: &str, text: &str) -> Result<Duration, ApiError> {
+  humantime::parse_duration(text.trim())
+    .map_err(|e| ApiError::invalid(format!("{name} is not a duration"), e.to_string()))
 }
 
 /// The path a files route names in base64 of its UTF-8 text, standard or URL-safe, padded or

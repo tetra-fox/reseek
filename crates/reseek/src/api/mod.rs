@@ -10,6 +10,7 @@ mod files;
 mod live;
 mod oidc;
 mod options;
+mod searches;
 mod session;
 mod shares;
 mod tokens;
@@ -41,6 +42,7 @@ use crate::auth;
     (name = "auth", description = "Signing in with an OpenID Connect provider"),
     (name = "tokens", description = "API tokens for scripts"),
     (name = "live", description = "The event stream"),
+    (name = "searches", description = "Searches we start on the network"),
     (name = "shares", description = "What we share"),
     (name = "files", description = "The downloaded files, served to the browser"),
     (name = "analysis", description = "Checking whether a downloaded file is what it claims")
@@ -52,6 +54,7 @@ struct ApiDoc;
 fn routes() -> OpenApiRouter<AppState> {
   let api = OpenApiRouter::new()
     .merge(application::routes())
+    .merge(searches::routes())
     .merge(shares::routes())
     .merge(files::routes())
     .merge(analysis::routes())
