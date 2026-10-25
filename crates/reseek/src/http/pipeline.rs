@@ -16,10 +16,12 @@ use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 use tracing::{Instrument, debug, info, info_span};
 
+use cascade::Watcher;
+
 use super::{Peer, Transport};
 use crate::api::{self, error::ApiError};
 use crate::app::AppState;
-use crate::auth::client::without_port;
+use crate::auth::{client, networks};
 use crate::config::Options;
 use crate::ui::Ui;
 
@@ -45,10 +47,18 @@ pub fn app(state: AppState, ui: Ui) -> Router {
     .layer(CatchPanicLayer::custom(panicked));
   let logging = startup.web.logging;
   let https = startup.web.https.clone();
+  let force = (https.force && !https.disabled).then_some(https.port);
+  let config = state.config.clone();
   let service = ServiceBuilder::new()
     .option_layer(cors(&startup))
     .layer(middleware::from_fn(move |request, next| {
-      https_only(https.force && !https.disabled, https.port, request, next)
+      let config = config.clone();
+      async move {
+        match force {
+          Some(port) => https_only(&config, port, request, next).await,
+          None => next.run(request).await,
+        }
+      }
     }))
     .map_request(move |request| without_base(&base, request))
     .layer(middleware::from_fn(move |request, next| {
@@ -92,45 +102,45 @@ fn without_base(base: &str, mut request: Request) -> Request {
   request
 }
 
-/// With `force`, sends plain HTTP requests to HTTPS and adds HSTS to HTTPS answers, except for
-/// `localhost`. Requests over the unix socket are left alone.
-async fn https_only(force: bool, port: u16, request: Request, next: Next) -> Response {
-  if !force {
+/// Sends plain HTTP requests to HTTPS on `port` and adds HSTS to HTTPS answers, except for
+/// `localhost`. The scheme is the one the client used, which a trusted reverse proxy reports in
+/// `X-Forwarded-Proto`, so a proxy that ends TLS in front does not loop. Requests over the unix
+/// socket are left alone.
+async fn https_only(
+  config: &Watcher<Options>,
+  port: u16,
+  request: Request,
+  next: Next,
+) -> Response {
+  let Some(peer) = request.extensions().get::<Peer>().copied() else {
+    return ApiError::internal("a request arrived without its connection").into_response();
+  };
+  if peer.transport == Transport::Unix {
     return next.run(request).await;
   }
-  let transport = request.extensions().get::<Peer>().map(|p| p.transport);
-  let host = request
-    .headers()
-    .get(header::HOST)
-    .and_then(|h| h.to_str().ok())
-    .map(without_port);
-  match transport {
-    Some(Transport::Plain) => {
-      let Some(host) = host else {
-        return ApiError::bad_request("a Host header is needed to redirect to HTTPS")
-          .into_response();
-      };
-      let path = request.uri().path_and_query().map_or("/", |p| p.as_str());
-      // an IPv6 address takes its brackets back in the URL
-      let host = if host.parse::<std::net::Ipv6Addr>().is_ok() {
-        format!("[{host}]")
-      } else {
-        host
-      };
-      Redirect::temporary(&format!("https://{host}:{port}{path}")).into_response()
+  let proxies = networks::ranges(&config.current().values.web.trusted_proxies);
+  let client = client::resolve(&peer, request.uri(), request.headers(), &proxies);
+  if client.https {
+    let mut response = next.run(request).await;
+    if client.host.as_deref() != Some("localhost") {
+      response.headers_mut().insert(
+        header::STRICT_TRANSPORT_SECURITY,
+        HeaderValue::from_static(HSTS),
+      );
     }
-    Some(Transport::Tls) => {
-      let mut response = next.run(request).await;
-      if host.as_deref() != Some("localhost") {
-        response.headers_mut().insert(
-          header::STRICT_TRANSPORT_SECURITY,
-          HeaderValue::from_static(HSTS),
-        );
-      }
-      response
-    }
-    _ => next.run(request).await,
+    return response;
   }
+  let Some(host) = client.host else {
+    return ApiError::bad_request("a Host header is needed to redirect to HTTPS").into_response();
+  };
+  let path = request.uri().path_and_query().map_or("/", |p| p.as_str());
+  // an IPv6 address takes its brackets back in the URL
+  let host = if host.parse::<std::net::Ipv6Addr>().is_ok() {
+    format!("[{host}]")
+  } else {
+    host
+  };
+  Redirect::temporary(&format!("https://{host}:{port}{path}")).into_response()
 }
 
 /// The CORS layer `web.cors.allowed_origins` asks for: none when it is empty, any origin
@@ -351,5 +361,38 @@ mod app_tests {
       app.send(v6).await.headers["location"],
       "https://[::1]:8443/"
     );
+  }
+
+  #[tokio::test]
+  async fn forced_https_believes_the_scheme_a_trusted_proxy_reports() {
+    let app = app(
+      "[web]\ntrusted_proxies = [\"127.0.0.1/32\"]\n[web.https]\nforce = true\nport = 8443\n",
+      &[],
+    );
+    let proxied = |proto: &'static str| {
+      let mut r = request("GET", "/health", None);
+      r.headers_mut()
+        .insert("x-forwarded-proto", proto.parse().unwrap());
+      r.headers_mut()
+        .insert("x-forwarded-host", "reseek.example.net".parse().unwrap());
+      r
+    };
+    let tls_at_proxy = app.send(proxied("https")).await;
+    assert_eq!(
+      tls_at_proxy.status, 200,
+      "no redirect loop behind the proxy"
+    );
+    assert_eq!(
+      tls_at_proxy.headers["strict-transport-security"],
+      "max-age=2592000"
+    );
+    let plain = app.send(proxied("http")).await;
+    assert_eq!(plain.status, 307);
+    assert_eq!(
+      plain.headers["location"],
+      "https://reseek.example.net:8443/health"
+    );
+    let untrusted = app.send_from("192.0.2.1:1", proxied("https")).await;
+    assert_eq!(untrusted.status, 307, "only a trusted proxy is believed");
   }
 }
