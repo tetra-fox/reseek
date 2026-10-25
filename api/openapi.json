@@ -1496,6 +1496,217 @@
         }
       }
     },
+    "/api/v0/events": {
+      "get": {
+        "tags": [
+          "events"
+        ],
+        "summary": "A page of the event log, newest first, or oldest first after `since`; `X-Total-Count` is\nhow many match the type and username filters.",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "how many matching events to skip, 0 when left out",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "how many events to return at most, at least 1; 100 when left out",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "only events of these types: comma-separated names in any case; every type when left out",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "DownloadFileComplete,DownloadFileFailed"
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "only events whose data has this `username`",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "only events after this time, oldest first",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "only events before this time, newest first",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "headers": {
+              "X-Total-Count": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0
+                },
+                "description": "how many events match"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventRecord"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/events/{type}": {
+      "post": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Raises a sample event of a type, its data made up with every text starting with the body,\na JSON string that may be empty. It is logged and runs every script that takes it, exactly\nas a real one does.",
+        "operationId": "raise",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "description": "the event type, in any case",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/EventType"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/files/{root}/directories": {
       "get": {
         "tags": [
@@ -20931,6 +21142,10 @@
     {
       "name": "relay",
       "description": "Relay controller and agents"
+    },
+    {
+      "name": "events",
+      "description": "The event log"
     }
   ]
 }

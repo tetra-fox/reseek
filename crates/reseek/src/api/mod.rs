@@ -5,6 +5,7 @@ pub mod agent;
 mod analysis;
 mod application;
 pub mod error;
+mod events;
 pub mod extract;
 mod files;
 mod live;
@@ -56,7 +57,8 @@ use crate::auth;
     (name = "shares", description = "What we share"),
     (name = "files", description = "The downloaded files, served to the browser"),
     (name = "analysis", description = "Checking whether a downloaded file is what it claims"),
-    (name = "relay", description = "Relay controller and agents")
+    (name = "relay", description = "Relay controller and agents"),
+    (name = "events", description = "The event log")
   )
 )]
 struct ApiDoc;
@@ -73,6 +75,7 @@ fn routes() -> OpenApiRouter<AppState> {
     .merge(files::routes())
     .merge(analysis::routes())
     .merge(relay::routes())
+    .merge(events::routes())
     .merge(options::routes())
     .merge(session::routes())
     .merge(oidc::routes())
