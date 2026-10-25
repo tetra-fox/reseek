@@ -79,8 +79,9 @@ pub fn free_port() -> u16 {
 }
 
 /// The number that places this process in [`PORTS`]. nextest gives each test running at once a
-/// slot no other running test has; under `cargo test` the process id stands in, which two live
-/// processes can share once it is reduced to a place.
+/// slot no other running test has, though two nextest runs alive at once both start at slot 0
+/// and can share ports; under `cargo test` the process id stands in, which two live processes
+/// can share once it is reduced to a place.
 fn process_slot() -> u32 {
   match std::env::var("NEXTEST_TEST_GLOBAL_SLOT") {
     Ok(slot) => slot.parse().expect("nextest's slot is a number"),

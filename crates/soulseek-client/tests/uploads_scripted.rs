@@ -272,11 +272,14 @@ async fn a_downloader_that_closes_early_fails_the_upload_and_may_queue_the_file_
   let mut options = listening_options();
   let mut requests = transfers::queueing(&mut options);
   let mut scripted = Scripted::with_options(options).await;
-  let (running, mut bob) = offered_upload(&mut scripted, "@@share\\gone.mp3").await;
+  let running = upload(&scripted, "@@share\\gone.mp3", |request| {
+    request.options.governor = Some(first_chunk_only());
+  });
+  let mut bob = scripted.connected().await;
   let source = running.source.clone();
   let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\gone.mp3").await;
   transfer.send(&0u64.to_le_bytes()).await;
-  transfer.raw(1000).await;
+  assert_eq!(transfer.raw(1000).await, content(1000));
   drop(transfer);
   let error = running.result().await.unwrap_err();
   assert!(matches!(error, ClientError::Connection { .. }), "{error:?}");
