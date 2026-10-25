@@ -11,6 +11,7 @@ mod live;
 mod messaging;
 mod oidc;
 mod options;
+mod relay;
 mod searches;
 mod session;
 mod shares;
@@ -54,7 +55,8 @@ use crate::auth;
     (name = "messages", description = "Searching what was said"),
     (name = "shares", description = "What we share"),
     (name = "files", description = "The downloaded files, served to the browser"),
-    (name = "analysis", description = "Checking whether a downloaded file is what it claims")
+    (name = "analysis", description = "Checking whether a downloaded file is what it claims"),
+    (name = "relay", description = "Relay controller and agents")
   )
 )]
 struct ApiDoc;
@@ -70,6 +72,7 @@ fn routes() -> OpenApiRouter<AppState> {
     .merge(shares::routes())
     .merge(files::routes())
     .merge(analysis::routes())
+    .merge(relay::routes())
     .merge(options::routes())
     .merge(session::routes())
     .merge(oidc::routes())

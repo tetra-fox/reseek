@@ -1,0 +1,454 @@
+//! The relay routes: the relay's state, a controller's agents, an agent's connection to its
+//! controller, and the calls agents make to their controller: sending their shares, the files
+//! peers download through the controller, fetching finished downloads, and the agent socket.
+//!
+//! Each route is for the relay mode it names, as the daemon started: anything else is answered
+//! 403 `relay_disabled` or `wrong_relay_mode`. An agent's calls take an API key or token, never
+//! a session.
+
+use api_types::auth::{Principal, Via};
+use api_types::relay::{RelayAgentState, RelayFileUploadResult, RelayState};
+use axum::extract::multipart::MultipartRejection;
+use axum::extract::{Multipart, Request, State};
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::Response;
+use base64::Engine;
+use tracing::info;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
+use uuid::Uuid;
+
+use super::error::ApiError;
+use super::extract::{Json, Path};
+use crate::app::AppState;
+use crate::auth::{Administrator, AnyRole, Authorized, ReadWrite, require_interactive};
+use crate::config::Options;
+use crate::config::enums::RelayMode;
+use crate::safety::traverses;
+use crate::services::AgentCredential;
+
+/// The relay routes.
+pub fn routes() -> OpenApiRouter<AppState> {
+  OpenApiRouter::new()
+    .routes(routes!(state))
+    .routes(routes!(agents))
+    .routes(routes!(kick))
+    .routes(routes!(start_agent, stop_agent))
+    .routes(routes!(sync))
+    .routes(routes!(receive_shares))
+    .routes(routes!(receive_file))
+    .routes(routes!(serve_download))
+    .routes(routes!(socket))
+}
+
+/// The side of a relay a route is for.
+#[derive(Clone, Copy)]
+enum Side {
+  /// a controller, or a debug instance that is both
+  Controller,
+  /// an agent, or a debug instance that is both
+  Agent,
+}
+
+/// Refuses a route whose relay mode this instance did not start in.
+fn mode(options: &Options, side: Option<Side>) -> Result<(), ApiError> {
+  let relay = &options.relay;
+  if !relay.enabled {
+    return Err(ApiError::disabled(
+      "relay_disabled",
+      "relay mode is off on this instance",
+    ));
+  }
+  let fits = match (side, relay.mode) {
+    (None, _) | (_, RelayMode::Debug) => true,
+    (Some(Side::Controller), mode) => mode == RelayMode::Controller,
+    (Some(Side::Agent), mode) => mode == RelayMode::Agent,
+  };
+  if fits {
+    return Ok(());
+  }
+  Err(ApiError::disabled(
+    "wrong_relay_mode",
+    format!("this instance is a relay {:?}", relay.mode),
+  ))
+}
+
+/// Refuses a principal that is not an API key or token, unless authentication is off.
+fn stored_credential(principal: &Principal, options: &Options) -> Result<(), ApiError> {
+  match principal.via {
+    Via::ApiToken { .. } | Via::ConfigApiKey { .. } => Ok(()),
+    Via::TrustedNetwork { .. } if options.web.authentication.disabled => Ok(()),
+    _ => Err(ApiError::forbidden("an agent calls with an API key")),
+  }
+}
+
+/// The agent a request names in `X-Relay-Agent` with its `X-Relay-Credential`; a request
+/// missing either is refused with 401.
+fn agent_credential(headers: &HeaderMap) -> Result<AgentCredential, ApiError> {
+  let header = |name: &str| {
+    headers
+      .get(name)
+      .and_then(|value| value.to_str().ok())
+      .filter(|value| !value.is_empty())
+      .map(str::to_string)
+  };
+  match (header("x-relay-agent"), header("x-relay-credential")) {
+    (Some(agent), Some(credential)) => Ok(AgentCredential { agent, credential }),
+    _ => Err(ApiError::unauthorized(
+      "X-Relay-Agent and X-Relay-Credential are required",
+    )),
+  }
+}
+
+/// The relay's state: the mode, the controller connection and the agents.
+#[utoipa::path(
+  get, path = "/relay", tag = "relay",
+  responses(
+    (status = 200, body = RelayState), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody)
+  )
+)]
+async fn state(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+) -> Result<Json<RelayState>, ApiError> {
+  mode(&app.startup.values, None)?;
+  Ok(Json(app.state.current().relay.clone()))
+}
+
+/// The agents logged in to this controller.
+#[utoipa::path(
+  get, path = "/relay/agents", tag = "relay",
+  responses(
+    (status = 200, body = Vec<RelayAgentState>), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn agents(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+) -> Result<Json<Vec<RelayAgentState>>, ApiError> {
+  mode(&app.startup.values, Some(Side::Controller))?;
+  app.services.relay.agents().await.map(Json)
+}
+
+/// Closes an agent's connection and unloads its shares; it connects again unless its
+/// configuration was removed too.
+#[utoipa::path(
+  delete, path = "/relay/agents/{name}", tag = "relay",
+  params(("name" = String, Path, description = "the agent's instance name")),
+  responses(
+    (status = 204, description = "disconnected"), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn kick(
+  State(app): State<AppState>,
+  admin: Authorized<Administrator>,
+  Path(name): Path<String>,
+) -> Result<StatusCode, ApiError> {
+  mode(&app.startup.values, Some(Side::Controller))?;
+  app.services.relay.kick(&name).await?;
+  info!(
+    by = admin.principal.subject,
+    agent = name,
+    "relay agent disconnected"
+  );
+  Ok(StatusCode::NO_CONTENT)
+}
+
+/// Starts this agent's connection to its controller. Needs someone at the UI.
+#[utoipa::path(
+  put, path = "/relay/agent", tag = "relay",
+  responses(
+    (status = 200, description = "connecting"), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn start_agent(
+  State(app): State<AppState>,
+  admin: Authorized<Administrator>,
+) -> Result<StatusCode, ApiError> {
+  mode(&app.startup.values, Some(Side::Agent))?;
+  require_interactive(&admin.principal)?;
+  app.services.relay.start_agent().await?;
+  info!(
+    by = admin.principal.subject,
+    "relay agent connection started"
+  );
+  Ok(StatusCode::OK)
+}
+
+/// Closes this agent's connection to its controller. Needs someone at the UI.
+#[utoipa::path(
+  delete, path = "/relay/agent", tag = "relay",
+  responses(
+    (status = 204, description = "disconnected"), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn stop_agent(
+  State(app): State<AppState>,
+  admin: Authorized<Administrator>,
+) -> Result<StatusCode, ApiError> {
+  mode(&app.startup.values, Some(Side::Agent))?;
+  require_interactive(&admin.principal)?;
+  app.services.relay.stop_agent().await?;
+  info!(
+    by = admin.principal.subject,
+    "relay agent connection stopped"
+  );
+  Ok(StatusCode::NO_CONTENT)
+}
+
+/// Sends this agent's shares to its controller again. Needs someone at the UI.
+#[utoipa::path(
+  post, path = "/relay/agent/sync", tag = "relay",
+  responses(
+    (status = 202, description = "sending"), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 409, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn sync(
+  State(app): State<AppState>,
+  admin: Authorized<Administrator>,
+) -> Result<StatusCode, ApiError> {
+  mode(&app.startup.values, Some(Side::Agent))?;
+  require_interactive(&admin.principal)?;
+  app.services.relay.sync().await?;
+  info!(by = admin.principal.subject, "relay share sync asked for");
+  Ok(StatusCode::ACCEPTED)
+}
+
+/// The token of an agent's upload, refused with `message` when it is no UUID.
+fn token(text: &str, message: &str) -> Result<Uuid, ApiError> {
+  Uuid::parse_str(text).map_err(|_| ApiError::bad_request(message))
+}
+
+/// The form of an agent's upload; a body that is not `multipart/form-data` is refused with 415.
+fn form(form: Result<Multipart, MultipartRejection>) -> Result<Multipart, ApiError> {
+  form.map_err(|e| ApiError::unsupported_media(e.body_text()))
+}
+
+/// An agent sends its share list (`shares`, JSON) and share database (`database`) for the
+/// upload the controller asked for with `token`.
+#[utoipa::path(
+  post, path = "/relay/controller/shares/{token}", tag = "relay",
+  params(
+    ("token" = Uuid, Path, description = "the token the controller asked with"),
+    ("X-Relay-Agent" = String, Header, description = "the agent's instance name"),
+    ("X-Relay-Credential" = String, Header, description = "the agent's credential for the token")
+  ),
+  request_body(content_type = "multipart/form-data", content = Vec<u8>),
+  responses(
+    (status = 200, description = "loaded"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 409, body = api_types::ErrorBody), (status = 413, body = api_types::ErrorBody),
+    (status = 415, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn receive_shares(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+  Path(text): Path<String>,
+  headers: HeaderMap,
+  upload: Result<Multipart, MultipartRejection>,
+) -> Result<StatusCode, ApiError> {
+  let options = &app.startup.values;
+  mode(options, Some(Side::Controller))?;
+  stored_credential(&caller.principal, options)?;
+  let token = token(&text, "Token is not a valid Guid")?;
+  let upload = form(upload)?;
+  let agent = agent_credential(&headers)?;
+  app
+    .services
+    .relay
+    .receive_shares(token, agent, upload)
+    .await?;
+  Ok(StatusCode::OK)
+}
+
+/// An agent sends the file (`file`, named by its remote filename) a peer downloads through the
+/// controller, for the upload asked for with `token`; answered once that upload has ended,
+/// with how it ended.
+#[utoipa::path(
+  post, path = "/relay/controller/files/{token}", tag = "relay",
+  params(
+    ("token" = Uuid, Path, description = "the token the controller asked with"),
+    ("X-Relay-Agent" = String, Header, description = "the agent's instance name"),
+    ("X-Relay-Credential" = String, Header, description = "the agent's credential for the token")
+  ),
+  request_body(content_type = "multipart/form-data", content = Vec<u8>),
+  responses(
+    (status = 200, body = RelayFileUploadResult), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 409, body = api_types::ErrorBody), (status = 415, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn receive_file(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+  Path(text): Path<String>,
+  headers: HeaderMap,
+  upload: Result<Multipart, MultipartRejection>,
+) -> Result<Json<RelayFileUploadResult>, ApiError> {
+  let options = &app.startup.values;
+  mode(options, Some(Side::Controller))?;
+  stored_credential(&caller.principal, options)?;
+  let token = token(&text, "Token is not a valid Guid")?;
+  let upload = form(upload)?;
+  let agent = agent_credential(&headers)?;
+  app
+    .services
+    .relay
+    .receive_file(token, agent, upload)
+    .await
+    .map(Json)
+}
+
+/// An agent fetches a finished download, named in `X-Relay-Filename-Base64` by its path under
+/// the downloads directory, with the token the controller announced it with.
+#[utoipa::path(
+  get, path = "/relay/controller/downloads/{token}", tag = "relay",
+  params(
+    ("token" = Uuid, Path, description = "the token the download was announced with"),
+    ("X-Relay-Agent" = String, Header, description = "the agent's instance name"),
+    ("X-Relay-Credential" = String, Header, description = "the agent's credential for the token"),
+    ("X-Relay-Filename-Base64" = String, Header, description = "the file's relative path, base64")
+  ),
+  responses(
+    (status = 200, content_type = "application/octet-stream", body = Vec<u8>),
+    (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn serve_download(
+  State(app): State<AppState>,
+  caller: Authorized<AnyRole>,
+  Path(text): Path<String>,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  let options = &app.startup.values;
+  mode(options, Some(Side::Controller))?;
+  stored_credential(&caller.principal, options)?;
+  let token = token(&text, "Token is not in a valid format")?;
+  let agent = agent_credential(&headers)?;
+  let filename = download_filename(&headers)?;
+  app
+    .services
+    .relay
+    .serve_download(token, agent, filename)
+    .await
+}
+
+/// The relative path `X-Relay-Filename-Base64` names, refused when it is missing, does not
+/// decode or steps outside the downloads directory.
+fn download_filename(headers: &HeaderMap) -> Result<String, ApiError> {
+  let encoded = headers
+    .get("x-relay-filename-base64")
+    .and_then(|value| value.to_str().ok())
+    .ok_or_else(|| ApiError::bad_request("X-Relay-Filename-Base64 is required"))?;
+  let bytes = base64::engine::general_purpose::STANDARD
+    .decode(encoded)
+    .map_err(|e| ApiError::invalid("X-Relay-Filename-Base64 is not base64", e.to_string()))?;
+  let filename = String::from_utf8(bytes)
+    .map_err(|_| ApiError::bad_request("X-Relay-Filename-Base64 is not UTF-8"))?;
+  if traverses(&filename) {
+    return Err(ApiError::bad_request(
+      "the filename contains a traversal segment",
+    ));
+  }
+  Ok(filename)
+}
+
+/// The socket an agent keeps open to its controller, opened with a WebSocket upgrade and the
+/// `reseek-relay-v1` sub-protocol.
+#[utoipa::path(
+  get, path = "/relay/ws", tag = "relay",
+  responses(
+    (status = 101, description = "the socket is open"), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 426, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn socket(
+  State(app): State<AppState>,
+  caller: Authorized<AnyRole>,
+  request: Request,
+) -> Result<Response, ApiError> {
+  let options = &app.startup.values;
+  mode(options, Some(Side::Controller))?;
+  stored_credential(&caller.principal, options)?;
+  app.services.relay.socket(request).await
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn options(enabled: bool, relay_mode: RelayMode) -> Options {
+    let mut options = Options::default();
+    options.relay.enabled = enabled;
+    options.relay.mode = relay_mode;
+    options
+  }
+
+  #[test]
+  fn routes_answer_only_in_their_relay_mode() {
+    let refusal = |options: &Options, side| mode(options, side).map_err(|e| format!("{e:?}"));
+    let off = options(false, RelayMode::Controller);
+    assert!(refusal(&off, None).unwrap_err().contains("relay_disabled"));
+    let controller = options(true, RelayMode::Controller);
+    assert!(refusal(&controller, Some(Side::Controller)).is_ok());
+    assert!(
+      refusal(&controller, Some(Side::Agent))
+        .unwrap_err()
+        .contains("wrong_relay_mode")
+    );
+    let agent = options(true, RelayMode::Agent);
+    assert!(refusal(&agent, Some(Side::Agent)).is_ok());
+    assert!(
+      refusal(&agent, Some(Side::Controller))
+        .unwrap_err()
+        .contains("wrong_relay_mode")
+    );
+    let debug = options(true, RelayMode::Debug);
+    assert!(
+      refusal(&debug, Some(Side::Agent)).is_ok() && refusal(&debug, Some(Side::Controller)).is_ok()
+    );
+  }
+
+  #[test]
+  fn an_agent_names_its_download_in_standard_base64() {
+    let with = |value: &'static str| {
+      let mut headers = HeaderMap::new();
+      headers.insert("x-relay-filename-base64", value.parse().unwrap());
+      headers
+    };
+    assert_eq!(
+      download_filename(&with("QXJ0aXN0L0FsYnVtLzAxLmZsYWM=")).unwrap(),
+      "Artist/Album/01.flac"
+    );
+    assert_eq!(
+      download_filename(&HeaderMap::new()).unwrap_err().status(),
+      400
+    );
+    assert_eq!(
+      download_filename(&with("not base64!"))
+        .unwrap_err()
+        .status(),
+      400
+    );
+    assert_eq!(
+      download_filename(&with("Li4vc2VjcmV0"))
+        .unwrap_err()
+        .status(),
+      400,
+      "../secret"
+    );
+  }
+}
