@@ -238,6 +238,23 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn drop_ins_that_can_not_be_listed_are_not_taken_for_gone() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir(dir.path().join("config.d")).unwrap();
+    fs::write(
+      dir.path().join("config.d/10-a.toml"),
+      "[server]\nport = 2000\n",
+    )
+    .unwrap();
+    let watcher = watched(dir.path());
+    fs::remove_dir_all(dir.path().join("config.d")).unwrap();
+    fs::write(dir.path().join("config.d"), "").unwrap();
+    assert!(matches!(watcher.reload().await, Err(Error::Read { .. })));
+    assert_eq!(watcher.current().values.server.port, 2000);
+    assert!(watcher.current().load_error.is_some());
+  }
+
+  #[tokio::test]
   async fn a_reload_is_tried_again_after_a_moment() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.toml");

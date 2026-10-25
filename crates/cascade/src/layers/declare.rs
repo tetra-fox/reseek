@@ -43,7 +43,7 @@ impl<T: Root> Layers<T> {
     };
     self.declare_env(&mut declared)?;
     let mut substituted = false;
-    for (name, path) in files::expand(&self.entries) {
+    for (name, path) in files::expand(&self.entries)? {
       let text = match substitute {
         Some((n, text)) if n == name => {
           substituted = true;

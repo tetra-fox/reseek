@@ -195,11 +195,13 @@ impl<T: Root> Layers<T> {
   }
 
   /// Where the file `name` is, when it is one of the configuration's files.
-  pub(crate) fn file_path(&self, name: &str) -> Option<PathBuf> {
-    files::expand(&self.entries)
-      .into_iter()
-      .find(|(n, _)| n == name)
-      .map(|(_, path)| path)
+  pub(crate) fn file_path(&self, name: &str) -> Result<Option<PathBuf>, Error> {
+    Ok(
+      files::expand(&self.entries)?
+        .into_iter()
+        .find(|(n, _)| n == name)
+        .map(|(_, path)| path),
+    )
   }
 
   pub(crate) fn entries(&self) -> &[Entry] {
@@ -216,7 +218,7 @@ impl<T: Root> Layers<T> {
 
   /// The files as they are on disk now, with their revisions.
   pub(crate) fn files_now(&self) -> Result<Vec<LoadedFile>, Error> {
-    files::expand(&self.entries)
+    files::expand(&self.entries)?
       .into_iter()
       .map(|(name, path)| match files::revision(&path) {
         Ok(revision) => Ok(LoadedFile {

@@ -99,7 +99,7 @@ impl<T: Root> State<T> {
   ) -> Result<Written<T>, Error> {
     let path = self
       .layers
-      .file_path(name)
+      .file_path(name)?
       .ok_or_else(|| Error::UnknownFile(name.to_string()))?;
     let current = match std::fs::read_to_string(&path) {
       Ok(text) => Some(text),

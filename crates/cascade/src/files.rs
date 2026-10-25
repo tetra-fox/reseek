@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
+use crate::Error;
+
 /// A file or a pattern of files, relative to `dir` unless absolute.
 #[derive(Clone, Debug)]
 pub(crate) struct Entry {
@@ -46,7 +48,9 @@ impl Entry {
 
 /// The files `entries` name, in order: a plain file whether or not it exists, then each
 /// pattern's matches in lexical order. A file named twice is listed once, where it comes last.
-pub(crate) fn expand(entries: &[Entry]) -> Vec<(String, PathBuf)> {
+/// A pattern's directory that exists but can not be listed is an error, so its files are never
+/// taken for gone.
+pub(crate) fn expand(entries: &[Entry]) -> Result<Vec<(String, PathBuf)>, Error> {
   let mut files: Vec<(String, PathBuf)> = Vec::new();
   for entry in entries {
     let (parent, last) = split_last(&entry.pattern);
@@ -55,13 +59,17 @@ pub(crate) fn expand(entries: &[Entry]) -> Vec<(String, PathBuf)> {
       continue;
     }
     let dir = entry.dir.join(parent);
-    let Ok(listing) = std::fs::read_dir(&dir) else {
+    let listing = match std::fs::read_dir(&dir) {
+      Ok(listing) => listing,
       // a pattern's directory that does not exist yet holds no files
-      continue;
+      Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+      Err(source) => return Err(Error::Read { path: dir, source }),
     };
     let mut names: Vec<String> = listing
+      // an entry that vanished while listed is a file that is gone
       .filter_map(Result::ok)
       .filter(|e| e.file_type().is_ok_and(|t| !t.is_dir()))
+      // a name that is not UTF-8 matches no pattern, which are UTF-8
       .filter_map(|e| e.file_name().into_string().ok())
       .filter(|name| matches(last, name))
       .collect();
@@ -82,7 +90,7 @@ pub(crate) fn expand(entries: &[Entry]) -> Vec<(String, PathBuf)> {
     .filter(|(_, path)| seen.insert(path.clone()))
     .collect();
   deduped.reverse();
-  deduped
+  Ok(deduped)
 }
 
 /// A hash of a file's contents, `sha256:` and hex.
@@ -184,7 +192,11 @@ mod tests {
         pattern: "config.d/*.toml".into(),
       },
     ];
-    let names: Vec<String> = expand(&entries).into_iter().map(|(n, _)| n).collect();
+    let names: Vec<String> = expand(&entries)
+      .unwrap()
+      .into_iter()
+      .map(|(n, _)| n)
+      .collect();
     assert_eq!(
       names,
       ["config.toml", "config.d/10-a.toml", "config.d/20-b.toml"],
@@ -201,7 +213,17 @@ mod tests {
       dir: dir.path().into(),
       pattern: "nope.d/*.toml".into(),
     }];
-    assert!(expand(&missing).is_empty());
+    assert!(expand(&missing).unwrap().is_empty());
+
+    fs::write(dir.path().join("file.d"), "").unwrap();
+    let not_a_dir = [Entry {
+      dir: dir.path().into(),
+      pattern: "file.d/*.toml".into(),
+    }];
+    assert!(
+      matches!(expand(&not_a_dir), Err(Error::Read { .. })),
+      "a directory that can not be listed is not an empty one"
+    );
   }
 
   #[test]
@@ -214,6 +236,7 @@ mod tests {
       pattern: pattern.into(),
     };
     let names: Vec<String> = expand(&[entry("b.toml"), entry("*.toml")])
+      .unwrap()
       .into_iter()
       .map(|(n, _)| n)
       .collect();
