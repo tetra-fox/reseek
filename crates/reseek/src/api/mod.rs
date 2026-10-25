@@ -16,6 +16,7 @@ mod relay;
 mod searches;
 mod session;
 mod shares;
+mod telemetry;
 mod tokens;
 mod transfers;
 mod users;
@@ -58,7 +59,8 @@ use crate::auth;
     (name = "files", description = "The downloaded files, served to the browser"),
     (name = "analysis", description = "Checking whether a downloaded file is what it claims"),
     (name = "relay", description = "Relay controller and agents"),
-    (name = "events", description = "The event log")
+    (name = "events", description = "The event log"),
+    (name = "telemetry", description = "Metrics and reports over the transfer history")
   )
 )]
 struct ApiDoc;
@@ -76,6 +78,7 @@ fn routes() -> OpenApiRouter<AppState> {
     .merge(analysis::routes())
     .merge(relay::routes())
     .merge(events::routes())
+    .merge(telemetry::routes())
     .merge(options::routes())
     .merge(session::routes())
     .merge(oidc::routes())
