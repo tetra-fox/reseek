@@ -53,8 +53,21 @@ e2e:
     SOULFIND_BIN="$soulfind" SOULSEEK_RS_BIN="$soulseek_rs" \
       cargo nextest run -p soulseek-client --test interop --run-ignored only
 
+# the live smoke example against a local soulfind, with other users sharing the file it fetches
+live-smoke-local:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    soulfind="${SOULFIND_BIN:-$(command -v soulfind || true)}"
+    if [ -z "$soulfind" ]; then
+      echo "live-smoke-local skipped: soulfind (SOULFIND_BIN or PATH) not found"
+      exit 0
+    fi
+    cargo build -p soulseek-client --example live_smoke
+    SOULFIND_BIN="$soulfind" \
+      cargo nextest run -p soulseek-client --test live_smoke --run-ignored only
+
 # the gate for every push
-ci: lint test api-check e2e
+ci: lint test api-check e2e live-smoke-local
 
 # soulfind on its default port 2242 with its data under target/soulfind, for trying things by hand
 soulfind:
