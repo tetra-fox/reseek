@@ -129,3 +129,28 @@ pub struct DistributedNetworkInfo {
   /// a parent is connected
   pub has_parent: bool,
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn client_states_are_written_as_their_flag_names() {
+    let states = [
+      (ClientState::DISCONNECTED, "Disconnected"),
+      (ClientState::CONNECTED, "Connected"),
+      (ClientState::LOGGED_IN, "LoggedIn"),
+      (ClientState::CONNECTING, "Connecting"),
+      (ClientState::LOGGING_IN, "LoggingIn"),
+      (ClientState::DISCONNECTING, "Disconnecting"),
+      (ClientState::READY, "Connected, LoggedIn"),
+      (
+        ClientState::CONNECTED | ClientState::LOGGING_IN,
+        "Connected, LoggingIn",
+      ),
+    ];
+    for (state, text) in states {
+      assert_eq!(state.to_string(), text);
+    }
+  }
+}

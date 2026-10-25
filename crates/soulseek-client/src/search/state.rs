@@ -165,3 +165,41 @@ impl fmt::Debug for SearchOptions {
       .finish()
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn search_states_are_written_as_their_flag_names_and_read_back() {
+    let states = [
+      (SearchState::REQUESTED, "Requested"),
+      (SearchState::QUEUED, "Queued"),
+      (SearchState::IN_PROGRESS, "InProgress"),
+      (
+        SearchState::COMPLETED | SearchState::CANCELLED,
+        "Completed, Cancelled",
+      ),
+      (
+        SearchState::COMPLETED | SearchState::TIMED_OUT,
+        "Completed, TimedOut",
+      ),
+      (
+        SearchState::COMPLETED | SearchState::RESPONSE_LIMIT_REACHED,
+        "Completed, ResponseLimitReached",
+      ),
+      (
+        SearchState::COMPLETED | SearchState::FILE_LIMIT_REACHED,
+        "Completed, FileLimitReached",
+      ),
+      (
+        SearchState::COMPLETED | SearchState::ERRORED,
+        "Completed, Errored",
+      ),
+    ];
+    for (state, text) in states {
+      assert_eq!(state.to_string(), text);
+      assert_eq!(text.parse::<SearchState>(), Ok(state));
+    }
+  }
+}
