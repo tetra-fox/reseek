@@ -163,6 +163,25 @@ pub struct TransferRemoved {
   pub direction: TransferDirection,
 }
 
+/// The Soulseek client's own records of the transfers it runs, as `GET /debug/transfers`
+/// shows them for diagnosis. Their shape is the client's and may change between versions.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DebugTransfers {
+  /// the client's records
+  pub soulseek: ClientTransfers,
+}
+
+/// The transfers the Soulseek client knows of, each as the client keeps it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientTransfers {
+  /// the uploads
+  pub uploads: Vec<serde_json::Value>,
+  /// the downloads
+  pub downloads: Vec<serde_json::Value>,
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

@@ -27,6 +27,7 @@ use crate::http::{self, pipeline};
 use crate::live::Live;
 use crate::logging::{self, LogBuffer, Logging, Sinks};
 use crate::paths::{Defaults, InstanceLock, Paths};
+use crate::services::Services;
 use crate::state::StateOwner;
 use crate::ui::{Bundle, Ui};
 use crate::version;
@@ -70,6 +71,8 @@ pub struct AppState {
   pub state: StateOwner,
   /// cancelled when the daemon shuts down
   pub shutdown: CancellationToken,
+  /// the engine of every domain
+  pub services: Services,
 }
 
 impl AppState {
@@ -111,6 +114,7 @@ impl AppState {
       live,
       state,
       shutdown,
+      services: Services::unavailable(),
     })
   }
 
