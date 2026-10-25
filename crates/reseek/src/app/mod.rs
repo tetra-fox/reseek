@@ -156,6 +156,13 @@ pub fn main(bundle: Bundle) -> ExitCode {
       }
     },
     Command::GenerateSecret { length } => println!("{}", cli::generate_secret(length)),
+    Command::HashPassword => match cli::hash_password() {
+      Ok(hash) => println!("{hash}"),
+      Err(e) => {
+        eprintln!("{e}");
+        return ExitCode::from(EXIT_FATAL);
+      }
+    },
     Command::Run(invocation) => return ExitCode::from(run(invocation, bundle)),
   }
   ExitCode::SUCCESS

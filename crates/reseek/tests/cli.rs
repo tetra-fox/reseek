@@ -65,6 +65,24 @@ fn secrets_and_certificates_are_generated() {
 }
 
 #[test]
+fn hash_password_prints_an_argon2id_hash_of_stdin() {
+  let mut child = Command::new(PROGRAM)
+    .arg("hash-password")
+    .env_clear()
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .unwrap();
+  child.stdin.take().unwrap().write_all(b"hunter2\n").unwrap();
+  let output = child.wait_with_output().unwrap();
+  assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+  let hash = text(&output.stdout);
+  assert!(hash.starts_with("$argon2id$v=19$"), "{hash}");
+  assert!(!hash.contains("hunter2"));
+}
+
+#[test]
 fn an_invalid_configuration_exits_three_and_a_held_lock_five() {
   let dir = tempfile::tempdir().unwrap();
   let app_dir = dir.path().to_str().unwrap();

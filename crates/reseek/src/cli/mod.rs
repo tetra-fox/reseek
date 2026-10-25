@@ -15,7 +15,7 @@ use std::path::PathBuf;
 
 use cascade::{Kind, Schema};
 
-pub use commands::{generate_cert, generate_secret};
+pub use commands::{generate_cert, generate_secret, hash_password};
 pub use help::{banner, envars, help};
 
 /// What the command line asks for.
@@ -44,7 +44,12 @@ pub enum Command {
     /// how many random bytes
     length: usize,
   },
+  /// read a password and print its argon2id hash
+  HashPassword,
 }
+
+/// The command that prints a password's hash, given as the only argument.
+pub const HASH_PASSWORD: &str = "hash-password";
 
 /// What the daemon is started with.
 #[derive(Debug, Default, PartialEq)]
@@ -164,6 +169,14 @@ pub fn parse(
         .map_err(|a| UsageError(format!("`{}` is not UTF-8", a.to_string_lossy())))
     })
     .collect::<Result<_, _>>()?;
+  if args.first().map(String::as_str) == Some(HASH_PASSWORD) {
+    return match args.get(1) {
+      Some(extra) => Err(UsageError(format!(
+        "{HASH_PASSWORD} takes no arguments, not `{extra}`"
+      ))),
+      None => Ok(Command::HashPassword),
+    };
+  }
   let mut invocation = Invocation::default();
   let mut seen: Vec<(Bootstrap, Option<String>)> = Vec::new();
   let mut i = 0;
@@ -463,6 +476,8 @@ mod tests {
         "Invalid command line input: secret length must be between 16 and 255, inclusive"
       );
     }
+    assert_eq!(run(&["hash-password"]).unwrap(), Command::HashPassword);
+    assert!(run(&["hash-password", "x"]).is_err());
     assert_eq!(
       flags(&["-k", "abc"]),
       pairs(&[("--api-key", "abc")]),

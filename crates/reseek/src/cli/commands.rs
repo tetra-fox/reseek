@@ -1,7 +1,9 @@
 //! The commands that do one thing and exit.
 
+use std::io::{BufRead, IsTerminal};
 use std::path::{Path, PathBuf};
 
+use crate::auth::local;
 use crate::crypto;
 
 /// The name `--generate-cert` writes when given no path.
@@ -24,4 +26,23 @@ pub fn generate_cert(path: Option<&Path>) -> Result<String, String> {
 /// A secret of `length` random bytes in Base62.
 pub fn generate_secret(length: usize) -> String {
   crypto::base62(&crypto::random_bytes(length))
+}
+
+/// Reads a password, without echo from a terminal or as the first line of stdin otherwise, and
+/// returns its argon2id hash for `password_hash`.
+pub fn hash_password() -> Result<String, String> {
+  let password = if std::io::stdin().is_terminal() {
+    rpassword::prompt_password("Password: ").map_err(|e| format!("reading the password: {e}"))?
+  } else {
+    let mut line = String::new();
+    std::io::stdin()
+      .lock()
+      .read_line(&mut line)
+      .map_err(|e| format!("reading the password: {e}"))?;
+    line.trim_end_matches(['\n', '\r']).to_string()
+  };
+  if password.is_empty() {
+    return Err("the password is empty".to_string());
+  }
+  Ok(local::hash(&password))
 }

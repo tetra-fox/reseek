@@ -1,5 +1,6 @@
 //! The banner and the generated lists of command-line flags and environment variables.
 
+use super::HASH_PASSWORD;
 use cascade::{Field, Kind, Schema};
 use serde_json::Value;
 
@@ -51,7 +52,8 @@ pub fn help(schema: &Schema) -> String {
     rows.push((item, described(field)));
   }
   format!(
-    "\nusage: reseek [arguments]\n\narguments:\n{}",
+    "\nusage: reseek [arguments]\n       reseek {HASH_PASSWORD}   prints an argon2id hash of a password read from \
+     the terminal, or from stdin, for password_hash\n\narguments:\n{}",
     table(&rows)
   )
 }
