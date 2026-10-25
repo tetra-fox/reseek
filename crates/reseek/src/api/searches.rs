@@ -74,8 +74,8 @@ fn timeout(timeout: &SearchTimeout) -> Result<u64, ApiError> {
   Ok(millis)
 }
 
-/// Refuses a search with no text, with only excluded terms, or with a scope that names the
-/// wrong number of users or rooms.
+/// Refuses a search with no text, with only excluded terms, with only terms of one character,
+/// or with a scope that names the wrong number of users or rooms.
 fn search_request(request: &SearchRequest) -> Result<(), ApiError> {
   if request.search_text.trim().is_empty() {
     return Err(ApiError::bad_request(
@@ -83,9 +83,20 @@ fn search_request(request: &SearchRequest) -> Result<(), ApiError> {
     ));
   }
   let excluded = |term: &str| term.len() > 1 && term.starts_with('-');
-  if request.search_text.split_whitespace().all(excluded) {
+  let mut terms = request
+    .search_text
+    .split_whitespace()
+    .filter(|term| !excluded(term))
+    .peekable();
+  if terms.peek().is_none() {
     return Err(ApiError::bad_request(
       "Search query must contain at least one non-exclusion term",
+    ));
+  }
+  // a one-character term matches too much to be sent, so it is dropped
+  if terms.all(|term| term.chars().count() <= 1) {
+    return Err(ApiError::bad_request(
+      "Search query must contain at least one non-exclusion term with length greater than 1",
     ));
   }
   let subjects = request.scope.subjects.len();
@@ -238,13 +249,23 @@ mod tests {
     let request = |text: &str| -> SearchRequest {
       serde_json::from_value(serde_json::json!({ "searchText": text })).unwrap()
     };
+    let message = |text: &str| format!("{:?}", search_request(&request(text)).unwrap_err());
     assert!(search_request(&request("pink floyd -live")).is_ok());
     assert!(
-      search_request(&request("-")).is_ok(),
-      "a lone dash is a term"
+      search_request(&request("a pink")).is_ok(),
+      "one long term is enough"
     );
-    assert!(search_request(&request("   ")).is_err());
-    assert!(search_request(&request("-live --remix")).is_err());
+    assert!(
+      search_request(&request("\u{e9}t\u{e9}")).is_ok(),
+      "characters, not bytes"
+    );
+    assert!(message("   ").contains("can not be null"));
+    assert!(message("-live --remix").contains("non-exclusion term\""));
+    assert!(
+      message("- a b -live").contains("length greater than 1"),
+      "a lone dash is short"
+    );
+    assert!(message("\u{e9} x").contains("length greater than 1"));
     let mut room = request("animals");
     room.scope.scope_type = SearchScopeType::Room;
     assert!(search_request(&room).is_err());

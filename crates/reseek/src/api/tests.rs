@@ -253,19 +253,25 @@ async fn requests_are_checked_before_any_service_is_asked() {
     (
       "POST",
       "/api/v0/searches".into(),
-      Some(json!({ "searchText": "x", "searchTimeout": 15 })),
+      Some(json!({ "searchText": "animals", "searchTimeout": 15 })),
       400,
     ),
     (
       "POST",
       "/api/v0/searches".into(),
-      Some(json!({ "searchText": "x", "searchTimeout": "20s" })),
+      Some(json!({ "searchText": "animals", "searchTimeout": "20s" })),
       503,
     ),
     (
       "POST",
       "/api/v0/searches".into(),
-      Some(json!({ "searchText": "x", "id": "" })),
+      Some(json!({ "searchText": "a b -live" })),
+      400,
+    ),
+    (
+      "POST",
+      "/api/v0/searches".into(),
+      Some(json!({ "searchText": "animals", "id": "" })),
       400,
     ),
     (
