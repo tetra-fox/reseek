@@ -3,6 +3,7 @@
 //! and a stand-in OpenID Connect provider.
 
 pub mod issuer;
+pub mod routes;
 
 use std::ffi::OsString;
 use std::net::SocketAddr;
