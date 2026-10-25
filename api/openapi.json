@@ -151,6 +151,162 @@
         }
       }
     },
+    "/api/v0/application": {
+      "get": {
+        "tags": [
+          "application"
+        ],
+        "summary": "The application state: the version, the server connection, our user, shares, rooms and\nwhat waits for a restart or a reconnect.",
+        "operationId": "get_state",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/State"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "application"
+        ],
+        "summary": "Stops the daemon in order and exits. Needs someone at the UI, not an API key.",
+        "operationId": "shut_down",
+        "responses": {
+          "204": {
+            "description": "stopping"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/application/version": {
+      "get": {
+        "tags": [
+          "application"
+        ],
+        "summary": "The running version, such as `\"0.1.0\"`.",
+        "operationId": "get_version",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/application/version/latest": {
+      "get": {
+        "tags": [
+          "application"
+        ],
+        "summary": "The running version and the newest release the last check found. `forceCheck` checks now,\nwhich takes the ReadWrite role.",
+        "operationId": "get_latest_version",
+        "parameters": [
+          {
+            "name": "forceCheck",
+            "in": "query",
+            "description": "read the release feed now instead of returning what the last check found; needs\nReadWrite or above",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/auth/oidc/{name}/backchannel": {
       "post": {
         "tags": [
@@ -1790,6 +1946,206 @@
         }
       }
     },
+    "/api/v0/logs/files": {
+      "get": {
+        "tags": [
+          "logs"
+        ],
+        "summary": "The log files.",
+        "operationId": "get_log_files",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FilesystemFile"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/logs/files/{filename}": {
+      "get": {
+        "tags": [
+          "logs"
+        ],
+        "summary": "One log file's text, ranges honoured. The name is a bare file name ending in `.log`.",
+        "operationId": "get_log_file",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "description": "the log file's name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/logs/live": {
+      "get": {
+        "tags": [
+          "logs"
+        ],
+        "summary": "The latest log records kept in memory, oldest first.",
+        "operationId": "get_live_logs",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LogRecord"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/options": {
       "get": {
         "tags": [
@@ -2315,6 +2671,150 @@
           },
           "403": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/api/v0/server": {
+      "get": {
+        "tags": [
+          "server"
+        ],
+        "summary": "The connection to the Soulseek server.",
+        "operationId": "get_server",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "server"
+        ],
+        "summary": "Connects to the Soulseek server and keeps reconnecting. Answered 205 when the client was\nalready trying, which makes it try again at once.",
+        "operationId": "connect",
+        "responses": {
+          "200": {
+            "description": "connecting"
+          },
+          "205": {
+            "description": "was trying already; trying again now"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "server"
+        ],
+        "summary": "Disconnects from the Soulseek server and stops reconnecting. The body, a JSON string, says\nwhy.",
+        "operationId": "disconnect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DisconnectReason"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "disconnected"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         }
       }
@@ -4669,6 +5169,11 @@
             "description": "transfers waiting in a queue, here or at the peer"
           }
         }
+      },
+      "DisconnectReason": {
+        "type": "string",
+        "description": "Why the client disconnects from the Soulseek server, the body of `DELETE /server`, written\nas a bare JSON string.",
+        "example": "client disconnected from web UI"
       },
       "DistributedNetworkState": {
         "type": "object",
@@ -10160,6 +10665,18 @@
     }
   },
   "tags": [
+    {
+      "name": "application",
+      "description": "The daemon's state, version, restart and shutdown"
+    },
+    {
+      "name": "server",
+      "description": "The connection to the Soulseek server"
+    },
+    {
+      "name": "logs",
+      "description": "The daemon's log"
+    },
     {
       "name": "options",
       "description": "The configuration and its files"

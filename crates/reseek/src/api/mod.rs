@@ -3,6 +3,7 @@
 
 pub mod agent;
 mod analysis;
+mod application;
 pub mod error;
 pub mod extract;
 mod files;
@@ -31,6 +32,9 @@ use crate::auth;
     license(name = "AGPL-3.0-only", identifier = "AGPL-3.0-only")
   ),
   tags(
+    (name = "application", description = "The daemon's state, version, restart and shutdown"),
+    (name = "server", description = "The connection to the Soulseek server"),
+    (name = "logs", description = "The daemon's log"),
     (name = "options", description = "The configuration and its files"),
     (name = "session", description = "Signing in and out, and browser sessions"),
     (name = "auth", description = "Signing in with an OpenID Connect provider"),
@@ -45,6 +49,7 @@ struct ApiDoc;
 /// Every route with its OpenAPI description.
 fn routes() -> OpenApiRouter<AppState> {
   let api = OpenApiRouter::new()
+    .merge(application::routes())
     .merge(files::routes())
     .merge(analysis::routes())
     .merge(options::routes())
@@ -55,10 +60,12 @@ fn routes() -> OpenApiRouter<AppState> {
   OpenApiRouter::with_openapi(ApiDoc::openapi()).nest("/api/v0", api)
 }
 
-/// The API's routes for `state`, each request authenticated first.
+/// The API's routes for `state`, the diagnostic ones the document leaves out included, each
+/// request authenticated first.
 pub fn router(state: AppState) -> Router {
   let (router, _) = routes().split_for_parts();
   router
+    .nest("/api/v0", application::hidden())
     .route_layer(middleware::from_fn_with_state(
       state.clone(),
       agent::refuse_in_agent_mode,
