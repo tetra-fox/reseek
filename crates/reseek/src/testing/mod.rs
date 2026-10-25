@@ -36,8 +36,11 @@ pub struct TestApp {
 
 /// What a request was answered with.
 pub struct Answer {
+  /// the status
   pub status: StatusCode,
+  /// the headers
   pub headers: HeaderMap,
+  /// the whole body
   pub body: Bytes,
 }
 
@@ -129,7 +132,9 @@ impl TestApp {
 
 /// An answer read as server-sent events.
 pub struct Stream {
+  /// the status
   pub status: StatusCode,
+  /// the headers
   pub headers: HeaderMap,
   body: Body,
   text: String,
@@ -138,8 +143,11 @@ pub struct Stream {
 /// One server-sent event.
 #[derive(Debug)]
 pub struct Sse {
+  /// its `id:` line
   pub id: Option<u64>,
+  /// its `event:` line
   pub event: String,
+  /// its `data:` line, read as JSON
   pub data: serde_json::Value,
 }
 

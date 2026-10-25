@@ -19,15 +19,19 @@ use rsa::pkcs8::DecodePrivateKey;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-/// The client id and secret the provider knows the daemon by.
+/// The client id the provider knows the daemon by.
 pub const CLIENT_ID: &str = "reseek";
+/// The client secret the daemon authenticates to the token endpoint with.
 pub const CLIENT_SECRET: &str = "s3cret";
 
 /// What a code was granted for: the PKCE challenge and callback of the login, and the claims
 /// of the ID token it is exchanged for.
 pub struct Grant {
+  /// the PKCE challenge the login sent, which the code's verifier must match
   pub challenge: String,
+  /// the callback the login named, which the exchange must name again
   pub redirect_uri: String,
+  /// the claims of the ID token, besides `iss`, `aud`, `iat` and `exp`
   pub claims: Value,
 }
 
