@@ -2,11 +2,14 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use tokio::sync::broadcast;
 
-use crate::{Cascade, Kind, Layers, Schema, Shape};
+use crate::{Cascade, Change, Invalid, Key, Kind, Layers, Overrides, Schema, Shape, Watcher};
 
 /// The root of the example.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
@@ -197,4 +200,43 @@ pub(crate) fn pairs(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
     .iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
     .collect()
+}
+
+/// Layers over `config.toml` and `config.d/*.toml` in `dir`, with `APP_USERNAME` set, overrides
+/// kept in `dir`, and a check that refuses ports below 1024.
+pub(crate) fn watched_layers(dir: &Path) -> Layers<Example> {
+  Layers::new()
+    .files(dir, ["config.toml", "config.d/*.toml"])
+    .env([("APP_USERNAME".to_string(), "from-env".to_string())])
+    .overrides(Overrides::load(dir.join("overrides.toml")).unwrap())
+    .validate(|o: &Example| {
+      if o.server.port < 1024 {
+        Err(vec![Invalid::new("server.port", "must be 1024 or more")])
+      } else {
+        Ok(())
+      }
+    })
+}
+
+/// A watcher of [`watched_layers`].
+pub(crate) fn watched(dir: &Path) -> Watcher<Example> {
+  Watcher::new(watched_layers(dir)).unwrap()
+}
+
+/// Keys and their values.
+pub(crate) fn values(pairs: &[(&str, Value)]) -> BTreeMap<Key, Value> {
+  pairs
+    .iter()
+    .map(|(k, v)| (k.to_string(), v.clone()))
+    .collect()
+}
+
+/// The next change, failing the test when none comes within five seconds.
+pub(crate) async fn next_change(
+  changes: &mut broadcast::Receiver<Arc<Change<Example>>>,
+) -> Arc<Change<Example>> {
+  tokio::time::timeout(Duration::from_secs(5), changes.recv())
+    .await
+    .expect("a change in time")
+    .unwrap()
 }

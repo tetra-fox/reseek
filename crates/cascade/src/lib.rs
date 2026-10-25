@@ -6,7 +6,10 @@
 //! one value, replaced whole by the highest layer that sets it. [`Layers`] loads a
 //! [`Loaded`]: the values, the [`Source`] of each, and warnings for keys nothing knows.
 //!
-//! [`FileEditor`] changes the files so their comments survive.
+//! A [`Watcher`] reloads when the files change or when asked, keeps the last good values when
+//! a reload fails, and reports what changed grouped by when it takes effect ([`Apply`]). It
+//! also sets and removes runtime [`Overrides`], and writes the files with [`FileEditor`] so
+//! their comments survive.
 //!
 //! ```
 //! use std::collections::BTreeMap;
@@ -80,6 +83,7 @@ mod overrides;
 mod schema;
 mod source;
 mod tree;
+mod watcher;
 mod write;
 
 #[cfg(test)]
@@ -95,6 +99,7 @@ pub use loaded::Loaded;
 pub use overrides::{Override, Overrides};
 pub use schema::{Field, REDACTED, Schema};
 pub use source::Source;
+pub use watcher::{ByApply, Change, DEBOUNCE, Watch, Watcher, Written};
 pub use write::writability;
 
 #[doc(hidden)]
@@ -120,4 +125,12 @@ impl<T> Root for T where
     + Sync
     + 'static
 {
+}
+
+/// Locks a mutex even when a thread panicked while holding it: no update to what it guards is
+/// left half-made, so it stays usable.
+pub(crate) fn lock<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+  mutex
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
