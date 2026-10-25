@@ -65,6 +65,8 @@ impl Tree {
       provisional
         .handle()
         .disconnect("Not accepting children", None);
+      // the socket closes when the connection is dropped, which must not wait for the server
+      drop(provisional);
       self.update_status(false).await;
       return;
     }

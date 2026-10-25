@@ -285,3 +285,23 @@ async fn a_child_lost_while_the_server_is_slow_still_frees_its_slot() {
   assert_eq!(gone, "leaving");
   let _joined = child(&session, "joined").await;
 }
+
+#[tokio::test]
+async fn a_refused_child_is_closed_while_the_server_is_slow() {
+  let logs = Logs::capture();
+  let options = ClientOptions {
+    distributed_child_limit: 1,
+    ..listening_options()
+  };
+  let mut session = Session::on(FakeServer::with_receive_buffer(4096).await, options).await;
+  promote(&mut session).await;
+  let _kept = child(&session, "kept").await;
+  added(&mut session).await;
+  session.stall_server_writes();
+  let mut refused = join_as_child(session.listen_address(), "refused").await;
+  // the refusal has the tree task write the status, which waits behind the stall
+  logs
+    .wait_for(&["child connection refused", "refused"])
+    .await;
+  refused.closed().await;
+}
