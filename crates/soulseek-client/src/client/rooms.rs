@@ -75,10 +75,9 @@ impl Client {
       .await
   }
 
-  /// sets our ticker in `room`
+  /// sets our ticker in `room`; an empty message clears it
   pub async fn set_room_ticker(&self, room: &str, message: &str) -> Result<(), ClientError> {
     non_blank("room name", room)?;
-    non_empty("message", message)?;
     self
       .tell(
         &format!("set ticker for room {room}"),

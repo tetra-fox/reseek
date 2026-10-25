@@ -5,8 +5,8 @@
 mod support;
 
 use soulseek_client::{ClientError, ClientState, Event, RoomErrorKind};
-use soulseek_proto::server::{RoomInfo, SetRoomTicker, UserData};
-use soulseek_proto::{RoomType, ServerRequest};
+use soulseek_proto::RoomType;
+use soulseek_proto::server::{RoomInfo, UserData};
 use support::options;
 use support::soulfind::{self, User};
 
@@ -159,13 +159,8 @@ async fn tickers_are_listed_on_join_and_pushed_when_set_and_cleared() {
     .await;
   assert_eq!(listed, [added.1]);
 
-  // the operation takes no empty ticker, but the protocol clears one with it
-  bob
-    .send(ServerRequest::SetRoomTicker(SetRoomTicker {
-      room: room.clone(),
-      ticker: String::new(),
-    }))
-    .await;
+  // an empty ticker clears ours
+  bob.client.set_room_ticker(&room, "").await.unwrap();
   let removed = carol
     .event(|event| match event {
       Event::RoomTickerRemoved {
