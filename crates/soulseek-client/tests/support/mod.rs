@@ -5,6 +5,7 @@
 
 pub mod peer;
 pub mod soulfind;
+pub mod transfers;
 pub mod tree;
 
 use std::io::Write;
