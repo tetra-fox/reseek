@@ -1,0 +1,29 @@
+[package]
+name = "api-client"
+description = "A typed client of the reseek HTTP API and its event stream"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+api-types.workspace = true
+
+base64 = "0.22"
+bytes = "1"
+eventsource-stream = "0.2"
+futures-util.workspace = true
+percent-encoding = "2"
+reqwest = { workspace = true, features = ["cookies", "json", "multipart", "stream"] }
+rustls.workspace = true
+serde.workspace = true
+serde_html_form = "0.2"
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["time"] }
+tracing.workspace = true
+url = "2"
+uuid.workspace = true
+webpki-roots.workspace = true
+
+[lints]
+workspace = true

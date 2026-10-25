@@ -1,13 +1,13 @@
 //! The program from the outside: the commands, the exit codes, a start that serves `/health`
 //! and stops cleanly on SIGTERM, and a restart asked for over HTTP.
 
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+mod support;
+
+use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
-use std::time::{Duration, Instant};
 
-const PROGRAM: &str = env!("CARGO_BIN_EXE_reseek-headless");
+use support::{Daemon, PROGRAM, send};
 
 /// The program run with `args` and only the variables in `env`.
 fn run(args: &[&str], env: &[(&str, &str)]) -> Output {
@@ -121,56 +121,29 @@ fn an_invalid_configuration_exits_three_and_a_held_lock_five() {
   assert_eq!(locked.status.code(), Some(5), "{}", text(&locked.stdout));
 }
 
-/// A port nothing listens on, for a moment.
-fn free_port() -> u16 {
-  TcpListener::bind("127.0.0.1:0")
-    .unwrap()
-    .local_addr()
-    .unwrap()
-    .port()
-}
-
 fn get(port: u16, path: &str) -> Option<String> {
   send(port, "GET", path)
-}
-
-fn send(port: u16, method: &str, path: &str) -> Option<String> {
-  let mut stream = TcpStream::connect(("127.0.0.1", port)).ok()?;
-  write!(
-    stream,
-    "{method} {path} HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-  )
-  .ok()?;
-  let mut answer = String::new();
-  stream.read_to_string(&mut answer).ok()?;
-  Some(answer)
 }
 
 #[cfg(unix)]
 #[test]
 fn the_daemon_serves_health_and_stops_on_sigterm() {
   let dir = tempfile::tempdir().unwrap();
-  let (mut child, port) = started(dir.path(), &[], &[]);
-  let answer = get(port, "/health").unwrap();
+  let mut daemon = Daemon::start(dir.path(), &[], &[]);
+  let answer = get(daemon.port, "/health").unwrap();
   assert!(answer.starts_with("HTTP/1.1 200"), "{answer}");
   assert!(answer.ends_with("Healthy"), "{answer}");
-  let unauthenticated = get(port, "/api/v0/options/view").unwrap();
+  let unauthenticated = get(daemon.port, "/api/v0/options/view").unwrap();
   assert!(
     unauthenticated.starts_with("HTTP/1.1 401"),
     "{unauthenticated}"
   );
   Command::new("kill")
-    .args(["-TERM", &child.id().to_string()])
+    .args(["-TERM", &daemon.child.id().to_string()])
     .status()
     .unwrap();
-  let status = child.wait().unwrap();
-  let mut log = String::new();
-  child
-    .stdout
-    .take()
-    .unwrap()
-    .read_to_string(&mut log)
-    .unwrap();
+  let status = daemon.child.wait().unwrap();
+  let log = daemon.output();
   assert_eq!(status.code(), Some(0), "{log}");
   assert!(log.contains("Listening for HTTP requests"), "{log}");
   assert!(
@@ -179,51 +152,15 @@ fn the_daemon_serves_health_and_stops_on_sigterm() {
   );
 }
 
-/// Starts the daemon on a free loopback port with `args` and only the variables in `env`, and
-/// waits until it answers `/health`.
-fn started(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> (std::process::Child, u16) {
-  let port = free_port();
-  let child = Command::new(PROGRAM)
-    .args(["--app-dir", dir.to_str().unwrap(), "-n", "--no-https"])
-    .args([
-      "--http-ip-address",
-      "127.0.0.1",
-      "--http-port",
-      &port.to_string(),
-    ])
-    .args(args)
-    .env_clear()
-    .envs(env.iter().copied())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .unwrap();
-  let started = Instant::now();
-  while get(port, "/health").is_none() {
-    assert!(
-      started.elapsed() < Duration::from_secs(20),
-      "never answered"
-    );
-    std::thread::sleep(Duration::from_millis(50));
-  }
-  (child, port)
-}
-
 #[test]
 fn a_restart_exits_75_for_the_supervisor() {
   let dir = tempfile::tempdir().unwrap();
   let trusted = [("RESEEK_TRUSTED_NETWORKS", "127.0.0.0/8")];
-  let (mut child, port) = started(dir.path(), &["--supervised"], &trusted);
-  let answer = send(port, "PUT", "/api/v0/application").unwrap();
+  let mut daemon = Daemon::start(dir.path(), &["--supervised"], &trusted);
+  let answer = send(daemon.port, "PUT", "/api/v0/application").unwrap();
   assert!(answer.starts_with("HTTP/1.1 204"), "{answer}");
-  let status = child.wait().unwrap();
-  let mut log = String::new();
-  child
-    .stdout
-    .take()
-    .unwrap()
-    .read_to_string(&mut log)
-    .unwrap();
+  let status = daemon.child.wait().unwrap();
+  let log = daemon.output();
   assert_eq!(status.code(), Some(75), "{log}");
   assert!(log.contains("restart asked for"), "{log}");
 }

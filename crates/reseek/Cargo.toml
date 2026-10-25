@@ -34,7 +34,7 @@ bytesize.workspace = true
 chrono.workspace = true
 directories = "6"
 form_urlencoded = "1"
-futures-util = { version = "0.3", default-features = false, features = ["std"] }
+futures-util.workspace = true
 hmac = "0.12"
 http-body-util = "0.1"
 humantime = "2"
@@ -47,11 +47,11 @@ p12-keystore = "0.4"
 rand = "0.9"
 rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs", "pem"] }
 regex = "1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-manual-roots-no-provider"] }
+reqwest.workspace = true
 rpassword = "7"
 rusqlite = { version = "0.39", features = ["bundled", "trace"] }
 rust-embed = { version = "8", features = ["interpolate-folder-path", "mime-guess"], optional = true }
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "logging", "std", "tls12"] }
+rustls.workspace = true
 serde.workspace = true
 serde_html_form = "0.2"
 serde_json.workspace = true
@@ -74,9 +74,10 @@ utoipa.workspace = true
 utoipa-axum = "0.2"
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid.workspace = true
-webpki-roots = "1"
+webpki-roots.workspace = true
 
 [dev-dependencies]
+api-client.workspace = true
 # turns a generated key into the PKCS#1 form the test identity provider signs with
 rsa = "0.9"
 tempfile.workspace = true
