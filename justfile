@@ -18,7 +18,7 @@ web-build:
 # cargo nextest, then vitest
 test:
     cargo nextest run --workspace
-    @[ -n "${SOULFIND_BIN:-}" ] || command -v soulfind >/dev/null || echo "soulfind not found at SOULFIND_BIN or on PATH: the soulfind suites were skipped"
+    @[ -n "$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)" ] || echo "soulfind not found at SOULFIND_BIN or on PATH: the soulfind suites were skipped"
     @echo "vitest: not yet (no web/)"
 
 # fmt --check, clippy -D warnings, oxlint, oxfmt --check
@@ -44,7 +44,7 @@ api-check:
 e2e:
     #!/usr/bin/env bash
     set -euo pipefail
-    soulfind="${SOULFIND_BIN:-$(command -v soulfind || true)}"
+    soulfind="$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)"
     soulseek_rs="${SOULSEEK_RS_BIN:-$(command -v soulseek-rs || true)}"
     if [ -z "$soulfind" ] || [ -z "$soulseek_rs" ]; then
       echo "e2e skipped: soulfind (SOULFIND_BIN or PATH) or soulseek-rs (SOULSEEK_RS_BIN or PATH) not found"
@@ -57,7 +57,7 @@ e2e:
 live-smoke-local:
     #!/usr/bin/env bash
     set -euo pipefail
-    soulfind="${SOULFIND_BIN:-$(command -v soulfind || true)}"
+    soulfind="$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)"
     if [ -z "$soulfind" ]; then
       echo "live-smoke-local skipped: soulfind (SOULFIND_BIN or PATH) not found"
       exit 0
@@ -72,6 +72,19 @@ live-smoke-local:
 [positional-arguments]
 live-smoke *ARGS:
     cargo run -p soulseek-client --example live_smoke -- "$@"
+
+# Prints the soulfind to test against: SOULFIND_BIN, else soulfind on PATH, else nothing, which
+# the callers take as a skip. With SOULFIND_REQUIRED=1 a missing soulfind fails instead
+[private]
+soulfind-bin:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    soulfind="${SOULFIND_BIN:-$(command -v soulfind || true)}"
+    if [ -z "$soulfind" ] && [ "${SOULFIND_REQUIRED:-}" = 1 ]; then
+      echo "SOULFIND_REQUIRED=1 but soulfind is neither at SOULFIND_BIN nor on PATH" >&2
+      exit 1
+    fi
+    echo "$soulfind"
 
 # the gate for every push
 ci: lint test api-check e2e live-smoke-local
