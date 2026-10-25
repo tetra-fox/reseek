@@ -1,5 +1,7 @@
 //! Refusing cross-site requests: a request that changes something and is authenticated only by
-//! the session cookie, which a browser sends on its own, must come from a page of this site.
+//! the session cookie, which a browser sends on its own, must come from a page of this site,
+//! and one let in by a trusted network, which a browser on that network also carries along, may
+//! not name another site as its origin.
 
 use axum::http::{HeaderMap, Method, header};
 use url::{Origin, Url};
@@ -22,10 +24,25 @@ pub fn same_origin(headers: &HeaderMap, client: &Client, options: &Options) -> b
   let sender = headers
     .get(header::ORIGIN)
     .or_else(|| headers.get(header::REFERER))
-    .and_then(|value| value.to_str().ok())
-    .and_then(|text| Url::parse(text).ok())
-    .map(|url| url.origin());
-  let Some(sender @ Origin::Tuple(..)) = sender else {
+    .and_then(|value| value.to_str().ok());
+  sender.is_some_and(|text| is_this_site(text, client, options))
+}
+
+/// Whether the request carries an `Origin` that is not this site. A request without one, as
+/// scripts send, is not refused by this check.
+pub fn foreign_origin(headers: &HeaderMap, client: &Client, options: &Options) -> bool {
+  match headers.get(header::ORIGIN) {
+    Some(value) => !value
+      .to_str()
+      .is_ok_and(|text| is_this_site(text, client, options)),
+    None => false,
+  }
+}
+
+/// Whether the origin of the URL `text` is the address the client used, `web.external_url`, or
+/// one of `web.hostnames`.
+fn is_this_site(text: &str, client: &Client, options: &Options) -> bool {
+  let Some(sender @ Origin::Tuple(..)) = Url::parse(text).ok().map(|url| url.origin()) else {
     return false;
   };
   let scheme = if client.https { "https" } else { "http" };

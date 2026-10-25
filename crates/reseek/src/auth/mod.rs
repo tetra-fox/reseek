@@ -5,9 +5,10 @@
 //! forwarded identity, a trusted network. A token or key that is presented but not valid fails
 //! the request at once rather than falling through to a weaker way in; a session cookie that is
 //! not valid is cleared and the next ways are tried. A request that changes something on the
-//! strength of the session cookie alone must come from a page of this site. The principal, or
-//! its absence, is put on the request as an [`Authentication`]; a handler takes an
-//! [`Authorized`] to require a role.
+//! strength of the session cookie alone must come from a page of this site, and one let in by a
+//! trusted network may not come from a page of another site. The principal, or its absence, is
+//! put on the request as an [`Authentication`]; a handler takes an [`Authorized`] to require a
+//! role.
 
 mod chain;
 pub mod client;
@@ -104,14 +105,21 @@ pub async fn authenticate(
     Ok(identified) => identified,
     Err(e) => return e.into_response(),
   };
-  if identified.by_cookie
-    && csrf::changes_state(request.method())
-    && !csrf::same_origin(request.headers(), &presented.client, &current.values)
-  {
-    debug!(ip = %presented.client.ip, "cross-site request refused");
-    return ApiError::forbidden("cross-site request refused")
-      .logged()
-      .into_response();
+  if csrf::changes_state(request.method()) {
+    let headers = request.headers();
+    let client = &presented.client;
+    let by_network = identified
+      .principal
+      .as_ref()
+      .is_some_and(|p| matches!(p.via, Via::TrustedNetwork { .. }));
+    let cross_site = (identified.by_cookie && !csrf::same_origin(headers, client, &current.values))
+      || (by_network && csrf::foreign_origin(headers, client, &current.values));
+    if cross_site {
+      debug!(ip = %client.ip, "cross-site request refused");
+      return ApiError::forbidden("cross-site request refused")
+        .logged()
+        .into_response();
+    }
   }
   if let Some(principal) = &identified.principal {
     tracing::Span::current().record("principal", principal.subject.as_str());
@@ -241,6 +249,30 @@ mod tests {
       .await;
     assert_eq!(token.status, 401);
     assert_eq!(token.json()["error"], "unknown API token");
+  }
+
+  #[tokio::test]
+  async fn a_trusted_network_change_may_not_come_from_another_site() {
+    let app = app(&format!("remote_configuration = true\n{CONFIG}"), &[]).await;
+    let patch = |origin: Option<&str>| {
+      let mut r = request("PATCH", "/api/v0/options", Some(serde_json::json!({})));
+      if let Some(origin) = origin {
+        r.headers_mut().insert("origin", origin.parse().unwrap());
+      }
+      r
+    };
+    let foreign = app.send(patch(Some("http://evil.example"))).await;
+    assert_eq!(foreign.status, 403);
+    assert_eq!(foreign.json()["error"], "cross-site request refused");
+    assert_eq!(app.send(patch(Some("null"))).await.status, 403);
+    assert_eq!(app.send(patch(Some("http://localhost"))).await.status, 204);
+    assert_eq!(
+      app.send(patch(None)).await.status,
+      204,
+      "scripts send no Origin"
+    );
+    let read = with_header("origin", "http://evil.example");
+    assert_eq!(app.send(read).await.status, 200, "reads are not refused");
   }
 
   #[tokio::test]
