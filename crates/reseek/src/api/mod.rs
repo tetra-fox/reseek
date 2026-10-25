@@ -8,6 +8,7 @@ pub mod error;
 pub mod extract;
 mod files;
 mod live;
+mod messaging;
 mod oidc;
 mod options;
 mod searches;
@@ -48,6 +49,9 @@ use crate::auth;
     (name = "transfers", description = "Downloads and uploads"),
     (name = "users", description = "Other users and the directory of users we know"),
     (name = "blocking", description = "Blocked users"),
+    (name = "conversations", description = "Private messages"),
+    (name = "rooms", description = "Chat rooms and their history"),
+    (name = "messages", description = "Searching what was said"),
     (name = "shares", description = "What we share"),
     (name = "files", description = "The downloaded files, served to the browser"),
     (name = "analysis", description = "Checking whether a downloaded file is what it claims")
@@ -62,6 +66,7 @@ fn routes() -> OpenApiRouter<AppState> {
     .merge(searches::routes())
     .merge(transfers::routes())
     .merge(users::routes())
+    .merge(messaging::routes())
     .merge(shares::routes())
     .merge(files::routes())
     .merge(analysis::routes())

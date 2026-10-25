@@ -608,6 +608,894 @@
         }
       }
     },
+    "/api/v0/conversations": {
+      "get": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "The conversations, without their messages, by username; the server's notices only with\n`includeServer`.",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "includeInactive",
+            "in": "query",
+            "description": "also list closed conversations",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "unAcknowledgedOnly",
+            "in": "query",
+            "description": "list only conversations with unacknowledged messages",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "includeServer",
+            "in": "query",
+            "description": "also list the conversation holding the server's notices",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Conversation"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/conversations/{username}": {
+      "get": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "One conversation, active or not, with its latest messages unless `includeMessages` is\nfalse.",
+        "operationId": "conversation",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the other user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeMessages",
+            "in": "query",
+            "description": "include the newest 100 messages",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conversation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "Acknowledges every unacknowledged message from a user, so the server stops sending them\nagain.",
+        "operationId": "acknowledge_all",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the other user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "acknowledged"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "Sends a private message, the body a JSON string. The server keeps it for a user who is\noffline.",
+        "operationId": "send",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the other user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageText"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "sent"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "Acknowledges a conversation and hides it until the next message; `purge` also deletes its\nmessages.",
+        "operationId": "close",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the other user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "description": "also delete the stored messages",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "closed"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/conversations/{username}/draft": {
+      "put": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "Keeps the unsent text of a conversation, up to 4 KiB.",
+        "operationId": "set_draft",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the other user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "saved"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/conversations/{username}/export": {
+      "get": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "The whole conversation as a file to save, JSON or text.",
+        "operationId": "export",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the other user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "the form to write",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ExportFormat"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/conversations/{username}/messages": {
+      "get": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "A page of one conversation's messages, oldest first; `before` pages back from a message.",
+        "operationId": "messages",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the other user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unAcknowledgedOnly",
+            "in": "query",
+            "description": "only unacknowledged messages",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "only messages stored before the one with this `localId`, the newest when left out",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "how many messages to return, at most 1000",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PrivateMessage"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/conversations/{username}/notify": {
+      "put": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "When a conversation notifies: every message, mentions only, or never.",
+        "operationId": "set_notify",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the other user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifySetting"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "saved"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/conversations/{username}/{id}": {
+      "put": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "Acknowledges one message from a user by the server's id for it.",
+        "operationId": "acknowledge",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the other user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the server's id of the message",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "acknowledged"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/files/{root}/directories": {
       "get": {
         "tags": [
@@ -2178,6 +3066,119 @@
         }
       }
     },
+    "/api/v0/messages/search": {
+      "get": {
+        "tags": [
+          "messages"
+        ],
+        "summary": "Searches what was said in conversations and rooms. `q` is a full-text query: words,\n`\"phrases\"`, `OR`, `NOT` and `prefix*`.",
+        "operationId": "search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "a full-text query, at most 200 characters",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "\"pink floyd\" OR animals"
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "which messages to search",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/MessageSearchKind"
+            }
+          },
+          {
+            "name": "room",
+            "in": "query",
+            "description": "only messages in this room",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "only messages by or with this user",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "how many hits to skip",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "how many hits to return",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSearchResults"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/options": {
       "get": {
         "tags": [
@@ -2703,6 +3704,1843 @@
           },
           "403": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/available": {
+      "get": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "The server's list of rooms, asked of it now: public rooms, then private ones we are a\nmember of, then those we own.",
+        "operationId": "available",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RoomInfo"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/history": {
+      "get": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "The rooms with stored messages, or the one `room` names.",
+        "operationId": "rooms",
+        "parameters": [
+          {
+            "name": "room",
+            "in": "query",
+            "description": "only this room, every room with stored messages when left out",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomHistoryList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/history/{roomName}": {
+      "delete": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Deletes a room's stored messages.",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "deleted"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/history/{roomName}/export": {
+      "get": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "A room's whole stored history as a file to save, JSON or text.",
+        "operationId": "export",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "the form to write",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ExportFormat"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/history/{roomName}/messages": {
+      "get": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "A page of a room's stored messages, oldest first, with the gaps in it; for any room, one we\nleft included.",
+        "operationId": "messages",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "only messages before the one with this `localId`, the newest when left out",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "how many messages to return, at most 500",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100,
+              "maximum": 500,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "includeHidden",
+            "in": "query",
+            "description": "also return the messages of users blocked for rooms",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomHistory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined": {
+      "get": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "The rooms we are in, with their unread counts.",
+        "operationId": "joined",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JoinedRoom"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Joins a room, creating it, as a private room with `private`, when it does not exist.\nAnswered 304 when we are in it already.",
+        "operationId": "join",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinRoom"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Room"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "in the room already"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined/{roomName}": {
+      "get": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "A room we are in, with its users and tickers.",
+        "operationId": "room",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Room"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Leaves a room.",
+        "operationId": "leave",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "left"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined/{roomName}/members": {
+      "post": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Adds a member to a private room we own or operate, the body the username as a JSON string.",
+        "operationId": "add_member",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomMemberName"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "added"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined/{roomName}/members/{username}": {
+      "delete": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Takes a member out of a private room we own or operate.",
+        "operationId": "remove_member",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the member",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "removed"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined/{roomName}/messages": {
+      "get": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "A page of what was said in a room we are in, oldest first, with the gaps where we were not\nthere to hear it; `before` pages back from a message.",
+        "operationId": "messages",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "only messages before the one with this `localId`, the newest when left out",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "how many messages to return, at most 500",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100,
+              "maximum": 500,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "includeHidden",
+            "in": "query",
+            "description": "also return the messages of users blocked for rooms",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomHistory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Says something in a room, the body a JSON string. It shows once the server sends it back.",
+        "operationId": "say",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageText"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "sent"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined/{roomName}/notify": {
+      "put": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "When a room notifies: every message, mentions only, or never.",
+        "operationId": "set_notify",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifySetting"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "saved"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined/{roomName}/operators": {
+      "post": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Makes a member of a private room we own an operator, the body the username as a JSON\nstring.",
+        "operationId": "add_operator",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomMemberName"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "made operator"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined/{roomName}/operators/{username}": {
+      "delete": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Takes a private room's operator back to member.",
+        "operationId": "remove_operator",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the operator",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no longer operator"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined/{roomName}/read": {
+      "put": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Marks a room read up to a message.",
+        "operationId": "mark_read",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadMarker"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "marked"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined/{roomName}/ticker": {
+      "post": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Sets our ticker in a room, the body a JSON string; an empty one clears it.",
+        "operationId": "set_ticker",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TickerText"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "set"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined/{roomName}/tickers": {
+      "get": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "The tickers in a room we are in.",
+        "operationId": "tickers",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RoomTicker"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/joined/{roomName}/users": {
+      "get": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "The users in a room we are in.",
+        "operationId": "users",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RoomUser"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/private/{roomName}/membership": {
+      "delete": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Gives up our membership of a private room.",
+        "operationId": "drop_membership",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "membership given up"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/rooms/private/{roomName}/ownership": {
+      "delete": {
+        "tags": [
+          "rooms"
+        ],
+        "summary": "Gives up our ownership of a private room.",
+        "operationId": "drop_ownership",
+        "parameters": [
+          {
+            "name": "roomName",
+            "in": "path",
+            "description": "the room",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomName",
+            "in": "query",
+            "description": "the room's name, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "ownership given up"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         }
       }
@@ -10267,6 +13105,19 @@
           }
         }
       },
+      "ConversationDraft": {
+        "type": "object",
+        "description": "The unsent text of a conversation, the body of `PUT /conversations/{username}/draft`.",
+        "required": [
+          "draft"
+        ],
+        "properties": {
+          "draft": {
+            "type": "string",
+            "description": "the text, at most 4 KiB"
+          }
+        }
+      },
       "ConversationMessage": {
         "type": "object",
         "description": "A private message was stored, inbound or sent, the data of a `conversations.message`\nframe.",
@@ -12057,6 +14908,24 @@
           }
         }
       },
+      "JoinRoom": {
+        "type": "object",
+        "description": "A room to join, the body of `POST /rooms/joined`. Joining a room that does not exist creates\nit.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "the room's name: 1 to 24 printable ASCII characters, no space at either end and no two\nspaces in a row",
+            "example": "indie"
+          },
+          "private": {
+            "type": "boolean",
+            "description": "create the room as a private one when it does not exist yet; ignored for a room that does"
+          }
+        }
+      },
       "JoinedRoom": {
         "type": "object",
         "description": "A room we are in, as `GET /rooms/joined` lists it and `rooms.list` frames carry it.",
@@ -13142,6 +16011,89 @@
           "Out"
         ]
       },
+      "MessageHit": {
+        "type": "object",
+        "description": "One stored message matching a message search.",
+        "required": [
+          "kind",
+          "username",
+          "timestamp",
+          "message",
+          "localId",
+          "snippet"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/MessageHitKind",
+            "description": "where the message is"
+          },
+          "localId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the message's id in its room's history or its conversation"
+          },
+          "message": {
+            "type": "string",
+            "description": "the text"
+          },
+          "room": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the room, null for a private message"
+          },
+          "snippet": {
+            "type": "string",
+            "description": "the matching part of the text, HTML-escaped, with the matches inside `<mark>` and\n`</mark>`"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when the message was sent or received"
+          },
+          "username": {
+            "type": "string",
+            "description": "the author of a room message, the peer of a private message"
+          }
+        }
+      },
+      "MessageHitKind": {
+        "type": "string",
+        "description": "Where a message search hit was found.",
+        "enum": [
+          "private",
+          "room"
+        ]
+      },
+      "MessageSearchResults": {
+        "type": "object",
+        "description": "One page of message search hits.",
+        "required": [
+          "hits",
+          "total"
+        ],
+        "properties": {
+          "hits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageHit"
+            },
+            "description": "the hits on this page"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "how many messages match, on every page together",
+            "minimum": 0
+          }
+        }
+      },
+      "MessageText": {
+        "type": "string",
+        "description": "The text of a message to send, the body of `POST /conversations/{username}` and\n`POST /rooms/joined/{roomName}/messages`, written as a bare JSON string. It must not be\nempty.",
+        "example": "hello"
+      },
       "NoFields": {
         "type": "object",
         "description": "The data of an event that has no fields of its own.",
@@ -13183,6 +16135,19 @@
           "mentions",
           "none"
         ]
+      },
+      "NotifySetting": {
+        "type": "object",
+        "description": "Sets which messages of a room or conversation notify, the body of\n`PUT /rooms/joined/{roomName}/notify` and `PUT /conversations/{username}/notify`.",
+        "required": [
+          "notify"
+        ],
+        "properties": {
+          "notify": {
+            "$ref": "#/components/schemas/NotifyLevel",
+            "description": "the level"
+          }
+        }
       },
       "OidcEndpoints": {
         "type": "object",
@@ -14050,6 +17015,20 @@
           }
         }
       },
+      "ReadMarker": {
+        "type": "object",
+        "description": "Moves a room's read marker, the body of `PUT /rooms/joined/{roomName}/read`. The marker\nnever moves back.",
+        "required": [
+          "localId"
+        ],
+        "properties": {
+          "localId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the `localId` of the newest message shown as read"
+          }
+        }
+      },
       "RelayAgentConnected": {
         "type": "object",
         "description": "The data of `RelayAgentConnected`.",
@@ -14333,6 +17312,96 @@
             "description": "who is in the room now"
           }
         }
+      },
+      "RoomHistory": {
+        "type": "object",
+        "description": "One page of a room's message history.",
+        "required": [
+          "messages",
+          "hasMore",
+          "gaps"
+        ],
+        "properties": {
+          "gaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryGap"
+            },
+            "description": "the intervals without history between the page's first message and its last, or now on\nthe newest page, oldest first"
+          },
+          "hasMore": {
+            "type": "boolean",
+            "description": "older messages exist"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomMessage"
+            },
+            "description": "the messages, oldest first"
+          }
+        }
+      },
+      "RoomHistoryList": {
+        "type": "object",
+        "description": "Every room with stored messages, the reply of `GET /rooms/history`.",
+        "required": [
+          "rooms"
+        ],
+        "properties": {
+          "rooms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoredRoom"
+            },
+            "description": "the rooms"
+          }
+        }
+      },
+      "RoomInfo": {
+        "type": "object",
+        "description": "A room from the server's room list, as `GET /rooms/available` lists it.",
+        "required": [
+          "name",
+          "userCount",
+          "isPrivate",
+          "isOwned",
+          "isModerated",
+          "joined"
+        ],
+        "properties": {
+          "isModerated": {
+            "type": "boolean",
+            "description": "a private room we are an operator of"
+          },
+          "isOwned": {
+            "type": "boolean",
+            "description": "a private room we own"
+          },
+          "isPrivate": {
+            "type": "boolean",
+            "description": "a private room we are a member of"
+          },
+          "joined": {
+            "type": "boolean",
+            "description": "we are in the room"
+          },
+          "name": {
+            "type": "string",
+            "description": "the room's name"
+          },
+          "userCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many users are in it, as the server counts them",
+            "minimum": 0
+          }
+        }
+      },
+      "RoomMemberName": {
+        "type": "string",
+        "description": "A user to add to a private room as a member or operator, the body of\n`POST /rooms/joined/{roomName}/members` and `POST /rooms/joined/{roomName}/operators`,\nwritten as a bare JSON string.",
+        "example": "alice"
       },
       "RoomMessage": {
         "type": "object",
@@ -15535,6 +18604,43 @@
           }
         }
       },
+      "StoredRoom": {
+        "type": "object",
+        "description": "A room with stored messages, joined now or not.",
+        "required": [
+          "name",
+          "messageCount",
+          "firstAt",
+          "lastAt",
+          "joined"
+        ],
+        "properties": {
+          "firstAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when the oldest stored message arrived"
+          },
+          "joined": {
+            "type": "boolean",
+            "description": "we are in the room now"
+          },
+          "lastAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when the newest stored message arrived"
+          },
+          "messageCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "how many messages are stored",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "description": "the room's name"
+          }
+        }
+      },
       "StoredStatistics": {
         "allOf": [
           {
@@ -15635,6 +18741,11 @@
           "belowDeclaredBitrate",
           "lossySizedLossless"
         ]
+      },
+      "TickerText": {
+        "type": "string",
+        "description": "Our ticker in a room, the body of `POST /rooms/joined/{roomName}/ticker`, written as a\nbare JSON string; an empty string clears it.",
+        "example": "listening to Animals"
       },
       "Token": {
         "type": "object",
@@ -17039,6 +20150,18 @@
     {
       "name": "blocking",
       "description": "Blocked users"
+    },
+    {
+      "name": "conversations",
+      "description": "Private messages"
+    },
+    {
+      "name": "rooms",
+      "description": "Chat rooms and their history"
+    },
+    {
+      "name": "messages",
+      "description": "Searching what was said"
     },
     {
       "name": "shares",
