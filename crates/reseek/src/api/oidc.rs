@@ -563,6 +563,21 @@ mod tests {
       200,
       "a logout token without an expiry ends nothing"
     );
+    let unnamed = app
+      .send_from(
+        OUTSIDE,
+        logout(json!({
+          "iss": issuer.url, "aud": CLIENT_ID, "iat": now, "exp": now + 120, "sid": "s2",
+          "events": events,
+        })),
+      )
+      .await;
+    assert_eq!(unnamed.status, 200);
+    assert_eq!(
+      me(&app, &cookie).await.status,
+      200,
+      "a logout token without a jti ends nothing"
+    );
     let posted = app
       .send_from(
         OUTSIDE,

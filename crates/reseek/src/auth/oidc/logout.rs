@@ -67,6 +67,10 @@ pub async fn check_token(
     Some(_) => return Err("expired".to_string()),
     None => return Err("no expiry".to_string()),
   }
+  // required but not remembered: a replay before `exp` only ends the same sessions again
+  if !claims.get("jti").is_some_and(Value::is_string) {
+    return Err("no token id".to_string());
+  }
   if claims.get("nonce").is_some() {
     return Err("a logout token has no nonce".to_string());
   }
