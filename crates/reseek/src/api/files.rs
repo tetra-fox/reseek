@@ -337,10 +337,9 @@ async fn link_token(
   Json(request): Json<FileTokenRequest>,
 ) -> Result<Json<FileToken>, ApiError> {
   if let FileTokenRequest::Path { path } = &request {
-    let (name, encoded) = path
-      .split_once('/')
-      .ok_or_else(|| ApiError::bad_request("path must be <root>/<base64 path>"))?;
-    root(name)?;
+    let malformed = || ApiError::bad_request("path must be <root>/<base64 path>");
+    let (name, encoded) = path.split_once('/').ok_or_else(malformed)?;
+    root(name).map_err(|_| malformed())?;
     validate::files_path(encoded, false)?;
   }
   serving(&app)?;
