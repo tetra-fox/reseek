@@ -15,7 +15,7 @@
         "tags": [
           "auth"
         ],
-        "summary": "Where the provider ends sessions it started, with a signed logout token naming its session\nor its user. Always answered 200.",
+        "summary": "Where the provider ends sessions it started, with a signed logout token naming its session\nor its user. Answered 404 for a provider that takes no back-channel logout whatever the\nbody, else always 200, a body that is not a logout form included.",
         "operationId": "backchannel",
         "parameters": [
           {

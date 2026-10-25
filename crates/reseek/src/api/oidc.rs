@@ -5,10 +5,11 @@ use api_types::events::{Event, LoginFailed, SessionRevokeReason};
 use api_types::session::{
   BackchannelLogout, OidcCallbackQuery, OidcEndpoints, OidcLoginQuery, OidcTestResult,
 };
+use axum::body::Bytes;
 use axum::extract::{Path, Query, State};
 use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
-use axum::{Extension, Form, Json};
+use axum::{Extension, Json};
 use openidconnect::RedirectUrl;
 use soulseek_client::LogLimiter;
 use std::sync::Arc;
@@ -210,7 +211,8 @@ async fn callback(
 }
 
 /// Where the provider ends sessions it started, with a signed logout token naming its session
-/// or its user. Always answered 200.
+/// or its user. Answered 404 for a provider that takes no back-channel logout whatever the
+/// body, else always 200, a body that is not a logout form included.
 #[utoipa::path(
   post, path = "/auth/oidc/{name}/backchannel", tag = "auth",
   params(("name" = String, Path, description = "the provider's name in the configuration")),
@@ -220,7 +222,7 @@ async fn callback(
 async fn backchannel(
   State(app): State<AppState>,
   Path(name): Path<String>,
-  Form(form): Form<BackchannelLogout>,
+  body: Bytes,
 ) -> Result<StatusCode, ApiError> {
   let provider = provider(&app, &name)?;
   if !provider.options.logout.back_channel {
@@ -228,6 +230,20 @@ async fn backchannel(
       "back-channel logout is off for this provider",
     ));
   }
+  let form = match serde_html_form::from_bytes::<BackchannelLogout>(&body) {
+    Ok(form) => form,
+    Err(e) => {
+      if let Some(suppressed) = LOGOUT_REFUSED.allow() {
+        warn!(
+          provider = name,
+          reason = %e,
+          suppressed,
+          "back-channel logout refused; the body is no logout form"
+        );
+      }
+      return Ok(StatusCode::OK);
+    }
+  };
   let metadata = match provider.metadata().await {
     Ok(metadata) => metadata,
     Err(e) => {
@@ -593,6 +609,44 @@ mod tests {
       401,
       "the provider ended the session"
     );
+  }
+
+  #[tokio::test]
+  async fn back_channel_status_depends_on_the_provider_not_the_body() {
+    let issuer = Issuer::start().await;
+    let app = app(
+      &format!(
+        "[web.authentication.oidc.home]\nissuer = \"{0}\"\nclient_id = \"{CLIENT_ID}\"\n\
+         [web.authentication.oidc.quiet]\nissuer = \"{0}\"\nclient_id = \"{CLIENT_ID}\"\n\
+         [web.authentication.oidc.quiet.logout]\nback_channel = false\n",
+        issuer.url
+      ),
+      &[],
+    )
+    .await;
+    let post = |provider: &str, content_type: &str, body: &'static str| {
+      axum::http::Request::builder()
+        .method("POST")
+        .uri(format!("/api/v0/auth/oidc/{provider}/backchannel"))
+        .header("host", "localhost")
+        .header("content-type", content_type)
+        .body(axum::body::Body::from(body))
+        .unwrap()
+    };
+    let form = "application/x-www-form-urlencoded";
+    for (provider, content_type, body, status) in [
+      ("nobody", "text/plain", "\u{0}", 404),
+      ("quiet", form, "logout_token=x", 404),
+      ("quiet", "application/json", "{", 404),
+      ("home", "text/plain", "\u{0}", 200),
+      ("home", form, "other=1", 200),
+      ("home", form, "logout_token=not.a.token", 200),
+    ] {
+      let answer = app
+        .send_from(OUTSIDE, post(provider, content_type, body))
+        .await;
+      assert_eq!(answer.status, status, "{provider} {content_type} {body:?}");
+    }
   }
 
   #[tokio::test]

@@ -51,6 +51,7 @@ rusqlite = { version = "0.39", features = ["bundled", "trace"] }
 rust-embed = { version = "8", features = ["interpolate-folder-path", "mime-guess"], optional = true }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "logging", "std", "tls12"] }
 serde.workspace = true
+serde_html_form = "0.2"
 serde_json.workspace = true
 sha2.workspace = true
 subtle = "2"
