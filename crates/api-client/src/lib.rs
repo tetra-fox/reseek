@@ -278,10 +278,20 @@ async fn send(request: RequestBuilder) -> Result<Response> {
   if status.is_success() || status.is_redirection() {
     return Ok(response);
   }
-  let text = response.text().await?;
+  Err(refused(response).await)
+}
+
+/// The error an answer that is no success carries: its error body, or its text when it has
+/// none.
+async fn refused(response: Response) -> Error {
+  let status = response.status();
+  let text = match response.text().await {
+    Ok(text) => text,
+    Err(e) => return Error::Http(e),
+  };
   match serde_json::from_str::<ErrorBody>(&text) {
-    Ok(body) => Err(Error::Api { status, body }),
-    Err(_) => Err(Error::Unexpected { status, text }),
+    Ok(body) => Error::Api { status, body },
+    Err(_) => Error::Unexpected { status, text },
   }
 }
 
