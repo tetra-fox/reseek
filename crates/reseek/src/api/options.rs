@@ -35,6 +35,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(get_options, patch_options))
     .routes(routes!(get_startup))
     .routes(routes!(get_view))
+    .routes(routes!(get_debug))
     .routes(routes!(delete_override))
     .routes(routes!(get_file, patch_file, put_file))
     .routes(routes!(get_file_location))
@@ -75,6 +76,32 @@ async fn get_view(
   _admin: Authorized<Administrator>,
 ) -> Json<ConfigView> {
   Json(view::config_view(&app.config.current()))
+}
+
+/// Every option's value with where it came from, one `key=value (source)` line each, secrets
+/// hidden. Needs `debug` and `remote_configuration` on, and someone at the UI.
+#[utoipa::path(
+  get, path = "/options/debug", tag = "options",
+  responses(
+    (status = 200, body = String), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody)
+  )
+)]
+async fn get_debug(
+  State(app): State<AppState>,
+  admin: Authorized<Administrator>,
+) -> Result<Json<String>, ApiError> {
+  let current = app.config.current();
+  if !current.values.debug {
+    warn!("Blocked configuration debug view; debug mode is off");
+    return Err(ApiError::forbidden("the debug view needs debug mode").logged());
+  }
+  remote(
+    &current,
+    "Blocked configuration debug view; remote configuration is disabled",
+  )?;
+  require_interactive(&admin.principal)?;
+  Ok(Json(view::debug_view(&current)))
 }
 
 /// Sets and removes runtime overrides. They last across restarts until they expire, are
@@ -563,6 +590,38 @@ mod tests {
     assert_ne!(written["revision"], revision);
     let text = std::fs::read_to_string(app.dir.path().join("config.toml")).unwrap();
     assert!(text.contains("debug = true") && text.contains("[web.authentication]"));
+  }
+
+  #[tokio::test]
+  async fn the_debug_view_names_sources_hides_secrets_and_needs_debug() {
+    let debugging = app(
+      &format!("debug = true\n{TRUSTED}[relay.controller]\naddress = \"https://a:b@c.lan/\"\n"),
+      &[("RESEEK_HTTP_PORT", "6000")],
+    )
+    .await;
+    let answer = debugging
+      .send(request("GET", "/api/v0/options/debug", None))
+      .await;
+    assert_eq!(answer.status, 200, "{:?}", answer.body);
+    let text = answer.json();
+    let text = text.as_str().unwrap();
+    assert!(
+      text.contains("web.port=6000 (environment RESEEK_HTTP_PORT)\n"),
+      "{text}"
+    );
+    assert!(text.contains("debug=true (file config.toml)\n"), "{text}");
+    assert!(text.contains("web.authentication.password=\"*****\" (file config.toml)\n"));
+    assert!(text.contains("relay.controller.address=\"https://*****@c.lan/\""));
+    assert!(
+      !text.contains("hunter2") && !text.contains("robot-key"),
+      "{text}"
+    );
+
+    let quiet = app(TRUSTED, &[]).await;
+    let refused = quiet
+      .send(request("GET", "/api/v0/options/debug", None))
+      .await;
+    assert_eq!(refused.status, 403);
   }
 
   #[tokio::test]

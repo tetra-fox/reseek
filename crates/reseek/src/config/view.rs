@@ -69,6 +69,28 @@ pub fn config_view(loaded: &Loaded<Options>) -> api::ConfigView {
   }
 }
 
+/// Every option's effective value with the layer that set it, one `key=value (source)` line per
+/// key in key order, secrets and URL credentials hidden as in every other view.
+pub fn debug_view(loaded: &Loaded<Options>) -> String {
+  let values = redact::values(loaded);
+  let mut text = String::new();
+  for (key, source) in &loaded.sources {
+    let value = key
+      .split('.')
+      .try_fold(&values, |value, part| value.get(part))
+      .map_or_else(|| "null".to_string(), Value::to_string);
+    let source = match source {
+      cascade::Source::Default => "default".to_string(),
+      cascade::Source::File { file } => format!("file {file}"),
+      cascade::Source::Env { var } => format!("environment {var}"),
+      cascade::Source::Cli { flag } => format!("command line {flag}"),
+      cascade::Source::Runtime { set_by, .. } => format!("runtime override by {set_by}"),
+    };
+    text.push_str(&format!("{key}={value} ({source})\n"));
+  }
+  text
+}
+
 /// The layer a value came from, as the API writes it.
 pub fn source(source: cascade::Source) -> api::OptionSource {
   match source {

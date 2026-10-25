@@ -450,6 +450,47 @@
         }
       }
     },
+    "/api/v0/options/debug": {
+      "get": {
+        "tags": [
+          "options"
+        ],
+        "summary": "Every option's value with where it came from, one `key=value (source)` line each, secrets\nhidden. Needs `debug` and `remote_configuration` on, and someone at the UI.",
+        "operationId": "get_debug",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/options/file": {
       "get": {
         "tags": [
