@@ -4241,6 +4241,881 @@
         }
       }
     },
+    "/api/v0/transfers/downloads": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Every download, grouped by user and remote directory.",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "includeRemoved",
+            "in": "query",
+            "description": "also list transfers that were removed",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/all/completed": {
+      "delete": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Removes every completed download from the listings; the reports still count them.",
+        "operationId": "remove_completed",
+        "responses": {
+          "204": {
+            "description": "removed"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/batches": {
+      "post": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Enqueues files from one user as a batch. Answered 201 when every file was enqueued, 207 when\nsome were, and 200 when none was; the batch exists in every case.",
+        "operationId": "enqueue_batch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueDownloadBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueDownloadBatchResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueDownloadBatchResponse"
+                }
+              }
+            }
+          },
+          "207": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueDownloadBatchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/batches/{id}": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "One batch with its downloads; `includeRemoved` lists removed ones too.",
+        "operationId": "batch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the batch's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "includeRemoved",
+            "in": "query",
+            "description": "also list transfers that were removed",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Batch"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/bulk": {
+      "post": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Cancels, removes or retries several downloads in one call.",
+        "operationId": "bulk",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/list": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "A page of downloads, flat, filtered and sorted.",
+        "operationId": "page",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "description": "only transfers in one of these states or categories, any state when empty; repeat the\nparameter for several",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/TransferStateFilter"
+              }
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "only transfers with this peer",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "batchId",
+            "in": "query",
+            "description": "only downloads of this batch",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "includeRemoved",
+            "in": "query",
+            "description": "also list transfers that were removed",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "only transfers requested at or after this time",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "what the listing is sorted by",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TransferSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "description": "which way it is sorted",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "how many matching transfers to skip",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "how many transfers the page holds at most, up to 1000",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 1000,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_Transfer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/{username}": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "The downloads from one user, grouped by remote directory.",
+        "operationId": "user_downloads",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Enqueues files from one user. Answered 201 when at least one file was enqueued and 200 when\nnone was; the files that were not are listed with why.",
+        "operationId": "enqueue",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/QueueDownloadRequest"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueDownloadResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueDownloadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/{username}/{id}": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "One download; `includeHistory` adds the states it went through.",
+        "operationId": "download",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "includeHistory",
+            "in": "query",
+            "description": "fill `stateHistory`",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transfer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Cancels a download; `remove` also removes it from the listings once it has completed.",
+        "operationId": "cancel",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "remove",
+            "in": "query",
+            "description": "also remove the transfer from the listings, once it has completed when it is still running",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "cancelled"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/transfers/downloads/{username}/{id}/analysis": {
       "get": {
         "tags": [
@@ -4865,6 +5740,887 @@
           }
         }
       }
+    },
+    "/api/v0/transfers/downloads/{username}/{id}/position": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Asks the peer for a queued download's place in its queue.",
+        "operationId": "place_in_queue",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/uploads": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Every upload, grouped by user and remote directory; `since`, `until` and `limit` bound it.",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "includeRemoved",
+            "in": "query",
+            "description": "also list uploads that were removed",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "only uploads requested at or after this time, null for no lower bound",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "description": "only uploads requested before this time, null for no upper bound",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "at most this many uploads, null for every one",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/uploads/all/completed": {
+      "delete": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Removes every completed upload from the listings; the reports still count them.",
+        "operationId": "remove_completed",
+        "responses": {
+          "204": {
+            "description": "removed"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/uploads/bulk": {
+      "post": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Cancels, removes or retries several uploads in one call.",
+        "operationId": "bulk",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/uploads/list": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "A page of uploads, flat, filtered and sorted.",
+        "operationId": "page",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "description": "only transfers in one of these states or categories, any state when empty; repeat the\nparameter for several",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/TransferStateFilter"
+              }
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "only transfers with this peer",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "batchId",
+            "in": "query",
+            "description": "only downloads of this batch",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "includeRemoved",
+            "in": "query",
+            "description": "also list transfers that were removed",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "only transfers requested at or after this time",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "what the listing is sorted by",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TransferSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "description": "which way it is sorted",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "how many matching transfers to skip",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "how many transfers the page holds at most, up to 1000",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 1000,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_Transfer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/uploads/{username}": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "The uploads to one user, grouped by remote directory; no directories when there are none.",
+        "operationId": "user_uploads",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/uploads/{username}/{id}": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "One upload; `includeHistory` adds the states it went through.",
+        "operationId": "upload",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the upload's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "includeHistory",
+            "in": "query",
+            "description": "fill `stateHistory`",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transfer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Cancels an upload; `remove` also removes it from the listings once it has completed.",
+        "operationId": "cancel",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the upload's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "remove",
+            "in": "query",
+            "description": "also remove the transfer from the listings, once it has completed when it is still running",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "cancelled"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/uploads/{username}/{id}/bump": {
+      "post": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Moves a queued upload to the front of its group's queue.",
+        "operationId": "bump",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the upload's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "bumped"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/uploads/{username}/{id}/why": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Why a queued upload waits: its place, its group's slots, the global slots and the user's\nlimits.",
+        "operationId": "why",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the upload's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadQueueStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5320,6 +7076,128 @@
           }
         }
       },
+      "Batch": {
+        "type": "object",
+        "description": "Downloads from one user enqueued together. A batch is never changed after it is made; its\ncounts and state are worked out from its transfers when it is read.",
+        "required": [
+          "id",
+          "username",
+          "direction",
+          "createdAt",
+          "transfers",
+          "options",
+          "fileCount",
+          "completedCount",
+          "failedCount",
+          "bytesTotal",
+          "bytesTransferred",
+          "state"
+        ],
+        "properties": {
+          "bytesTotal": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the sizes of the transfers added up, in bytes",
+            "minimum": 0
+          },
+          "bytesTransferred": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the bytes moved by the transfers added up",
+            "minimum": 0
+          },
+          "completedCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many of them completed, whatever the outcome",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when the batch was made"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/TransferDirection",
+            "description": "always `Download`"
+          },
+          "failedCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many of them completed other than successfully",
+            "minimum": 0
+          },
+          "fileCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many transfers the batch has",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "the batch's id"
+          },
+          "options": {
+            "$ref": "#/components/schemas/BatchOptions",
+            "description": "where the files go and how the caller tagged the batch"
+          },
+          "searchId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the search the files were found by, null when there is none"
+          },
+          "state": {
+            "$ref": "#/components/schemas/BatchState",
+            "description": "where the batch is as a whole"
+          },
+          "transfers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transfer"
+            },
+            "description": "the batch's transfers, without removed ones unless they were asked for"
+          },
+          "username": {
+            "type": "string",
+            "description": "the user the files come from"
+          }
+        }
+      },
+      "BatchOptions": {
+        "type": "object",
+        "description": "Where a batch's files go and how the caller tags it.",
+        "properties": {
+          "destination": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "a relative path under the downloads directory that every file of the batch goes to,\nin place of the directory the download pattern gives; null for the pattern",
+            "example": "Artist/Album"
+          },
+          "externalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "a tag of the caller's choosing, given to the download pattern; null for none"
+          }
+        }
+      },
+      "BatchState": {
+        "type": "string",
+        "description": "Where a batch is as a whole.",
+        "enum": [
+          "Pending",
+          "InProgress",
+          "Completed",
+          "Failed"
+        ]
+      },
       "Block": {
         "type": "object",
         "description": "A blocked user.",
@@ -5433,6 +7311,81 @@
           "username": {
             "type": "string",
             "description": "the user being browsed"
+          }
+        }
+      },
+      "BulkAction": {
+        "type": "string",
+        "description": "What a bulk call does to each of its transfers.",
+        "enum": [
+          "cancel",
+          "remove",
+          "retry"
+        ]
+      },
+      "BulkFailure": {
+        "type": "object",
+        "description": "A transfer a bulk action could not be applied to.",
+        "required": [
+          "id",
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "why the action failed for it"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "the transfer's id"
+          }
+        }
+      },
+      "BulkRequest": {
+        "type": "object",
+        "description": "One action applied to several transfers of one direction.",
+        "required": [
+          "ids",
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/BulkAction",
+            "description": "what to do to each"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "the transfers to act on"
+          }
+        }
+      },
+      "BulkResult": {
+        "type": "object",
+        "description": "What a bulk call did.",
+        "required": [
+          "ok",
+          "failed"
+        ],
+        "properties": {
+          "failed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkFailure"
+            },
+            "description": "the transfers it could not be applied to, and why"
+          },
+          "ok": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "the transfers the action was applied to"
           }
         }
       },
@@ -6043,6 +7996,35 @@
           }
         }
       },
+      "DirectoryResponse": {
+        "type": "object",
+        "description": "The transfers of one remote directory.",
+        "required": [
+          "directory",
+          "fileCount",
+          "files"
+        ],
+        "properties": {
+          "directory": {
+            "type": "string",
+            "description": "the remote filename up to its last separator, `/` when the filename has one and `\\`\notherwise; empty for a filename without a separator",
+            "example": "@@abcde\\Music\\Artist\\Album"
+          },
+          "fileCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many entries `files` has",
+            "minimum": 0
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transfer"
+            },
+            "description": "the transfers, in the order they were asked for"
+          }
+        }
+      },
       "DisconnectReason": {
         "type": "string",
         "description": "Why the client disconnects from the Soulseek server, the body of `DELETE /server`, written\nas a bare JSON string.",
@@ -6236,6 +8218,115 @@
             "type": "string",
             "description": "the codec and approximate bitrate",
             "example": "mp3 ~128 kbps"
+          }
+        }
+      },
+      "EnqueueDownloadBatchItem": {
+        "type": "object",
+        "description": "One file of a batch.",
+        "required": [
+          "filename",
+          "size"
+        ],
+        "properties": {
+          "attributes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileAttribute"
+            },
+            "description": "the file's attributes as the response gave them, kept to be shown with the download"
+          },
+          "filename": {
+            "type": "string",
+            "description": "the remote filename exactly as a search or browse response gave it",
+            "example": "@@abcde\\Music\\Artist\\Album\\01 - Track.flac"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the file's size in bytes as the response gave it",
+            "minimum": 0
+          }
+        }
+      },
+      "EnqueueDownloadBatchRequest": {
+        "type": "object",
+        "description": "Downloads several files from one user as one batch, which can give them a common\ndestination.",
+        "required": [
+          "username",
+          "files"
+        ],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnqueueDownloadBatchItem"
+            },
+            "description": "the files, at least one, no filename twice"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the batch's id, not the nil id; a new one is made when null"
+          },
+          "options": {
+            "$ref": "#/components/schemas/BatchOptions",
+            "description": "where the files go and how the caller tags the batch"
+          },
+          "searchId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the search the files were found by, null when there is none"
+          },
+          "username": {
+            "type": "string",
+            "description": "the user to download from",
+            "example": "alice"
+          }
+        }
+      },
+      "EnqueueDownloadBatchResponse": {
+        "type": "object",
+        "description": "What enqueueing a batch did.",
+        "required": [
+          "batch",
+          "failures"
+        ],
+        "properties": {
+          "batch": {
+            "$ref": "#/components/schemas/Batch",
+            "description": "the batch with the downloads that were created"
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnqueueFailure"
+            },
+            "description": "the files that were not enqueued, and why"
+          }
+        }
+      },
+      "EnqueueFailure": {
+        "type": "object",
+        "description": "A file that was not enqueued.",
+        "required": [
+          "filename",
+          "message"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "the remote filename as it was asked for"
+          },
+          "message": {
+            "type": "string",
+            "description": "why it was not enqueued, such as `Skipped: Already in progress`"
           }
         }
       },
@@ -8980,6 +11071,204 @@
           }
         }
       },
+      "Page_Transfer": {
+        "type": "object",
+        "description": "One page of a list, with how many items the whole list has.",
+        "required": [
+          "items",
+          "total"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "One file moving in one direction with one peer. The record exists from the moment the\ntransfer is asked for until it is removed, and is updated in place as it runs; a retry by\nenqueueing again makes a new record with a new id.",
+              "required": [
+                "id",
+                "username",
+                "direction",
+                "filename",
+                "size",
+                "state",
+                "requestedAt",
+                "bytesTransferred",
+                "averageSpeed",
+                "attempts",
+                "removed",
+                "bytesRemaining",
+                "percentComplete"
+              ],
+              "properties": {
+                "attempts": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "attempts made so far for a download, 0 for an upload",
+                  "minimum": 0
+                },
+                "averageSpeed": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "the average speed in bytes per second, 0 until the first sample"
+                },
+                "batchId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "the batch the download was enqueued in, null for downloads enqueued one by one and for\nuploads"
+                },
+                "bytesRemaining": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "bytes still to move",
+                  "minimum": 0
+                },
+                "bytesTransferred": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "bytes moved so far, counting from offset 0 of a resumed file",
+                  "minimum": 0
+                },
+                "direction": {
+                  "$ref": "#/components/schemas/TransferDirection",
+                  "description": "which way the file moves"
+                },
+                "elapsedTime": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64",
+                  "description": "milliseconds from `startedAt` to `endedAt`, or to now while running; null before the\ntransfer starts",
+                  "minimum": 0
+                },
+                "endedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "when the transfer completed, null until it does"
+                },
+                "enqueuedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "when the peer queued our download or the upload entered our queue, null until then"
+                },
+                "exception": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "why the transfer failed, null when it did not"
+                },
+                "filename": {
+                  "type": "string",
+                  "description": "the remote filename exactly as the peer shares it, usually with `\\` separators",
+                  "example": "@@abcde\\Music\\Artist\\Album\\01 - Track.flac"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "the transfer's id, never reused"
+                },
+                "localPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "the absolute local path of a download's file once it was moved into the downloads\ndirectory, null before that and for uploads"
+                },
+                "nextAttemptAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "when a download waiting to be retried starts its next attempt, null when no retry is\nwaiting"
+                },
+                "percentComplete": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "how much of the file has moved, from 0 to 100; 0 for an empty file"
+                },
+                "placeInQueue": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32",
+                  "description": "the last place in the peer's queue the peer reported for a download, null when not asked\nor once the download left the peer's queue",
+                  "minimum": 0
+                },
+                "remainingTime": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64",
+                  "description": "milliseconds still needed at the average speed, null while the speed is 0",
+                  "minimum": 0
+                },
+                "removed": {
+                  "type": "boolean",
+                  "description": "hidden from the listings"
+                },
+                "requestedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "when the transfer was asked for: by us for a download, by the peer for an upload"
+                },
+                "size": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "the file's size in bytes, 0 when the caller did not know it",
+                  "minimum": 0
+                },
+                "startedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "when the current attempt started moving bytes, null until it does"
+                },
+                "state": {
+                  "$ref": "#/components/schemas/TransferStates",
+                  "description": "where the transfer is"
+                },
+                "stateHistory": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "$ref": "#/components/schemas/TransferStateChange"
+                  },
+                  "description": "the states the transfer went through, oldest first; null unless asked for"
+                },
+                "username": {
+                  "type": "string",
+                  "description": "the peer",
+                  "example": "alice"
+                }
+              }
+            },
+            "description": "the items on this page, in the order asked for"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "how many items match, on every page together",
+            "minimum": 0
+          }
+        }
+      },
       "Principal": {
         "type": "object",
         "description": "The identity a request acts as.",
@@ -9164,6 +11453,50 @@
           "enabled": {
             "type": "boolean",
             "description": "the proxy's identity headers are honoured"
+          }
+        }
+      },
+      "QueueDownloadRequest": {
+        "type": "object",
+        "description": "One file to download from the user named in the path. The body of the call is a list of\nthese.",
+        "required": [
+          "filename"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "the remote filename exactly as a search or browse response gave it",
+            "example": "@@abcde\\Music\\Artist\\Album\\01 - Track.flac"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the file's size in bytes as the response gave it, 0 when unknown",
+            "minimum": 0
+          }
+        }
+      },
+      "QueueDownloadResponse": {
+        "type": "object",
+        "description": "What enqueueing a list of files did.",
+        "required": [
+          "enqueued",
+          "failed"
+        ],
+        "properties": {
+          "enqueued": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transfer"
+            },
+            "description": "the downloads that were created"
+          },
+          "failed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnqueueFailure"
+            },
+            "description": "the files that were not enqueued, and why"
           }
         }
       },
@@ -11200,6 +13533,145 @@
           }
         }
       },
+      "UploadLimitUsage": {
+        "type": "object",
+        "description": "How much of one limit is used.",
+        "required": [
+          "used"
+        ],
+        "properties": {
+          "limit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "the limit, null when there is none",
+            "minimum": 0
+          },
+          "used": {
+            "type": "integer",
+            "format": "int64",
+            "description": "how much the user has used",
+            "minimum": 0
+          }
+        }
+      },
+      "UploadLimitWindow": {
+        "type": "object",
+        "description": "The figures of one limit window. Succeeded uploads count toward `files` and `bytes` of the\ndaily and weekly windows, failed ones toward `failures`.",
+        "required": [
+          "files",
+          "bytes"
+        ],
+        "properties": {
+          "bytes": {
+            "$ref": "#/components/schemas/UploadLimitUsage",
+            "description": "bytes, the limit converted from megabytes of 1 000 000 bytes"
+          },
+          "failures": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UploadLimitUsage",
+                "description": "failed uploads, null for the queued window, which has no failure limit"
+              }
+            ]
+          },
+          "files": {
+            "$ref": "#/components/schemas/UploadLimitUsage",
+            "description": "files"
+          }
+        }
+      },
+      "UploadLimits": {
+        "type": "object",
+        "description": "A user's upload figures against the limits of their group, per window.",
+        "required": [
+          "queued",
+          "daily",
+          "weekly"
+        ],
+        "properties": {
+          "daily": {
+            "$ref": "#/components/schemas/UploadLimitWindow",
+            "description": "uploads started in the trailing 24 hours"
+          },
+          "queued": {
+            "$ref": "#/components/schemas/UploadLimitWindow",
+            "description": "uploads queued or in progress"
+          },
+          "weekly": {
+            "$ref": "#/components/schemas/UploadLimitWindow",
+            "description": "uploads started in the trailing 7 days"
+          }
+        }
+      },
+      "UploadQueueStatus": {
+        "type": "object",
+        "description": "Where a queued upload stands in the upload queue and what it waits for, worked out without\nchanging the queue.",
+        "required": [
+          "group",
+          "groupSlotsUsed",
+          "groupSlots",
+          "globalSlotsUsed",
+          "globalSlots",
+          "userActive",
+          "limits"
+        ],
+        "properties": {
+          "globalSlots": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many uploads may run at once over every group",
+            "minimum": 0
+          },
+          "globalSlotsUsed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "uploads in progress over every group",
+            "minimum": 0
+          },
+          "group": {
+            "type": "string",
+            "description": "the group the user is in",
+            "example": "default"
+          },
+          "groupSlots": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many uploads the group may run at once",
+            "minimum": 0
+          },
+          "groupSlotsUsed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "uploads in progress in that group",
+            "minimum": 0
+          },
+          "limits": {
+            "$ref": "#/components/schemas/UploadLimits",
+            "description": "the user's figures against the group's limits"
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "the upload's 0-based place among its group's uploads, uploads in progress counted; null\nwhen the queue does not hold the upload",
+            "minimum": 0
+          },
+          "userActive": {
+            "type": "integer",
+            "format": "int32",
+            "description": "uploads to this user in progress",
+            "minimum": 0
+          }
+        }
+      },
       "UserBlocked": {
         "type": "object",
         "description": "The data of `UserBlocked`.",
@@ -11334,6 +13806,27 @@
           "username": {
             "type": "string",
             "description": "the user"
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "description": "One peer's transfers in one direction, grouped by remote directory, in the order the\ntransfers were first asked for.",
+        "required": [
+          "username",
+          "directories"
+        ],
+        "properties": {
+          "directories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryResponse"
+            },
+            "description": "the remote directories the peer's transfers are in, empty when there are none"
+          },
+          "username": {
+            "type": "string",
+            "description": "the peer"
           }
         }
       },
@@ -11739,6 +14232,10 @@
     {
       "name": "searches",
       "description": "Searches we start on the network"
+    },
+    {
+      "name": "transfers",
+      "description": "Downloads and uploads"
     },
     {
       "name": "shares",

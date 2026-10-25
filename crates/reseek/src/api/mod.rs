@@ -14,6 +14,7 @@ mod searches;
 mod session;
 mod shares;
 mod tokens;
+mod transfers;
 mod validate;
 
 use axum::Router;
@@ -43,6 +44,7 @@ use crate::auth;
     (name = "tokens", description = "API tokens for scripts"),
     (name = "live", description = "The event stream"),
     (name = "searches", description = "Searches we start on the network"),
+    (name = "transfers", description = "Downloads and uploads"),
     (name = "shares", description = "What we share"),
     (name = "files", description = "The downloaded files, served to the browser"),
     (name = "analysis", description = "Checking whether a downloaded file is what it claims")
@@ -55,6 +57,7 @@ fn routes() -> OpenApiRouter<AppState> {
   let api = OpenApiRouter::new()
     .merge(application::routes())
     .merge(searches::routes())
+    .merge(transfers::routes())
     .merge(shares::routes())
     .merge(files::routes())
     .merge(analysis::routes())
