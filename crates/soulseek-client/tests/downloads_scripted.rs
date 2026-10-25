@@ -1,5 +1,5 @@
 //! Downloads from a scripted peer, for what a real uploader does not say on demand: refusing
-//! with each reason, reporting a failure at each stage, naming another size or none, sending at
+//! with any reason, reporting a failure at each stage, naming another size or none, sending at
 //! once, sending what does not decode; and how the download asks: governed, with fresh tokens,
 //! once per file.
 
@@ -30,22 +30,8 @@ fn reported_failed(error: &ClientError) -> bool {
 #[tokio::test]
 async fn a_refusal_with_any_reason_rejects_the_download() {
   let mut scripted = Scripted::start().await;
-  let reasons = [
-    "Cancelled",
-    "Complete",
-    "File not shared.",
-    "File not shared",
-    "File read error.",
-    "Remote file error",
-    "Pending shutdown.",
-    "Too many files",
-    "Too many megabytes",
-    "Too many files today",
-    "Overwhelmed with requests; try again later.",
-    "Banned",
-    "Enqueue failed due to internal error",
-    "",
-  ];
+  // the reason is passed on as it is and never matched, so a few stand for every one
+  let reasons = ["Cancelled", "File not shared.", ""];
   let mut bob = None;
   for (n, reason) in reasons.into_iter().enumerate() {
     let filename = format!("@@share\\refused {n}.mp3");

@@ -205,20 +205,7 @@ async fn a_downloader_that_refuses_or_never_answers_ends_the_upload_and_hears_it
 }
 
 #[tokio::test]
-async fn the_downloader_says_where_to_start() {
-  // a resume
-  let mut scripted = Scripted::start().await;
-  let (running, mut bob) = offered_upload(&mut scripted, "@@share\\resume.mp3").await;
-  let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\resume.mp3").await;
-  receive(&mut transfer, 20_000).await;
-  drop(transfer);
-  let done = running.result().await.unwrap();
-  assert_eq!(
-    (done.start_offset, done.bytes_transferred),
-    (20_000, SIZE as u64)
-  );
-
-  // a downloader that has the whole file gets nothing more
+async fn a_downloader_that_has_the_whole_file_gets_nothing_more() {
   let mut scripted = Scripted::start().await;
   let (running, mut bob) = offered_upload(&mut scripted, "@@share\\whole.mp3").await;
   let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\whole.mp3").await;

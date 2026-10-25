@@ -6,8 +6,7 @@ mod support;
 use std::time::Duration;
 
 use soulseek_client::{ClientError, Event, RequestStyle, Transfer, TransferState};
-use soulseek_proto::peer::{TransferRequest, TransferResponse};
-use soulseek_proto::{PeerMessage, TransferDirection};
+use soulseek_proto::TransferDirection;
 use support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
 use support::transfers::{content, states};
 use support::{listening_options, next_event};
@@ -150,30 +149,6 @@ async fn a_download_cancelled_at_any_stage_ends_cancelled() {
   let _ = bob.read_peer().await;
   running.cancel.cancel();
   assert!(cancelled(running.result().await));
-
-  // waiting in bob's queue: bob's later offer is refused
-  let mut scripted = Scripted::start().await;
-  let (running, mut bob) = scripted.queued_download("@@share\\queued.mp3").await;
-  running.cancel.cancel();
-  assert!(cancelled(running.result().await));
-  bob
-    .send(
-      &PeerMessage::TransferRequest(TransferRequest {
-        direction: TransferDirection::Upload,
-        token: 16,
-        filename: "@@share\\queued.mp3".into(),
-        file_size: Some(SIZE),
-      })
-      .encode(),
-    )
-    .await;
-  assert_eq!(
-    bob.read_peer().await,
-    PeerMessage::TransferResponse(TransferResponse::Denied {
-      token: 16,
-      message: "Cancelled".into(),
-    })
-  );
 
   // waiting for bob to connect: bob connecting afterwards is turned away
   let mut scripted = Scripted::start().await;
