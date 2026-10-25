@@ -170,4 +170,6 @@ async fn a_message_needs_a_recipient_and_a_text() {
       Err(ClientError::InvalidArgument(_))
     ));
   }
+  // a text of only whitespace is still a message
+  alice.client.send_private_message("bob", " ").await.unwrap();
 }
