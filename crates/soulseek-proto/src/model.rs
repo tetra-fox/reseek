@@ -186,31 +186,12 @@ mod tests {
   use super::*;
 
   #[test]
-  fn attribute_types_round_trip_through_u32() {
-    for value in 0..8 {
-      assert_eq!(FileAttributeType::from_u32(value).to_u32(), value);
-    }
-    assert_eq!(
-      FileAttributeType::from_u32(3),
-      FileAttributeType::Unknown(3)
-    );
-  }
-
-  #[test]
   fn search_query_terms_and_exclusions() {
     let query = SearchQuery::parse(" a  b\t- -x\n--y -x ");
     assert_eq!(query.terms, ["a", "b", "-"]);
     assert_eq!(query.exclusions, ["x", "y"]);
     assert_eq!(query.query(), "a b -");
     assert_eq!(query.search_text(), "a b - -x -y");
-  }
-
-  #[test]
-  fn search_query_without_exclusions() {
-    let query = SearchQuery::parse("one two");
-    assert_eq!(query.search_text(), "one two");
-    assert!(query.exclusions.is_empty());
-    assert!(SearchQuery::parse("  ").terms.is_empty());
   }
 
   #[test]

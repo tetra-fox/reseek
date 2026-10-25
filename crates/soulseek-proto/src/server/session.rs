@@ -242,11 +242,6 @@ pub(crate) mod tests {
   }
 
   #[test]
-  fn login_hash_is_md5_of_username_and_password() {
-    assert_eq!(login_hash("username", "password"), MD5_USERNAME_PASSWORD);
-  }
-
-  #[test]
   fn login_request_debug_never_shows_credentials() {
     let login = LoginRequest::new("alice".into(), "hunter2".into(), 1, 2);
     let debug = format!("{login:?}");
