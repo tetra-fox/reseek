@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+  "crates/api-types",
   "crates/cascade",
   "crates/cascade-derive",
   "crates/soulseek-proto",
@@ -15,6 +16,8 @@ edition = "2024"
 publish = false
 
 [workspace.dependencies]
+api-types = { path = "crates/api-types" }
+cascade = { path = "crates/cascade" }
 cascade-derive = { path = "crates/cascade-derive" }
 soulseek-proto = { path = "crates/soulseek-proto" }
 
@@ -39,7 +42,7 @@ tokio-util = "0.7"
 toml = "1"
 toml_edit = "0.25"
 tracing = "0.1"
-utoipa = { version = "5", features = ["chrono"] }
+utoipa = { version = "5", features = ["chrono", "uuid"] }
 uuid = { version = "1", features = ["v4"] }
 
 proptest = "1"

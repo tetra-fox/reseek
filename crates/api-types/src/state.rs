@@ -1,0 +1,265 @@
+//! The application state document: everything the UI shows about the daemon itself, sent whole
+//! on every change.
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
+use crate::flags::flag_names;
+use crate::relay::RelayState;
+
+/// The daemon's state, as `GET /application` returns it and `application.state` frames carry
+/// it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct State {
+  /// the running version and whether a newer one exists
+  pub version: VersionInfo,
+  /// an option changed that takes effect only after reconnecting to the Soulseek server
+  pub pending_reconnect: bool,
+  /// an option changed that takes effect only after a restart
+  pub pending_restart: bool,
+  /// the connection to the Soulseek server
+  pub server: ServerState,
+  /// the loop that reconnects to the server
+  pub connection_watchdog: ConnectionWatchdogState,
+  /// relay mode, the controller connection and the connected agents
+  pub relay: RelayState,
+  /// sampled health figures
+  pub health: HealthState,
+  /// our own Soulseek account
+  pub user: UserState,
+  /// our place in the distributed search network
+  pub distributed_network: DistributedNetworkState,
+  /// the share scan and the share cache
+  pub shares: SharesState,
+  /// the chat rooms we are in
+  pub rooms: Vec<String>,
+  /// the outcome of the last configuration reload
+  pub configuration: ConfigurationState,
+}
+
+/// The running version and whether a newer one exists.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionInfo {
+  /// the version with its build information
+  #[schema(example = "0.1.0 (0.1.0+a1b2c3d)")]
+  pub full: String,
+  /// the semantic version
+  #[schema(example = "0.1.0")]
+  pub current: String,
+  /// the latest released version, null until the release feed was read
+  pub latest: Option<String>,
+  /// whether `latest` is newer than `current`, null while unknown
+  pub is_update_available: Option<bool>,
+  /// a canary build, which is not checked for updates
+  pub is_canary: bool,
+  /// a development build, which is not checked for updates
+  pub is_development: bool,
+}
+
+bitflags::bitflags! {
+  /// The state of the connection to the Soulseek server, written as the names of the set
+  /// flags such as `"Connected, LoggedIn"`, or `"None"` before the first change.
+  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+  pub struct ServerConnectionState: u32 {
+    /// not connected
+    const Disconnected = 1;
+    /// the TCP connection is up
+    const Connected = 2;
+    /// the server accepted our login
+    const LoggedIn = 4;
+    /// the TCP connection is being made
+    const Connecting = 8;
+    /// the login was sent and is not answered yet
+    const LoggingIn = 16;
+    /// the connection is being closed
+    const Disconnecting = 32;
+  }
+}
+
+flag_names!(
+  ServerConnectionState,
+  "the names of the set flags joined by \", \"",
+  "Connected, LoggedIn"
+);
+
+/// The connection to the Soulseek server.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerState {
+  /// the configured server host while not disconnected
+  pub address: Option<String>,
+  /// the server's resolved `ip:port` while connected
+  #[schema(example = "1.2.3.4:2271")]
+  pub ip_end_point: Option<String>,
+  /// the client's state flags
+  pub state: ServerConnectionState,
+  /// `state` has `Connected`
+  pub is_connected: bool,
+  /// `state` has `Connecting`
+  pub is_connecting: bool,
+  /// `state` has `LoggedIn`
+  pub is_logged_in: bool,
+  /// `state` has `LoggingIn`
+  pub is_logging_in: bool,
+  /// `state` has `Connecting`, `Disconnecting` or `LoggingIn`
+  pub is_transitioning: bool,
+}
+
+/// The loop that reconnects to the Soulseek server.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionWatchdogState {
+  /// the loop is active and keeps trying
+  pub is_enabled: bool,
+  /// a connection attempt is waiting or running
+  pub is_attempting_connection: bool,
+  /// when the next attempt starts, null when none is scheduled
+  pub next_attempt_at: Option<DateTime<Utc>>,
+}
+
+/// Sampled health figures.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthState {
+  /// how incoming searches are being answered
+  pub search: SearchHealth,
+}
+
+/// Health of the search side.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchHealth {
+  /// incoming search requests from other users
+  pub incoming: IncomingSearchHealth,
+}
+
+/// How incoming search requests are being answered.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct IncomingSearchHealth {
+  /// the moving average time to answer one, in milliseconds
+  pub latency: f64,
+  /// how many are waiting to be answered
+  pub queue_depth: u32,
+  /// how many were dropped in the current window
+  pub drop_rate: f64,
+}
+
+/// Our own Soulseek account.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserState {
+  /// our username while connected
+  pub username: Option<String>,
+  /// our privileges as the server reports them
+  pub privileges: Privileges,
+  /// our statistics as the server reports them
+  pub statistics: UserStatistics,
+}
+
+/// Privileges on the Soulseek network.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Privileges {
+  /// `privilegesRemaining` is above zero
+  pub is_privileged: bool,
+  /// seconds of privilege left
+  pub privileges_remaining: u32,
+}
+
+/// A user's statistics as the Soulseek server keeps them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserStatistics {
+  /// average upload speed in bytes per second
+  pub average_speed: u32,
+  /// shared directories
+  pub directory_count: u32,
+  /// shared files
+  pub file_count: u32,
+  /// uploads made
+  pub upload_count: u64,
+}
+
+/// Our place in the distributed search network.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DistributedNetworkState {
+  /// our level in the tree, 0 at a branch root
+  pub branch_level: i32,
+  /// the username at the root of our branch
+  pub branch_root: Option<String>,
+  /// whether we take children
+  pub can_accept_children: bool,
+  /// how many children we take at most
+  pub child_limit: u32,
+  /// the usernames of our children
+  pub children: Vec<String>,
+  /// whether we have a parent
+  pub has_parent: bool,
+  /// whether we are a branch root
+  pub is_branch_root: bool,
+  /// our parent's username
+  pub parent: Option<String>,
+}
+
+/// The share scan and the share cache.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SharesState {
+  /// the shared directories or filters changed and a scan is needed for it to take effect
+  pub scan_pending: bool,
+  /// a scan is running
+  pub scanning: bool,
+  /// the share cache can answer requests
+  pub ready: bool,
+  /// the last scan failed
+  pub faulted: bool,
+  /// the last scan was cancelled
+  pub cancelled: bool,
+  /// how far the running scan is, from 0 to 1
+  pub scan_progress: f64,
+  /// the share hosts, `local` and any relay agents; null until the shares were first loaded
+  pub hosts: Option<Vec<String>>,
+  /// shared directories over every host
+  pub directories: u32,
+  /// shared files over every host
+  pub files: u32,
+}
+
+/// The outcome of the last configuration reload.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigurationState {
+  /// why the last reload failed, null once a reload succeeds; the values from before stay in
+  /// effect
+  pub last_reload_error: Option<String>,
+  /// when that reload failed, null once a reload succeeds
+  pub last_reload_at: Option<DateTime<Utc>>,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn server_state_flags_are_written_by_name() {
+    let state = ServerConnectionState::Connected | ServerConnectionState::LoggedIn;
+    assert_eq!(
+      serde_json::to_string(&state).unwrap(),
+      "\"Connected, LoggedIn\""
+    );
+    assert_eq!(
+      serde_json::to_string(&ServerConnectionState::empty()).unwrap(),
+      "\"None\""
+    );
+    let read: ServerConnectionState = serde_json::from_str("\"Connected, LoggingIn\"").unwrap();
+    assert_eq!(
+      read,
+      ServerConnectionState::Connected | ServerConnectionState::LoggingIn
+    );
+  }
+}
