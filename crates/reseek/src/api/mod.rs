@@ -1,6 +1,7 @@
 //! The HTTP API under `/api/v0`: the routes, their OpenAPI document, and the error type every
 //! handler answers failures with.
 
+pub mod agent;
 pub mod error;
 pub mod extract;
 mod live;
@@ -51,6 +52,10 @@ fn routes() -> OpenApiRouter<AppState> {
 pub fn router(state: AppState) -> Router {
   let (router, _) = routes().split_for_parts();
   router
+    .route_layer(middleware::from_fn_with_state(
+      state.clone(),
+      agent::refuse_in_agent_mode,
+    ))
     .layer(middleware::from_fn_with_state(
       state.clone(),
       auth::authenticate,
