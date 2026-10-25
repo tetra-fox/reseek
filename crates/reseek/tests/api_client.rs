@@ -7,6 +7,8 @@ mod support;
 use api_client::{Client, Error};
 use api_types::live::LiveFrame;
 use api_types::search::SearchListQuery;
+use std::time::Duration;
+
 use futures_util::StreamExt;
 use support::Daemon;
 
@@ -100,12 +102,16 @@ async fn the_event_stream_opens_again_when_the_daemon_comes_back() {
   drop(first);
   let _second = Daemon::start_on(port, dir.path(), &[], &trusted);
   let mut frames = Vec::new();
+  let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
   while !frames
     .iter()
     .any(|frame| matches!(frame, LiveFrame::Lagged(_)))
   {
     assert!(frames.len() < 10, "{frames:?}");
-    match stream.next().await.unwrap() {
+    let next = tokio::time::timeout_at(deadline, stream.next())
+      .await
+      .expect("the stream was not opened again within 30 s");
+    match next.expect("the stream ended instead of opening again") {
       Ok(event) => frames.push(event.frame),
       // the attempts to open the stream while the daemon was away
       Err(_) => continue,
