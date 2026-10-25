@@ -72,8 +72,8 @@ impl FakeServer {
     }
   }
 
-  /// a server whose sockets take in at most about `bytes` while it is not reading, so a client
-  /// writing more soon waits on the write
+  /// a server whose sockets take in only about `bytes` while it is not reading, so what a client
+  /// writes piles up in its own send buffer
   pub async fn with_receive_buffer(bytes: u32) -> Self {
     let socket = TcpSocket::new_v4().unwrap();
     socket.set_recv_buffer_size(bytes).unwrap();
@@ -274,10 +274,10 @@ impl Session {
       username: "filler".into(),
       message: "x".repeat(60 << 10),
     });
-    // 15 MB, several times what a loopback socket pair holds with a small receive window
     let client = self.client.clone();
     tokio::spawn(async move {
-      // the server reads it only when the test is done with the stall, or never
+      // the server reads it only when the test is done with the stall, or never. 15 MB is
+      // several times what a loopback socket pair holds with a small receive window
       let _ = client.write_server_messages(&vec![filler; 256]).await;
     });
   }
