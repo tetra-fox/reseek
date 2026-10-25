@@ -1,7 +1,7 @@
 //! Binding the listeners: HTTP on each configured address, HTTPS unless it is off, and the
 //! unix domain socket when one is configured.
 
-use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -144,25 +144,9 @@ impl Accept {
   }
 }
 
-/// The addresses of a comma-separated list, each trimmed and with or without brackets; every
-/// address (`[::]`, which takes IPv4 too) when the list is not set or blank.
-pub fn addresses(list: Option<&str>) -> Result<Vec<IpAddr>, String> {
-  let Some(list) = list.filter(|l| !l.trim().is_empty()) else {
-    return Ok(vec![IpAddr::V6(Ipv6Addr::UNSPECIFIED)]);
-  };
-  list
-    .split(',')
-    .map(|item| {
-      let item = item.trim();
-      let bare = item
-        .strip_prefix('[')
-        .and_then(|i| i.strip_suffix(']'))
-        .unwrap_or(item);
-      bare
-        .parse()
-        .map_err(|_| format!("`{item}` is not an IP address"))
-    })
-    .collect()
+/// The addresses of a configured list, as `config::addresses::list` reads it.
+fn addresses(list: Option<&str>) -> Result<Vec<IpAddr>, String> {
+  crate::config::addresses::list(list).map_err(|item| format!("`{item}` is not an IP address"))
 }
 
 fn url(scheme: &str, ip: IpAddr, port: u16) -> String {
@@ -207,23 +191,6 @@ fn unix_socket(path: &std::path::Path) -> Result<tokio::net::UnixListener, Strin
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[test]
-  fn address_lists_are_trimmed_and_default_to_every_address() {
-    assert_eq!(
-      addresses(None).unwrap(),
-      [IpAddr::V6(Ipv6Addr::UNSPECIFIED)]
-    );
-    assert_eq!(addresses(Some("  ")).unwrap().len(), 1);
-    assert_eq!(
-      addresses(Some("127.0.0.1, [::1]")).unwrap(),
-      [
-        "127.0.0.1".parse::<IpAddr>().unwrap(),
-        "::1".parse().unwrap()
-      ]
-    );
-    assert!(addresses(Some("localhost")).is_err());
-  }
 
   #[cfg(unix)]
   #[tokio::test]

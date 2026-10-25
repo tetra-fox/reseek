@@ -132,17 +132,14 @@ fn existing_directory(name: &str, path: &Path) -> Result<(), String> {
   Ok(())
 }
 
-/// A file with a fresh name can be made in `dir` and removed again.
+/// [`crate::paths::probe`] with the message of a configured directory.
 fn writable(name: &str, dir: &Path) -> Result<(), String> {
-  let probe = dir.join(uuid::Uuid::new_v4().to_string());
-  let refused = || {
+  crate::paths::probe(dir).map_err(|_| {
     format!(
       "The {name} field specifies a directory '{}' that exists, but is not writeable.",
       resolved(dir).display()
     )
-  };
-  fs::write(&probe, b"").map_err(|_| refused())?;
-  fs::remove_file(&probe).map_err(|_| refused())
+  })
 }
 
 /// The path with its links resolved, or made absolute when it does not exist.

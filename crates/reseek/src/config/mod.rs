@@ -1,6 +1,7 @@
 //! The configuration: every option, how the layers are loaded, what is valid, and how values
 //! are shown without their secrets.
 
+pub mod addresses;
 pub mod api_key;
 pub mod cidr;
 pub mod enums;

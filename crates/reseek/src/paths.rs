@@ -182,12 +182,15 @@ fn create(dir: &Path) -> Result<(), PathError> {
 }
 
 /// Checks `dir` is writable by creating and removing a file with a fresh name.
-pub fn writable(dir: &Path) -> Result<(), PathError> {
+pub fn probe(dir: &Path) -> std::io::Result<()> {
   let probe = dir.join(uuid::Uuid::new_v4().to_string());
-  let not_writable =
-    |e: std::io::Error| PathError(format!("Directory {} is not writeable: {e}", dir.display()));
-  File::create(&probe).map_err(not_writable)?;
-  std::fs::remove_file(&probe).map_err(not_writable)
+  File::create(&probe)?;
+  std::fs::remove_file(&probe)
+}
+
+/// [`probe`] with the message of a directory reseek owns.
+fn writable(dir: &Path) -> Result<(), PathError> {
+  probe(dir).map_err(|e| PathError(format!("Directory {} is not writeable: {e}", dir.display())))
 }
 
 /// The lock that keeps a second instance off the same data directory; released when dropped

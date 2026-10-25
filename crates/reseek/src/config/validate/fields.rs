@@ -3,9 +3,9 @@
 //! fails, naming the option by `name`.
 
 use std::fmt::Display;
-use std::net::IpAddr;
 use std::time::Duration;
 
+use crate::config::addresses;
 use crate::config::cidr::{IpRange, parse_list};
 
 /// `value` is from `min` to `max`, inclusive.
@@ -116,7 +116,7 @@ pub(crate) fn ip_address(name: &str, value: &str) -> Result<(), String> {
       "The {name} field accepts a single value only (a comma separated list was specified)"
     ));
   }
-  if parse_ip(value.trim()).is_none() {
+  if addresses::address(value.trim()).is_none() {
     return Err(format!(
       "The {name} field specifies an invalid IPv4 or IPv6 IP address."
     ));
@@ -124,23 +124,11 @@ pub(crate) fn ip_address(name: &str, value: &str) -> Result<(), String> {
   Ok(())
 }
 
-/// A comma-separated list of IP addresses, each trimmed; IPv6 may be in brackets (`[::]`).
+/// A comma-separated list of IP addresses as the listeners read it.
 pub(crate) fn ip_addresses(name: &str, value: &str) -> Result<(), String> {
-  if value.split(',').any(|a| parse_ip(a.trim()).is_none()) {
-    return Err(format!(
-      "The {name} field contains one or more invalid IPv4 or IPv6 IP addresses."
-    ));
-  }
-  Ok(())
-}
-
-/// The address `text` names, IPv6 with or without brackets.
-pub(crate) fn parse_ip(text: &str) -> Option<IpAddr> {
-  let bare = text
-    .strip_prefix('[')
-    .and_then(|t| t.strip_suffix(']'))
-    .unwrap_or(text);
-  bare.parse().ok()
+  addresses::list(Some(value)).map(drop).map_err(|_| {
+    format!("The {name} field contains one or more invalid IPv4 or IPv6 IP addresses.")
+  })
 }
 
 /// Whether `pattern` is a usable regular expression: not blank, and it compiles.
@@ -197,6 +185,7 @@ mod tests {
     );
     assert!(ip_address("x", "localhost").is_err());
     assert!(ip_addresses("x", "127.0.0.1, [::1] ,::").is_ok());
+    assert!(ip_addresses("x", "  ").is_ok(), "blank is every address");
     assert_eq!(
       ip_addresses("x", "127.0.0.1,nope").unwrap_err(),
       "The x field contains one or more invalid IPv4 or IPv6 IP addresses."
