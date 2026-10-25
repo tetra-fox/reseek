@@ -3219,6 +3219,333 @@
         }
       }
     },
+    "/api/v0/shares": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "The shares of every host by host name, this one as `local`.",
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharesByHost"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Starts a scan of this host's shares; `force` reads every file again. The scan's progress is\nin the application state.",
+        "operationId": "scan",
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "description": "read every file again, even ones whose size and modification time are unchanged",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "the scan started"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "a scan is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Stops the running scan.",
+        "operationId": "cancel_scan",
+        "responses": {
+          "204": {
+            "description": "the scan is stopping"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "no scan is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/shares/contents": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Everything every host shares, as other users browsing us see it.",
+        "operationId": "contents",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Directory"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/shares/{id}": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "One share, on any host.",
+        "operationId": "share",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the share's id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Share"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/shares/{id}/contents": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "What one share holds, its own directory included.",
+        "operationId": "share_contents",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the share's id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Directory"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/tokens": {
       "get": {
         "tags": [
@@ -5199,6 +5526,35 @@
           "queued": {
             "$ref": "#/components/schemas/QueuedMetrics",
             "description": "transfers waiting in a queue, here or at the peer"
+          }
+        }
+      },
+      "Directory": {
+        "type": "object",
+        "description": "A shared directory and the files directly in it.",
+        "required": [
+          "name",
+          "fileCount",
+          "files"
+        ],
+        "properties": {
+          "fileCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many entries `files` has",
+            "minimum": 0
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/File"
+            },
+            "description": "the files, each `filename` the bare name"
+          },
+          "name": {
+            "type": "string",
+            "description": "the full remote path with the peer's separators kept exactly; send it back unchanged",
+            "example": "@@abcd\\Music\\Pink Floyd\\Animals"
           }
         }
       },
@@ -9414,6 +9770,86 @@
           }
         }
       },
+      "Share": {
+        "type": "object",
+        "description": "A shared directory, or a directory excluded from the shares.",
+        "required": [
+          "id",
+          "alias",
+          "isExcluded",
+          "localPath",
+          "raw",
+          "remotePath"
+        ],
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "the name the directory is shared under",
+            "example": "Music"
+          },
+          "derivedFrom": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the option that made this share when it is not an entry of the configured directories,\nsuch as `shares.share_downloads`; null for a configured share"
+          },
+          "directories": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "directories in the share, its root included; null until the share was counted",
+            "minimum": 0
+          },
+          "files": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "files in the share; null until the share was counted",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "description": "the upper-case hex SHA-1 of `remotePath`",
+            "example": "6B86B273FF34FCE19D6B804EFF5A3F5747ADA4EA"
+          },
+          "isExcluded": {
+            "type": "boolean",
+            "description": "the entry excludes its directory from the shares"
+          },
+          "localPath": {
+            "type": "string",
+            "description": "the absolute local path, without trailing separators",
+            "example": "/srv/music"
+          },
+          "raw": {
+            "type": "string",
+            "description": "the entry as configured, without trailing separators, with its exclusion prefix; the\ndownloads path for a share made from an option",
+            "example": "[Music]/srv/music"
+          },
+          "remotePath": {
+            "type": "string",
+            "description": "the path other users see, the same as `alias`"
+          }
+        }
+      },
+      "SharesByHost": {
+        "type": "object",
+        "description": "The shares of every host by host name: `local` for this instance, always present, and each\nrelay agent's instance name.",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Share"
+          }
+        },
+        "propertyNames": {
+          "type": "string"
+        }
+      },
       "SharesState": {
         "type": "object",
         "description": "The share scan and the share cache.",
@@ -10728,6 +11164,10 @@
     {
       "name": "live",
       "description": "The event stream"
+    },
+    {
+      "name": "shares",
+      "description": "What we share"
     },
     {
       "name": "files",
