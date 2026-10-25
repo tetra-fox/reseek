@@ -27,7 +27,7 @@ static PROXY_REFUSED: LogLimiter = LogLimiter::new();
 
 /// Everything a request presented that says who it is, kept so the same credential can be
 /// checked again later, as the event stream does.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Presented {
   /// the client, after trusted proxies
   pub client: Client,
@@ -87,8 +87,20 @@ impl Presented {
   }
 }
 
+/// Leaves the credential, the cookie and the headers out, so they are never logged.
+impl std::fmt::Debug for Presented {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("Presented")
+      .field("client", &self.client)
+      .field("peer", &self.peer)
+      .field("credential", &self.credential.is_some())
+      .field("cookie", &self.cookie.is_some())
+      .finish_non_exhaustive()
+  }
+}
+
 /// Who the chain found a request to be, and the cookies its answer must set.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Identified {
   /// the principal, `None` for an anonymous request
   pub principal: Option<Principal>,

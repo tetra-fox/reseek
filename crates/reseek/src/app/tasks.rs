@@ -36,7 +36,8 @@ pub(super) fn spawn(app: &AppState) {
 async fn follow_configuration(app: AppState) {
   let mut loads = app.config.subscribe();
   let mut changes = app.config.changes();
-  app.state.configured(&loads.borrow_and_update());
+  let first = loads.borrow_and_update().clone();
+  app.state.configured(&first);
   loop {
     tokio::select! {
       () = app.shutdown.cancelled() => return,

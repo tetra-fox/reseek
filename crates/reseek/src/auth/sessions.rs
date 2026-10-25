@@ -78,7 +78,7 @@ impl Origin {
 }
 
 /// A session as stored.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct StoredSession {
   /// its id, the secret part of the cookie
   pub id: String,
@@ -106,6 +106,19 @@ pub struct StoredSession {
   pub user_agent: Option<String>,
   /// when it was revoked
   pub revoked_at: Option<DateTime<Utc>>,
+}
+
+/// Leaves the id and the ID token out, so they are never logged.
+impl std::fmt::Debug for StoredSession {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("StoredSession")
+      .field("subject", &self.subject)
+      .field("role", &self.role)
+      .field("origin", &self.origin)
+      .field("expires_at", &self.expires_at)
+      .field("revoked_at", &self.revoked_at)
+      .finish_non_exhaustive()
+  }
 }
 
 impl StoredSession {
