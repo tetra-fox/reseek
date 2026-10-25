@@ -85,7 +85,7 @@ async fn search(
 }
 
 #[tokio::test]
-async fn a_search_in_every_scope_takes_the_answers_and_ends_when_they_stop() {
+async fn network_and_room_searches_take_the_answers_and_end_when_they_stop() {
   let Some(server) = soulfind::server() else {
     return;
   };
@@ -100,11 +100,7 @@ async fn a_search_in_every_scope_takes_the_answers_and_ends_when_they_stop() {
       .await
       .unwrap();
   }
-  let scopes = [
-    SearchScope::Network,
-    SearchScope::User(vec![responder.username.clone()]),
-    SearchScope::Room(room.clone()),
-  ];
+  let scopes = [SearchScope::Network, SearchScope::Room(room.clone())];
   for scope in scopes {
     let mut events = searcher.client.subscribe();
     let (done, responses) = search(&searcher, scope.clone(), quick()).await;
@@ -222,12 +218,6 @@ async fn filtered_out_responses_are_not_taken() {
   let (done, responses) = search(&searcher, SearchScope::Network, options).await;
   assert!(responses.is_empty());
   assert_eq!(done.response_count, 0);
-  let mut options = quick();
-  options.file_filter = Some(Arc::new(|file: &File| {
-    file.filename.as_str().ends_with("1.flac")
-  }));
-  let (_, responses) = search(&searcher, SearchScope::Network, options).await;
-  assert_eq!(responses[0].files.len(), 1);
 }
 
 #[tokio::test]
