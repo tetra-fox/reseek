@@ -74,16 +74,26 @@ impl Ui {
     Self::Off
   }
 
+  /// Whether a request for `path` is answered with the app's page, `index.html`: a path of
+  /// the app (no file extension) or the page itself.
+  pub fn is_page(&self, method: &Method, path: &str) -> bool {
+    if self.is_off() || !(method == Method::GET || method == Method::HEAD) {
+      return false;
+    }
+    let relative = path.trim_start_matches('/');
+    let last = relative.rsplit('/').next().unwrap_or("");
+    !last.contains('.') || relative == "index.html"
+  }
+
   /// Answers a request the API did not: an asset, `index.html` for a path of the app, or 404.
   pub async fn respond(&self, method: &Method, path: &str) -> Response {
+    if self.is_page(method, path) {
+      return self.index().await;
+    }
     if self.is_off() || !(method == Method::GET || method == Method::HEAD) {
       return StatusCode::NOT_FOUND.into_response();
     }
     let relative = path.trim_start_matches('/');
-    let last = relative.rsplit('/').next().unwrap_or("");
-    if !last.contains('.') {
-      return self.index().await;
-    }
     match self.asset(relative).await {
       Some((bytes, mime)) => {
         let mut response = ([(header::CONTENT_TYPE, mime)], Body::from(bytes)).into_response();
@@ -91,10 +101,6 @@ impl Ui {
           response
             .headers_mut()
             .insert(header::CACHE_CONTROL, HeaderValue::from_static(IMMUTABLE));
-        } else if last == "index.html" {
-          response
-            .headers_mut()
-            .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
         }
         response
       }

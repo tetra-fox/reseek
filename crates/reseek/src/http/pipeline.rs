@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use axum::Router;
 use axum::extract::Request;
-use axum::http::{HeaderValue, Method, StatusCode, Uri, header};
+use axum::http::{HeaderValue, StatusCode, Uri, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
@@ -21,7 +21,7 @@ use cascade::Watcher;
 use super::{Peer, Transport};
 use crate::api::{self, error::ApiError};
 use crate::app::AppState;
-use crate::auth::{client, networks};
+use crate::auth::{self, Presented, client, networks};
 use crate::config::Options;
 use crate::ui::Ui;
 
@@ -40,9 +40,13 @@ pub fn app(state: AppState, ui: Ui) -> Router {
   let inner = Router::new()
     .merge(api::router(state.clone()))
     .route("/health", get(health))
-    .fallback(move |method: Method, uri: Uri| {
-      let ui = ui.clone();
-      async move { fallback(&ui, &method, uri.path()).await }
+    .fallback({
+      let app = state.clone();
+      move |request: Request| {
+        let ui = ui.clone();
+        let app = app.clone();
+        async move { fallback(&app, &ui, request).await }
+      }
     })
     .layer(CatchPanicLayer::custom(panicked));
   let logging = startup.web.logging;
@@ -239,16 +243,38 @@ async fn health() -> &'static str {
   "Healthy"
 }
 
-/// A request no route took: 404 with no body under `/api`, else the web UI.
-async fn fallback(ui: &Ui, method: &Method, path: &str) -> Response {
+/// A request no route took: 404 with no body under `/api`, else the web UI. The app's page
+/// carries the cookies the page response sets, such as a reverse proxy user's new session.
+async fn fallback(app: &AppState, ui: &Ui, request: Request) -> Response {
+  let path = request.uri().path();
   let under = |prefix: &str| path == prefix || path.starts_with(&format!("{prefix}/"));
-  if under("/api") {
+  if under("/api") || under("/metrics") || under("/swagger") {
     return StatusCode::NOT_FOUND.into_response();
   }
-  if under("/metrics") || under("/swagger") {
-    return StatusCode::NOT_FOUND.into_response();
+  let page = ui.is_page(request.method(), path);
+  let mut response = ui.respond(request.method(), path).await;
+  if !page || response.status() != StatusCode::OK {
+    return response;
   }
-  ui.respond(method, path).await
+  let Some(peer) = request.extensions().get::<Peer>().copied() else {
+    return ApiError::internal("a request arrived without its connection").into_response();
+  };
+  let presented = Presented::read(
+    &peer,
+    request.uri(),
+    request.headers(),
+    &app.config.current().values,
+  );
+  match auth::page_session(app, &presented).await {
+    Ok(cookies) => {
+      for cookie in cookies {
+        response.headers_mut().append(header::SET_COOKIE, cookie);
+      }
+    }
+    // the page is still served; its requests then authenticate as they can
+    Err(e) => tracing::warn!(error = ?e, "no session started for the page"),
+  }
+  response
 }
 
 #[cfg(test)]

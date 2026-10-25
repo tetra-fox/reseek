@@ -272,8 +272,10 @@ pub struct Proxy {
   pub email_header: String,
   /// How the forwarded groups map to roles.
   pub role_mapping: RoleMapping,
-  /// Starts a session on first sight, so later requests without the headers still work;
-  /// otherwise the headers are read on every request.
+  /// Starts a session when the web UI's page is served to a user the proxy names and the
+  /// browser has no session yet, so the page's later requests work without the proxy's
+  /// headers; API requests act on the headers alone. Off, the headers are read on every
+  /// request.
   #[cascade(env = "RESEEK_PROXY_AUTH_SESSION")]
   pub session: bool,
 }

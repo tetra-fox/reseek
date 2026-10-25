@@ -77,16 +77,6 @@ impl Presented {
     }
   }
 
-  /// Whether the request is a browser loading a page: its `Accept` names `text/html`.
-  fn navigates(&self) -> bool {
-    self
-      .headers
-      .get_all(header::ACCEPT)
-      .iter()
-      .filter_map(|value| value.to_str().ok())
-      .any(|accept| accept.contains("text/html"))
-  }
-
   /// The browser's user agent, when it sent one.
   pub fn user_agent(&self) -> Option<String> {
     self
@@ -123,7 +113,7 @@ pub struct Identified {
 }
 
 /// Whether the chain runs for a new request, or checks again the credential of one already
-/// accepted, which counts no failures and starts no sessions.
+/// accepted, which counts no failures.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Check {
   /// a new request
@@ -190,57 +180,85 @@ pub async fn identify(
       None => identified.cookies.push(scope.clear(cookies::SESSION)),
     }
   }
-  let proxy = &options.web.authentication.proxy;
-  let proxies = networks::ranges(&options.web.trusted_proxies);
-  if let Some(forwarded) = proxy::forwarded(&presented.headers, presented.peer, proxy, &proxies) {
-    match forwarded.role(proxy) {
-      Some(role) => {
-        let principal = Principal {
-          subject: forwarded.subject(),
-          name: forwarded.username.clone(),
-          role,
-          via: Via::Proxy,
-        };
-        // a session is for a browser loading a page, so the later requests it makes
-        // without the headers still work; anything else acts on the headers alone
-        if proxy.session && check == Check::Request && presented.navigates() {
-          let session = start_session(
-            app,
-            presented,
-            NewSession {
-              subject: principal.subject.clone(),
-              name: principal.name.clone(),
-              email: forwarded.email.clone(),
-              groups: serde_json::to_string(&forwarded.groups).ok(),
-              role,
-              origin: Origin::Proxy,
-              ttl: sessions::lifetime(options.web.authentication.session_ttl),
-              idp_sid: None,
-              id_token: None,
-              ip: Some(ip.to_string()),
-              user_agent: presented.user_agent(),
-            },
-          )
-          .await?;
-          identified
-            .cookies
-            .push(session_cookie(app, &session, &scope));
-        }
-        identified.principal = Some(principal);
-        return Ok(identified);
-      }
-      None => {
-        if let Some(suppressed) = PROXY_REFUSED.allow() {
-          warn!(
-            username = forwarded.username,
-            suppressed, "forwarded identity is in no group that grants a role"
-          );
-        }
-      }
-    }
+  if let Some((principal, _)) = forwarded(presented, options) {
+    identified.principal = Some(principal);
+    return Ok(identified);
   }
   identified.principal = networks::trusted(&presented.client, options);
   Ok(identified)
+}
+
+/// The proxy step: the identity a trusted reverse proxy forwarded, when its groups grant a
+/// role, with what the proxy said about the user.
+fn forwarded(
+  presented: &Presented,
+  options: &crate::config::Options,
+) -> Option<(Principal, proxy::Forwarded)> {
+  let proxy = &options.web.authentication.proxy;
+  let proxies = networks::ranges(&options.web.trusted_proxies);
+  let forwarded = proxy::forwarded(&presented.headers, presented.peer, proxy, &proxies)?;
+  let Some(role) = forwarded.role(proxy) else {
+    if let Some(suppressed) = PROXY_REFUSED.allow() {
+      warn!(
+        username = forwarded.username,
+        suppressed, "forwarded identity is in no group that grants a role"
+      );
+    }
+    return None;
+  };
+  let principal = Principal {
+    subject: forwarded.subject(),
+    name: forwarded.username.clone(),
+    role,
+    via: Via::Proxy,
+  };
+  Some((principal, forwarded))
+}
+
+/// The `Set-Cookie` values for the web UI's page: the cookie and proxy steps of the chain.
+/// With `proxy.session` on, a page load that a trusted proxy names a user for and that has no
+/// valid session cookie starts a session, so the page's later requests work without the
+/// proxy's headers; an invalid cookie is cleared. API requests never start one.
+pub async fn page_session(
+  app: &AppState,
+  presented: &Presented,
+) -> Result<Vec<HeaderValue>, ApiError> {
+  let current = app.config.current();
+  let options = &current.values;
+  let scope = Scope::new(&app.url_base, presented.client.https);
+  let mut cookies = Vec::new();
+  if let Some(value) = &presented.cookie {
+    match session_of(app, value, presented).await? {
+      Some(_) => return Ok(cookies),
+      None => cookies.push(scope.clear(cookies::SESSION)),
+    }
+  }
+  if !options.web.authentication.proxy.session {
+    return Ok(cookies);
+  }
+  let Some((principal, forwarded)) = forwarded(presented, options) else {
+    return Ok(cookies);
+  };
+  let session = start_session(
+    app,
+    presented,
+    NewSession {
+      subject: principal.subject,
+      name: principal.name,
+      email: forwarded.email,
+      groups: serde_json::to_string(&forwarded.groups).ok(),
+      role: principal.role,
+      origin: Origin::Proxy,
+      ttl: sessions::lifetime(options.web.authentication.session_ttl),
+      idp_sid: None,
+      id_token: None,
+      ip: Some(presented.client.ip.to_string()),
+      user_agent: presented.user_agent(),
+    },
+  )
+  .await?;
+  cookies.push(session_cookie(app, &session, &scope));
+  Ok(cookies)
 }
 
 /// The active session a cookie value names, recording its use when the record is stale.
@@ -440,42 +458,17 @@ mod tests {
     );
     assert_eq!(who(app.send(no_token).await), "local:reseek");
     let api_call = app
-      .send(proxied(request("GET", "/api/v0/session", None)))
-      .await;
-    assert!(
-      set_cookie(&api_call.headers, "reseek_session").is_none(),
-      "a request that is no page load acts on the headers alone"
-    );
-    assert_eq!(who(api_call), "proxy:alice");
-    let proxy_sessions = || async {
-      app
-        .state
-        .auth
-        .db
-        .read(|conn| {
-          conn.query_row(
-            "SELECT count(*) FROM sessions WHERE subject = 'proxy:alice'",
-            [],
-            |row| row.get::<_, i64>(0),
-          )
-        })
-        .await
-        .unwrap()
-    };
-    assert_eq!(proxy_sessions().await, 0, "no session row");
-    let page = app
       .send(with(
         proxied(request("GET", "/api/v0/session", None)),
         "accept",
-        "text/html,application/xhtml+xml",
+        "text/html",
       ))
       .await;
     assert!(
-      set_cookie(&page.headers, "reseek_session").is_some(),
-      "a page load starts a session"
+      set_cookie(&api_call.headers, "reseek_session").is_none(),
+      "an API request acts on the headers alone"
     );
-    assert_eq!(who(page), "proxy:alice");
-    assert_eq!(proxy_sessions().await, 1);
+    assert_eq!(who(api_call), "proxy:alice");
     assert_eq!(
       who(app.send(request("GET", "/api/v0/session", None)).await),
       "network:127.0.0.0/8"
@@ -487,5 +480,103 @@ mod tests {
       )
       .await;
     assert_eq!(untrusted.status, 401, "only a trusted proxy is believed");
+  }
+
+  #[tokio::test]
+  async fn the_ui_page_starts_a_proxy_users_session() {
+    use crate::testing::{set_cookie, with};
+    let app = app(
+      "[web]\ntrusted_proxies = [\"127.0.0.1/32\"]\n[web.authentication.proxy]\nenabled = \
+       true\n[web.authentication.proxy.role_mapping]\nreadwrite = [\"users\"]\n",
+      &[],
+    )
+    .await
+    .with_page();
+    let created = std::sync::Arc::new(std::sync::Mutex::new(0));
+    let counted = created.clone();
+    app.state.events.subscribe(
+      "test",
+      Some(api_types::events::EventType::SessionCreated),
+      move |_| {
+        *counted.lock().unwrap() += 1;
+        async { Ok(()) }
+      },
+    );
+    let rows = || async {
+      app
+        .state
+        .auth
+        .db
+        .read(|conn| {
+          conn.query_row("SELECT count(*) FROM sessions", [], |row| {
+            row.get::<_, i64>(0)
+          })
+        })
+        .await
+        .unwrap()
+    };
+    let proxied = |r| with(r, "x-authentik-username", "alice");
+    let groups = |r| with(r, "x-authentik-groups", "users");
+
+    let api = app
+      .send(groups(proxied(request("GET", "/api/v0/session", None))))
+      .await;
+    assert_eq!(api.status, 200);
+    assert!(set_cookie(&api.headers, "reseek_session").is_none());
+    let bare = app.send(request("GET", "/", None)).await;
+    assert_eq!(bare.status, 200);
+    assert!(
+      set_cookie(&bare.headers, "reseek_session").is_none(),
+      "no forwarded user"
+    );
+    let stranger = app
+      .send_from("192.0.2.1:1", groups(proxied(request("GET", "/", None))))
+      .await;
+    assert!(
+      set_cookie(&stranger.headers, "reseek_session").is_none(),
+      "not a trusted proxy"
+    );
+    assert_eq!(rows().await, 0);
+
+    let page = app
+      .send(groups(proxied(request("GET", "/transfers", None))))
+      .await;
+    assert_eq!(page.status, 200);
+    assert_eq!(page.body, "<html>app</html>");
+    let cookie = set_cookie(&page.headers, "reseek_session").expect("the page starts a session");
+    assert_eq!(rows().await, 1);
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert_eq!(*created.lock().unwrap(), 1, "SessionCreated is raised");
+
+    let me = app
+      .send(with(
+        request("GET", "/api/v0/session", None),
+        "cookie",
+        &cookie,
+      ))
+      .await;
+    assert_eq!(me.status, 200);
+    assert_eq!(me.json()["subject"], "proxy:alice");
+    let mut stream = app
+      .stream_from(
+        "127.0.0.1:1",
+        with(request("GET", "/api/v0/live", None), "cookie", &cookie),
+      )
+      .await;
+    assert_eq!(stream.status, 200, "the stream works on the cookie alone");
+    assert_eq!(stream.next().await.unwrap().event, "hello");
+
+    let again = app
+      .send(with(
+        groups(proxied(request("GET", "/", None))),
+        "cookie",
+        &cookie,
+      ))
+      .await;
+    assert!(
+      set_cookie(&again.headers, "reseek_session").is_none(),
+      "the cookie is kept"
+    );
+    assert_eq!(rows().await, 1);
   }
 }

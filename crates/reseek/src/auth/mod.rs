@@ -39,7 +39,9 @@ use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::db::{Database, DbError, Location};
 use crate::http::Peer;
-pub use chain::{Check, Identified, Presented, identify, idle, session_cookie, start_session};
+pub use chain::{
+  Check, Identified, Presented, identify, idle, page_session, session_cookie, start_session,
+};
 pub use client::Client;
 use limits::Limits;
 use local::Accounts;

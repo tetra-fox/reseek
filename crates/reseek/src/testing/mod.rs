@@ -92,6 +92,15 @@ pub async fn app(config: &str, env: &[(&str, &str)]) -> TestApp {
 }
 
 impl TestApp {
+  /// The same daemon serving a web UI whose page is `<html>app</html>`.
+  pub fn with_page(mut self) -> Self {
+    let web = self.dir.path().join("web");
+    std::fs::create_dir_all(&web).unwrap();
+    std::fs::write(web.join("index.html"), "<html>app</html>").unwrap();
+    self.router = pipeline::app(self.state.clone(), Ui::Directory(web));
+    self
+  }
+
   /// Sends `request` as if from `from` over plain HTTP.
   pub async fn send_from(&self, from: &str, mut request: Request<Body>) -> Answer {
     request.extensions_mut().insert(Peer {
