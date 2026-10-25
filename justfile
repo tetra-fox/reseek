@@ -31,15 +31,15 @@ lint:
 
 # regenerate api/openapi.json from the handlers
 api-spec:
-    @echo "api-spec: not yet (no api-types)"
+    cargo run -q -p reseek --example openapi > api/openapi.json
 
 # regenerate web/src/lib/api/schema.d.ts from api/openapi.json
 api:
     @echo "api: not yet (no web/)"
 
-# fail if the generated types are stale
+# fail if api/openapi.json no longer matches the handlers
 api-check:
-    @echo "api-check: not yet (no api/openapi.json)"
+    cargo nextest run -p reseek -E "test(the_committed_openapi_document_is_current)"
 
 # soulfind and the soulseek-rs cli as the other user: search, browse and transfers both ways
 e2e:
