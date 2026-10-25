@@ -84,8 +84,10 @@ impl<T: Root> State<T> {
     for key in loaded.overrides.keys() {
       debug!(key, set_by, "runtime override in effect");
     }
+    let change = self.publish(shared, loaded);
+    // after the publish, so the task reads the new overrides when it wakes
     shared.overrides_changed.notify_one();
-    Ok(self.publish(shared, loaded))
+    Ok(change)
   }
 
   /// Changes the file `name` if it is still at `revision`, after the checks
