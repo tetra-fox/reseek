@@ -121,7 +121,9 @@ impl<T: Root> State<T> {
       FileEdit::Patch { set, unset } => editor.patch(name, &old, &set, &unset)?,
       FileEdit::Replace(text) => text,
     };
-    self.layers.check_file(name, &text)?;
+    if let Some(error) = self.layers.check_file(name, &text).error {
+      return Err(error);
+    }
     let declared = self.declared();
     for key in changed_in_file(&schema, &old, &text) {
       if let Some(by) = declared.sources.get(&key).and_then(Source::fixed_by) {
@@ -423,7 +425,8 @@ mod tests {
       watcher
         .check_file("config.toml", "[server]\nprot = 1\n")
         .await
-        .unwrap(),
+        .unwrap()
+        .warnings,
       ["config.toml: unknown key `server.prot`"]
     );
     assert_eq!(

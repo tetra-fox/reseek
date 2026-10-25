@@ -10,10 +10,6 @@ fuzz_target!(|data: &[u8]| {
     return;
   };
   let layers = Layers::<config::Options>::new().files("/nonexistent", ["config.toml"]);
-  if let Ok(loaded) = layers.check_file("config.toml", text) {
-    let _ = loaded.redacted();
-    let _ = loaded
-      .schema()
-      .diff(&config::Options::default(), &loaded.values);
-  }
+  // any result is fine, this only checks it does not panic
+  let _ = layers.check_file("config.toml", text);
 });

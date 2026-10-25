@@ -29,6 +29,16 @@ pub(crate) const SECRET_VALUE: &str = "the value does not fit the key (not shown
 /// What splits a list given in one environment variable. Elements are kept as written.
 pub const LIST_SEPARATOR: char = ';';
 
+/// What a file's text would load as.
+#[derive(Debug)]
+pub struct Checked {
+  /// keys, flags and variables the configuration would warn about; empty when it is not read
+  /// that far, such as when the text does not parse
+  pub warnings: Vec<String>,
+  /// why the configuration would not load, `None` when it would
+  pub error: Option<Error>,
+}
+
 /// The application's checks of a configuration, beyond what its types enforce.
 type Validator<T> = Box<dyn Fn(&T) -> Result<(), Vec<Invalid>> + Send + Sync>;
 
@@ -184,14 +194,26 @@ impl<T: Root> Layers<T> {
     self.load_at(Utc::now()).map_err(|failure| failure.error)
   }
 
-  /// The configuration as it would load if the file `name` held `text`. Nothing is saved.
-  pub fn check_file(&self, name: &str, text: &str) -> Result<Loaded<T>, Error> {
-    let declared = self.declare(Some((name, text)))?;
+  /// What the configuration would load with if the file `name` held `text`: its warnings, and
+  /// why it would not load. Nothing is saved.
+  pub fn check_file(&self, name: &str, text: &str) -> Checked {
+    let declared = match self.declare(Some((name, text))) {
+      Ok(declared) => declared,
+      Err(error) => {
+        return Checked {
+          warnings: Vec::new(),
+          error: Some(error),
+        };
+      }
+    };
     let (kept, _) =
       self
         .overrides
         .pruned(&self.schema, &declared.tree, &declared.sources, Utc::now());
-    self.finish(&declared, &kept).map_err(|f| f.error)
+    Checked {
+      error: self.finish(&declared, &kept).err().map(|f| f.error),
+      warnings: declared.warnings,
+    }
   }
 
   /// Where the file `name` is, when it is one of the configuration's files.
@@ -492,10 +514,19 @@ mod tests {
       "invalid configuration: server.port: must be 1024 or more"
     );
     let checked = validated().check_file("config.toml", "[server]\nport = 2000\n");
-    assert_eq!(checked.unwrap().values.server.port, 2000);
+    assert!(checked.error.is_none() && checked.warnings.is_empty());
+    let checked = validated().check_file("config.toml", "[server]\nport = 80\nprot = 1\n");
+    assert!(matches!(checked.error, Some(Error::Invalid(_))));
+    assert_eq!(
+      checked.warnings,
+      ["config.toml: unknown key `server.prot`"],
+      "the warnings come with the refusal"
+    );
+    let checked = validated().check_file("config.toml", "[server\n");
+    assert!(matches!(checked.error, Some(Error::Parse { .. })) && checked.warnings.is_empty());
     assert!(matches!(
-      validated().check_file("nope.toml", ""),
-      Err(Error::UnknownFile(_))
+      validated().check_file("nope.toml", "").error,
+      Some(Error::UnknownFile(_))
     ));
   }
 }

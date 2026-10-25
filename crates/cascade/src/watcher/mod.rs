@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::files::LoadedFile;
-use crate::layers::{Failure, Layers};
+use crate::layers::{Checked, Failure, Layers};
 use crate::loaded::Loaded;
 use crate::{Error, Key, Root, lock};
 pub use events::DEBOUNCE;
@@ -185,13 +185,13 @@ impl<T: Root> Watcher<T> {
     self.reload_files(false).await
   }
 
-  /// The warnings the configuration would load with if the file `name` held `text`, or why it
-  /// would not load.
-  pub async fn check_file(&self, name: &str, text: &str) -> Result<Vec<String>, Error> {
+  /// What the configuration would load with if the file `name` held `text`: its warnings, and
+  /// why it would not load.
+  pub async fn check_file(&self, name: &str, text: &str) -> Result<Checked, Error> {
     let (name, text) = (name.to_string(), text.to_string());
     self
-      .blocking(move |state, _| state.layers.check_file(&name, &text).map(|l| l.warnings))
-      .await?
+      .blocking(move |state, _| state.layers.check_file(&name, &text))
+      .await
   }
 
   /// Sets the keys of `set` and removes those of `unset` in the file `name`, keeping its
