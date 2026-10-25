@@ -306,8 +306,9 @@ impl Client {
         Some(ClientError::Disposed),
       )
       .await;
-    self.inner.transfers.cancel_all();
+    // disposed first, so the transfers this cancels do not tell their peers
     self.inner.lifetime.cancel();
+    self.inner.transfers.cancel_all();
     self.inner.peers.remove_and_dispose_all();
     self.inner.waiter.cancel_all();
   }

@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use soulseek_client::{
-  ClientError, InputFactory, Transfer, TransferState, UploadInput, UploadRequest,
+  ClientError, Event, Governor, InputFactory, Transfer, TransferState, UploadInput, UploadRequest,
 };
 use soulseek_proto::peer::{QueueDownload, TransferResponse, UploadDenied, UploadFailed};
 use soulseek_proto::server::{GetPeerAddressRequest, GetPeerAddressResponse};
@@ -20,6 +20,7 @@ use support::peer::PeerSide;
 use support::scripted::{BOB, Scripted};
 use support::transfers::{self, content, file, scratch, states};
 use support::{Logs, PATIENCE, listening_options};
+use tokio::io::AsyncWriteExt;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -104,6 +105,22 @@ async fn offered_upload(scripted: &mut Scripted, filename: &str) -> (Running, Pe
   let running = upload(scripted, filename, |_| {});
   let bob = scripted.connected().await;
   (running, bob)
+}
+
+/// a governor that lets the first 1000 bytes through and nothing after, so the upload stays in
+/// progress
+fn first_chunk_only() -> Governor {
+  let granted = Arc::new(AtomicU32::new(0));
+  Arc::new(move |_, wanted, _| {
+    let first = granted.fetch_add(1, Ordering::SeqCst) == 0;
+    Box::pin(async move {
+      if first {
+        wanted.min(1000)
+      } else {
+        std::future::pending().await
+      }
+    })
+  })
 }
 
 fn told_failed(message: PeerMessage, filename: &str) -> bool {
@@ -285,6 +302,28 @@ async fn a_downloader_that_closes_early_fails_the_upload_and_may_queue_the_file_
 }
 
 #[tokio::test]
+async fn an_upload_that_fails_after_the_server_session_was_lost_still_tells_the_downloader() {
+  let mut scripted = Scripted::start().await;
+  let running = upload(&scripted, "@@share\\outage.mp3", |request| {
+    request.options.governor = Some(first_chunk_only());
+  });
+  let mut bob = scripted.connected().await;
+  let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\outage.mp3").await;
+  transfer.send(&0u64.to_le_bytes()).await;
+  assert_eq!(transfer.raw(1000).await, content(1000));
+  // the server goes away without the application asking to disconnect
+  scripted.session.server.stream.shutdown().await.unwrap();
+  scripted
+    .session
+    .event(|event| matches!(event, Event::Disconnected { .. }).then_some(()))
+    .await;
+  drop(transfer);
+  let error = running.result().await.unwrap_err();
+  assert!(matches!(error, ClientError::Connection { .. }), "{error:?}");
+  assert!(told_failed(bob.read_peer().await, "@@share\\outage.mp3"));
+}
+
+#[tokio::test]
 async fn a_downloader_that_never_closes_is_closed_after_the_linger_and_the_upload_stands() {
   let logs = Logs::capture();
   let mut scripted = Scripted::start().await;
@@ -375,19 +414,8 @@ async fn an_upload_cancelled_at_any_stage_tells_the_downloader_to_drop_it() {
 
   // with bytes moving, held back by a governor that allows nothing after the first chunk
   let mut scripted = Scripted::start().await;
-  let granted = Arc::new(AtomicU32::new(0));
   let running = upload(&scripted, "@@share\\moving.mp3", |request| {
-    let granted = granted.clone();
-    request.options.governor = Some(Arc::new(move |_, wanted, _| {
-      let first = granted.fetch_add(1, Ordering::SeqCst) == 0;
-      Box::pin(async move {
-        if first {
-          wanted.min(1000)
-        } else {
-          std::future::pending().await
-        }
-      })
-    }));
+    request.options.governor = Some(first_chunk_only());
   });
   let mut bob = scripted.connected().await;
   let mut transfer = accepted(&mut scripted, &mut bob, "@@share\\moving.mp3").await;

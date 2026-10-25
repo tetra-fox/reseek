@@ -443,10 +443,14 @@ impl Upload {
 
   /// Tells the peer an upload did not succeed: that we cancelled it, so it drops the file, or
   /// that it failed, so it queues the file again. Best effort and bounded; skipped while the
-  /// client disconnects.
+  /// client disconnects or once it is disposed, but not because the server session was lost.
   async fn tell_peer(&mut self, error: &ClientError) {
-    if self.client.state() != ClientState::READY {
-      tracing::debug!("not logged in; the peer is not told the upload ended");
+    if self.client.state().contains(ClientState::DISCONNECTING)
+      || self.client.cancellation().is_cancelled()
+    {
+      tracing::debug!(
+        "the client is disconnecting or disposed; the peer is not told the upload ended"
+      );
       return;
     }
     if matches!(error, ClientError::UserOffline(_)) {
@@ -462,15 +466,10 @@ impl Upload {
       }),
     };
     let tell = async {
-      let endpoint = self.client.get_user_endpoint(&self.username).await?;
+      // the address is looked up only when there is no connection to the peer to reuse
       let conn = self
         .client
-        .message_connection(
-          &self.username,
-          Some(endpoint),
-          None,
-          &CancellationToken::new(),
-        )
+        .message_connection(&self.username, None, None, &CancellationToken::new())
         .await?;
       write_peer(&conn, message).await
     };
