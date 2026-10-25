@@ -77,6 +77,16 @@ impl Presented {
     }
   }
 
+  /// Whether the request is a browser loading a page: its `Accept` names `text/html`.
+  fn navigates(&self) -> bool {
+    self
+      .headers
+      .get_all(header::ACCEPT)
+      .iter()
+      .filter_map(|value| value.to_str().ok())
+      .any(|accept| accept.contains("text/html"))
+  }
+
   /// The browser's user agent, when it sent one.
   pub fn user_agent(&self) -> Option<String> {
     self
@@ -191,7 +201,9 @@ pub async fn identify(
           role,
           via: Via::Proxy,
         };
-        if proxy.session && check == Check::Request {
+        // a session is for a browser loading a page, so the later requests it makes
+        // without the headers still work; anything else acts on the headers alone
+        if proxy.session && check == Check::Request && presented.navigates() {
           let session = start_session(
             app,
             presented,
@@ -427,14 +439,43 @@ mod tests {
       &cookie,
     );
     assert_eq!(who(app.send(no_token).await), "local:reseek");
-    let proxy = app
+    let api_call = app
       .send(proxied(request("GET", "/api/v0/session", None)))
       .await;
     assert!(
-      set_cookie(&proxy.headers, "reseek_session").is_some(),
-      "a proxy identity starts a session"
+      set_cookie(&api_call.headers, "reseek_session").is_none(),
+      "a request that is no page load acts on the headers alone"
     );
-    assert_eq!(who(proxy), "proxy:alice");
+    assert_eq!(who(api_call), "proxy:alice");
+    let proxy_sessions = || async {
+      app
+        .state
+        .auth
+        .db
+        .read(|conn| {
+          conn.query_row(
+            "SELECT count(*) FROM sessions WHERE subject = 'proxy:alice'",
+            [],
+            |row| row.get::<_, i64>(0),
+          )
+        })
+        .await
+        .unwrap()
+    };
+    assert_eq!(proxy_sessions().await, 0, "no session row");
+    let page = app
+      .send(with(
+        proxied(request("GET", "/api/v0/session", None)),
+        "accept",
+        "text/html,application/xhtml+xml",
+      ))
+      .await;
+    assert!(
+      set_cookie(&page.headers, "reseek_session").is_some(),
+      "a page load starts a session"
+    );
+    assert_eq!(who(page), "proxy:alice");
+    assert_eq!(proxy_sessions().await, 1);
     assert_eq!(
       who(app.send(request("GET", "/api/v0/session", None)).await),
       "network:127.0.0.0/8"
