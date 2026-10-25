@@ -19,7 +19,7 @@ use crate::search::{Search, SearchResponseReceived};
 use crate::state::{State, VersionInfo};
 use crate::telemetry::TransferMetrics;
 use crate::transfers::{Transfer, TransferRemoved};
-use crate::users::{UserRemoved, UserStatusChanged, UserSummary};
+use crate::users::{BrowseProgress, UserRemoved, UserStatusChanged, UserSummary};
 
 /// One frame of the event stream. Frames are named `<topic>.<event>`; the control frames
 /// `hello`, `lagged` and `bye` belong to no topic and are always sent.
@@ -111,6 +111,10 @@ pub enum LiveFrame {
   /// a watched user's status changed
   #[serde(rename = "users.status")]
   UsersStatus(UserStatusChanged),
+  /// how far a browse of a user's shares has come, at most every 250 ms per user and once
+  /// more at 100 %
+  #[serde(rename = "users.browse_progress")]
+  UsersBrowseProgress(BrowseProgress),
   /// a user in the directory changed
   #[serde(rename = "users.updated")]
   UsersUpdated(Box<UserSummary>),
@@ -201,6 +205,7 @@ mod tests {
     "rooms.user_left",
     "rooms.gap",
     "users.status",
+    "users.browse_progress",
     "users.updated",
     "users.removed",
     "chat.unread",
