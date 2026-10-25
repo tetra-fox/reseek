@@ -29,6 +29,7 @@ use crate::auth::{
 use crate::config::Options;
 
 static LOGIN_FAILED: LogLimiter = LogLimiter::new();
+static HEADLESS_LOGIN: LogLimiter = LogLimiter::new();
 
 /// The session routes.
 pub fn routes() -> OpenApiRouter<AppState> {
@@ -84,10 +85,12 @@ async fn login(
   let current = app.config.current();
   let options = &current.values;
   if options.headless {
-    warn!(
-      username = login.username,
-      "Login rejected; web UI is DISABLED when running in headless mode"
-    );
+    if let Some(suppressed) = HEADLESS_LOGIN.allow() {
+      warn!(
+        username = login.username,
+        suppressed, "Login rejected; web UI is DISABLED when running in headless mode"
+      );
+    }
     return Err(ApiError::forbidden("the web UI is disabled in headless mode").logged());
   }
   let client = &presented.client;

@@ -27,6 +27,9 @@ use crate::auth::sessions::{self, NewSession, Origin};
 use crate::auth::{Administrator, Authorized, Presented, session_cookie, start_session};
 
 static CALLBACK_FAILED: LogLimiter = LogLimiter::new();
+static PROVIDER_DOWN: LogLimiter = LogLimiter::new();
+static LOGOUT_UNCHECKED: LogLimiter = LogLimiter::new();
+static LOGOUT_REFUSED: LogLimiter = LogLimiter::new();
 
 /// The OpenID Connect routes.
 pub fn routes() -> OpenApiRouter<AppState> {
@@ -228,18 +231,26 @@ async fn backchannel(
   let metadata = match provider.metadata().await {
     Ok(metadata) => metadata,
     Err(e) => {
-      warn!(
-        provider = name,
-        error = e,
-        "back-channel logout not checked; provider unavailable"
-      );
+      if let Some(suppressed) = LOGOUT_UNCHECKED.allow() {
+        warn!(
+          provider = name,
+          error = e,
+          suppressed,
+          "back-channel logout not checked; provider unavailable"
+        );
+      }
       return Ok(StatusCode::OK);
     }
   };
   let logged_out = match check_token(&provider, metadata, &form.logout_token).await {
     Ok(logged_out) => logged_out,
     Err(reason) => {
-      warn!(provider = name, reason, "back-channel logout token refused");
+      if let Some(suppressed) = LOGOUT_REFUSED.allow() {
+        warn!(
+          provider = name,
+          reason, suppressed, "back-channel logout token refused"
+        );
+      }
       return Ok(StatusCode::OK);
     }
   };
@@ -306,10 +317,12 @@ async fn test(
 
 /// The 503 for a provider whose discovery document can not be read, logged with why.
 fn unavailable(name: &str, error: &str) -> ApiError {
-  warn!(
-    provider = name,
-    error, "OpenID Connect provider unavailable"
-  );
+  if let Some(suppressed) = PROVIDER_DOWN.allow() {
+    warn!(
+      provider = name,
+      error, suppressed, "OpenID Connect provider unavailable"
+    );
+  }
   ApiError::service_unavailable("the identity provider is unavailable").logged()
 }
 
