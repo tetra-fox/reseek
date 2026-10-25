@@ -65,7 +65,7 @@ pub fn free_port() -> u16 {
   static NEXT: std::sync::OnceLock<std::sync::atomic::AtomicU32> = std::sync::OnceLock::new();
   let len = PORTS.end - PORTS.start;
   let next = NEXT.get_or_init(|| {
-    let slot = std::process::id() % (len / PORTS_PER_PROCESS);
+    let slot = process_slot() % (len / PORTS_PER_PROCESS);
     std::sync::atomic::AtomicU32::new(slot * PORTS_PER_PROCESS)
   });
   loop {
@@ -75,6 +75,16 @@ pub fn free_port() -> u16 {
     if std::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).is_ok() {
       return port;
     }
+  }
+}
+
+/// The number that places this process in [`PORTS`]. nextest gives each test running at once a
+/// slot no other running test has; under `cargo test` the process id stands in, which two live
+/// processes can share once it is reduced to a place.
+fn process_slot() -> u32 {
+  match std::env::var("NEXTEST_TEST_GLOBAL_SLOT") {
+    Ok(slot) => slot.parse().expect("nextest's slot is a number"),
+    Err(_) => std::process::id(),
   }
 }
 
