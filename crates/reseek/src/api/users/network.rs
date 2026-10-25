@@ -7,7 +7,7 @@ use api_types::users::{
 };
 use axum::extract::State;
 use axum::http::StatusCode;
-use tracing::info;
+use tracing::debug;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -181,7 +181,7 @@ async fn watch(
   NamedUser(username): NamedUser,
 ) -> Result<StatusCode, ApiError> {
   app.services.users.watch(&username).await?;
-  info!(by = caller.principal.subject, username, "user watched");
+  debug!(by = caller.principal.subject, username, "user watched");
   Ok(StatusCode::NO_CONTENT)
 }
 
@@ -201,7 +201,7 @@ async fn unwatch(
   NamedUser(username): NamedUser,
 ) -> Result<StatusCode, ApiError> {
   app.services.users.unwatch(&username).await?;
-  info!(
+  debug!(
     by = caller.principal.subject,
     username, "user no longer watched"
   );

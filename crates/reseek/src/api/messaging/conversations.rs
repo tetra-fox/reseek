@@ -10,7 +10,7 @@ use api_types::users::UsernameQuery;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
-use tracing::info;
+use tracing::{debug, info};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -131,7 +131,7 @@ async fn send(
   }
   message(&app, &text)?;
   app.services.messaging.send_private(&username, text).await?;
-  info!(
+  debug!(
     by = caller.principal.subject,
     username, "private message sent"
   );
