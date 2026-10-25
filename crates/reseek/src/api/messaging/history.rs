@@ -100,8 +100,7 @@ async fn delete(
   get, path = "/rooms/history/{roomName}/export", tag = "rooms",
   params(("roomName" = String, Path, description = "the room"), RoomNameQuery, ExportQuery),
   responses(
-    (status = 200, content_type = "application/json", body = Vec<RoomMessage>),
-    (status = 200, content_type = "text/plain", body = String),
+    (status = 200, content((Vec<RoomMessage> = "application/json"), (String = "text/plain"))),
     (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
     (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )

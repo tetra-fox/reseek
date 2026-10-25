@@ -215,8 +215,9 @@ async fn close(
   get, path = "/conversations/{username}/export", tag = "conversations",
   params(("username" = String, Path, description = "the other user"), UsernameQuery, ExportQuery),
   responses(
-    (status = 200, content_type = "application/json", body = Vec<PrivateMessage>),
-    (status = 200, content_type = "text/plain", body = String),
+    (status = 200, content(
+      (Vec<PrivateMessage> = "application/json"), (String = "text/plain")
+    )),
     (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
     (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )

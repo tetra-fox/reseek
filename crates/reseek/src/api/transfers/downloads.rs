@@ -137,9 +137,9 @@ async fn download(
     ("id" = Uuid, Path, description = "the download's id")
   ),
   responses(
-    (status = 200, body = u32), (status = 400, body = api_types::ErrorBody),
-    (status = 401, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
-    (status = 409, body = api_types::ErrorBody), (status = 502, body = api_types::ErrorBody),
+    (status = 200, body = u32, content_type = "application/json"),
+    (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 409, body = api_types::ErrorBody), (status = 502, body = api_types::ErrorBody),
     (status = 503, body = api_types::ErrorBody), (status = 504, body = api_types::ErrorBody)
   )
 )]

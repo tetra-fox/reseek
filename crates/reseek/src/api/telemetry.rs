@@ -106,8 +106,9 @@ fn prefers_json(headers: &HeaderMap) -> bool {
 #[utoipa::path(
   get, path = "/telemetry/metrics", tag = "telemetry",
   responses(
-    (status = 200, body = BTreeMap<String, PrometheusMetric>),
-    (status = 200, content_type = "text/plain", body = String),
+    (status = 200, content(
+      (BTreeMap<String, PrometheusMetric> = "application/json"), (String = "text/plain")
+    )),
     (status = 401, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
 )]

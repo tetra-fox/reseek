@@ -189,7 +189,7 @@ fn block_import(headers: &HeaderMap, body: &[u8]) -> Result<BlockImport, ApiErro
 #[utoipa::path(
   get, path = "/users/blocked/export", tag = "blocking", params(ExportQuery),
   responses(
-    (status = 200, body = Vec<Block>), (status = 200, content_type = "text/plain", body = String),
+    (status = 200, content((Vec<Block> = "application/json"), (String = "text/plain"))),
     (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
     (status = 503, body = api_types::ErrorBody)
   )

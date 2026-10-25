@@ -107,7 +107,7 @@ async fn profile(
   get, path = "/users/{username}/picture", tag = "users",
   params(("username" = String, Path, description = "the user"), UsernameQuery),
   responses(
-    (status = 200, content_type = "image/*", body = Vec<u8>),
+    (status = 200, content_type = "image/*", body = api_types::files::FileContent),
     (status = 401, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
     (status = 503, body = api_types::ErrorBody)
   )

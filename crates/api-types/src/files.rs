@@ -3,6 +3,8 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::openapi::RefOr;
+use utoipa::openapi::schema::{KnownFormat, ObjectBuilder, Schema, SchemaFormat, Type};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -162,6 +164,22 @@ pub struct FileToken {
   /// when it stops being accepted
   pub expires_at: DateTime<Utc>,
 }
+
+/// A response body that is a file's bytes as they are, such as a downloaded file, an image or a
+/// zip archive. It is never JSON.
+pub struct FileContent;
+
+impl utoipa::PartialSchema for FileContent {
+  fn schema() -> RefOr<Schema> {
+    ObjectBuilder::new()
+      .schema_type(Type::String)
+      .format(Some(SchemaFormat::KnownFormat(KnownFormat::Binary)))
+      .description(Some("the bytes of the file"))
+      .into()
+  }
+}
+
+impl ToSchema for FileContent {}
 
 #[cfg(test)]
 mod tests {

@@ -226,8 +226,8 @@ fn deleting(app: &AppState, by: &Principal, path: &str) -> Result<(), ApiError> 
     ContentQuery
   ),
   responses(
-    (status = 200, content_type = "application/octet-stream", body = Vec<u8>),
-    (status = 206, content_type = "application/octet-stream", body = Vec<u8>),
+    (status = 200, content_type = "application/octet-stream", body = api_types::files::FileContent),
+    (status = 206, content_type = "application/octet-stream", body = api_types::files::FileContent),
     (status = 304, description = "unchanged"), (status = 400, body = api_types::ErrorBody),
     (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
     (status = 404, body = api_types::ErrorBody), (status = 409, body = api_types::ErrorBody),
@@ -263,8 +263,8 @@ async fn file_content(
     ContentQuery
   ),
   responses(
-    (status = 200, content_type = "application/octet-stream", body = Vec<u8>),
-    (status = 206, content_type = "application/octet-stream", body = Vec<u8>),
+    (status = 200, content_type = "application/octet-stream", body = api_types::files::FileContent),
+    (status = 206, content_type = "application/octet-stream", body = api_types::files::FileContent),
     (status = 304, description = "unchanged"), (status = 400, body = api_types::ErrorBody),
     (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
     (status = 404, body = api_types::ErrorBody), (status = 416, body = api_types::ErrorBody),
@@ -298,7 +298,7 @@ async fn download_content(
     ArchiveQuery
   ),
   responses(
-    (status = 200, content_type = "application/zip", body = Vec<u8>),
+    (status = 200, content_type = "application/zip", body = api_types::files::FileContent),
     (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
     (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
     (status = 413, body = api_types::ErrorBody), (status = 429, body = api_types::ErrorBody),

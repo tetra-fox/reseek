@@ -156,7 +156,7 @@ async fn login(
 /// authentication is off.
 #[utoipa::path(
   get, path = "/session/enabled", tag = "session",
-  responses((status = 200, body = bool))
+  responses((status = 200, body = bool, content_type = "application/json"))
 )]
 async fn enabled(State(app): State<AppState>, Extension(client): Extension<Client>) -> Json<bool> {
   let current = app.config.current();

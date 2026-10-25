@@ -98,7 +98,9 @@ async fn restart(
 /// The running version, such as `"0.1.0"`.
 #[utoipa::path(
   get, path = "/application/version", tag = "application",
-  responses((status = 200, body = String), (status = 401, body = api_types::ErrorBody))
+  responses((status = 200, body = String, content_type = "application/json"),
+    (status = 401, body = api_types::ErrorBody)
+  )
 )]
 async fn get_version(State(app): State<AppState>, _caller: Authorized<AnyRole>) -> Json<String> {
   Json(app.state.current().version.current.clone())

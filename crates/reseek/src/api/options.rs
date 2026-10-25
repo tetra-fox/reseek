@@ -83,7 +83,8 @@ async fn get_view(
 #[utoipa::path(
   get, path = "/options/debug", tag = "options",
   responses(
-    (status = 200, body = String), (status = 401, body = api_types::ErrorBody),
+    (status = 200, body = String, content_type = "application/json"),
+    (status = 401, body = api_types::ErrorBody),
     (status = 403, body = api_types::ErrorBody)
   )
 )]
@@ -231,7 +232,8 @@ async fn get_file(
 #[utoipa::path(
   get, path = "/options/file/location", tag = "options", params(FileQuery),
   responses(
-    (status = 200, body = String), (status = 403, body = api_types::ErrorBody),
+    (status = 200, body = String, content_type = "application/json"),
+    (status = 403, body = api_types::ErrorBody),
     (status = 404, body = api_types::ErrorBody)
   )
 )]
