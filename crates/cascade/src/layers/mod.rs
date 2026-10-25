@@ -206,14 +206,20 @@ impl<T: Root> Layers<T> {
         };
       }
     };
+    Checked {
+      error: self.refusal(&declared),
+      warnings: declared.warnings,
+    }
+  }
+
+  /// Why the configuration would not load from `declared` with the overrides that still apply
+  /// over it, `None` when it would.
+  pub(crate) fn refusal(&self, declared: &Declared) -> Option<Error> {
     let (kept, _) =
       self
         .overrides
         .pruned(&self.schema, &declared.tree, &declared.sources, Utc::now());
-    Checked {
-      error: self.finish(&declared, &kept).err().map(|f| f.error),
-      warnings: declared.warnings,
-    }
+    self.finish(declared, &kept).err().map(|f| f.error)
   }
 
   /// Where the file `name` is, when it is one of the configuration's files.

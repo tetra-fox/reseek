@@ -119,13 +119,17 @@ impl<T: Root> State<T> {
       FileEdit::Patch { set, unset } => editor.patch(name, &old, &set, &unset)?,
       FileEdit::Replace(text) => text,
     };
-    if let Some(error) = self.layers.check_file(name, &text).error {
+    // the files as they are now with the edit, not as last loaded: a file that failed to load
+    // still has its place in the order
+    let declared = self.layers.declare(Some((name, &text)))?;
+    if let Some(error) = self.layers.refusal(&declared) {
       return Err(error);
     }
-    let declared = self.declared();
     let changed = changed_in_file(&schema, &old, &text);
+    // what wins each key before the edit: a file beats env, so after it the file would
+    let before = self.declared();
     for key in &changed {
-      if let Some(by) = declared.sources.get(key).and_then(Source::fixed_by) {
+      if let Some(by) = before.sources.get(key).and_then(Source::fixed_by) {
         return Err(Error::SetBy {
           key: key.clone(),
           by: by.to_string(),
@@ -456,6 +460,41 @@ mod tests {
       .await
       .unwrap();
     assert_eq!(watcher.current().values.server.port, 3000);
+
+    // a drop-in that arrives broken is not loaded, and can still be fixed through its own file
+    fs::write(dir.path().join("config.d/20-b.toml"), "[server]\nport = \n").unwrap();
+    assert!(watcher.reload().await.is_err());
+    let broken = revision_of(b"[server]\nport = \n");
+    watcher
+      .replace_file(
+        "config.d/20-b.toml",
+        Some(&broken),
+        "[server]\nport = 4000\n".into(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(watcher.current().values.server.port, 4000);
+    let revision = watcher
+      .current()
+      .files
+      .iter()
+      .find(|f| f.name == "config.d/10-a.toml")
+      .unwrap()
+      .revision
+      .clone();
+    let e = watcher
+      .patch_file(
+        "config.d/10-a.toml",
+        revision.as_deref(),
+        values(&[("server.port", json!(5000))]),
+        vec![],
+      )
+      .await
+      .unwrap_err();
+    assert!(
+      matches!(&e, Error::SetBy { by, .. } if by == "config.d/20-b.toml"),
+      "{e}"
+    );
   }
 
   #[tokio::test]
