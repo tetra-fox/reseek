@@ -51,13 +51,29 @@ pub fn listening_options() -> ClientOptions {
   }
 }
 
-/// a port nothing listens on right now
+/// where the tests take listening ports from: below the range Linux hands out for outgoing
+/// connections, so no connection a test makes can take a port between its pick and its bind
+const PORTS: std::ops::Range<u32> = 20_000..32_000;
+/// ports each test process takes from before running into the next process's
+const PORTS_PER_PROCESS: u32 = 10;
+
+/// A port nothing listens on right now. Each test process takes them in order from a place of
+/// its own in [`PORTS`], so processes running side by side do not pick the same one.
 pub fn free_port() -> u16 {
-  std::net::TcpListener::bind("127.0.0.1:0")
-    .unwrap()
-    .local_addr()
-    .unwrap()
-    .port()
+  static NEXT: std::sync::OnceLock<std::sync::atomic::AtomicU32> = std::sync::OnceLock::new();
+  let len = PORTS.end - PORTS.start;
+  let next = NEXT.get_or_init(|| {
+    let slot = std::process::id() % (len / PORTS_PER_PROCESS);
+    std::sync::atomic::AtomicU32::new(slot * PORTS_PER_PROCESS)
+  });
+  loop {
+    let offset = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % len;
+    let port = u16::try_from(PORTS.start + offset).expect("the range is below 65536");
+    // a port something else holds is skipped
+    if std::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).is_ok() {
+      return port;
+    }
+  }
 }
 
 /// The server's listening socket
@@ -234,7 +250,7 @@ impl Session {
     let client = Client::new(options).unwrap();
     let events = client.subscribe();
     let address = fake.address();
-    let connecting = {
+    let mut connecting = {
       let client = client.clone();
       tokio::spawn(async move {
         client
@@ -248,7 +264,11 @@ impl Session {
           .await
       })
     };
-    let mut server = fake.accept().await;
+    // a connect that fails before reaching the server says why, rather than the accept timing out
+    let mut server = tokio::select! {
+      server = fake.accept() => server,
+      connected = &mut connecting => panic!("the client did not reach the server: {connected:?}"),
+    };
     server.accept_login().await;
     server.read_configuration().await;
     connecting.await.unwrap().unwrap();
