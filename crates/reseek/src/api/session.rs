@@ -95,7 +95,10 @@ async fn login(
   if app.auth.limits.logins.blocked(client.ip) {
     return Err(ApiError::rate_limited());
   }
-  if !local_login_allowed(options, client) {
+  if !options.web.authentication.local.enabled {
+    return Err(ApiError::forbidden("password login is off"));
+  }
+  if !offered_to(options, client) {
     return Err(ApiError::forbidden(
       "password login is not offered to this address",
     ));
@@ -171,7 +174,7 @@ async fn providers(
   let current = app.config.current();
   let options = &current.values;
   let authentication = &options.web.authentication;
-  let local = local_login_allowed(options, &client);
+  let local = options.web.authentication.local.enabled && offered_to(options, &client);
   let trusted = networks::trusted(&client, options).is_some();
   let proxy = authentication.proxy.enabled;
   let only = authentication.oidc.len() == 1 && !local && !proxy && !trusted;
@@ -391,14 +394,13 @@ async fn provider_logout(
   end_session_url(&metadata, &id_token, &back)
 }
 
-/// Whether password login is on and offered to `client`'s address.
-fn local_login_allowed(options: &Options, client: &Client) -> bool {
-  let local = &options.web.authentication.local;
-  local.enabled
-    && (local.only_from.is_empty()
-      || local.only_from.iter().any(|text| {
-        parse_list(text).is_ok_and(|ranges| ranges.iter().any(|range| range.contains(client.ip)))
-      }))
+/// Whether `local.only_from` lets `client`'s address use password login.
+fn offered_to(options: &Options, client: &Client) -> bool {
+  let only_from = &options.web.authentication.local.only_from;
+  only_from.is_empty()
+    || only_from.iter().any(|text| {
+      parse_list(text).is_ok_and(|ranges| ranges.iter().any(|range| range.contains(client.ip)))
+    })
 }
 
 fn is_admin(caller: &Authorized<AnyRole>) -> bool {
@@ -702,7 +704,11 @@ mod tests {
         request("POST", "/api/v0/session", Some(credentials("reseek"))),
       )
       .await;
-    assert_eq!(far.status, 403, "password login is not offered there");
+    assert_eq!(far.status, 403);
+    assert_eq!(
+      far.json()["error"],
+      "password login is not offered to this address"
+    );
     assert_eq!(
       app
         .send(request("GET", "/api/v0/session/enabled", None))
@@ -717,6 +723,19 @@ mod tests {
         .json(),
       json!(true)
     );
+  }
+
+  #[tokio::test]
+  async fn turning_password_login_off_says_so() {
+    let app = app("[web.authentication.local]\nenabled = false\n", &[]).await;
+    let off = app
+      .send_from(
+        OUTSIDE,
+        request("POST", "/api/v0/session", Some(credentials("reseek"))),
+      )
+      .await;
+    assert_eq!(off.status, 403);
+    assert_eq!(off.json()["error"], "password login is off");
   }
 
   #[tokio::test]
