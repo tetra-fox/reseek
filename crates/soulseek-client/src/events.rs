@@ -1,18 +1,22 @@
-//! What the client tells the application: every state change and every pushed server message
-//! the application acts on. Events go out on one broadcast channel; a subscriber that falls more
-//! than [`EVENT_CAPACITY`] behind gets `RecvError::Lagged(n)` from its receiver and continues
-//! with the newest events.
+//! What the client tells the application: every state change, every pushed server message the
+//! application acts on, and how its transfers, searches and browses go. Events go out on one
+//! broadcast channel; a subscriber that falls more than [`EVENT_CAPACITY`] behind gets
+//! `RecvError::Lagged(n)` from its receiver and continues with the newest events.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use soulseek_proto::RemoteFilename;
+use soulseek_proto::peer::SearchResponse;
 use soulseek_proto::server::{RoomList, RoomTicker, UserData, UserStatistics, UserStatus};
 
+use crate::browse::BrowseProgress;
 use crate::error::ClientError;
 use crate::resolvers::SearchReply;
+use crate::search::{Search, SearchState};
 use crate::state::{ClientState, DistributedNetworkInfo, ServerInfo};
+use crate::transfers::{Transfer, TransferState};
 
 /// how many events the channel holds for its slowest subscriber
 pub const EVENT_CAPACITY: usize = 4096;
@@ -159,6 +163,36 @@ pub enum Event {
     username: String,
     filename: RemoteFilename,
   },
+  /// a peer told us our place in its queue for a file without our asking, as it does once it
+  /// queued the file
+  PlaceInQueueReceived {
+    username: String,
+    filename: RemoteFilename,
+    place: u32,
+  },
+  /// a download or upload moved from one state to another
+  TransferStateChanged {
+    previous_state: TransferState,
+    transfer: Transfer,
+  },
+  /// bytes of a download or upload moved; raised for every chunk, so a consumer that shows it
+  /// should pace itself
+  TransferProgressUpdated {
+    previous_bytes_transferred: u64,
+    transfer: Transfer,
+  },
+  /// one of our searches moved from one state to another
+  SearchStateChanged {
+    previous_state: SearchState,
+    search: Search,
+  },
+  /// one of our searches took a response; it may come just after the search completed
+  SearchResponseReceived {
+    search: Search,
+    response: Arc<SearchResponse>,
+  },
+  /// more of a browse response arrived
+  BrowseProgressUpdated(BrowseProgress),
 }
 
 /// A private message to us

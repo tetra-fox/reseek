@@ -15,7 +15,7 @@ use crate::waiter::WaitKey;
 
 impl Client {
   /// fails unless logged in, naming what was attempted
-  pub(super) fn require_logged_in(&self, verb: &str) -> Result<(), ClientError> {
+  pub(crate) fn require_logged_in(&self, verb: &str) -> Result<(), ClientError> {
     let state = self.state();
     if state == ClientState::READY {
       return Ok(());
@@ -67,7 +67,7 @@ impl Client {
 
 /// what a failed operation reports: its own outcomes as they are, anything else as a failure
 /// to `verb` wrapping the cause
-pub(super) fn failed(verb: &str, error: ClientError) -> ClientError {
+pub(crate) fn failed(verb: &str, error: ClientError) -> ClientError {
   match error {
     ClientError::Timeout(_)
     | ClientError::Cancelled
@@ -112,7 +112,7 @@ pub(super) fn room_user_key(code: ServerCode, room: &str, username: &str) -> Wai
 }
 
 /// fails when `value` is empty or only whitespace, naming it as `name`
-pub(super) fn non_blank(name: &str, value: &str) -> Result<(), ClientError> {
+pub(crate) fn non_blank(name: &str, value: &str) -> Result<(), ClientError> {
   if value.trim().is_empty() {
     return Err(ClientError::InvalidArgument(format!(
       "The {name} must not be a null or empty string, or one consisting only of whitespace"

@@ -92,7 +92,8 @@ pub enum Scope {
   Server,
   /// answered over the user's peer or distributed connection
   Peer(String),
-  /// a transfer connection the user is expected to open, which outlives the other connections
+  /// a transfer the user is expected to offer or connect for, which outlives the other
+  /// connections
   Transfer(String),
   /// answered on one connection
   Connection(Uuid),
@@ -112,6 +113,30 @@ impl WaitKey {
         | Self::SolicitedDistributedConnection { .. },
         Scope::Server,
       ) => true,
+      // a download waits for its uploader's offer across the hours a queue can take, while
+      // message connections come and go; a browse follows the connection bringing its response
+      // itself, which need not be the one that closed
+      (
+        Self::PeerFile {
+          code: PeerCode::TransferRequest,
+          ..
+        }
+        | Self::Peer {
+          code: PeerCode::BrowseResponse,
+          ..
+        },
+        Scope::Peer(_),
+      ) => false,
+      (
+        Self::PeerFile {
+          code: PeerCode::TransferRequest,
+          username,
+          ..
+        }
+        | Self::DirectTransfer { username, .. }
+        | Self::IndirectTransfer { username, .. },
+        Scope::Transfer(peer),
+      ) => username == peer,
       (
         Self::Peer { username, .. }
         | Self::PeerToken { username, .. }
@@ -120,10 +145,6 @@ impl WaitKey {
         | Self::BrowseResponseConnection { username }
         | Self::ChildDepthMessage { username, .. },
         Scope::Peer(peer),
-      ) => username == peer,
-      (
-        Self::DirectTransfer { username, .. } | Self::IndirectTransfer { username, .. },
-        Scope::Transfer(peer),
       ) => username == peer,
       (
         Self::BranchLevelMessage { connection }
@@ -245,6 +266,16 @@ impl Waiter {
     self.register(key, None, cancel)
   }
 
+  /// [`Waiter::wait`] whose `timeout`, when `None`, means no timeout rather than the default
+  pub(crate) fn wait_within<T: Send + 'static>(
+    &self,
+    key: WaitKey,
+    timeout: Option<Duration>,
+    cancel: CancellationToken,
+  ) -> impl Future<Output = Result<T, ClientError>> + Send + 'static {
+    self.register(key, timeout, cancel)
+  }
+
   fn register<T: Send + 'static>(
     &self,
     key: WaitKey,
@@ -315,6 +346,24 @@ impl Waiter {
       ),
       Err(Err(_)) => unreachable!("an offered value is never an error"),
     }
+  }
+
+  /// Completes every wait under `key` with a clone of `value`, returning how many took it
+  pub fn complete_all<T: Clone + Send + 'static>(&self, key: &WaitKey, value: T) -> usize {
+    let mut completed = 0;
+    while self.complete(key, value.clone()) {
+      completed += 1;
+    }
+    completed
+  }
+
+  /// Fails every wait under `key` with `error`, returning how many there were
+  pub fn fault_all(&self, key: &WaitKey, error: ClientError) -> usize {
+    let mut faulted = 0;
+    while self.fault(key, error.clone()) {
+      faulted += 1;
+    }
+    faulted
   }
 
   /// fails the oldest wait under `key` with `error`, returning whether there was one

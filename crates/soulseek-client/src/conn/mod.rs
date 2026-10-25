@@ -224,6 +224,36 @@ impl ConnReadHalf {
   pub async fn read_exact(&mut self, buf: &mut [u8]) -> Result<(), ClientError> {
     read_exact(&self.handle, &mut self.half, buf).await
   }
+
+  /// Reads what has arrived, at most `buf.len()` bytes and at least one, waiting for the first.
+  /// The remote closing the connection is a failure, as for every read.
+  pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, ClientError> {
+    let handle = &self.handle;
+    if !handle.is_connected() {
+      return Err(handle.not_connected());
+    }
+    let len = buf.len();
+    let read = tokio::select! {
+      biased;
+      () = handle.cancellation().cancelled() => {
+        return Err(read_error(handle, len, handle.closed_message(), None));
+      }
+      read = self.half.read(buf) => read,
+    };
+    match read {
+      Ok(0) if len > 0 => Err(read_failed(
+        handle,
+        len,
+        "Remote connection closed".into(),
+        None,
+      )),
+      Ok(read) => {
+        handle.touch();
+        Ok(read)
+      }
+      Err(error) => Err(read_failed(handle, len, error.to_string(), Some(error))),
+    }
+  }
 }
 
 /// The writing half of a split connection

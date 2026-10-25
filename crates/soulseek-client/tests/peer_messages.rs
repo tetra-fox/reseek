@@ -269,8 +269,9 @@ async fn a_legacy_download_request_is_queued_never_started() {
   ));
 }
 
+// an offer for a file we do download goes to that download; the transfer suites cover it
 #[tokio::test]
-async fn an_upload_offer_goes_to_the_download_waiting_for_it_and_is_refused_otherwise() {
+async fn an_upload_offer_for_a_file_we_do_not_download_is_refused() {
   let session = session().await;
   let mut bob = bob(&session).await;
   let offer = |token, filename: &str| {
@@ -290,20 +291,6 @@ async fn an_upload_offer_goes_to_the_download_waiting_for_it_and_is_refused_othe
       message: "Cancelled".into()
     })
   );
-  let waiting = session
-    .client
-    .waiter()
-    .wait_indefinitely::<TransferRequest>(
-      file_key(PeerCode::TransferRequest, "@@music\\wanted.mp3"),
-      CancellationToken::new(),
-    );
-  bob.send(&offer(8, "@@music\\wanted.mp3")).await;
-  let request = tokio::time::timeout(PATIENCE, waiting)
-    .await
-    .unwrap()
-    .unwrap();
-  assert_eq!(request.token, 8);
-  assert_eq!(request.file_size, Some(4_000_000));
 }
 
 #[tokio::test]
@@ -395,7 +382,7 @@ async fn a_browse_response_is_announced_by_its_header_before_it_completes() {
     None,
     CancellationToken::new(),
   );
-  let response = session.client.waiter().wait::<BrowseResponse>(
+  let response = session.client.waiter().wait::<Arc<BrowseResponse>>(
     WaitKey::Peer {
       code: PeerCode::BrowseResponse,
       username: "bob".into(),
@@ -413,7 +400,7 @@ async fn a_browse_response_is_announced_by_its_header_before_it_completes() {
   assert_eq!(incoming.length as usize, frame.len() - 4);
   assert_eq!(*incoming.received.borrow(), 0);
   bob.send(&frame[8..]).await;
-  assert_eq!(response.await.unwrap(), listing());
+  assert_eq!(*response.await.unwrap(), listing());
   assert_eq!(*incoming.received.borrow(), frame.len() - 8);
 }
 
@@ -421,7 +408,7 @@ async fn a_browse_response_is_announced_by_its_header_before_it_completes() {
 async fn an_invalid_browse_response_fails_the_browse() {
   let session = session().await;
   let mut bob = bob(&session).await;
-  let response = session.client.waiter().wait::<BrowseResponse>(
+  let response = session.client.waiter().wait::<Arc<BrowseResponse>>(
     WaitKey::Peer {
       code: PeerCode::BrowseResponse,
       username: "bob".into(),

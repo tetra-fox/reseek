@@ -5,16 +5,15 @@
 //! across all connections; at the bound a connection's reader waits before reading its next
 //! frame, so a stuck resolver slows the peers sending to it and loses nothing.
 
-use soulseek_proto::{
-  DecodeError, PeerCode, PeerMessage, RemoteFilename, TransferDirection, peek_search_response,
-};
+use std::sync::Arc;
+
+use soulseek_proto::{DecodeError, PeerCode, PeerMessage, TransferDirection, peek_search_response};
 use tokio::sync::{OwnedSemaphorePermit, watch};
 use tracing::Instrument;
 
 use crate::client::Client;
 use crate::conn::{MessageConn, ReadEvent};
 use crate::error::{ClientError, MessageErrorKind};
-use crate::events::Event;
 use crate::waiter::WaitKey;
 
 /// The start of a browse response on its way, so its progress can be followed: the frame's
@@ -50,7 +49,8 @@ impl Client {
             connection: reader.clone(),
             received,
           };
-          if !client.waiter().complete(&key, incoming) {
+          // every browse of this user follows the response
+          if client.waiter().complete_all(&key, incoming) == 0 {
             tracing::trace!("browse response nobody follows");
           }
         }
@@ -76,12 +76,6 @@ impl Client {
     frame: Vec<u8>,
     permit: Option<OwnedSemaphorePermit>,
   ) {
-    let code = frame
-      .get(4..8)
-      .map(|code| u32::from_le_bytes([code[0], code[1], code[2], code[3]]));
-    if code == Some(PeerCode::SearchResponse.code()) {
-      return self.search_response_received(conn, &frame);
-    }
     let client = self.clone();
     let conn = conn.clone();
     let span = conn.handle().span().clone();
@@ -90,18 +84,25 @@ impl Client {
     );
   }
 
-  /// Our searches take the response; this layer has none of its own, so a response is checked
-  /// for its token only and dropped
+  /// A search response goes to the search its token names. Only the username and token are
+  /// inflated first, so a response for a search that is over costs next to nothing.
   fn search_response_received(&self, conn: &MessageConn, frame: &[u8]) {
     let limits = self.options().limits.frame_limits();
     // a malformed one has been logged by the peek
-    if let Ok((username, token)) = peek_search_response(frame, &limits) {
-      tracing::trace!(
+    let Ok((username, token)) = peek_search_response(frame, &limits) else {
+      return;
+    };
+    if !self.searches().is_running(token) {
+      return tracing::trace!(
         username,
         token,
         peer = conn.handle().username(),
         "search response for no active search, dropped"
       );
+    }
+    // a malformed one has been logged by the decoder
+    if let Ok(PeerMessage::SearchResponse(response)) = PeerMessage::decode_with(frame, &limits) {
+      self.search_response(response);
     }
   }
 
@@ -111,6 +112,9 @@ impl Client {
     frame: &[u8],
     _permit: Option<OwnedSemaphorePermit>,
   ) {
+    if frame.get(4..8) == Some(&PeerCode::SearchResponse.code().to_le_bytes()) {
+      return self.search_response_received(conn, frame);
+    }
     let username = conn.handle().username().unwrap_or_default().to_owned();
     let limits = self.options().limits.frame_limits();
     let message = match PeerMessage::decode_with(frame, &limits) {
@@ -119,9 +123,9 @@ impl Client {
         return tracing::debug!(code, len = frame.len(), "unhandled peer message");
       }
       Err(error) => {
-        // the decoder has logged it; a browse response somebody waits for fails that wait
+        // the decoder has logged it; the waits for what it was fail now rather than time out
         if frame.get(4..8) == Some(&PeerCode::BrowseResponse.code().to_le_bytes()) {
-          self.waiter().fault(
+          self.waiter().fault_all(
             &WaitKey::Peer {
               code: PeerCode::BrowseResponse,
               username,
@@ -132,6 +136,8 @@ impl Client {
               source: Some(std::sync::Arc::new(error)),
             },
           );
+        } else {
+          self.fault_unparseable(&username, frame, &error);
         }
         return;
       }
@@ -153,15 +159,16 @@ impl Client {
       code,
       username: username.to_owned(),
     };
-    let file = |code, filename: &RemoteFilename| WaitKey::PeerFile {
-      code,
-      username: username.to_owned(),
-      filename: filename.clone(),
-    };
     let endpoint = conn.handle().remote();
     match message {
       M::BrowseRequest => self.send_browse_response(conn, username, endpoint).await?,
-      M::BrowseResponse(response) => self.complete_peer(peer(PeerCode::BrowseResponse), response),
+      M::BrowseResponse(response) => {
+        // every browse of this user takes the same response
+        let key = peer(PeerCode::BrowseResponse);
+        if self.waiter().complete_all(&key, Arc::new(response)) == 0 {
+          tracing::debug!("browse response nobody waits for, dropped");
+        }
+      }
       M::SearchRequest(request) => {
         self
           .respond_on(conn, username, request.token, &request.query)
@@ -170,7 +177,7 @@ impl Client {
       // routed by its token before decoding
       M::SearchResponse(_) => {}
       M::InfoRequest => self.send_user_info(conn, username, endpoint).await?,
-      M::InfoResponse(info) => self.complete_peer(peer(PeerCode::InfoResponse), info),
+      M::InfoResponse(info) => self.user_info_received(username, info),
       M::FolderContentsRequest(request) => {
         self
           .send_folder_contents(conn, username, endpoint, request)
@@ -206,35 +213,9 @@ impl Client {
           .queue_requested(conn, username, endpoint, request.filename)
           .await?;
       }
-      M::PlaceInQueueResponse(response) => {
-        let key = file(PeerCode::PlaceInQueueResponse, &response.filename);
-        self.complete_peer(key, response);
-      }
-      M::UploadFailed(failed) => {
-        tracing::debug!(filename = %failed.filename, "download reported as failed by the uploader");
-        self.waiter().fault(
-          &file(PeerCode::TransferRequest, &failed.filename),
-          ClientError::TransferReportedFailed(
-            "Download reported as failed by remote client".into(),
-          ),
-        );
-        self.emit(Event::DownloadFailed {
-          username: username.to_owned(),
-          filename: failed.filename,
-        });
-      }
-      M::UploadDenied(denied) => {
-        tracing::debug!(filename = %denied.filename, reason = denied.reason, "download denied by the uploader");
-        self.waiter().fault(
-          &file(PeerCode::TransferRequest, &denied.filename),
-          ClientError::TransferRejected(denied.reason.clone()),
-        );
-        self.emit(Event::DownloadDenied {
-          username: username.to_owned(),
-          filename: denied.filename,
-          message: denied.reason,
-        });
-      }
+      M::PlaceInQueueResponse(response) => self.place_in_queue_received(username, response),
+      M::UploadFailed(failed) => self.download_failed(username, failed),
+      M::UploadDenied(denied) => self.download_denied(username, denied),
       M::PlaceInQueueRequest(request) => {
         self
           .try_send_place_in_queue(conn, username, endpoint, &request.filename)

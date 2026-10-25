@@ -95,12 +95,48 @@ pub enum ClientError {
   /// a resolver refused to queue a download; the reason is sent to the peer as written
   #[error("{0}")]
   DownloadEnqueue(String),
-  /// the uploader refused or cancelled a file we asked for, with its reason
-  #[error("{0}")]
+  /// the token is already used by another search, or by another transfer
+  #[error("token {0} is already in use")]
+  DuplicateToken(u32),
+  /// a transfer of the same file with the same user in the same direction is already active
+  #[error("a transfer of {filename} with {username} is already active")]
+  DuplicateTransfer { username: String, filename: String },
+  /// no download of the file from the user is active
+  #[error("no active download of {filename} from {username}")]
+  TransferNotFound { username: String, filename: String },
+  /// the local file to upload does not exist
+  #[error("local file not found: {0}")]
+  NotFound(String),
+  /// the peer refused or cancelled a transfer, with its reason, which is kept as it was sent
+  #[error("transfer rejected: {0}")]
   TransferRejected(String),
   /// the uploader reported that the upload of a file to us failed
   #[error("{0}")]
   TransferReportedFailed(String),
+  /// the size the peer reports for a file differs from the size we expect, and nothing settled
+  /// which one is right
+  #[error("transfer aborted: size mismatch (local {local}, remote {remote})")]
+  SizeMismatch {
+    local: u64,
+    remote: u64,
+    #[source]
+    source: Option<ErrorSource>,
+  },
+  /// a transfer could not go on: no upload slot, a bad start offset, a source that ended early
+  /// or changed size, a stream that cannot seek
+  #[error("transfer error: {message}")]
+  Transfer {
+    message: String,
+    #[source]
+    source: Option<ErrorSource>,
+  },
+  /// reading or writing a local file or stream failed
+  #[error("I/O error: {message}")]
+  Io {
+    message: String,
+    #[source]
+    source: Option<ErrorSource>,
+  },
   /// an operation failed for another reason; the message names the operation
   #[error("{message}")]
   Client {
@@ -185,6 +221,22 @@ impl ClientError {
     Self::Client {
       message: message.into(),
       source: source.map(|source| Arc::new(source) as ErrorSource),
+    }
+  }
+
+  /// a transfer that could not go on, without an underlying cause
+  pub fn transfer(message: impl Into<String>) -> Self {
+    Self::Transfer {
+      message: message.into(),
+      source: None,
+    }
+  }
+
+  /// a local I/O failure, described by `message`
+  pub fn io(message: impl Into<String>, source: std::io::Error) -> Self {
+    Self::Io {
+      message: message.into(),
+      source: Some(Arc::new(source)),
     }
   }
 

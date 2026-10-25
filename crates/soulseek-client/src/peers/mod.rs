@@ -19,7 +19,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use soulseek_proto::RemoteFilename;
+use soulseek_proto::{PeerMessage, RemoteFilename};
 use tokio::sync::{Semaphore, watch};
 use tokio_util::sync::CancellationToken;
 
@@ -228,4 +228,15 @@ impl PeerConnections {
       }
     }
   }
+}
+
+/// writes `message` on a peer connection and waits until it is on the socket
+pub(crate) async fn write_peer(
+  conn: &MessageConn,
+  message: PeerMessage,
+) -> Result<(), ClientError> {
+  let code = message.code();
+  conn.write(message.encode()).await?;
+  tracing::debug!(code = code.code(), name = code.name(), "peer message sent");
+  Ok(())
 }

@@ -7,7 +7,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use soulseek_proto::SearchQuery;
+use soulseek_proto::{PeerMessage, SearchQuery};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
@@ -119,6 +119,9 @@ impl Client {
       return false;
     };
     let reply = Arc::new(reply);
+    if self.username().as_deref() == Some(username) {
+      return self.deliver_to_self(username, token, query, reply);
+    }
     let endpoint = match self.get_user_endpoint(username).await {
       Ok(endpoint) => endpoint,
       Err(error) => {
@@ -169,6 +172,44 @@ impl Client {
       }
     };
     self.deliver(&conn, username, token, query, reply).await
+  }
+
+  /// Our answer to a search we sent ourselves on purpose goes straight to that search: a
+  /// connection to our own listener would stand for both ends of one user's connection
+  fn deliver_to_self(
+    &self,
+    username: &str,
+    token: u32,
+    query: &str,
+    reply: Arc<SearchReply>,
+  ) -> bool {
+    let response = match reply.as_ref() {
+      SearchReply::Response(response) => response.clone(),
+      SearchReply::Encoded(frame) => {
+        let limits = self.options().limits.frame_limits();
+        match PeerMessage::decode_with(frame, &limits) {
+          Ok(PeerMessage::SearchResponse(response)) => response,
+          Ok(other) => {
+            tracing::warn!(
+              code = other.code().code(),
+              "encoded search reply is another message"
+            );
+            return false;
+          }
+          // the decoder has logged what is wrong with it
+          Err(_) => return false,
+        }
+      }
+    };
+    self.search_response(response);
+    tracing::debug!(query, "search response delivered to our own search");
+    self.emit(Event::SearchResponseDelivered(SearchDelivery {
+      username: username.to_owned(),
+      token,
+      query: query.to_owned(),
+      search_response: reply,
+    }));
+    true
   }
 
   /// Answers a search a peer sent on its message connection, on that connection

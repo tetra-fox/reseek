@@ -33,26 +33,54 @@ impl ClientState {
 /// the flag names joined with ", ", as in "Connected, LoggedIn"
 impl fmt::Display for ClientState {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let names = [
-      (Self::DISCONNECTED, "Disconnected"),
-      (Self::CONNECTED, "Connected"),
-      (Self::LOGGED_IN, "LoggedIn"),
-      (Self::CONNECTING, "Connecting"),
-      (Self::LOGGING_IN, "LoggingIn"),
-      (Self::DISCONNECTING, "Disconnecting"),
-    ];
-    let mut first = true;
-    for (flag, name) in names {
-      if self.contains(flag) {
-        if !first {
-          f.write_str(", ")?;
-        }
-        f.write_str(name)?;
-        first = false;
-      }
-    }
-    Ok(())
+    write_flags(
+      f,
+      *self,
+      &[
+        (Self::DISCONNECTED, "Disconnected"),
+        (Self::CONNECTED, "Connected"),
+        (Self::LOGGED_IN, "LoggedIn"),
+        (Self::CONNECTING, "Connecting"),
+        (Self::LOGGING_IN, "LoggingIn"),
+        (Self::DISCONNECTING, "Disconnecting"),
+      ],
+    )
   }
+}
+
+/// Writes the names of the flags of `value` in the order of `names`, joined with ", ", or
+/// "None" when none is set
+pub(crate) fn write_flags<F: bitflags::Flags + Copy>(
+  f: &mut fmt::Formatter<'_>,
+  value: F,
+  names: &[(F, &str)],
+) -> fmt::Result {
+  let mut first = true;
+  for (flag, name) in names {
+    if value.contains(*flag) {
+      if !first {
+        f.write_str(", ")?;
+      }
+      f.write_str(name)?;
+      first = false;
+    }
+  }
+  if first {
+    f.write_str("None")?;
+  }
+  Ok(())
+}
+
+/// Reads flag names joined with ", " back, as [`write_flags`] writes them; `None` for a name not
+/// in `names`
+pub(crate) fn parse_flags<F: bitflags::Flags + Copy>(text: &str, names: &[(F, &str)]) -> Option<F> {
+  if text == "None" {
+    return Some(F::empty());
+  }
+  text.split(", ").try_fold(F::empty(), |flags, part| {
+    let (flag, _) = names.iter().find(|(_, name)| *name == part)?;
+    Some(flags.union(*flag))
+  })
 }
 
 /// Tuning values the server sends after login, each `None` until its message arrives. The last

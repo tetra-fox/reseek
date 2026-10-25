@@ -31,20 +31,23 @@ pub struct ClientOptions {
   pub accept_distributed_children: bool,
   /// most children we keep at once
   pub distributed_child_limit: u32,
-  /// searches we run at once; fixed for the client's lifetime
+  /// searches we run at once
   pub maximum_concurrent_searches: u32,
-  /// uploads we run at once; fixed for the client's lifetime
+  /// uploads we run at once
   pub maximum_concurrent_uploads: u32,
-  /// KiB/s across all uploads
+  /// KiB/s across all uploads; 0 is no limit
   pub maximum_upload_speed: u32,
-  /// downloads we run at once; fixed for the client's lifetime
+  /// downloads we run at once
   pub maximum_concurrent_downloads: u32,
-  /// KiB/s across all downloads
+  /// KiB/s across all downloads; 0 is no limit
   pub maximum_download_speed: u32,
   /// drop a distributed search identical to the one received just before it
   pub deduplicate_search_requests: bool,
   /// how long a request waits for the reply that answers it; fixed for the client's lifetime
   pub message_timeout: Duration,
+  /// how long an upload, or a download asked for with a transfer request, waits for the peer
+  /// to answer the transfer request
+  pub transfer_response_timeout: Duration,
   /// acknowledge private messages as soon as they arrive, so the server stops replaying them
   pub auto_acknowledge_private_messages: bool,
   /// acknowledge privilege notifications as soon as they arrive
@@ -99,6 +102,7 @@ impl Default for ClientOptions {
       maximum_download_speed: i32::MAX as u32,
       deduplicate_search_requests: true,
       message_timeout: Duration::from_secs(5),
+      transfer_response_timeout: Duration::from_secs(15),
       auto_acknowledge_private_messages: true,
       auto_acknowledge_privilege_notifications: true,
       accept_private_room_invitations: false,
@@ -170,6 +174,12 @@ impl ClientOptions {
     }
     if self.message_timeout.is_zero() {
       return Err(invalid("message_timeout", "Must be greater than zero"));
+    }
+    if self.transfer_response_timeout.is_zero() {
+      return Err(invalid(
+        "transfer_response_timeout",
+        "Must be greater than zero",
+      ));
     }
     self
       .server_connection_options

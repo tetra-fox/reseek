@@ -35,6 +35,18 @@ impl TokenGenerator {
         if token >= MAX_TOKEN { 0 } else { token + 1 }
       })
   }
+
+  /// The next token `taken` does not claim, skipping the ones still in use, so a token that
+  /// wrapped around never lands on a search or transfer that outlived a full cycle
+  pub fn next_free(&self, taken: impl Fn(u32) -> bool) -> u32 {
+    loop {
+      let token = self.next();
+      if !taken(token) {
+        return token;
+      }
+      tracing::debug!(token, "token still in use, skipped");
+    }
+  }
 }
 
 #[cfg(test)]
@@ -54,5 +66,12 @@ mod tests {
     for _ in 0..100 {
       assert!(TokenGenerator::new(None).next() <= MAX_TOKEN);
     }
+  }
+
+  #[test]
+  fn tokens_in_use_are_skipped() {
+    let tokens = TokenGenerator::new(Some(5));
+    assert_eq!(tokens.next_free(|token| token == 5 || token == 6), 7);
+    assert_eq!(tokens.next(), 8);
   }
 }

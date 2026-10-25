@@ -31,6 +31,8 @@ impl Client {
       .inner
       .endpoints
       .resize(new.limits.user_endpoint_cache_size);
+    self.transfers().reconfigure(&new);
+    self.searches().resize(new.maximum_concurrent_searches);
     // the child limit and whether we take children may have changed
     self.distributed_command(crate::distributed::Command::Changed);
 

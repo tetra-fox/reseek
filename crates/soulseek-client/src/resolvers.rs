@@ -99,7 +99,7 @@ pub struct Resolvers {
   pub directory_contents_resolver: Option<DirectoryContentsResolver>,
   /// unset: empty user info
   pub user_info_resolver: Option<UserInfoResolver>,
-  /// unset: every request is queued
+  /// unset: every request is refused with "File not shared."
   pub enqueue_download: Option<EnqueueDownload>,
   /// unset: place requests get no reply
   pub place_in_queue_resolver: Option<PlaceInQueueResolver>,

@@ -1,8 +1,8 @@
 //! How the client answers what a peer asks of it on a message connection: shares, user info
-//! and folder contents come from the application's resolvers, a download the peer wants is
-//! queued through the application, and a file a peer offers to upload is taken by the download
-//! waiting for it or refused. A resolver that fails yields an empty answer, no answer or a
-//! generic refusal; its error never reaches the peer.
+//! and folder contents come from the application's resolvers, and a download the peer wants is
+//! queued through the application, or refused when the application shares nothing. A resolver
+//! that fails yields an empty answer, no answer or a generic refusal; its error never reaches the
+//! peer.
 
 use std::net::SocketAddr;
 
@@ -12,11 +12,11 @@ use soulseek_proto::peer::{
 };
 use soulseek_proto::{PeerCode, PeerMessage, RemoteFilename};
 
+use super::write_peer;
 use crate::client::Client;
 use crate::conn::MessageConn;
 use crate::error::ClientError;
 use crate::resolvers::BrowseReply;
-use crate::waiter::WaitKey;
 
 impl Client {
   /// A peer asks to queue a download of `filename`; it is told its place in the queue, or why
@@ -44,34 +44,6 @@ impl Client {
         )
         .await?;
       }
-    }
-    Ok(())
-  }
-
-  /// An uploader is about to send us a file. A download waiting for it takes the request;
-  /// anything else is refused.
-  pub(super) async fn upload_offered(
-    &self,
-    conn: &MessageConn,
-    username: &str,
-    request: TransferRequest,
-  ) -> Result<(), ClientError> {
-    let key = WaitKey::PeerFile {
-      code: PeerCode::TransferRequest,
-      username: username.to_owned(),
-      filename: request.filename.clone(),
-    };
-    let token = request.token;
-    if let Err(request) = self.waiter().offer(&key, request) {
-      tracing::debug!(filename = %request.filename, token, "Rejecting unknown upload");
-      write_peer(
-        conn,
-        PeerMessage::TransferResponse(TransferResponse::Denied {
-          token,
-          message: "Cancelled".into(),
-        }),
-      )
-      .await?;
     }
     Ok(())
   }
@@ -133,7 +105,9 @@ impl Client {
     filename: &RemoteFilename,
   ) -> Result<(), String> {
     let Some(enqueue) = self.options().resolvers.enqueue_download.clone() else {
-      return Ok(());
+      // with nothing to queue uploads through, nothing is shared
+      tracing::debug!(%filename, "upload refused; no upload queue");
+      return Err("File not shared.".into());
     };
     match enqueue(username.to_owned(), endpoint, filename.clone()).await {
       Ok(()) => Ok(()),
@@ -276,12 +250,4 @@ impl Client {
     tracing::debug!(token = request.token, "Folder contents sent");
     Ok(())
   }
-}
-
-/// writes `message` on a peer connection and waits until it is on the socket
-async fn write_peer(conn: &MessageConn, message: PeerMessage) -> Result<(), ClientError> {
-  let code = message.code();
-  conn.write(message.encode()).await?;
-  tracing::debug!(code = code.code(), name = code.name(), "peer message sent");
-  Ok(())
 }

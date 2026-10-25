@@ -1,8 +1,9 @@
 //! Ending the server session. The state moves to disconnecting, waits on the server are failed
 //! and the session's resources are taken in one step under the session lock; stopping the
-//! listener, closing the server connection, tearing down the distributed tree and forgetting the
-//! connection requests the server relayed follow, and the state ends at disconnected. Message
-//! and transfer connections to other users are not part of the session and stay open.
+//! listener, closing the server connection, tearing down the distributed tree, cancelling our
+//! searches and forgetting the connection requests the server relayed follow, and the state ends
+//! at disconnected. Message and transfer connections to other users, and the transfers on them,
+//! are not part of the session and go on.
 
 use uuid::Uuid;
 
@@ -127,6 +128,8 @@ impl Teardown {
       server.handle().disconnect(message.clone(), error.clone());
     }
     client.tear_down_distributed().await;
+    // responses to our searches reach us through the server's session
+    client.searches().cancel_all();
     // answers to those requests would now be taken for a session that no longer exists
     client.peers().solicitations.clear();
     match &error {

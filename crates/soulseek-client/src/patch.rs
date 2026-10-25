@@ -9,8 +9,9 @@ use crate::resolvers::Resolvers;
 
 /// The options that can change while the client runs. Each field replaces the [`ClientOptions`]
 /// field of the same name, which says what it does; `None` leaves it as it is. The options fixed
-/// for the client's lifetime (concurrency limits, message timeout, starting token, protocol
-/// versions) have no field here.
+/// for the client's lifetime (message timeout, starting token, protocol versions) have no field
+/// here. A lower concurrency limit lets what already runs finish, and starts nothing new until
+/// fewer run than the new limit.
 #[derive(Clone, Debug, Default)]
 pub struct ClientOptionsPatch {
   pub enable_listener: Option<bool>,
@@ -20,8 +21,12 @@ pub struct ClientOptionsPatch {
   pub enable_distributed_network: Option<bool>,
   pub accept_distributed_children: Option<bool>,
   pub distributed_child_limit: Option<u32>,
+  pub maximum_concurrent_searches: Option<u32>,
+  pub maximum_concurrent_uploads: Option<u32>,
   pub maximum_upload_speed: Option<u32>,
+  pub maximum_concurrent_downloads: Option<u32>,
   pub maximum_download_speed: Option<u32>,
+  pub transfer_response_timeout: Option<std::time::Duration>,
   pub deduplicate_search_requests: Option<bool>,
   pub auto_acknowledge_private_messages: Option<bool>,
   pub auto_acknowledge_privilege_notifications: Option<bool>,
@@ -50,8 +55,12 @@ impl ClientOptionsPatch {
       enable_distributed_network,
       accept_distributed_children,
       distributed_child_limit,
+      maximum_concurrent_searches,
+      maximum_concurrent_uploads,
       maximum_upload_speed,
+      maximum_concurrent_downloads,
       maximum_download_speed,
+      transfer_response_timeout,
       deduplicate_search_requests,
       auto_acknowledge_private_messages,
       auto_acknowledge_privilege_notifications,
@@ -80,8 +89,24 @@ impl ClientOptionsPatch {
       accept_distributed_children,
     );
     set(&mut next.distributed_child_limit, distributed_child_limit);
+    set(
+      &mut next.maximum_concurrent_searches,
+      maximum_concurrent_searches,
+    );
+    set(
+      &mut next.maximum_concurrent_uploads,
+      maximum_concurrent_uploads,
+    );
     set(&mut next.maximum_upload_speed, maximum_upload_speed);
+    set(
+      &mut next.maximum_concurrent_downloads,
+      maximum_concurrent_downloads,
+    );
     set(&mut next.maximum_download_speed, maximum_download_speed);
+    set(
+      &mut next.transfer_response_timeout,
+      transfer_response_timeout,
+    );
     set(
       &mut next.deduplicate_search_requests,
       deduplicate_search_requests,

@@ -14,11 +14,10 @@ mod private_rooms;
 mod reconfigure;
 mod request;
 mod rooms;
-mod search;
 mod server;
 mod users;
 
-pub use search::SearchScope;
+pub(crate) use request::{failed, non_blank};
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, Weak};
@@ -36,8 +35,10 @@ use crate::lock;
 use crate::options::ClientOptions;
 use crate::peers::PeerConnections;
 use crate::responder::SearchResponder;
+use crate::search::Searches;
 use crate::state::{ClientState, ServerInfo};
 use crate::token::TokenGenerator;
+use crate::transfers::Transfers;
 use crate::waiter::Waiter;
 
 /// The server the library connects to when the application names none
@@ -79,6 +80,8 @@ struct Inner {
   distributed: DistributedNetwork,
   responder: SearchResponder,
   endpoints: endpoint::Endpoints,
+  transfers: Arc<Transfers>,
+  searches: Searches,
   /// cancelled when the client is disposed or dropped
   lifetime: CancellationToken,
 }
@@ -118,6 +121,8 @@ impl Client {
         options.limits.max_concurrent_search_responses,
       ),
       endpoints: endpoint::Endpoints::new(options.limits.user_endpoint_cache_size),
+      transfers: Arc::new(Transfers::new(&options)),
+      searches: Searches::new(options.maximum_concurrent_searches),
       options: RwLock::new(Arc::new(options)),
       state: watch::Sender::new(ClientState::DISCONNECTED),
       session: Mutex::new(Session::default()),
@@ -132,6 +137,7 @@ impl Client {
     };
     DistributedNetwork::run(client.downgrade(), commands);
     client.start_endpoint_lock_cleanup();
+    client.start_upload_turn_cleanup();
     Ok(client)
   }
 
@@ -227,6 +233,18 @@ impl Client {
     &self.inner.responder
   }
 
+  pub(crate) fn transfers(&self) -> &Arc<Transfers> {
+    &self.inner.transfers
+  }
+
+  pub(crate) fn searches(&self) -> &Searches {
+    &self.inner.searches
+  }
+
+  pub(crate) fn tokens(&self) -> &TokenGenerator {
+    &self.inner.tokens
+  }
+
   pub(crate) fn check_not_disposed(&self) -> Result<(), ClientError> {
     self.inner.check_not_disposed()
   }
@@ -278,9 +296,9 @@ impl Client {
     }
   }
 
-  /// Disconnects and stops the client for good: every wait is cancelled, every connection to
-  /// another user is closed and every task tied to the client stops. Later calls fail with
-  /// `Disposed`.
+  /// Disconnects and stops the client for good: every transfer is cancelled, every wait is
+  /// cancelled, every connection to another user is closed and every task tied to the client
+  /// stops. Later calls fail with `Disposed`.
   pub async fn dispose(&self) {
     self
       .disconnect(
@@ -288,6 +306,7 @@ impl Client {
         Some(ClientError::Disposed),
       )
       .await;
+    self.inner.transfers.cancel_all();
     self.inner.lifetime.cancel();
     self.inner.peers.remove_and_dispose_all();
     self.inner.waiter.cancel_all();
