@@ -9,7 +9,7 @@
 //! A [`Watcher`] reloads when the files change or when asked, keeps the last good values when
 //! a reload fails, and reports what changed grouped by when it takes effect ([`Apply`]). It
 //! also sets and removes runtime [`Overrides`], and writes the files with [`FileEditor`] so
-//! their comments survive.
+//! their comments survive. [`ConfigView`] is all of it in one serialisable document.
 //!
 //! ```
 //! use std::collections::BTreeMap;
@@ -83,6 +83,7 @@ mod overrides;
 mod schema;
 mod source;
 mod tree;
+mod view;
 mod watcher;
 mod write;
 
@@ -99,6 +100,7 @@ pub use loaded::Loaded;
 pub use overrides::{Override, Overrides};
 pub use schema::{Field, REDACTED, Schema};
 pub use source::Source;
+pub use view::{ConfigView, FieldView, FileView, OverrideView};
 pub use watcher::{ByApply, Change, DEBOUNCE, Watch, Watcher, Written};
 pub use write::writability;
 

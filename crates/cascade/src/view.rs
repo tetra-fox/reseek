@@ -1,0 +1,290 @@
+//! Everything a settings page needs about a configuration, as one serialisable document.
+
+use std::collections::BTreeMap;
+
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use serde_json::Value;
+
+use crate::Key;
+use crate::describe::Apply;
+use crate::loaded::Loaded;
+use crate::source::Source;
+use crate::write::writability;
+
+/// The configuration in effect with, for every key, where its value came from and how it can
+/// be changed.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigView {
+  /// the values in effect, secrets shown as `*****`
+  #[cfg_attr(feature = "utoipa", schema(value_type = Object))]
+  pub values: Value,
+  pub fields: BTreeMap<Key, FieldView>,
+  pub files: Vec<FileView>,
+  /// keys that only take effect on restart whose value changed since the start
+  pub pending_restart: Vec<Key>,
+  /// keys that take effect on the next reconnect whose value changed since the last one
+  pub pending_reconnect: Vec<Key>,
+  /// the tool that manages the files, which are then read-only
+  pub managed_by: Option<String>,
+  pub warnings: Vec<String>,
+  /// why the last reload failed, `None` once one succeeds
+  pub load_error: Option<String>,
+  pub overrides: BTreeMap<Key, OverrideView>,
+}
+
+/// One key: where its value came from and how it can be changed.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct FieldView {
+  pub source: Source,
+  /// the file a write of the key goes to: the last file that sets it, else the first file
+  pub file: Option<String>,
+  pub env_var: Option<String>,
+  pub cli_flag: Option<String>,
+  pub apply: Apply,
+  pub secret: bool,
+  /// why the files' value of the key is not the one in effect
+  pub not_applied: Option<String>,
+}
+
+/// One configuration file.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct FileView {
+  pub name: String,
+  pub path: String,
+  /// `None` when the file does not exist
+  pub revision: Option<String>,
+  pub writable: bool,
+  /// why the file can not be written
+  pub read_only_reason: Option<String>,
+}
+
+/// A runtime override in effect.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct OverrideView {
+  /// shown as `*****` for a secret
+  #[cfg_attr(feature = "utoipa", schema(value_type = Object))]
+  pub value: Value,
+  pub expires_at: Option<DateTime<Utc>>,
+  pub set_by: String,
+  pub set_at: DateTime<Utc>,
+}
+
+impl ConfigView {
+  /// The view of `loaded`. Each file's writability is checked now.
+  pub fn new<T>(loaded: &Loaded<T>) -> Self {
+    let schema = loaded.schema();
+    let fields = schema
+      .fields()
+      .iter()
+      .map(|field| {
+        let view = FieldView {
+          source: loaded
+            .sources
+            .get(&field.key)
+            .cloned()
+            .unwrap_or(Source::Default),
+          file: loaded.file_for(&field.key).map(str::to_string),
+          env_var: field.env.clone(),
+          cli_flag: field.cli.clone(),
+          apply: field.apply,
+          secret: field.secret,
+          not_applied: loaded.not_applied.get(&field.key).cloned(),
+        };
+        (field.key.clone(), view)
+      })
+      .collect();
+    let files = loaded
+      .files
+      .iter()
+      .map(|file| {
+        let writable = writability(&file.path, loaded.managed_by.as_deref());
+        FileView {
+          name: file.name.clone(),
+          path: file.path.display().to_string(),
+          revision: file.revision.clone(),
+          writable: writable.is_ok(),
+          read_only_reason: writable.err(),
+        }
+      })
+      .collect();
+    let overrides = loaded
+      .overrides
+      .iter()
+      .map(|(key, o)| {
+        let view = OverrideView {
+          value: schema.redact_value(key, &o.value),
+          expires_at: o.expires_at,
+          set_by: o.set_by.clone(),
+          set_at: o.set_at,
+        };
+        (key.clone(), view)
+      })
+      .collect();
+    Self {
+      values: loaded.redacted(),
+      fields,
+      files,
+      pending_restart: loaded.pending_restart.clone(),
+      pending_reconnect: loaded.pending_reconnect.clone(),
+      managed_by: loaded.managed_by.clone(),
+      warnings: loaded.warnings.clone(),
+      load_error: loaded.load_error.clone(),
+      overrides,
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::testing::{example_layers, pairs, values, watched, write};
+  use serde_json::json;
+
+  #[tokio::test]
+  async fn the_view_says_where_each_value_came_from() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+      dir.path(),
+      "config.toml",
+      "[server]\naddress = \"file\"\npassword = \"hunter2\"\n",
+    );
+    write(dir.path(), "config.d/10-a.toml", "[server]\nport = 3000\n");
+    let watcher = watched(dir.path());
+    watcher
+      .set_overrides(
+        values(&[("server.address", json!("runtime"))]),
+        vec![],
+        "admin",
+        None,
+      )
+      .await
+      .unwrap();
+    let view = serde_json::to_value(ConfigView::new(&watcher.current())).unwrap();
+
+    assert_eq!(view["values"]["server"]["password"], json!("*****"));
+    assert_eq!(view["values"]["server"]["address"], json!("runtime"));
+    assert_eq!(
+      view["values"]["webhooks"],
+      json!([]),
+      "values keep their configuration keys"
+    );
+    assert_eq!(
+      view["fields"]["server.password"],
+      json!({
+        "source": { "layer": "file", "file": "config.toml" },
+        "file": "config.toml",
+        "envVar": "APP_SERVER_PASSWORD",
+        "cliFlag": "--password",
+        "apply": "reconnect",
+        "secret": true,
+        "notApplied": null,
+      })
+    );
+    assert_eq!(
+      view["fields"]["server.port"]["file"],
+      json!("config.d/10-a.toml")
+    );
+    assert_eq!(
+      view["fields"]["server.username"]["source"]["var"],
+      json!("APP_USERNAME")
+    );
+    assert_eq!(
+      view["fields"]["server.address"]["source"]["layer"],
+      json!("runtime")
+    );
+    assert_eq!(
+      view["fields"]["flags.volatile"]["envVar"],
+      json!("APP_VOLATILE")
+    );
+    assert_eq!(view["fields"]["api_keys"]["cliFlag"], json!(null));
+    assert_eq!(
+      view["overrides"]["server.address"]["value"],
+      json!("runtime")
+    );
+    assert_eq!(view["overrides"]["server.address"]["setBy"], json!("admin"));
+    assert_eq!(
+      view["overrides"]["server.address"]["expiresAt"],
+      json!(null)
+    );
+    assert_eq!(view["files"][0]["name"], json!("config.toml"));
+    assert_eq!(view["files"][0]["writable"], json!(true));
+    assert_eq!(view["files"][0]["readOnlyReason"], json!(null));
+    assert_eq!(view["files"][1]["name"], json!("config.d/10-a.toml"));
+    assert!(
+      view["files"][1]["revision"]
+        .as_str()
+        .unwrap()
+        .starts_with("sha256:")
+    );
+    for key in [
+      "pendingRestart",
+      "pendingReconnect",
+      "managedBy",
+      "warnings",
+      "loadError",
+    ] {
+      assert!(view.get(key).is_some(), "{key} is written even when empty");
+    }
+  }
+
+  #[test]
+  fn a_managed_configuration_is_read_only_and_secret_overrides_are_hidden() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut layers = example_layers(dir.path())
+      .managed_by(Some("nixos".into()))
+      .env(pairs(&[("APP_DEBUG", "true")]));
+    let mut loaded = layers.load().unwrap();
+    loaded.overrides.insert(
+      "server.password".into(),
+      crate::Override {
+        value: json!("secret"),
+        declared: json!(null),
+        set_by: "admin".into(),
+        set_at: chrono::Utc::now(),
+        expires_at: None,
+      },
+    );
+    let view = ConfigView::new(&loaded);
+    assert_eq!(view.managed_by.as_deref(), Some("nixos"));
+    assert!(!view.files[0].writable);
+    assert_eq!(
+      view.files[0].read_only_reason.as_deref(),
+      Some("managed by nixos")
+    );
+    assert_eq!(view.overrides["server.password"].value, json!("*****"));
+    assert_eq!(
+      view.fields["debug"].source,
+      Source::Env {
+        var: "APP_DEBUG".into()
+      }
+    );
+  }
+}
+
+#[cfg(all(test, feature = "utoipa"))]
+mod schema_tests {
+  use super::*;
+  use utoipa::PartialSchema;
+
+  #[test]
+  fn the_openapi_schema_has_the_json_names() {
+    let view = serde_json::to_string(&ConfigView::schema()).unwrap();
+    for name in ["pendingRestart", "loadError", "managedBy", "overrides"] {
+      assert!(view.contains(name), "{name}: {view}");
+    }
+    let source = serde_json::to_string(&Source::schema()).unwrap();
+    for name in ["\"layer\"", "\"runtime\"", "expiresAt", "setBy", "setAt"] {
+      assert!(source.contains(name), "{name}: {source}");
+    }
+    assert!(!source.contains("expires_at"), "{source}");
+  }
+}
