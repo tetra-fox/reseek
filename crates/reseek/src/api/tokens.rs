@@ -2,10 +2,10 @@
 //! (only from a login session, never with a token), renaming it or changing its expiry, and
 //! revoking it.
 
+use super::extract::Json;
 use api_types::auth::Role;
 use api_types::events::{Event, TokenChanged};
 use api_types::tokens::{ConfigApiKey, CreateToken, CreatedToken, ListedToken, Token, UpdateToken};
-use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};

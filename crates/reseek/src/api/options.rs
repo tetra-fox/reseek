@@ -5,11 +5,11 @@
 //! needs `remote_configuration`; touching the files, or the authentication options, also needs
 //! someone at the UI rather than a stored API key.
 
+use super::extract::Json;
 use api_types::options::{
   ConfigFile, ConfigView, FilePatch, FileQuery, FileReplace, FileValidate, FileWritten,
   OptionError, OptionsChanged, OptionsDocument, OptionsPatch, Validation,
 };
-use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
