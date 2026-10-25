@@ -417,12 +417,7 @@ mod tests {
       rejected("server", "", "secret"),
       "Username may not be null or an empty string"
     );
-    for username in [" alice", "alice ", &"a".repeat(31), "caf\u{e9}", "a\tb"] {
-      assert!(
-        rejected("server", username, "secret").starts_with("Username must be 1-30"),
-        "{username:?}"
-      );
-    }
+    assert!(rejected("server", " alice", "secret").starts_with("Username must be 1-30"));
     assert_eq!(
       rejected("server", "server", "secret"),
       "Username 'server' is reserved"

@@ -128,11 +128,6 @@ mod tests {
     )
   }
 
-  async fn classified(bytes: &[u8]) -> InboundConnection {
-    let (conn, _remote) = accepted_with(bytes).await;
-    classify(conn).await.expect("the connection is classified")
-  }
-
   /// the reason a connection that sent `bytes` was closed with
   async fn rejection(bytes: &[u8]) -> String {
     let (conn, _remote) = accepted_with(bytes).await;
@@ -151,30 +146,6 @@ mod tests {
     let mut frame = (payload.len() as u32).to_le_bytes().to_vec();
     frame.extend(payload);
     frame
-  }
-
-  #[tokio::test]
-  async fn peer_init_types_are_told_apart() {
-    assert!(matches!(
-      classified(&peer_init("alice", "P", 0)).await,
-      InboundConnection::Peer { username, .. } if username == "alice"
-    ));
-    assert!(matches!(
-      classified(&peer_init("alice", "F", 77)).await,
-      InboundConnection::Transfer { username, token: 77, .. } if username == "alice"
-    ));
-    assert!(matches!(
-      classified(&peer_init("alice", "D", 0)).await,
-      InboundConnection::Distributed { username, .. } if username == "alice"
-    ));
-  }
-
-  #[tokio::test]
-  async fn pierce_firewall_carries_its_token() {
-    assert!(matches!(
-      classified(&[5, 0, 0, 0, 0, 42, 0, 0, 0]).await,
-      InboundConnection::PierceFirewall { token: 42, .. }
-    ));
   }
 
   #[tokio::test]

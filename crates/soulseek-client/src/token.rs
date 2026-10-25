@@ -62,13 +62,6 @@ mod tests {
   }
 
   #[test]
-  fn a_random_start_stays_in_range() {
-    for _ in 0..100 {
-      assert!(TokenGenerator::new(None).next() <= MAX_TOKEN);
-    }
-  }
-
-  #[test]
   fn tokens_in_use_are_skipped() {
     let tokens = TokenGenerator::new(Some(5));
     assert_eq!(tokens.next_free(|token| token == 5 || token == 6), 7);

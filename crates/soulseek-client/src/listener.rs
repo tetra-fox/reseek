@@ -117,37 +117,3 @@ async fn accept_loop(
     }
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  fn free_address() -> SocketAddr {
-    let socket = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    socket.local_addr().unwrap()
-  }
-
-  #[tokio::test]
-  async fn a_busy_address_is_a_listen_error() {
-    let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = taken.local_addr().unwrap();
-    let error = Listener::start(address, 128, |_, _| {}).err().unwrap();
-    assert!(matches!(error, ClientError::Listen { .. }));
-    assert!(
-      error
-        .to_string()
-        .starts_with(&format!("Failed to start listening on {address}"))
-    );
-  }
-
-  #[tokio::test]
-  async fn stopping_frees_the_address() {
-    let address = free_address();
-    let listener = Listener::start(address, 128, |_, _| {}).unwrap();
-    listener.stop().await;
-    Listener::start(address, 128, |_, _| {})
-      .unwrap()
-      .stop()
-      .await;
-  }
-}

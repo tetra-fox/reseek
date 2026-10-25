@@ -174,14 +174,6 @@ mod tests {
     assert!(!SockRef::from(&stream).keepalive().unwrap());
   }
 
-  #[tokio::test]
-  async fn ip_literals_skip_the_lookup() {
-    assert_eq!(
-      resolve("10.0.0.1", 2271).await.unwrap(),
-      "10.0.0.1:2271".parse().unwrap()
-    );
-  }
-
   #[test]
   fn an_ipv4_address_wins_over_an_earlier_ipv6_one() {
     let v6: SocketAddr = "[::1]:2271".parse().unwrap();

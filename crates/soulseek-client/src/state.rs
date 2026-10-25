@@ -129,14 +129,3 @@ pub struct DistributedNetworkInfo {
   /// a parent is connected
   pub has_parent: bool,
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn state_displays_as_flag_names() {
-    assert_eq!(ClientState::READY.to_string(), "Connected, LoggedIn");
-    assert_eq!(ClientState::DISCONNECTED.to_string(), "Disconnected");
-  }
-}

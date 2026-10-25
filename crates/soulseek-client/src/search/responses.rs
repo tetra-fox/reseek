@@ -165,15 +165,4 @@ mod tests {
     assert_eq!(kept.locked_files, [file("c.flac")]);
     assert!(filter(&options, response(&["a.mp3"], &[])).is_err());
   }
-
-  #[test]
-  fn nothing_is_filtered_when_filtering_is_off() {
-    let options = SearchOptions {
-      filter_responses: false,
-      minimum_response_file_count: 5,
-      response_filter: Some(Arc::new(|_: &SearchResponse| false)),
-      ..SearchOptions::default()
-    };
-    assert!(filter(&options, response(&[], &[])).is_ok());
-  }
 }

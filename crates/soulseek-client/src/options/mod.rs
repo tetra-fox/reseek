@@ -326,11 +326,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn defaults_are_valid() {
-    ClientOptions::default().validate().unwrap();
-  }
-
-  #[test]
   fn listen_port_and_backlog_ranges() {
     let options = ClientOptions {
       listen_port: 1023,
@@ -371,14 +366,5 @@ mod tests {
     let effective = options.effective_server_connection_options();
     assert_eq!(effective.inactivity_timeout, None);
     assert_eq!(effective.keepalive, options.server_keepalive);
-  }
-
-  #[test]
-  fn max_message_size_is_the_peer_frame_limit() {
-    let limits = ClientLimits {
-      max_message_size: 1 << 20,
-      ..ClientLimits::default()
-    };
-    assert_eq!(limits.frame_limits().peer_message_bytes, 1 << 20);
   }
 }

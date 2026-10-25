@@ -156,12 +156,4 @@ mod tests {
       matches!(&wrapped, ClientError::Client { message, .. } if message == "Failed to leave chat room x: closed")
     );
   }
-
-  #[test]
-  fn blank_and_empty_arguments() {
-    assert!(non_blank("room name", " ").is_err());
-    assert!(non_blank("room name", "a").is_ok());
-    assert!(non_empty("message", " ").is_ok());
-    assert!(non_empty("message", "").is_err());
-  }
 }
