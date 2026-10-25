@@ -43,6 +43,18 @@ impl File {
     self.attributes.len()
   }
 
+  /// The extension the filename gives: what follows the last `.` of the last path component,
+  /// lower-cased, or empty when there is none. `extension` is often blank or wrong, so this is
+  /// what filters go by.
+  pub fn derived_extension(&self) -> String {
+    let path = self.filename.as_str();
+    let name = path.rsplit_once(['\\', '/']).map_or(path, |(_, name)| name);
+    name
+      .rsplit_once('.')
+      .map(|(_, extension)| extension.to_lowercase())
+      .unwrap_or_default()
+  }
+
   /// the last attribute of this type wins when a list repeats one
   fn attribute(&self, attribute_type: FileAttributeType) -> Option<u32> {
     self
@@ -396,6 +408,24 @@ pub(crate) mod tests {
       }));
     browse_response_rejects_a_stream_that_is_not_zlib: PeerMessage, p().raw(b"plain").frame(5)
       => Err(field("BrowseResponse", "body", FieldError::InvalidZlib));
+  }
+
+  #[test]
+  fn the_extension_comes_from_the_filename() {
+    let file = |name: &str| File {
+      code: 1,
+      filename: name.into(),
+      size: 1,
+      extension: String::new(),
+      attributes: Vec::new(),
+    };
+    assert_eq!(
+      file("@@share\\Album.v2\\01 Intro.FLAC").derived_extension(),
+      "flac"
+    );
+    assert_eq!(file("@@share/album/notes").derived_extension(), "");
+    assert_eq!(file("@@share\\album.v2\\README").derived_extension(), "");
+    assert_eq!(file("track.mp3").derived_extension(), "mp3");
   }
 
   #[test]
