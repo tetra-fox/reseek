@@ -8,7 +8,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use soulseek_proto::SearchQuery;
-use tokio::sync::OwnedSemaphorePermit;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
@@ -16,7 +15,7 @@ use crate::cache::BoundedCache;
 use crate::client::Client;
 use crate::conn::MessageConn;
 use crate::events::{Event, SearchDelivery};
-use crate::limit::Limiter;
+use crate::limit::{Limiter, Permit};
 use crate::log::LogLimiter;
 use crate::resolvers::SearchReply;
 
@@ -81,7 +80,7 @@ impl SearchResponder {
 impl Client {
   /// A permit to answer `username`'s search, or `None` when the bound on searches being answered
   /// at once is reached and the request is to be dropped
-  fn responding(&self, username: &str, token: u32) -> Option<OwnedSemaphorePermit> {
+  fn responding(&self, username: &str, token: u32) -> Option<Permit> {
     let limit = self.options().limits.max_concurrent_search_responses;
     let permit = self.responder().responding.try_acquire(limit);
     if permit.is_none()
