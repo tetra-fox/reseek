@@ -46,6 +46,7 @@ pub struct Loaded<T> {
 }
 
 impl<T> Loaded<T> {
+  /// The schema of the configuration's type.
   pub fn schema(&self) -> &Schema {
     &self.schema
   }

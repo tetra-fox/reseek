@@ -10,12 +10,21 @@ use serde::Serialize;
 pub enum Source {
   /// no layer sets the key
   Default,
-  /// a configuration file, by its name, such as `config.toml` or `config.d/10-shares.toml`
-  File { file: String },
+  /// a configuration file
+  File {
+    /// its name, such as `config.toml` or `config.d/10-shares.toml`
+    file: String,
+  },
   /// an environment variable
-  Env { var: String },
-  /// a command-line flag, in its long form
-  Cli { flag: String },
+  Env {
+    /// its name
+    var: String,
+  },
+  /// a command-line flag
+  Cli {
+    /// its long form, such as `--debug`
+    flag: String,
+  },
   /// an override set at run time
   #[serde(rename_all = "camelCase")]
   Runtime {
@@ -23,6 +32,7 @@ pub enum Source {
     expires_at: Option<DateTime<Utc>>,
     /// who set it
     set_by: String,
+    /// when it was set
     set_at: DateTime<Utc>,
   },
 }

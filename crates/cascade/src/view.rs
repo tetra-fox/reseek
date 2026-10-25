@@ -21,7 +21,9 @@ pub struct ConfigView {
   /// the values in effect, secrets shown as `*****`
   #[cfg_attr(feature = "utoipa", schema(value_type = Object))]
   pub values: Value,
+  /// every leaf key, by key
   pub fields: BTreeMap<Key, FieldView>,
+  /// the configuration files, in the order they apply
   pub files: Vec<FileView>,
   /// keys that only take effect on restart whose value changed since the start
   pub pending_restart: Vec<Key>,
@@ -29,9 +31,11 @@ pub struct ConfigView {
   pub pending_reconnect: Vec<Key>,
   /// the tool that manages the files, which are then read-only
   pub managed_by: Option<String>,
+  /// keys, flags and variables that were ignored, each with where it was found
   pub warnings: Vec<String>,
   /// why the last reload failed, `None` once one succeeds
   pub load_error: Option<String>,
+  /// the runtime overrides in effect, by key
   pub overrides: BTreeMap<Key, OverrideView>,
 }
 
@@ -40,12 +44,17 @@ pub struct ConfigView {
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct FieldView {
+  /// the layer whose value is in effect
   pub source: Source,
   /// the file a write of the key goes to: the last file that sets it, else the first file
   pub file: Option<String>,
+  /// the environment variable that sets the key
   pub env_var: Option<String>,
+  /// the long command-line flag that sets the key
   pub cli_flag: Option<String>,
+  /// when a change to the value takes effect
   pub apply: Apply,
+  /// whether the value is shown as `*****`
   pub secret: bool,
   /// why the files' value of the key is not the one in effect
   pub not_applied: Option<String>,
@@ -56,10 +65,13 @@ pub struct FieldView {
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct FileView {
+  /// as the files were given, e.g. `config.d/10-shares.toml`
   pub name: String,
+  /// where the file is
   pub path: String,
   /// `None` when the file does not exist
   pub revision: Option<String>,
+  /// whether a write to the file can be made
   pub writable: bool,
   /// why the file can not be written
   pub read_only_reason: Option<String>,
@@ -73,8 +85,11 @@ pub struct OverrideView {
   /// shown as `*****` for a secret
   #[cfg_attr(feature = "utoipa", schema(value_type = Object))]
   pub value: Value,
+  /// when it ends on its own, `None` for never
   pub expires_at: Option<DateTime<Utc>>,
+  /// who set it
   pub set_by: String,
+  /// when it was set
   pub set_at: DateTime<Utc>,
 }
 

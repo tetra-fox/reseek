@@ -70,6 +70,8 @@
 //! A field's key is its name, or its `#[serde(rename = "...")]`; `#[serde(skip)]` fields are
 //! not part of the configuration.
 
+#![warn(missing_docs)]
+
 // the derive's generated code names `::cascade`, which this makes work inside the crate too
 extern crate self as cascade;
 

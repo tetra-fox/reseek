@@ -18,6 +18,7 @@ pub(crate) struct Entry {
 pub struct LoadedFile {
   /// as the files were given, e.g. `config.toml` or `config.d/10-shares.toml`
   pub name: String,
+  /// where the file is
   pub path: PathBuf,
   /// a hash of the contents, `None` when the file does not exist
   pub revision: Option<String>,

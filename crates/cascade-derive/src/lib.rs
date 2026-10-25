@@ -2,6 +2,8 @@
 //! flags, apply classes, secrecy and docs) so `cascade` can build its schema. Use it through the
 //! `cascade` crate, which re-exports it.
 
+#![warn(missing_docs)]
+
 mod attrs;
 
 use proc_macro2::{Span, TokenStream};
