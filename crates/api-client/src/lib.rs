@@ -322,7 +322,7 @@ mod tests {
     let dots = Route::new("users").user("..").then("browse");
     assert_eq!(dots.path, "/users/_/browse");
     assert_eq!(dots.query, ["username=.."]);
-    let room = Route::new("rooms/joined").room("Café").then("users");
+    let room = Route::new("rooms/joined").room("Caf\u{e9}").then("users");
     assert_eq!(room.path, "/rooms/joined/Caf%C3%A9/users");
   }
 }
