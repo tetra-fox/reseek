@@ -219,12 +219,19 @@ pub struct StoredRoom {
   pub joined: bool,
 }
 
-/// The name of a room to join, the body of `POST /rooms/joined`, written as a bare JSON
-/// string: 1 to 24 printable ASCII characters, no space at either end and no two spaces in a
-/// row.
+/// A room to join, the body of `POST /rooms/joined`. Joining a room that does not exist creates
+/// it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[schema(example = "indie")]
-pub struct RoomName(pub String);
+#[serde(rename_all = "camelCase")]
+pub struct JoinRoom {
+  /// the room's name: 1 to 24 printable ASCII characters, no space at either end and no two
+  /// spaces in a row
+  #[schema(example = "indie")]
+  pub name: String,
+  /// create the room as a private one when it does not exist yet; ignored for a room that does
+  #[serde(default)]
+  pub private: bool,
+}
 
 /// Our ticker in a room, the body of `POST /rooms/joined/{roomName}/ticker`, written as a
 /// bare JSON string; an empty string clears it.
