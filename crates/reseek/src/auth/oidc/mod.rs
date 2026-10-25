@@ -12,13 +12,19 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use openidconnect::core::{CoreClient, CoreJsonWebKey};
+use openidconnect::core::{
+  CoreAuthDisplay, CoreAuthPrompt, CoreErrorResponseType, CoreGenderClaim, CoreJsonWebKey,
+  CoreJweContentEncryptionAlgorithm, CoreJwsSigningAlgorithm, CoreRevocableToken,
+  CoreRevocationErrorResponse, CoreTokenIntrospectionResponse, CoreTokenType,
+};
 use openidconnect::{
-  ClientId, ClientSecret, EndpointMaybeSet, EndpointNotSet, EndpointSet, IssuerUrl, JsonWebKeySet,
-  ProviderMetadataWithLogout, RedirectUrl,
+  AdditionalClaims, ClientId, ClientSecret, EmptyExtraTokenFields, EndpointMaybeSet,
+  EndpointNotSet, EndpointSet, IdToken, IdTokenFields, IssuerUrl, JsonWebKeySet,
+  ProviderMetadataWithLogout, RedirectUrl, StandardErrorResponse, StandardTokenResponse,
 };
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::pem::PemObject;
+use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
@@ -29,8 +35,46 @@ use crate::config::{Oidc, Options};
 /// A provider's discovery document with its signing keys.
 pub type Metadata = ProviderMetadataWithLogout;
 
+/// The claims of an ID token or a userinfo answer besides the standard ones, kept whole: the
+/// groups, the provider's session id and any claim the configuration names.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ExtraClaims {
+  /// every such claim by name
+  #[serde(flatten)]
+  pub claims: HashMap<String, serde_json::Value>,
+}
+
+impl AdditionalClaims for ExtraClaims {}
+
+/// An ID token with every claim it carries.
+pub type OidcIdToken =
+  IdToken<ExtraClaims, CoreGenderClaim, CoreJweContentEncryptionAlgorithm, CoreJwsSigningAlgorithm>;
+
+/// The token endpoint's answer, its ID token read with every claim.
+type TokenAnswer = StandardTokenResponse<
+  IdTokenFields<
+    ExtraClaims,
+    EmptyExtraTokenFields,
+    CoreGenderClaim,
+    CoreJweContentEncryptionAlgorithm,
+    CoreJwsSigningAlgorithm,
+  >,
+  CoreTokenType,
+>;
+
 /// A client of one provider, with every endpoint discovery can name.
-pub type OidcClient = CoreClient<
+pub type OidcClient = openidconnect::Client<
+  ExtraClaims,
+  CoreAuthDisplay,
+  CoreGenderClaim,
+  CoreJweContentEncryptionAlgorithm,
+  CoreJsonWebKey,
+  CoreAuthPrompt,
+  StandardErrorResponse<CoreErrorResponseType>,
+  TokenAnswer,
+  CoreTokenIntrospectionResponse,
+  CoreRevocableToken,
+  CoreRevocationErrorResponse,
   EndpointSet,
   EndpointNotSet,
   EndpointNotSet,
@@ -192,7 +236,7 @@ impl Provider {
         methods.contains(&openidconnect::core::CoreClientAuthMethod::ClientSecretBasic)
       });
     let client =
-      CoreClient::from_provider_metadata(metadata, client_id, secret).set_redirect_uri(redirect);
+      OidcClient::from_provider_metadata(metadata, client_id, secret).set_redirect_uri(redirect);
     if basic {
       client
     } else {

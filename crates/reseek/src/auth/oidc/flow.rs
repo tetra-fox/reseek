@@ -8,9 +8,9 @@ use api_types::auth::Role;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::Utc;
-use openidconnect::core::{CoreAuthenticationFlow, CoreJwsSigningAlgorithm};
+use openidconnect::core::{CoreAuthenticationFlow, CoreGenderClaim, CoreJwsSigningAlgorithm};
 use openidconnect::{
-  AuthorizationCode, ClaimsVerificationError, CsrfToken, IdToken, Nonce, OAuth2TokenResponse,
+  AuthorizationCode, ClaimsVerificationError, CsrfToken, IdTokenClaims, Nonce, OAuth2TokenResponse,
   PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, SignatureVerificationError,
   TokenResponse,
 };
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
-use super::{LEEWAY, Metadata, Provider, error_chain};
+use super::{ExtraClaims, LEEWAY, Metadata, OidcClient, OidcIdToken, Provider, error_chain};
 use crate::auth::roles::{Mapping, claim_strings};
 use crate::auth::secret::Secret;
 use crate::crypto;
@@ -151,19 +151,20 @@ pub async fn exchange(
     },
     other => other,
   };
-  let subject = verified.map_err(|e| format!("the ID token is not valid: {e}"))?;
-  let text = id_token.to_string();
-  let mut claims = payload(&text).ok_or_else(|| "the ID token's claims do not read".to_string())?;
+  let verified = verified.map_err(|e| format!("the ID token is not valid: {e}"))?;
+  let subject = verified.subject().clone();
+  // the verified claims as one object, standard and extra alike, so any claim can be named
+  let mut claims = serde_json::to_value(&verified).map_err(|e| e.to_string())?;
   let claim = &provider.options.role_mapping.claim;
   if claim_strings(&claims, claim).is_empty() && metadata.userinfo_endpoint().is_some() {
-    match user_info(
-      provider,
-      &metadata,
-      response.access_token().secret(),
-      &subject,
-    )
-    .await
-    {
+    let answer = match client.user_info(response.access_token().clone(), Some(subject.clone())) {
+      Ok(request) => request
+        .request_async::<ExtraClaims, _, CoreGenderClaim>(provider.http())
+        .await
+        .map_err(|e| error_chain(&e)),
+      Err(e) => Err(error_chain(&e)),
+    };
+    match answer.and_then(|info| serde_json::to_value(&info).map_err(|e| e.to_string())) {
       Ok(Value::Object(more)) => {
         if let Value::Object(claims) = &mut claims {
           for (key, value) in more {
@@ -184,22 +185,17 @@ pub async fn exchange(
       .and_then(Value::as_str)
       .map(str::to_string),
     claims,
-    subject,
-    id_token: text,
+    subject: subject.to_string(),
+    id_token: id_token.to_string(),
   })
 }
 
-/// The subject of `id_token` when it is valid for `client`, signed with RS256 or ES256.
+/// The claims of `id_token` when it is valid for `client`, signed with RS256 or ES256.
 fn verify(
-  client: &super::OidcClient,
-  id_token: &IdToken<
-    openidconnect::EmptyAdditionalClaims,
-    openidconnect::core::CoreGenderClaim,
-    openidconnect::core::CoreJweContentEncryptionAlgorithm,
-    CoreJwsSigningAlgorithm,
-  >,
+  client: &OidcClient,
+  id_token: &OidcIdToken,
   nonce: &Nonce,
-) -> Result<String, ClaimsVerificationError> {
+) -> Result<IdTokenClaims<ExtraClaims, CoreGenderClaim>, ClaimsVerificationError> {
   let verifier = client
     .id_token_verifier()
     .set_allowed_algs([
@@ -214,44 +210,7 @@ fn verify(
         Err(format!("issued in the future, at {issued}"))
       }
     });
-  id_token
-    .claims(&verifier, nonce)
-    .map(|claims| claims.subject().to_string())
-}
-
-/// The claims of a signed JWT whose signature was checked already.
-pub fn payload(jwt: &str) -> Option<Value> {
-  let encoded = jwt.split('.').nth(1)?;
-  serde_json::from_slice(&URL_SAFE_NO_PAD.decode(encoded).ok()?).ok()
-}
-
-/// The claims the userinfo endpoint gives for `access_token`, which must name `subject`.
-async fn user_info(
-  provider: &Provider,
-  metadata: &Metadata,
-  access_token: &str,
-  subject: &str,
-) -> Result<Value, String> {
-  let endpoint = metadata
-    .userinfo_endpoint()
-    .ok_or_else(|| "no userinfo endpoint".to_string())?;
-  let response = provider
-    .http()
-    .get(endpoint.url().clone())
-    .bearer_auth(access_token)
-    .header("accept", "application/json")
-    .send()
-    .await
-    .map_err(|e| error_chain(&e))?;
-  if !response.status().is_success() {
-    return Err(format!("userinfo answered {}", response.status()));
-  }
-  let body = response.bytes().await.map_err(|e| error_chain(&e))?;
-  let claims: Value = serde_json::from_slice(&body).map_err(|e| e.to_string())?;
-  if claims.get("sub").and_then(Value::as_str) != Some(subject) {
-    return Err("userinfo names another subject".to_string());
-  }
-  Ok(claims)
+  id_token.claims(&verifier, nonce).cloned()
 }
 
 /// Who signed in, once the provider's rules let them in.

@@ -48,6 +48,8 @@ struct Shared {
   key: CoreRsaPrivateSigningKey,
   codes: Mutex<HashMap<String, Grant>>,
   userinfo: Mutex<Value>,
+  /// userinfo answers as a signed JWT rather than JSON
+  signed_userinfo: Mutex<bool>,
 }
 
 impl Drop for Issuer {
@@ -73,6 +75,7 @@ impl Issuer {
       key,
       codes: Mutex::new(HashMap::new()),
       userinfo: Mutex::new(json!({})),
+      signed_userinfo: Mutex::new(false),
     });
     let router = Router::new()
       .route("/.well-known/openid-configuration", get(discovery))
@@ -100,9 +103,16 @@ impl Issuer {
       .insert(code.to_string(), grant);
   }
 
-  /// Sets what userinfo returns.
+  /// Sets what userinfo returns, as JSON.
   pub fn set_userinfo(&self, claims: Value) {
     *self.shared.userinfo.lock().unwrap() = claims;
+    *self.shared.signed_userinfo.lock().unwrap() = false;
+  }
+
+  /// Sets what userinfo returns, as a JWT signed by the provider for the daemon.
+  pub fn set_signed_userinfo(&self, claims: Value) {
+    *self.shared.userinfo.lock().unwrap() = claims;
+    *self.shared.signed_userinfo.lock().unwrap() = true;
   }
 
   /// `claims` signed as a JWT with the provider's key.
@@ -193,5 +203,15 @@ async fn userinfo(State(shared): State<Arc<Shared>>, headers: HeaderMap) -> Resp
   if headers.get("authorization").and_then(|v| v.to_str().ok()) != Some("Bearer access") {
     return StatusCode::UNAUTHORIZED.into_response();
   }
-  Json(shared.userinfo.lock().unwrap().clone()).into_response()
+  let mut claims = shared.userinfo.lock().unwrap().clone();
+  if !*shared.signed_userinfo.lock().unwrap() {
+    return Json(claims).into_response();
+  }
+  claims["iss"] = json!(shared.url);
+  claims["aud"] = json!(CLIENT_ID);
+  (
+    [(axum::http::header::CONTENT_TYPE, "application/jwt")],
+    shared.sign(&claims),
+  )
+    .into_response()
 }

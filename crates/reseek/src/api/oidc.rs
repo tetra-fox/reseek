@@ -710,6 +710,34 @@ mod tests {
     );
     let cookie = set_cookie(&back(&app, &started, "c2").await.headers, "reseek_session").unwrap();
     assert_eq!(me(&app, &cookie).await.json()["role"], "Administrator");
+
+    issuer.set_signed_userinfo(json!({ "sub": "u4", "groups": ["users"] }));
+    let started = start(&app, "/").await;
+    let nonce = started.params["nonce"].clone();
+    grant(
+      &issuer,
+      &started,
+      "c3",
+      json!({ "sub": "u4", "nonce": nonce }),
+    );
+    let signed = set_cookie(&back(&app, &started, "c3").await.headers, "reseek_session")
+      .expect("a signed userinfo answer is read");
+    assert_eq!(me(&app, &signed).await.json()["role"], "ReadWrite");
+
+    issuer.set_userinfo(json!({ "sub": "someone else", "groups": ["admins"] }));
+    let started = start(&app, "/").await;
+    let nonce = started.params["nonce"].clone();
+    grant(
+      &issuer,
+      &started,
+      "c4",
+      json!({ "sub": "u5", "nonce": nonce }),
+    );
+    assert_eq!(
+      back(&app, &started, "c4").await.status,
+      403,
+      "userinfo about another subject is not used, so the deny default applies"
+    );
   }
 
   #[tokio::test]
