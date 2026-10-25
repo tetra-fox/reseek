@@ -166,8 +166,6 @@ mod tests {
     let mut changes = watcher.changes();
     let cancel = CancellationToken::new();
     watcher.start(Watch::Events, cancel.clone());
-    // let the watch be set up
-    tokio::time::sleep(Duration::from_millis(100)).await;
 
     for port in 2001..=2005 {
       fs::write(&path, format!("[server]\nport = {port}\n")).unwrap();
@@ -207,7 +205,6 @@ mod tests {
     let mut changes = watcher.changes();
     let cancel = CancellationToken::new();
     watcher.start(Watch::Poll(Duration::from_millis(50)), cancel.clone());
-    tokio::time::sleep(Duration::from_millis(100)).await;
     fs::write(
       &path,
       "[server]\nport = 2001\n# longer, so the size changes too\n",
@@ -227,7 +224,6 @@ mod tests {
     let mut changes = watcher.changes();
     let cancel = CancellationToken::new();
     watcher.start(Watch::Events, cancel.clone());
-    tokio::time::sleep(Duration::from_millis(100)).await;
     watcher
       .patch_file(
         "config.toml",

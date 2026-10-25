@@ -16,7 +16,7 @@ use tokio::sync::{Notify, broadcast, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 
-use crate::files::LoadedFile;
+use crate::files::{Entry, LoadedFile};
 use crate::layers::{Checked, Failure, Layers};
 use crate::loaded::Loaded;
 use crate::{Error, Key, Root, lock};
@@ -88,6 +88,8 @@ impl<T> Clone for Watcher<T> {
 }
 
 struct Shared<T> {
+  /// the files and patterns the configuration is read from, which do not change
+  entries: Vec<Entry>,
   /// only locked on blocking threads
   state: Mutex<State<T>>,
   current: watch::Sender<Arc<Loaded<T>>>,
@@ -137,6 +139,7 @@ impl<T: Root> Watcher<T> {
       };
       info!(file = file.name, path = %file.path.display(), state, "configuration file");
     }
+    let entries = layers.entries().to_vec();
     let state = State {
       startup: loaded.tree.clone(),
       reconnected: loaded.tree.clone(),
@@ -145,6 +148,7 @@ impl<T: Root> Watcher<T> {
     };
     Ok(Self {
       shared: Arc::new(Shared {
+        entries,
         state: Mutex::new(state),
         current: watch::Sender::new(Arc::new(loaded)),
         changes: broadcast::Sender::new(CHANGES),
@@ -156,10 +160,25 @@ impl<T: Root> Watcher<T> {
   /// Starts the task that reloads on file changes (as `watch` says) and ends runtime
   /// overrides when they expire. It stops when `cancel` is cancelled. Call it once.
   pub fn start(&self, watch: Watch, cancel: CancellationToken) {
+    let _span = info_span!("config_watcher").entered();
+    let events = Arc::new(Notify::new());
+    let poll = match watch {
+      Watch::Events => Some(None),
+      Watch::Poll(interval) => Some(Some(interval)),
+      Watch::Off => None,
+    };
+    // watched before this returns, so no change made after it is missed
+    let files = poll.and_then(|poll| {
+      match FileEvents::new(poll, self.shared.entries.clone(), events.clone()) {
+        Ok(files) => Some(files),
+        Err(e) => {
+          warn!(error = %e, "configuration files are not watched; reload with a signal or the API");
+          None
+        }
+      }
+    });
     let this = self.clone();
-    tokio::spawn(
-      async move { this.run(watch, cancel).await }.instrument(info_span!("config_watcher")),
-    );
+    tokio::spawn(this.run(files, events, cancel).in_current_span());
   }
 
   /// The configuration in effect.
@@ -270,27 +289,12 @@ impl<T: Root> Watcher<T> {
       .await
   }
 
-  async fn run(self, watch: Watch, cancel: CancellationToken) {
-    let events = Arc::new(Notify::new());
-    let entries = self
-      .blocking(|state, _| state.layers.entries().to_vec())
-      .await;
-    let poll = match watch {
-      Watch::Events => Some(None),
-      Watch::Poll(interval) => Some(Some(interval)),
-      Watch::Off => None,
-    };
-    let mut files = match (poll, entries) {
-      // the entries only fail to come while the runtime shuts down
-      (None, _) | (_, Err(_)) => None,
-      (Some(poll), Ok(entries)) => match FileEvents::new(poll, entries, events.clone()) {
-        Ok(files) => Some(files),
-        Err(e) => {
-          warn!(error = %e, "configuration files are not watched; reload with a signal or the API");
-          None
-        }
-      },
-    };
+  async fn run(
+    self,
+    mut files: Option<FileEvents>,
+    events: Arc<Notify>,
+    cancel: CancellationToken,
+  ) {
     loop {
       let next_expiry = self
         .current()
