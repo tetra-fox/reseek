@@ -13,6 +13,7 @@ use soulseek_proto::{Limits, PROTOCOL_MAJOR_VERSION, PROTOCOL_MINOR_VERSION};
 
 use crate::error::ClientError;
 use crate::resolvers::Resolvers;
+use crate::token::MAX_TOKEN;
 
 /// Everything that configures a [`Client`](crate::Client)
 #[derive(Clone, Debug)]
@@ -50,8 +51,10 @@ pub struct ClientOptions {
   pub auto_acknowledge_privilege_notifications: bool,
   /// let other users add us to their private rooms
   pub accept_private_room_invitations: bool,
-  /// the first token handed out; fixed for the client's lifetime
-  pub starting_token: u32,
+  /// the first token handed out, at most [`MAX_TOKEN`](crate::MAX_TOKEN); `None` starts at a
+  /// random one, so a restarted client does not reuse tokens peers may still hold. Fixed for the
+  /// client's lifetime.
+  pub starting_token: Option<u32>,
   /// the server connection. Its inactivity timeout is always off (the server can be silent for
   /// a long time) and its keep-alive is always `server_keepalive`.
   pub server_connection_options: ConnectionOptions,
@@ -99,7 +102,7 @@ impl Default for ClientOptions {
       auto_acknowledge_private_messages: true,
       auto_acknowledge_privilege_notifications: true,
       accept_private_room_invitations: false,
-      starting_token: 0,
+      starting_token: None,
       server_connection_options: ConnectionOptions {
         inactivity_timeout: None,
         ..ConnectionOptions::default()
@@ -157,6 +160,14 @@ impl ClientOptions {
       "maximum_concurrent_downloads",
       self.maximum_concurrent_downloads,
     )?;
+    if let Some(start) = self.starting_token
+      && start > MAX_TOKEN
+    {
+      return Err(invalid(
+        "starting_token",
+        format!("Must be at most {MAX_TOKEN} (specified: {start})"),
+      ));
+    }
     if self.message_timeout.is_zero() {
       return Err(invalid("message_timeout", "Must be greater than zero"));
     }

@@ -48,6 +48,7 @@ pub use resolvers::{
   UserInfoResolver,
 };
 pub use state::{ClientState, DistributedNetworkInfo, ServerInfo};
+pub use token::MAX_TOKEN;
 pub use waiter::{Scope, WaitKey, Waiter};
 
 /// locks a mutex whose critical sections cannot leave its data half-updated
