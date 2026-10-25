@@ -202,8 +202,7 @@ pub async fn identify(
               groups: serde_json::to_string(&forwarded.groups).ok(),
               role,
               origin: Origin::Proxy,
-              ttl: chrono::Duration::from_std(options.web.authentication.session_ttl)
-                .unwrap_or(chrono::Duration::MAX),
+              ttl: sessions::lifetime(options.web.authentication.session_ttl),
               idp_sid: None,
               id_token: None,
               ip: Some(ip.to_string()),
@@ -274,8 +273,7 @@ async fn session_of(
 
 /// How long a session may go unused.
 pub fn idle(app: &AppState) -> chrono::Duration {
-  chrono::Duration::from_std(app.config.current().values.web.authentication.session_idle)
-    .unwrap_or(chrono::Duration::MAX)
+  sessions::lifetime(app.config.current().values.web.authentication.session_idle)
 }
 
 /// Makes a session for someone who just signed in and raises `SessionCreated`.

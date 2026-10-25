@@ -21,8 +21,10 @@ use utoipa_axum::routes;
 
 use super::error::ApiError;
 use crate::app::AppState;
+use crate::auth::sessions::lifetime;
 use crate::auth::{Administrator, Authorized, require_interactive};
 use crate::config::{Options, redact, view};
+use crate::db::shifted;
 
 /// The keys an API key or token may not change.
 const AUTHENTICATION: &str = "web.authentication";
@@ -106,9 +108,7 @@ async fn patch_options(
     Some(text) => {
       let duration = humantime::parse_duration(text)
         .map_err(|e| ApiError::invalid("expiresIn is not a duration", e.to_string()))?;
-      let duration = chrono::Duration::from_std(duration)
-        .map_err(|e| ApiError::invalid("expiresIn is too long", e.to_string()))?;
-      Some(Utc::now() + duration)
+      Some(shifted(Utc::now(), lifetime(duration)))
     }
     None => None,
   };

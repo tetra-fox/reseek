@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, SecondsFormat, Utc};
 use rusqlite::trace::{TraceEvent, TraceEventCodes};
 use rusqlite::{Connection, OpenFlags};
 use tokio::sync::Semaphore;
@@ -297,6 +297,33 @@ pub fn timestamp(time: DateTime<Utc>) -> String {
   time.to_rfc3339_opts(SecondsFormat::Micros, true)
 }
 
+/// `start` moved by `by`, held between the years 0 and 9999, the times whose stored text sorts
+/// in time order; a duration too long for the calendar ends at the bound.
+pub fn shifted(start: DateTime<Utc>, by: chrono::Duration) -> DateTime<Utc> {
+  let earliest = NaiveDate::from_ymd_opt(0, 1, 1).expect("year 0 is a date");
+  let latest = NaiveDate::from_ymd_opt(9999, 12, 31).expect("year 9999 is a date");
+  let bound = |date: NaiveDate, time| date.and_time(time).and_utc();
+  start
+    .checked_add_signed(by)
+    .unwrap_or_else(|| {
+      if by < chrono::Duration::zero() {
+        bound(earliest, NaiveTime::MIN)
+      } else {
+        bound(
+          latest,
+          NaiveTime::from_hms_opt(23, 59, 59).expect("a time of day"),
+        )
+      }
+    })
+    .clamp(
+      bound(earliest, NaiveTime::MIN),
+      bound(
+        latest,
+        NaiveTime::from_hms_opt(23, 59, 59).expect("a time of day"),
+      ),
+    )
+}
+
 /// A time the databases stored, read back.
 pub fn read_timestamp(text: &str) -> rusqlite::Result<DateTime<Utc>> {
   DateTime::parse_from_rfc3339(text)
@@ -304,4 +331,29 @@ pub fn read_timestamp(text: &str) -> rusqlite::Result<DateTime<Utc>> {
     .map_err(|e| {
       rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, e.into())
     })
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn shifted_times_stay_within_the_years_stored_text_sorts() {
+    let now: DateTime<Utc> = "2026-10-25T12:00:00Z".parse().unwrap();
+    assert_eq!(
+      shifted(now, chrono::Duration::hours(1)),
+      "2026-10-25T13:00:00Z".parse::<DateTime<Utc>>().unwrap()
+    );
+    let forever = shifted(now, chrono::Duration::MAX);
+    assert_eq!(timestamp(forever), "9999-12-31T23:59:59.000000Z");
+    assert!(timestamp(forever) > timestamp(now));
+    let long_ago = shifted(now, -chrono::Duration::MAX);
+    assert_eq!(timestamp(long_ago), "0000-01-01T00:00:00.000000Z");
+    assert!(timestamp(long_ago) < timestamp(now));
+    let far = shifted(now, chrono::Duration::days(365 * 100_000));
+    assert_eq!(
+      far, forever,
+      "past the calendar's text form, not past chrono's range"
+    );
+  }
 }

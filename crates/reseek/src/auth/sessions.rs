@@ -12,7 +12,7 @@ use rusqlite::{OptionalExtension, Row, params};
 use super::secret::Secret;
 use super::store::StoredRole;
 use crate::crypto;
-use crate::db::{Database, DbError, read_timestamp, timestamp};
+use crate::db::{Database, DbError, read_timestamp, shifted, timestamp};
 
 /// How often a session's last use is written at most.
 pub const SEEN_WRITES: Duration = Duration::minutes(5);
@@ -80,7 +80,7 @@ impl Origin {
 /// A session as stored.
 #[derive(Clone)]
 pub struct StoredSession {
-  /// its id, the secret part of the cookie
+  /// its id, which the cookie carries with its HMAC
   pub id: String,
   /// who it is for
   pub subject: String,
@@ -124,7 +124,7 @@ impl std::fmt::Debug for StoredSession {
 impl StoredSession {
   /// Whether it may still be used at `now` given the idle limit `idle`.
   pub fn active(&self, now: DateTime<Utc>, idle: Duration) -> bool {
-    self.revoked_at.is_none() && self.expires_at > now && self.last_seen_at + idle > now
+    self.revoked_at.is_none() && self.expires_at > now && shifted(self.last_seen_at, idle) > now
   }
 
   /// The principal its requests act as.
@@ -152,6 +152,11 @@ impl StoredSession {
       current,
     }
   }
+}
+
+/// A configured lifetime as a time span; one too long for the span lasts for ever.
+pub fn lifetime(configured: std::time::Duration) -> Duration {
+  Duration::from_std(configured).unwrap_or(Duration::MAX)
 }
 
 /// The cookie value for the session `id`: the id and its HMAC.
@@ -234,7 +239,7 @@ pub async fn create(db: &Database, new: NewSession) -> Result<StoredSession, DbE
     idp_sid: new.idp_sid,
     id_token: new.id_token,
     created_at: now,
-    expires_at: now + new.ttl,
+    expires_at: shifted(now, new.ttl),
     last_seen_at: now,
     ip: new.ip,
     user_agent: new.user_agent,
@@ -401,9 +406,10 @@ pub async fn lapsed(db: &Database, idle: Duration) -> Result<Vec<String>, DbErro
        <= ?2)",
     )?;
     statement
-      .query_map(params![timestamp(now), timestamp(now - idle)], |row| {
-        row.get(0)
-      })?
+      .query_map(
+        params![timestamp(now), timestamp(shifted(now, -idle))],
+        |row| row.get(0),
+      )?
       .collect::<rusqlite::Result<Vec<String>>>()
   })
   .await

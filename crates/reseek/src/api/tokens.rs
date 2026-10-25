@@ -18,9 +18,11 @@ use uuid::Uuid;
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::auth::keys::PRIMARY;
+use crate::auth::sessions::lifetime;
 use crate::auth::tokens::{self, NewToken, StoredToken};
 use crate::auth::{AnyRole, Authorized, ReadWrite, require_interactive};
 use crate::config::cidr::parse_list;
+use crate::db::shifted;
 
 /// The most characters a token's name has.
 const NAME_CHARS: usize = 64;
@@ -105,9 +107,7 @@ async fn create(
     (Some(text), None) => {
       let lasts = humantime::parse_duration(text)
         .map_err(|e| ApiError::invalid("expiresIn is not a duration", e.to_string()))?;
-      let lasts = chrono::Duration::from_std(lasts)
-        .map_err(|e| ApiError::invalid("expiresIn is too long", e.to_string()))?;
-      Some(Utc::now() + lasts)
+      Some(shifted(Utc::now(), lifetime(lasts)))
     }
     (None, at) => at,
   };

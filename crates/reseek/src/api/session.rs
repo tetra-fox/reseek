@@ -129,8 +129,7 @@ async fn login(
       groups: None,
       role: account.role,
       origin: Origin::Local,
-      ttl: chrono::Duration::from_std(options.web.authentication.session_ttl)
-        .unwrap_or(chrono::Duration::MAX),
+      ttl: sessions::lifetime(options.web.authentication.session_ttl),
       idp_sid: None,
       id_token: None,
       ip: Some(client.ip.to_string()),

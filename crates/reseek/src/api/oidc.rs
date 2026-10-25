@@ -199,8 +199,7 @@ async fn callback(
       groups: serde_json::to_string(&admitted.groups).ok(),
       role: admitted.role,
       origin: Origin::Oidc(name.clone()),
-      ttl: chrono::Duration::from_std(provider.options.session_ttl)
-        .unwrap_or(chrono::Duration::MAX),
+      ttl: sessions::lifetime(provider.options.session_ttl),
       idp_sid: claims.sid,
       id_token: Some(app.auth.secret.seal(claims.id_token.as_bytes())),
       ip: Some(client.ip.to_string()),
