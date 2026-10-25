@@ -97,7 +97,7 @@ pub use describe::{Apply, Cascade, Kind, Shape};
 pub use edit::FileEditor;
 pub use error::{Error, Invalid};
 pub use files::LoadedFile;
-pub use layers::{Checked, LIST_SEPARATOR, Layers};
+pub use layers::{Checked, Layers};
 pub use loaded::{Loaded, NotApplied};
 pub use overrides::{Override, Overrides};
 pub use schema::{Field, REDACTED, Schema};

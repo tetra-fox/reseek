@@ -27,7 +27,7 @@ use crate::{Error, Invalid, Key, Root, tree};
 pub(crate) const SECRET_VALUE: &str = "the value does not fit the key (not shown, it is secret)";
 
 /// What splits a list given in one environment variable. Elements are kept as written.
-pub const LIST_SEPARATOR: char = ';';
+pub(crate) const LIST_SEPARATOR: char = ';';
 
 /// What a file's text would load as.
 #[derive(Debug)]
@@ -121,7 +121,8 @@ impl<T: Root> Layers<T> {
   }
 
   /// Environment variables, such as `std::env::vars_os()`, read once: reloads see the same
-  /// values. Only variables a field names are used.
+  /// values. Only variables a field names are used. A list is one variable with its elements
+  /// split by `;` and kept as written; an empty variable is an empty list.
   pub fn env<K: Into<OsString>, V: Into<OsString>>(
     mut self,
     vars: impl IntoIterator<Item = (K, V)>,
