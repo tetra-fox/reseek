@@ -11,6 +11,7 @@ use tracing::debug;
 use super::{LIST_SEPARATOR, Layers, SECRET_VALUE};
 use crate::describe::Kind;
 use crate::files::{self, LoadedFile};
+use crate::schema::Field;
 use crate::source::Source;
 use crate::{Error, Key, Root, tree};
 
@@ -137,7 +138,9 @@ impl<T: Root> Layers<T> {
         by: name.to_string(),
         message,
       };
-      if self.schema.field(&key).is_some() {
+      if let Some(field) = self.schema.field(&key) {
+        let mut v = v;
+        drop_unknown_in_entries(field, &mut v, &key, name, &mut declared.warnings);
         let value = tree::from_toml(v).map_err(shape_error)?;
         tree::set(&mut declared.tree, &key, value);
         declared.sources.insert(
@@ -199,6 +202,87 @@ impl<T: Root> Layers<T> {
       tree::set(&mut declared.tree, key, Value::Array(values));
     }
     Ok(())
+  }
+}
+
+/// Takes out of each entry of a user-keyed map or list of tables the keys its type does not
+/// have, with a warning for each, as the files' other unknown keys are. `shown` is where the
+/// value is, for the warning.
+fn drop_unknown_in_entries(
+  field: &Field,
+  value: &mut toml::Value,
+  shown: &str,
+  file: &str,
+  warnings: &mut Vec<String>,
+) {
+  if field.entries.is_empty() {
+    return;
+  }
+  match value {
+    toml::Value::Table(entries) if field.kind == Kind::Map => {
+      for (name, entry) in entries.iter_mut() {
+        if let toml::Value::Table(entry) = entry {
+          drop_unknown(
+            &field.entries,
+            entry,
+            "",
+            &format!("{shown}.{name}"),
+            file,
+            warnings,
+          );
+        }
+      }
+    }
+    toml::Value::Array(items) => {
+      for (i, item) in items.iter_mut().enumerate() {
+        if let toml::Value::Table(item) = item {
+          drop_unknown(
+            &field.entries,
+            item,
+            "",
+            &format!("{shown}[{i}]"),
+            file,
+            warnings,
+          );
+        }
+      }
+    }
+    // a value of the wrong shape is refused when the configuration is read into its type
+    _ => {}
+  }
+}
+
+/// [`drop_unknown_in_entries`] for one entry, whose keys from `prefix` on are those of
+/// `fields`.
+fn drop_unknown(
+  fields: &[Field],
+  table: &mut toml::Table,
+  prefix: &str,
+  shown: &str,
+  file: &str,
+  warnings: &mut Vec<String>,
+) {
+  let mut unknown = Vec::new();
+  for (k, v) in table.iter_mut() {
+    let key = if prefix.is_empty() {
+      k.clone()
+    } else {
+      format!("{prefix}.{k}")
+    };
+    let here = format!("{shown}.{k}");
+    if let Some(field) = fields.iter().find(|f| f.key == key) {
+      drop_unknown_in_entries(field, v, &here, file, warnings);
+    } else if fields.iter().any(|f| f.key.starts_with(&format!("{key}."))) {
+      if let toml::Value::Table(inner) = v {
+        drop_unknown(fields, inner, &key, &here, file, warnings);
+      }
+    } else {
+      warnings.push(format!("{file}: unknown key `{here}`"));
+      unknown.push(k.clone());
+    }
+  }
+  for k in unknown {
+    table.remove(&k);
   }
 }
 
@@ -442,6 +526,27 @@ mod tests {
   }
 
   #[test]
+  fn unknown_keys_inside_entries_are_warnings_too() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+      dir.path(),
+      "config.toml",
+      "[api_keys.mine]\nkey = \"k\"\nrolle = \"admin\"\n\n[[webhooks]]\nurl = \"u\"\ntokn = \"t\"\n",
+    );
+    let loaded = example_layers(dir.path()).load().unwrap();
+    assert_eq!(
+      loaded.warnings,
+      [
+        "config.toml: unknown key `api_keys.mine.rolle`",
+        "config.toml: unknown key `webhooks[0].tokn`",
+      ],
+      "and they are dropped, so a type that refuses unknown fields still loads"
+    );
+    assert_eq!(loaded.values.api_keys["mine"].key, "k");
+    assert_eq!(loaded.values.webhooks[0].token, None);
+  }
+
+  #[test]
   fn bad_values_name_the_key_and_what_set_it() {
     let dir = tempfile::tempdir().unwrap();
     let error = |mut layers: Layers<Example>| layers.load_at(Utc::now()).err().unwrap().error;
@@ -479,11 +584,11 @@ mod tests {
     write(
       dir.path(),
       "config.toml",
-      "[api_keys.mine]\nkey = \"k\"\ncolour = \"red\"\n",
+      "[api_keys.mine]\nkey = \"k\"\nrole = 5\n",
     );
     let e = error(example_layers(dir.path()));
     assert!(
-      matches!(&e, Error::Value { key, message, .. } if key == "api_keys" && message.contains("(at api_keys.mine")),
+      matches!(&e, Error::Value { key, message, .. } if key == "api_keys" && message.contains("(at api_keys.mine.role")),
       "{e}"
     );
 
