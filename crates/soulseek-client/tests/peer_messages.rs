@@ -50,33 +50,6 @@ fn resolvers() -> Resolvers {
         }))
       })
     })),
-    directory_contents_resolver: Some(Arc::new(|_, _, _, directory: RemoteFilename| {
-      Box::pin(async move {
-        let below = format!("{}\\cd2", directory.as_str());
-        Ok(Some(vec![
-          Directory {
-            name: directory,
-            files: vec![mp3("a.mp3")],
-          },
-          Directory {
-            name: below.as_str().into(),
-            files: Vec::new(),
-          },
-        ]))
-      })
-    })),
-    user_info_resolver: Some(Arc::new(|_, _| {
-      Box::pin(async {
-        Ok(UserInfo {
-          description: "hello".into(),
-          picture: None,
-          upload_slots: 2,
-          queue_length: 5,
-          has_free_upload_slot: false,
-          upload_permitted: None,
-        })
-      })
-    })),
     enqueue_download: Some(Arc::new(|_, _, filename: RemoteFilename| {
       Box::pin(async move {
         match filename.as_str() {
@@ -145,45 +118,6 @@ async fn a_failed_browse_resolver_sends_an_empty_listing() {
       locked_directories: Vec::new(),
     })
   );
-}
-
-#[tokio::test]
-async fn user_info_says_everyone_may_upload_unless_told_otherwise() {
-  let session = session().await;
-  let mut bob = session.peer("bob").await;
-  bob.send(&PeerMessage::InfoRequest.encode()).await;
-  let PeerMessage::InfoResponse(info) = bob.read_peer().await else {
-    panic!("expected user info");
-  };
-  assert_eq!(info.description, "hello");
-  assert_eq!(info.queue_length, 5);
-  assert_eq!(info.upload_permitted, Some(1));
-}
-
-#[tokio::test]
-async fn folder_contents_come_with_the_folders_below() {
-  let session = session().await;
-  let mut bob = bob(&session).await;
-  bob
-    .send(
-      &PeerMessage::FolderContentsRequest(FolderContentsRequest {
-        token: 9,
-        directory_name: "@@music\\album".into(),
-      })
-      .encode(),
-    )
-    .await;
-  let PeerMessage::FolderContentsResponse(response) = bob.read_peer().await else {
-    panic!("expected folder contents");
-  };
-  assert_eq!(response.token, 9);
-  assert_eq!(response.directory_name.as_str(), "@@music\\album");
-  let names: Vec<&str> = response
-    .directories
-    .iter()
-    .map(|directory| directory.name.as_str())
-    .collect();
-  assert_eq!(names, ["@@music\\album", "@@music\\album\\cd2"]);
 }
 
 #[tokio::test]

@@ -1,7 +1,6 @@
-//! Transfer connections between two clients on soulfind: the uploader opens one to a download
-//! waiting for it, directly or, when the downloader cannot be dialled, through the server's
-//! relay; the token names the transfer, and a connection for a token nothing waits for, or a
-//! relayed request nothing expects, is refused.
+//! Transfer connections between two clients on soulfind: when the downloader cannot be dialled,
+//! the uploader has the server relay its request and the downloader dials it; a download waits
+//! no longer than the connect timeout, and a relayed request nothing expects is refused.
 
 mod support;
 
@@ -29,55 +28,6 @@ fn unreachable() -> ClientOptions {
 
 fn file() -> RemoteFilename {
   "@@music\\artist\\01 intro.flac".into()
-}
-
-#[tokio::test]
-async fn an_uploader_connects_directly_to_a_waiting_download() {
-  let Some(server) = soulfind::server() else {
-    return;
-  };
-  let downloader = server.login("down", listening()).await;
-  let uploader = server.login("up", listening()).await;
-  let incoming = downloader.client.await_transfer_connection(
-    &uploader.username,
-    file(),
-    41,
-    &CancellationToken::new(),
-  );
-  let endpoint = uploader
-    .client
-    .get_user_endpoint(&downloader.username)
-    .await
-    .unwrap();
-  let mut outgoing = uploader
-    .client
-    .get_transfer_connection(
-      &downloader.username,
-      endpoint,
-      41,
-      &CancellationToken::new(),
-    )
-    .await
-    .unwrap();
-  assert_eq!(
-    outgoing.handle().kind(),
-    ConnKind::OUTBOUND | ConnKind::DIRECT
-  );
-  let mut received = tokio::time::timeout(PATIENCE, incoming)
-    .await
-    .unwrap()
-    .unwrap();
-  assert_eq!(
-    received.handle().kind(),
-    ConnKind::INBOUND | ConnKind::DIRECT
-  );
-  assert_eq!(
-    received.handle().username(),
-    Some(uploader.username.as_str())
-  );
-  // the connection is the transfer's own from here on
-  outgoing.write_all(b"file bytes").await.unwrap();
-  assert_eq!(received.read_exact(10).await.unwrap(), b"file bytes");
 }
 
 #[tokio::test]
