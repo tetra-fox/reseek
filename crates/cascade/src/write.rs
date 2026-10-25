@@ -5,8 +5,6 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use tracing::debug;
-
 use crate::edit::FileEditor;
 use crate::{Error, files};
 
@@ -38,7 +36,6 @@ impl FileEditor<'_> {
       PLAIN_MODE
     };
     write_atomic(path, text.as_bytes(), Mode::KeepOr(mode))?;
-    debug!(path = %path.display(), "configuration file written");
     Ok(files::revision_of(text.as_bytes()))
   }
 }

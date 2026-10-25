@@ -145,7 +145,7 @@ impl<T: Root> State<T> {
       }
     }
     let revision = editor.write(&path, base.as_deref(), &text)?;
-    info!(file = name, "configuration file written");
+    info!(file = name, path = %path.display(), "configuration file written");
     match self.load(shared) {
       Ok(change) => Ok(Written { revision, change }),
       Err(failure) => Err(self.report(shared, failure)),
