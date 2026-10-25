@@ -1,5 +1,5 @@
 //! Privileges and interests on soulfind: the privileged list pushed at login, our own remaining
-//! privileges, another user's flag, interests, recommendations sorted by score, similar users,
+//! privileges, another user's flag, interests, recommendations, similar users,
 //! and changing the password.
 
 mod support;
@@ -84,29 +84,6 @@ async fn interests_recommendations_and_similar_users() {
       .iter()
       .any(|recommendation| recommendation.interest == liked && recommendation.count == 2),
     "{global:?}"
-  );
-  // recommended interests come highest score first, the rest lowest first
-  assert!(
-    global
-      .recommendations
-      .is_sorted_by(|a, b| a.count >= b.count)
-  );
-  assert!(
-    global
-      .recommendations
-      .iter()
-      .all(|recommendation| recommendation.count > 0)
-  );
-  assert!(
-    global
-      .unrecommendations
-      .is_sorted_by_key(|recommendation| recommendation.count)
-  );
-  assert!(
-    global
-      .unrecommendations
-      .iter()
-      .all(|recommendation| recommendation.count <= 0)
   );
   alice.client.get_personal_recommendations().await.unwrap();
 

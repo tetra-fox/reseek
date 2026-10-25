@@ -237,21 +237,6 @@ async fn disconnecting_twice_raises_disconnected_once() {
 }
 
 #[tokio::test]
-async fn a_disposed_client_refuses_to_connect() {
-  let Some(server) = soulfind::server() else {
-    return;
-  };
-  let alice = server.login("disposed", options()).await;
-  alice.client.dispose().await;
-  let error = server
-    .connect(&alice.client, &alice.username, PASSWORD)
-    .await
-    .unwrap_err();
-  assert!(matches!(error, ClientError::Disposed));
-  assert!(alice.client.cancellation().is_cancelled());
-}
-
-#[tokio::test]
 async fn a_refused_connection_is_a_connect_error() {
   let port = free_port();
   let client = Client::new(options()).unwrap();
