@@ -22,7 +22,7 @@ use crate::auth::sessions::lifetime;
 use crate::auth::tokens::{self, NewToken, StoredToken};
 use crate::auth::{AnyRole, Authorized, ReadWrite, require_interactive};
 use crate::config::cidr::parse_list;
-use crate::db::shifted;
+use crate::db::{latest, shifted};
 
 /// The most characters a token's name has.
 const NAME_CHARS: usize = 64;
@@ -233,10 +233,12 @@ fn check_name(name: &str) -> Result<(), ApiError> {
 }
 
 fn check_expiry(expires_at: Option<chrono::DateTime<Utc>>) -> Result<(), ApiError> {
-  if expires_at.is_some_and(|at| at <= Utc::now()) {
-    return Err(ApiError::bad_request("the expiry is in the past"));
+  match expires_at {
+    Some(at) if at <= Utc::now() => Err(ApiError::bad_request("the expiry is in the past")),
+    // a later time is not stored in time order, so pruning would take it for an old one
+    Some(at) if at > latest() => Err(ApiError::bad_request("the expiry is after the year 9999")),
+    _ => Ok(()),
   }
-  Ok(())
 }
 
 /// Raises `TokenCreated` or `TokenRevoked` for `token`, done by `by`.
@@ -315,6 +317,14 @@ mod tests {
       ))
       .await;
     assert_eq!(renamed.json()["name"], "nightly");
+    let beyond = app
+      .send(request(
+        "PUT",
+        &format!("/api/v0/tokens/{id}"),
+        Some(json!({ "expiresAt": "+10000-01-01T00:00:00Z" })),
+      ))
+      .await;
+    assert_eq!(beyond.status, 400, "an expiry past what is stored in order");
     let revoked = app
       .send(request("DELETE", &format!("/api/v0/tokens/{id}"), None))
       .await;
@@ -372,6 +382,10 @@ mod tests {
       ),
       (
         json!({ "name": "x", "role": "ReadOnly", "expiresAt": "2000-01-01T00:00:00Z" }),
+        400,
+      ),
+      (
+        json!({ "name": "x", "role": "ReadOnly", "expiresAt": "+10000-01-01T00:00:00Z" }),
         400,
       ),
       (

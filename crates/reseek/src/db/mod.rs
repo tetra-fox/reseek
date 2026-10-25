@@ -297,31 +297,36 @@ pub fn timestamp(time: DateTime<Utc>) -> String {
   time.to_rfc3339_opts(SecondsFormat::Micros, true)
 }
 
-/// `start` moved by `by`, held between the years 0 and 9999, the times whose stored text sorts
-/// in time order; a duration too long for the calendar ends at the bound.
+/// The earliest time the databases store: the start of the year 0. Stored text sorts in time
+/// order only between it and [`latest`].
+pub fn earliest() -> DateTime<Utc> {
+  NaiveDate::from_ymd_opt(0, 1, 1)
+    .expect("year 0 is a date")
+    .and_time(NaiveTime::MIN)
+    .and_utc()
+}
+
+/// The latest time the databases store: the end of the year 9999.
+pub fn latest() -> DateTime<Utc> {
+  NaiveDate::from_ymd_opt(9999, 12, 31)
+    .expect("year 9999 is a date")
+    .and_hms_opt(23, 59, 59)
+    .expect("a time of day")
+    .and_utc()
+}
+
+/// `start` moved by `by`, held between [`earliest`] and [`latest`]; a duration too long for
+/// the calendar ends at the bound.
 pub fn shifted(start: DateTime<Utc>, by: chrono::Duration) -> DateTime<Utc> {
-  let earliest = NaiveDate::from_ymd_opt(0, 1, 1).expect("year 0 is a date");
-  let latest = NaiveDate::from_ymd_opt(9999, 12, 31).expect("year 9999 is a date");
-  let bound = |date: NaiveDate, time| date.and_time(time).and_utc();
+  let bound = if by < chrono::Duration::zero() {
+    earliest()
+  } else {
+    latest()
+  };
   start
     .checked_add_signed(by)
-    .unwrap_or_else(|| {
-      if by < chrono::Duration::zero() {
-        bound(earliest, NaiveTime::MIN)
-      } else {
-        bound(
-          latest,
-          NaiveTime::from_hms_opt(23, 59, 59).expect("a time of day"),
-        )
-      }
-    })
-    .clamp(
-      bound(earliest, NaiveTime::MIN),
-      bound(
-        latest,
-        NaiveTime::from_hms_opt(23, 59, 59).expect("a time of day"),
-      ),
-    )
+    .unwrap_or(bound)
+    .clamp(earliest(), latest())
 }
 
 /// A time the databases stored, read back.
