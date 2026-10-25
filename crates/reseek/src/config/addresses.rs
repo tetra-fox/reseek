@@ -13,10 +13,10 @@ pub fn address(text: &str) -> Option<IpAddr> {
 }
 
 /// The addresses of a comma-separated list, each trimmed; every address (`[::]`, which takes
-/// IPv4 too) when the list is not set or blank. The error is the first element that is no
-/// address.
+/// IPv4 too) when the list is not set. The error is the first element that is no address, so
+/// a blank list is refused.
 pub fn list(text: Option<&str>) -> Result<Vec<IpAddr>, String> {
-  let Some(text) = text.filter(|t| !t.trim().is_empty()) else {
+  let Some(text) = text else {
     return Ok(vec![IpAddr::V6(Ipv6Addr::UNSPECIFIED)]);
   };
   text
@@ -30,12 +30,10 @@ mod tests {
   use super::*;
 
   #[test]
-  fn lists_are_trimmed_bracketed_or_not_and_default_to_every_address() {
+  fn lists_are_trimmed_bracketed_or_not_and_unset_is_every_address() {
     assert_eq!(list(None).unwrap(), [IpAddr::V6(Ipv6Addr::UNSPECIFIED)]);
-    assert_eq!(
-      list(Some("  ")).unwrap(),
-      [IpAddr::V6(Ipv6Addr::UNSPECIFIED)]
-    );
+    assert_eq!(list(Some("  ")).unwrap_err(), "");
+    assert_eq!(list(Some("")).unwrap_err(), "");
     assert_eq!(
       list(Some("127.0.0.1, [::1] ,::")).unwrap(),
       [

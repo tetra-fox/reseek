@@ -74,6 +74,16 @@ fn an_invalid_configuration_exits_three_and_a_held_lock_five() {
   );
   assert_eq!(invalid.status.code(), Some(3), "{}", text(&invalid.stderr));
   assert!(text(&invalid.stderr).contains("soulseek.listen_port"));
+  let blank = run(
+    &["--app-dir", app_dir, "--no-logo"],
+    &[("RESEEK_HTTP_IP_ADDRESS", "")],
+  );
+  assert_eq!(
+    blank.status.code(),
+    Some(3),
+    "an empty variable is set, not absent"
+  );
+  assert!(text(&blank.stderr).contains("web.ip_address"));
 
   let start = run(
     &["--app-dir", app_dir, "-n", "--no-start", "--no-https"],
