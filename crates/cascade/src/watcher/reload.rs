@@ -90,12 +90,23 @@ impl<T: Root> State<T> {
         Apply::Restart => by_apply.restart.push(key.clone()),
       }
     }
-    let current = Arc::new(loaded);
-    shared.current.send_replace(current.clone());
     if changed.is_empty() {
       debug!("configuration unchanged");
+      // nothing a reader sees is different, so readers are not woken
+      let same = previous.load_error.is_none()
+        && previous.sources == loaded.sources
+        && previous.file_of == loaded.file_of
+        && previous.warnings == loaded.warnings
+        && previous.files == loaded.files
+        && previous.overrides == loaded.overrides
+        && previous.pending_reconnect == loaded.pending_reconnect;
+      if !same {
+        shared.current.send_replace(Arc::new(loaded));
+      }
       return None;
     }
+    let current = Arc::new(loaded);
+    shared.current.send_replace(current.clone());
     info!(
       changed = changed.len(),
       reconnect = by_apply.reconnect.len(),
@@ -332,6 +343,25 @@ mod tests {
       "the failure is reported once, not again and again"
     );
     cancel.cancel();
+  }
+
+  #[tokio::test]
+  async fn a_reload_that_changes_nothing_wakes_no_reader() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    fs::write(&path, "[server]\nport = 2000\n").unwrap();
+    let watcher = watched(dir.path());
+    let mut states = watcher.subscribe();
+    states.mark_unchanged();
+    assert!(watcher.reload().await.unwrap().is_none());
+    assert!(!states.has_changed().unwrap());
+
+    fs::write(&path, "# a comment\n[server]\nport = 2000\n").unwrap();
+    assert!(watcher.reload().await.unwrap().is_none());
+    assert!(
+      states.has_changed().unwrap(),
+      "a new revision is news, a write needs it"
+    );
   }
 
   #[tokio::test]
