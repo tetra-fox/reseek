@@ -6,6 +6,7 @@ mod support;
 
 use std::io::Cursor;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use soulseek_client::{
@@ -596,4 +597,57 @@ async fn a_replaced_connection_closing_never_takes_its_replacement_with_it() {
     cached.handle().remote(),
     second.stream.local_addr().unwrap()
   );
+}
+
+#[tokio::test]
+async fn messages_past_the_handler_bound_wait_instead_of_being_dropped() {
+  // user info answered only once the test lets it, so every handler stays busy
+  let release = Arc::new(tokio::sync::Semaphore::new(0));
+  let asked = Arc::new(AtomicUsize::new(0));
+  let mut options = listening_options();
+  // every answer is queued at once when the handlers are released
+  options.peer_connection_options.write_queue_size = 1000;
+  options.resolvers.user_info_resolver = Some(Arc::new({
+    let release = release.clone();
+    let asked = asked.clone();
+    move |_, _| {
+      asked.fetch_add(1, Ordering::SeqCst);
+      let release = release.clone();
+      Box::pin(async move {
+        release.acquire().await.unwrap().forget();
+        Ok(UserInfo {
+          description: String::new(),
+          picture: None,
+          upload_slots: 1,
+          queue_length: 0,
+          has_free_upload_slot: true,
+          upload_permitted: None,
+        })
+      })
+    }
+  }));
+  let session = Session::with_options(options).await;
+  let mut bob = session.peer("bob").await;
+  let requests = 300;
+  let frames: Vec<u8> = (0..requests)
+    .flat_map(|_| PeerMessage::InfoRequest.encode())
+    .collect();
+  bob.send(&frames).await;
+  // 256 messages are handled at once
+  tokio::time::timeout(PATIENCE, async {
+    while asked.load(Ordering::SeqCst) < 256 {
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  })
+  .await
+  .unwrap();
+  tokio::time::sleep(Duration::from_millis(100)).await;
+  assert_eq!(asked.load(Ordering::SeqCst), 256);
+  release.add_permits(requests);
+  for _ in 0..requests {
+    assert!(matches!(
+      bob.read_peer().await,
+      PeerMessage::InfoResponse(_)
+    ));
+  }
 }

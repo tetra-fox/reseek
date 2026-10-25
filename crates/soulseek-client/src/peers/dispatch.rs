@@ -1,8 +1,9 @@
 //! What the client does with each message a peer sends on a message connection: answer it from
 //! the application's resolvers, complete the wait of the request it answers, or raise the event
 //! it carries. A search response is checked against our searches before anything else of it is
-//! inflated; every other frame is handled on a task of its own, with a bound on how many run at
-//! once so a stuck resolver cannot pile up work without end.
+//! inflated. Every frame is handled on a task of its own, with a bound on how many run at once
+//! across all connections; at the bound a connection's reader waits before reading its next
+//! frame, so a stuck resolver slows the peers sending to it and loses nothing.
 
 use soulseek_proto::{
   DecodeError, PeerCode, PeerMessage, RemoteFilename, TransferDirection, peek_search_response,
@@ -14,10 +15,7 @@ use crate::client::Client;
 use crate::conn::{MessageConn, ReadEvent};
 use crate::error::{ClientError, MessageErrorKind};
 use crate::events::Event;
-use crate::log::LogLimiter;
 use crate::waiter::WaitKey;
-
-static HANDLERS_BUSY: LogLimiter = LogLimiter::new();
 
 /// The start of a browse response on its way, so its progress can be followed: the frame's
 /// length, the connection bringing it, and how many payload bytes of it have arrived
@@ -38,7 +36,8 @@ impl Client {
     let client = self.downgrade();
     let reader = conn.clone();
     let mut browse: Option<watch::Sender<usize>> = None;
-    conn.start_reading(move |event| match event {
+    let gate = self.peers().handlers.clone();
+    conn.start_reading_gated(gate, move |event, permit| match event {
       ReadEvent::Header { len, code } if code == PeerCode::BrowseResponse.code() => {
         let (progress, received) = watch::channel(0);
         browse = Some(progress);
@@ -63,30 +62,26 @@ impl Client {
       }
       ReadEvent::Frame(frame) => {
         if let Some(client) = client.upgrade() {
-          client.dispatch_peer_frame(&reader, frame);
+          client.dispatch_peer_frame(&reader, frame, permit);
         }
       }
       ReadEvent::Header { .. } | ReadEvent::Progress { .. } => {}
     });
   }
 
-  fn dispatch_peer_frame(&self, conn: &MessageConn, frame: Vec<u8>) {
+  /// Hands `frame` to a task of its own, which keeps `permit` until the frame is handled
+  fn dispatch_peer_frame(
+    &self,
+    conn: &MessageConn,
+    frame: Vec<u8>,
+    permit: Option<OwnedSemaphorePermit>,
+  ) {
     let code = frame
       .get(4..8)
       .map(|code| u32::from_le_bytes([code[0], code[1], code[2], code[3]]));
     if code == Some(PeerCode::SearchResponse.code()) {
       return self.search_response_received(conn, &frame);
     }
-    let Some(permit) = self.peers().handlers.clone().try_acquire_owned().ok() else {
-      if let Some(suppressed) = HANDLERS_BUSY.allow() {
-        tracing::warn!(
-          code,
-          suppressed,
-          "too many peer messages being handled, message dropped"
-        );
-      }
-      return;
-    };
     let client = self.clone();
     let conn = conn.clone();
     let span = conn.handle().span().clone();
@@ -114,7 +109,7 @@ impl Client {
     &self,
     conn: &MessageConn,
     frame: &[u8],
-    _permit: OwnedSemaphorePermit,
+    _permit: Option<OwnedSemaphorePermit>,
   ) {
     let username = conn.handle().username().unwrap_or_default().to_owned();
     let limits = self.options().limits.frame_limits();

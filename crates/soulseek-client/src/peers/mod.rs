@@ -29,7 +29,8 @@ use crate::limit::Limiter;
 use crate::lock;
 use crate::waiter::{Scope, Waiter};
 
-/// peer messages handled at once across every connection; past it a frame is dropped
+/// peer messages handled at once across every connection; at the bound a connection's reader
+/// waits for one of them to finish before reading its next frame
 const PEER_HANDLERS: usize = 256;
 
 type Outcome = Option<Result<MessageConn, ClientError>>;

@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use soulseek_proto::Limits;
 use soulseek_proto::frame::{self, FrameHeader, FrameKind};
 use tokio::io::{AsyncRead, AsyncReadExt};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tracing::Instrument;
 
 use super::{Conn, ConnHandle, ConnReadHalf, ConnWriteHalf};
@@ -125,7 +125,28 @@ impl MessageConn {
   /// Starts the read loop, which hands every [`ReadEvent`] to `sink` in order until the
   /// connection closes. `sink` runs on the loop's task, so it must not block; anything slow
   /// belongs on a task of its own. Only the first call starts a loop; later ones return false.
-  pub fn start_reading(&self, sink: impl FnMut(ReadEvent) + Send + 'static) -> bool {
+  pub fn start_reading(&self, mut sink: impl FnMut(ReadEvent) + Send + 'static) -> bool {
+    self.spawn_read_loop(None, move |event, _| sink(event))
+  }
+
+  /// Starts the read loop like [`MessageConn::start_reading`], except that after reading each
+  /// frame the loop waits for a permit from `gate` and hands it to `sink` with the frame. The
+  /// next frame is read only once a permit was free, so while every permit is held by frames
+  /// being handled the remote's writes back up instead of frames being dropped. Header and
+  /// progress events come without a permit.
+  pub(crate) fn start_reading_gated(
+    &self,
+    gate: Arc<Semaphore>,
+    sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>) + Send + 'static,
+  ) -> bool {
+    self.spawn_read_loop(Some(gate), sink)
+  }
+
+  fn spawn_read_loop(
+    &self,
+    gate: Option<Arc<Semaphore>>,
+    sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>) + Send + 'static,
+  ) -> bool {
     let reading = self
       .reading
       .lock()
@@ -134,7 +155,7 @@ impl MessageConn {
     let Some(reading) = reading else {
       return false;
     };
-    tokio::spawn(read_loop(reading, sink).instrument(self.handle.span().clone()));
+    tokio::spawn(read_loop(reading, gate, sink).instrument(self.handle.span().clone()));
     true
   }
 
@@ -279,7 +300,11 @@ async fn write_encoded(half: &mut ConnWriteHalf, frame: EncodedFrame) -> Result<
   Ok(())
 }
 
-async fn read_loop(reading: Reading, mut sink: impl FnMut(ReadEvent)) {
+async fn read_loop(
+  reading: Reading,
+  gate: Option<Arc<Semaphore>>,
+  mut sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>),
+) {
   let Reading {
     mut half,
     frame_kind,
@@ -305,12 +330,15 @@ async fn read_loop(reading: Reading, mut sink: impl FnMut(ReadEvent)) {
       .flatten()
       .expect("a length that passed the check, followed by the code, is a complete header");
     let total = len as usize - width;
-    sink(ReadEvent::Header { len, code });
-    sink(ReadEvent::Progress {
-      code,
-      current: 0,
-      total,
-    });
+    sink(ReadEvent::Header { len, code }, None);
+    sink(
+      ReadEvent::Progress {
+        code,
+        current: 0,
+        total,
+      },
+      None,
+    );
     // the frame grows with what arrives, not with what the length prefix claims
     let mut current = 0;
     while current < total {
@@ -320,14 +348,29 @@ async fn read_loop(reading: Reading, mut sink: impl FnMut(ReadEvent)) {
       }
       frame.extend_from_slice(&chunk[..size]);
       current += size;
-      sink(ReadEvent::Progress {
-        code,
-        current,
-        total,
-      });
+      sink(
+        ReadEvent::Progress {
+          code,
+          current,
+          total,
+        },
+        None,
+      );
     }
     tracing::trace!(len, code, "frame read");
-    sink(ReadEvent::Frame(frame));
+    // a frame read whole is handed over even when the connection closes while it waits, since
+    // a wait for it may already count on it; the next read on the closed connection ends the loop
+    let permit = match &gate {
+      None => None,
+      Some(gate) => Some(
+        gate
+          .clone()
+          .acquire_owned()
+          .await
+          .expect("a read gate is never closed"),
+      ),
+    };
+    sink(ReadEvent::Frame(frame), permit);
   }
 }
 
