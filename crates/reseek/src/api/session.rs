@@ -27,7 +27,6 @@ use crate::auth::{
   start_session,
 };
 use crate::config::Options;
-use crate::config::cidr::parse_list;
 
 static LOGIN_FAILED: LogLimiter = LogLimiter::new();
 
@@ -398,9 +397,9 @@ async fn provider_logout(
 fn offered_to(options: &Options, client: &Client) -> bool {
   let only_from = &options.web.authentication.local.only_from;
   only_from.is_empty()
-    || only_from.iter().any(|text| {
-      parse_list(text).is_ok_and(|ranges| ranges.iter().any(|range| range.contains(client.ip)))
-    })
+    || networks::ranges(only_from)
+      .iter()
+      .any(|range| range.contains(client.ip))
 }
 
 fn is_admin(caller: &Authorized<AnyRole>) -> bool {

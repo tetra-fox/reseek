@@ -15,9 +15,8 @@ use subtle::ConstantTimeEq;
 use tracing::warn;
 use uuid::Uuid;
 
-use super::TOKEN_PREFIX;
 use super::store::StoredRole;
-use crate::config::cidr::parse_list;
+use super::{TOKEN_PREFIX, networks};
 use crate::db::{Database, DbError, read_timestamp, timestamp};
 
 /// How many random characters follow `slsk_`.
@@ -240,18 +239,12 @@ pub async fn check(
   if token.expires_at.is_some_and(|at| at <= now) {
     return Ok(Err(Refusal::Expired));
   }
-  if let Some(cidr) = &token.cidr {
-    let allowed = match parse_list(cidr) {
-      Ok(ranges) => ranges.iter().any(|range| range.contains(ip)),
-      Err((element, e)) => {
-        // checked when the token was created, so this is a bug if it happens
-        tracing::error!(token = %token.id, element, error = %e, "token network does not parse");
-        false
-      }
-    };
-    if !allowed {
-      return Ok(Err(Refusal::Address(ip)));
-    }
+  if let Some(cidr) = &token.cidr
+    && !networks::ranges(std::slice::from_ref(cidr))
+      .iter()
+      .any(|range| range.contains(ip))
+  {
+    return Ok(Err(Refusal::Address(ip)));
   }
   if token.last_used_at.is_none_or(|at| now - at >= USE_WRITES) {
     let db = db.clone();
