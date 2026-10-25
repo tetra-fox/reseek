@@ -81,7 +81,7 @@ impl Default for Server {
     Self {
       address: "localhost".into(),
       port: 2242,
-      username: "reseek".into(),
+      username: "guest".into(),
       password: None,
       timeout: Duration::from_secs(5),
       buffer: bytesize::ByteSize::kib(16),

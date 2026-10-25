@@ -454,7 +454,7 @@ mod tests {
     });
     let redacted = schema.redact(&serde_json::to_value(&example).unwrap());
     assert_eq!(redacted["server"]["password"], json!(REDACTED));
-    assert_eq!(redacted["server"]["username"], json!("reseek"));
+    assert_eq!(redacted["server"]["username"], json!("guest"));
     assert_eq!(redacted["api_keys"]["mine"]["key"], json!(REDACTED));
     assert_eq!(redacted["api_keys"]["mine"]["role"], json!("readonly"));
     assert_eq!(redacted["api_keys"]["empty"]["key"], json!(""));
