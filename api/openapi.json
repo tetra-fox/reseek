@@ -1,0 +1,1207 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "reseek",
+    "description": "A Soulseek client daemon: its configuration, transfers, searches, chat and shares.",
+    "license": {
+      "name": "AGPL-3.0-only",
+      "identifier": "AGPL-3.0-only"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v0/options": {
+      "get": {
+        "tags": [
+          "options"
+        ],
+        "summary": "The options in effect.",
+        "operationId": "get_options",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsDocument"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "options"
+        ],
+        "summary": "Sets and removes runtime overrides. They last across restarts until they expire, are\nremoved, or the files change the value under them.",
+        "operationId": "patch_options",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptionsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsChanged"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "nothing to change"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/options/file": {
+      "get": {
+        "tags": [
+          "options"
+        ],
+        "summary": "A configuration file's text, secrets and all.",
+        "operationId": "get_file",
+        "parameters": [
+          {
+            "name": "file",
+            "in": "query",
+            "description": "the file's name, such as `config.d/10-shares.toml`; the first configuration file when\nnot given",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigFile"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "options"
+        ],
+        "summary": "Replaces the whole text of a configuration file, then reloads.",
+        "operationId": "put_file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileReplace"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileWritten"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "options"
+        ],
+        "summary": "Changes some keys of a configuration file, keeping its comments, then reloads.",
+        "operationId": "patch_file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileWritten"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/options/file/location": {
+      "get": {
+        "tags": [
+          "options"
+        ],
+        "summary": "Where a configuration file is.",
+        "operationId": "get_file_location",
+        "parameters": [
+          {
+            "name": "file",
+            "in": "query",
+            "description": "the file's name, such as `config.d/10-shares.toml`; the first configuration file when\nnot given",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/options/file/validate": {
+      "post": {
+        "tags": [
+          "options"
+        ],
+        "summary": "Whether a text would load as a configuration file, checked with every other layer.",
+        "operationId": "validate_file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileValidate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Validation"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/options/overrides/{key}": {
+      "delete": {
+        "tags": [
+          "options"
+        ],
+        "summary": "Removes the runtime override of one key.",
+        "operationId": "delete_override",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "description": "the configuration key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsChanged"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/options/startup": {
+      "get": {
+        "tags": [
+          "options"
+        ],
+        "summary": "The options the daemon started with, which every restart-class option still runs with.",
+        "operationId": "get_startup",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsDocument"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v0/options/view": {
+      "get": {
+        "tags": [
+          "options"
+        ],
+        "summary": "Every option with where its value came from, the files, the overrides and what is pending.",
+        "operationId": "get_view",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Apply": {
+        "type": "string",
+        "description": "When a changed value takes effect.",
+        "enum": [
+          "live",
+          "reconnect",
+          "restart"
+        ]
+      },
+      "ConfigFile": {
+        "type": "object",
+        "description": "A configuration file's text.",
+        "required": [
+          "name",
+          "path"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "the file's name, such as `config.toml`"
+          },
+          "path": {
+            "type": "string",
+            "description": "where the file is"
+          },
+          "revision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "a hash of its contents, null when the file does not exist"
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "its text, null when the file does not exist"
+          }
+        }
+      },
+      "ConfigView": {
+        "type": "object",
+        "description": "The configuration in effect with, for every key, where its value came from and how it can\nbe changed.",
+        "required": [
+          "values",
+          "fields",
+          "files",
+          "pendingRestart",
+          "pendingReconnect",
+          "warnings",
+          "overrides"
+        ],
+        "properties": {
+          "fields": {
+            "type": "object",
+            "description": "every leaf key, by key",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FieldView"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileView"
+            },
+            "description": "the configuration files, in the order they apply"
+          },
+          "loadError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "why the last reload failed, null once one succeeds"
+          },
+          "managedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the tool that manages the files, which are then read-only, such as `nixos`"
+          },
+          "overrides": {
+            "type": "object",
+            "description": "the runtime overrides in effect, by key",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/OverrideView"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "pendingReconnect": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "keys that take effect on reconnect whose value changed since the last connection"
+          },
+          "pendingRestart": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "keys that take effect on restart whose value differs from the one the daemon started\nwith"
+          },
+          "values": {
+            "type": "object",
+            "description": "the values in effect, secrets shown as `*****`"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "keys, flags and variables that were ignored, each with where it was found"
+          }
+        }
+      },
+      "ErrorBody": {
+        "type": "object",
+        "description": "What went wrong, sent with every 4xx and 5xx status.",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "a longer explanation, null when the message says it all"
+          },
+          "error": {
+            "type": "string",
+            "description": "a short message, or a fixed code such as `soulseek_unavailable`",
+            "example": "invalid configuration"
+          }
+        }
+      },
+      "FieldView": {
+        "type": "object",
+        "description": "One key: where its value came from and how it can be changed.",
+        "required": [
+          "source",
+          "kind",
+          "doc",
+          "apply",
+          "secret"
+        ],
+        "properties": {
+          "apply": {
+            "$ref": "#/components/schemas/Apply",
+            "description": "when a change to the value takes effect"
+          },
+          "cliFlag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the long command-line flag that sets the key",
+            "example": "--slsk-username"
+          },
+          "doc": {
+            "type": "string",
+            "description": "the key's help text"
+          },
+          "envVar": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the environment variable that sets the key",
+            "example": "RESEEK_SLSK_USERNAME"
+          },
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the file a save of the key writes: the last file that sets it, else the first file"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OptionKind",
+            "description": "what kind of value the key holds"
+          },
+          "notApplied": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotApplied",
+                "description": "the files' value when it is not the one in effect, and why"
+              }
+            ]
+          },
+          "secret": {
+            "type": "boolean",
+            "description": "whether the value is shown as `*****`"
+          },
+          "source": {
+            "$ref": "#/components/schemas/OptionSource",
+            "description": "the layer whose value is in effect"
+          }
+        }
+      },
+      "FilePatch": {
+        "type": "object",
+        "description": "Changes some keys of a configuration file, keeping its comments.",
+        "properties": {
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the file to change, the first configuration file when null"
+          },
+          "revision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the file's revision the change was made against, null when the file did not exist"
+          },
+          "set": {
+            "type": "object",
+            "description": "the keys to write and their values; `*****` for a secret keeps it, `\"\"` clears it"
+          },
+          "unset": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "the keys to take out of the file"
+          }
+        }
+      },
+      "FileReplace": {
+        "type": "object",
+        "description": "Replaces the whole text of a configuration file.",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the file to replace, the first configuration file when null"
+          },
+          "revision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the file's revision the text was written against, null when the file did not exist"
+          },
+          "text": {
+            "type": "string",
+            "description": "the new text"
+          }
+        }
+      },
+      "FileValidate": {
+        "type": "object",
+        "description": "A text to check as the new contents of a configuration file.",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the file it would replace, the first configuration file when null"
+          },
+          "text": {
+            "type": "string",
+            "description": "the text"
+          }
+        }
+      },
+      "FileView": {
+        "type": "object",
+        "description": "One configuration file.",
+        "required": [
+          "name",
+          "path",
+          "writable"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "as the files are named, such as `config.toml` or `config.d/10-shares.toml`"
+          },
+          "path": {
+            "type": "string",
+            "description": "where the file is"
+          },
+          "readOnlyReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "why the file can not be written"
+          },
+          "revision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "a hash of its contents, null when the file does not exist",
+            "example": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "writable": {
+            "type": "boolean",
+            "description": "whether a save to the file can be made"
+          }
+        }
+      },
+      "FileWritten": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/OptionsChanged",
+            "description": "what the reload after the write changed"
+          },
+          {
+            "type": "object",
+            "required": [
+              "revision"
+            ],
+            "properties": {
+              "revision": {
+                "type": "string",
+                "description": "the file's new revision"
+              }
+            }
+          }
+        ],
+        "description": "What a write to a configuration file did."
+      },
+      "NotApplied": {
+        "type": "object",
+        "description": "A value the files hold that is not the one in effect, because a reload with it failed.",
+        "required": [
+          "reason",
+          "value"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "why it is not in effect"
+          },
+          "value": {
+            "type": "object",
+            "description": "the value the failed reload read, `*****` for a secret"
+          }
+        }
+      },
+      "OptionError": {
+        "type": "object",
+        "description": "One problem with a configuration.",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the key the problem is about, null when it is about the whole text"
+          },
+          "message": {
+            "type": "string",
+            "description": "what is wrong"
+          }
+        }
+      },
+      "OptionKind": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "`true` or `false`",
+            "enum": [
+              "bool"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "a whole number",
+            "enum": [
+              "integer"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "a number with a fraction",
+            "enum": [
+              "float"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "text",
+            "enum": [
+              "string"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "a human-readable duration such as `\"15m\"`",
+            "enum": [
+              "duration"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "a byte count, an integer or a string such as `\"10 MiB\"`",
+            "enum": [
+              "size"
+            ]
+          },
+          {
+            "type": "object",
+            "description": "a list, replaced whole by the layer that sets it",
+            "required": [
+              "list"
+            ],
+            "properties": {
+              "list": {
+                "$ref": "#/components/schemas/OptionKind",
+                "description": "a list, replaced whole by the layer that sets it"
+              }
+            }
+          },
+          {
+            "type": "string",
+            "description": "a table whose keys the user picks, replaced whole by the layer that sets it",
+            "enum": [
+              "map"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "a table that is an element of a list",
+            "enum": [
+              "table"
+            ]
+          }
+        ],
+        "description": "What kind of value a key holds, written as its lowercase name, a list as\n`{ \"list\": <kind of each element> }`."
+      },
+      "OptionSource": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "no layer sets the key",
+            "required": [
+              "layer"
+            ],
+            "properties": {
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "default"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "a configuration file",
+            "required": [
+              "file",
+              "layer"
+            ],
+            "properties": {
+              "file": {
+                "type": "string",
+                "description": "its name, such as `config.toml` or `config.d/10-shares.toml`"
+              },
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "file"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "an environment variable",
+            "required": [
+              "var",
+              "layer"
+            ],
+            "properties": {
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "env"
+                ]
+              },
+              "var": {
+                "type": "string",
+                "description": "its name"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "a command-line flag",
+            "required": [
+              "flag",
+              "layer"
+            ],
+            "properties": {
+              "flag": {
+                "type": "string",
+                "description": "its long form, such as `--debug`"
+              },
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "cli"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "a runtime override",
+            "required": [
+              "setBy",
+              "setAt",
+              "layer"
+            ],
+            "properties": {
+              "expiresAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "when the override ends on its own, null for never"
+              },
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "runtime"
+                ]
+              },
+              "setAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "when it was set"
+              },
+              "setBy": {
+                "type": "string",
+                "description": "who set it"
+              }
+            }
+          }
+        ],
+        "description": "The layer whose value of a key is in effect, with what in that layer set it."
+      },
+      "OptionsChanged": {
+        "type": "object",
+        "description": "What a change to the configuration did, by when each changed key takes effect.",
+        "required": [
+          "applied",
+          "reconnectRequired",
+          "restartRequired"
+        ],
+        "properties": {
+          "applied": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "keys whose new value is in effect now"
+          },
+          "reconnectRequired": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "keys whose new value takes effect after the next reconnect"
+          },
+          "restartRequired": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "keys whose new value takes effect after a restart"
+          }
+        }
+      },
+      "OptionsDocument": {
+        "type": "object",
+        "description": "The options in effect, by their configuration keys, with every secret shown as `*****` and\ncredentials taken out of URLs."
+      },
+      "OptionsPatch": {
+        "type": "object",
+        "description": "Sets and removes runtime overrides, which apply on top of every other layer until they\nexpire or the files change the value under them.",
+        "properties": {
+          "expiresIn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "how long the overrides set last, such as `\"2h\"`; null for until removed",
+            "example": "2h"
+          },
+          "set": {
+            "type": "object",
+            "description": "the keys to override and their values; `*****` for a secret keeps its override"
+          },
+          "unset": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "the keys whose override ends"
+          }
+        }
+      },
+      "OverrideView": {
+        "type": "object",
+        "description": "A runtime override in effect.",
+        "required": [
+          "value",
+          "setBy",
+          "setAt"
+        ],
+        "properties": {
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when it ends on its own, null for never"
+          },
+          "setAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when it was set"
+          },
+          "setBy": {
+            "type": "string",
+            "description": "who set it"
+          },
+          "value": {
+            "type": "object",
+            "description": "its value, `*****` for a secret"
+          }
+        }
+      },
+      "Validation": {
+        "type": "object",
+        "description": "Whether a text would load as the configuration, checked together with every other layer.",
+        "required": [
+          "valid",
+          "errors",
+          "warnings"
+        ],
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OptionError"
+            },
+            "description": "why it would not, empty when it would"
+          },
+          "valid": {
+            "type": "boolean",
+            "description": "whether the configuration would load"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "keys, flags and variables that would be ignored"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "options",
+      "description": "The configuration and its files"
+    }
+  ]
+}

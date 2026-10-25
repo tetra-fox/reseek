@@ -1,0 +1,355 @@
+//! The request pipeline, outermost first: CORS, the HTTPS redirect and HSTS, the URL base taken
+//! off the path, a span and log line per request, a panic turned into a 500, then the API
+//! with its authentication, `/health`, the 404 for unknown API paths, and the web UI.
+
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use axum::Router;
+use axum::extract::Request;
+use axum::http::{HeaderValue, Method, StatusCode, Uri, header};
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Redirect, Response};
+use axum::routing::get;
+use tower::ServiceBuilder;
+use tower_http::catch_panic::CatchPanicLayer;
+use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
+use tracing::{Instrument, debug, info, info_span};
+
+use super::{Peer, Transport};
+use crate::api::{self, error::ApiError};
+use crate::app::AppState;
+use crate::auth::client::without_port;
+use crate::config::Options;
+use crate::ui::Ui;
+
+/// HSTS for 30 days.
+const HSTS: &str = "max-age=2592000";
+
+/// How long a browser may keep a CORS preflight answer.
+const PREFLIGHT_MAX_AGE: Duration = Duration::from_secs(3600);
+
+/// The whole application for `state`, with the UI served as `ui` says. The options that shape
+/// the pipeline are the ones the daemon started with.
+pub fn app(state: AppState, ui: Ui) -> Router {
+  let startup = state.startup.values.clone();
+  let base = state.url_base.clone();
+  let ui = Arc::new(ui);
+  let inner = Router::new()
+    .merge(api::router(state.clone()))
+    .route("/health", get(health))
+    .fallback(move |method: Method, uri: Uri| {
+      let ui = ui.clone();
+      async move { fallback(&ui, &method, uri.path()).await }
+    })
+    .layer(CatchPanicLayer::custom(panicked));
+  let logging = startup.web.logging;
+  let https = startup.web.https.clone();
+  let service = ServiceBuilder::new()
+    .option_layer(cors(&startup))
+    .layer(middleware::from_fn(move |request, next| {
+      https_only(https.force && !https.disabled, https.port, request, next)
+    }))
+    .map_request(move |request| without_base(&base, request))
+    .layer(middleware::from_fn(move |request, next| {
+      traced(logging, request, next)
+    }))
+    .service(inner);
+  Router::new().fallback_service(service)
+}
+
+/// The URL base as the pipeline uses it: a leading `/`, no trailing one, empty for the root.
+pub fn url_base(configured: &str) -> String {
+  let trimmed = configured.trim().trim_end_matches('/');
+  if trimmed.is_empty() {
+    return String::new();
+  }
+  if trimmed.starts_with('/') {
+    trimmed.to_string()
+  } else {
+    format!("/{trimmed}")
+  }
+}
+
+/// `request` with the URL base taken off its path. A path outside the base is left as it is.
+fn without_base(base: &str, mut request: Request) -> Request {
+  if base.is_empty() {
+    return request;
+  }
+  let path = request.uri().path();
+  let rest = match path.strip_prefix(base) {
+    Some("") => "/",
+    Some(rest) if rest.starts_with('/') => rest,
+    _ => return request,
+  };
+  let rewritten = match request.uri().query() {
+    Some(query) => format!("{rest}?{query}"),
+    None => rest.to_string(),
+  };
+  if let Ok(uri) = rewritten.parse::<Uri>() {
+    *request.uri_mut() = uri;
+  }
+  request
+}
+
+/// With `force`, sends plain HTTP requests to HTTPS and adds HSTS to HTTPS answers, except for
+/// `localhost`. Requests over the unix socket are left alone.
+async fn https_only(force: bool, port: u16, request: Request, next: Next) -> Response {
+  if !force {
+    return next.run(request).await;
+  }
+  let transport = request.extensions().get::<Peer>().map(|p| p.transport);
+  let host = request
+    .headers()
+    .get(header::HOST)
+    .and_then(|h| h.to_str().ok())
+    .map(without_port);
+  match transport {
+    Some(Transport::Plain) => {
+      let Some(host) = host else {
+        return ApiError::bad_request("a Host header is needed to redirect to HTTPS")
+          .into_response();
+      };
+      let path = request.uri().path_and_query().map_or("/", |p| p.as_str());
+      // an IPv6 address takes its brackets back in the URL
+      let host = if host.parse::<std::net::Ipv6Addr>().is_ok() {
+        format!("[{host}]")
+      } else {
+        host
+      };
+      Redirect::temporary(&format!("https://{host}:{port}{path}")).into_response()
+    }
+    Some(Transport::Tls) => {
+      let mut response = next.run(request).await;
+      if host.as_deref() != Some("localhost") {
+        response.headers_mut().insert(
+          header::STRICT_TRANSPORT_SECURITY,
+          HeaderValue::from_static(HSTS),
+        );
+      }
+      response
+    }
+    _ => next.run(request).await,
+  }
+}
+
+/// The CORS layer `web.cors.allowed_origins` asks for: none when it is empty, any origin
+/// without credentials for `*`, else the listed origins with credentials.
+fn cors(options: &Options) -> Option<CorsLayer> {
+  let origins = &options.web.cors.allowed_origins;
+  if origins.is_empty() {
+    return None;
+  }
+  let layer = CorsLayer::new()
+    .allow_methods(AllowMethods::mirror_request())
+    .allow_headers(AllowHeaders::mirror_request())
+    .expose_headers([
+      header::HeaderName::from_static("x-total-count"),
+      header::HeaderName::from_static("x-url-base"),
+    ])
+    .max_age(PREFLIGHT_MAX_AGE);
+  if origins.iter().any(|o| o == "*") {
+    return Some(layer.allow_origin(AllowOrigin::any()));
+  }
+  let listed: Vec<HeaderValue> = origins
+    .iter()
+    .filter_map(|o| match HeaderValue::from_str(o) {
+      Ok(value) => Some(value),
+      Err(e) => {
+        tracing::warn!(origin = o, error = %e, "CORS origin is not a valid header value; ignored");
+        None
+      }
+    })
+    .collect();
+  Some(
+    layer
+      .allow_origin(AllowOrigin::list(listed))
+      .allow_credentials(true),
+  )
+}
+
+/// Runs the request in its own span and logs it when it is answered: at debug always, and at
+/// info with `web.logging`. The path is logged without an `access_token`.
+async fn traced(logging: bool, request: Request, next: Next) -> Response {
+  let method = request.method().clone();
+  let path = loggable(request.uri());
+  let id = uuid::Uuid::new_v4();
+  let span = info_span!(
+    "request",
+    %method,
+    path,
+    principal = tracing::field::Empty,
+    %id
+  );
+  let started = Instant::now();
+  let response = next.run(request).instrument(span.clone()).await;
+  let status = response.status().as_u16();
+  let ms = started.elapsed().as_millis();
+  span.in_scope(|| {
+    if logging {
+      info!(status, ms, "HTTP request answered");
+    } else {
+      debug!(status, ms, "HTTP request answered");
+    }
+  });
+  response
+}
+
+/// The path and query of `uri` with the value of any `access_token` taken out.
+fn loggable(uri: &Uri) -> String {
+  let Some(query) = uri.query() else {
+    return uri.path().to_string();
+  };
+  let query = query
+    .split('&')
+    .map(|pair| {
+      if pair.starts_with("access_token=") {
+        "access_token=*****"
+      } else {
+        pair
+      }
+    })
+    .collect::<Vec<_>>()
+    .join("&");
+  format!("{}?{query}", uri.path())
+}
+
+/// The answer to a handler that panicked: a 500 whose log line, in the request's span, carries
+/// the panic's message.
+fn panicked(payload: Box<dyn std::any::Any + Send>) -> Response {
+  let message = payload
+    .downcast_ref::<&str>()
+    .map(|s| s.to_string())
+    .or_else(|| payload.downcast_ref::<String>().cloned())
+    .unwrap_or_else(|| "a panic without a message".to_string());
+  ApiError::internal(format!("a handler panicked: {message}")).into_response()
+}
+
+async fn health() -> &'static str {
+  "Healthy"
+}
+
+/// A request no route took: 404 with no body under `/api`, else the web UI.
+async fn fallback(ui: &Ui, method: &Method, path: &str) -> Response {
+  let under = |prefix: &str| path == prefix || path.starts_with(&format!("{prefix}/"));
+  if under("/api") {
+    return StatusCode::NOT_FOUND.into_response();
+  }
+  if under("/metrics") || under("/swagger") {
+    return StatusCode::NOT_FOUND.into_response();
+  }
+  ui.respond(method, path).await
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn the_url_base_gets_a_leading_slash_and_loses_trailing_ones() {
+    assert_eq!(url_base("/"), "");
+    assert_eq!(url_base(""), "");
+    assert_eq!(url_base("reseek"), "/reseek");
+    assert_eq!(url_base("/reseek/"), "/reseek");
+    assert_eq!(url_base("/a/b//"), "/a/b");
+  }
+
+  #[test]
+  fn the_base_comes_off_paths_under_it_only() {
+    let strip = |uri: &str| {
+      without_base(
+        "/reseek",
+        Request::builder()
+          .uri(uri)
+          .body(axum::body::Body::empty())
+          .unwrap(),
+      )
+      .uri()
+      .to_string()
+    };
+    assert_eq!(strip("/reseek/api/v0/options?x=1"), "/api/v0/options?x=1");
+    assert_eq!(strip("/reseek"), "/");
+    assert_eq!(strip("/reseekx/api"), "/reseekx/api");
+    assert_eq!(strip("/api/v0/options"), "/api/v0/options");
+  }
+
+  #[test]
+  fn a_panic_is_a_500_whose_log_line_has_the_panic_message() {
+    use tracing_subscriber::layer::SubscriberExt;
+    let buffer = std::sync::Arc::new(crate::logging::LogBuffer::default());
+    let subscriber =
+      tracing_subscriber::registry().with(crate::logging::BufferLayer(buffer.clone()));
+    let answer = tracing::subscriber::with_default(subscriber, || {
+      panicked(Box::new(String::from("index out of bounds")))
+    });
+    assert_eq!(answer.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let records = buffer.snapshot();
+    assert!(
+      records[0].message.contains("index out of bounds"),
+      "{records:?}"
+    );
+  }
+
+  #[test]
+  fn access_tokens_are_not_logged() {
+    let uri: Uri = "/api/v0/live?topics=logs&access_token=slsk_secret"
+      .parse()
+      .unwrap();
+    assert_eq!(
+      loggable(&uri),
+      "/api/v0/live?topics=logs&access_token=*****"
+    );
+  }
+}
+
+#[cfg(test)]
+mod app_tests {
+  use crate::testing::{app, request};
+
+  #[tokio::test]
+  async fn health_unknown_api_paths_and_the_url_base() {
+    let app = app(
+      "[web]\nurl_base = \"/reseek/\"\n[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
+      &[],
+    );
+    let health = app.send(request("GET", "/health", None)).await;
+    assert_eq!(health.status, 200);
+    assert_eq!(health.body, "Healthy");
+    let unknown = app.send(request("GET", "/api/v0/nothing", None)).await;
+    assert_eq!(unknown.status, 404);
+    assert!(unknown.body.is_empty());
+    let based = app
+      .send(request("GET", "/reseek/api/v0/options", None))
+      .await;
+    assert_eq!(based.status, 200);
+    assert_eq!(
+      app
+        .send(request("GET", "/reseek/health", None))
+        .await
+        .status,
+      200
+    );
+    assert_eq!(
+      app.send(request("GET", "/app/page", None)).await.status,
+      404,
+      "no UI"
+    );
+  }
+
+  #[tokio::test]
+  async fn forced_https_redirects_plain_requests() {
+    let app = app("[web.https]\nforce = true\nport = 8443\n", &[]);
+    let answer = app.send(request("GET", "/health?x=1", None)).await;
+    assert_eq!(answer.status, 307);
+    assert_eq!(
+      answer.headers["location"],
+      "https://localhost:8443/health?x=1"
+    );
+    let mut v6 = request("GET", "/", None);
+    v6.headers_mut().insert("host", "[::1]".parse().unwrap());
+    assert_eq!(
+      app.send(v6).await.headers["location"],
+      "https://[::1]:8443/"
+    );
+  }
+}

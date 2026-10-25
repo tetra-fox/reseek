@@ -6,6 +6,7 @@ members = [
   "crates/cascade-derive",
   "crates/soulseek-proto",
   "crates/soulseek-client",
+  "crates/reseek",
 ]
 # cargo-fuzz needs nightly and its own lockfile, so the fuzz crate is a separate workspace
 exclude = ["fuzz"]
