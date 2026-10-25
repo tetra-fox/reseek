@@ -18,6 +18,8 @@ pub struct Schema {
   pub name: &'static str,
   /// the migrations, oldest first
   pub migrations: &'static [Migration],
+  /// the file holds credentials, so on Unix it is created readable by its owner only
+  pub private: bool,
 }
 
 /// One migration file.
@@ -54,9 +56,16 @@ impl Migration {
 }
 
 /// A database's [`Schema`], its migration files read from `migrations/<name>/` at build time:
-/// `schema!("auth", ["0001_initial"])`.
+/// `schema!("events", ["0001_initial"])`, or `schema!("auth", ["0001_initial"], private)` for
+/// a database only its owner may read.
 macro_rules! schema {
   ($name:literal, [$($file:literal),* $(,)?]) => {
+    $crate::db::schema!(@build $name, [$($file),*], false)
+  };
+  ($name:literal, [$($file:literal),* $(,)?], private) => {
+    $crate::db::schema!(@build $name, [$($file),*], true)
+  };
+  (@build $name:literal, [$($file:literal),*], $private:literal) => {
     $crate::db::Schema {
       name: $name,
       migrations: &[$($crate::db::Migration {
@@ -65,6 +74,7 @@ macro_rules! schema {
           env!("CARGO_MANIFEST_DIR"), "/../../migrations/", $name, "/", $file, ".sql"
         )),
       }),*],
+      private: $private,
     }
   };
 }
@@ -321,6 +331,7 @@ mod tests {
   #[tokio::test]
   async fn a_database_with_data_is_backed_up_before_a_pending_migration() {
     static TWO: Schema = Schema {
+      private: false,
       name: "auth",
       migrations: &[
         Migration {
@@ -334,6 +345,7 @@ mod tests {
       ],
     };
     static ONE: Schema = Schema {
+      private: false,
       name: "auth",
       migrations: &[Migration {
         file: "0001_initial",

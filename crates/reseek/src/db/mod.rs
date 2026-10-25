@@ -29,6 +29,9 @@ pub enum DbError {
   /// SQLite refused a statement or could not open the file
   #[error(transparent)]
   Sqlite(#[from] rusqlite::Error),
+  /// the database file could not be created
+  #[error("{0} could not be created: {1}")]
+  Create(PathBuf, std::io::Error),
   /// the blocking thread running a call panicked or was cancelled
   #[error("a database call did not finish: {0}")]
   Task(String),
@@ -190,6 +193,9 @@ fn open_blocking(schema: &'static Schema, location: &Location) -> Result<Databas
   let mut writer = if location.volatile {
     Connection::open_with_flags(&memory, flags)?
   } else {
+    if schema.private {
+      create_private(&path)?;
+    }
     Connection::open_with_flags(&path, flags)?
   };
   configure(&writer, location.log_sql)?;
@@ -238,6 +244,23 @@ fn open_blocking(schema: &'static Schema, location: &Location) -> Result<Databas
       readers,
     }),
   })
+}
+
+/// Creates the empty file at `path` readable and writable by its owner only, unless it exists.
+/// SQLite gives the database's `-wal` and `-shm` files the database file's mode.
+fn create_private(path: &std::path::Path) -> Result<(), DbError> {
+  let mut options = std::fs::OpenOptions::new();
+  options.write(true).create_new(true);
+  #[cfg(unix)]
+  std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+  match options.open(path) {
+    Ok(_) => {
+      debug!(path = %path.display(), "database file created for its owner only");
+      Ok(())
+    }
+    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+    Err(e) => Err(DbError::Create(path.to_path_buf(), e)),
+  }
 }
 
 /// The settings every connection takes when it opens.
@@ -341,6 +364,34 @@ pub fn read_timestamp(text: &str) -> rusqlite::Result<DateTime<Utc>> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[cfg(unix)]
+  #[tokio::test]
+  async fn a_private_database_and_its_journal_are_for_the_owner_only() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let location = Location {
+      data: dir.path().to_path_buf(),
+      backups: dir.path().to_path_buf(),
+      volatile: false,
+      log_sql: false,
+    };
+    let db = Database::open(&crate::auth::store::SCHEMA, &location)
+      .await
+      .unwrap();
+    db.write(|conn| {
+      conn.execute_batch("CREATE TABLE probe (x INTEGER); INSERT INTO probe VALUES (1);")
+    })
+    .await
+    .unwrap();
+    for file in ["auth.db", "auth.db-wal", "auth.db-shm"] {
+      let mode = std::fs::metadata(dir.path().join(file))
+        .unwrap()
+        .permissions()
+        .mode();
+      assert_eq!(mode & 0o777, 0o600, "{file}");
+    }
+  }
 
   #[test]
   fn shifted_times_stay_within_the_years_stored_text_sorts() {
