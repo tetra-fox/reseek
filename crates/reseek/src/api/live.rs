@@ -67,7 +67,7 @@ async fn stream(
     .live
     .open(Opening {
       topics: topics.clone(),
-      subject: caller.principal.subject.clone(),
+      holder: holder(&caller.principal, &presented),
       limit,
       last_seen: asked.flatten(),
     })
@@ -129,6 +129,17 @@ async fn stream(
     )
       .into_response(),
   )
+}
+
+/// Whom the stream cap counts a stream against: the principal's subject, and for a trusted
+/// network also the client's address, so the browsers of one network do not share one cap.
+fn holder(principal: &api_types::auth::Principal, presented: &Presented) -> String {
+  match principal.via {
+    api_types::auth::Via::TrustedNetwork { .. } => {
+      format!("{} {}", principal.subject, presented.client.ip)
+    }
+    _ => principal.subject.clone(),
+  }
 }
 
 /// Checks again that what the stream's request presented still names the same principal with
@@ -238,7 +249,11 @@ mod tests {
   async fn a_reconnect_replays_what_it_missed_or_gets_snapshots_and_lagged() {
     let app = app(TRUSTED, &[]).await;
     let mut first = open(&app, "/api/v0/live?topics=users").await;
-    first.next().await.unwrap();
+    let start = first.next().await.unwrap().id.unwrap();
+    assert!(
+      (1 << 32..1 << 48).contains(&start),
+      "the sequence starts at a random number"
+    );
     removed(&app, "a");
     let seen = first.next().await.unwrap().id.unwrap();
     drop(first);
@@ -271,7 +286,7 @@ mod tests {
         with(
           request("GET", "/api/v0/live?topics=application,users", None),
           "last-event-id",
-          "999999",
+          &(start - 1).to_string(),
         ),
       )
       .await;
@@ -338,6 +353,13 @@ mod tests {
     assert_eq!(held.status, 200);
     held.next().await.unwrap();
     assert_eq!(open(&app, "/api/v0/live").await.status, 429);
+    let neighbour = app
+      .stream_from("127.0.0.2:1", request("GET", "/api/v0/live", None))
+      .await;
+    assert_eq!(
+      neighbour.status, 200,
+      "another address of the trusted network has its own cap"
+    );
     drop(held);
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     assert_eq!(

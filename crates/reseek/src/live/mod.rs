@@ -42,19 +42,39 @@ struct Hub {
   cancel: CancellationToken,
 }
 
-#[derive(Default)]
 struct HubState {
-  /// the sequence number of the last frame published, 0 before the first
+  /// the sequence number of the last frame published, the starting number before the first
   last: u64,
   /// the sequence number of the last frame dropped from the ring
   evicted_through: u64,
   ring: VecDeque<Arc<Published>>,
   streams: HashMap<u64, Arc<Queue>>,
   next_stream: u64,
-  /// open streams by principal subject
+  /// open streams by whom the cap counts them against
   per_principal: HashMap<String, u32>,
   /// the data of the last `metrics.update`, which is sent again only when it changed
   last_metrics: Option<String>,
+}
+
+/// The lowest and highest first sequence numbers: past any one an earlier run of the daemon
+/// can have reached, and below 2^53 so a JavaScript client reads every id exactly.
+const FIRST_SEQ: std::ops::Range<u64> = 1 << 32..1 << 48;
+
+impl HubState {
+  /// A hub with nothing published, whose sequence starts at a random number, so an id kept
+  /// from an earlier run is not in its ring.
+  fn new() -> Self {
+    let start = rand::Rng::random_range(&mut rand::rng(), FIRST_SEQ);
+    Self {
+      last: start,
+      evicted_through: start,
+      ring: VecDeque::new(),
+      streams: HashMap::new(),
+      next_stream: 0,
+      per_principal: HashMap::new(),
+      last_metrics: None,
+    }
+  }
 }
 
 /// A frame as published: its number, its topics and its text, shared by every stream.
@@ -71,8 +91,9 @@ pub struct Published {
 pub struct Opening {
   /// the topics it follows
   pub topics: Vec<Topic>,
-  /// the subject of its principal
-  pub subject: String,
+  /// whom the stream cap counts it against: the principal's subject, with the client's address
+  /// for a trusted network
+  pub holder: String,
   /// how many streams one principal may hold
   pub limit: u32,
   /// the last sequence number the client saw, when it is reconnecting
@@ -90,17 +111,17 @@ pub struct Registered {
   /// the stream's number, for logs
   pub id: u64,
   hub: Arc<Hub>,
-  subject: String,
+  holder: String,
 }
 
 impl Drop for Registered {
   fn drop(&mut self) {
     let mut hub = self.hub.lock();
     hub.streams.remove(&self.id);
-    if let Some(count) = hub.per_principal.get_mut(&self.subject) {
+    if let Some(count) = hub.per_principal.get_mut(&self.holder) {
       *count -= 1;
       if *count == 0 {
-        hub.per_principal.remove(&self.subject);
+        hub.per_principal.remove(&self.holder);
       }
     }
   }
@@ -115,7 +136,7 @@ impl Live {
   pub fn new(cancel: CancellationToken) -> Self {
     Self {
       hub: Arc::new(Hub {
-        state: Mutex::new(HubState::default()),
+        state: Mutex::new(HubState::new()),
         cancel,
       }),
     }
@@ -170,10 +191,7 @@ impl Live {
   pub fn open(&self, opening: Opening) -> Result<Registered, TooManyStreams> {
     let mut guard = self.hub.lock();
     let hub = &mut *guard;
-    let count = hub
-      .per_principal
-      .entry(opening.subject.clone())
-      .or_default();
+    let count = hub.per_principal.entry(opening.holder.clone()).or_default();
     if *count >= opening.limit {
       return Err(TooManyStreams);
     }
@@ -204,7 +222,7 @@ impl Live {
       at,
       id,
       hub: self.hub.clone(),
-      subject: opening.subject,
+      holder: opening.holder,
     })
   }
 }
