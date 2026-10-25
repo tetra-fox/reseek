@@ -9,7 +9,7 @@ use api_types::tokens::{CreateToken, CreatedToken, ListedToken, Token, UpdateTok
 use reqwest::header::LOCATION;
 use uuid::Uuid;
 
-use super::{Client, Result, Route, done, json, send};
+use super::{Client, Error, Result, Route, done, json, send};
 
 impl Client {
   /// `POST /session`: signs in with a local account; the session cookie is kept for every later
@@ -128,11 +128,14 @@ impl Client {
 /// The `Location` an answer sends the browser to, when it sends it anywhere.
 async fn redirect(client: &Client, route: Route) -> Result<Option<String>> {
   let response = send(client.get(route)).await?;
-  Ok(
-    response
-      .headers()
-      .get(LOCATION)
-      .and_then(|value| value.to_str().ok())
-      .map(str::to_string),
-  )
+  let Some(location) = response.headers().get(LOCATION) else {
+    return Ok(None);
+  };
+  match location.to_str() {
+    Ok(location) => Ok(Some(location.to_string())),
+    Err(_) => Err(Error::Unexpected {
+      status: response.status(),
+      text: "the Location header is not text".to_string(),
+    }),
+  }
 }

@@ -90,6 +90,7 @@ impl Live {
     if response.status().is_success() {
       return Ok(Box::pin(response.bytes_stream().eventsource()));
     }
+    // a `Retry-After` that is a date, or not a number of seconds, leaves the stream's own delay
     let retry_after = response
       .headers()
       .get(RETRY_AFTER)

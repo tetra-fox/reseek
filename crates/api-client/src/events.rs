@@ -9,17 +9,20 @@ impl Client {
   /// `GET /events`: a page of the event log, with how many events match.
   pub async fn events(&self, query: &EventsQuery) -> Result<Page<EventRecord>> {
     let response = send(self.get(Route::new("events").query(query)?)).await?;
+    let status = response.status();
+    let unexpected = |text: &str| Error::Unexpected {
+      status,
+      text: text.to_string(),
+    };
     let total = response
       .headers()
       .get("x-total-count")
-      .and_then(|value| value.to_str().ok())
-      .and_then(|value| value.parse().ok());
-    let status = response.status();
+      .ok_or_else(|| unexpected("no X-Total-Count"))?
+      .to_str()
+      .map_err(|_| unexpected("X-Total-Count is not text"))?
+      .parse()
+      .map_err(|_| unexpected("X-Total-Count is not a count"))?;
     let items: Vec<EventRecord> = serde_json::from_slice(&response.bytes().await?)?;
-    let total = total.ok_or_else(|| Error::Unexpected {
-      status,
-      text: "no X-Total-Count".to_string(),
-    })?;
     Ok(Page { items, total })
   }
 
