@@ -8,7 +8,7 @@ use crate::config::{Integrations, Script};
 const KEY: &str = "integrations.scripts";
 
 /// Names in `on` that match every event.
-const WILDCARDS: &[&str] = &["Any", "All"];
+const WILDCARDS: &[&str] = &["Any", "All", "*"];
 
 pub(super) fn check(integrations: &Integrations, report: &mut Report) {
   for (name, script) in &integrations.scripts {
@@ -94,13 +94,13 @@ mod tests {
 
   #[test]
   fn events_are_known_names_or_wildcards_in_any_case() {
-    assert!(problems(command(&["downloadfilecomplete", "All", "any"])).is_empty());
-    assert_eq!(problems(command(&["*"])).len(), 1);
+    assert!(problems(command(&["downloadfilecomplete", "All", "any", "*"])).is_empty());
+    assert_eq!(problems(command(&["**"])).len(), 1);
     assert!(problems(command(&[])).is_empty(), "never runs");
     let found = problems(command(&["DownloadFinished", ""]));
     assert_eq!(found.len(), 2);
     assert!(found[0].ends_with("contains one or more null or empty values"));
-    assert!(found[1].contains("must all be one of: Any, All, DownloadFileComplete"));
+    assert!(found[1].contains("must all be one of: Any, All, *, DownloadFileComplete"));
     assert_eq!(problems(command(&["None"])).len(), 1, "None never matches");
   }
 
