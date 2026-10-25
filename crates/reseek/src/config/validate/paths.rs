@@ -1,43 +1,10 @@
-//! Path options: whether a path is absolute or relative for an operating system, whether it
-//! steps outside where it starts, and whether the file or directory it names is there.
-//!
-//! There are two sets of path rules: Windows, where `X:\`, `X:/` and `\\` start an absolute
-//! path, and everything else, where `/` does.
+//! Path options: whether the file or directory a path names is there and usable. Whether a path
+//! is absolute or steps outside where it starts is [`crate::safety`]'s.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Which operating system's path rules a check uses.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Os {
-  Windows,
-  Unix,
-}
-
-impl Os {
-  /// The rules of the system the program runs on.
-  pub(crate) const CURRENT: Os = if cfg!(windows) { Os::Windows } else { Os::Unix };
-}
-
-/// Whether `path` is absolute under `os`'s rules.
-pub(crate) fn is_absolute(path: &str, os: Os) -> bool {
-  match os {
-    Os::Unix => path.starts_with('/'),
-    Os::Windows => {
-      let bytes = path.as_bytes();
-      path.starts_with("\\\\")
-        || (bytes.len() >= 3
-          && bytes[0].is_ascii_alphabetic()
-          && bytes[1] == b':'
-          && matches!(bytes[2], b'\\' | b'/'))
-    }
-  }
-}
-
-/// Whether a segment of `path`, split on `/` and `\`, is `.` or `..`.
-pub(crate) fn traverses(path: &str) -> bool {
-  path.split(['/', '\\']).any(|s| s == "." || s == "..")
-}
+use crate::safety::{Os, is_absolute, non_traversing};
 
 /// A path that is set is not the empty string, which would name the working directory.
 pub(crate) fn not_empty(name: &str, path: &Path) -> Result<(), String> {
@@ -57,26 +24,6 @@ pub(crate) fn absolute(name: &str, path: &Path) -> Result<(), String> {
     ));
   }
   non_traversing(name, &text)
-}
-
-/// A path that is relative under every system's rules.
-pub(crate) fn relative_everywhere(name: &str, path: &str) -> Result<(), String> {
-  if is_absolute(path, Os::Unix) || is_absolute(path, Os::Windows) {
-    return Err(format!(
-      "The {name} field must be a relative path on all operating systems."
-    ));
-  }
-  Ok(())
-}
-
-/// A path with no `.` or `..` segment.
-pub(crate) fn non_traversing(name: &str, path: &str) -> Result<(), String> {
-  if traverses(path) {
-    return Err(format!(
-      "The {name} field contains one or more unsafe path traversal segments ('.' or '..')"
-    ));
-  }
-  Ok(())
 }
 
 /// A file that exists and can be opened for reading.
@@ -152,33 +99,6 @@ fn resolved(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[test]
-  fn absolute_paths_follow_each_systems_rules() {
-    assert!(is_absolute("/music", Os::Unix));
-    assert!(!is_absolute("music", Os::Unix));
-    assert!(!is_absolute("C:\\music", Os::Unix));
-    assert!(is_absolute("C:\\music", Os::Windows));
-    assert!(is_absolute("c:/music", Os::Windows));
-    assert!(is_absolute("\\\\server\\share", Os::Windows));
-    assert!(
-      !is_absolute("C:music", Os::Windows),
-      "a drive without a separator"
-    );
-    assert!(!is_absolute("/music", Os::Windows));
-    assert!(relative_everywhere("x", "${SOURCE_DIRECTORY}").is_ok());
-    assert!(relative_everywhere("x", "/x").is_err());
-    assert!(relative_everywhere("x", "C:\\x").is_err());
-  }
-
-  #[test]
-  fn traversal_is_a_whole_dot_segment() {
-    assert!(traverses("a/../b"));
-    assert!(traverses(".\\b"));
-    assert!(traverses("a/."));
-    assert!(!traverses("a/..b/c."));
-    assert!(!traverses("/a/b"));
-  }
 
   #[test]
   fn download_directories_must_exist_unless_default() {

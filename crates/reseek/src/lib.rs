@@ -14,6 +14,7 @@ pub mod http;
 pub mod live;
 pub mod logging;
 pub mod paths;
+pub mod safety;
 pub mod state;
 pub mod ui;
 pub mod version;

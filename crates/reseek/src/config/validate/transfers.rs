@@ -8,8 +8,8 @@ use regex::Regex;
 
 use super::Report;
 use super::fields::{at_least, cidr, duration_at_least, is_regex, optional_at_least};
-use super::paths::{non_traversing, relative_everywhere};
 use crate::config::{Destination, GroupUpload, Limits, Transfers};
+use crate::safety::{non_traversing, relative_everywhere};
 
 /// Group names that belong to the built-in groups.
 const RESERVED_GROUPS: &[&str] = &["privileged", "default", "leechers", "blacklisted"];
