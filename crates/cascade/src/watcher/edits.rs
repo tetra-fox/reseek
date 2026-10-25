@@ -121,11 +121,24 @@ impl<T: Root> State<T> {
       return Err(error);
     }
     let declared = self.declared();
-    for key in changed_in_file(&schema, &old, &text) {
-      if let Some(by) = declared.sources.get(&key).and_then(Source::fixed_by) {
+    let changed = changed_in_file(&schema, &old, &text);
+    for key in &changed {
+      if let Some(by) = declared.sources.get(key).and_then(Source::fixed_by) {
+        return Err(Error::SetBy {
+          key: key.clone(),
+          by: by.to_string(),
+        });
+      }
+    }
+    let position = |file: &str| declared.files.iter().position(|f| f.name == file);
+    for key in changed {
+      // a file later in the order wins, so the write would not take effect
+      if let Some(later) = declared.file_of.get(&key)
+        && position(later) > position(name)
+      {
         return Err(Error::SetBy {
           key,
-          by: by.to_string(),
+          by: later.clone(),
         });
       }
     }
@@ -395,6 +408,52 @@ mod tests {
       .patch_file("other.toml", None, BTreeMap::new(), vec![])
       .await;
     assert!(matches!(unknown, Err(Error::UnknownFile(_))));
+  }
+
+  #[tokio::test]
+  async fn a_key_a_later_file_sets_is_written_there() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir(dir.path().join("config.d")).unwrap();
+    fs::write(
+      dir.path().join("config.d/10-a.toml"),
+      "[server]\nport = 2000\n",
+    )
+    .unwrap();
+    let watcher = watched(dir.path());
+    let e = watcher
+      .patch_file(
+        "config.toml",
+        None,
+        values(&[("server.port", json!(3000))]),
+        vec![],
+      )
+      .await
+      .unwrap_err();
+    assert!(
+      matches!(&e, Error::SetBy { key, by } if key == "server.port" && by == "config.d/10-a.toml"),
+      "{e}"
+    );
+    assert!(!dir.path().join("config.toml").exists());
+
+    let current = watcher.current();
+    let file = current.file_for("server.port").unwrap();
+    let revision = current
+      .files
+      .iter()
+      .find(|f| f.name == file)
+      .unwrap()
+      .revision
+      .clone();
+    watcher
+      .patch_file(
+        file,
+        revision.as_deref(),
+        values(&[("server.port", json!(3000))]),
+        vec![],
+      )
+      .await
+      .unwrap();
+    assert_eq!(watcher.current().values.server.port, 3000);
   }
 
   #[tokio::test]
