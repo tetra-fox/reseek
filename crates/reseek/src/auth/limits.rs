@@ -1,8 +1,9 @@
 //! Limits on failed attempts per client address: failed logins and failed API credentials, each
-//! counted over a sliding minute and kept in memory only.
+//! counted over a sliding minute and kept in memory only. An IPv6 client is counted by its /64,
+//! the block one host is usually given, so it cannot spread attempts over its own addresses.
 
 use std::collections::{HashMap, VecDeque};
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv6Addr};
 use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
@@ -60,14 +61,15 @@ impl Window {
   /// Whether `ip` has failed as often as it may within the window; logs when it has.
   pub fn blocked(&self, ip: IpAddr) -> bool {
     let now = Instant::now();
+    let key = counted_as(ip);
     let mut failures = self.failures.lock().unwrap_or_else(PoisonError::into_inner);
-    let Some(times) = failures.get_mut(&ip) else {
+    let Some(times) = failures.get_mut(&key) else {
       return false;
     };
     forget_old(times, now);
     let blocked = times.len() >= self.limit;
     if times.is_empty() {
-      failures.remove(&ip);
+      failures.remove(&key);
     }
     if blocked && let Some(suppressed) = TRIPPED.allow() {
       warn!(%ip, kind = self.what, suppressed, "rate limit tripped");
@@ -78,6 +80,7 @@ impl Window {
   /// Counts a failure of `ip`.
   pub fn failed(&self, ip: IpAddr) {
     let now = Instant::now();
+    let ip = counted_as(ip);
     let mut failures = self.failures.lock().unwrap_or_else(PoisonError::into_inner);
     if failures.len() >= TRACKED && !failures.contains_key(&ip) {
       failures.retain(|_, times| {
@@ -99,6 +102,18 @@ impl Window {
     if times.len() < self.limit {
       times.push_back(now);
     }
+  }
+}
+
+/// The address failures of `ip` are counted under: an IPv4 address itself, an IPv6 address its
+/// /64.
+fn counted_as(ip: IpAddr) -> IpAddr {
+  match ip {
+    IpAddr::V4(_) => ip,
+    IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+      Some(v4) => IpAddr::V4(v4),
+      None => IpAddr::V6(Ipv6Addr::from_bits(v6.to_bits() & !u128::from(u64::MAX))),
+    },
   }
 }
 
@@ -135,5 +150,29 @@ mod tests {
       limits.presentations.failed(other);
     }
     assert!(limits.presentations.blocked(other));
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn an_ipv6_client_is_counted_by_its_64() {
+    let limits = Limits::default();
+    let address = |text: &str| text.parse::<IpAddr>().unwrap();
+    for host in 1..=5 {
+      limits
+        .logins
+        .failed(address(&format!("2001:db8:1:2::{host:x}")));
+    }
+    assert!(limits.logins.blocked(address("2001:db8:1:2:ffff::1")));
+    assert!(
+      !limits.logins.blocked(address("2001:db8:1:3::1")),
+      "another /64"
+    );
+    for _ in 0..5 {
+      limits.logins.failed(address("::ffff:192.0.2.9"));
+    }
+    assert!(
+      limits.logins.blocked(address("192.0.2.9")),
+      "a mapped address is its IPv4 one"
+    );
+    assert!(!limits.logins.blocked(address("192.0.2.10")));
   }
 }
