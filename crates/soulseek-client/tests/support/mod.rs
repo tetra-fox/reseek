@@ -18,11 +18,10 @@ use soulseek_client::{Client, ClientError, ClientOptions, ClientState, Event, Wa
 use soulseek_proto::frame::{self, FrameKind};
 use soulseek_proto::init::PeerInit;
 use soulseek_proto::server::{
-  GlobalAdminMessage, LoginRequest, LoginResponse, PrivateMessageRequest, UserData, UserStats,
+  GlobalAdminMessage, LoginRequest, LoginResponse, PrivateMessageRequest,
 };
 use soulseek_proto::{
   InitMessage, Limits, PeerConnectionType, Secret, ServerCode, ServerRequest, ServerResponse,
-  UserPresence,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpSocket, TcpStream};
@@ -364,40 +363,6 @@ pub fn user_key(code: ServerCode, username: &str) -> WaitKey {
   WaitKey::ServerUser {
     code,
     username: username.into(),
-  }
-}
-
-pub fn room_key(code: ServerCode, room: &str) -> WaitKey {
-  WaitKey::ServerRoom {
-    code,
-    room: room.into(),
-  }
-}
-
-pub fn room_user_key(code: ServerCode, room: &str, username: &str) -> WaitKey {
-  WaitKey::ServerRoomUser {
-    code,
-    room: room.into(),
-    username: username.into(),
-  }
-}
-
-pub fn stats() -> UserStats {
-  UserStats {
-    average_speed: 1000,
-    upload_count: 5,
-    file_count: 300,
-    directory_count: 20,
-  }
-}
-
-pub fn user_data(username: &str) -> UserData {
-  UserData {
-    username: username.into(),
-    status: UserPresence::Online,
-    stats: stats(),
-    slots_full: true,
-    country_code: "NL".into(),
   }
 }
 
