@@ -14,7 +14,7 @@ use crate::auth::{Principal, Role, Via};
 pub struct Providers {
   /// password login with a local account
   pub local: LocalProvider,
-  /// the OpenID Connect providers, one login button each, in configuration order
+  /// the OpenID Connect providers, one login button each, in order of their names
   pub oidc: Vec<OidcProvider>,
   /// identity forwarded by a trusted reverse proxy
   pub proxy: ProxyProvider,

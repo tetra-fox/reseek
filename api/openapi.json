@@ -300,7 +300,7 @@
           {
             "name": "access_token",
             "in": "query",
-            "description": "an API token, for clients that can not set an `Authorization` header",
+            "description": "an API token or a configuration API key, for clients that can not set an\n`Authorization` header; never a session cookie's value",
             "required": false,
             "schema": {
               "type": "string"
@@ -5362,7 +5362,7 @@
             "items": {
               "$ref": "#/components/schemas/OidcProvider"
             },
-            "description": "the OpenID Connect providers, one login button each, in configuration order"
+            "description": "the OpenID Connect providers, one login button each, in order of their names"
           },
           "proxy": {
             "$ref": "#/components/schemas/ProxyProvider",

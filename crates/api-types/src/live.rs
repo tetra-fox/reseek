@@ -138,7 +138,8 @@ pub struct LiveQuery {
   /// when left out
   #[param(example = "application,transfers")]
   pub topics: Option<String>,
-  /// an API token, for clients that can not set an `Authorization` header
+  /// an API token or a configuration API key, for clients that can not set an
+  /// `Authorization` header; never a session cookie's value
   pub access_token: Option<String>,
 }
 
