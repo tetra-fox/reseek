@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Cascade, Kind, Schema, Shape};
+use crate::{Cascade, Kind, Layers, Schema, Shape};
 
 /// The root of the example.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
@@ -177,4 +177,24 @@ pub(crate) fn read_only_dirs_hold(dir: &Path) -> bool {
   drop(std::fs::remove_file(&probe));
   std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755)).unwrap();
   refused
+}
+
+/// Layers over `config.toml` and `config.d/*.toml` in `dir`.
+pub(crate) fn example_layers(dir: &Path) -> Layers<Example> {
+  Layers::new().files(dir, ["config.toml", "config.d/*.toml"])
+}
+
+/// Writes `text` to `name` under `dir`, making the directories on the way.
+pub(crate) fn write(dir: &Path, name: &str, text: &str) {
+  let path = dir.join(name);
+  std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+  std::fs::write(path, text).unwrap();
+}
+
+/// Owned name and value pairs, as env vars or flags are given.
+pub(crate) fn pairs(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+  pairs
+    .iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect()
 }

@@ -1,8 +1,53 @@
 //! Layered configuration that remembers where each value came from.
 //!
-//! A configuration is a struct deriving [`Cascade`]; its [`Schema`] lists every leaf key with
-//! its kind, default, environment variable, command-line flag, when a change to it takes effect
-//! ([`Apply`]), whether it is secret, and its help.
+//! A configuration is a struct deriving [`Cascade`]. Its values come from layers, each
+//! replacing the one before per key: the defaults (`T::default()`), environment variables, TOML
+//! files, the command line, and runtime overrides. A list or a map whose keys the user picks is
+//! one value, replaced whole by the highest layer that sets it. [`Layers`] loads a
+//! [`Loaded`]: the values, the [`Source`] of each, and warnings for keys nothing knows.
+//!
+//! [`FileEditor`] changes the files so their comments survive.
+//!
+//! ```
+//! use std::collections::BTreeMap;
+//! use cascade::{Cascade, Layers};
+//! use serde::{Deserialize, Serialize};
+//!
+//! #[derive(Clone, Default, Serialize, Deserialize, Cascade)]
+//! #[cascade(env_alias_prefix(from = "APP_", to = "NEW_"))]
+//! #[serde(default)]
+//! struct Options {
+//!   /// Logs more.
+//!   #[cascade(env = "APP_DEBUG", cli = "-d|--debug", apply = "restart")]
+//!   debug: bool,
+//!   server: Server,
+//!   /// Keys that may use the API, by name.
+//!   #[cascade(user_keyed)]
+//!   api_keys: BTreeMap<String, ApiKey>,
+//! }
+//!
+//! #[derive(Clone, Default, Serialize, Deserialize, Cascade)]
+//! #[serde(default)]
+//! struct Server {
+//!   /// The password to log in with.
+//!   #[cascade(env = "APP_PASSWORD", apply = "reconnect", secret)]
+//!   password: Option<String>,
+//!   /// Read buffer size.
+//!   #[cascade(env = "APP_BUFFER", kind = "size")]
+//!   buffer: u64,
+//! }
+//!
+//! #[derive(Clone, Default, Serialize, Deserialize, Cascade)]
+//! struct ApiKey {
+//!   #[cascade(secret)]
+//!   key: String,
+//! }
+//!
+//! let env = [("NEW_PASSWORD".to_string(), "hunter2".to_string())];
+//! let loaded = Layers::<Options>::new().env(env).load().unwrap();
+//! assert_eq!(loaded.values.server.password.as_deref(), Some("hunter2"));
+//! assert_eq!(loaded.redacted()["server"]["password"], "*****");
+//! ```
 //!
 //! Field attributes, all optional:
 //!
@@ -29,7 +74,11 @@ mod describe;
 mod edit;
 mod error;
 mod files;
+mod layers;
+mod loaded;
+mod overrides;
 mod schema;
+mod source;
 mod tree;
 mod write;
 
@@ -41,7 +90,11 @@ pub use describe::{Apply, Cascade, Kind, Shape};
 pub use edit::FileEditor;
 pub use error::{Error, Invalid};
 pub use files::{LoadedFile, revision, revision_of};
+pub use layers::{LIST_SEPARATOR, Layers};
+pub use loaded::Loaded;
+pub use overrides::{Override, Overrides};
 pub use schema::{Field, REDACTED, Schema};
+pub use source::Source;
 pub use write::writability;
 
 #[doc(hidden)]
@@ -49,3 +102,22 @@ pub use describe::private as __private;
 
 /// A dotted configuration key, such as `web.authentication.password`.
 pub type Key = String;
+
+/// What a whole configuration's type needs: a struct deriving [`Cascade`] that has defaults,
+/// serialises, and is shared between threads.
+pub trait Root:
+  Cascade + Default + Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static
+{
+}
+
+impl<T> Root for T where
+  T: Cascade
+    + Default
+    + Clone
+    + serde::Serialize
+    + serde::de::DeserializeOwned
+    + Send
+    + Sync
+    + 'static
+{
+}
