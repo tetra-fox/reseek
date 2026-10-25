@@ -151,6 +151,9 @@ impl<T: Root> State<T> {
     };
     loaded.load_error = Some(message);
     loaded.load_error_at = Some(Utc::now());
+    // the overrides the failed load dropped, an expired one included, are gone from the store;
+    // the values they set stay in effect with the rest
+    loaded.overrides = self.layers.overrides.items().clone();
     // the files as they are, so a fix can be written against their revisions
     loaded.files = self.attempted.clone();
     shared.current.send_replace(Arc::new(loaded));
@@ -185,10 +188,13 @@ fn pending(schema: &Schema, base: &Value, tree: &Value, apply: Apply) -> Vec<Key
 mod tests {
   use super::*;
   use crate::files::revision_of;
-  use crate::testing::{values, watched};
+  use crate::overrides::Overrides;
+  use crate::testing::{Example, example_layers, values, watched};
+  use crate::{Invalid, Watch, Watcher};
   use serde_json::json;
   use std::fs;
   use std::time::Duration;
+  use tokio_util::sync::CancellationToken;
 
   #[tokio::test]
   async fn a_bad_reload_keeps_the_values_in_effect() {
@@ -259,6 +265,73 @@ mod tests {
     assert!(matches!(watcher.reload().await, Err(Error::Read { .. })));
     assert_eq!(watcher.current().values.server.port, 2000);
     assert!(watcher.current().load_error.is_some());
+  }
+
+  #[tokio::test]
+  async fn an_expiry_that_leaves_an_invalid_configuration_keeps_the_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    fs::write(&path, "[server]\nport = 10\n[shares.cache]\nworkers = 4\n").unwrap();
+    let layers = example_layers(dir.path())
+      .overrides(Overrides::load(dir.path().join("overrides.toml")).unwrap())
+      .validate(|o: &Example| {
+        if u32::from(o.server.port) < o.shares.cache.workers {
+          Err(vec![Invalid::new("server.port", "fewer than the workers")])
+        } else {
+          Ok(())
+        }
+      });
+    let watcher = Watcher::new(layers).unwrap();
+    let cancel = CancellationToken::new();
+    watcher.start(Watch::Off, cancel.clone());
+    let soon = Utc::now() + chrono::Duration::milliseconds(300);
+    watcher
+      .set_overrides(
+        values(&[("server.port", json!(100))]),
+        vec![],
+        "a",
+        Some(soon),
+      )
+      .await
+      .unwrap();
+    // valid only while the override lasts
+    fs::write(&path, "[server]\nport = 10\n[shares.cache]\nworkers = 50\n").unwrap();
+    watcher.reload().await.unwrap();
+    assert_eq!(watcher.current().values.shares.cache.workers, 50);
+
+    let mut states = watcher.subscribe();
+    states.mark_unchanged();
+    tokio::time::timeout(Duration::from_secs(5), states.changed())
+      .await
+      .unwrap()
+      .unwrap();
+    let current = watcher.current();
+    assert_eq!(current.values.server.port, 100, "the values in effect stay");
+    assert!(
+      current.overrides.is_empty(),
+      "the expired override is not listed"
+    );
+    assert!(
+      current
+        .load_error
+        .as_deref()
+        .unwrap()
+        .contains("fewer than the workers")
+    );
+    assert_eq!(current.not_applied["server.port"].value, json!(10));
+    assert!(
+      Overrides::load(dir.path().join("overrides.toml"))
+        .unwrap()
+        .items()
+        .is_empty(),
+      "and it is gone from the store"
+    );
+    let again = tokio::time::timeout(Duration::from_millis(500), states.changed()).await;
+    assert!(
+      again.is_err(),
+      "the failure is reported once, not again and again"
+    );
+    cancel.cancel();
   }
 
   #[tokio::test]
