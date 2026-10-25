@@ -189,7 +189,7 @@ fn cors(options: &Options) -> Option<CorsLayer> {
 }
 
 /// Runs the request in its own span and logs it when it is answered: at debug always, and at
-/// info with `web.logging`. The path is logged without an `access_token`.
+/// info with `web.logging`. The path is logged without the credentials a query may carry.
 async fn traced(logging: bool, request: Request, next: Next) -> Response {
   let method = request.method().clone();
   let path = loggable(request.uri());
@@ -215,19 +215,20 @@ async fn traced(logging: bool, request: Request, next: Next) -> Response {
   response
 }
 
-/// The path and query of `uri` with the value of any `access_token` taken out.
+/// The query parameters that carry a credential: the event stream's `access_token` and a file
+/// link's `t`.
+const SECRET_PARAMETERS: &[&str] = &["access_token", "t"];
+
+/// The path and query of `uri` with the value of every credential parameter taken out.
 fn loggable(uri: &Uri) -> String {
   let Some(query) = uri.query() else {
     return uri.path().to_string();
   };
   let query = query
     .split('&')
-    .map(|pair| {
-      if pair.starts_with("access_token=") {
-        "access_token=*****"
-      } else {
-        pair
-      }
+    .map(|pair| match pair.split_once('=') {
+      Some((name, _)) if SECRET_PARAMETERS.contains(&name) => format!("{name}=*****"),
+      _ => pair.to_string(),
     })
     .collect::<Vec<_>>()
     .join("&");
@@ -333,13 +334,20 @@ mod tests {
   }
 
   #[test]
-  fn access_tokens_are_not_logged() {
+  fn credentials_in_a_query_are_not_logged() {
     let uri: Uri = "/api/v0/live?topics=logs&access_token=slsk_secret"
       .parse()
       .unwrap();
     assert_eq!(
       loggable(&uri),
       "/api/v0/live?topics=logs&access_token=*****"
+    );
+    let link: Uri = "/api/v0/files/downloads/files/YQ/content?t=eyJ.x.y&disposition=inline"
+      .parse()
+      .unwrap();
+    assert_eq!(
+      loggable(&link),
+      "/api/v0/files/downloads/files/YQ/content?t=*****&disposition=inline"
     );
   }
 }
