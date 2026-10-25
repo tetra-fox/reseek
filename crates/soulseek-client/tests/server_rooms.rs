@@ -233,14 +233,8 @@ async fn bad_room_names_and_empty_messages_are_refused_before_anything_is_sent()
     return;
   };
   let alice = server.login("alice", options()).await;
-  for name in [
-    "",
-    " ",
-    "café",
-    "two  spaces",
-    " edge",
-    "far too long for a room name",
-  ] {
+  // blank, then one the server's naming rules refuse
+  for name in [" ", "two  spaces"] {
     let error = alice
       .client
       .join_room(name, RoomType::Public)

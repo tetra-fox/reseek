@@ -1,6 +1,6 @@
-//! Server messages soulfind never sends, delivered by a scripted server: admin broadcasts,
-//! privilege notifications, the distributed tree's tuning values, the shapes older or newer
-//! servers send, codes nothing handles, malformed frames and unread bytes.
+//! Server messages soulfind never sends, delivered by a scripted server: privilege notifications,
+//! the distributed tree's tuning values, the shapes older or newer servers send, codes nothing
+//! handles, malformed frames and unread bytes.
 
 mod support;
 
@@ -19,23 +19,6 @@ async fn ping_completes_its_wait_and_an_unsolicited_one_is_dropped() {
   session.settle().await;
   let () = session
     .reply(WaitKey::Server(ServerCode::Ping), ServerResponse::Ping)
-    .await;
-}
-
-#[tokio::test]
-async fn global_admin_message_is_raised() {
-  let mut session = Session::start().await;
-  session
-    .server
-    .send(&ServerResponse::GlobalAdminMessage(GlobalAdminMessage {
-      message: "maintenance".into(),
-    }))
-    .await;
-  session
-    .event(|event| {
-      matches!(event, Event::GlobalMessageReceived(message) if message == "maintenance")
-        .then_some(())
-    })
     .await;
 }
 

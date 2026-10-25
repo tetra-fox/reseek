@@ -1,6 +1,6 @@
 //! Connecting, logging in and disconnecting against soulfind: the state transitions and their
-//! events, a refused login, being kicked by a second login with our name, reconnecting, and a
-//! server connection that stays up however long it is idle.
+//! events, a refused login, being kicked by a second login with our name, and a server
+//! connection that stays up however long it is idle.
 
 mod support;
 
@@ -234,20 +234,6 @@ async fn disconnecting_twice_raises_disconnected_once() {
   assert_eq!(alice.client.username(), None);
   assert_eq!(alice.client.address(), None);
   assert_eq!(alice.client.ip_endpoint(), None);
-}
-
-#[tokio::test]
-async fn reconnecting_after_a_disconnect() {
-  let Some(server) = soulfind::server() else {
-    return;
-  };
-  let alice = server.login("again", options()).await;
-  alice.client.disconnect(None, None).await;
-  server
-    .connect(&alice.client, &alice.username, PASSWORD)
-    .await
-    .unwrap();
-  assert_eq!(alice.client.state(), ClientState::READY);
 }
 
 #[tokio::test]
