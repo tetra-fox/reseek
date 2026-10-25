@@ -79,10 +79,6 @@ impl Daemon {
   }
 
   /// The base URL to reach it at.
-  #[allow(
-    dead_code,
-    reason = "not every test binary that has the support module uses it"
-  )]
   pub fn url(&self) -> String {
     format!("http://127.0.0.1:{}", self.port)
   }
