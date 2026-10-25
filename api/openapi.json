@@ -10,6 +10,147 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/v0/analysis": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "The analysis reports, newest first, without their windows.",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "verdict",
+            "in": "query",
+            "description": "only reports with this verdict",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AnalysisVerdict"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "only reports that finished after this time",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "how many matching reports to skip, 0 when left out",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "how many reports to return at most, 100 when left out",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AudioAnalysis"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/analysis/jobs": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "The analyses queued and running.",
+        "operationId": "jobs",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnalysisJob"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/auth/oidc/{name}/backchannel": {
       "post": {
         "tags": [
@@ -267,6 +408,1294 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/files/{root}/directories": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "summary": "A root directory with what is in it, or everything under it with `recursive`.",
+        "operationId": "list_root",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "recursive",
+            "in": "query",
+            "description": "list every entry under the directory, not only its direct entries",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilesystemDirectory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/files/{root}/directories/{path}": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "summary": "A directory under a root with what is in it, or everything under it with `recursive`.",
+        "operationId": "list_directory",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the directory's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recursive",
+            "in": "query",
+            "description": "list every entry under the directory, not only its direct entries",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilesystemDirectory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "files"
+        ],
+        "summary": "Deletes a directory under a root and everything in it.",
+        "operationId": "delete_directory",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the directory's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "deleted"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/files/{root}/directories/{path}/archive": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "summary": "A directory under a root as a zip archive, streamed. One archive per principal at a time.",
+        "operationId": "archive",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the directory's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the archive's name without `.zip`, null for the directory's name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/files/{root}/files/{path}": {
+      "delete": {
+        "tags": [
+          "files"
+        ],
+        "summary": "Deletes a file under a root.",
+        "operationId": "delete_file",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "deleted"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/files/{root}/files/{path}/analysis": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "A file's analysis report; without `windows` the per-window measures are left out.",
+        "operationId": "report_file",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "windows",
+            "in": "query",
+            "description": "include the per-window measures, true when left out",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioAnalysis"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Queues a file for analysis, again with `force` when it has a report.",
+        "operationId": "run_file",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "description": "analyse again even when a report for the file as it is now exists",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisJobCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/files/{root}/files/{path}/analysis/override": {
+      "put": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Records the user's own verdict on a file.",
+        "operationId": "set_override",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAnalysisOverride"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "recorded"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Takes the user's verdict on a file away.",
+        "operationId": "clear_override",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "removed"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/files/{root}/files/{path}/analysis/spectrogram.png": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "A file's spectrogram as a PNG image, loaded as a file is: by the session or a link token.",
+        "operationId": "spectrogram_file",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "guides",
+            "in": "query",
+            "description": "draw the encoder cutoff guide lines into the image, true when left out",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "disposition",
+            "in": "query",
+            "description": "whether the browser shows the file or saves it",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ContentDisposition"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the name the browser saves the file under, null for the file's own name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "t",
+            "in": "query",
+            "description": "a file token for this file, for a link that carries no session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/files/{root}/files/{path}/content": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "summary": "A file's bytes for the browser to show or save, a single range honoured. A link without a\nsession loads it with the token `t`.",
+        "operationId": "file_content",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "disposition",
+            "in": "query",
+            "description": "whether the browser shows the file or saves it",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ContentDisposition"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the name the browser saves the file under, null for the file's own name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "t",
+            "in": "query",
+            "description": "a file token for this file, for a link that carries no session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "unchanged"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "files"
+        ],
+        "summary": "A file's bytes for the browser to show or save, a single range honoured. A link without a\nsession loads it with the token `t`.",
+        "operationId": "file_content",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "disposition",
+            "in": "query",
+            "description": "whether the browser shows the file or saves it",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ContentDisposition"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the name the browser saves the file under, null for the file's own name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "t",
+            "in": "query",
+            "description": "a file token for this file, for a link that carries no session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "unchanged"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "",
             "content": {
               "application/json": {
@@ -1004,6 +2433,87 @@
         }
       }
     },
+    "/api/v0/session/file-token": {
+      "post": {
+        "tags": [
+          "files"
+        ],
+        "summary": "A token that lets a link load one file for ten minutes, for a browser that cannot send the\nsession with the link.",
+        "operationId": "link_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileToken"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/session/logout": {
       "post": {
         "tags": [
@@ -1386,6 +2896,631 @@
           }
         }
       }
+    },
+    "/api/v0/transfers/downloads/{username}/{id}/analysis": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "A succeeded download's analysis report.",
+        "operationId": "report_download",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "windows",
+            "in": "query",
+            "description": "include the per-window measures, true when left out",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioAnalysis"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Queues a succeeded download's file for analysis, again with `force` when it has a report.",
+        "operationId": "run_download",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "description": "analyse again even when a report for the file as it is now exists",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisJobCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/{username}/{id}/analysis/spectrogram.png": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "A succeeded download's spectrogram as a PNG image.",
+        "operationId": "spectrogram_download",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "guides",
+            "in": "query",
+            "description": "draw the encoder cutoff guide lines into the image, true when left out",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "disposition",
+            "in": "query",
+            "description": "whether the browser shows the file or saves it",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ContentDisposition"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the name the browser saves the file under, null for the file's own name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "t",
+            "in": "query",
+            "description": "a file token for this file, for a link that carries no session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/{username}/{id}/content": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "summary": "The file a succeeded download was moved to, served as a file is.",
+        "operationId": "download_content",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "disposition",
+            "in": "query",
+            "description": "whether the browser shows the file or saves it",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ContentDisposition"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the name the browser saves the file under, null for the file's own name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "t",
+            "in": "query",
+            "description": "a file token for this file, for a link that carries no session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "unchanged"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "files"
+        ],
+        "summary": "The file a succeeded download was moved to, served as a file is.",
+        "operationId": "download_content",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "disposition",
+            "in": "query",
+            "description": "whether the browser shows the file or saves it",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ContentDisposition"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the name the browser saves the file under, null for the file's own name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "t",
+            "in": "query",
+            "description": "a file token for this file, for a link that carries no session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "unchanged"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1436,6 +3571,74 @@
         "enum": [
           "upsampled",
           "bit_padded"
+        ]
+      },
+      "AnalysisJob": {
+        "type": "object",
+        "description": "A file waiting for or under analysis, an entry of `GET /analysis/jobs`.",
+        "required": [
+          "id",
+          "path",
+          "state",
+          "queuedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "the job's id"
+          },
+          "path": {
+            "type": "string",
+            "description": "the file's local path"
+          },
+          "queuedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when it was queued"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when the worker took it, null while queued"
+          },
+          "state": {
+            "$ref": "#/components/schemas/AnalysisJobState",
+            "description": "where the job is"
+          },
+          "transferId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the download the file belongs to, null when it was queued by path"
+          }
+        }
+      },
+      "AnalysisJobCreated": {
+        "type": "object",
+        "description": "The answer to `POST .../analysis`: the queued job.",
+        "required": [
+          "jobId"
+        ],
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "the job's id"
+          }
+        }
+      },
+      "AnalysisJobState": {
+        "type": "string",
+        "description": "Where an analysis job is.",
+        "enum": [
+          "queued",
+          "running"
         ]
       },
       "AnalysisMeasures": {
@@ -3472,6 +5675,58 @@
           }
         }
       },
+      "FileToken": {
+        "type": "object",
+        "description": "A short-lived token that lets one link load one file without a session.",
+        "required": [
+          "token",
+          "expiresAt"
+        ],
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when it stops being accepted"
+          },
+          "token": {
+            "type": "string",
+            "description": "the token, given to the content URL as `t`"
+          }
+        }
+      },
+      "FileTokenRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "a local file",
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "the root and the file's encoded path, as `<root>/<b64>` in the content URL",
+                "example": "downloads/QWxidW0vMDEgLSBUcmFjay5mbGFj"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "a download's file",
+            "required": [
+              "transferId"
+            ],
+            "properties": {
+              "transferId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "the download's id"
+              }
+            }
+          }
+        ],
+        "description": "The file a file token is asked for: a local file, or the file of a finished download."
+      },
       "FileValidate": {
         "type": "object",
         "description": "A text to check as the new contents of a configuration file.",
@@ -3550,6 +5805,112 @@
           }
         ],
         "description": "What a write to a configuration file did."
+      },
+      "FilesystemAttributes": {
+        "type": "string",
+        "description": "the names of the set attribute flags joined by \", \"",
+        "examples": [
+          "Hidden, Directory"
+        ]
+      },
+      "FilesystemDirectory": {
+        "type": "object",
+        "description": "A local directory in a listing. The listed directory carries its entries, sorted by name,\ndirectories first; a recursive listing holds every entry under it in the two flat lists.",
+        "required": [
+          "name",
+          "fullName",
+          "attributes",
+          "createdAt",
+          "modifiedAt"
+        ],
+        "properties": {
+          "attributes": {
+            "$ref": "#/components/schemas/FilesystemAttributes",
+            "description": "what kind of entry it is"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when it was created, or when its metadata last changed where the system keeps no\ncreation time"
+          },
+          "directories": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/FilesystemDirectory"
+            },
+            "description": "the directories in the listed directory, null for the directories listed in it"
+          },
+          "files": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/FilesystemFile"
+            },
+            "description": "the files in the listed directory, null for the directories listed in it"
+          },
+          "fullName": {
+            "type": "string",
+            "description": "the path relative to the listed directory, empty for the listed directory itself"
+          },
+          "modifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when its entries last changed"
+          },
+          "name": {
+            "type": "string",
+            "description": "the directory's name"
+          }
+        }
+      },
+      "FilesystemFile": {
+        "type": "object",
+        "description": "A local file in a listing.",
+        "required": [
+          "name",
+          "fullName",
+          "length",
+          "attributes",
+          "createdAt",
+          "modifiedAt"
+        ],
+        "properties": {
+          "attributes": {
+            "$ref": "#/components/schemas/FilesystemAttributes",
+            "description": "what kind of entry it is"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when it was created, or when its metadata last changed where the system keeps no\ncreation time"
+          },
+          "fullName": {
+            "type": "string",
+            "description": "the path relative to the listed directory, with the system's separators",
+            "example": "Album/01 - Track.flac"
+          },
+          "length": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the size in bytes",
+            "minimum": 0
+          },
+          "modifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when its contents last changed"
+          },
+          "name": {
+            "type": "string",
+            "description": "the file's name",
+            "example": "01 - Track.flac"
+          }
+        }
       },
       "GapReason": {
         "type": "string",
@@ -6495,6 +8856,27 @@
           }
         }
       },
+      "SetAnalysisOverride": {
+        "type": "object",
+        "description": "The body of `PUT .../analysis/override`, which records the user's judgement of a file.",
+        "required": [
+          "verdict"
+        ],
+        "properties": {
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "why, in the user's words",
+            "example": "remix, known low-quality acapella"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Judgement",
+            "description": "the judgement"
+          }
+        }
+      },
       "SharesState": {
         "type": "object",
         "description": "The share scan and the share cache.",
@@ -7797,6 +10179,14 @@
     {
       "name": "live",
       "description": "The event stream"
+    },
+    {
+      "name": "files",
+      "description": "The downloaded files, served to the browser"
+    },
+    {
+      "name": "analysis",
+      "description": "Checking whether a downloaded file is what it claims"
     }
   ]
 }

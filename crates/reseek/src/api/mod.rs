@@ -2,13 +2,16 @@
 //! handler answers failures with.
 
 pub mod agent;
+mod analysis;
 pub mod error;
 pub mod extract;
+mod files;
 mod live;
 mod oidc;
 mod options;
 mod session;
 mod tokens;
+mod validate;
 
 use axum::Router;
 use axum::middleware;
@@ -32,7 +35,9 @@ use crate::auth;
     (name = "session", description = "Signing in and out, and browser sessions"),
     (name = "auth", description = "Signing in with an OpenID Connect provider"),
     (name = "tokens", description = "API tokens for scripts"),
-    (name = "live", description = "The event stream")
+    (name = "live", description = "The event stream"),
+    (name = "files", description = "The downloaded files, served to the browser"),
+    (name = "analysis", description = "Checking whether a downloaded file is what it claims")
   )
 )]
 struct ApiDoc;
@@ -40,6 +45,8 @@ struct ApiDoc;
 /// Every route with its OpenAPI description.
 fn routes() -> OpenApiRouter<AppState> {
   let api = OpenApiRouter::new()
+    .merge(files::routes())
+    .merge(analysis::routes())
     .merge(options::routes())
     .merge(session::routes())
     .merge(oidc::routes())

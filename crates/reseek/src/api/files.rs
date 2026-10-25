@@ -1,0 +1,353 @@
+//! The files routes: listing and deleting under the downloads and incomplete directories,
+//! serving a file or a zipped directory to the browser, and the short-lived token that lets a
+//! link load a file.
+//!
+//! A path in these routes is the base64 of its UTF-8 text relative to its root, in the standard
+//! or the URL-safe alphabet, padded or not. Listing and serving take the ReadOnly role;
+//! deleting takes ReadWrite and `remote_file_management`, and serving `web.files.serve`.
+
+use api_types::auth::Principal;
+use api_types::files::{
+  ArchiveQuery, ContentQuery, DirectoryListingQuery, FileRoot, FileToken, FileTokenRequest,
+  FilesystemDirectory,
+};
+use axum::Extension;
+use axum::extract::State;
+use axum::http::{HeaderMap, Method, StatusCode};
+use axum::response::Response;
+use tracing::{info, warn};
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
+use uuid::Uuid;
+
+use super::error::ApiError;
+use super::extract::{Json, Path, Query};
+use super::validate;
+use crate::app::AppState;
+use crate::auth::{AnyRole, Authentication, Authorized, ReadWrite};
+use crate::services::{ContentRequest, FileTarget};
+
+/// The files routes.
+pub fn routes() -> OpenApiRouter<AppState> {
+  OpenApiRouter::new()
+    .routes(routes!(list_root))
+    .routes(routes!(list_directory, delete_directory))
+    .routes(routes!(delete_file))
+    .routes(routes!(file_content))
+    .routes(routes!(archive))
+    .routes(routes!(download_content))
+    .routes(routes!(link_token))
+}
+
+/// The root a path parameter names; any other name is no route.
+pub(super) fn root(name: &str) -> Result<FileRoot, ApiError> {
+  match name {
+    "downloads" => Ok(FileRoot::Downloads),
+    "incomplete" => Ok(FileRoot::Incomplete),
+    _ => Err(ApiError::not_found(format!(
+      "no directory root named {name}"
+    ))),
+  }
+}
+
+/// How a request asks for a file's bytes, from its method, headers, principal and query.
+pub(super) fn content_request(
+  method: &Method,
+  headers: HeaderMap,
+  principal: Option<Principal>,
+  query: ContentQuery,
+) -> ContentRequest {
+  ContentRequest {
+    headers,
+    head: method == Method::HEAD,
+    disposition: query.disposition,
+    name: query.name,
+    principal,
+    link: query.token,
+  }
+}
+
+/// Refuses to serve files when `web.files.serve` is off.
+fn serving(app: &AppState) -> Result<(), ApiError> {
+  if app.config.current().values.web.files.serve {
+    return Ok(());
+  }
+  Err(ApiError::forbidden("serving files is turned off"))
+}
+
+/// A request for a file's bytes: by its principal, or else by its link token alone.
+pub(super) fn by_principal_or_link(
+  authentication: &Authentication,
+  query: &ContentQuery,
+) -> Result<Option<Principal>, ApiError> {
+  match (&authentication.0, &query.token) {
+    (Some(principal), _) => Ok(Some(principal.clone())),
+    (None, Some(_)) => Ok(None),
+    (None, None) => Err(ApiError::unauthorized("authentication required")),
+  }
+}
+
+/// A root directory with what is in it, or everything under it with `recursive`.
+#[utoipa::path(
+  get, path = "/files/{root}/directories", tag = "files",
+  params(("root" = FileRoot, Path, description = "the directory root"), DirectoryListingQuery),
+  responses(
+    (status = 200, body = FilesystemDirectory), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn list_root(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+  Path(name): Path<String>,
+  Query(query): Query<DirectoryListingQuery>,
+) -> Result<Json<FilesystemDirectory>, ApiError> {
+  let root = root(&name)?;
+  app
+    .services
+    .files
+    .list(root, "", query.recursive)
+    .await
+    .map(Json)
+}
+
+/// A directory under a root with what is in it, or everything under it with `recursive`.
+#[utoipa::path(
+  get, path = "/files/{root}/directories/{path}", tag = "files",
+  params(
+    ("root" = FileRoot, Path, description = "the directory root"),
+    ("path" = String, Path, description = "the directory's path under the root, base64"),
+    DirectoryListingQuery
+  ),
+  responses(
+    (status = 200, body = FilesystemDirectory), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn list_directory(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+  Path((name, path)): Path<(String, String)>,
+  Query(query): Query<DirectoryListingQuery>,
+) -> Result<Json<FilesystemDirectory>, ApiError> {
+  let root = root(&name)?;
+  let path = validate::files_path(&path, false)?;
+  app
+    .services
+    .files
+    .list(root, &path, query.recursive)
+    .await
+    .map(Json)
+}
+
+/// Deletes a directory under a root and everything in it.
+#[utoipa::path(
+  delete, path = "/files/{root}/directories/{path}", tag = "files",
+  params(
+    ("root" = FileRoot, Path, description = "the directory root"),
+    ("path" = String, Path, description = "the directory's path under the root, base64")
+  ),
+  responses(
+    (status = 204, description = "deleted"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn delete_directory(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+  Path((name, path)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+  let root = root(&name)?;
+  let path = validate::files_path(&path, true)?;
+  deleting(&app, &caller.principal, &path)?;
+  if path.is_empty() {
+    return Err(ApiError::forbidden(
+      "a directory root itself is not deleted",
+    ));
+  }
+  app.services.files.delete_directory(root, &path).await?;
+  info!(
+    by = caller.principal.subject,
+    ?root,
+    path,
+    "directory deleted"
+  );
+  Ok(StatusCode::NO_CONTENT)
+}
+
+/// Deletes a file under a root.
+#[utoipa::path(
+  delete, path = "/files/{root}/files/{path}", tag = "files",
+  params(
+    ("root" = FileRoot, Path, description = "the directory root"),
+    ("path" = String, Path, description = "the file's path under the root, base64")
+  ),
+  responses(
+    (status = 204, description = "deleted"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn delete_file(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+  Path((name, path)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+  let root = root(&name)?;
+  let path = validate::files_path(&path, true)?;
+  deleting(&app, &caller.principal, &path)?;
+  app.services.files.delete_file(root, &path).await?;
+  info!(by = caller.principal.subject, ?root, path, "file deleted");
+  Ok(StatusCode::NO_CONTENT)
+}
+
+/// Refuses a deletion while `remote_file_management` is off.
+fn deleting(app: &AppState, by: &Principal, path: &str) -> Result<(), ApiError> {
+  if app.config.current().values.remote_file_management {
+    return Ok(());
+  }
+  warn!(
+    by = by.subject,
+    path, "deletion refused; remote file management is disabled"
+  );
+  Err(ApiError::forbidden("remote file management is disabled").logged())
+}
+
+/// A file's bytes for the browser to show or save, a single range honoured. A link without a
+/// session loads it with the token `t`.
+#[utoipa::path(
+  method(get, head), path = "/files/{root}/files/{path}/content", tag = "files",
+  params(
+    ("root" = FileRoot, Path, description = "the directory root"),
+    ("path" = String, Path, description = "the file's path under the root, base64"),
+    ContentQuery
+  ),
+  responses(
+    (status = 200, content_type = "application/octet-stream", body = Vec<u8>),
+    (status = 206, content_type = "application/octet-stream", body = Vec<u8>),
+    (status = 304, description = "unchanged"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 409, body = api_types::ErrorBody),
+    (status = 416, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn file_content(
+  State(app): State<AppState>,
+  Extension(authentication): Extension<Authentication>,
+  Path((name, path)): Path<(String, String)>,
+  Query(query): Query<ContentQuery>,
+  method: Method,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  let principal = by_principal_or_link(&authentication, &query)?;
+  let root = root(&name)?;
+  let path = validate::files_path(&path, false)?;
+  serving(&app)?;
+  let request = content_request(&method, headers, principal, query);
+  app
+    .services
+    .files
+    .content(FileTarget::File { root, path }, request)
+    .await
+}
+
+/// The file a succeeded download was moved to, served as a file is.
+#[utoipa::path(
+  method(get, head), path = "/transfers/downloads/{username}/{id}/content", tag = "files",
+  params(
+    ("username" = String, Path, description = "the peer"),
+    ("id" = Uuid, Path, description = "the download's id"),
+    ContentQuery
+  ),
+  responses(
+    (status = 200, content_type = "application/octet-stream", body = Vec<u8>),
+    (status = 206, content_type = "application/octet-stream", body = Vec<u8>),
+    (status = 304, description = "unchanged"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 416, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn download_content(
+  State(app): State<AppState>,
+  Extension(authentication): Extension<Authentication>,
+  Path((username, id)): Path<(String, Uuid)>,
+  Query(query): Query<ContentQuery>,
+  method: Method,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  let principal = by_principal_or_link(&authentication, &query)?;
+  serving(&app)?;
+  let request = content_request(&method, headers, principal, query);
+  app
+    .services
+    .files
+    .content(FileTarget::Download { username, id }, request)
+    .await
+}
+
+/// A directory under a root as a zip archive, streamed. One archive per principal at a time.
+#[utoipa::path(
+  get, path = "/files/{root}/directories/{path}/archive", tag = "files",
+  params(
+    ("root" = FileRoot, Path, description = "the directory root"),
+    ("path" = String, Path, description = "the directory's path under the root, base64"),
+    ArchiveQuery
+  ),
+  responses(
+    (status = 200, content_type = "application/zip", body = Vec<u8>),
+    (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
+    (status = 413, body = api_types::ErrorBody), (status = 429, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn archive(
+  State(app): State<AppState>,
+  caller: Authorized<AnyRole>,
+  Path((name, path)): Path<(String, String)>,
+  Query(query): Query<ArchiveQuery>,
+) -> Result<Response, ApiError> {
+  let root = root(&name)?;
+  let path = validate::files_path(&path, false)?;
+  serving(&app)?;
+  app
+    .services
+    .files
+    .archive(&caller.principal, root, &path, query.name)
+    .await
+}
+
+/// A token that lets a link load one file for ten minutes, for a browser that cannot send the
+/// session with the link.
+#[utoipa::path(
+  post, path = "/session/file-token", tag = "files", request_body = FileTokenRequest,
+  responses(
+    (status = 200, body = FileToken), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn link_token(
+  State(app): State<AppState>,
+  caller: Authorized<AnyRole>,
+  Json(request): Json<FileTokenRequest>,
+) -> Result<Json<FileToken>, ApiError> {
+  if let FileTokenRequest::Path { path } = &request {
+    let (name, encoded) = path
+      .split_once('/')
+      .ok_or_else(|| ApiError::bad_request("path must be <root>/<base64 path>"))?;
+    root(name)?;
+    validate::files_path(encoded, false)?;
+  }
+  serving(&app)?;
+  app
+    .services
+    .files
+    .link_token(&caller.principal, request)
+    .await
+    .map(Json)
+}
