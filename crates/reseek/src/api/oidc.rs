@@ -527,20 +527,36 @@ mod tests {
     let cookie = set_cookie(&back(&app, &started, "c2").await.headers, "reseek_session").unwrap();
     assert_eq!(me(&app, &cookie).await.json()["role"], "Administrator");
     let now = chrono::Utc::now().timestamp();
-    let token = issuer.sign(&json!({
-      "iss": issuer.url, "aud": CLIENT_ID, "iat": now, "jti": "j1", "sid": "s2",
-      "events": { "http://schemas.openid.net/event/backchannel-logout": {} },
-    }));
+    let logout = |claims: Value| {
+      let token = issuer.sign(&claims);
+      axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/v0/auth/oidc/home/backchannel")
+        .header("host", "localhost")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(axum::body::Body::from(format!("logout_token={token}")))
+        .unwrap()
+    };
+    let events = json!({ "http://schemas.openid.net/event/backchannel-logout": {} });
+    let lasting = app
+      .send_from(
+        OUTSIDE,
+        logout(json!({ "iss": issuer.url, "aud": CLIENT_ID, "iat": now, "jti": "j0", "sid": "s2", "events": events })),
+      )
+      .await;
+    assert_eq!(lasting.status, 200, "always answered 200");
+    assert_eq!(
+      me(&app, &cookie).await.status,
+      200,
+      "a logout token without an expiry ends nothing"
+    );
     let posted = app
       .send_from(
         OUTSIDE,
-        axum::http::Request::builder()
-          .method("POST")
-          .uri("/api/v0/auth/oidc/home/backchannel")
-          .header("host", "localhost")
-          .header("content-type", "application/x-www-form-urlencoded")
-          .body(axum::body::Body::from(format!("logout_token={token}")))
-          .unwrap(),
+        logout(json!({
+          "iss": issuer.url, "aud": CLIENT_ID, "iat": now, "exp": now + 120, "jti": "j1",
+          "sid": "s2", "events": events,
+        })),
       )
       .await;
     assert_eq!(posted.status, 200);

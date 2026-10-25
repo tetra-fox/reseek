@@ -62,12 +62,10 @@ pub async fn check_token(
     Some(_) => return Err("issued in the future".to_string()),
     None => return Err("no issue time".to_string()),
   }
-  if claims
-    .get("exp")
-    .and_then(Value::as_i64)
-    .is_some_and(|expires| expires + leeway < now)
-  {
-    return Err("expired".to_string());
+  match claims.get("exp").and_then(Value::as_i64) {
+    Some(expires) if expires + leeway >= now => {}
+    Some(_) => return Err("expired".to_string()),
+    None => return Err("no expiry".to_string()),
   }
   if claims.get("nonce").is_some() {
     return Err("a logout token has no nonce".to_string());
