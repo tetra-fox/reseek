@@ -49,6 +49,8 @@
           );
           # the Soulseek server the client and daemon test suites start
           soulfind = pkgs.callPackage ./nix/soulfind.nix { };
+          # the other user in `just e2e`
+          soulseek-rs = pkgs.callPackage ./nix/soulseek-rs.nix { };
         in
         {
           default = pkgs.mkShell {
@@ -63,6 +65,7 @@
               typos
               sqlite
               soulfind
+              soulseek-rs
 
               nodejs_24
               pnpm
