@@ -69,8 +69,9 @@ live-smoke-local:
 # Run by hand only, never from ci or by an agent: it logs in to the real Soulseek server with
 # the throwaway account in RESEEK_TEST_USERNAME and RESEEK_TEST_PASSWORD. --help lists the rest
 [doc("the live smoke example against the real Soulseek server, run by hand only")]
+[positional-arguments]
 live-smoke *ARGS:
-    cargo run -p soulseek-client --example live_smoke -- {{ ARGS }}
+    cargo run -p soulseek-client --example live_smoke -- "$@"
 
 # the gate for every push
 ci: lint test api-check e2e live-smoke-local
