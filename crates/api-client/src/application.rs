@@ -69,17 +69,14 @@ impl Client {
     text(self.get(Route::new("logs/files").segment(filename))).await
   }
 
-  /// `POST /application/gc`: asks for a garbage collection, which does nothing.
+  /// `POST /application/gc`: asks for a garbage collection, which does nothing. A diagnostic
+  /// route the API document leaves out.
   pub async fn collect_garbage(&self) -> Result<()> {
     done(self.post(Route::new("application/gc"))).await
   }
 
-  /// `GET /application/dump`: asks for a memory dump, which is refused.
-  pub async fn dump(&self) -> Result<()> {
-    done(self.get(Route::new("application/dump"))).await
-  }
-
-  /// `GET /debug/transfers`: the Soulseek client's own records of its transfers.
+  /// `GET /debug/transfers`: the Soulseek client's own records of its transfers. A diagnostic
+  /// route the API document leaves out.
   pub async fn debug_transfers(&self) -> Result<DebugTransfers> {
     json(self.get(Route::new("debug/transfers"))).await
   }
