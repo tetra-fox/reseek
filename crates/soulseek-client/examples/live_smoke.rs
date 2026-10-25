@@ -102,7 +102,7 @@ async fn main() -> ExitCode {
   init_logging();
   match run(&config).await {
     Ok(()) => {
-      tracing::info!("smoke test passed");
+      eprintln!("live smoke passed");
       ExitCode::SUCCESS
     }
     Err(failure) => {
@@ -277,7 +277,7 @@ async fn steps(
   tracing::info!(room = room.name, members = room.user_count(), "joined room");
 
   let responses = search(client, &config.query, cancel)
-    .instrument(tracing::info_span!("step", step = "search"))
+    .instrument(step_span("search"))
     .await?;
   let pick = pick(&responses, config.max_size).ok_or_else(|| {
     Failure::new(
@@ -337,8 +337,10 @@ async fn step<T>(
   cancel: &CancellationToken,
   work: impl Future<Output = Result<T, ClientError>>,
 ) -> Result<T, Failure> {
-  let span = tracing::info_span!("step", step = name);
-  match tokio::time::timeout(limit, work).instrument(span).await {
+  match tokio::time::timeout(limit, work)
+    .instrument(step_span(name))
+    .await
+  {
     Ok(Ok(value)) => Ok(value),
     Ok(Err(error)) => Err(Failure::new(name, error.to_string())),
     Err(_) => {
@@ -346,6 +348,11 @@ async fn step<T>(
       Err(Failure::new(name, timed_out(limit)))
     }
   }
+}
+
+/// the span every line logged during a step carries
+fn step_span(name: &'static str) -> tracing::Span {
+  tracing::info_span!("step", step = name)
 }
 
 fn timed_out(limit: Duration) -> String {
