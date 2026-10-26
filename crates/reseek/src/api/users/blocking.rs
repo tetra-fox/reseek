@@ -13,7 +13,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 use crate::api::error::ApiError;
-use crate::api::extract::{Json, NamedUser, Query};
+use crate::api::extract::{Json, NamedUser, Query, essence};
 use crate::api::validate;
 use crate::app::AppState;
 use crate::auth::{Administrator, AnyRole, Authorized, ReadWrite};
@@ -161,8 +161,7 @@ fn block_import(headers: &HeaderMap, body: &[u8]) -> Result<BlockImport, ApiErro
   let kind = headers
     .get(header::CONTENT_TYPE)
     .and_then(|value| value.to_str().ok())
-    .and_then(|value| value.split(';').next())
-    .map(|value| value.trim().to_ascii_lowercase())
+    .map(essence)
     .unwrap_or_default();
   match kind.as_str() {
     "text/plain" => {

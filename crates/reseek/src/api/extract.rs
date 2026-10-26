@@ -64,15 +64,21 @@ async fn json_bytes<S: Send + Sync>(request: Request, state: &S) -> Result<Bytes
   }
 }
 
-/// Whether a `Content-Type` is JSON: `application/json` or a `+json` type, with any
-/// parameters.
-fn is_json(content_type: &str) -> bool {
-  let essence = content_type
+/// A `Content-Type`'s media type without its parameters, in lower case: `text/plain` for
+/// `Text/Plain; charset=utf-8`.
+pub fn essence(content_type: &str) -> String {
+  content_type
     .split(';')
     .next()
     .unwrap_or_default()
     .trim()
-    .to_ascii_lowercase();
+    .to_ascii_lowercase()
+}
+
+/// Whether a `Content-Type` is JSON: `application/json` or a `+json` type, with any
+/// parameters.
+fn is_json(content_type: &str) -> bool {
+  let essence = essence(content_type);
   essence == "application/json"
     || (essence.starts_with("application/") && essence.ends_with("+json"))
 }
