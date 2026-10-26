@@ -23,7 +23,8 @@ fn answered_here(operation: &Operation) -> bool {
   let under = |prefix: &str| route == prefix || route.starts_with(&format!("{prefix}/"));
   under("/api/v0/application")
     || (route == "/api/v0/server" && operation.method == Method::GET)
-    || route == "/api/v0/logs/live"
+    || under("/api/v0/logs")
+    || under("/api/v0/files")
     || under("/api/v0/options")
     || (under("/api/v0/session") && route != "/api/v0/session/file-token")
     || under("/api/v0/sessions")
@@ -62,7 +63,11 @@ async fn every_route_is_answered_and_the_unbuilt_ones_say_so() {
   assert!(operations.len() > 150, "{} operations", operations.len());
   for operation in &operations {
     let answer = answer(&app, operation).await;
-    let routed = answer.status != 405 && !(answer.status == 404 && answer.body.is_empty());
+    // a HEAD answer never has a body, so its 404 for a missing file looks like no route; its
+    // GET twin is checked on its own
+    let unrouted_404 =
+      answer.status == 404 && answer.body.is_empty() && operation.method != Method::HEAD;
+    let routed = answer.status != 405 && !unrouted_404;
     assert!(routed, "{operation:?} is not routed: {}", answer.status);
     if answered_here(operation) {
       continue;
