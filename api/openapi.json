@@ -14841,7 +14841,8 @@
         "description": "The loop that reconnects to the Soulseek server.",
         "required": [
           "isEnabled",
-          "isAttemptingConnection"
+          "isAttemptingConnection",
+          "isLoginUnanswered"
         ],
         "properties": {
           "isAttemptingConnection": {
@@ -14851,6 +14852,10 @@
           "isEnabled": {
             "type": "boolean",
             "description": "the loop is active and keeps trying"
+          },
+          "isLoginUnanswered": {
+            "type": "boolean",
+            "description": "the server did not answer the last login, which is how it treats a banned account; the\nattempts are then 15 minutes, an hour and after that 6 hours apart"
           },
           "nextAttemptAt": {
             "type": [
@@ -18915,6 +18920,14 @@
           "isPrivileged": {
             "type": "boolean",
             "description": "`privilegesRemaining` is above zero"
+          },
+          "privilegedUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "when the privileges run out, null without any"
           },
           "privilegesRemaining": {
             "type": "integer",

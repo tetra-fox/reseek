@@ -118,6 +118,9 @@ pub struct ConnectionWatchdogState {
   pub is_attempting_connection: bool,
   /// when the next attempt starts, null when none is scheduled
   pub next_attempt_at: Option<DateTime<Utc>>,
+  /// the server did not answer the last login, which is how it treats a banned account; the
+  /// attempts are then 15 minutes, an hour and after that 6 hours apart
+  pub is_login_unanswered: bool,
 }
 
 /// Sampled health figures.
@@ -168,6 +171,8 @@ pub struct Privileges {
   pub is_privileged: bool,
   /// seconds of privilege left
   pub privileges_remaining: u32,
+  /// when the privileges run out, null without any
+  pub privileged_until: Option<DateTime<Utc>>,
 }
 
 /// A user's statistics as the Soulseek server keeps them.

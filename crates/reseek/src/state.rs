@@ -111,6 +111,7 @@ fn initial(loaded: &Loaded<Options>) -> State {
       is_enabled: false,
       is_attempting_connection: false,
       next_attempt_at: None,
+      is_login_unanswered: false,
     },
     relay: RelayState {
       mode,
@@ -134,6 +135,7 @@ fn initial(loaded: &Loaded<Options>) -> State {
       privileges: Privileges {
         is_privileged: false,
         privileges_remaining: 0,
+        privileged_until: None,
       },
       statistics: UserStatistics {
         average_speed: 0,
