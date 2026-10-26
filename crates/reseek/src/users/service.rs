@@ -207,7 +207,9 @@ impl UserService for Directory {
         )),
       ));
     }
-    self.change(username, Change::Group(group)).await
+    self.change(username, Change::Group(group.clone())).await?;
+    self.group_changed(username, group);
+    Ok(())
   }
 
   async fn transfers(
@@ -233,6 +235,7 @@ impl UserService for Directory {
       )));
     }
     self.blocks.unset(username);
+    self.group_changed(username, None);
     if purge {
       let removed = transfers::remove_all(&self.transfers, username)
         .await

@@ -66,6 +66,14 @@ pub const COLUMNS: &str = "username, first_seen_at, last_seen_at, last_presence,
                            has_picture, upload_slots, queue_length, has_free_slot, info_at, \
                            notes, tags, group_override, muted, pinned";
 
+/// Every user we put in a user-defined group, with the group.
+pub fn overrides(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+  conn
+    .prepare("SELECT username, group_override FROM users WHERE group_override IS NOT NULL")?
+    .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+    .collect()
+}
+
 /// A presence as stored.
 pub fn presence_text(presence: UserPresence) -> &'static str {
   match presence {

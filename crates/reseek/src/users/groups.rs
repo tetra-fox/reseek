@@ -27,16 +27,59 @@ pub fn configured(options: &Options, username: &str) -> Option<(String, u32)> {
     .min_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)))
 }
 
+/// What a user's group is worked out from, besides the configuration.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Facts {
+  /// the server calls them privileged
+  pub privileged: bool,
+  /// the files and directories they share, as the server last said; `None` until it said
+  pub shared: Option<Shared>,
+  /// the user-defined group we put them in
+  pub group_override: Option<String>,
+}
+
+/// How much a user shares.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Shared {
+  /// shared files
+  pub files: u32,
+  /// shared directories
+  pub directories: u32,
+}
+
+impl Facts {
+  /// The facts a user's stored row holds.
+  pub fn of(stored: &Stored) -> Self {
+    Self {
+      privileged: stored.is_privileged,
+      shared: stored.statistics.as_ref().map(|(statistics, _)| Shared {
+        files: statistics.file_count,
+        directories: statistics.directory_count,
+      }),
+      group_override: stored.group_override.clone(),
+    }
+  }
+}
+
 /// The group `username` is in, from what is stored about them. A group we put them in that
 /// the configuration no longer has is passed over.
 pub fn effective(options: &Options, username: &str, stored: Option<&Stored>) -> UserGroup {
+  resolve(
+    options,
+    username,
+    &stored.map(Facts::of).unwrap_or_default(),
+  )
+}
+
+/// The group `username` is in by `facts`. Shares not known make no leecher.
+pub fn resolve(options: &Options, username: &str, facts: &Facts) -> UserGroup {
   let groups = &options.transfers.groups;
   let builtin = |name: &str, priority: u32| UserGroup {
     name: name.to_string(),
     source: GroupSource::Builtin,
     priority,
   };
-  if stored.is_some_and(|s| s.is_privileged) {
+  if facts.privileged {
     return builtin(PRIVILEGED, 0);
   }
   if let Some((name, priority)) = configured(options, username) {
@@ -46,7 +89,7 @@ pub fn effective(options: &Options, username: &str, stored: Option<&Stored>) -> 
       priority,
     };
   }
-  if let Some(name) = stored.and_then(|s| s.group_override.as_ref())
+  if let Some(name) = &facts.group_override
     && let Some(group) = groups.user_defined.get(name)
   {
     return UserGroup {
@@ -56,12 +99,9 @@ pub fn effective(options: &Options, username: &str, stored: Option<&Stored>) -> 
     };
   }
   let thresholds = &groups.leechers.thresholds;
-  let leeches = stored
-    .and_then(|s| s.statistics.as_ref())
-    .is_some_and(|(statistics, _)| {
-      statistics.file_count < thresholds.files
-        || statistics.directory_count < thresholds.directories
-    });
+  let leeches = facts.shared.is_some_and(|shared| {
+    shared.files < thresholds.files || shared.directories < thresholds.directories
+  });
   if leeches {
     return builtin(LEECHERS, groups.leechers.upload.priority);
   }

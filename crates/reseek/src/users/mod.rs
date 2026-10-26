@@ -2,11 +2,13 @@
 //! deal with them, our notes, tags, pins, mutes and groups for them, the figures of their
 //! transfers, and who is blocked from what.
 //!
-//! [`Directory`] is the one engine: the API's users directory and blocking calls, and the two
-//! calls the network engines make, [`Directory::touch`] and [`Directory::is_blocked`].
+//! [`Directory`] is the one engine: the API's users directory and blocking calls, and what the
+//! network engines ask of it: [`Directory::touch`], [`Directory::is_blocked`] and each user's
+//! upload group, [`Directory::group`] and [`Directory::fetch_group`].
 
 mod blocking;
 mod blocklist;
+mod group_cache;
 mod groups;
 mod listing;
 mod profile;
@@ -19,7 +21,7 @@ mod touch;
 mod transfers;
 
 pub use blocking::reason_fits;
-pub use groups::DEFAULT as DEFAULT_GROUP;
+pub use groups::{DEFAULT as DEFAULT_GROUP, LEECHERS, PRIVILEGED};
 
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -45,6 +47,7 @@ use crate::events::EventBus;
 use crate::live::Live;
 use blocking::Blocks;
 use blocklist::Blocklist;
+use group_cache::GroupCache;
 use store::Stored;
 use touch::Toucher;
 use transfers::FigureCache;
@@ -63,14 +66,16 @@ pub struct Directory {
   events: EventBus,
   toucher: Toucher,
   blocks: Blocks,
+  /// what each user's upload group is worked out from
+  groups: GroupCache,
   figures: FigureCache,
   summaries: Mutex<HashMap<String, (Instant, UserSummary)>>,
 }
 
 impl Directory {
-  /// Opens `users.db` in `location` and loads the blocks and the blocklist file, then starts
-  /// the touch writer, the expiry and retention sweeps and the follower of the configuration,
-  /// which all stop when `shutdown` is cancelled.
+  /// Opens `users.db` in `location` and loads the blocks, the groups we put users in and the
+  /// blocklist file, then starts the touch writer, the expiry and retention sweeps and the
+  /// follower of the configuration, which all stop when `shutdown` is cancelled.
   pub async fn open(
     location: &Location,
     transfers: Database,
@@ -82,8 +87,8 @@ impl Directory {
     let db = Database::open(&store::SCHEMA, location)
       .await
       .map_err(|e| format!("users.db: {e}"))?;
-    let ours = db
-      .read(|conn| blocking::stored(conn, Utc::now()))
+    let (ours, overrides) = db
+      .read(|conn| Ok((blocking::stored(conn, Utc::now())?, store::overrides(conn)?)))
       .await
       .map_err(|e| format!("users.db: {e}"))?;
     let options = config.current().values.clone();
@@ -106,6 +111,7 @@ impl Directory {
       events,
       toucher,
       blocks,
+      groups: GroupCache::new(overrides),
       figures: FigureCache::default(),
       summaries: Mutex::new(HashMap::new()),
     });
