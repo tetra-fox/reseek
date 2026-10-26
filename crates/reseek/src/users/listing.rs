@@ -8,7 +8,7 @@ use rusqlite::params_from_iter;
 use rusqlite::types::Value;
 
 use super::store::{COLUMNS, Stored, presence_text, stored};
-use super::{Directory, groups, transfers};
+use super::{Directory, blocking, groups, transfers};
 use crate::api::error::ApiError;
 use crate::db::timestamp;
 
@@ -42,7 +42,8 @@ impl Directory {
     }
     let sql = format!(
       "SELECT {COLUMNS}, EXISTS (SELECT 1 FROM blocks b WHERE b.username = users.username \
-       AND (b.expires_at IS NULL OR b.expires_at > ?1)) FROM users WHERE {}",
+       AND {}) FROM users WHERE {}",
+      blocking::stands_sql("b", "?1"),
       filter.join(" AND ")
     );
     let rows = self

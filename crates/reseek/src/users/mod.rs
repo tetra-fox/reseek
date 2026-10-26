@@ -176,7 +176,7 @@ impl Directory {
         Ok((row, ours))
       })
       .await?;
-    let ours = ours.filter(|b| b.expires_at.is_none_or(|end| end > now));
+    let ours = ours.filter(|b| blocking::stands(b.expires_at, now));
     let block = ours.or_else(|| {
       self
         .blocks

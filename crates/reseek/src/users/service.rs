@@ -106,7 +106,7 @@ impl Directory {
       .read(move |conn| blocking::stored_of(conn, &name))
       .await
       .map_err(internal)?;
-    Ok(ours.is_some_and(|b| b.expires_at.is_none_or(|end| end > now)))
+    Ok(ours.is_some_and(|b| blocking::stands(b.expires_at, now)))
   }
 }
 
@@ -367,7 +367,7 @@ impl BlockingService for Directory {
         blocks.len(),
         blocks
           .into_iter()
-          .filter(|b| b.source == BlockSource::Api && b.expires_at.is_none_or(|end| end > now))
+          .filter(|b| b.source == BlockSource::Api && blocking::stands(b.expires_at, now))
           .map(|b| (b.username, b.reason, b.scopes, b.expires_at))
           .collect(),
       ),

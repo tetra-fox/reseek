@@ -84,10 +84,21 @@ fn block(row: &Row) -> rusqlite::Result<Block> {
   })
 }
 
-/// Every block in `blocks` that has not expired by `now`, ordered by username.
+/// Whether a block that ends at `expires_at`, never when `None`, still stands at `now`.
+pub fn stands(expires_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> bool {
+  expires_at.is_none_or(|end| end > now)
+}
+
+/// [`stands`] as SQL, for the `blocks` row `row` and the time bound as `now`, such as `?1`.
+pub fn stands_sql(row: &str, now: &str) -> String {
+  format!("({row}.expires_at IS NULL OR {row}.expires_at > {now})")
+}
+
+/// Every block in `blocks` that still stands at `now`, ordered by username.
 pub fn stored(conn: &Connection, now: DateTime<Utc>) -> rusqlite::Result<Vec<Block>> {
   let mut statement = conn.prepare_cached(&format!(
-    "SELECT {COLUMNS} FROM blocks WHERE expires_at IS NULL OR expires_at > ?1 ORDER BY username"
+    "SELECT {COLUMNS} FROM blocks WHERE {} ORDER BY username",
+    stands_sql("blocks", "?1")
   ))?;
   let rows = statement.query_map([timestamp(now)], block)?;
   rows.collect()
@@ -132,11 +143,12 @@ pub fn delete(conn: &Connection, username: &str) -> rusqlite::Result<bool> {
   Ok(conn.execute("DELETE FROM blocks WHERE username = ?1", [username])? == 1)
 }
 
-/// Deletes the blocks that expired by `now` and returns their users.
+/// Deletes the blocks that no longer stand at `now` and returns their users.
 pub fn expire(conn: &Connection, now: DateTime<Utc>) -> rusqlite::Result<Vec<String>> {
-  let mut statement = conn.prepare_cached(
-    "DELETE FROM blocks WHERE expires_at IS NOT NULL AND expires_at <= ?1 RETURNING username",
-  )?;
+  let mut statement = conn.prepare_cached(&format!(
+    "DELETE FROM blocks WHERE NOT {} RETURNING username",
+    stands_sql("blocks", "?1")
+  ))?;
   let rows = statement.query_map([timestamp(now)], |row| row.get(0))?;
   rows.collect()
 }
