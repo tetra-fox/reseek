@@ -130,7 +130,9 @@ impl Shares {
     }
     let options = self.config.current();
     let settings = Arc::new(Settings::new(self.listed(), &options.values));
-    if scanner::content(&latest.options) != settings.snapshot.get("content").cloned() {
+    let recorded = scanner::content(&latest.options)
+      .map_err(|e| format!("Previous share scan recorded options that can not be read: {e}"))?;
+    if recorded != settings.snapshot.get("content").cloned() {
       return Err("Share options changed since previous scan".into());
     }
     let totals = self

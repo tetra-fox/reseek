@@ -53,7 +53,7 @@ pub(super) fn delete(
     Err(Refused::RootMissing) => return Err(missing()),
     Err(Refused::Outside) => return Err(outside()),
     Err(Refused::Denied(e)) => return Err(denied(&shown, noun, &e)),
-    Err(Refused::Io(e)) => return Err(ApiError::internal(e)),
+    Err(Refused::Io(e)) => return Err(super::unreadable(noun, &shown, e)),
   };
   let segments: Vec<&str> = relative.split('/').filter(|s| !s.is_empty()).collect();
   let Some((name, parents)) = segments.split_last() else {

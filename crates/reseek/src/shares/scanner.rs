@@ -91,11 +91,11 @@ pub(super) fn content_of(shares: &[Share], options: &Options) -> serde_json::Val
   })
 }
 
-/// The part of a recorded snapshot that decides what is shared.
-pub fn content(snapshot: &str) -> Option<serde_json::Value> {
-  serde_json::from_str::<serde_json::Value>(snapshot)
-    .ok()
-    .and_then(|mut value| value.get_mut("content").map(serde_json::Value::take))
+/// The part of a recorded snapshot that decides what is shared, `None` when it has none; an
+/// error when the snapshot is no JSON.
+pub fn content(snapshot: &str) -> Result<Option<serde_json::Value>, serde_json::Error> {
+  let mut value = serde_json::from_str::<serde_json::Value>(snapshot)?;
+  Ok(value.get_mut("content").map(serde_json::Value::take))
 }
 
 /// The time now in epoch milliseconds.
@@ -413,7 +413,7 @@ pub(super) mod tests {
     let latest = db.read(repository::latest_scan).await.unwrap().unwrap();
     assert!(latest.ended_at.is_some() && !latest.suspect);
     assert_eq!(
-      content(&latest.options).unwrap()["filters"],
+      content(&latest.options).unwrap().unwrap()["filters"],
       json!(["/Thumbs$", r"\.ini$"])
     );
   }
