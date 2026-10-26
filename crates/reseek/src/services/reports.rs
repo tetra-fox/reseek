@@ -12,6 +12,7 @@ use async_trait::async_trait;
 
 use super::not_yet;
 use crate::api::error::ApiError;
+use crate::telemetry::reports::Width;
 
 const DOMAIN: &str = "reports";
 
@@ -45,6 +46,7 @@ pub trait ReportService: Send + Sync {
   async fn histogram(
     &self,
     query: HistogramQuery,
+    width: Width,
   ) -> Result<BTreeMap<String, DirectionSummaries>, ApiError> {
     Err(not_yet(DOMAIN))
   }

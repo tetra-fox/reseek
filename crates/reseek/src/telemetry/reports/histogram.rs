@@ -3,6 +3,7 @@
 //! window is listed, empty or not.
 
 use std::collections::BTreeMap;
+use std::num::NonZeroU32;
 
 use api_types::reports::{DirectionSummaries, HistogramQuery, TransferSummary};
 use api_types::transfers::TransferDirection;
@@ -18,9 +19,9 @@ use crate::transfers::direction_at;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Width {
   /// this many minutes each
-  Minutes(u32),
-  /// the window cut into this many buckets of equal whole seconds
-  Buckets(u32),
+  Minutes(NonZeroU32),
+  /// the window cut into this many buckets of equal whole seconds, at least one each
+  Buckets(NonZeroU32),
 }
 
 /// The most buckets a histogram has; a narrower interval over a wider window is refused.
@@ -68,10 +69,10 @@ impl Reports {
       };
     }
     let width = match width {
-      Width::Minutes(minutes) => i64::from(minutes.max(1)) * 60,
+      Width::Minutes(minutes) => i64::from(minutes.get()) * 60,
       Width::Buckets(buckets) => {
         let seconds = (end - start).num_seconds().max(0);
-        (seconds / i64::from(buckets.max(1))).max(1)
+        (seconds / i64::from(buckets.get())).max(1)
       }
     };
     let first = start.timestamp().div_euclid(width) * width;
@@ -172,13 +173,19 @@ mod tests {
     let mut fast = row("bob", Upload, 48, at(1, 40));
     fast.size = 600;
     fast.started_at = Some(at(1, 38));
-    let on_the_end = row("carol", Download, 48, at(3, 0));
-    let failed = row("dave", Download, 272, at(2, 59));
+    // the window ends inside the last bucket, so only the exclusive end leaves this one out
+    let on_the_end = row("carol", Download, 48, at(2, 30));
+    let failed = row("dave", Download, 272, at(2, 29));
     insert(&db, vec![slow, fast, on_the_end, failed]).await;
     let reports = Reports::new(db);
-    let histogram = cut(&reports, at(0, 30), at(3, 0), Width::Minutes(60))
-      .await
-      .unwrap();
+    let histogram = cut(
+      &reports,
+      at(0, 30),
+      at(2, 30),
+      Width::Minutes(NonZeroU32::new(60).unwrap()),
+    )
+    .await
+    .unwrap();
     let keys: Vec<_> = histogram.keys().cloned().collect();
     assert_eq!(
       keys,
@@ -187,7 +194,7 @@ mod tests {
         "2026-03-01T01:00:00Z",
         "2026-03-01T02:00:00Z"
       ],
-      "the first bucket starts before the window, the last ends at it"
+      "the first bucket starts before the window, the last holds its end"
     );
     let one = &histogram["2026-03-01T01:00:00Z"].upload[&TransferOutcome::Succeeded];
     assert_eq!(
@@ -209,9 +216,14 @@ mod tests {
   async fn a_bucket_count_divides_the_window_in_whole_seconds() {
     let reports = Reports::new(transfers().await);
     let week = at(0, 0) + chrono::Duration::days(7);
-    let histogram = cut(&reports, at(0, 0), week, Width::Buckets(84))
-      .await
-      .unwrap();
+    let histogram = cut(
+      &reports,
+      at(0, 0),
+      week,
+      Width::Buckets(NonZeroU32::new(84).unwrap()),
+    )
+    .await
+    .unwrap();
     assert_eq!(histogram.len(), 84);
     let mut keys = histogram.keys();
     keys.next();
@@ -222,10 +234,15 @@ mod tests {
     );
     let day = at(0, 7) + chrono::Duration::days(1);
     assert_eq!(
-      cut(&reports, at(0, 7), day, Width::Buckets(24))
-        .await
-        .unwrap()
-        .len(),
+      cut(
+        &reports,
+        at(0, 7),
+        day,
+        Width::Buckets(NonZeroU32::new(24).unwrap())
+      )
+      .await
+      .unwrap()
+      .len(),
       25,
       "a start between bucket starts adds one"
     );
@@ -239,14 +256,25 @@ mod tests {
     insert(&db, vec![old]).await;
     let reports = Reports::new(db);
     let epoch = "1970-01-01T00:00:00Z".parse().unwrap();
-    let histogram = cut(&reports, epoch, at(6, 0), Width::Minutes(60))
-      .await
-      .unwrap();
+    let histogram = cut(
+      &reports,
+      epoch,
+      at(6, 0),
+      Width::Minutes(NonZeroU32::new(60).unwrap()),
+    )
+    .await
+    .unwrap();
     assert_eq!(histogram.keys().next().unwrap(), "2026-03-01T04:00:00Z");
     assert_eq!(histogram.len(), 2);
     let year = at(0, 0) + chrono::Duration::days(365);
     assert!(matches!(
-      cut(&reports, at(0, 0), year, Width::Minutes(1)).await,
+      cut(
+        &reports,
+        at(0, 0),
+        year,
+        Width::Minutes(NonZeroU32::new(1).unwrap())
+      )
+      .await,
       Err(HistogramError::TooManyBuckets(_))
     ));
   }

@@ -5,6 +5,7 @@
 //! are left out, as each route says, and refuses a window that ends before it starts.
 
 use std::collections::BTreeMap;
+use std::num::NonZeroU32;
 
 use api_types::reports::{
   DirectionSummaries, DirectoriesQuery, DirectoryCount, ExceptionCount, ExceptionsQuery,
@@ -25,13 +26,13 @@ use super::validate;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized};
 use crate::db;
-use crate::telemetry::reports::{GENESIS, genesis};
+use crate::telemetry::reports::{GENESIS, Width, genesis};
 
 /// The most buckets a histogram has.
 const BUCKETS_MAX: u32 = 1000;
 
 /// The buckets a histogram has when neither `buckets` nor `interval` is given.
-const BUCKETS_DEFAULT: u32 = 100;
+const BUCKETS_DEFAULT: NonZeroU32 = NonZeroU32::new(100).expect("100 is not zero");
 
 /// The telemetry routes.
 pub fn routes() -> OpenApiRouter<AppState> {
@@ -188,24 +189,22 @@ async fn histogram(
       "End time impossibly early (earlier than {GENESIS})"
     )));
   }
-  match (query.buckets, query.interval) {
+  let width = match (query.buckets, query.interval) {
     (Some(_), Some(_)) => {
       return Err(ApiError::bad_request(
         "Specify either interval or buckets, not both",
       ));
     }
-    (Some(buckets), None) if !(1..=BUCKETS_MAX).contains(&buckets) => {
-      return Err(ApiError::bad_request(
-        "Buckets must be between 1 and 1000, if specified",
-      ));
-    }
-    (None, Some(0)) => {
-      return Err(ApiError::bad_request("Interval must be at least 1"));
-    }
-    (None, None) => query.buckets = Some(BUCKETS_DEFAULT),
-    _ => {}
-  }
-  app.services.reports.histogram(query).await.map(Json)
+    (Some(buckets), None) => NonZeroU32::new(buckets)
+      .filter(|b| b.get() <= BUCKETS_MAX)
+      .map(Width::Buckets)
+      .ok_or_else(|| ApiError::bad_request("Buckets must be between 1 and 1000, if specified"))?,
+    (None, Some(minutes)) => NonZeroU32::new(minutes)
+      .map(Width::Minutes)
+      .ok_or_else(|| ApiError::bad_request("Interval must be at least 1"))?,
+    (None, None) => Width::Buckets(BUCKETS_DEFAULT),
+  };
+  app.services.reports.histogram(query, width).await.map(Json)
 }
 
 /// Users ranked by their successful transfers in one direction. The window is everything

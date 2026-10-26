@@ -150,17 +150,9 @@ impl ReportService for Telemetry {
   async fn histogram(
     &self,
     query: HistogramQuery,
+    width: Width,
   ) -> Result<BTreeMap<String, DirectionSummaries>, ApiError> {
     let (start, end) = (query.start, query.end);
-    let width = match (query.interval, query.buckets) {
-      (Some(minutes), _) => Width::Minutes(minutes),
-      (None, Some(buckets)) => Width::Buckets(buckets),
-      (None, None) => {
-        return Err(ApiError::internal(
-          "a histogram was asked for without its width",
-        ));
-      }
-    };
     match self
       .reports
       .histogram(window(start, end)?, width, query)
