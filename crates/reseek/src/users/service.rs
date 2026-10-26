@@ -319,7 +319,7 @@ impl BlockingService for Directory {
     let name = username.to_string();
     let deleted = self
       .db
-      .write(move |conn| blocking::delete(conn, &name))
+      .write(move |conn| blocking::delete(conn, &name, Utc::now()))
       .await
       .map_err(internal)?;
     if !deleted {

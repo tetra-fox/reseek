@@ -142,9 +142,17 @@ pub fn store(conn: &mut Connection, block: &Block, now: DateTime<Utc>) -> rusqli
   tx.commit()
 }
 
-/// Deletes `username`'s block; false when there was none.
-pub fn delete(conn: &Connection, username: &str) -> rusqlite::Result<bool> {
-  Ok(conn.execute("DELETE FROM blocks WHERE username = ?1", [username])? == 1)
+/// Deletes `username`'s block if it still stands at `now`; false when there was none. An
+/// expired block is left for the sweep, which reports it as expired.
+pub fn delete(conn: &Connection, username: &str, now: DateTime<Utc>) -> rusqlite::Result<bool> {
+  let deleted = conn.execute(
+    &format!(
+      "DELETE FROM blocks WHERE username = ?1 AND {}",
+      stands_sql("blocks", "?2")
+    ),
+    rusqlite::params![username, timestamp(now)],
+  )?;
+  Ok(deleted == 1)
 }
 
 /// Deletes the blocks that no longer stand at `now` and returns their users.

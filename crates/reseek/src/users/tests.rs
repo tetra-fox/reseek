@@ -373,6 +373,11 @@ async fn an_expired_block_is_swept_with_its_event() {
     !directory.is_blocked("alice", None, BlockScope::Uploads),
     "expired already"
   );
+  let (status, _) = send(&app, "DELETE", "/api/v0/users/alice/block", None).await;
+  assert_eq!(
+    status, 404,
+    "an expired block is not lifted, the sweep ends it"
+  );
   directory.expire_blocks().await;
   let record = tokio::time::timeout(std::time::Duration::from_secs(5), received.recv())
     .await
