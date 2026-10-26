@@ -30,7 +30,11 @@ pub(super) fn check(soulseek: &Soulseek, report: &mut Report) {
   let key = "soulseek.browse.response_timeout";
   report.check(
     key,
-    duration_at_least(key, soulseek.browse.response_timeout, Duration::from_secs(1)),
+    duration_at_least(
+      key,
+      soulseek.browse.response_timeout,
+      Duration::from_secs(1),
+    ),
   );
   let key = "soulseek.distributed_network.child_limit";
   report.check(
