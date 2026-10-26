@@ -46,7 +46,10 @@ pub(super) async fn follow(
           );
         }
         let client = app.network.client();
-        server_state(&app, client.state());
+        let state = client.state();
+        // a missed StateChanged may have been the one that reached the server
+        reached |= state.contains(ClientState::CONNECTED);
+        server_state(&app, state);
         distributed_network(&app, &client.distributed_network());
       }
       Err(RecvError::Closed) => return,
