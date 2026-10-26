@@ -11,8 +11,8 @@ use rusqlite::params_from_iter;
 use rusqlite::types::Value;
 
 use super::{Filter, Reports, SUMMARY, summary_at};
-use crate::transfers::categories::SUCCESSFUL;
 use crate::db::{self, DbError};
+use crate::transfers::categories::SUCCESSFUL;
 
 impl Reports {
   /// Users ranked by their successful transfers in one direction, ties broken by username

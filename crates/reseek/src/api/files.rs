@@ -163,11 +163,6 @@ async fn delete_directory(
   let root = root(&name)?;
   let path = validate::files_path(&path, true)?;
   deleting(&app, &caller.principal, &path)?;
-  if path.is_empty() {
-    return Err(ApiError::forbidden(
-      "a directory root itself is not deleted",
-    ));
-  }
   app.services.files.delete_directory(root, &path).await?;
   info!(
     by = caller.principal.subject,
@@ -336,19 +331,24 @@ async fn link_token(
   caller: Authorized<AnyRole>,
   Json(request): Json<FileTokenRequest>,
 ) -> Result<Json<FileToken>, ApiError> {
-  if let FileTokenRequest::Path { path } = &request {
-    let malformed = || ApiError::bad_request("path must be <root>/<base64 path>");
-    let (name, encoded) = path.split_once('/').ok_or_else(malformed)?;
-    root(name).map_err(|_| malformed())?;
-    validate::files_path(encoded, false)?;
-  }
-  serving(&app)?;
-  app
-    .services
-    .files
-    .link_token(&caller.principal, request)
-    .await
-    .map(Json)
+  let files = &app.services.files;
+  let token = match request {
+    FileTokenRequest::Path { path } => {
+      let malformed = || ApiError::bad_request("path must be <root>/<base64 path>");
+      let (name, encoded) = path.split_once('/').ok_or_else(malformed)?;
+      let root = root(name).map_err(|_| malformed())?;
+      let path = validate::files_path(encoded, false)?;
+      serving(&app)?;
+      files.link_token(&caller.principal, root, &path).await
+    }
+    FileTokenRequest::Transfer { transfer_id } => {
+      serving(&app)?;
+      files
+        .download_link_token(&caller.principal, transfer_id)
+        .await
+    }
+  };
+  token.map(Json)
 }
 
 #[cfg(test)]

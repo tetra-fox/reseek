@@ -23,9 +23,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use api_types::auth::Principal;
-use api_types::files::{
-  FileRoot, FileToken, FileTokenRequest, FilesystemDirectory, FilesystemFile,
-};
+use api_types::files::{FileRoot, FileToken, FilesystemDirectory, FilesystemFile};
 use async_trait::async_trait;
 use axum::body::Body;
 use axum::http::{HeaderValue, StatusCode, header};
@@ -357,22 +355,21 @@ impl FileService for Files {
     Ok(response)
   }
 
+  async fn download_link_token(
+    &self,
+    _principal: &Principal,
+    _id: uuid::Uuid,
+  ) -> Result<FileToken, ApiError> {
+    Err(download_files())
+  }
+
   async fn link_token(
     &self,
     principal: &Principal,
-    request: FileTokenRequest,
+    root: FileRoot,
+    relative: &str,
   ) -> Result<FileToken, ApiError> {
-    let FileTokenRequest::Path { path } = request else {
-      return Err(download_files());
-    };
-    let malformed = || ApiError::bad_request("path must be <root>/<base64 path>");
-    let (name, encoded) = path.split_once('/').ok_or_else(malformed)?;
-    let root = match name {
-      "downloads" => FileRoot::Downloads,
-      "incomplete" => FileRoot::Incomplete,
-      _ => return Err(malformed()),
-    };
-    let relative = crate::api::validate::files_path(encoded, false)?;
+    let relative = relative.to_string();
     let dir = self.root(root).to_path_buf();
     let checked = relative.clone();
     let resolved = blocking(move || served_path(&dir, &checked)).await?;
@@ -385,7 +382,7 @@ impl FileService for Files {
     let (token, expires_at) = link::issue(
       &self.auth.secret,
       &principal.subject,
-      &link::claimed(name, &relative),
+      &link::claimed(root_name(root), &relative),
       Utc::now(),
     );
     debug!(

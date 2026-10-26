@@ -8,8 +8,8 @@ use rusqlite::types::{Type, Value};
 use rusqlite::{Connection, params_from_iter};
 
 use super::{Filter, Reports};
-use crate::transfers::categories::FAILED;
 use crate::db::{self, DbError};
+use crate::transfers::categories::FAILED;
 
 impl Reports {
   /// The failed transfers of one direction, by when they ended.

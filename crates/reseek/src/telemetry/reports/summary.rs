@@ -11,8 +11,8 @@ use rusqlite::{Connection, params_from_iter};
 
 use super::failures::pareto_rows;
 use super::{Filter, Reports, SUMMARY, outcome, summary_at};
-use crate::transfers::categories::{COMPLETED, SUCCESSFUL};
 use crate::db::{self, DbError};
+use crate::transfers::categories::{COMPLETED, SUCCESSFUL};
 
 /// How many error messages a user report lists.
 const USER_EXCEPTIONS: u32 = 25;

@@ -9,8 +9,8 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use rusqlite::{OptionalExtension, params_from_iter};
 
 use super::{Filter, Reports, outcome};
-use crate::transfers::categories::COMPLETED;
 use crate::db::{self, DbError};
+use crate::transfers::categories::COMPLETED;
 
 /// The first release; a window that starts earlier starts at the oldest transfer instead.
 const GENESIS: &str = "2020-12-30T06:22:00Z";

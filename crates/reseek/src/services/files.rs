@@ -3,7 +3,7 @@
 
 use api_types::auth::Principal;
 use api_types::files::{
-  ContentDisposition, FileRoot, FileToken, FileTokenRequest, FilesystemDirectory, FilesystemFile,
+  ContentDisposition, FileRoot, FileToken, FilesystemDirectory, FilesystemFile,
 };
 use async_trait::async_trait;
 use axum::http::HeaderMap;
@@ -101,11 +101,21 @@ pub trait FileService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// A short-lived token that lets a link load one file for `principal`.
+  /// A short-lived token that lets a link load one file under a root for `principal`.
   async fn link_token(
     &self,
     principal: &Principal,
-    request: FileTokenRequest,
+    root: FileRoot,
+    path: &str,
+  ) -> Result<FileToken, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// A short-lived token that lets a link load the file of the download `id` for `principal`.
+  async fn download_link_token(
+    &self,
+    principal: &Principal,
+    id: Uuid,
   ) -> Result<FileToken, ApiError> {
     Err(not_yet(DOMAIN))
   }
