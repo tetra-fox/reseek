@@ -81,6 +81,8 @@ pub(super) async fn start(shares: Arc<Shares>, settings: Arc<Settings>) -> Optio
     let mut watched = Vec::new();
     for (root, alias) in roots {
       if !root.is_dir() {
+        // the scan has warned that the share is not a directory
+        debug!(share = alias, "share not watched: it is not a directory");
         continue;
       }
       match watcher.watch(&root, RecursiveMode::Recursive) {
