@@ -334,6 +334,11 @@ mod tests {
     let cases = [
       (format!("{reports}/summary?start={at}&end={at}"), 400),
       (
+        format!("{reports}/summary?start=2026-01-01T00:00:00&end=2026-01-02T00:00:00"),
+        200,
+      ),
+      (format!("{reports}/summary?start=2026-01-01"), 400),
+      (
         format!("{reports}/summary?start=2026-01-01T00:00:00Z&end={at}"),
         200,
       ),
