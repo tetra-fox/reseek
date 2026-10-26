@@ -29,6 +29,7 @@
   import { toast } from "#lib/toast.svelte.js";
 
   import FieldRow from "./FieldRow.svelte";
+  import OidcTest from "./OidcTest.svelte";
 
   type Props = {
     section: Section;
@@ -245,7 +246,13 @@
         changed={changed.includes(field)}
         moved={moved.includes(field.key)}
         unused={!enabled(field)}
-        error={errors[field.key]} />
+        error={errors[field.key]}>
+        {#snippet extra()}
+          {#if field.key === "web.authentication.oidc"}
+            <OidcTest names={Object.keys(valueAt(view.values, field.key) ?? {})} />
+          {/if}
+        {/snippet}
+      </FieldRow>
     {/each}
   </div>
   {#if saveable || runtimeable}

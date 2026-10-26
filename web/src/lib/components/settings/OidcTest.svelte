@@ -1,0 +1,48 @@
+<script lang="ts">
+  import { api, type Schemas } from "#lib/api/client.js";
+  import { Busy } from "#lib/busy.svelte.js";
+  import Button from "#lib/components/ui/Button.svelte";
+  import { call } from "#lib/request.js";
+
+  // a discovery check for each configured provider, its outcome shown under it
+  let { names }: { names: string[] } = $props();
+
+  const busy = new Busy();
+  let results = $state<Record<string, Schemas["OidcTestResult"]>>({});
+
+  const test = (name: string) =>
+    busy.run(async () => {
+      const outcome = await call(() =>
+        api.POST("/api/v0/auth/oidc/{name}/test", { params: { path: { name } } })
+      );
+      if (outcome.ok) results[name] = outcome.data;
+      return outcome;
+    });
+</script>
+
+{#each names as name (name)}
+  {@const result = results[name]}
+  <div class="flex flex-col gap-1 text-xs">
+    <div class="flex items-center gap-inline">
+      <Button variant="outline" size="sm" disabled={busy.running} onclick={() => test(name)}>
+        Test discovery: {name}
+      </Button>
+      {#if result}
+        <span class={result.ok ? "text-success-soft-fg" : "text-danger"} role="status">
+          {result.ok ? "passed" : `failed: ${result.error ?? "unknown"}`}
+        </span>
+      {/if}
+    </div>
+    {#if result?.issuer}<p class="text-fg-muted">issuer <code>{result.issuer}</code></p>{/if}
+    {#if result?.endpoints}
+      {@const e = result.endpoints}
+      <ul class="font-mono text-fg-subtle">
+        <li>authorization {e.authorization}</li>
+        <li>token {e.token}</li>
+        <li>jwks {e.jwks}</li>
+        {#if e.userinfo}<li>userinfo {e.userinfo}</li>{/if}
+        {#if e.endSession}<li>end session {e.endSession}</li>{/if}
+      </ul>
+    {/if}
+  </div>
+{/each}

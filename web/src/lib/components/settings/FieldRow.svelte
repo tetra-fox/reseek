@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
+
   import type { Schemas } from "#lib/api/client.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import type { Editability } from "#lib/config/editability.js";
@@ -22,6 +24,8 @@
     /** the option it depends on is set so that this one has no effect */
     unused: boolean;
     error: string | undefined;
+    /** shown under the control, such as a check that goes with the option */
+    extra?: Snippet;
   };
 
   let {
@@ -34,7 +38,8 @@
     changed,
     moved,
     unused,
-    error
+    error,
+    extra
   }: Props = $props();
 
   const help = $derived(`${field.key}-help`);
@@ -86,6 +91,7 @@
         The file's value <code>{JSON.stringify(notApplied.value)}</code> isn't running: {notApplied.reason}
       </p>
     {/if}
+    {@render extra?.()}
     {#if moved}<p class="text-xs text-warning-soft-fg">The running value changed</p>{/if}
   </div>
 </div>

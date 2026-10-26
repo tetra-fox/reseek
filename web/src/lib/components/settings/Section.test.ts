@@ -1,5 +1,5 @@
 import { flushSync, mount, unmount } from "svelte";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { type ConfigView, leftovers } from "#lib/config/fields.js";
 import fixture from "#lib/config/fixtures/view.json";
@@ -80,5 +80,35 @@ describe("a settings section", () => {
     clear.click();
     flushSync();
     expect(status()).toBe("1 setting changed");
+  });
+
+  it("tests each configured identity provider's discovery and shows what it found", async () => {
+    const v = structuredClone(view);
+    (v.values as { web: { authentication: { oidc: unknown } } }).web.authentication.oidc = {
+      home: { issuer: "https://id.example" }
+    };
+    const answer = {
+      ok: true,
+      issuer: "https://id.example",
+      error: null,
+      endpoints: { authorization: "https://id.example/auth", token: "t", jwks: "j" }
+    };
+    const fetcher = vi.fn<(request: Request) => Promise<Response>>(
+      async () =>
+        new Response(JSON.stringify(answer), { headers: { "Content-Type": "application/json" } })
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const auth = render(
+      sections.find((s) => s.id === "authentication")!,
+      v
+    );
+    const button = [...auth.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Test discovery: home")
+    )!;
+    button.click();
+    await vi.waitFor(() => expect(auth.textContent).toContain("passed"));
+    expect(new URL(fetcher.mock.calls[0][0].url).pathname).toBe("/api/v0/auth/oidc/home/test");
+    expect(auth.textContent).toContain("https://id.example/auth");
+    vi.unstubAllGlobals();
   });
 });
