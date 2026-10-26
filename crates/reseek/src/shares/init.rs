@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{Instrument, debug, info, info_span, warn};
+use tracing::{Instrument, debug, error, info, info_span, warn};
 
 use super::scanner::{self, Settings};
 use super::{Shares, lock, repository, share, storage};
@@ -42,11 +42,11 @@ impl Shares {
   async fn initialize(self: &Arc<Self>, force: bool, mode: StorageMode) {
     info!("Initializing shares");
     self.publish(|status| status.ready = false);
-    // the scan logs its own failure; these say what it leaves
+    // the scan logs why it failed; these say that sharing is off because of it
     if force {
       warn!("Performing a forced re-scan of shares");
       if !self.scan_at_startup(true).await {
-        warn!("Failed to initialize shares. Sharing is disabled");
+        error!("Failed to initialize shares. Sharing is disabled");
       }
     } else {
       match self.load(mode).await {
@@ -64,7 +64,7 @@ impl Shares {
           warn!(error = e, "Error initializing shares");
           info!("Re-attempting initialization");
           if !self.scan_at_startup(false).await {
-            warn!(
+            error!(
               "Failed to initialize shares, and an attempt to force a full scan to repair failed. \
                Sharing is disabled"
             );
