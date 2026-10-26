@@ -342,8 +342,18 @@ async fn counted(shares: &Arc<Shares>) -> Result<(), DbError> {
   });
   shares.throttled(
     |s| &s.counts_throttle,
-    move |shares| async move {
-      shares.counts.send_replace(totals);
+    |shares| async move {
+      // counted when the throttled send runs, so the changes since it was armed are in it
+      match shares.count_shares().await {
+        Ok(now) => {
+          shares.counts.send_if_modified(|sent| {
+            let changed = *sent != now;
+            *sent = now;
+            changed
+          });
+        }
+        Err(e) => warn!(error = %e, "shared counts not read for the server"),
+      }
     },
   );
   shares.throttled(
