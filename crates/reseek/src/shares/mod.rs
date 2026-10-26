@@ -403,19 +403,23 @@ impl Shares {
       .this
       .upgrade()
       .expect("the engine is only made inside the Arc it refers to");
-    let cancel = {
-      let mut running = lock(&self.running);
-      if running.is_some() {
-        return Err(ScanConflict::Running);
-      }
-      let cancel = self.shutdown.child_token();
-      *running = Some(cancel.clone());
-      cancel
-    };
+    let cancel = self.take_slot().ok_or(ScanConflict::Running)?;
     tokio::spawn(
       async move { shares.run_scan(force, cancel).await }.instrument(info_span!("scan", force)),
     );
     Ok(())
+  }
+
+  /// Takes the one scan slot, with the token that cancels the scan; `None` while a scan holds
+  /// it.
+  fn take_slot(&self) -> Option<CancellationToken> {
+    let mut running = lock(&self.running);
+    if running.is_some() {
+      return None;
+    }
+    let cancel = self.shutdown.child_token();
+    *running = Some(cancel.clone());
+    Some(cancel)
   }
 
   /// Asks the running scan to stop.

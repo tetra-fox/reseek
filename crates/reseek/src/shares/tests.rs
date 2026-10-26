@@ -219,3 +219,22 @@ async fn watched_changes_are_applied_by_what_is_on_disk() {
   eventually(async || lock(&shares.status).files == 2).await;
   shutdown.cancel();
 }
+
+#[tokio::test]
+async fn a_startup_scan_leaves_a_held_slot_to_its_scan() {
+  let (files, app) = shared_app().await;
+  let shares = app.state.shares.clone();
+  eventually(async || lock(&shares.running).is_none()).await;
+  let held = shares.take_slot().unwrap();
+  assert!(shares.scan_at_startup(false).await);
+  assert!(
+    lock(&shares.running)
+      .as_ref()
+      .is_some_and(|cancel| !cancel.is_cancelled()),
+    "the slot is still the first scan's"
+  );
+  assert!(shares.take_slot().is_none());
+  drop(held);
+  *lock(&shares.running) = None;
+  drop(files);
+}

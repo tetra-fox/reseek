@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{Instrument, debug, error, info, info_span, warn};
+use tracing::{Instrument, debug, info, info_span, warn};
 
 use super::scanner::{self, Settings};
 use super::{Shares, lock, repository, share, storage};
@@ -42,10 +42,11 @@ impl Shares {
   async fn initialize(self: &Arc<Self>, force: bool, mode: StorageMode) {
     info!("Initializing shares");
     self.publish(|status| status.ready = false);
+    // the scan logs its own failure; these say what it leaves
     if force {
       warn!("Performing a forced re-scan of shares");
       if !self.scan_at_startup(true).await {
-        error!("Failed to initialize shares. Sharing is disabled");
+        warn!("Failed to initialize shares. Sharing is disabled");
       }
     } else {
       match self.load(mode).await {
@@ -63,10 +64,10 @@ impl Shares {
           warn!(error = e, "Error initializing shares");
           info!("Re-attempting initialization");
           if !self.scan_at_startup(false).await {
-            error!(
-              "Failed to initialize shares, and an attempt to force a full scan to repair failed"
+            warn!(
+              "Failed to initialize shares, and an attempt to force a full scan to repair failed. \
+               Sharing is disabled"
             );
-            error!("Failed to initialize shares. Sharing is disabled");
           }
         }
       }
@@ -74,13 +75,12 @@ impl Shares {
     self.initialized.send_replace(true);
   }
 
-  /// A scan run as part of starting up, waited for; true when it completed.
-  async fn scan_at_startup(self: &Arc<Self>, force: bool) -> bool {
-    let cancel = {
-      let mut running = lock(&self.running);
-      let cancel = self.shutdown.child_token();
-      *running = Some(cancel.clone());
-      cancel
+  /// A scan run as part of starting up, waited for; true when it completed, or when a scan
+  /// asked for over the API holds the slot and the startup scan is left to it.
+  pub(super) async fn scan_at_startup(self: &Arc<Self>, force: bool) -> bool {
+    let Some(cancel) = self.take_slot() else {
+      debug!("a share scan already runs; the startup scan is left to it");
+      return true;
     };
     self
       .run_scan(force, cancel)
