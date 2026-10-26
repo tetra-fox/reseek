@@ -1,11 +1,10 @@
 // Rewrites build/index.html to load its assets relative to the page, so one build works under
 // any URL base the daemon is given.
 //
-// adapter-static writes the hash-router page as a fallback page, and @sveltejs/kit renders
-// fallback pages with root-relative asset URLs (`/_app/...`) whatever `paths.relative` says (see
-// `render_response` in kit's src/runtime/server/page/render.js, which only computes relative paths
-// for pages that are not fallbacks). The page always lives at the base itself, so `./_app/` is
-// right there.
+// @sveltejs/kit renders the hash router's one page the way it renders fallback pages, with
+// root-relative asset URLs (`/_app/...`) whatever `paths.relative` says (`render_response` in
+// kit's src/runtime/server/page/render.js computes relative paths only for other pages). The page
+// always lives at the base itself, so `./_app/` is right there.
 // TODO: remove once kit writes relative asset paths for the hash router's page.
 import { readFileSync, writeFileSync } from "node:fs";
 

@@ -10,7 +10,7 @@ export default defineConfig({
     // the hash router keeps every screen under one index.html, so one build works under any URL
     // base the daemon is given
     sveltekit({
-      adapter: adapter({ fallback: "index.html" }),
+      adapter: adapter(),
       router: { type: "hash" },
       compilerOptions: { runes: true }
     })
