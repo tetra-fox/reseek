@@ -80,11 +80,7 @@ impl Uploads {
     filename: &str,
     located: Located,
   ) -> Result<(), ClientError> {
-    let tracked = self
-      .client()?
-      .uploads()
-      .iter()
-      .any(|t| t.username == username && t.filename.as_str() == filename);
+    let client = self.client()?;
     let record = Record::upload(username, filename, located.size);
     let id = record.id;
     // the handle exists before the record can be seen, so a cancel always finds it
@@ -107,6 +103,12 @@ impl Uploads {
       );
       live
     };
+    // read after the snapshot: an upload is marked ended just before the client lets go of it,
+    // so one the snapshot saw end is no longer the client's either
+    let tracked = client
+      .uploads()
+      .iter()
+      .any(|t| t.username == username && t.filename.as_str() == filename);
     let written = record.clone();
     let result = self
       .db
