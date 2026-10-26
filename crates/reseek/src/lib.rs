@@ -18,6 +18,7 @@ pub mod logging;
 pub mod paths;
 pub mod safety;
 pub mod services;
+pub mod shares;
 pub mod state;
 pub mod telemetry;
 pub mod transfers;

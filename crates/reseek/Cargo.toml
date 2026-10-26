@@ -24,6 +24,7 @@ path = "src/bin/reseek-headless.rs"
 api-types.workspace = true
 cascade.workspace = true
 soulseek-client.workspace = true
+soulseek-proto.workspace = true
 
 aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
 argon2 = { version = "0.5", default-features = false, features = ["alloc", "password-hash"] }
@@ -43,7 +44,9 @@ humantime = "2"
 humantime-serde.workspace = true
 hyper = { version = "1", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["server-auto", "server-graceful", "service", "tokio"] }
+lofty = "0.25"
 mime_guess = "2"
+notify.workspace = true
 openidconnect = { version = "4", default-features = false, features = ["reqwest"] }
 p12-keystore = "0.4"
 percent-encoding = "2"
@@ -52,13 +55,14 @@ rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs", "
 regex = "1"
 reqwest.workspace = true
 rpassword = "7"
-rusqlite = { version = "0.39", features = ["bundled", "trace"] }
+rusqlite = { version = "0.39", features = ["backup", "bundled", "trace"] }
 rust-embed = { version = "8", features = ["interpolate-folder-path", "mime-guess"], optional = true }
 rustls.workspace = true
 serde.workspace = true
 serde_html_form = "0.2"
 serde_json.workspace = true
 serde_path_to_error.workspace = true
+sha1 = "0.10"
 sha2.workspace = true
 subtle = "2"
 sysinfo = { version = "0.39", default-features = false, features = ["disk", "network", "system"] }
@@ -78,6 +82,7 @@ utoipa.workspace = true
 utoipa-axum = "0.2"
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid.workspace = true
+walkdir = "2"
 webpki-roots.workspace = true
 
 # deletes relative to an opened directory, never through a link
