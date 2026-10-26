@@ -29,10 +29,16 @@ pub(crate) fn from_names<F: Flags>(text: &str) -> Result<F, String> {
   })
 }
 
-/// Implements the written form for a `bitflags` type: `Serialize`, `Deserialize` and an
-/// OpenAPI string schema with `$example` as its example.
+/// Implements the written form for a `bitflags` type: `Display`, `Serialize`, `Deserialize` and
+/// an OpenAPI string schema with `$example` as its example.
 macro_rules! flag_names {
   ($ty:ty, $description:literal, $example:literal) => {
+    impl std::fmt::Display for $ty {
+      fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&$crate::flags::to_names(self))
+      }
+    }
+
     impl serde::Serialize for $ty {
       fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&$crate::flags::to_names(self))
