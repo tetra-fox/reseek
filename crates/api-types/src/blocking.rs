@@ -110,7 +110,7 @@ pub struct BlockRequest {
   /// why, at most 500 characters
   #[serde(default)]
   pub reason: String,
-  /// what the block stops, the configured default scopes when null
+  /// what the block stops, at least one scope; the configured default scopes when null
   #[serde(default)]
   #[schema(example = json!(["uploads", "searches", "browse", "messages", "rooms"]))]
   pub scopes: Option<Vec<BlockScope>>,

@@ -79,12 +79,18 @@ async fn block(
   Ok(Json(block))
 }
 
-/// Refuses a reason over 500 characters, both `expiresIn` and `expiresAt`, and an `expiresIn`
-/// that is no duration; the duration `expiresIn` gives otherwise.
+/// Refuses a reason over 500 characters, an empty list of scopes, both `expiresIn` and
+/// `expiresAt`, and an `expiresIn` that is no duration; the duration `expiresIn` gives
+/// otherwise.
 fn block_request(request: &BlockRequest) -> Result<Option<Duration>, ApiError> {
   if !crate::users::reason_fits(&request.reason) {
     return Err(ApiError::bad_request(
       "reason must be at most 500 characters",
+    ));
+  }
+  if request.scopes.as_ref().is_some_and(Vec::is_empty) {
+    return Err(ApiError::bad_request(
+      "scopes must name at least one scope; leave it out for the default scopes",
     ));
   }
   if request.expires_in.is_some() && request.expires_at.is_some() {

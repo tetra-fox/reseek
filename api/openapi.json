@@ -14266,7 +14266,7 @@
             "items": {
               "$ref": "#/components/schemas/BlockScope"
             },
-            "description": "what the block stops, the configured default scopes when null",
+            "description": "what the block stops, at least one scope; the configured default scopes when null",
             "example": [
               "uploads",
               "searches",
