@@ -473,7 +473,9 @@ async fn serve(
   };
   watcher.start(watch, cancel.clone());
   let logging = Arc::new(logging);
-  tokio::spawn(follow_changes(watcher.clone(), logging.clone(), cancel.clone()).in_current_span());
+  tokio::spawn(
+    tasks::follow_changes(watcher.clone(), logging.clone(), cancel.clone()).in_current_span(),
+  );
   spawn_signals(watcher.clone(), cancel.clone());
 
   let grace = options.shutdown_timeout;
@@ -530,48 +532,4 @@ async fn serve(
   }
   info!("reseek stopped");
   0
-}
-
-/// Applies the live parts of each configuration change that are not read per request.
-async fn follow_changes(
-  watcher: Watcher<Options>,
-  logging: Arc<Logging>,
-  cancel: CancellationToken,
-) {
-  let mut changes = watcher.changes();
-  loop {
-    let change = tokio::select! {
-      () = cancel.cancelled() => return,
-      change = changes.recv() => change,
-    };
-    match change {
-      Ok(change) => {
-        if change
-          .changed
-          .iter()
-          .any(|k| k.starts_with("logging.") || k == "soulseek.distributed_network.logging")
-        {
-          logging.apply(&change.current.values);
-        }
-        let limit = change.current.values.web.files.serve_speed_limit;
-        if limit != change.previous.values.web.files.serve_speed_limit {
-          startup::warn_about_serve_speed_limit(limit);
-        }
-        if !change.by_apply.restart.is_empty() {
-          info!(
-            keys = change.by_apply.restart.join(", "),
-            "One or more updated options requires an application restart to take effect."
-          );
-        }
-      }
-      Err(tokio::sync::broadcast::error::RecvError::Lagged(missed)) => {
-        warn!(
-          missed,
-          "configuration changes missed; applying the current values"
-        );
-        logging.apply(&watcher.current().values);
-      }
-      Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
-    }
-  }
 }

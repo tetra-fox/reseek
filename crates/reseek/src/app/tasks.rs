@@ -1,7 +1,8 @@
 //! The background work every request relies on: the application state and the event stream
-//! follow the configuration and the log, ended sessions and tokens are pruned, and the
-//! OpenID Connect providers are discovered.
+//! follow the configuration and the log, the log filter follows its options, ended sessions and
+//! tokens are pruned, and the OpenID Connect providers are discovered.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use api_types::events::{Event, SessionRevokeReason, SessionRevoked};
@@ -12,10 +13,14 @@ use soulseek_client::LogLimiter;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{Instrument, debug, info, info_span, warn};
 
+use cascade::Watcher;
+use tokio_util::sync::CancellationToken;
+
 use super::AppState;
 use crate::auth::{sessions, tokens};
-use crate::config::redact;
+use crate::config::{Options, redact};
 use crate::live::Topic;
+use crate::logging::Logging;
 
 /// How often ended sessions are marked and old ones pruned.
 const HOUSEKEEPING: Duration = Duration::from_secs(3600);
@@ -61,6 +66,50 @@ async fn follow_configuration(app: AppState) {
         }
         Err(RecvError::Closed) => return,
       },
+    }
+  }
+}
+
+/// Applies the live parts of each configuration change that are not read per request.
+pub(super) async fn follow_changes(
+  watcher: Watcher<Options>,
+  logging: Arc<Logging>,
+  cancel: CancellationToken,
+) {
+  let mut changes = watcher.changes();
+  loop {
+    let change = tokio::select! {
+      () = cancel.cancelled() => return,
+      change = changes.recv() => change,
+    };
+    match change {
+      Ok(change) => {
+        if change
+          .changed
+          .iter()
+          .any(|k| k.starts_with("logging.") || k == "soulseek.distributed_network.logging")
+        {
+          logging.apply(&change.current.values);
+        }
+        let limit = change.current.values.web.files.serve_speed_limit;
+        if limit != change.previous.values.web.files.serve_speed_limit {
+          super::startup::warn_about_serve_speed_limit(limit);
+        }
+        if !change.by_apply.restart.is_empty() {
+          info!(
+            keys = change.by_apply.restart.join(", "),
+            "One or more updated options requires an application restart to take effect."
+          );
+        }
+      }
+      Err(tokio::sync::broadcast::error::RecvError::Lagged(missed)) => {
+        warn!(
+          missed,
+          "configuration changes missed; applying the current values"
+        );
+        logging.apply(&watcher.current().values);
+      }
+      Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
     }
   }
 }
