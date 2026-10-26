@@ -5,7 +5,6 @@ use api_types::shares::{Share, ShareScanQuery, SharesByHost};
 use api_types::users::Directory;
 use axum::extract::State;
 use axum::http::StatusCode;
-use tracing::info;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -100,15 +99,10 @@ async fn share_contents(
 )]
 async fn scan(
   State(app): State<AppState>,
-  caller: Authorized<ReadWrite>,
+  _caller: Authorized<ReadWrite>,
   Query(query): Query<ShareScanQuery>,
 ) -> Result<StatusCode, ApiError> {
   app.services.shares.scan(query.force).await?;
-  info!(
-    by = caller.principal.subject,
-    force = query.force,
-    "share scan asked for"
-  );
   Ok(StatusCode::NO_CONTENT)
 }
 
@@ -124,9 +118,8 @@ async fn scan(
 )]
 async fn cancel_scan(
   State(app): State<AppState>,
-  caller: Authorized<ReadWrite>,
+  _caller: Authorized<ReadWrite>,
 ) -> Result<StatusCode, ApiError> {
   app.services.shares.cancel_scan().await?;
-  info!(by = caller.principal.subject, "share scan cancel asked for");
   Ok(StatusCode::NO_CONTENT)
 }
