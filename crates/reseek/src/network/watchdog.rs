@@ -189,8 +189,7 @@ impl Watchdog {
     tokio::spawn(
       async move {
         watchdog.run().await;
-        lock(&watchdog.inner.status).attempting = false;
-        lock(&watchdog.inner.status).next_attempt_at = None;
+        *lock(&watchdog.inner.status) = Status::default();
         *lock(&watchdog.inner.attempt) = None;
         watchdog.publish();
         drop(running);
@@ -242,15 +241,10 @@ impl Watchdog {
         }
         None if failed > 0 => {
           let wait = backoff(failed, BACKOFF_BASE, BACKOFF_MAX) + jitter(BACKOFF_BASE);
-          let seconds = wait.as_millis().div_ceil(1000);
-          if seconds == 1 {
-            info!("Waiting about a second before attempting to reconnect");
-          } else {
-            info!(
-              seconds,
-              "Waiting about N seconds before attempting to reconnect"
-            );
-          }
+          info!(
+            seconds = wait.as_millis().div_ceil(1000),
+            "Waiting before attempting to reconnect"
+          );
           Some(wait)
         }
         None => None,
@@ -271,7 +265,7 @@ impl Watchdog {
         return;
       }
       let span = info_span!("server_connect", attempt = failed + 1);
-      match self.attempt(&attempt, failed).instrument(span).await {
+      match self.attempt(&attempt).instrument(span).await {
         Attempt::Connected | Attempt::Cancelled => return,
         Attempt::Stop => {
           self.stop(false);
@@ -289,16 +283,9 @@ impl Watchdog {
   }
 
   /// One attempt with the current options, once the shares are initialized.
-  async fn attempt(&self, cancel: &CancellationToken, failed: u32) -> Attempt {
+  async fn attempt(&self, cancel: &CancellationToken) -> Attempt {
     let inner = &self.inner;
-    if failed == 0 {
-      info!("Attempting to connect to the Soulseek server...");
-    } else {
-      info!(
-        attempt = failed + 1,
-        "Attempting to connect to the Soulseek server (#n)..."
-      );
-    }
+    info!("Attempting to connect to the Soulseek server");
     tokio::select! {
       () = cancel.cancelled() => {
         debug!("Reconnection attempt cancelled");

@@ -66,6 +66,14 @@ async fn until(client: &Client, what: &str, ready: impl Fn(&State) -> bool) -> S
   }
 }
 
+/// Options for a client of the test's own, which takes no listening port.
+fn quiet() -> ClientOptions {
+  ClientOptions {
+    enable_listener: false,
+    ..ClientOptions::default()
+  }
+}
+
 fn logged_in(state: &State) -> bool {
   state.server.is_logged_in
 }
@@ -102,7 +110,7 @@ async fn the_daemon_logs_in_with_its_shares_counted_and_connects_when_asked() {
   );
 
   // the server learnt what we share, which another user reads from it
-  let watcher = server.login("watcher", ClientOptions::default()).await;
+  let watcher = server.login("watcher", quiet()).await;
   let started = Instant::now();
   loop {
     let statistics = watcher.client.get_user_statistics(&name).await.unwrap();
@@ -166,7 +174,7 @@ async fn a_refused_login_is_not_tried_again() {
     return;
   };
   // the account exists once someone logged in with it
-  let owner = server.login("taken", ClientOptions::default()).await;
+  let owner = server.login("taken", quiet()).await;
   let dir = tempfile::tempdir().unwrap();
   let address = server.address().port().to_string();
   let listen = support::free_port().to_string();

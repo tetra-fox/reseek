@@ -42,10 +42,12 @@ pub(super) async fn follow(
         if let Some(suppressed) = LAGGED.allow() {
           warn!(
             missed,
-            suppressed, "client events missed; the server state is read again"
+            suppressed, "client events missed; the client's state is read again"
           );
         }
-        server_state(&app, app.network.client().state());
+        let client = app.network.client();
+        server_state(&app, client.state());
+        distributed_network(&app, &client.distributed_network());
       }
       Err(RecvError::Closed) => return,
     }
