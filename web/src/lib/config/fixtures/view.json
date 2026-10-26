@@ -1,0 +1,3441 @@
+{
+  "values": {
+    "blacklist": {
+      "enabled": false,
+      "file": null
+    },
+    "blocking": {
+      "default_scopes": ["uploads", "searches", "browse", "messages", "rooms"]
+    },
+    "chat": {
+      "max_message_length": 2000,
+      "notifications": {
+        "enabled": true,
+        "mentions": true,
+        "only_when_hidden": true,
+        "private_messages": true,
+        "room_messages": false,
+        "sound": false
+      }
+    },
+    "debug": false,
+    "directories": {
+      "downloads": null,
+      "incomplete": null
+    },
+    "feature": {
+      "swagger": false
+    },
+    "filters": {
+      "search": {
+        "request": []
+      }
+    },
+    "flags": {
+      "case_sensitive_regex": false,
+      "config_watch_poll": false,
+      "experimental": false,
+      "force_migrations": false,
+      "force_share_scan": false,
+      "legacy_windows_tcp_keepalive": false,
+      "log_sql": false,
+      "log_unobserved_exceptions": false,
+      "no_config_watch": false,
+      "no_connect": true,
+      "no_logo": true,
+      "no_share_scan": false,
+      "no_start": false,
+      "no_version_check": true,
+      "optimistic_relay_file_info": false,
+      "volatile": false
+    },
+    "headless": false,
+    "instance_name": "default",
+    "integrations": {
+      "scripts": {}
+    },
+    "logger": {
+      "loki": null,
+      "no_color": false,
+      "no_disk": false
+    },
+    "logging": {
+      "level": "info",
+      "targets": []
+    },
+    "metrics": {
+      "authentication": {
+        "disabled": false,
+        "password": "*****",
+        "username": "reseek"
+      },
+      "enabled": false,
+      "url": "/metrics"
+    },
+    "paths": {
+      "cache": null,
+      "config": null,
+      "data": null,
+      "logs": null
+    },
+    "relay": {
+      "agents": {},
+      "controller": {
+        "address": null,
+        "api_key": null,
+        "downloads": false,
+        "ignore_certificate_errors": false,
+        "secret": null
+      },
+      "enabled": false,
+      "mode": "controller"
+    },
+    "remote_configuration": false,
+    "remote_file_management": false,
+    "retention": {
+      "events": "30days",
+      "events_max_rows": 100000,
+      "files": {
+        "complete": null,
+        "incomplete": null
+      },
+      "logs": "14days",
+      "messages": {
+        "max_per_conversation": 100000,
+        "max_per_room": 100000,
+        "mentions": "5months 27days 19h 12m",
+        "private": "2months 29days 2h 52m 48s",
+        "rooms": "2months 29days 2h 52m 48s"
+      },
+      "search": null,
+      "transfers": {
+        "download": {
+          "cancelled": null,
+          "errored": null,
+          "failed": null,
+          "succeeded": null
+        },
+        "purge_removed_after": null,
+        "upload": {
+          "cancelled": null,
+          "errored": null,
+          "failed": null,
+          "succeeded": null
+        }
+      },
+      "users": null
+    },
+    "rooms": [],
+    "shares": {
+      "cache": {
+        "retention": null,
+        "storage_mode": "memory",
+        "workers": 32
+      },
+      "directories": [],
+      "filters": [],
+      "follow_symlinks": false,
+      "share_downloads": false
+    },
+    "shutdown_timeout": "10s",
+    "soulseek": {
+      "address": "vps.slsknet.org",
+      "connection": {
+        "buffer": {
+          "read": 16384,
+          "transfer": 262144,
+          "write": 16384,
+          "write_queue": 50
+        },
+        "mtu": null,
+        "proxy": {
+          "address": null,
+          "enabled": false,
+          "password": null,
+          "port": null,
+          "username": null
+        },
+        "timeout": {
+          "connect": "10s",
+          "inactivity": "15s",
+          "transfer": "1m",
+          "transfer_response": "15s"
+        }
+      },
+      "description": "A reseek user.",
+      "diagnostic_level": "info",
+      "distributed_network": {
+        "child_limit": 25,
+        "disable_children": false,
+        "disabled": false,
+        "logging": false
+      },
+      "limits": {
+        "distributed_parent_negotiation_timeout": "5s",
+        "max_cached_peer_connections": 1000,
+        "max_concurrent_peer_connects": 50,
+        "max_concurrent_search_responses": 20,
+        "max_message_size": "256.0 MiB",
+        "search_response_cache_size": 1000,
+        "user_endpoint_cache_size": 10000
+      },
+      "listen_ip_address": "0.0.0.0",
+      "listen_port": 50300,
+      "password": null,
+      "picture": null,
+      "port": 2271,
+      "server_keepalive": {
+        "enabled": true,
+        "idle": "10s",
+        "interval": "2s",
+        "probes": 3
+      },
+      "username": null
+    },
+    "throttling": {
+      "search": {
+        "incoming": {
+          "circuit_breaker": 500,
+          "concurrency": 10,
+          "response_file_limit": 500
+        }
+      }
+    },
+    "transfers": {
+      "download": {
+        "destination": {
+          "exists": "rename",
+          "permissions": {
+            "mode": null
+          },
+          "subdirectory": "${SOURCE_DIRECTORY}"
+        },
+        "request_style": "queue",
+        "retry": {
+          "attempts": 3,
+          "delay": "5s",
+          "max_delay": "1m",
+          "partial": "resume"
+        },
+        "slots": null,
+        "speed_limit": null
+      },
+      "groups": {
+        "blacklisted": {
+          "cidrs": [],
+          "members": [],
+          "patterns": []
+        },
+        "default": {
+          "upload": {
+            "limits": {
+              "daily": {
+                "failures": null,
+                "files": null,
+                "megabytes": null
+              },
+              "queued": {
+                "failures": null,
+                "files": null,
+                "megabytes": null
+              },
+              "weekly": {
+                "failures": null,
+                "files": null,
+                "megabytes": null
+              }
+            },
+            "priority": 1,
+            "slots": null,
+            "speed_limit": null,
+            "strategy": "roundrobin"
+          }
+        },
+        "leechers": {
+          "thresholds": {
+            "directories": 1,
+            "files": 1
+          },
+          "upload": {
+            "limits": {
+              "daily": {
+                "failures": null,
+                "files": null,
+                "megabytes": null
+              },
+              "queued": {
+                "failures": null,
+                "files": null,
+                "megabytes": null
+              },
+              "weekly": {
+                "failures": null,
+                "files": null,
+                "megabytes": null
+              }
+            },
+            "priority": 1,
+            "slots": null,
+            "speed_limit": null,
+            "strategy": "roundrobin"
+          }
+        },
+        "user_defined": {}
+      },
+      "ui": {
+        "queue_refresh": "2m"
+      },
+      "upload": {
+        "limits": {
+          "daily": {
+            "failures": null,
+            "files": null,
+            "megabytes": null
+          },
+          "queued": {
+            "failures": null,
+            "files": null,
+            "megabytes": null
+          },
+          "weekly": {
+            "failures": null,
+            "files": null,
+            "megabytes": null
+          }
+        },
+        "slots": 10,
+        "speed_limit": null
+      }
+    },
+    "users": {
+      "cache_pictures": true,
+      "picture_max_bytes": "1.9 MiB"
+    },
+    "web": {
+      "authentication": {
+        "api_key": null,
+        "api_keys": {},
+        "disabled": false,
+        "local": {
+          "enabled": true,
+          "only_from": [],
+          "users": {}
+        },
+        "oidc": {},
+        "password": "*****",
+        "password_hash": null,
+        "proxy": {
+          "email_header": "X-Authentik-Email",
+          "enabled": false,
+          "groups_header": "X-Authentik-Groups",
+          "role_mapping": {
+            "administrator": [],
+            "default": "deny",
+            "readonly": [],
+            "readwrite": []
+          },
+          "session": true,
+          "user_header": "X-Authentik-Username"
+        },
+        "session_idle": "30days",
+        "session_ttl": "7days",
+        "trusted_networks": ["127.0.0.0/8"],
+        "trusted_role": "administrator",
+        "username": "reseek"
+      },
+      "content_path": null,
+      "cors": {
+        "allowed_origins": []
+      },
+      "external_url": null,
+      "files": {
+        "archive_max_bytes": "18.6 GiB",
+        "serve": true,
+        "serve_speed_limit": null
+      },
+      "hostnames": [],
+      "https": {
+        "certificate": {
+          "cert": null,
+          "key": null,
+          "password": null,
+          "pfx": null
+        },
+        "disabled": true,
+        "force": false,
+        "ip_address": null,
+        "port": 5031
+      },
+      "ip_address": null,
+      "live": {
+        "max_streams_per_principal": 16
+      },
+      "logging": false,
+      "port": 5130,
+      "socket": null,
+      "trusted_proxies": [],
+      "ui": true,
+      "url_base": "/"
+    }
+  },
+  "fields": {
+    "blacklist.enabled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_BLACKLIST",
+      "cliFlag": "--enable-blacklist",
+      "kind": "bool",
+      "doc": "Loads the blocklist file and refuses peers whose address it lists.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "blacklist.file": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_BLACKLIST_FILE",
+      "cliFlag": "--blacklist-file",
+      "kind": "string",
+      "doc": "The blocklist file, in CIDR, P2P or DAT format; read again when a `blacklist` option changes.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "blocking.default_scopes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_BLOCKING_DEFAULT_SCOPES",
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "What a new block stops unless it says otherwise: any of `uploads`, `searches`, `browse`, `messages`, `rooms`, `downloads`, `distributed`.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "chat.max_message_length": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CHAT_MAX_MESSAGE_LENGTH",
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The longest message that may be sent, in characters.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "chat.notifications.enabled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CHAT_NOTIFICATIONS_ENABLED",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "The UI may show notifications, once the browser allows it.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "chat.notifications.mentions": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CHAT_NOTIFICATIONS_MENTIONS",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Notifies of room messages that mention us.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "chat.notifications.only_when_hidden": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CHAT_NOTIFICATIONS_ONLY_WHEN_HIDDEN",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "No notification while the tab is visible with the message's chat open.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "chat.notifications.private_messages": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CHAT_NOTIFICATIONS_PRIVATE_MESSAGES",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Notifies of private messages.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "chat.notifications.room_messages": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CHAT_NOTIFICATIONS_ROOM_MESSAGES",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Notifies of every message in rooms set to notify of all messages.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "chat.notifications.sound": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CHAT_NOTIFICATIONS_SOUND",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Plays a short sound with each notification.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "debug": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_DEBUG",
+      "cliFlag": "--debug",
+      "kind": "bool",
+      "doc": "Debug mode: logs at debug level and names the module on every log line.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "directories.downloads": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_DOWNLOADS_DIR",
+      "cliFlag": "--downloads",
+      "kind": "string",
+      "doc": "Where finished downloads are moved; `downloads` in the data directory when not set. A directory given here must exist and be writable.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "directories.incomplete": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_INCOMPLETE_DIR",
+      "cliFlag": "--incomplete",
+      "kind": "string",
+      "doc": "Where downloads in progress are written; `incomplete` in the data directory when not set. A directory given here must exist and be writable.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "feature.swagger": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SWAGGER",
+      "cliFlag": "--swagger",
+      "kind": "bool",
+      "doc": "Serves the OpenAPI document at `/swagger/v0/swagger.json` and its browser at `/swagger`.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "filters.search.request": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SEARCH_REQUEST_FILTER",
+      "cliFlag": "--search-request-filter",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Regular expressions; an incoming search whose text matches one is not answered.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.case_sensitive_regex": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CASE_SENSITIVE_REGEX",
+      "cliFlag": "--case-sensitive-regex",
+      "kind": "bool",
+      "doc": "Makes user-defined regular expressions case-sensitive.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.config_watch_poll": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CONFIG_WATCH_POLL",
+      "cliFlag": "--config-watch-poll",
+      "kind": "bool",
+      "doc": "Watches the configuration files by reading them every few seconds, for mounts where file notifications do not arrive.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.experimental": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_EXPERIMENTAL",
+      "cliFlag": "--experimental",
+      "kind": "bool",
+      "doc": "Turns on features still being tried out.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.force_migrations": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_FORCE_MIGRATIONS",
+      "cliFlag": "--force-migrations",
+      "kind": "bool",
+      "doc": "Applies every database migration whether or not it looks applied.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.force_share_scan": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_FORCE_SHARE_SCAN",
+      "cliFlag": "--force-share-scan",
+      "kind": "bool",
+      "doc": "Scans the shares in full at startup even when the share cache is current.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.legacy_windows_tcp_keepalive": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_LEGACY_WINDOWS_TCP_KEEPALIVE",
+      "cliFlag": "--legacy-windows-tcp-keepalive",
+      "kind": "bool",
+      "doc": "Uses the older socket keepalive control on Windows versions before 10 1709.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.log_sql": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_LOG_SQL",
+      "cliFlag": "--log-sql",
+      "kind": "bool",
+      "doc": "Logs every SQL statement with its values; the log then holds usernames, filenames and messages.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.log_unobserved_exceptions": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_LOG_UNOBSERVED_EXCEPTIONS",
+      "cliFlag": "--log-unobserved-exceptions",
+      "kind": "bool",
+      "doc": "Logs the failure of background work nothing waits for.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.no_config_watch": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NO_CONFIG_WATCH",
+      "cliFlag": "--no-config-watch",
+      "kind": "bool",
+      "doc": "Does not watch the configuration files; changes then need a reload signal or a restart.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.no_connect": {
+      "source": {
+        "layer": "file",
+        "file": "config.toml"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NO_CONNECT",
+      "cliFlag": "--no-connect",
+      "kind": "bool",
+      "doc": "Does not connect to the Soulseek server at startup.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.no_logo": {
+      "source": {
+        "layer": "cli",
+        "flag": "--no-logo"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NO_LOGO",
+      "cliFlag": "--no-logo",
+      "kind": "bool",
+      "doc": "Leaves out the startup banner.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.no_share_scan": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NO_SHARE_SCAN",
+      "cliFlag": "--no-share-scan",
+      "kind": "bool",
+      "doc": "Does not scan the shares at startup.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.no_start": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NO_START",
+      "cliFlag": "--no-start",
+      "kind": "bool",
+      "doc": "Sets everything up, then exits instead of serving; for checking a configuration.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.no_version_check": {
+      "source": {
+        "layer": "file",
+        "file": "config.toml"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NO_VERSION_CHECK",
+      "cliFlag": "--no-version-check",
+      "kind": "bool",
+      "doc": "Does not check for a newer release.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.optimistic_relay_file_info": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_OPTIMISTIC_RELAY_FILE_INFO",
+      "cliFlag": "--optimistic-relay-file-info",
+      "kind": "bool",
+      "doc": "A relay controller trusts an agent's share listing for whether a file exists, instead of asking the agent first.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "flags.volatile": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_VOLATILE",
+      "cliFlag": "--volatile",
+      "kind": "bool",
+      "doc": "Keeps every database in memory: nothing is saved and nothing survives a restart.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "headless": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HEADLESS",
+      "cliFlag": "--headless",
+      "kind": "bool",
+      "doc": "Serves the API only, no web UI.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "instance_name": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_INSTANCE_NAME",
+      "cliFlag": "--instance-name",
+      "kind": "string",
+      "doc": "Names this instance in logs and to a relay controller.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "integrations.scripts": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "map",
+      "doc": "Scripts by name, each run when one of its events is raised.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "logger.loki": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_LOKI",
+      "cliFlag": "--loki",
+      "kind": "string",
+      "doc": "The base URL of a Grafana Loki instance to push logs to.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "logger.no_color": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NO_COLOR",
+      "cliFlag": "--no-color",
+      "kind": "bool",
+      "doc": "Writes the console log without colour; `NO_COLOR` set to anything does the same.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "logger.no_disk": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NO_DISK_LOGGER",
+      "cliFlag": "--no-disk-logger",
+      "kind": "bool",
+      "doc": "Writes no log files.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "logging.level": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_LOG_LEVEL",
+      "cliFlag": "--log-level",
+      "kind": "string",
+      "doc": "The least severe level logged: `error`, `warn`, `info`, `debug` or `trace`; `debug` mode lowers it to `debug`.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "logging.targets": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_LOG_TARGETS",
+      "cliFlag": "--log-target",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Levels for single modules, such as `soulseek_client::distributed=trace`.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "metrics.authentication.disabled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_METRICS_NO_AUTH",
+      "cliFlag": "--metrics-no-auth",
+      "kind": "bool",
+      "doc": "Serves the metrics without credentials.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "metrics.authentication.password": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_METRICS_PASSWORD",
+      "cliFlag": "--metrics-password",
+      "kind": "string",
+      "doc": "The password.",
+      "apply": "restart",
+      "secret": true,
+      "notApplied": null
+    },
+    "metrics.authentication.username": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_METRICS_USERNAME",
+      "cliFlag": "--metrics-username",
+      "kind": "string",
+      "doc": "The username.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "metrics.enabled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_METRICS",
+      "cliFlag": "--metrics",
+      "kind": "bool",
+      "doc": "Serves Prometheus metrics.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "metrics.url": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_METRICS_URL",
+      "cliFlag": "--metrics-url",
+      "kind": "string",
+      "doc": "The path the metrics are served at.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "paths.cache": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CACHE_DIR",
+      "cliFlag": "--cache-dir",
+      "kind": "string",
+      "doc": "The cache directory, which holds what can be rebuilt, such as the share index.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "paths.config": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CONFIG_DIR",
+      "cliFlag": "--config-dir",
+      "kind": "string",
+      "doc": "The configuration directory, which holds the configuration files and the scripts directory; set by the environment or the command line only, since the files are in it.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "paths.data": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_DATA_DIR",
+      "cliFlag": "--data-dir",
+      "kind": "string",
+      "doc": "The data directory, which holds the databases, runtime overrides and the instance lock.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "paths.logs": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_LOG_DIR",
+      "cliFlag": "--log-dir",
+      "kind": "string",
+      "doc": "The directory of the daily log files.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "relay.agents": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "map",
+      "doc": "The agents allowed to connect to this controller, by name.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "relay.controller.address": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CONTROLLER_ADDRESS",
+      "cliFlag": "--controller-address",
+      "kind": "string",
+      "doc": "The controller's base URL, such as `https://host:5031`.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "relay.controller.api_key": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CONTROLLER_API_KEY",
+      "cliFlag": "--controller-api-key",
+      "kind": "string",
+      "doc": "One of the controller's API keys, with the read-write or administrator role.",
+      "apply": "live",
+      "secret": true,
+      "notApplied": null
+    },
+    "relay.controller.downloads": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CONTROLLER_DOWNLOADS",
+      "cliFlag": "--controller-downloads",
+      "kind": "bool",
+      "doc": "Fetches finished downloads from the controller.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "relay.controller.ignore_certificate_errors": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CONTROLLER_IGNORE_CERTIFICATE_ERRORS",
+      "cliFlag": "--controller-ignore-certificate-errors",
+      "kind": "bool",
+      "doc": "Accepts any TLS certificate from the controller.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "relay.controller.secret": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CONTROLLER_SECRET",
+      "cliFlag": "--controller-secret",
+      "kind": "string",
+      "doc": "The secret the controller has for this agent.",
+      "apply": "live",
+      "secret": true,
+      "notApplied": null
+    },
+    "relay.enabled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RELAY",
+      "cliFlag": "--relay",
+      "kind": "bool",
+      "doc": "Turns relay mode on.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "relay.mode": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RELAY_MODE",
+      "cliFlag": "--relay-mode",
+      "kind": "string",
+      "doc": "`controller`, `agent`, or `debug` for a controller that is also its own agent.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "remote_configuration": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_REMOTE_CONFIGURATION",
+      "cliFlag": "--remote-configuration",
+      "kind": "bool",
+      "doc": "Lets administrators change the configuration files and runtime overrides through the API.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "remote_file_management": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_REMOTE_FILE_MANAGEMENT",
+      "cliFlag": "--remote-file-management",
+      "kind": "bool",
+      "doc": "Lets the files API delete files in the download and incomplete directories.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.events": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RETENTION_EVENTS",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Logged events older than this are deleted; `0` keeps them.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.events_max_rows": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RETENTION_EVENTS_MAX_ROWS",
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most logged events kept; the oldest beyond it are deleted, `0` keeps them all.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.files.complete": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Files in the downloads directory.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.files.incomplete": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Files in the incomplete directory.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.logs": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Daily log files older than this are deleted, at least two days.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.messages.max_per_conversation": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RETENTION_MESSAGES_MAX_PER_CONVERSATION",
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most read private messages kept per conversation, at least 250.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.messages.max_per_room": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RETENTION_MESSAGES_MAX_PER_ROOM",
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most messages kept per room, at least 250.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.messages.mentions": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RETENTION_MESSAGES_MENTIONS",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Room messages that mention us older than this are deleted.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.messages.private": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RETENTION_MESSAGES_PRIVATE",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Read private messages older than this are deleted.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.messages.rooms": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RETENTION_MESSAGES_ROOMS",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Room messages older than this are deleted, except those that mention us; at least an hour.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.search": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Finished searches older than this are deleted, at least five minutes.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.transfers.download.cancelled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Transfers that were cancelled.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.transfers.download.errored": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Transfers that failed with an error, a timeout, a refusal or a size mismatch.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.transfers.download.failed": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Transfers that errored or were cancelled.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.transfers.download.succeeded": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Transfers that succeeded.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.transfers.purge_removed_after": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Transfers removed from the listings longer ago than this are deleted for good, at least five minutes; removed transfers are kept for the history when not set.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.transfers.upload.cancelled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Transfers that were cancelled.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.transfers.upload.errored": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Transfers that failed with an error, a timeout, a refusal or a size mismatch.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.transfers.upload.failed": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Transfers that errored or were cancelled.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.transfers.upload.succeeded": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Transfers that succeeded.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "retention.users": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RETENTION_USERS",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "Users not seen for this long leave the users directory, unless pinned, noted, tagged, blocked or in a group.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "rooms": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_ROOMS",
+      "cliFlag": "--rooms",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Chat rooms to join after logging in. Rooms taken off the list are not left.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "shares.cache.retention": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SHARE_CACHE_RETENTION",
+      "cliFlag": "--share-cache-retention",
+      "kind": "duration",
+      "doc": "How often the shares are scanned again on their own, at least an hour; never when not set.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "shares.cache.storage_mode": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SHARE_CACHE_STORAGE_MODE",
+      "cliFlag": "--share-cache-storage-mode",
+      "kind": "string",
+      "doc": "`memory`, rebuilt at every start, or `disk`, kept in the cache directory.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "shares.cache.workers": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SHARE_CACHE_WORKERS",
+      "cliFlag": "--share-cache-workers",
+      "kind": "integer",
+      "doc": "How many files are read at the same time during a scan.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "shares.directories": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SHARED_DIR",
+      "cliFlag": "--shared",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Shared directories, each an absolute path, optionally with `[alias]` before it and `!` in front to exclude it instead.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "shares.filters": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SHARE_FILTER",
+      "cliFlag": "--share-filter",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Regular expressions; a file whose full path matches one is not shared.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "shares.follow_symlinks": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Follows links to directories and files inside the shares; share roots are always opened through a link.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "shares.share_downloads": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SHARE_DOWNLOADS",
+      "cliFlag": "--share-downloads",
+      "kind": "bool",
+      "doc": "Also shares the downloads directory.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "shutdown_timeout": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SHUTDOWN_TIMEOUT",
+      "cliFlag": "--shutdown-timeout",
+      "kind": "duration",
+      "doc": "How long a shutdown waits for work in progress before the process exits anyway.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.address": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_ADDRESS",
+      "cliFlag": "--slsk-address",
+      "kind": "string",
+      "doc": "The server's host name.",
+      "apply": "reconnect",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.buffer.read": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_READ_BUFFER",
+      "cliFlag": "--slsk-read-buffer",
+      "kind": "integer",
+      "doc": "The read buffer of a connection, at least 1024.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.buffer.transfer": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_TRANSFER_BUFFER",
+      "cliFlag": "--slsk-transfer-buffer",
+      "kind": "integer",
+      "doc": "The buffer of a transfer connection, at least 81920; a change applies to the transfers that start after it.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.buffer.write": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_WRITE_BUFFER",
+      "cliFlag": "--slsk-write-buffer",
+      "kind": "integer",
+      "doc": "The write buffer of a connection, at least 1024.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.buffer.write_queue": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_WRITE_QUEUE",
+      "cliFlag": "--slsk-write-queue",
+      "kind": "integer",
+      "doc": "How many writes may wait per connection, from 5 to 5000.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.mtu": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_SERVER_MTU",
+      "cliFlag": "--slsk-server-mtu",
+      "kind": "integer",
+      "doc": "The MTU of the server connection, from 576 to 65535; the system's when not set.",
+      "apply": "reconnect",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.proxy.address": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_PROXY_ADDRESS",
+      "cliFlag": "--slsk-proxy-address",
+      "kind": "string",
+      "doc": "The proxy's host.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.proxy.enabled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_PROXY_ENABLED",
+      "cliFlag": "--slsk-proxy",
+      "kind": "bool",
+      "doc": "Connects through the proxy.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.proxy.password": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_PROXY_PASSWORD",
+      "cliFlag": "--slsk-proxy-password",
+      "kind": "string",
+      "doc": "The password for the proxy.",
+      "apply": "live",
+      "secret": true,
+      "notApplied": null
+    },
+    "soulseek.connection.proxy.port": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_PROXY_PORT",
+      "cliFlag": "--slsk-proxy-port",
+      "kind": "integer",
+      "doc": "The proxy's port.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.proxy.username": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_PROXY_USERNAME",
+      "cliFlag": "--slsk-proxy-username",
+      "kind": "string",
+      "doc": "The username for the proxy.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.timeout.connect": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_CONNECTION_TIMEOUT",
+      "cliFlag": "--slsk-connection-timeout",
+      "kind": "duration",
+      "doc": "How long a connection may take to open, at least a second.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.timeout.inactivity": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_INACTIVITY_TIMEOUT",
+      "cliFlag": "--slsk-inactivity-timeout",
+      "kind": "duration",
+      "doc": "How long a peer connection may be idle before it is closed, at least a second.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.timeout.transfer": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_TRANSFER_TIMEOUT",
+      "cliFlag": "--slsk-transfer-timeout",
+      "kind": "duration",
+      "doc": "How long a transfer may stall before it fails, at least 30 seconds.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.connection.timeout.transfer_response": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "How long an upload, or a download asked for with a transfer request, waits for the peer to answer the request, at least a second.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.description": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_DESCRIPTION",
+      "cliFlag": "--slsk-description",
+      "kind": "string",
+      "doc": "The profile text other users see.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.diagnostic_level": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_DIAG_LEVEL",
+      "cliFlag": "--slsk-diag-level",
+      "kind": "string",
+      "doc": "The least severe protocol diagnostic logged: `none`, `warning`, `info` or `debug`.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.distributed_network.child_limit": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_DNET_CHILDREN",
+      "cliFlag": "--slsk-dnet-children",
+      "kind": "integer",
+      "doc": "The most children we take.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.distributed_network.disable_children": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_DNET_NO_CHILDREN",
+      "cliFlag": "--slsk-dnet-no-children",
+      "kind": "bool",
+      "doc": "Refuses children in the distributed network.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.distributed_network.disabled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_NO_DNET",
+      "cliFlag": "--slsk-no-dnet",
+      "kind": "bool",
+      "doc": "Takes no part in the distributed search network.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.distributed_network.logging": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_DNET_LOGGING",
+      "cliFlag": "--slsk-dnet-logging",
+      "kind": "bool",
+      "doc": "Logs the distributed network's diagnostics.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.limits.distributed_parent_negotiation_timeout": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "How long a would-be distributed parent has to send its branch level, root and a search.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.limits.max_cached_peer_connections": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many message connections to other users are kept open.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.limits.max_concurrent_peer_connects": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many connections to other users are being opened at once.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.limits.max_concurrent_search_responses": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many searches from the distributed network are answered at once.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.limits.max_message_size": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "size",
+      "doc": "The largest message accepted from another user; a large share's browse listing is the only message that is legitimately big.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.limits.search_response_cache_size": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many search responses are kept for a searcher we could not reach yet.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.limits.user_endpoint_cache_size": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many users' addresses are remembered between connections.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.listen_ip_address": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_LISTEN_IP_ADDRESS",
+      "cliFlag": "--slsk-listen-ip-address",
+      "kind": "string",
+      "doc": "The address the peer listener binds.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.listen_port": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_LISTEN_PORT",
+      "cliFlag": "--slsk-listen-port",
+      "kind": "integer",
+      "doc": "The port other users connect to us on.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.password": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_PASSWORD",
+      "cliFlag": "--slsk-password",
+      "kind": "string",
+      "doc": "The account's password.",
+      "apply": "reconnect",
+      "secret": true,
+      "notApplied": null
+    },
+    "soulseek.picture": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_PICTURE",
+      "cliFlag": "--slsk-picture",
+      "kind": "string",
+      "doc": "The profile picture other users see, a JPEG, GIF or BMP file.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.port": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_PORT",
+      "cliFlag": "--slsk-port",
+      "kind": "integer",
+      "doc": "The server's port.",
+      "apply": "reconnect",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.server_keepalive.enabled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_SERVER_KEEPALIVE_ENABLED",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Sends keep-alive probes on the server connection.",
+      "apply": "reconnect",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.server_keepalive.idle": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_SERVER_KEEPALIVE_IDLE",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "How long the connection is silent before the first probe, at least a second.",
+      "apply": "reconnect",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.server_keepalive.interval": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_SERVER_KEEPALIVE_INTERVAL",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "The time between probes, at least a second.",
+      "apply": "reconnect",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.server_keepalive.probes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_SERVER_KEEPALIVE_PROBES",
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many probes go unanswered before the connection is dropped, at least 1.",
+      "apply": "reconnect",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.username": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_USERNAME",
+      "cliFlag": "--slsk-username",
+      "kind": "string",
+      "doc": "The account to log in as; without it reseek does not connect.",
+      "apply": "reconnect",
+      "secret": false,
+      "notApplied": null
+    },
+    "throttling.search.incoming.circuit_breaker": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_THROTTLING_SEARCH_INCOMING_CIRCUIT_BREAKER",
+      "cliFlag": "--throttling-search-incoming-circuit-breaker",
+      "kind": "integer",
+      "doc": "How many incoming searches may wait before new ones are dropped.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "throttling.search.incoming.concurrency": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_THROTTLING_SEARCH_INCOMING_CONCURRENCY",
+      "cliFlag": "--throttling-search-incoming-concurrency",
+      "kind": "integer",
+      "doc": "How many incoming searches are answered at the same time.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "throttling.search.incoming.response_file_limit": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_THROTTLING_SEARCH_INCOMING_RESPONSE_FILE_LIMIT",
+      "cliFlag": "--throttling-search-incoming-response-file-limit",
+      "kind": "integer",
+      "doc": "The most files one search response carries.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.download.destination.exists": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "What happens when the file already exists: `rename` or `overwrite`.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.download.destination.permissions.mode": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "The mode in chmod's octal form, such as `644`; the system's default when not set. No effect on Windows.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.download.destination.subdirectory": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "The relative directory under the downloads directory a file is moved to, with `${SOURCE_USERNAME}`, `${SOURCE_PATH}`, `${SOURCE_DIRECTORY}`, `${BATCH_ID}`, `${BATCH_EXTERNAL_ID}`, `${SEARCH_ID}` and `${SEARCH_TEXT}` filled in.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.download.request_style": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "How a file is asked for: `queue`, the queue request every current client sends, or `transfer_request`, the older transfer request the peer answers.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.download.retry.attempts": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many times a download is tried, the first try included; 1 never tries again.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.download.retry.delay": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "How long to wait before the first retry; each later wait doubles, at least a second.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.download.retry.max_delay": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "The longest wait between retries, at least 30 seconds.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.download.retry.partial": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "What a retry does with the part already downloaded: `resume` or `overwrite`.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.download.slots": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_DOWNLOAD_SLOTS",
+      "cliFlag": "--download-slots",
+      "kind": "integer",
+      "doc": "How many downloads run at the same time; no limit when not set. A lower number lets the downloads that run finish and starts no new one until fewer run.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.download.speed_limit": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_DOWNLOAD_SPEED_LIMIT",
+      "cliFlag": "--download-speed-limit",
+      "kind": "integer",
+      "doc": "The total download speed in KiB/s; no limit when not set.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.blacklisted.cidrs": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Networks whose addresses are refused.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.blacklisted.members": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Usernames.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.blacklisted.patterns": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Regular expressions matched against usernames.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.limits.daily.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most failed transfers.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.limits.daily.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most files.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.limits.daily.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most megabytes.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.limits.queued.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most failed transfers.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.limits.queued.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most files.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.limits.queued.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most megabytes.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.limits.weekly.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most failed transfers.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.limits.weekly.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most files.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.limits.weekly.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most megabytes.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.priority": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The group's priority; a lower number is served first.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.slots": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many of the group's uploads run at once; no limit beyond the global one when not set.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.speed_limit": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The group's total upload speed in KiB/s; no limit when not set.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.default.upload.strategy": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "The order the group's queue is served in: `roundrobin` or `firstinfirstout`.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.thresholds.directories": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The fewest shared directories.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.thresholds.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The fewest shared files.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.limits.daily.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most failed transfers.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.limits.daily.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most files.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.limits.daily.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most megabytes.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.limits.queued.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most failed transfers.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.limits.queued.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most files.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.limits.queued.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most megabytes.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.limits.weekly.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most failed transfers.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.limits.weekly.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most files.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.limits.weekly.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most megabytes.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.priority": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The group's priority; a lower number is served first.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.slots": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many of the group's uploads run at once; no limit beyond the global one when not set.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.speed_limit": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The group's total upload speed in KiB/s; no limit when not set.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.leechers.upload.strategy": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "The order the group's queue is served in: `roundrobin` or `firstinfirstout`.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.groups.user_defined": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "map",
+      "doc": "Groups of the user's own, by name.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.ui.queue_refresh": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_TRANSFERS_UI_QUEUE_REFRESH",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "How often the page asks for the queue place of visible remotely queued downloads, at least 30 seconds.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.upload.limits.daily.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most failed transfers.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.upload.limits.daily.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most files.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.upload.limits.daily.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most megabytes.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.upload.limits.queued.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most failed transfers.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.upload.limits.queued.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most files.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.upload.limits.queued.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most megabytes.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.upload.limits.weekly.failures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most failed transfers.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.upload.limits.weekly.files": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most files.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.upload.limits.weekly.megabytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The most megabytes.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.upload.slots": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_UPLOAD_SLOTS",
+      "cliFlag": "--upload-slots",
+      "kind": "integer",
+      "doc": "How many uploads run at the same time over every group. A lower number lets the uploads that run finish and starts no new one until fewer run.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "transfers.upload.speed_limit": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_UPLOAD_SPEED_LIMIT",
+      "cliFlag": "--upload-speed-limit",
+      "kind": "integer",
+      "doc": "The total upload speed in KiB/s; no limit when not set.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "users.cache_pictures": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_USERS_CACHE_PICTURES",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Keeps users' profile pictures.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "users.picture_max_bytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_USERS_PICTURE_MAX_BYTES",
+      "cliFlag": null,
+      "kind": "size",
+      "doc": "The largest profile picture kept.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.api_key": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_API_KEY",
+      "cliFlag": "--api-key",
+      "kind": "string",
+      "doc": "One API key given outside the files: the key alone, or `;`-separated parts of `role=<role>`, `cidr=<networks>` and the key, such as `role=readonly;cidr=192.168.1.0/24;<key>`. An administrator key from anywhere by default.",
+      "apply": "restart",
+      "secret": true,
+      "notApplied": null
+    },
+    "web.authentication.api_keys": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "map",
+      "doc": "API keys by name.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.disabled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NO_AUTH",
+      "cliFlag": "--no-auth",
+      "kind": "bool",
+      "doc": "Lets every request in without a credential, as an administrator; the same as trusting every network.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.local.enabled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_LOCAL_LOGIN",
+      "cliFlag": "--local-login",
+      "kind": "bool",
+      "doc": "Offers the password login.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.local.only_from": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_LOCAL_LOGIN_ONLY_FROM",
+      "cliFlag": "--local-login-only-from",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "The networks password login is allowed from; anywhere when empty.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.local.users": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "map",
+      "doc": "More local accounts by username.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.oidc": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "map",
+      "doc": "OpenID Connect providers by name.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.password": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_PASSWORD",
+      "cliFlag": "--password",
+      "kind": "string",
+      "doc": "The administrator account's password.",
+      "apply": "live",
+      "secret": true,
+      "notApplied": null
+    },
+    "web.authentication.password_hash": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_PASSWORD_HASH",
+      "cliFlag": "--password-hash",
+      "kind": "string",
+      "doc": "The administrator account's password as an argon2id hash, used instead of `password` when set.",
+      "apply": "live",
+      "secret": true,
+      "notApplied": null
+    },
+    "web.authentication.proxy.email_header": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_PROXY_AUTH_EMAIL_HEADER",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "The header with the user's email address.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.proxy.enabled": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_PROXY_AUTH",
+      "cliFlag": "--proxy-auth",
+      "kind": "bool",
+      "doc": "Takes the identity the proxy forwards.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.proxy.groups_header": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_PROXY_AUTH_GROUPS_HEADER",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "The header with the user's groups, separated by `|` or `,`.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.proxy.role_mapping.administrator": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Groups whose users are administrators.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.proxy.role_mapping.default": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "The role of a user in none of the groups, or `deny` to refuse them.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.proxy.role_mapping.readonly": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Groups whose users may only read.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.proxy.role_mapping.readwrite": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Groups whose users may read and write.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.proxy.session": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_PROXY_AUTH_SESSION",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Starts a session when the web UI's page is served to a user the proxy names and the browser has no session yet, so the page's later requests work without the proxy's headers; API requests act on the headers alone. Off, the headers are read on every request.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.proxy.user_header": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_PROXY_AUTH_USER_HEADER",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "The header with the username.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.session_idle": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SESSION_IDLE",
+      "cliFlag": "--session-idle",
+      "kind": "duration",
+      "doc": "How long a session lasts without being used.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.session_ttl": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SESSION_TTL",
+      "cliFlag": "--session-ttl",
+      "kind": "duration",
+      "doc": "How long a session from a local login lasts.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.trusted_networks": {
+      "source": {
+        "layer": "file",
+        "file": "config.toml"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_TRUSTED_NETWORKS",
+      "cliFlag": "--trusted-networks",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Networks whose requests need no credential.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.trusted_role": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_TRUSTED_ROLE",
+      "cliFlag": "--trusted-role",
+      "kind": "string",
+      "doc": "The role of a request from a trusted network.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.authentication.username": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_USERNAME",
+      "cliFlag": "--username",
+      "kind": "string",
+      "doc": "The administrator account's username.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.content_path": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CONTENT_PATH",
+      "cliFlag": "--content-path",
+      "kind": "string",
+      "doc": "Serves the UI from this directory, relative to the program's directory, instead of the one built into the program.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.cors.allowed_origins": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CORS_ALLOWED_ORIGINS",
+      "cliFlag": "--cors-allowed-origins",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Origins such as `http://localhost:5173` that may call the API with credentials; `*` lets any origin call it without credentials. None when empty.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.external_url": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_EXTERNAL_URL",
+      "cliFlag": "--external-url",
+      "kind": "string",
+      "doc": "The public base URL, such as `https://reseek.example.net/reseek`, for login redirects; worked out from each request when not set.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.files.archive_max_bytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_WEB_FILES_ARCHIVE_MAX_BYTES",
+      "cliFlag": null,
+      "kind": "size",
+      "doc": "The largest folder that may be downloaded as one zip.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.files.serve": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_WEB_FILES_SERVE",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Lets the browser open and download files from the download directories.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.files.serve_speed_limit": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_WEB_FILES_SERVE_SPEED_LIMIT",
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "The speed files and folders are served to the browser at, in KiB/s, over every one sent at once; no limit when not set.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.hostnames": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HOSTNAMES",
+      "cliFlag": "--hostnames",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "The host names the daemon is reached by; a trusted network is only trusted on these, on IP addresses and on `localhost`.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.https.certificate.cert": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HTTPS_CERT",
+      "cliFlag": "--https-cert",
+      "kind": "string",
+      "doc": "A PEM file with the certificate chain, used with `key`.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.https.certificate.key": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HTTPS_KEY",
+      "cliFlag": "--https-key",
+      "kind": "string",
+      "doc": "A PEM file with the private key of `cert`.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.https.certificate.password": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HTTPS_CERT_PASSWORD",
+      "cliFlag": "--https-cert-password",
+      "kind": "string",
+      "doc": "The password of the PKCS#12 file.",
+      "apply": "restart",
+      "secret": true,
+      "notApplied": null
+    },
+    "web.https.certificate.pfx": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HTTPS_CERT_PFX",
+      "cliFlag": "--https-cert-pfx",
+      "kind": "string",
+      "doc": "A PKCS#12 file with the certificate and its key, used when `cert` is not set.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.https.disabled": {
+      "source": {
+        "layer": "file",
+        "file": "config.toml"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NO_HTTPS",
+      "cliFlag": "--no-https",
+      "kind": "bool",
+      "doc": "Does not listen for HTTPS.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.https.force": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HTTPS_FORCE",
+      "cliFlag": "--force-https",
+      "kind": "bool",
+      "doc": "Redirects HTTP requests to HTTPS and sends HSTS.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.https.ip_address": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HTTPS_IP_ADDRESS",
+      "cliFlag": "--https-ip-address",
+      "kind": "string",
+      "doc": "The addresses to listen on, comma-separated; every address when not set.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.https.port": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HTTPS_PORT",
+      "cliFlag": "--https-port",
+      "kind": "integer",
+      "doc": "The HTTPS port.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.ip_address": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HTTP_IP_ADDRESS",
+      "cliFlag": "--http-ip-address",
+      "kind": "string",
+      "doc": "The addresses to listen on, comma-separated; every address, IPv6 and IPv4, when not set.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.live.max_streams_per_principal": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_LIVE_MAX_STREAMS_PER_PRINCIPAL",
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many event streams one principal may hold open.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.logging": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HTTP_LOGGING",
+      "cliFlag": "--http-logging",
+      "kind": "bool",
+      "doc": "Logs one line per HTTP request.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.port": {
+      "source": {
+        "layer": "file",
+        "file": "config.toml"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HTTP_PORT",
+      "cliFlag": "--http-port",
+      "kind": "integer",
+      "doc": "The HTTP port.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.socket": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_HTTP_SOCKET",
+      "cliFlag": "--http-socket",
+      "kind": "string",
+      "doc": "Also listens on a unix domain socket at this absolute path.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.trusted_proxies": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_TRUSTED_PROXIES",
+      "cliFlag": "--trusted-proxies",
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Reverse proxies, as networks, whose `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host` headers are believed.",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.ui": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_WEB_UI",
+      "cliFlag": "--web-ui",
+      "kind": "bool",
+      "doc": "Serves the web UI.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "web.url_base": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_URL_BASE",
+      "cliFlag": "--url-base",
+      "kind": "string",
+      "doc": "The path the daemon is served under behind a reverse proxy, such as `/reseek`.",
+      "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    }
+  },
+  "files": [
+    {
+      "name": "config.toml",
+      "path": "/var/lib/reseek/config.toml",
+      "revision": "sha256:5e32f29840bff9e4b377729699314790a56d262078b7d0f4dd49a9fd5094ae30",
+      "writable": true,
+      "readOnlyReason": null
+    }
+  ],
+  "pendingRestart": [],
+  "pendingReconnect": [],
+  "managedBy": null,
+  "warnings": [],
+  "loadError": null,
+  "overrides": {}
+}
