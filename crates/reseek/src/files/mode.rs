@@ -18,6 +18,10 @@ pub fn to_unix_file_mode(text: &str) -> Result<u32, String> {
 
 /// `mode` with the execute bit of the owner, the group and others set wherever their read bit
 /// is, as a directory needs to be entered.
+#[allow(
+  dead_code,
+  reason = "the download engine's directory creation is its first caller"
+)]
 pub fn with_execute_for_each_read(mode: u32) -> u32 {
   let mut mode = mode;
   for (read, execute) in [(0o400, 0o100), (0o040, 0o010), (0o004, 0o001)] {

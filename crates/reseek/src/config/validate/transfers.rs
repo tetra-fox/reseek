@@ -1,21 +1,16 @@
 //! Uploads, downloads and the user groups: slots, speeds, limits, retries, where downloads go,
 //! and the groups' names, patterns and networks.
 
-use std::sync::LazyLock;
 use std::time::Duration;
-
-use regex::Regex;
 
 use super::Report;
 use super::fields::{at_least, cidr, duration_at_least, is_regex, optional_at_least};
 use crate::config::{Destination, GroupUpload, Limits, Transfers};
+use crate::files::mode::to_unix_file_mode;
 use crate::safety::{non_traversing, relative_everywhere};
 
 /// Group names that belong to the built-in groups.
 const RESERVED_GROUPS: &[&str] = &["privileged", "default", "leechers", "blacklisted"];
-
-/// A chmod mode in octal.
-static MODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[0-7]{3,4}$").unwrap());
 
 pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Report) {
   let upload = &transfers.upload;
@@ -163,7 +158,7 @@ fn check_destination(destination: &Destination, report: &mut Report) {
   }
   let key = "transfers.download.destination.permissions.mode";
   if let Some(mode) = &destination.permissions.mode
-    && !MODE.is_match(mode)
+    && to_unix_file_mode(mode).is_err()
   {
     report.add(
       key,

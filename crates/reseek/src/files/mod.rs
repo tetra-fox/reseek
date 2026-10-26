@@ -12,10 +12,6 @@ mod delete;
 mod link;
 mod listing;
 mod logs;
-#[allow(
-  dead_code,
-  reason = "the download engine's file creation is its first caller"
-)]
 pub(crate) mod mode;
 mod prune;
 mod roots;
