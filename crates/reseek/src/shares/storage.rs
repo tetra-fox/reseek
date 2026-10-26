@@ -63,12 +63,15 @@ pub async fn open(
         "Share cache is missing, corrupt, or is out of date. Attempting to load from backup..."
       );
       remove_database(&primary);
-      if let Some(backup) = &backup
-        && valid(backup).is_ok()
-        && let Err(e) = std::fs::copy(backup, &primary)
-      {
-        warn!(error = %e, "share cache backup not copied");
-        remove_database(&primary);
+      match backup.as_deref().map(|backup| (backup, valid(backup))) {
+        Some((backup, Ok(()))) => {
+          if let Err(e) = std::fs::copy(backup, &primary) {
+            warn!(error = %e, "share cache backup not copied");
+            remove_database(&primary);
+          }
+        }
+        Some((_, Err(e))) => warn!(error = e, "share cache backup not used"),
+        None => {}
       }
       match Database::open_as(&SCHEMA, &location(false), STEM).await {
         Ok(db) => db,

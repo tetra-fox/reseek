@@ -98,7 +98,7 @@ impl Shares {
         .clone()
         .ok_or("Share cache backup is missing, corrupt, or is out of date")?;
       storage::valid(&backup)
-        .map_err(|_| "Share cache backup is missing, corrupt, or is out of date")?;
+        .map_err(|e| format!("Share cache backup is missing, corrupt, or is out of date: {e}"))?;
       info!("Share cache backup validated. Attempting to restore...");
       storage::restore(&self.db, &backup)
         .await

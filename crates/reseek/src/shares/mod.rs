@@ -252,6 +252,7 @@ impl Shares {
   /// The files matching an incoming search, local first, at most `limit` of them; nothing when
   /// the index is not loaded.
   pub async fn search(&self, query: &SearchQuery, limit: Option<usize>) -> Vec<File> {
+    let text = query.search_text();
     let query = query.clone();
     match self
       .db
@@ -261,7 +262,7 @@ impl Shares {
       Ok(files) => files,
       Err(e) => {
         if let Some(suppressed) = search::QUERY_FAILED.allow() {
-          warn!(error = %e, suppressed, "Failed to execute shared file query");
+          warn!(query = text, error = %e, suppressed, "Failed to execute shared file query");
         }
         Vec::new()
       }

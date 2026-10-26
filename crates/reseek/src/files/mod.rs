@@ -121,6 +121,24 @@ async fn blocking<T: Send + 'static>(
 }
 
 /// The answer for a call that needs a download's file, which the downloads engine gives.
+/// The answer to `error` met reading `path`, which a message calls `what`: 404 when it is not
+/// there, 403 when the system refuses it, else a 500 with the error logged.
+fn unreadable(what: &str, path: &Path, error: std::io::Error) -> ApiError {
+  if roots::missing(&error) {
+    ApiError::not_found(format!("The {what} '{}' does not exist", path.display()))
+  } else if error.kind() == std::io::ErrorKind::PermissionDenied {
+    ApiError::forbidden(format!(
+      "Access to the {what} '{}' was denied: {error}",
+      path.display()
+    ))
+  } else {
+    ApiError::internal(format!(
+      "the {what} '{}' could not be read: {error}",
+      path.display()
+    ))
+  }
+}
+
 fn download_files() -> ApiError {
   ApiError::unavailable(Some(
     "the files of downloads not implemented yet".to_string(),
@@ -241,12 +259,7 @@ impl FileService for Files {
     }
     let served = Served::at(&resolved)
       .await
-      .map_err(|e| {
-        ApiError::not_found(format!(
-          "The file '{}' does not exist: {e}",
-          lexical.display()
-        ))
-      })?
+      .map_err(|e| unreadable("file", &lexical, e))?
       .ok_or_else(|| ApiError::not_found(format!("'{}' is not a file", lexical.display())))?;
     serve::respond(served, &request).await
   }
@@ -278,18 +291,11 @@ impl FileService for Files {
           );
         }
         Err(Refused::Denied(e)) | Err(Refused::Io(e)) => {
-          return Err(ApiError::forbidden(format!(
-            "Access to directory '{}' was denied: {e}",
-            shown.display()
-          )));
+          return Err(unreadable("directory", &shown, e));
         }
       };
-      let members = archive::members(&located.resolved).map_err(|e| {
-        ApiError::forbidden(format!(
-          "Access to directory '{}' was denied: {e}",
-          shown.display()
-        ))
-      })?;
+      let members =
+        archive::members(&located.resolved).map_err(|e| unreadable("directory", &shown, e))?;
       Ok((located.name(), members))
     })
     .await?;
@@ -411,7 +417,7 @@ impl FileService for Files {
     .await?;
     let mut served = Served::at(&resolved)
       .await
-      .map_err(|e| ApiError::not_found(format!("the log file does not exist: {e}")))?
+      .map_err(|e| unreadable("log file", &resolved, e))?
       .ok_or_else(|| ApiError::not_found("the log file is not a file"))?;
     served.content_type = Some("text/plain; charset=utf-8");
     serve::respond(served, &request).await
