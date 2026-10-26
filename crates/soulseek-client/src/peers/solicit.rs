@@ -152,7 +152,8 @@ pub(crate) async fn race(
 
 impl Client {
   /// Dials a peer, holding one of the bounded connect permits while the TCP connect and any
-  /// proxy handshake are under way.
+  /// proxy handshake are under way. An address that refuses or does not answer is dropped from
+  /// the endpoint cache.
   pub(crate) async fn connect_to_peer_socket(
     &self,
     remote: SocketAddr,
@@ -163,7 +164,11 @@ impl Client {
   ) -> Result<Conn, ClientError> {
     let limit = self.options().limits.max_concurrent_peer_connects;
     let _permit = self.peers().connects.acquire(limit, cancel).await?;
-    Conn::connect(remote, Some(username.to_owned()), kind, options, cancel).await
+    let connected = Conn::connect(remote, Some(username.to_owned()), kind, options, cancel).await;
+    if let Err(error) = &connected {
+      self.forget_unreachable(username, remote, error);
+    }
+    connected
   }
 
   /// Dials a user that asked the server to have us connect to it, and opens the connection with

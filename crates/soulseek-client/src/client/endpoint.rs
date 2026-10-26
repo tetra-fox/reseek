@@ -1,6 +1,8 @@
 //! Finding where another user listens. The server knows; a bounded cache remembers each answer
 //! for a minute, and lookups for one user take turns so concurrent callers share one request.
-//! The per-user turn locks that nobody holds are swept every five minutes.
+//! An address that refuses a connection or does not answer one in time is forgotten, so the next
+//! lookup asks the server again. The per-user turn locks that nobody holds are swept every five
+//! minutes.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -45,6 +47,37 @@ impl Endpoints {
   /// follows a change of the cache bound
   pub(super) fn resize(&self, capacity: u32) {
     lock(&self.cache).set_capacity(capacity as usize);
+  }
+
+  /// forgets `username`'s address when it is still `endpoint`; a newer one stays
+  fn forget(&self, username: &str, endpoint: SocketAddr) -> bool {
+    let mut cache = lock(&self.cache);
+    let key = username.to_owned();
+    if cache.get(&key) != Some(&endpoint) {
+      return false;
+    }
+    cache.remove(&key);
+    true
+  }
+}
+
+/// Whether a failed connect means nothing takes connections at that address now: it was
+/// refused, or it was not answered in time.
+fn unreachable(error: &ClientError) -> bool {
+  match error {
+    ClientError::Timeout(_) => true,
+    ClientError::Connection {
+      source: Some(source),
+      ..
+    } => {
+      if let Some(io) = source.downcast_ref::<std::io::Error>() {
+        return io.kind() == std::io::ErrorKind::ConnectionRefused;
+      }
+      source
+        .downcast_ref::<ClientError>()
+        .is_some_and(unreachable)
+    }
+    _ => false,
   }
 }
 
@@ -108,6 +141,19 @@ impl Client {
     Ok(endpoint)
   }
 
+  /// Forgets the address cached for `username` when a connect to it, `endpoint`, failed with
+  /// `error` because it was refused or timed out.
+  pub(crate) fn forget_unreachable(
+    &self,
+    username: &str,
+    endpoint: SocketAddr,
+    error: &ClientError,
+  ) {
+    if unreachable(error) && self.inner.endpoints.forget(username, endpoint) {
+      tracing::debug!(username, %endpoint, %error, "cached endpoint dropped after a failed connect");
+    }
+  }
+
   /// Makes sure we have a message connection to `username`, replacing the one we have when
   /// `invalidate_cache` is set; for warming up or refreshing a connection ahead of use.
   pub async fn connect_to_user(
@@ -156,5 +202,53 @@ impl Client {
       }
       .in_current_span(),
     );
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::net::TcpListener;
+
+  use super::*;
+  use crate::conn::{Conn, ConnKind};
+  use crate::options::ConnectionOptions;
+
+  #[tokio::test]
+  async fn a_refused_or_unanswered_connect_makes_an_address_unreachable() {
+    // a port that was just let go takes no connections
+    let closed = TcpListener::bind("127.0.0.1:0")
+      .unwrap()
+      .local_addr()
+      .unwrap();
+    let refused = Conn::connect(
+      closed,
+      Some("alice".into()),
+      ConnKind::OUTBOUND | ConnKind::DIRECT,
+      ConnectionOptions::default(),
+      &CancellationToken::new(),
+    )
+    .await
+    .unwrap_err();
+    assert!(unreachable(&refused), "{refused:?}");
+    assert!(unreachable(&ClientError::Timeout(
+      "Operation timed out after 10000 milliseconds".into()
+    )));
+    assert!(!unreachable(&ClientError::Cancelled));
+    assert!(!unreachable(&ClientError::connection(
+      crate::error::ConnectionErrorKind::Read,
+      "Remote connection closed"
+    )));
+  }
+
+  #[test]
+  fn only_the_address_that_failed_is_forgotten() {
+    let endpoints = Endpoints::new(10);
+    let old: SocketAddr = "198.51.100.7:2234".parse().unwrap();
+    let new: SocketAddr = "198.51.100.7:2235".parse().unwrap();
+    lock(&endpoints.cache).insert("alice".into(), new);
+    assert!(!endpoints.forget("alice", old), "a newer address stays");
+    assert_eq!(endpoints.cached("alice"), Some(new));
+    assert!(endpoints.forget("alice", new));
+    assert_eq!(endpoints.cached("alice"), None);
   }
 }
