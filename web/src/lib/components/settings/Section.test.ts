@@ -111,4 +111,41 @@ describe("a settings section", () => {
     expect(auth.textContent).toContain("https://id.example/auth");
     vi.unstubAllGlobals();
   });
+
+  it("shows a saved secret as set again, with nothing left to save", async () => {
+    const fetcher = vi.fn<(request: Request) => Promise<Response>>(
+      async () =>
+        new Response(
+          JSON.stringify({
+            revision: "sha256:2",
+            applied: [],
+            reconnectRequired: [],
+            restartRequired: []
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        )
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const auth = render(sections.find((s) => s.id === "authentication")!);
+    const status = () => auth.querySelector('[aria-live="polite"]')!.textContent!.trim();
+    const key = "web.authentication.password";
+    auth.querySelector<HTMLButtonElement>(`[id="${key}"]`)!.click();
+    flushSync();
+    const input = auth.querySelector<HTMLInputElement>(`input[id="${key}"]`)!;
+    input.value = "new password";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+    const save = [...auth.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim() === "Save"
+    )!;
+    save.click();
+    await vi.waitFor(() => expect(status()).toBe("No changes"));
+    const body = await fetcher.mock.calls[0][0].json();
+    expect(body.set).toEqual({ [key]: "new password" });
+    flushSync();
+    expect(auth.querySelector(`input[id="${key}"]`)).toBeNull();
+    expect(auth.querySelector(`button[id="${key}"]`)!.textContent).toContain("Change");
+    expect(save.disabled).toBe(true);
+    vi.unstubAllGlobals();
+  });
 });

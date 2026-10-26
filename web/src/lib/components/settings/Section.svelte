@@ -57,6 +57,8 @@
   /** keys whose running value changed under an edit in progress */
   let moved = $state<string[]>([]);
   let errors = $state<Record<string, string>>({});
+  /** how many writes each key has had, so its control starts afresh after one */
+  let written = $state<Record<string, number>>({});
 
   // a reload (a save here, or a change from elsewhere) takes the new values into fields that
   // weren't edited, so an edit in progress is kept and marked instead of lost
@@ -106,6 +108,23 @@
     return Object.keys(found).length ? null : out;
   };
 
+  /**
+   * Takes what the daemon now runs into the drafts of the keys just written, so the section
+   * shows no change for them and a later save doesn't send them again
+   */
+  const settle = async (keys: string[]) => {
+    if (!keys.length) return;
+    await onchanged();
+    loaded = { ...loaded };
+    for (const key of keys) {
+      draft[key] = running[key];
+      loaded[key] = running[key];
+      delete errors[key];
+      written[key] = (written[key] ?? 0) + 1;
+    }
+    moved = moved.filter((key) => !keys.includes(key));
+  };
+
   const saving = new Busy();
   const save = () =>
     saving.run(async () => {
@@ -116,7 +135,7 @@
         const file = view.fields[write.field.key].file ?? view.files[0]?.name ?? "config.toml";
         byFile.set(file, [...(byFile.get(file) ?? []), write]);
       }
-      let saved = 0;
+      const done: string[] = [];
       let restart: string[] = [];
       for (const [file, list] of byFile) {
         const outcome = await call(() =>
@@ -132,8 +151,10 @@
           })
         );
         if (!outcome.ok) {
+          // the files written before this one keep their change
+          await settle(done);
           if (outcome.status === 409 && outcome.error.startsWith("config file changed on disk")) {
-            await onchanged();
+            if (!done.length) await onchanged();
             return {
               ...outcome,
               error: `${file} changed on disk, check the values and save again`
@@ -148,14 +169,14 @@
           );
           return outcome;
         }
-        saved += list.length;
+        done.push(...list.map((w) => w.field.key));
         restart = [...restart, ...outcome.data.restartRequired];
       }
       toast(
-        `${section.title}: ${plural(saved, "setting", "settings")} saved` +
+        `${section.title}: ${plural(done.length, "setting", "settings")} saved` +
           (restart.length ? `, restart reseek for ${restart.join(", ")}` : "")
       );
-      await onchanged();
+      await settle(done);
       return { ok: true as const, data: null };
     });
 
@@ -194,7 +215,7 @@
       toast(
         `${section.title}: ${plural(writes.length, "setting", "settings")} applied ${expiry.words}`
       );
-      await onchanged();
+      await settle(writes.map((w) => w.field.key));
       return { ok: true as const, data: null };
     });
 
@@ -236,23 +257,25 @@
   {/if}
   <div class="-mx-5 divide-y border-y">
     {#each fields as field (field.key)}
-      <FieldRow
-        {field}
-        info={view.fields[field.key]}
-        control={controls[field.key]}
-        edit={edits[field.key]}
-        values={view.values}
-        bind:draft={draft[field.key]}
-        changed={changed.includes(field)}
-        moved={moved.includes(field.key)}
-        unused={!enabled(field)}
-        error={errors[field.key]}>
-        {#snippet extra()}
-          {#if field.key === "web.authentication.oidc"}
-            <OidcTest names={Object.keys(valueAt(view.values, field.key) ?? {})} />
-          {/if}
-        {/snippet}
-      </FieldRow>
+      {#key written[field.key]}
+        <FieldRow
+          {field}
+          info={view.fields[field.key]}
+          control={controls[field.key]}
+          edit={edits[field.key]}
+          values={view.values}
+          bind:draft={draft[field.key]}
+          changed={changed.includes(field)}
+          moved={moved.includes(field.key)}
+          unused={!enabled(field)}
+          error={errors[field.key]}>
+          {#snippet extra()}
+            {#if field.key === "web.authentication.oidc"}
+              <OidcTest names={Object.keys(valueAt(view.values, field.key) ?? {})} />
+            {/if}
+          {/snippet}
+        </FieldRow>
+      {/key}
     {/each}
   </div>
   {#if saveable || runtimeable}
