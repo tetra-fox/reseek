@@ -430,6 +430,29 @@ mod tests {
   }
 
   #[test]
+  fn a_search_request_filter_must_compile_within_its_size() {
+    let mut options = Options::default();
+    options.filters.search.request = vec!["^.{1,2}$".into()];
+    assert!(problems(&options).is_empty());
+    // a pattern this large would be matched against every search that reaches us
+    let huge = "\\w{1000}".to_string();
+    options.filters.search.request = vec!["(".into(), huge.clone()];
+    assert_eq!(
+      problems(&options),
+      [
+        (
+          "filters.search.request".to_string(),
+          "Search request filter '(' is not a valid regular expression".to_string()
+        ),
+        (
+          "filters.search.request".to_string(),
+          format!("Search request filter '{huge}' is not a valid regular expression")
+        ),
+      ]
+    );
+  }
+
+  #[test]
   fn unknown_block_scopes_are_refused() {
     let mut options = Options::default();
     options.blocking.default_scopes.push("downloads".into());

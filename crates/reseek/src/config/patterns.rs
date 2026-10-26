@@ -19,3 +19,15 @@ pub fn compile(pattern: &str, case_sensitive: bool) -> Result<Regex, String> {
     .build()
     .map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn a_pattern_too_large_to_compile_is_refused() {
+    assert!(compile("\\w{100}", false).is_ok());
+    let error = compile("\\w{1000}", false).unwrap_err();
+    assert!(error.contains("exceeds size limit"), "{error}");
+  }
+}
