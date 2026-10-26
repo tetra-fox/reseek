@@ -132,7 +132,10 @@ impl Shares {
     if scanner::content(&latest.options) != settings.snapshot.get("content").cloned() {
       return Err("Share options changed since previous scan".into());
     }
-    let totals = self.count_shares().await.map_err(|e| e.to_string())?;
+    let totals = self
+      .count_shares(&settings.shares)
+      .await
+      .map_err(|e| e.to_string())?;
     *lock(&self.covered) = Some(settings.clone());
     self.publish(|status| {
       status.scanning = false;

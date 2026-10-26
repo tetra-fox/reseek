@@ -447,3 +447,47 @@ async fn a_cancelled_scan_leaves_the_engine_idle_at_full_progress() {
   assert!(shown.ready, "the index from before is still served");
   drop(files);
 }
+
+/// Adds `dir/other`, holding one file, to the shared directories as `Other`.
+fn add_other(app: &TestApp, files: &Path) {
+  let other = files.join("other");
+  std::fs::create_dir_all(&other).unwrap();
+  std::fs::write(other.join("x.mp3"), "x").unwrap();
+  let mut options = app.state.config.current().values.clone();
+  options
+    .shares
+    .directories
+    .push(format!("[Other]{}", other.display()));
+  app.state.shares.apply_options(&options);
+}
+
+/// The counts of the configured share `alias`.
+fn counts(shares: &Shares, alias: &str) -> (Option<u32>, Option<u32>) {
+  let listed = shares.listed();
+  let share = listed.iter().find(|s| s.alias == alias).unwrap();
+  (share.directories, share.files)
+}
+
+#[tokio::test]
+async fn a_share_added_since_the_last_scan_is_not_counted_by_watched_changes() {
+  let (files, app) = shared_app().await;
+  let shares = app.state.shares.clone();
+  eventually(async || lock(&shares.running).is_none()).await;
+  add_other(&app, files.path());
+  let album = files.path().join("music/Album");
+  std::fs::write(album.join("02.mp3"), "two").unwrap();
+  watcher::apply(
+    &shares,
+    &shares.filled_from(),
+    &[files.path().join("music")],
+    vec![(album.join("02.mp3"), watcher::Need::Change)],
+  )
+  .await
+  .unwrap();
+  assert_eq!(counts(&shares, "Music"), (Some(2), Some(2)));
+  assert_eq!(
+    counts(&shares, "Other"),
+    (None, None),
+    "no scan has covered it"
+  );
+}

@@ -104,7 +104,7 @@ impl Shares {
         {
           warn!(error = %e, "shared file cache not backed up");
         }
-        match self.count_shares().await {
+        match self.count_shares(&settings.shares).await {
           Ok(totals) => {
             *lock(&self.covered) = Some(settings.clone());
             self.publish(|status| {

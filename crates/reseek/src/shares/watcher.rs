@@ -385,10 +385,10 @@ pub(super) async fn apply(
   counted(shares).await.map_err(scanner::ScanError::from)
 }
 
-/// Counts the shares after a change and lets the totals, the server's counts and the browse
+/// Counts the shares the index was filled from after a change and lets the totals, the server's counts and the browse
 /// cache follow, the last two at most once a minute.
 async fn counted(shares: &Arc<Shares>) -> Result<(), DbError> {
-  let totals = shares.count_shares().await?;
+  let totals = shares.count_shares(&shares.filled_from().shares).await?;
   shares.publish(|status| {
     if !status.scanning {
       status.directories = totals.directories;
@@ -399,7 +399,7 @@ async fn counted(shares: &Arc<Shares>) -> Result<(), DbError> {
     |s| &s.counts_throttle,
     |shares| async move {
       // counted when the throttled send runs, so the changes since it was armed are in it
-      match shares.count_shares().await {
+      match shares.count_shares(&shares.filled_from().shares).await {
         Ok(now) => {
           shares.counts.send_if_modified(|sent| {
             let changed = *sent != now;

@@ -373,15 +373,22 @@ impl Shares {
     lock(&self.shares).clone()
   }
 
-  /// Counts what each configured share holds in the index and returns the totals. The counts
-  /// are written back to the shares by entry, so a list replaced while the index was read
-  /// keeps its own counts.
-  async fn count_shares(&self) -> Result<SharedCounts, DbError> {
-    let counting: Vec<(String, String)> = self
-      .listed()
-      .into_iter()
+  /// The settings the index was last filled from by a completed scan or load.
+  fn filled_from(&self) -> Arc<Settings> {
+    lock(&self.covered)
+      .clone()
+      .expect("shares are watched only once a scan or load has filled the index")
+  }
+
+  /// Counts what each share of `covering`, the shares the index was filled from, holds in the
+  /// index and returns the totals. The counts are written back to the configured shares by
+  /// entry, so a share added since the index was filled keeps no counts until a scan covers
+  /// it.
+  async fn count_shares(&self, covering: &[Share]) -> Result<SharedCounts, DbError> {
+    let counting: Vec<(String, String)> = covering
+      .iter()
       .filter(|s| !s.excluded)
-      .map(|s| (s.raw, s.alias))
+      .map(|s| (s.raw.clone(), s.alias.clone()))
       .collect();
     let counted = self
       .db
