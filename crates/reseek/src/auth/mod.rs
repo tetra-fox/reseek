@@ -117,7 +117,8 @@ pub async fn authenticate(
     let cross_site = (identified.by_cookie && !csrf::same_origin(headers, client, &current.values))
       || (ambient && csrf::foreign_origin(headers, client, &current.values));
     if cross_site {
-      debug!(ip = %client.ip, "cross-site request refused");
+      let via = identified.principal.as_ref().map(|p| &p.via);
+      debug!(ip = %client.ip, ?via, "cross-site request refused");
       return ApiError::forbidden("cross-site request refused")
         .logged()
         .into_response();
