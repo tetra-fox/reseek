@@ -25,6 +25,56 @@ pub enum BlockScope {
   Distributed,
 }
 
+impl BlockScope {
+  /// Every scope, in the order they are written.
+  pub const ALL: [BlockScope; 7] = [
+    BlockScope::Uploads,
+    BlockScope::Searches,
+    BlockScope::Browse,
+    BlockScope::Messages,
+    BlockScope::Rooms,
+    BlockScope::Downloads,
+    BlockScope::Distributed,
+  ];
+
+  /// What a new block stops when neither the block nor the configuration says otherwise.
+  pub const DEFAULT: [BlockScope; 5] = [
+    BlockScope::Uploads,
+    BlockScope::Searches,
+    BlockScope::Browse,
+    BlockScope::Messages,
+    BlockScope::Rooms,
+  ];
+
+  /// The scope's name as it is written, such as `uploads`.
+  pub fn name(self) -> &'static str {
+    match self {
+      BlockScope::Uploads => "uploads",
+      BlockScope::Searches => "searches",
+      BlockScope::Browse => "browse",
+      BlockScope::Messages => "messages",
+      BlockScope::Rooms => "rooms",
+      BlockScope::Downloads => "downloads",
+      BlockScope::Distributed => "distributed",
+    }
+  }
+}
+
+impl std::str::FromStr for BlockScope {
+  type Err = String;
+
+  /// Reads a scope by its name as written.
+  fn from_str(text: &str) -> Result<Self, String> {
+    Self::ALL
+      .into_iter()
+      .find(|scope| scope.name() == text)
+      .ok_or_else(|| {
+        let names: Vec<_> = Self::ALL.iter().map(|s| s.name()).collect();
+        format!("Block scope '{text}' must be one of: {}", names.join(", "))
+      })
+  }
+}
+
 /// Where a block comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
@@ -141,4 +191,19 @@ pub struct BlockImportResult {
   pub added: u32,
   /// entries that made no block
   pub skipped: u32,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn scope_names_are_the_ones_json_writes_and_read_back() {
+    for scope in BlockScope::ALL {
+      assert_eq!(serde_json::to_value(scope).unwrap(), scope.name());
+      assert_eq!(scope.name().parse::<BlockScope>().unwrap(), scope);
+    }
+    let refused = "everything".parse::<BlockScope>().unwrap_err();
+    assert!(refused.ends_with("downloads, distributed"), "{refused}");
+  }
 }

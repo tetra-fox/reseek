@@ -96,8 +96,7 @@ pub(super) fn directories_under(
       }
       // a directory reached a second time, through a link or to one, would be indexed twice
       // under two names, or walked forever
-      if settings.follow_symlinks && !path.canonicalize().is_ok_and(|real| canonical.insert(real))
-      {
+      if settings.follow_symlinks && !path.canonicalize().is_ok_and(|real| canonical.insert(real)) {
         return false;
       }
       true

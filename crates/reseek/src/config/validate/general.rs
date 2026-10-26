@@ -13,9 +13,7 @@ use super::fields::{
 use super::paths::{absolute, download_directory, readable_file};
 use super::{Context, Report};
 use crate::config::enums::RelayMode;
-use crate::config::{
-  BLOCK_SCOPES, Blacklist, Logging, Options, Relay, Retention, TransferRetention,
-};
+use crate::config::{Blacklist, Logging, Options, Relay, Retention, TransferRetention};
 
 const MINUTE: Duration = Duration::from_secs(60);
 const HOUR: Duration = Duration::from_secs(3600);
@@ -113,14 +111,8 @@ pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
   }
   check_retention(&options.retention, report);
   for scope in &options.blocking.default_scopes {
-    if !BLOCK_SCOPES.contains(&scope.as_str()) {
-      report.add(
-        "blocking.default_scopes",
-        format!(
-          "Block scope '{scope}' must be one of: {}",
-          BLOCK_SCOPES.join(", ")
-        ),
-      );
+    if let Err(message) = scope.parse::<api_types::blocking::BlockScope>() {
+      report.add("blocking.default_scopes", message);
     }
   }
   let refresh = "transfers.ui.queue_refresh";
@@ -442,12 +434,15 @@ mod tests {
   #[test]
   fn unknown_block_scopes_are_refused() {
     let mut options = Options::default();
+    options.blocking.default_scopes.push("downloads".into());
+    assert!(problems(&options).is_empty(), "every scope may be a default");
     options.blocking.default_scopes.push("everything".into());
     assert_eq!(
       problems(&options),
       [(
         "blocking.default_scopes".to_string(),
-        "Block scope 'everything' must be one of: uploads, searches, browse, messages, rooms"
+        "Block scope 'everything' must be one of: uploads, searches, browse, messages, rooms, \
+         downloads, distributed"
           .to_string()
       )]
     );

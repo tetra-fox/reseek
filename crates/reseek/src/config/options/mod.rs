@@ -379,18 +379,18 @@ impl Default for ChatNotifications {
 #[serde(default)]
 pub struct Blocking {
   /// What a new block stops unless it says otherwise: any of `uploads`, `searches`, `browse`,
-  /// `messages`, `rooms`.
+  /// `messages`, `rooms`, `downloads`, `distributed`.
   #[cascade(env = "RESEEK_BLOCKING_DEFAULT_SCOPES")]
   pub default_scopes: Vec<String>,
 }
 
-/// The scopes a block can have.
-pub const BLOCK_SCOPES: &[&str] = &["uploads", "searches", "browse", "messages", "rooms"];
-
 impl Default for Blocking {
   fn default() -> Self {
     Self {
-      default_scopes: BLOCK_SCOPES.iter().map(|s| s.to_string()).collect(),
+      default_scopes: api_types::blocking::BlockScope::DEFAULT
+        .iter()
+        .map(|s| s.name().to_string())
+        .collect(),
     }
   }
 }

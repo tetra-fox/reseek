@@ -66,7 +66,8 @@ impl Directory {
       .blocking
       .default_scopes
       .iter()
-      .filter_map(|name| serde_json::from_value(serde_json::Value::String(name.clone())).ok())
+      // the configuration is only loaded once every name in it is a scope
+      .filter_map(|name| name.parse().ok())
       .collect()
   }
 

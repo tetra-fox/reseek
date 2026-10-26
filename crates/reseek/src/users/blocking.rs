@@ -27,17 +27,6 @@ const DECISIONS: usize = 1000;
 /// The size limit a blacklist pattern compiles within.
 const PATTERN_SIZE: usize = 10 * 1024 * 1024;
 
-/// Every scope in the order they are written.
-pub const SCOPES: [BlockScope; 7] = [
-  BlockScope::Uploads,
-  BlockScope::Searches,
-  BlockScope::Browse,
-  BlockScope::Messages,
-  BlockScope::Rooms,
-  BlockScope::Downloads,
-  BlockScope::Distributed,
-];
-
 /// The bit a scope is stored as.
 pub fn bit(scope: BlockScope) -> u32 {
   match scope {
@@ -58,7 +47,10 @@ pub fn bits(scopes: &[BlockScope]) -> u32 {
 
 /// The scopes stored as `bits`, in their order.
 pub fn scopes(bits: u32) -> Vec<BlockScope> {
-  SCOPES.into_iter().filter(|s| bits & bit(*s) != 0).collect()
+  BlockScope::ALL
+    .into_iter()
+    .filter(|s| bits & bit(*s) != 0)
+    .collect()
 }
 
 /// The configuration's block of a user it names: every scope, no time, no one.
@@ -66,7 +58,7 @@ pub fn configured(username: &str) -> Block {
   Block {
     username: username.to_string(),
     reason: String::new(),
-    scopes: SCOPES.to_vec(),
+    scopes: BlockScope::ALL.to_vec(),
     created_at: None,
     expires_at: None,
     created_by: None,
@@ -424,7 +416,7 @@ mod tests {
     ];
     assert_eq!(bits(&some), 81);
     assert_eq!(scopes(81), some);
-    assert_eq!(bits(&SCOPES[..5]), 31, "the default scopes");
+    assert_eq!(bits(&BlockScope::DEFAULT), 31, "the default scopes");
   }
 
   #[test]
