@@ -17,6 +17,7 @@ pub mod paths;
 pub mod safety;
 pub mod services;
 pub mod state;
+pub mod telemetry;
 pub mod transfers;
 pub mod ui;
 pub mod version;

@@ -32,6 +32,7 @@ fn answered_here(operation: &Operation) -> bool {
     || route == "/api/v0/live"
     || (route == "/api/v0/relay" && operation.method == Method::GET)
     || under("/api/v0/events")
+    || under("/api/v0/telemetry")
 }
 
 #[tokio::test]
@@ -374,7 +375,7 @@ async fn requests_are_checked_before_any_service_is_asked() {
       "GET",
       format!("{leaderboard}?direction=download&sortBy=totalbytes&sortOrder=asc"),
       None,
-      503,
+      200,
     ),
     (
       "GET",

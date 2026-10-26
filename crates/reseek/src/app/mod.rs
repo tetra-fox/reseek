@@ -31,6 +31,7 @@ use crate::logging::{self, LogBuffer, Logging, Sinks};
 use crate::paths::{Defaults, InstanceLock, Paths};
 use crate::services::Services;
 use crate::state::StateOwner;
+use crate::telemetry::Telemetry;
 use crate::ui::{Bundle, Ui};
 use crate::version;
 use signals::spawn_signals;
@@ -89,6 +90,8 @@ pub struct AppState {
   pub paths: Paths,
   /// `transfers.db`, the record of every download and upload
   pub transfers: Database,
+  /// the metrics the engines update, and the reports
+  pub telemetry: Arc<Telemetry>,
   /// the engine of every domain
   pub services: Services,
   /// set when the daemon is to start again once it has stopped
@@ -132,8 +135,10 @@ impl AppState {
     let event_log = EventLog::open(&location, &events, config.clone(), shutdown.clone())
       .await
       .map_err(|e| StartError::Open(format!("events.db: {e}")))?;
+    let telemetry = Telemetry::new(transfers.clone(), shutdown.clone());
     let mut services = Services::unavailable();
     services.events = event_log;
+    services.reports = telemetry.clone();
     Ok(Self {
       config,
       startup,
@@ -147,6 +152,7 @@ impl AppState {
       shutdown,
       paths,
       transfers,
+      telemetry,
       services,
       restart: Arc::new(AtomicBool::new(false)),
     })

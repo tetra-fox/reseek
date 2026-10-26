@@ -1,7 +1,8 @@
 //! The request pipeline, outermost first: CORS, the HTTPS redirect and HSTS, the URL base taken
 //! off the path, a span and log line per request, a panic turned into a 500, then the API
-//! with its authentication, `/health`, the OpenAPI document and Swagger UI when
-//! `feature.swagger` is on, the 404 for unknown API paths, and the web UI.
+//! with its authentication, `/health`, the Prometheus endpoint when `metrics.enabled` is on,
+//! the OpenAPI document and Swagger UI when `feature.swagger` is on, the 404 for unknown API
+//! paths, and the web UI.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -24,6 +25,7 @@ use crate::api::{self, error::ApiError};
 use crate::app::AppState;
 use crate::auth::{self, Presented, client, networks};
 use crate::config::Options;
+use crate::telemetry;
 use crate::ui::Ui;
 
 /// HSTS for 30 days.
@@ -41,6 +43,9 @@ pub fn app(state: AppState, ui: Ui) -> Router {
   let mut inner = Router::new()
     .merge(api::router(state.clone()))
     .route("/health", get(health));
+  if startup.metrics.enabled {
+    inner = inner.merge(telemetry::exposition::routes(&state));
+  }
   if startup.feature.swagger {
     info!("Publishing Swagger documentation to /swagger");
     inner = inner.merge(api::swagger(&base));
