@@ -5,11 +5,15 @@
 //! exclusion also removes every match whose name holds it anywhere, ignoring case.
 
 use rusqlite::{Connection, params};
+use soulseek_client::LogLimiter;
 use soulseek_proto::SearchQuery;
 use soulseek_proto::peer;
 use tracing::warn;
 
 use super::repository::shared_file;
+
+/// Failed share queries, which arrive at the network's search rate.
+pub(super) static QUERY_FAILED: LogLimiter = LogLimiter::new();
 
 /// Whether the filename index takes `c` as part of a word: letters, numbers and private-use
 /// characters; everything else separates words.
@@ -72,11 +76,14 @@ pub fn search(conn: &Connection, query: &SearchQuery, limit: Option<usize>) -> V
   match run(conn, &expression, &excluded, limit.unwrap_or(usize::MAX)) {
     Ok(files) => files,
     Err(e) => {
-      warn!(
-        query = query.search_text(),
-        error = %e,
-        "Failed to execute shared file query"
-      );
+      if let Some(suppressed) = QUERY_FAILED.allow() {
+        warn!(
+          query = query.search_text(),
+          error = %e,
+          suppressed,
+          "Failed to execute shared file query"
+        );
+      }
       Vec::new()
     }
   }

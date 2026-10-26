@@ -259,7 +259,9 @@ impl Shares {
     {
       Ok(files) => files,
       Err(e) => {
-        warn!(error = %e, "Failed to execute shared file query");
+        if let Some(suppressed) = search::QUERY_FAILED.allow() {
+          warn!(error = %e, suppressed, "Failed to execute shared file query");
+        }
         Vec::new()
       }
     }
@@ -390,7 +392,7 @@ impl Shares {
       }
     }
     let api: Vec<_> = shares.iter().map(Share::to_api).collect();
-    debug!(shares = %serde_json::to_string(&api).unwrap_or_default(), "Share statistics updated");
+    debug!(shares = ?api, "Share statistics updated");
     Ok(totals)
   }
 
@@ -546,8 +548,7 @@ impl Shares {
 
   /// Puts a failed scan into the state: the cache served is what was there before.
   fn faulted(&self, error: &str, before: &Status) {
-    tracing::error!(error, "Encountered error during scan of shared files");
-    tracing::error!("Failed to scan shares.");
+    tracing::error!(error, "Failed to scan shares.");
     self.publish(|status| {
       status.scanning = false;
       status.faulted = true;
