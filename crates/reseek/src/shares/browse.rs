@@ -6,14 +6,17 @@ use std::time::Instant;
 
 use soulseek_proto::PeerMessage;
 use soulseek_proto::peer::BrowseResponse;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use super::repository;
 use crate::db::{Database, DbError};
 
+/// The name of the browse cache file.
+const FILE: &str = "browse.cache";
+
 /// The file the browse cache is kept in, in the cache directory.
 pub fn path(cache: &Path) -> PathBuf {
-  cache.join("browse.cache")
+  cache.join(FILE)
 }
 
 /// Why the browse cache was not written.
@@ -30,8 +33,8 @@ pub enum CacheError {
   Task(String),
 }
 
-/// Writes the listing in `db` to the browse cache at `file`, through a file beside it that
-/// replaces it whole, so a peer never reads half of one.
+/// Writes the listing in `db` to the browse cache at `file`, through a file of its own beside
+/// it that replaces it whole, so a peer never reads half of one.
 pub async fn rebuild(db: &Database, file: &Path) -> Result<(), CacheError> {
   let started = Instant::now();
   info!("Warming browse response cache...");
@@ -42,9 +45,17 @@ pub async fn rebuild(db: &Database, file: &Path) -> Result<(), CacheError> {
       directories,
       locked_directories: Vec::new(),
     });
-    let temporary = file.with_extension("cache.tmp");
-    std::fs::write(&temporary, message.encode())?;
-    std::fs::rename(&temporary, &file)
+    // a name of its own, so rebuilds that overlap never write into each other's file
+    let temporary = file.with_file_name(format!("{FILE}.tmp-{:016x}", rand::random::<u64>()));
+    let written = std::fs::write(&temporary, message.encode())
+      .and_then(|()| std::fs::rename(&temporary, &file));
+    if written.is_err()
+      && let Err(e) = std::fs::remove_file(&temporary)
+      && e.kind() != std::io::ErrorKind::NotFound
+    {
+      warn!(path = %temporary.display(), error = %e, "unfinished browse cache not removed");
+    }
+    written
   })
   .await
   .map_err(|e| CacheError::Task(e.to_string()))??;
