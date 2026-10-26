@@ -46,6 +46,12 @@
     providers = outcome.data;
   });
 
+  // the username takes focus when the form shows, and again once a login attempt is over:
+  // disabling the fields while it runs drops the focus
+  const focusWhenReady = (input: HTMLInputElement) => {
+    if (!submitting) input.focus();
+  };
+
   const ready = $derived(username.trim() !== "" && password.trim() !== "" && !submitting);
 
   const login = async (event: SubmitEvent) => {
@@ -102,9 +108,9 @@
             <Input
               id="username"
               autocomplete="username"
-              autofocus
               disabled={submitting}
-              bind:value={username} />
+              bind:value={username}
+              {@attach focusWhenReady} />
           </Field>
           <Field label="Password" for="password">
             <Input
