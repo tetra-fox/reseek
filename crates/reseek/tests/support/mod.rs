@@ -9,6 +9,32 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use soulseek_client::Event;
+use tokio::sync::broadcast;
+
+/// The Soulseek server the network tests run against, from the client's test harness.
+#[path = "../../../soulseek-client/tests/support/soulfind.rs"]
+pub mod soulfind;
+
+/// How long a test waits for something that should happen promptly.
+pub const PATIENCE: Duration = Duration::from_secs(20);
+
+/// The next client event `pick` accepts, skipping the others.
+pub async fn next_event<T>(
+  events: &mut broadcast::Receiver<Event>,
+  mut pick: impl FnMut(Event) -> Option<T>,
+) -> T {
+  tokio::time::timeout(PATIENCE, async {
+    loop {
+      if let Some(picked) = pick(events.recv().await.unwrap()) {
+        return picked;
+      }
+    }
+  })
+  .await
+  .expect("the event is raised")
+}
+
 /// The headless daemon program.
 pub const PROGRAM: &str = env!("CARGO_BIN_EXE_reseek-headless");
 

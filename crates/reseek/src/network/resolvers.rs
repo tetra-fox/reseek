@@ -243,3 +243,109 @@ fn queue_place(username: &str, filename: &RemoteFilename) -> Option<u32> {
   debug!(username, %filename, "place in queue not answered; nothing is queued for upload yet");
   None
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::testing::{app, request};
+  use serde_json::json;
+
+  const CONFIG: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n\
+                        [transfers.groups.blacklisted]\ncidrs = [\"192.0.2.0/24\"]\n";
+
+  fn from(ip: &str) -> SocketAddr {
+    format!("{ip}:2234").parse().unwrap()
+  }
+
+  fn name(text: &str) -> RemoteFilename {
+    RemoteFilename::from(text)
+  }
+
+  fn refused(result: Result<(), ClientError>) -> bool {
+    matches!(result, Err(ClientError::DownloadEnqueue(reason)) if reason == NOT_SHARED)
+  }
+
+  fn empty_share(reply: BrowseReply) -> bool {
+    matches!(reply, BrowseReply::Response(r) if r.directories.is_empty())
+  }
+
+  #[tokio::test]
+  async fn a_blocked_user_gets_what_a_blocked_user_gets_at_every_edge() {
+    let app = app(CONFIG, &[]).await;
+    let block = json!({ "scopes": ["uploads", "searches", "browse"] });
+    let answer = app
+      .send(request("PUT", "/api/v0/users/mallory/block", Some(block)))
+      .await;
+    assert_eq!(answer.status, 200);
+    let edges = Edges {
+      users: app.state.users.clone(),
+      shares: app.state.shares.clone(),
+    };
+    let peer = from("198.51.100.7");
+    let file = name("@@music\\a.mp3");
+
+    assert!(refused(
+      enqueue_download(&edges, "mallory", peer, &file).await
+    ));
+    assert!(empty_share(browse(&edges, "mallory", peer)));
+    let folder = directory_contents(&edges, "mallory", peer, &name("@@music\\album"));
+    let folder = folder.expect("a blocked user is answered");
+    assert_eq!(folder.len(), 1);
+    assert_eq!(folder[0].name.as_str(), "@@music\\album");
+    assert!(folder[0].files.is_empty());
+    assert_eq!(search(&edges, "mallory", 1, &SearchQuery::parse("a")), None);
+    let info = user_info(&edges, "mallory", peer).await;
+    assert_eq!(info.description, "A reseek user.");
+    assert_eq!(
+      (
+        info.upload_slots,
+        info.queue_length,
+        info.has_free_upload_slot
+      ),
+      (0, i32::MAX as u32, false)
+    );
+    assert_eq!(place_in_queue(&edges, "mallory", peer, &file), None);
+
+    // an address the configuration blocks is blocked whoever connects from it
+    let blocked_network = from("192.0.2.9");
+    assert!(empty_share(browse(&edges, "alice", blocked_network)));
+    assert_eq!(
+      directory_contents(&edges, "alice", blocked_network, &name("@@music")).map(|d| d.len()),
+      Some(1)
+    );
+    assert_eq!(
+      user_info(&edges, "alice", blocked_network)
+        .await
+        .queue_length,
+      i32::MAX as u32
+    );
+
+    // anyone else gets what is here, which is nothing yet
+    assert_eq!(
+      directory_contents(&edges, "alice", peer, &name("@@music")),
+      None
+    );
+    assert_eq!(user_info(&edges, "alice", peer).await.description, "");
+  }
+
+  #[tokio::test]
+  async fn a_name_that_climbs_out_of_the_share_is_refused() {
+    let app = app(CONFIG, &[]).await;
+    let edges = Edges {
+      users: app.state.users.clone(),
+      shares: app.state.shares.clone(),
+    };
+    let peer = from("198.51.100.7");
+    for traversing in ["@@music\\..\\secret.txt", "@@music/./a.mp3", ".."] {
+      assert!(
+        refused(enqueue_download(&edges, "alice", peer, &name(traversing)).await),
+        "{traversing}"
+      );
+      assert_eq!(
+        directory_contents(&edges, "alice", peer, &name(traversing)),
+        Some(Vec::new()),
+        "{traversing}"
+      );
+    }
+  }
+}
