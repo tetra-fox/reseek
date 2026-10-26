@@ -219,7 +219,10 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
     .get_download_place_in_queue(&name, small_name, &cancel)
     .await
     .unwrap();
-  assert_eq!(place, 1, "behind the upload running in the group");
+  assert_eq!(
+    place, 2,
+    "behind the upload running in the group, counted from 1"
+  );
   let why = api
     .upload_queue_status(&second.username, waiting.id)
     .await

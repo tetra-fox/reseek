@@ -14,8 +14,8 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use super::{InFlight, OVERWHELMED, lock};
-use crate::network::resolvers::enqueue_download;
 use crate::network::resolvers::tests::{edges, exposed, from};
+use crate::network::resolvers::{enqueue_download, place_in_queue};
 use crate::testing::{TestApp, app, request};
 use crate::transfers::fixtures::{Row, insert};
 use crate::transfers::{Record, store};
@@ -263,6 +263,21 @@ async fn a_running_upload_stands_for_a_new_request_and_an_ended_one_is_supersede
     .unwrap()
     .unwrap();
   assert!(superseded.removed);
+}
+
+#[tokio::test]
+async fn a_peer_first_in_line_is_told_place_one() {
+  let (_files, app) = shared_app("").await;
+  app
+    .state
+    .uploads
+    .queue
+    .enqueue(Uuid::new_v4(), "alice", SHARED);
+  let peer = from("198.51.100.7");
+  let place =
+    |filename: &str| place_in_queue(&edges(&app), "alice", peer, &RemoteFilename::from(filename));
+  assert_eq!(place(SHARED), Some(1));
+  assert_eq!(place("Music\\Album\\02.mp3"), None);
 }
 
 #[tokio::test]
