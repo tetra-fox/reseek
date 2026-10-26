@@ -107,11 +107,17 @@ impl Shares {
         match self.count_shares(&settings.shares).await {
           Ok(totals) => {
             *lock(&self.covered) = Some(settings.clone());
+            let current = self.covers_current(&settings);
+            if !current {
+              debug!("the share options changed while the scan ran, so a rescan stays pending");
+            }
             self.publish(|status| {
               status.scanning = false;
               status.faulted = false;
               status.cancelled = false;
-              status.scan_pending = false;
+              if current {
+                status.scan_pending = false;
+              }
               status.ready = true;
               status.loaded = true;
               status.progress = 1.0;
@@ -158,6 +164,13 @@ impl Shares {
       self.watch_shares(settings).await;
     }
     completed
+  }
+
+  /// Whether `settings` share what a scan started now would: the same entries, filters and
+  /// link following.
+  fn covers_current(&self, settings: &Settings) -> bool {
+    let options = self.config.current();
+    settings.snapshot.get("content") == Some(&scanner::content_of(&self.listed(), &options.values))
   }
 
   /// Puts a failed scan into the state: the cache served is what was there before.

@@ -59,15 +59,8 @@ impl Settings {
           .ok()
       })
       .collect();
-    let mut directories: Vec<&str> = shares.iter().map(|s| s.raw.as_str()).collect();
-    directories.sort_unstable();
-    directories.dedup();
     let snapshot = json!({
-      "content": {
-        "directories": directories,
-        "filters": filter_set(&options.shares.filters),
-        "followSymlinks": options.shares.follow_symlinks,
-      },
+      "content": content_of(&shares, options),
       "shares": options.shares,
     });
     Self {
@@ -83,6 +76,19 @@ impl Settings {
     let text = path.to_string_lossy();
     self.filters.iter().any(|f| f.is_match(&text))
   }
+}
+
+/// What decides what a scan of `shares` with `options` shares: the entries, the filters as a
+/// set and whether links are followed.
+pub(super) fn content_of(shares: &[Share], options: &Options) -> serde_json::Value {
+  let mut directories: Vec<&str> = shares.iter().map(|s| s.raw.as_str()).collect();
+  directories.sort_unstable();
+  directories.dedup();
+  json!({
+    "directories": directories,
+    "filters": filter_set(&options.shares.filters),
+    "followSymlinks": options.shares.follow_symlinks,
+  })
 }
 
 /// The part of a recorded snapshot that decides what is shared.

@@ -491,3 +491,40 @@ async fn a_share_added_since_the_last_scan_is_not_counted_by_watched_changes() {
     "no scan has covered it"
   );
 }
+
+#[tokio::test]
+async fn options_changed_while_a_scan_runs_stay_pending_and_uncounted() {
+  let (files, app) = shared_app().await;
+  let shares = app.state.shares.clone();
+  eventually(async || lock(&shares.running).is_none()).await;
+  // the scan has made its settings and waits for the writer while the options change
+  let (release, held) = std::sync::mpsc::channel::<()>();
+  let (taken, writer_taken) = tokio::sync::oneshot::channel();
+  let hold = {
+    let db = shares.db.clone();
+    tokio::spawn(async move {
+      db.write(move |_| {
+        taken.send(()).unwrap();
+        held.recv().unwrap();
+        Ok(())
+      })
+      .await
+    })
+  };
+  writer_taken.await.unwrap();
+  shares.scan(false).unwrap();
+  eventually(async || app.state.state.current().shares.scanning).await;
+  add_other(&app, files.path());
+  release.send(()).unwrap();
+  hold.await.unwrap().unwrap();
+  eventually(async || lock(&shares.running).is_none()).await;
+  let shown = app.state.state.current().shares.clone();
+  assert!(shown.ready && !shown.scanning);
+  assert!(shown.scan_pending, "the scan did not cover the share added");
+  assert_eq!(counts(&shares, "Other"), (None, None));
+  assert_eq!(counts(&shares, "Music"), (Some(2), Some(1)));
+  shares.scan(false).unwrap();
+  eventually(async || lock(&shares.running).is_none()).await;
+  assert!(!app.state.state.current().shares.scan_pending);
+  assert_eq!(counts(&shares, "Other"), (Some(1), Some(1)));
+}
