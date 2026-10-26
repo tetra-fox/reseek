@@ -214,7 +214,7 @@ impl Shares {
     let shares = Arc::new_cyclic(|this| Self {
       this: this.clone(),
       db: storage.db,
-      shares: Mutex::new(share::configure(options, &paths.downloads)),
+      shares: Mutex::new(share::configure(&options.shares, &paths.downloads)),
       applied: Mutex::new(options.shares.clone()),
       config: config.clone(),
       state,

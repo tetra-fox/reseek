@@ -10,7 +10,7 @@ use std::path::{Component, Path, PathBuf};
 
 use sha1::{Digest, Sha1};
 
-use crate::config::Options;
+use crate::config::Shares;
 
 /// The option that adds the downloads directory as a share of its own.
 pub const DERIVED_FROM_DOWNLOADS: &str = "shares.share_downloads";
@@ -115,18 +115,26 @@ pub fn id(alias: &str) -> String {
     .collect()
 }
 
-/// The shares of `options`, with the downloads directory `downloads` added when the options
-/// say so and no configured share has its path: repeats dropped, deepest path first so that
-/// the first share holding a directory is the one that owns it.
-pub fn configure(options: &Options, downloads: &Path) -> Vec<Share> {
+/// The shares of the share options, deepest path first so that the first share holding a
+/// directory is the one that owns it.
+pub fn configure(options: &Shares, downloads: &Path) -> Vec<Share> {
+  let mut shares = in_written_order(options, downloads);
+  shares.sort_by_key(|share| std::cmp::Reverse(share.local_path.as_os_str().len()));
+  shares
+}
+
+/// The shares of the share options in the order they are written, repeats dropped, with the
+/// downloads directory `downloads` last when `share_downloads` asks for it and no entry that
+/// shares rather than excludes has its path.
+pub fn in_written_order(options: &Shares, downloads: &Path) -> Vec<Share> {
   let mut entries: Vec<(String, Option<&'static str>)> = Vec::new();
-  for raw in &options.shares.directories {
+  for raw in &options.directories {
     let raw = trimmed(raw).to_string();
     if !entries.iter().any(|(seen, _)| *seen == raw) {
       entries.push((raw, None));
     }
   }
-  if options.shares.share_downloads {
+  if options.share_downloads {
     let path = downloads.to_string_lossy();
     let path = trimmed(&path).to_string();
     let shared = entries.iter().any(|(raw, _)| {
@@ -137,12 +145,10 @@ pub fn configure(options: &Options, downloads: &Path) -> Vec<Share> {
       entries.push((path, Some(DERIVED_FROM_DOWNLOADS)));
     }
   }
-  let mut shares: Vec<Share> = entries
+  entries
     .iter()
     .map(|(raw, derived)| Share::parse(raw, *derived))
-    .collect();
-  shares.sort_by_key(|share| std::cmp::Reverse(share.local_path.as_os_str().len()));
-  shares
+    .collect()
 }
 
 /// What identifies a share list, so applying the same list twice changes nothing: the SHA-1
@@ -256,6 +262,10 @@ mod tests {
       "x",
       "an unclosed bracket is no alias"
     );
+    let flac = entry(trimmed("/music/flac/"));
+    assert_eq!((flac.alias, flac.path), ("flac", "/music/flac"));
+    assert_eq!(entry("[a]/music/odd]name").path, "/music/odd]name");
+    assert_eq!(entry("\\\\nas\\music").alias, "music");
   }
 
   #[test]
@@ -265,14 +275,16 @@ mod tests {
 
   #[test]
   fn the_list_drops_repeats_puts_deepest_first_and_adds_the_downloads() {
-    let mut options = Options::default();
-    options.shares.directories = vec![
-      "/mnt/music/".into(),
-      "/mnt/music".into(),
-      "[Deep]/mnt/music/flac/lossless".into(),
-      "!/mnt/music/private".into(),
-    ];
-    options.shares.share_downloads = true;
+    let mut options = Shares {
+      directories: vec![
+        "/mnt/music/".into(),
+        "/mnt/music".into(),
+        "[Deep]/mnt/music/flac/lossless".into(),
+        "!/mnt/music/private".into(),
+      ],
+      share_downloads: true,
+      ..Shares::default()
+    };
     let shares = configure(&options, Path::new("/srv/downloads"));
     let raws: Vec<&str> = shares.iter().map(|s| s.raw.as_str()).collect();
     assert_eq!(
@@ -286,10 +298,7 @@ mod tests {
     );
     assert_eq!(shares[2].derived_from, Some(DERIVED_FROM_DOWNLOADS));
     assert_eq!(shares[2].alias, "downloads");
-    options
-      .shares
-      .directories
-      .push("[dl]/srv/downloads/".into());
+    options.directories.push("[dl]/srv/downloads/".into());
     let shares = configure(&options, Path::new("/srv/downloads"));
     assert!(
       shares.iter().all(|s| s.derived_from.is_none()),
@@ -328,12 +337,14 @@ mod tests {
 
   #[test]
   fn the_deepest_share_owns_a_directory() {
-    let mut options = Options::default();
-    options.shares.directories = vec![
-      "/mnt/music".into(),
-      "[Flac]/mnt/music/flac".into(),
-      "!/mnt/music/private".into(),
-    ];
+    let options = Shares {
+      directories: vec![
+        "/mnt/music".into(),
+        "[Flac]/mnt/music/flac".into(),
+        "!/mnt/music/private".into(),
+      ],
+      ..Shares::default()
+    };
     let shares = configure(&options, Path::new("/d"));
     let owned = |p: &str| owner(&shares, Path::new(p)).map(|s| s.alias.as_str());
     assert_eq!(owned("/mnt/music/flac/x"), Some("Flac"));

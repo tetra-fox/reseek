@@ -232,7 +232,7 @@ impl Shares {
   /// Applies the share options of `current` where they differ from those last applied.
   pub(super) fn apply_options(&self, current: &Options) {
     let previous = std::mem::replace(&mut *lock(&self.applied), current.shares.clone());
-    let list = share::configure(current, &self.downloads);
+    let list = share::configure(&current.shares, &self.downloads);
     let changed_list = {
       let mut shares = lock(&self.shares);
       let changed = share::fingerprint(&shares) != share::fingerprint(&list);

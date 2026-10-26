@@ -13,7 +13,7 @@ use regex::Regex;
 use super::Report;
 use super::fields::{duration_at_least, is_regex, range};
 use crate::config::{MAX_SCAN_WORKERS, ShareCache, Shares};
-use crate::shares::share::{self, DERIVED_FROM_DOWNLOADS, trimmed};
+use crate::shares::share::{self, DERIVED_FROM_DOWNLOADS, Share, trimmed};
 
 const KEY: &str = "shares.directories";
 
@@ -26,21 +26,21 @@ static ROOT: LazyLock<Regex> =
 static TRAVERSAL: LazyLock<Regex> =
   LazyLock::new(|| Regex::new(r"^\.+[/\\]?|[/\\]\.+[/\\]|[/\\]\.+$").unwrap());
 
-/// One entry of `shares.directories`, or the share `shares.share_downloads` adds, taken apart.
-#[derive(Debug, PartialEq, Eq)]
+/// One share of `shares.directories`, or the share `shares.share_downloads` adds, with the
+/// entry as written.
 struct Entry<'a> {
   written: &'a str,
-  alias: &'a str,
-  path: &'a str,
-  excluded: bool,
-  /// the share the downloads option adds
-  derived: bool,
+  share: &'a Share,
 }
 
 impl Entry<'_> {
+  fn derived(&self) -> bool {
+    self.share.derived_from.is_some()
+  }
+
   /// How a message names the entry.
   fn named(&self) -> String {
-    if self.derived {
+    if self.derived() {
       format!("'{}' (from {DERIVED_FROM_DOWNLOADS})", self.written)
     } else {
       format!("'{}'", self.written)
@@ -51,40 +51,33 @@ impl Entry<'_> {
 /// Checks the shared directories, with the share of the downloads directory `downloads` when
 /// `shares.share_downloads` adds it, and the filters and cache options.
 pub(super) fn check(shares: &Shares, downloads: &Path, case_sensitive: bool, report: &mut Report) {
-  let mut entries: Vec<Entry> = Vec::new();
+  let mut invalid: Vec<&str> = Vec::new();
   for written in &shares.directories {
-    match entry(written) {
-      // an entry written twice, perhaps with a trailing separator, is the same share
-      Ok(_)
-        if entries
-          .iter()
-          .any(|e| trimmed(e.written) == trimmed(written)) => {}
-      Ok(entry) => entries.push(entry),
-      Err(message) => report.add(KEY, message),
+    if let Err(message) = valid(written) {
+      report.add(KEY, message);
+      invalid.push(trimmed(written));
     }
   }
-  let downloads = downloads.to_string_lossy();
-  if shares.share_downloads {
-    let path = trimmed(&downloads);
-    let shared = entries
-      .iter()
-      .any(|e| !e.excluded && share::same_path(Path::new(e.path), Path::new(path)));
-    if !shared {
-      let parts = share::entry(path);
-      entries.push(Entry {
-        written: path,
-        alias: parts.alias,
-        path: parts.path,
-        excluded: false,
-        derived: true,
-      });
-    }
-  }
+  let list = share::in_written_order(shares, downloads);
+  let entries: Vec<Entry> = list
+    .iter()
+    .filter(|share| !invalid.contains(&share.raw.as_str()))
+    .map(|share| Entry {
+      // a share is named by its entry as first written, trailing separators and all; the
+      // downloads share has no entry
+      written: shares
+        .directories
+        .iter()
+        .find(|written| share.derived_from.is_none() && trimmed(written) == share.raw)
+        .map_or(share.raw.as_str(), String::as_str),
+      share,
+    })
+    .collect();
   for (i, a) in entries.iter().enumerate() {
     for b in &entries[i + 1..] {
-      let (first, second) = if b.derived { (b, a) } else { (a, b) };
-      if a.alias.to_lowercase() == b.alias.to_lowercase() {
-        let message = if first.derived {
+      let (first, second) = if b.derived() { (b, a) } else { (a, b) };
+      if a.share.alias.to_lowercase() == b.share.alias.to_lowercase() {
+        let message = if first.derived() {
           format!(
             "Share {} collides with {}. Specify an alias for {} to disambiguate them.",
             first.named(),
@@ -99,8 +92,8 @@ pub(super) fn check(shares: &Shares, downloads: &Path, case_sensitive: bool, rep
           )
         };
         report.add(KEY, message);
-      } else if share::same_path(Path::new(a.path), Path::new(b.path)) {
-        let message = if first.derived {
+      } else if share::same_path(&a.share.local_path, &b.share.local_path) {
+        let message = if first.derived() {
           format!(
             "Share {} aliases the same path as {}",
             first.named(),
@@ -141,8 +134,8 @@ fn check_cache(cache: &ShareCache, report: &mut Report) {
   }
 }
 
-/// Takes an entry apart, or says what is wrong with it.
-fn entry(written: &str) -> Result<Entry<'_>, String> {
+/// Says what is wrong with an entry as written, if anything.
+fn valid(written: &str) -> Result<(), String> {
   if ROOT.is_match(written) {
     return Err(format!(
       "Share {written} specifies a root mount, which is not supported."
@@ -179,13 +172,7 @@ fn entry(written: &str) -> Result<Entry<'_>, String> {
       "Share '{written}' is invalid; alias may not be '.', '..' or contain control characters"
     ));
   }
-  Ok(Entry {
-    written,
-    alias,
-    path,
-    excluded: parts.excluded,
-    derived: false,
-  })
+  Ok(())
 }
 
 /// A drive letter and a colon, with or without a separator after it.
@@ -211,21 +198,6 @@ mod tests {
 
   fn problems(directories: &[&str]) -> Vec<String> {
     problems_with(directories, false)
-  }
-
-  #[test]
-  fn entries_take_their_alias_from_brackets_or_the_last_segment() {
-    let flac = entry("/music/flac/").unwrap();
-    assert_eq!((flac.alias, flac.path), ("flac", "/music/flac"));
-    assert_eq!(entry("![lossy]/music/mp3").unwrap().alias, "lossy");
-    let bracket = entry("[a]/music/odd]name").unwrap();
-    assert_eq!(
-      (bracket.alias, bracket.path),
-      ("a", "/music/odd]name"),
-      "the first ] ends the alias"
-    );
-    assert_eq!(entry("-C:\\Music").unwrap().alias, "Music");
-    assert_eq!(entry("\\\\nas\\music").unwrap().alias, "music");
   }
 
   #[test]

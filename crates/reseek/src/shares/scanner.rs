@@ -364,7 +364,7 @@ pub(super) mod tests {
     );
     options.shares.filters = filters.iter().map(|f| f.to_string()).collect();
     options.shares.follow_symlinks = follow;
-    let shares = share::configure(&options, Path::new("/nowhere"));
+    let shares = share::configure(&options.shares, Path::new("/nowhere"));
     Arc::new(Settings::new(shares, &options))
   }
 
