@@ -91,10 +91,6 @@ pub(super) async fn follow_changes(
         {
           logging.apply(&change.current.values);
         }
-        let limit = change.current.values.web.files.serve_speed_limit;
-        if limit != change.previous.values.web.files.serve_speed_limit {
-          super::startup::warn_about_serve_speed_limit(limit);
-        }
         if !change.by_apply.restart.is_empty() {
           info!(
             keys = change.by_apply.restart.join(", "),

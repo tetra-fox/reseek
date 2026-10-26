@@ -108,7 +108,7 @@ pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Re
 }
 
 /// A speed limit, when set, is at least 1 KiB/s; no limit is the option left unset.
-fn check_speed(key: &str, limit: Option<u32>, report: &mut Report) {
+pub(super) fn check_speed(key: &str, limit: Option<u32>, report: &mut Report) {
   if limit == Some(0) {
     report.add(
       key,

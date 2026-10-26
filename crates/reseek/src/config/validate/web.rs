@@ -40,6 +40,11 @@ pub(super) fn check(web: &Web, context: &Context, report: &mut Report) {
     );
     report.check(key, directory_under(key, content, &context.program_dir));
   }
+  super::transfers::check_speed(
+    "web.files.serve_speed_limit",
+    web.files.serve_speed_limit,
+    report,
+  );
   check_certificate(&web.https.certificate, report);
   for range in &web.trusted_proxies {
     report.check("web.trusted_proxies", cidr(range));

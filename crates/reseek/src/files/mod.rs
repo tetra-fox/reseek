@@ -4,7 +4,8 @@
 //! kept past their retention.
 //!
 //! Every path is checked against its root after links are resolved, so a link inside a root
-//! that points out of it leads nowhere. A file a download is writing is held in [`Writing`]
+//! that points out of it leads nowhere. Files and archives are sent no faster than
+//! `web.files.serve_speed_limit` allows over every response together. A file a download is writing is held in [`Writing`]
 //! and is neither served, deleted nor pruned until the download lets go of it.
 
 mod archive;
@@ -33,6 +34,7 @@ use cascade::Watcher;
 use chrono::Utc;
 use futures_util::stream;
 use rusqlite::OptionalExtension;
+use soulseek_client::TokenBucket;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, warn};
@@ -54,6 +56,26 @@ pub use writing::{WriteGuard, Writing};
 /// How many pieces of an archive wait to be sent before its writer waits.
 const ARCHIVE_BACKLOG: usize = 8;
 
+/// The speed limit every served file and archive shares.
+#[derive(Clone)]
+pub(crate) struct ServeSpeed {
+  bucket: Arc<TokenBucket>,
+  /// ends a wait for the limit when the daemon stops
+  shutdown: CancellationToken,
+}
+
+impl ServeSpeed {
+  /// How many of the `wanted` bytes may be read and sent now, waiting until some may.
+  async fn allowed(&self, wanted: usize) -> usize {
+    let wanted = u32::try_from(wanted).unwrap_or(u32::MAX);
+    match self.bucket.get(wanted, &self.shutdown).await {
+      Ok(granted) => granted as usize,
+      // the daemon stops; what is left goes without a limit
+      Err(_) => wanted as usize,
+    }
+  }
+}
+
 /// The files service.
 pub struct Files {
   config: Watcher<Options>,
@@ -66,11 +88,14 @@ pub struct Files {
   writing: Writing,
   /// the principals an archive is being sent to now
   archives: Arc<Mutex<HashSet<String>>>,
+  /// the speed files are served at
+  speed: ServeSpeed,
 }
 
 impl Files {
   /// The service over the directories of `paths`, finding downloads' files in `transfers`,
-  /// pruning them by `retention.files` until `shutdown` is cancelled.
+  /// pruning them by `retention.files` and following the speed files are served at until
+  /// `shutdown` is cancelled.
   pub fn start(
     config: Watcher<Options>,
     transfers: Database,
@@ -78,6 +103,17 @@ impl Files {
     auth: Arc<Auth>,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
+    let limit = config.current().values.web.files.serve_speed_limit;
+    let speed = ServeSpeed {
+      // the client's bucket takes 0 as no limit
+      bucket: Arc::new(TokenBucket::for_speed(limit.unwrap_or(0))),
+      shutdown: shutdown.clone(),
+    };
+    tokio::spawn(follow_speed(
+      config.clone(),
+      speed.bucket.clone(),
+      shutdown.clone(),
+    ));
     let files = Arc::new(Self {
       config,
       transfers,
@@ -87,6 +123,7 @@ impl Files {
       auth,
       writing: Writing::default(),
       archives: Arc::default(),
+      speed,
     });
     prune::spawn(files.clone(), shutdown);
     files
@@ -298,7 +335,7 @@ impl FileService for Files {
       .await
       .map_err(|e| unreadable("file", &lexical, e))?
       .ok_or_else(|| ApiError::not_found(format!("'{}' is not a file", lexical.display())))?;
-    serve::respond(served, &request).await
+    serve::respond(served, &request, &self.speed).await
   }
 
   async fn archive(
@@ -382,9 +419,10 @@ impl FileService for Files {
     };
     debug!(files = members.len(), bytes = total, "sending an archive");
     let (sender, receiver) = mpsc::channel(ARCHIVE_BACKLOG);
+    let speed = self.speed.clone();
     tokio::spawn(
       async move {
-        archive::send(members, sender).await;
+        archive::send(members, sender, &speed).await;
         drop(slot);
       }
       .instrument(tracing::Span::current()),
@@ -481,6 +519,30 @@ impl FileService for Files {
       .map_err(|e| unreadable("log file", &resolved, e))?
       .ok_or_else(|| ApiError::not_found("the log file is not a file"))?;
     served.content_type = Some("text/plain; charset=utf-8");
-    serve::respond(served, &request).await
+    serve::respond(served, &request, &self.speed).await
+  }
+}
+
+/// Takes every change of `web.files.serve_speed_limit` into `bucket` until `shutdown`.
+async fn follow_speed(
+  config: Watcher<Options>,
+  bucket: Arc<TokenBucket>,
+  shutdown: CancellationToken,
+) {
+  let mut changes = config.changes();
+  loop {
+    let change = tokio::select! {
+      () = shutdown.cancelled() => return,
+      change = changes.recv() => change,
+    };
+    let limit = match change {
+      Ok(change) => change.current.values.web.files.serve_speed_limit,
+      Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+        config.current().values.web.files.serve_speed_limit
+      }
+      Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
+    };
+    bucket.set_speed(limit.unwrap_or(0));
+    debug!(limit, "speed files are served at");
   }
 }

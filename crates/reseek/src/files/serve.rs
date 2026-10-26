@@ -15,6 +15,7 @@ use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tracing::{debug, warn};
 
+use super::ServeSpeed;
 use crate::api::error::ApiError;
 use crate::safety::{Os, file_name_safely};
 use crate::services::ContentRequest;
@@ -187,8 +188,12 @@ fn content_type(name: &str) -> String {
   }
 }
 
-/// `file` as the response `request` asks for.
-pub(super) async fn respond(file: Served, request: &ContentRequest) -> Result<Response, ApiError> {
+/// `file` as the response `request` asks for, sent no faster than `speed` allows.
+pub(super) async fn respond(
+  file: Served,
+  request: &ContentRequest,
+  speed: &ServeSpeed,
+) -> Result<Response, ApiError> {
   let etag = file.etag();
   let name = file.name();
   let kind = match file.content_type {
@@ -250,12 +255,18 @@ pub(super) async fn respond(file: Served, request: &ContentRequest) -> Result<Re
   if request.head {
     return Ok((status, headers).into_response());
   }
-  let body = body(&file.path, start, length).await?;
+  let body = body(&file.path, start, length, speed.clone()).await?;
   Ok((status, headers, body).into_response())
 }
 
-/// `length` bytes of the file at `path` from `start`, read as they are sent.
-pub(super) async fn body(path: &Path, start: u64, length: u64) -> Result<Body, ApiError> {
+/// `length` bytes of the file at `path` from `start`, read as they are sent and no faster
+/// than `speed` allows.
+pub(super) async fn body(
+  path: &Path,
+  start: u64,
+  length: u64,
+  speed: ServeSpeed,
+) -> Result<Body, ApiError> {
   let mut opened = tokio::fs::File::open(path)
     .await
     .map_err(|e| match e.kind() {
@@ -268,12 +279,13 @@ pub(super) async fn body(path: &Path, start: u64, length: u64) -> Result<Body, A
     .map_err(ApiError::internal)?;
   let shown = path.display().to_string();
   let chunks = stream::unfold(
-    (opened, length, shown),
-    |(mut file, left, shown)| async move {
+    (opened, length, shown, speed),
+    |(mut file, left, shown, speed)| async move {
       if left == 0 {
         return None;
       }
-      let mut buffer = vec![0; CHUNK.min(usize::try_from(left).unwrap_or(CHUNK))];
+      let want = CHUNK.min(usize::try_from(left).unwrap_or(CHUNK));
+      let mut buffer = vec![0; speed.allowed(want).await];
       match file.read(&mut buffer).await {
         // the file got shorter while it was sent; the length promised can not be kept
         Ok(0) => {
@@ -284,16 +296,19 @@ pub(super) async fn body(path: &Path, start: u64, length: u64) -> Result<Body, A
           );
           Some((
             Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof)),
-            (file, 0, shown),
+            (file, 0, shown, speed),
           ))
         }
         Ok(read) => {
           buffer.truncate(read);
-          Some((Ok(Bytes::from(buffer)), (file, left - read as u64, shown)))
+          Some((
+            Ok(Bytes::from(buffer)),
+            (file, left - read as u64, shown, speed),
+          ))
         }
         Err(e) => {
           warn!(path = shown, error = %e, "a file being served could not be read");
-          Some((Err(e), (file, 0, shown)))
+          Some((Err(e), (file, 0, shown, speed)))
         }
       }
     },

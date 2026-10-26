@@ -13,6 +13,7 @@ use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tracing::{debug, warn};
 
+use super::ServeSpeed;
 use crate::entries;
 
 /// The largest size, offset and count the classic zip fields hold.
@@ -309,8 +310,13 @@ impl Writer {
   }
 }
 
-/// Writes the archive of `members` into `sender` until it is done or the receiver is gone.
-pub(super) async fn send(members: Vec<Member>, sender: mpsc::Sender<io::Result<Bytes>>) {
+/// Writes the archive of `members` into `sender` until it is done or the receiver is gone,
+/// reading no faster than `speed` allows.
+pub(super) async fn send(
+  members: Vec<Member>,
+  sender: mpsc::Sender<io::Result<Bytes>>,
+  speed: &ServeSpeed,
+) {
   let mut writer = Writer::new();
   let send = |bytes: Vec<u8>| sender.send(Ok(Bytes::from(bytes)));
   for member in members {
@@ -332,7 +338,7 @@ pub(super) async fn send(members: Vec<Member>, sender: mpsc::Sender<io::Result<B
     // read what the walk saw, so a file that grows does not outgrow the sizes written
     while read_total < member.size {
       let want = CHUNK.min(usize::try_from(member.size - read_total).unwrap_or(CHUNK));
-      let mut buffer = vec![0; want];
+      let mut buffer = vec![0; speed.allowed(want).await];
       match file.read(&mut buffer).await {
         Ok(0) => break,
         Ok(read) => {

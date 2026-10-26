@@ -159,8 +159,8 @@ pub struct WebFiles {
   /// The largest folder that may be downloaded as one zip.
   #[cascade(env = "RESEEK_WEB_FILES_ARCHIVE_MAX_BYTES", kind = "size")]
   pub archive_max_bytes: bytesize::ByteSize,
-  /// The speed files are served to the browser at, in KiB/s; no limit when not set. Not
-  /// applied in this build, which warns when it is set.
+  /// The speed files and folders are served to the browser at, in KiB/s, over every one sent
+  /// at once; no limit when not set.
   #[cascade(env = "RESEEK_WEB_FILES_SERVE_SPEED_LIMIT")]
   pub serve_speed_limit: Option<u32>,
 }
