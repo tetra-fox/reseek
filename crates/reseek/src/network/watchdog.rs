@@ -8,7 +8,7 @@
 //! login is not tried again at once each time.
 
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use api_types::state::ConnectionWatchdogState;
@@ -20,6 +20,7 @@ use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
+use super::lock;
 use crate::config::Options;
 use crate::shares::Shares;
 use crate::state::StateOwner;
@@ -91,11 +92,6 @@ struct Inner {
 struct Status {
   attempting: bool,
   next_attempt_at: Option<chrono::DateTime<Utc>>,
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-  // every change under these locks is made whole before the lock is let go
-  mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl Watchdog {
