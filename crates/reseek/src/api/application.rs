@@ -266,7 +266,7 @@ async fn get_log_files(
     (status = 206, content_type = "text/plain", body = String),
     (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
     (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
-    (status = 503, body = api_types::ErrorBody)
+    (status = 416, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
 )]
 async fn get_log_file(
