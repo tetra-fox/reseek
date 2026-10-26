@@ -13,6 +13,7 @@ mod link;
 mod listing;
 mod logs;
 pub(crate) mod mode;
+mod placing;
 mod prune;
 mod roots;
 mod serve;
@@ -44,6 +45,7 @@ use crate::services::{ContentRequest, FileService, FileTarget};
 use delete::Kind;
 use roots::{Refused, locate};
 use serve::Served;
+pub use placing::{create_file, move_file};
 pub use writing::{WriteGuard, Writing};
 
 /// How many pieces of an archive wait to be sent before its writer waits.
