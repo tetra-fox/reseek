@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use api_types::events::{Event, EventRecord, EventType};
 use chrono::{DateTime, Utc};
 use futures_util::FutureExt;
+use soulseek_client::LogLimiter;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
@@ -140,6 +141,8 @@ async fn deliver<F, Fut>(
   F: Fn(Arc<EventRecord>) -> Fut,
   Fut: Future<Output = Result<(), String>>,
 {
+  // a subscriber that keeps falling behind would log on every event
+  let behind = LogLimiter::new();
   loop {
     let record = tokio::select! {
       () = cancel.cancelled() => return,
@@ -148,10 +151,12 @@ async fn deliver<F, Fut>(
     let record = match record {
       Ok(record) => record,
       Err(RecvError::Lagged(missed)) => {
-        warn!(
-          subscriber = name,
-          missed, "event subscriber fell behind and missed events"
-        );
+        if let Some(suppressed) = behind.allow() {
+          warn!(
+            subscriber = name,
+            missed, suppressed, "event subscriber fell behind and missed events"
+          );
+        }
         continue;
       }
       Err(RecvError::Closed) => return,
@@ -169,6 +174,7 @@ async fn deliver<F, Fut>(
         "Subscriber encountered an error"
       ),
       Err(panic) => {
+        // a panic carries a text unless it was raised with some other value
         let message = panic
           .downcast_ref::<&str>()
           .map(|s| s.to_string())

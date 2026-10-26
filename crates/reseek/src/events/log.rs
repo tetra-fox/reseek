@@ -16,7 +16,7 @@ use rusqlite::types::Value;
 use rusqlite::{Connection, params, params_from_iter};
 use soulseek_client::LogLimiter;
 use tokio_util::sync::CancellationToken;
-use tracing::{Instrument, debug, info_span, warn};
+use tracing::{Instrument, debug, error, info_span, warn};
 
 use super::{EventBus, samples};
 use crate::api::error::ApiError;
@@ -124,7 +124,7 @@ impl EventLog {
 impl EventService for EventLog {
   async fn list(&self, query: EventsQuery) -> Result<Page<EventRecord>, ApiError> {
     self.page(query).await.map_err(|e| {
-      warn!(error = %e, "Failed to list events");
+      error!(error = %e, "Failed to list events");
       ApiError::internal(e).logged()
     })
   }
