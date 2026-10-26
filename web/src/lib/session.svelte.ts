@@ -19,8 +19,6 @@ export type Check = "in" | "out" | "unreachable";
  */
 class Session {
   principal = $state.raw<Principal | null>(null);
-  /** false when the daemon lets this browser in without a login (a trusted network, or auth off) */
-  authEnabled = $state(true);
   #expiry: ReturnType<typeof setTimeout> | undefined;
   #hiddenAt: number | null = null;
   #ended: () => void = () => {};
@@ -44,11 +42,12 @@ class Session {
     this.#ended = handler;
   }
 
-  /** Asks the daemon whether this browser is signed in, and as whom */
+  /**
+   * Asks the daemon whether this browser is signed in, and as whom. A browser let in without a
+   * login (a trusted network, or authentication off) is answered with a principal that has no
+   * session, which is all `canSignOut` needs to know
+   */
   check = async (): Promise<Check> => {
-    const enabled = await call(() => api.GET("/api/v0/session/enabled"));
-    if (!enabled.ok) return enabled.status === 0 || enabled.status >= 500 ? "unreachable" : "out";
-    this.authEnabled = enabled.data;
     const current = await call(() => api.GET("/api/v0/session"));
     if (current.ok) {
       this.#set(current.data);

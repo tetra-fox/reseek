@@ -39,7 +39,6 @@ describe("session", () => {
 
   it("reads who is signed in and what they may do", async () => {
     serve({
-      "GET /api/v0/session/enabled": () => json(true),
       "GET /api/v0/session": () => json(principal("2026-10-27T12:00:00Z"))
     });
     expect(await session.check()).toBe("in");
@@ -51,7 +50,6 @@ describe("session", () => {
 
   it("tells a session that is gone from a daemon that can't be reached", async () => {
     serve({
-      "GET /api/v0/session/enabled": () => json(true),
       "GET /api/v0/session": () => json({ error: "authentication required" }, 401)
     });
     expect(await session.check()).toBe("out");
@@ -63,7 +61,6 @@ describe("session", () => {
   it("checks again when the session is due to expire, and says it ended", async () => {
     let signedIn = true;
     serve({
-      "GET /api/v0/session/enabled": () => json(true),
       "GET /api/v0/session": () =>
         signedIn ? json(principal("2026-10-26T12:10:00Z")) : json({ error: "no" }, 401)
     });
@@ -79,7 +76,6 @@ describe("session", () => {
 
   it("checks again when the tab comes back after a long time hidden", async () => {
     const fetcher = serve({
-      "GET /api/v0/session/enabled": () => json(true),
       "GET /api/v0/session": () => json(principal(null))
     });
     await session.check();
@@ -91,7 +87,7 @@ describe("session", () => {
     session.visibility(true, 0);
     session.visibility(false, IDLE_CHECK_MS + 1);
     await vi.advanceTimersByTimeAsync(0);
-    expect(fetcher.mock.calls.length).toBe(calls + 2);
+    expect(fetcher.mock.calls.length).toBe(calls + 1);
   });
 
   it("ends the session on a 401 from any route but the session's own", async () => {
