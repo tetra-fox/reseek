@@ -9,8 +9,8 @@ use std::time::{Duration, SystemTime};
 use tracing::{Instrument, debug, info_span, warn};
 
 use super::Files;
-use super::listing::is_system;
 use super::writing::Writing;
+use crate::entries;
 
 /// How often old files are looked for.
 const EVERY: Duration = Duration::from_secs(30 * 60);
@@ -84,15 +84,11 @@ fn prune_in(
 ) -> std::io::Result<bool> {
   let mut deleted_here = false;
   for entry in std::fs::read_dir(dir)?.filter_map(|e| super::roots::entry_of(e, dir, "pruning")) {
-    let name = entry.file_name();
-    if name.to_string_lossy().starts_with('.') {
-      continue;
-    }
     let path = entry.path();
     let Some(metadata) = super::roots::metadata_of(&path, "pruning") else {
       continue;
     };
-    if metadata.file_type().is_symlink() || is_system(&metadata) {
+    if metadata.file_type().is_symlink() || entries::left_out(&entry.file_name(), Some(&metadata)) {
       continue;
     }
     if metadata.is_dir() {

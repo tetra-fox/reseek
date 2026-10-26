@@ -18,26 +18,10 @@ use super::repository::{self, DirectoryRows, FileRow, Known};
 use super::scanner::{ScanError, Settings};
 use super::share::{self, CASE_SENSITIVE, Share};
 use crate::db::Database;
+use crate::entries;
 
 /// Directories the walk can not read, which a large share can hold many of.
 static UNREADABLE: LogLimiter = LogLimiter::new();
-
-/// Whether a directory entry is hidden or the system's own, by its attributes.
-#[cfg(windows)]
-pub(super) fn hidden(_path: &Path, metadata: Option<&std::fs::Metadata>) -> bool {
-  use std::os::windows::fs::MetadataExt;
-  const HIDDEN: u32 = 0x2;
-  const SYSTEM: u32 = 0x4;
-  metadata.is_some_and(|m| m.file_attributes() & (HIDDEN | SYSTEM) != 0)
-}
-
-/// Whether a directory entry is hidden: its name starts with a dot.
-#[cfg(not(windows))]
-pub(super) fn hidden(path: &Path, _metadata: Option<&std::fs::Metadata>) -> bool {
-  path
-    .file_name()
-    .is_some_and(|name| name.to_string_lossy().starts_with('.'))
-}
 
 /// The key that tells two directory paths apart by this system's case rule.
 fn key(path: &Path) -> PathBuf {
@@ -78,7 +62,7 @@ pub(super) fn directories_under(
         return true;
       }
       let metadata = entry.metadata().ok();
-      if !entry.file_type().is_dir() || hidden(entry.path(), metadata.as_ref()) {
+      if !entry.file_type().is_dir() || entries::left_out(entry.file_name(), metadata.as_ref()) {
         return false;
       }
       let path = entry.path();
@@ -211,7 +195,7 @@ pub(super) fn read_directory(
         continue;
       }
     };
-    if !metadata.is_file() || hidden(&path, Some(&metadata)) {
+    if !metadata.is_file() || entries::left_out(&entry.file_name(), Some(&metadata)) {
       continue;
     }
     if settings.filtered(&path) {

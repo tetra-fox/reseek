@@ -13,7 +13,7 @@ use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tracing::{debug, warn};
 
-use super::listing::is_system;
+use crate::entries;
 
 /// The largest size, offset and count the classic zip fields hold.
 const CLASSIC: u64 = u32::MAX as u64;
@@ -56,17 +56,14 @@ fn walk(dir: &Path, prefix: &str, found: &mut Vec<Member>, top: bool) -> io::Res
     .collect();
   entries.sort_by_key(|entry| entry.file_name());
   for entry in entries {
-    let name = entry.file_name().to_string_lossy().into_owned();
-    if name.starts_with('.') {
-      continue;
-    }
     let path = entry.path();
     let Some(metadata) = super::roots::metadata_of(&path, "archive") else {
       continue;
     };
-    if metadata.file_type().is_symlink() || is_system(&metadata) {
+    if metadata.file_type().is_symlink() || entries::left_out(&entry.file_name(), Some(&metadata)) {
       continue;
     }
+    let name = entry.file_name().to_string_lossy().into_owned();
     let inner = if prefix.is_empty() {
       name
     } else {

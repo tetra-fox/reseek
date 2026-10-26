@@ -13,6 +13,7 @@ use tracing::{debug, warn};
 
 use super::roots::{Refused, locate};
 use crate::api::error::ApiError;
+use crate::entries;
 
 /// One entry of a directory, read without following it.
 pub(super) enum Entry {
@@ -164,7 +165,7 @@ pub(super) fn read(dir: &Path) -> io::Result<Vec<(String, Entry)>> {
         continue;
       }
     };
-    if is_system(&own) {
+    if entries::system(&own) {
       continue;
     }
     let link = own.file_type().is_symlink();
@@ -235,7 +236,7 @@ pub(super) fn attributes(name: &str, link: bool, metadata: &Metadata) -> Filesys
   if link {
     attributes |= FilesystemAttributes::ReparsePoint;
   }
-  if name.starts_with('.') {
+  if entries::hidden(std::ffi::OsStr::new(name), Some(metadata)) {
     attributes |= FilesystemAttributes::Hidden;
   }
   if metadata.permissions().mode() & 0o200 == 0 {
@@ -256,20 +257,6 @@ pub(super) fn attributes(_name: &str, link: bool, metadata: &Metadata) -> Filesy
     attributes |= FilesystemAttributes::ReparsePoint;
   }
   attributes
-}
-
-/// Whether the system marks the entry as its own, which listings leave out.
-#[cfg(windows)]
-pub(super) fn is_system(metadata: &Metadata) -> bool {
-  use std::os::windows::fs::MetadataExt;
-  FilesystemAttributes::from_bits_truncate(metadata.file_attributes())
-    .contains(FilesystemAttributes::System)
-}
-
-/// Whether the system marks the entry as its own; no entry is on Unix.
-#[cfg(not(windows))]
-pub(super) fn is_system(_metadata: &Metadata) -> bool {
-  false
 }
 
 /// When the entry was created, or when its metadata last changed where the system keeps no

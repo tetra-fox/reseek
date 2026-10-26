@@ -5,8 +5,9 @@ use std::path::Path;
 
 use api_types::files::FilesystemFile;
 
-use super::listing::{file, is_system};
+use super::listing::file;
 use crate::api::error::ApiError;
+use crate::entries;
 
 /// The `.log` files in `dir`, by name; 404 when the directory does not exist.
 pub(super) fn files(dir: &Path) -> Result<Vec<FilesystemFile>, ApiError> {
@@ -19,13 +20,13 @@ pub(super) fn files(dir: &Path) -> Result<Vec<FilesystemFile>, ApiError> {
   let mut found = Vec::new();
   for entry in entries.filter_map(|e| super::roots::entry_of(e, dir, "log files")) {
     let name = entry.file_name().to_string_lossy().into_owned();
-    if name.starts_with('.') || !name.to_ascii_lowercase().ends_with(".log") {
+    if !name.to_ascii_lowercase().ends_with(".log") {
       continue;
     }
     let Some(metadata) = super::roots::metadata_of(&entry.path(), "log files") else {
       continue;
     };
-    if !metadata.is_file() || is_system(&metadata) {
+    if !metadata.is_file() || entries::left_out(&entry.file_name(), Some(&metadata)) {
       continue;
     }
     found.push(file(&name, name.clone(), false, &metadata));

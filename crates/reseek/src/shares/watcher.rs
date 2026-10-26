@@ -24,6 +24,7 @@ use super::share::{self, Share};
 use super::walk;
 use super::{Shares, lock};
 use crate::db::DbError;
+use crate::entries;
 
 /// How many notifications wait to be sorted at most; past it the notifying thread waits.
 const BACKLOG: usize = 4096;
@@ -213,7 +214,10 @@ fn allowed<'a>(settings: &'a Settings, path: &Path) -> Option<&'a Share> {
     } else {
       None
     };
-    if walk::hidden(&current, metadata.as_ref()) {
+    if current
+      .file_name()
+      .is_some_and(|name| entries::left_out(name, metadata.as_ref()))
+    {
       return None;
     }
     if settings.filtered(&current) {

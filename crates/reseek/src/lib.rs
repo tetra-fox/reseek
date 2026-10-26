@@ -10,6 +10,7 @@ pub mod config;
 pub mod crypto;
 pub mod databases;
 pub mod db;
+pub mod entries;
 pub mod events;
 pub mod files;
 pub mod http;
