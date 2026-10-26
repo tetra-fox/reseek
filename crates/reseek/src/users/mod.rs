@@ -296,9 +296,8 @@ impl Directory {
     let Some(age) = self.config.current().values.retention.users else {
       return;
     };
-    let Ok(age) = chrono::Duration::from_std(age) else {
-      return;
-    };
+    // an age too long for chrono forgets no one, as the earliest time stored bounds it
+    let age = chrono::Duration::from_std(age).unwrap_or(chrono::Duration::MAX);
     let before = crate::db::shifted(Utc::now(), -age);
     match self
       .db

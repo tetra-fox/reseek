@@ -51,7 +51,9 @@ fn walk(dir: &Path, prefix: &str, found: &mut Vec<Member>, top: bool) -> io::Res
     }
     Err(e) => return Err(e),
   };
-  let mut entries: Vec<_> = entries.filter_map(Result::ok).collect();
+  let mut entries: Vec<_> = entries
+    .filter_map(|e| super::roots::entry_of(e, dir, "archive"))
+    .collect();
   entries.sort_by_key(|entry| entry.file_name());
   for entry in entries {
     let name = entry.file_name().to_string_lossy().into_owned();
@@ -59,7 +61,7 @@ fn walk(dir: &Path, prefix: &str, found: &mut Vec<Member>, top: bool) -> io::Res
       continue;
     }
     let path = entry.path();
-    let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+    let Some(metadata) = super::roots::metadata_of(&path, "archive") else {
       continue;
     };
     if metadata.file_type().is_symlink() || is_system(&metadata) {

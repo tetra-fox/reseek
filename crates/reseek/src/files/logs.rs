@@ -17,12 +17,12 @@ pub(super) fn files(dir: &Path) -> Result<Vec<FilesystemFile>, ApiError> {
     _ => ApiError::internal(format!("{} not read: {e}", dir.display())),
   })?;
   let mut found = Vec::new();
-  for entry in entries.filter_map(Result::ok) {
+  for entry in entries.filter_map(|e| super::roots::entry_of(e, dir, "log files")) {
     let name = entry.file_name().to_string_lossy().into_owned();
     if name.starts_with('.') || !name.to_ascii_lowercase().ends_with(".log") {
       continue;
     }
-    let Ok(metadata) = std::fs::symlink_metadata(entry.path()) else {
+    let Some(metadata) = super::roots::metadata_of(&entry.path(), "log files") else {
       continue;
     };
     if !metadata.is_file() || is_system(&metadata) {

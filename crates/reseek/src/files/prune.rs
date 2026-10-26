@@ -83,13 +83,13 @@ fn prune_in(
   pruned: &mut Pruned,
 ) -> std::io::Result<bool> {
   let mut deleted_here = false;
-  for entry in std::fs::read_dir(dir)?.filter_map(Result::ok) {
+  for entry in std::fs::read_dir(dir)?.filter_map(|e| super::roots::entry_of(e, dir, "pruning")) {
     let name = entry.file_name();
     if name.to_string_lossy().starts_with('.') {
       continue;
     }
     let path = entry.path();
-    let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+    let Some(metadata) = super::roots::metadata_of(&path, "pruning") else {
       continue;
     };
     if metadata.file_type().is_symlink() || is_system(&metadata) {

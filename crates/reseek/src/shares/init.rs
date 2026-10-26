@@ -162,6 +162,7 @@ impl Shares {
       let Some(retention) = self.config.current().values.shares.cache.retention else {
         continue;
       };
+      // a retention too long for the clock's milliseconds reaches back past every scan
       let cutoff = scanner::now_ms() - i64::try_from(retention.as_millis()).unwrap_or(i64::MAX);
       let scans = match self
         .db

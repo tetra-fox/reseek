@@ -118,6 +118,10 @@ pub fn stored_of(conn: &Connection, username: &str) -> rusqlite::Result<Option<B
 /// Stores `block`, replacing the user's earlier one, and makes the user's row when there is
 /// none.
 pub fn store(conn: &mut Connection, block: &Block, now: DateTime<Utc>) -> rusqlite::Result<()> {
+  // only a block from the configuration has no maker, and those are never stored
+  let created_by = block.created_by.as_deref().ok_or_else(|| {
+    rusqlite::Error::ToSqlConversionFailure("a stored block names who made it".into())
+  })?;
   let tx = conn.transaction()?;
   ensure(&tx, &block.username, now)?;
   tx.execute(
@@ -132,7 +136,7 @@ pub fn store(conn: &mut Connection, block: &Block, now: DateTime<Utc>) -> rusqli
       bits(&block.scopes),
       timestamp(block.created_at.unwrap_or(now)),
       block.expires_at.map(timestamp),
-      block.created_by.clone().unwrap_or_default(),
+      created_by,
     ],
   )?;
   tx.commit()

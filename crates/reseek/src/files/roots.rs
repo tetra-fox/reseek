@@ -74,6 +74,26 @@ pub(super) fn locate(root: &Path, relative: &str) -> Result<Located, Refused> {
   })
 }
 
+/// The entry a directory read gave, or `None` with a debug line when the system refused it;
+/// `walk` names what is reading, such as "archive".
+pub(super) fn entry_of(
+  entry: io::Result<std::fs::DirEntry>,
+  dir: &Path,
+  walk: &str,
+) -> Option<std::fs::DirEntry> {
+  entry
+    .inspect_err(|e| tracing::debug!(dir = %dir.display(), error = %e, walk, "entry not read"))
+    .ok()
+}
+
+/// The metadata of `path` itself, not of a link's target, or `None` with a debug line when
+/// the system refused it.
+pub(super) fn metadata_of(path: &Path, walk: &str) -> Option<std::fs::Metadata> {
+  std::fs::symlink_metadata(path)
+    .inspect_err(|e| tracing::debug!(path = %path.display(), error = %e, walk, "entry not read"))
+    .ok()
+}
+
 /// Whether an error says a path, or a directory on its way, is not there.
 pub(super) fn missing(error: &io::Error) -> bool {
   matches!(

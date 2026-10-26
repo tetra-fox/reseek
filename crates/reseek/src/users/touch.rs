@@ -213,6 +213,7 @@ pub fn write(
         params![
           username,
           statistics.average_speed,
+          // SQLite integers are signed; a count past them is kept at the largest
           i64::try_from(statistics.upload_count).unwrap_or(i64::MAX),
           statistics.file_count,
           statistics.directory_count,
