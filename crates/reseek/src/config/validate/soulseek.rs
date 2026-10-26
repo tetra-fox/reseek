@@ -25,6 +25,13 @@ pub(super) fn check(soulseek: &Soulseek, report: &mut Report) {
       readable_file("soulseek.picture", picture),
     );
   }
+  let key = "soulseek.search.max_concurrent";
+  report.check(key, at_least(key, soulseek.search.max_concurrent, 1));
+  let key = "soulseek.browse.response_timeout";
+  report.check(
+    key,
+    duration_at_least(key, soulseek.browse.response_timeout, Duration::from_secs(1)),
+  );
   let key = "soulseek.distributed_network.child_limit";
   report.check(
     key,

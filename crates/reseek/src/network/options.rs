@@ -19,9 +19,6 @@ use crate::config::{Options, Soulseek, enums};
 /// server connection.
 pub const UNBOUNDED_WRITE_QUEUE: u32 = 10_000;
 
-/// Our own searches that run at once.
-const CONCURRENT_SEARCHES: u32 = 2;
-
 /// How long a request waits for the server's or a peer's reply.
 const MESSAGE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -50,7 +47,7 @@ pub fn client_options(options: &Options) -> Result<ClientOptions, String> {
     enable_distributed_network: !soulseek.distributed_network.disabled,
     accept_distributed_children: !soulseek.distributed_network.disable_children,
     distributed_child_limit: soulseek.distributed_network.child_limit,
-    maximum_concurrent_searches: CONCURRENT_SEARCHES,
+    maximum_concurrent_searches: soulseek.search.max_concurrent,
     maximum_concurrent_uploads: transfers.upload.slots,
     maximum_concurrent_downloads: transfers
       .download
@@ -114,10 +111,8 @@ pub fn patch(previous: &Options, current: &Options) -> Result<ClientOptionsPatch
       to.accept_distributed_children,
     ),
     distributed_child_limit: changed(from.distributed_child_limit, to.distributed_child_limit),
-    maximum_concurrent_searches: changed(
-      from.maximum_concurrent_searches,
-      to.maximum_concurrent_searches,
-    ),
+    // a restart applies it; the client keeps the bound it started with
+    maximum_concurrent_searches: None,
     maximum_concurrent_uploads: changed(
       from.maximum_concurrent_uploads,
       to.maximum_concurrent_uploads,

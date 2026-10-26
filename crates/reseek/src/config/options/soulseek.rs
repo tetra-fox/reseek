@@ -68,6 +68,10 @@ pub struct Soulseek {
   pub server_keepalive: ServerKeepalive,
   /// Bounds on what other users can make us hold or start.
   pub limits: SoulseekLimits,
+  /// Our own searches.
+  pub search: SoulseekSearch,
+  /// Browsing other users' shares.
+  pub browse: SoulseekBrowse,
 }
 
 impl Default for Soulseek {
@@ -86,6 +90,8 @@ impl Default for Soulseek {
       connection: SoulseekConnection::default(),
       server_keepalive: ServerKeepalive::default(),
       limits: SoulseekLimits::default(),
+      search: SoulseekSearch::default(),
+      browse: SoulseekBrowse::default(),
     }
   }
 }
@@ -296,6 +302,39 @@ impl Default for SoulseekLimits {
       search_response_cache_size: 1000,
       user_endpoint_cache_size: 10_000,
       distributed_parent_negotiation_timeout: Duration::from_secs(5),
+    }
+  }
+}
+
+/// Our own searches.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct SoulseekSearch {
+  /// How many of our searches run at once, at least 1; the others wait their turn.
+  #[cascade(apply = "restart")]
+  pub max_concurrent: u32,
+}
+
+impl Default for SoulseekSearch {
+  fn default() -> Self {
+    Self { max_concurrent: 2 }
+  }
+}
+
+/// Browsing other users' shares.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct SoulseekBrowse {
+  /// How long a user has to start sending their share listing, at least a second; a large
+  /// share takes a while to put together.
+  #[serde(with = "humantime_serde")]
+  pub response_timeout: Duration,
+}
+
+impl Default for SoulseekBrowse {
+  fn default() -> Self {
+    Self {
+      response_timeout: Duration::from_secs(60),
     }
   }
 }
