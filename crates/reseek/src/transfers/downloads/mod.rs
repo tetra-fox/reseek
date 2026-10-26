@@ -9,9 +9,9 @@
 //! run one at a time. Every record written is pushed to the `transfers` topic.
 
 mod attempt;
-pub mod batches;
+mod batches;
 mod complete;
-pub mod destination;
+mod destination;
 mod enqueue;
 mod queue;
 mod service;
@@ -36,6 +36,7 @@ use tokio_util::task::TaskTracker;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+use super::categories::UNFINISHED;
 use super::{Record, cleanup, direction_text, removal, store};
 use crate::api::error::ApiError;
 use crate::config::Options;
@@ -46,7 +47,7 @@ use crate::live::Live;
 use crate::network::Network;
 use crate::paths::Paths;
 use crate::users::Directory;
-pub use enqueue::{Batching, Enqueued, FileRequest, IN_PROGRESS, NewBatch};
+pub use enqueue::{Batching, Enqueued, FileRequest, NewBatch};
 
 /// How long the tasks of running downloads get to end at shutdown before their records are
 /// ended anyway.
@@ -280,9 +281,9 @@ impl Downloads {
     let unfinished = self
       .db
       .read(move |conn| {
-        let mut statement = conn.prepare(
-          "SELECT Id FROM Transfers WHERE Username = ?1 AND Direction = ?2 AND (State & 16) = 0",
-        )?;
+        let mut statement = conn.prepare(&format!(
+          "SELECT Id FROM Transfers WHERE Username = ?1 AND Direction = ?2 AND {UNFINISHED}"
+        ))?;
         let ids = statement
           .query_map(
             params![name, direction_text(TransferDirection::Download)],

@@ -21,6 +21,7 @@ use crate::config::enums::DestinationExists;
 use crate::files::mode::to_unix_file_mode;
 use crate::files::move_file;
 use crate::safety::Os;
+use crate::transfers::categories::UNFINISHED;
 use crate::transfers::listing::remote_directory;
 use crate::transfers::{Record, direction_text};
 
@@ -149,10 +150,10 @@ impl Downloads {
     let pending = self
       .db
       .read(move |conn| {
-        let mut statement = conn.prepare(
+        let mut statement = conn.prepare(&format!(
           "SELECT Filename FROM Transfers WHERE Username = ?1 AND Direction = ?2 AND Removed = 0 \
-           AND (State & 16) = 0",
-        )?;
+           AND {UNFINISHED}"
+        ))?;
         let filenames = statement
           .query_map(
             params![username, direction_text(TransferDirection::Download)],

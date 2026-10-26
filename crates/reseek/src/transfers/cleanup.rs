@@ -9,15 +9,13 @@ use rusqlite::params;
 use tracing::{debug, info};
 use uuid::Uuid;
 
+use super::categories::UNFINISHED;
 use super::downloads::FileRequest;
 use super::{direction_at, direction_text};
 use crate::db::{Database, DbError, timestamp};
 
 /// Why a transfer left unfinished at the last stop ended.
 pub const SHUT_DOWN: &str = "Application shut down";
-
-/// Which transfers are unfinished: not ended, or in a state that is not complete.
-const UNFINISHED: &str = "EndedAt IS NULL OR (State & 16) = 0";
 
 /// Ends every transfer left unfinished, removed ones included, as `Completed, Errored` with
 /// [`SHUT_DOWN`] at the time of this call. Returns how many it ended.

@@ -21,6 +21,7 @@ use super::{Downloads, InFlight, lock};
 use crate::api::error::ApiError;
 use crate::db::timestamp;
 use crate::safety::traverses;
+use crate::transfers::categories::UNFINISHED;
 use crate::transfers::removal::{self, Removed};
 use crate::transfers::{Record, direction_text, store};
 
@@ -31,7 +32,7 @@ const ALL_AT_ONCE: usize = 30;
 const AT_ONCE: usize = 5;
 
 /// What scripts read as a file already downloading.
-pub const IN_PROGRESS: &str = "Skipped: Already in progress";
+const ALREADY_RUNNING: &str = "Skipped: Already in progress";
 
 /// One file to download.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -273,10 +274,10 @@ fn write(
     batches::insert(&tx, &batch.row, &batch.files)?;
   }
   let running: HashSet<String> = {
-    let mut statement = tx.prepare(
+    let mut statement = tx.prepare(&format!(
       "SELECT Filename FROM Transfers WHERE Username = ?1 AND Direction = ?2 AND Removed = 0 \
-       AND (EndedAt IS NULL OR (State & 16) = 0)",
-    )?;
+       AND {UNFINISHED}"
+    ))?;
     let rows = statement.query_map(
       params![username, direction_text(TransferDirection::Download)],
       |row| row.get::<_, Option<String>>(0),
@@ -294,7 +295,7 @@ fn write(
     if running.contains(&record.filename) {
       written.failed.push(EnqueueFailure {
         filename: record.filename,
-        message: IN_PROGRESS.to_string(),
+        message: ALREADY_RUNNING.to_string(),
       });
       continue;
     }
@@ -306,7 +307,7 @@ fn write(
       );
       written.failed.push(EnqueueFailure {
         filename: record.filename,
-        message: IN_PROGRESS.to_string(),
+        message: ALREADY_RUNNING.to_string(),
       });
       continue;
     }

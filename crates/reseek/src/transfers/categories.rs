@@ -18,6 +18,9 @@ pub const FAILED: &str = "(State IN (80, 144, 272, 528, 1040))";
 pub const ERRORED: &str = "(State IN (144, 272, 528, 1040))";
 /// `Completed, Cancelled`.
 pub const CANCELLED: &str = "(State = 80)";
+/// Not finished: not ended, or in a state without `Completed`, so a row the daemon stopped
+/// writing halfway counts as unfinished too.
+pub const UNFINISHED: &str = "(EndedAt IS NULL OR (State & 16) = 0)";
 
 /// The condition a category stands for.
 pub fn condition(category: TransferStateCategory) -> &'static str {
@@ -83,5 +86,25 @@ mod tests {
         );
       }
     }
+  }
+
+  #[test]
+  fn a_row_is_unfinished_until_it_has_both_ended_and_completed() {
+    let conn = Connection::open_in_memory().unwrap();
+    let unfinished = |ended: Option<&str>, state: u32| -> bool {
+      conn
+        .query_row(
+          &format!("SELECT {UNFINISHED} FROM (SELECT ?1 AS EndedAt, ?2 AS State)"),
+          rusqlite::params![ended, state],
+          |row| row.get(0),
+        )
+        .unwrap()
+    };
+    let at = Some("2026-01-01T00:00:00Z");
+    assert!(unfinished(None, 8));
+    assert!(unfinished(None, 48), "completed but never ended");
+    assert!(unfinished(at, 4098), "ended but not completed");
+    assert!(!unfinished(at, 48));
+    assert!(!unfinished(at, 272));
   }
 }
