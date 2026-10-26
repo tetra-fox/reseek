@@ -4,8 +4,8 @@
 //! [`Client`] has a method for every API call, named after what it does and documented with its
 //! route. A call that is the same for downloads and uploads takes the direction, and a route that
 //! answers in two forms, or as headers alone, has a method for each. [`Client::live`] opens the
-//! event stream, which reconnects with `Last-Event-ID` on its own. A call that is answered with an error returns [`Error::Api`] with the status and the
-//! error body.
+//! event stream, which reconnects with `Last-Event-ID` on its own. A call that is answered with
+//! an error returns [`Error::Api`] with the status and the error body.
 //!
 //! ```no_run
 //! # async fn example() -> api_client::Result<()> {
