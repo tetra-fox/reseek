@@ -309,6 +309,22 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn a_change_with_an_api_key_may_come_from_any_site() {
+    let app = app(
+      "remote_configuration = true\n[web.authentication.api_keys.robot]\n\
+       key = \"robot-key-0123456789\"\nrole = \"administrator\"\n",
+      &[],
+    )
+    .await;
+    let mut patch = request("PATCH", "/api/v0/options", Some(serde_json::json!({})));
+    let headers = patch.headers_mut();
+    headers.insert("x-api-key", "robot-key-0123456789".parse().unwrap());
+    headers.insert("origin", "http://evil.example".parse().unwrap());
+    let answer = app.send_from("192.0.2.1:1", patch).await;
+    assert_eq!(answer.status, 204, "a key is no ambient credential");
+  }
+
+  #[tokio::test]
   async fn roles_and_the_rebinding_rule_decide_the_rest() {
     let app = app(CONFIG, &[]).await;
     let viewer = app
