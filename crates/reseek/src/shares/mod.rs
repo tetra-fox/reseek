@@ -28,6 +28,7 @@ use std::time::{Duration, Instant};
 
 use api_types::state::SharesState;
 use cascade::Watcher;
+use soulseek_client::LogLimiter;
 use soulseek_proto::SearchQuery;
 use soulseek_proto::peer::{Directory, File};
 use tokio::sync::watch;
@@ -40,6 +41,9 @@ use crate::paths::Paths;
 use crate::state::StateOwner;
 use scanner::{Outcome, Settings};
 use share::Share;
+
+/// Failed share queries, which arrive at the network's search rate.
+static QUERY_FAILED: LogLimiter = LogLimiter::new();
 
 /// How long a path must be quiet after a change before the change is applied.
 const QUIET: Duration = Duration::from_secs(2);
@@ -258,12 +262,12 @@ impl Shares {
     let query = query.clone();
     match self
       .db
-      .read(move |conn| Ok(search::search(conn, &query, limit)))
+      .read(move |conn| search::search(conn, &query, limit))
       .await
     {
       Ok(files) => files,
       Err(e) => {
-        if let Some(suppressed) = search::QUERY_FAILED.allow() {
+        if let Some(suppressed) = QUERY_FAILED.allow() {
           warn!(query = text, error = %e, suppressed, "Failed to execute shared file query");
         }
         Vec::new()

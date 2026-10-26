@@ -5,15 +5,10 @@
 //! exclusion also removes every match whose name holds it anywhere, ignoring case.
 
 use rusqlite::{Connection, params};
-use soulseek_client::LogLimiter;
 use soulseek_proto::SearchQuery;
 use soulseek_proto::peer;
-use tracing::warn;
 
 use super::repository::shared_file;
-
-/// Failed share queries, which arrive at the network's search rate.
-pub(super) static QUERY_FAILED: LogLimiter = LogLimiter::new();
 
 /// Whether the filename index takes `c` as part of a word: letters, numbers and private-use
 /// characters; everything else separates words.
@@ -61,11 +56,14 @@ pub fn expression(query: &SearchQuery) -> Option<String> {
 }
 
 /// The files matching `query`, ordered by remote name, each named by its whole remote name; at
-/// most `limit` of them, counted after the exclusions are applied. A query the index refuses
-/// is logged and answered with nothing.
-pub fn search(conn: &Connection, query: &SearchQuery, limit: Option<usize>) -> Vec<peer::File> {
+/// most `limit` of them, counted after the exclusions are applied.
+pub fn search(
+  conn: &Connection,
+  query: &SearchQuery,
+  limit: Option<usize>,
+) -> rusqlite::Result<Vec<peer::File>> {
   let Some(expression) = expression(query) else {
-    return Vec::new();
+    return Ok(Vec::new());
   };
   let excluded: Vec<String> = query
     .exclusions
@@ -73,20 +71,7 @@ pub fn search(conn: &Connection, query: &SearchQuery, limit: Option<usize>) -> V
     .filter(|e| !e.is_empty())
     .map(|e| e.to_lowercase())
     .collect();
-  match run(conn, &expression, &excluded, limit.unwrap_or(usize::MAX)) {
-    Ok(files) => files,
-    Err(e) => {
-      if let Some(suppressed) = QUERY_FAILED.allow() {
-        warn!(
-          query = query.search_text(),
-          error = %e,
-          suppressed,
-          "Failed to execute shared file query"
-        );
-      }
-      Vec::new()
-    }
-  }
+  run(conn, &expression, &excluded, limit.unwrap_or(usize::MAX))
 }
 
 fn run(
@@ -167,6 +152,7 @@ mod tests {
         );
         let names = |q: SearchQuery, limit| {
           search(conn, &q, limit)
+            .unwrap()
             .into_iter()
             .map(|f| f.filename.as_str().to_string())
             .collect::<Vec<_>>()
