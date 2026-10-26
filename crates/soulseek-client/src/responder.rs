@@ -78,6 +78,12 @@ impl SearchResponder {
 }
 
 impl Client {
+  /// How many answers to other users' searches are kept now because their searcher could not
+  /// be reached yet.
+  pub fn undelivered_search_responses(&self) -> usize {
+    self.responder().undelivered().len()
+  }
+
   /// A permit to answer `username`'s search, or `None` when the bound on searches being answered
   /// at once is reached and the request is to be dropped
   fn responding(&self, username: &str, token: u32) -> Option<Permit> {

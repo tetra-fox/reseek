@@ -78,6 +78,15 @@ impl<K: Eq + Hash + Clone, V> BoundedCache<K, V> {
     (!expired).then_some(entry.value)
   }
 
+  /// how many entries have not expired
+  pub(crate) fn len(&mut self) -> usize {
+    let now = Instant::now();
+    self
+      .entries
+      .retain(|_, entry| now < entry.stored + self.ttl);
+    self.entries.len()
+  }
+
   fn expired(&self, key: &K, now: Instant) -> bool {
     self
       .entries
@@ -109,6 +118,10 @@ mod tests {
     assert_eq!(cache.get(&"alice"), Some(&1));
     tokio::time::sleep(Duration::from_secs(1)).await;
     assert_eq!(cache.get(&"alice"), None);
+    cache.insert("bob", 2);
+    assert_eq!(cache.len(), 1);
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    assert_eq!(cache.len(), 0, "the size counts only what has not expired");
     cache.insert("bob", 2);
     tokio::time::sleep(Duration::from_secs(60)).await;
     assert_eq!(
