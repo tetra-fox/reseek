@@ -6,20 +6,20 @@
 //! watching for us, not what it said of them.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Mutex, PoisonError, RwLock};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
 use soulseek_client::Client;
 use soulseek_proto::server::UserStats;
-use tracing::{debug, trace, warn};
+use tracing::{Instrument, debug, trace, warn};
 
 use super::Directory;
 use super::groups::{self, Facts, Shared};
 
 /// The facts of every user known, and the users the server watches for us.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct GroupCache {
-  facts: RwLock<HashMap<String, Facts>>,
-  watched: Mutex<HashSet<String>>,
+  facts: Arc<RwLock<HashMap<String, Facts>>>,
+  watched: Arc<Mutex<HashSet<String>>>,
 }
 
 impl GroupCache {
@@ -36,8 +36,8 @@ impl GroupCache {
       })
       .collect();
     Self {
-      facts: RwLock::new(facts),
-      watched: Mutex::default(),
+      facts: Arc::new(RwLock::new(facts)),
+      watched: Arc::default(),
     }
   }
 
@@ -140,6 +140,30 @@ impl Directory {
     }
     self.groups.watched().insert(username.to_string());
     debug!(username, "user watched");
+  }
+
+  /// Fetches the statistics of the watched user `username` again in the background, since the
+  /// server pushes their status and not what they share, and takes them into their upload
+  /// group. The stop waits for it.
+  pub fn refetch_statistics(&self, username: &str) {
+    let Some(client) = self.client.get().cloned() else {
+      return;
+    };
+    let groups = self.groups.clone();
+    let username = username.to_string();
+    self.tasks.spawn(
+      async move {
+        match client.get_user_statistics(&username).await {
+          Ok(statistics) => {
+            groups.update(&username, false, |facts| {
+              facts.shared = Some(shared(&statistics.stats));
+            });
+          }
+          Err(e) => warn!(username, error = %e, "statistics of a watched user not fetched again"),
+        }
+      }
+      .in_current_span(),
+    );
   }
 
   /// Every user on the server's list of privileged users is privileged from now on.

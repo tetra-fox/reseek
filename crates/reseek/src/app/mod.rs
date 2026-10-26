@@ -200,6 +200,7 @@ impl AppState {
       shutdown.clone(),
     )
     .map_err(StartError::Config)?;
+    users.attach_client(network.client().clone());
     let searches = Searches::open(&location, network.clone(), live.clone(), config.clone())
       .await
       .map_err(|e| StartError::Open(format!("search.db: {e}")))?;

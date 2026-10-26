@@ -26,7 +26,7 @@ pub use groups::{DEFAULT as DEFAULT_GROUP, LEECHERS, PRIVILEGED};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
 use api_types::blocking::{Block, BlockScope};
@@ -35,8 +35,10 @@ use api_types::live::LiveFrame;
 use api_types::users::{UserRemoved, UserSummary};
 use cascade::Watcher;
 use chrono::Utc;
+use soulseek_client::Client;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
 pub use touch::{PeerInfo, Touch};
@@ -56,11 +58,17 @@ use transfers::FigureCache;
 const SUMMARY_FOR: Duration = Duration::from_secs(60);
 /// How often expired blocks are removed.
 const EXPIRY_SWEEP: Duration = Duration::from_secs(60);
+/// How long the stop waits for statistics being fetched again.
+const STOPPING: Duration = Duration::from_secs(5);
 
 /// The users directory and the blocks.
 pub struct Directory {
   db: Database,
   transfers: Database,
+  /// the Soulseek client, once the network is built
+  client: OnceLock<Client>,
+  /// the statistics fetched again in the background, so the stop waits for them
+  tasks: TaskTracker,
   config: Watcher<Options>,
   live: Live,
   events: EventBus,
@@ -106,6 +114,8 @@ impl Directory {
     let directory = Arc::new(Self {
       db,
       transfers,
+      client: OnceLock::new(),
+      tasks: TaskTracker::new(),
       config,
       live,
       events,
@@ -139,6 +149,27 @@ impl Directory {
   /// `users.db`.
   pub fn database(&self) -> &Database {
     &self.db
+  }
+
+  /// Takes the Soulseek client the network engines use, once it is built.
+  pub fn attach_client(&self, client: Client) {
+    if self.client.set(client).is_err() {
+      warn!("the client was attached to the users directory already");
+    }
+  }
+
+  /// Waits, at shutdown, for the statistics being fetched again.
+  pub async fn stop(&self) {
+    self.tasks.close();
+    if tokio::time::timeout(STOPPING, self.tasks.wait())
+      .await
+      .is_err()
+    {
+      debug!(
+        running = self.tasks.len(),
+        "statistics still being fetched at shutdown"
+      );
+    }
   }
 
   /// Marks that we dealt with `username` for the reason `touch` gives, storing what came with

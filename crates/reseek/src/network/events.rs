@@ -155,7 +155,7 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
         .users
         .status_received(&status.username, status.is_privileged);
       if app.users.is_watched(&status.username) {
-        refetch_statistics(app, status.username);
+        app.users.refetch_statistics(&status.username);
       }
     }
     Event::UserStatisticsChanged(statistics) => {
@@ -195,22 +195,6 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
     | Event::SearchStateChanged { .. }
     | Event::SearchResponseReceived { .. } => {}
   }
-}
-
-/// Fetches the statistics of the watched user `username` again, since the server pushes their
-/// status and not what they share, and takes them into their upload group.
-fn refetch_statistics(app: &AppState, username: String) {
-  let client = app.network.client().clone();
-  let users = app.users.clone();
-  tokio::spawn(
-    async move {
-      match client.get_user_statistics(&username).await {
-        Ok(statistics) => users.statistics_received(&username, &statistics.stats),
-        Err(e) => warn!(username, error = %e, "statistics of a watched user not fetched again"),
-      }
-    }
-    .in_current_span(),
-  );
 }
 
 /// `State.server` and our username as the client has them in `state`.

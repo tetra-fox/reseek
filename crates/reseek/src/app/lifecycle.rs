@@ -6,8 +6,8 @@
 //! the clock starts, and then the watchdog connects, unless this is a relay agent, connecting
 //! is turned off or there are no credentials. Stopping, once the HTTP host has stopped: the
 //! watchdog stops, the client disconnects and is disposed, the events this raised are
-//! handled, the searches and the transfer tasks end, and the transfers still unfinished are
-//! ended as shut down.
+//! handled, the statistics fetched again, the searches and the transfer tasks end, and the
+//! transfers still unfinished are ended as shut down.
 
 use tracing::{Instrument, debug, info, info_span, warn};
 
@@ -124,6 +124,7 @@ async fn check_versions(app: AppState) {
 pub(super) async fn stop(app: &AppState) {
   info!("Application is shutting down");
   app.network.stop().await;
+  app.users.stop().await;
   app.searches.stop().await;
   app.downloads.stop().await;
   app.uploads.stop().await;
