@@ -10,7 +10,7 @@ mod histogram;
 mod rankings;
 mod summary;
 
-pub use histogram::HistogramError;
+pub use histogram::{HistogramError, Width};
 
 use api_types::reports::{TransferOutcome, TransferSummary};
 use api_types::transfers::TransferDirection;
@@ -19,6 +19,23 @@ use rusqlite::types::Value;
 
 use crate::db::{self, Database};
 use crate::transfers::direction_text;
+
+/// The first release; no transfer can have ended before it.
+pub const GENESIS: &str = "2020-12-30T06:22:00Z";
+
+/// [`GENESIS`] as a time.
+pub fn genesis() -> DateTime<Utc> {
+  GENESIS.parse().expect("the first release is RFC 3339")
+}
+
+/// The window a report covers, its ends as the API filled them in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Window {
+  /// the start
+  pub start: DateTime<Utc>,
+  /// the end
+  pub end: DateTime<Utc>,
+}
 
 /// The aggregate columns a [`TransferSummary`] is read from, at the start of a row.
 const SUMMARY: &str = "COALESCE(SUM(Size), 0), COUNT(*), COUNT(DISTINCT Username), \
@@ -71,23 +88,23 @@ struct Filter {
 }
 
 impl Filter {
-  /// Transfers that ended between `start` and `end`, both included.
-  fn ended_between(mut self, start: DateTime<Utc>, end: DateTime<Utc>) -> Self {
+  /// Transfers that ended in `window`, both ends included.
+  fn ended_between(mut self, window: Window) -> Self {
     self
       .conditions
       .push("EndedAt IS NOT NULL AND EndedAt BETWEEN ? AND ?".to_string());
-    self.values.push(Value::Text(db::timestamp(start)));
-    self.values.push(Value::Text(db::timestamp(end)));
+    self.values.push(Value::Text(db::timestamp(window.start)));
+    self.values.push(Value::Text(db::timestamp(window.end)));
     self
   }
 
-  /// Transfers that ended at `start` or later and before `end`.
-  fn ended_from(mut self, start: DateTime<Utc>, end: DateTime<Utc>) -> Self {
+  /// Transfers that ended at `window`'s start or later and before its end.
+  fn ended_from(mut self, window: Window) -> Self {
     self
       .conditions
       .push("EndedAt IS NOT NULL AND EndedAt >= ? AND EndedAt < ?".to_string());
-    self.values.push(Value::Text(db::timestamp(start)));
-    self.values.push(Value::Text(db::timestamp(end)));
+    self.values.push(Value::Text(db::timestamp(window.start)));
+    self.values.push(Value::Text(db::timestamp(window.end)));
     self
   }
 
@@ -143,6 +160,14 @@ pub(super) mod tests {
 
   use super::*;
   use crate::transfers::fixtures::{Row, insert, transfers};
+
+  /// Every time the databases store.
+  pub fn all() -> Window {
+    Window {
+      start: db::earliest(),
+      end: db::latest(),
+    }
+  }
 
   /// `hour:minute` on 2026-03-01, UTC.
   pub fn at(hour: u32, minute: u32) -> DateTime<Utc> {

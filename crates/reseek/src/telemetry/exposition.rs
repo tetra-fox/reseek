@@ -14,8 +14,8 @@ use tracing::{debug, info};
 use crate::app::AppState;
 use crate::config::MetricsAuthentication;
 
-/// The type the text format is served as.
-const TEXT: &str = "text/plain; version=0.0.4; charset=utf-8";
+/// The type the Prometheus text format is served as.
+pub const TEXT: &str = "text/plain; version=0.0.4; charset=utf-8";
 
 /// What a refused request is told to answer with.
 const CHALLENGE: &str = "Basic realm=\"metrics\"";

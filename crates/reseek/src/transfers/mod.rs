@@ -33,6 +33,19 @@ pub fn direction_text(direction: TransferDirection) -> &'static str {
   }
 }
 
+/// The direction in the column `i` of `row`, as [`direction_text`] wrote it.
+pub fn direction_at(row: &Row, i: usize) -> rusqlite::Result<TransferDirection> {
+  match row.get_ref(i)?.as_str()? {
+    "Download" => Ok(TransferDirection::Download),
+    "Upload" => Ok(TransferDirection::Upload),
+    other => Err(rusqlite::Error::FromSqlConversionFailure(
+      i,
+      Type::Text,
+      format!("{other} is no direction").into(),
+    )),
+  }
+}
+
 /// The record a row of [`COLUMNS`] holds, with the figures derived from it: what is left, how
 /// far along it is and how long it took. Times derived while it runs are taken against now.
 pub fn transfer(row: &Row) -> rusqlite::Result<Transfer> {
@@ -47,17 +60,7 @@ pub fn transfer(row: &Row) -> rusqlite::Result<Transfer> {
   };
   let id = uuid(0, &row.get::<_, String>(0)?)?;
   let batch_id = text(1)?.map(|value| uuid(1, &value)).transpose()?;
-  let direction = match row.get::<_, String>(3)?.as_str() {
-    "Download" => TransferDirection::Download,
-    "Upload" => TransferDirection::Upload,
-    other => {
-      return Err(rusqlite::Error::FromSqlConversionFailure(
-        3,
-        Type::Text,
-        format!("{other} is no direction").into(),
-      ));
-    }
-  };
+  let direction = direction_at(row, 3)?;
   let size = row.get::<_, i64>(5)?.max(0).unsigned_abs();
   let state = TransferStates::from_bits_retain(row.get::<_, u32>(6)?);
   let requested_at = time(7)?.ok_or(rusqlite::Error::InvalidColumnType(

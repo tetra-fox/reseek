@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+use api_types::transfers::TransferDirection;
 use api_types::users::{TransferFigures, UserFigures, UserTransfers, UserTransfersQuery};
 use rusqlite::params_from_iter;
 use rusqlite::types::Value;
@@ -41,10 +42,9 @@ pub async fn figures(transfers: &Database, username: &str) -> Result<UserFigures
         last_message_at: None,
       };
       while let Some(row) = rows.next()? {
-        let direction: String = row.get(0)?;
-        let side = match direction.as_str() {
-          "Download" => &mut figures.downloads,
-          _ => &mut figures.uploads,
+        let side = match crate::transfers::direction_at(row, 0)? {
+          TransferDirection::Download => &mut figures.downloads,
+          TransferDirection::Upload => &mut figures.uploads,
         };
         side.counts.succeeded = row.get(1)?;
         side.counts.failed = row.get(2)?;

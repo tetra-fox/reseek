@@ -3,25 +3,24 @@
 //! message is read as stored, which is already without the transfer library's prefix.
 
 use api_types::reports::{ExceptionCount, ExceptionsQuery, ParetoQuery, TransferExceptionDetail};
-use api_types::transfers::{SortOrder, TransferDirection, TransferStates};
+use api_types::transfers::{SortOrder, TransferStates};
 use rusqlite::types::{Type, Value};
 use rusqlite::{Connection, params_from_iter};
 
-use super::{Filter, Reports};
+use super::{Filter, Reports, Window};
 use crate::db::{self, DbError};
 use crate::transfers::categories::FAILED;
+use crate::transfers::direction_at;
 
 impl Reports {
   /// The failed transfers of one direction, by when they ended.
   pub async fn exceptions(
     &self,
+    window: Window,
     query: ExceptionsQuery,
   ) -> Result<Vec<TransferExceptionDetail>, DbError> {
     let filter = Filter::default()
-      .ended_between(
-        query.start.unwrap_or_else(db::earliest),
-        query.end.unwrap_or_else(db::latest),
-      )
+      .ended_between(window)
       .states(FAILED)
       .direction(Some(query.direction))
       .username(query.username.as_deref())
@@ -51,12 +50,13 @@ impl Reports {
   }
 
   /// The failed transfers of one direction counted by error message, most frequent first.
-  pub async fn pareto(&self, query: ParetoQuery) -> Result<Vec<ExceptionCount>, DbError> {
+  pub async fn pareto(
+    &self,
+    window: Window,
+    query: ParetoQuery,
+  ) -> Result<Vec<ExceptionCount>, DbError> {
     let filter = Filter::default()
-      .ended_between(
-        query.start.unwrap_or_else(db::earliest),
-        query.end.unwrap_or_else(db::latest),
-      )
+      .ended_between(window)
       .direction(Some(query.direction))
       .username(query.username.as_deref());
     self
@@ -112,10 +112,7 @@ fn detail(row: &rusqlite::Row) -> rusqlite::Result<TransferExceptionDetail> {
     .get::<_, String>(0)?
     .parse()
     .map_err(|e: uuid::Error| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, e.into()))?;
-  let direction = match row.get::<_, String>(2)?.as_str() {
-    "Upload" => TransferDirection::Upload,
-    _ => TransferDirection::Download,
-  };
+  let direction = direction_at(row, 2)?;
   Ok(TransferExceptionDetail {
     id,
     username: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
@@ -136,7 +133,7 @@ fn detail(row: &rusqlite::Row) -> rusqlite::Result<TransferExceptionDetail> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::telemetry::reports::tests::{at, row};
+  use crate::telemetry::reports::tests::{all, at, row};
   use crate::transfers::fixtures::{insert, transfers};
   use api_types::transfers::TransferDirection::{Download, Upload};
 
@@ -181,7 +178,7 @@ mod tests {
   async fn only_failed_states_are_listed_newest_first_with_messages_intact() {
     let reports = reports().await;
     let listed = reports
-      .exceptions(exceptions(SortOrder::Desc))
+      .exceptions(all(), exceptions(SortOrder::Desc))
       .await
       .unwrap();
     let minutes: Vec<_> = listed
@@ -200,7 +197,7 @@ mod tests {
     );
     let mut by_message = exceptions(SortOrder::Asc);
     by_message.exception = Some("File not shared.".into());
-    let found = reports.exceptions(by_message).await.unwrap();
+    let found = reports.exceptions(all(), by_message).await.unwrap();
     assert_eq!(found.len(), 1);
     assert_eq!(
       serde_json::to_value(found[0].state).unwrap(),
@@ -212,14 +209,17 @@ mod tests {
   async fn the_pareto_counts_messages_most_frequent_first() {
     let counted = reports()
       .await
-      .pareto(ParetoQuery {
-        direction: Download,
-        start: None,
-        end: None,
-        username: None,
-        limit: 25,
-        offset: 0,
-      })
+      .pareto(
+        all(),
+        ParetoQuery {
+          direction: Download,
+          start: None,
+          end: None,
+          username: None,
+          limit: 25,
+          offset: 0,
+        },
+      )
       .await
       .unwrap();
     let rows: Vec<_> = counted

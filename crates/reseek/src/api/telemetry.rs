@@ -25,9 +25,7 @@ use super::validate;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized};
 use crate::db;
-
-/// The earliest time a transfer can have ended: before it no release existed.
-const GENESIS: &str = "2020-12-30T06:22:00Z";
+use crate::telemetry::reports::{GENESIS, genesis};
 
 /// The most buckets a histogram has.
 const BUCKETS_MAX: u32 = 1000;
@@ -47,10 +45,6 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(pareto))
     .routes(routes!(directories))
     .routes(routes!(user))
-}
-
-fn genesis() -> DateTime<Utc> {
-  GENESIS.parse().expect("the genesis time is RFC 3339")
 }
 
 fn week_ago() -> DateTime<Utc> {
@@ -128,10 +122,7 @@ async fn metrics(
   let text = app.services.reports.metrics_text().await?;
   Ok(
     (
-      [(
-        header::CONTENT_TYPE,
-        "text/plain; version=0.0.4; charset=utf-8",
-      )],
+      [(header::CONTENT_TYPE, crate::telemetry::exposition::TEXT)],
       text,
     )
       .into_response(),

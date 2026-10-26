@@ -5,15 +5,23 @@
 use std::collections::BTreeMap;
 
 use api_types::reports::{DirectionSummaries, HistogramQuery, TransferSummary};
+use api_types::transfers::TransferDirection;
 use chrono::{DateTime, SecondsFormat, Utc};
 use rusqlite::{OptionalExtension, params_from_iter};
 
-use super::{Filter, Reports, outcome};
+use super::{Filter, Reports, Window, genesis, outcome};
 use crate::db::{self, DbError};
 use crate::transfers::categories::COMPLETED;
+use crate::transfers::direction_at;
 
-/// The first release; a window that starts earlier starts at the oldest transfer instead.
-const GENESIS: &str = "2020-12-30T06:22:00Z";
+/// How wide a histogram's buckets are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Width {
+  /// this many minutes each
+  Minutes(u32),
+  /// the window cut into this many buckets of equal whole seconds
+  Buckets(u32),
+}
 
 /// The most buckets a histogram has; a narrower interval over a wider window is refused.
 pub const MOST_BUCKETS: i64 = 100_000;
@@ -30,16 +38,18 @@ pub enum HistogramError {
 }
 
 impl Reports {
-  /// The window of `query` cut into buckets of `interval` minutes, or into `buckets` of equal
-  /// whole seconds, each with its finished transfers by direction and outcome. A bucket's
-  /// `averageSpeed` is its bytes over the seconds its transfers took.
+  /// `window` cut into buckets of `width`, each with the finished transfers `query` selects by
+  /// direction and outcome; a window starting before the first release starts at the oldest
+  /// transfer. A bucket's `averageSpeed` is its bytes over the seconds its transfers took.
   pub async fn histogram(
     &self,
+    window: Window,
+    width: Width,
     query: HistogramQuery,
   ) -> Result<BTreeMap<String, DirectionSummaries>, HistogramError> {
-    let genesis: DateTime<Utc> = GENESIS.parse().expect("the first release is RFC 3339");
-    let end = query.end.unwrap_or_else(Utc::now);
-    let mut start = query.start.unwrap_or(genesis);
+    let genesis = genesis();
+    let end = window.end;
+    let mut start = window.start;
     if start < genesis {
       let oldest: Option<String> = self
         .db
@@ -57,11 +67,11 @@ impl Reports {
         None => genesis,
       };
     }
-    let width = match (query.interval, query.buckets) {
-      (Some(minutes), _) => i64::from(minutes) * 60,
-      (None, buckets) => {
+    let width = match width {
+      Width::Minutes(minutes) => i64::from(minutes.max(1)) * 60,
+      Width::Buckets(buckets) => {
         let seconds = (end - start).num_seconds().max(0);
-        (seconds / i64::from(buckets.unwrap_or(100).max(1))).max(1)
+        (seconds / i64::from(buckets.max(1))).max(1)
       }
     };
     let first = start.timestamp().div_euclid(width) * width;
@@ -80,7 +90,7 @@ impl Reports {
       result.insert(key(first + bucket * width), DirectionSummaries::default());
     }
     let filter = Filter::default()
-      .ended_from(start, end)
+      .ended_from(Window { start, end })
       .states(COMPLETED)
       .direction(query.direction)
       .username(query.username.as_deref());
@@ -104,7 +114,7 @@ impl Reports {
           .query_map(params_from_iter(&values), |row| {
             Ok((
               row.get::<_, i64>(0)?,
-              row.get::<_, String>(1)?,
+              direction_at(row, 1)?,
               row.get::<_, u32>(2)?,
               TransferSummary {
                 total_bytes: row.get::<_, i64>(3)?.max(0).unsigned_abs(),
@@ -124,10 +134,9 @@ impl Reports {
       let Some(summaries) = result.get_mut(&key(bucket)) else {
         continue;
       };
-      let into = match direction.as_str() {
-        "Download" => &mut summaries.download,
-        "Upload" => &mut summaries.upload,
-        _ => continue,
+      let into = match direction {
+        TransferDirection::Download => &mut summaries.download,
+        TransferDirection::Upload => &mut summaries.upload,
       };
       into.insert(outcome(state), summary);
     }
@@ -143,12 +152,15 @@ mod tests {
   use api_types::reports::TransferOutcome;
   use api_types::transfers::TransferDirection::{Download, Upload};
 
-  fn query(start: DateTime<Utc>, end: DateTime<Utc>) -> HistogramQuery {
-    HistogramQuery {
-      start: Some(start),
-      end: Some(end),
-      ..HistogramQuery::default()
-    }
+  async fn cut(
+    reports: &Reports,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+    width: Width,
+  ) -> Result<BTreeMap<String, DirectionSummaries>, HistogramError> {
+    reports
+      .histogram(Window { start, end }, width, HistogramQuery::default())
+      .await
   }
 
   #[tokio::test]
@@ -164,9 +176,9 @@ mod tests {
     let failed = row("dave", Download, 272, at(2, 59));
     insert(&db, vec![slow, fast, on_the_end, failed]).await;
     let reports = Reports::new(db);
-    let mut q = query(at(0, 30), at(3, 0));
-    q.interval = Some(60);
-    let histogram = reports.histogram(q).await.unwrap();
+    let histogram = cut(&reports, at(0, 30), at(3, 0), Width::Minutes(60))
+      .await
+      .unwrap();
     let keys: Vec<_> = histogram.keys().cloned().collect();
     assert_eq!(
       keys,
@@ -196,9 +208,10 @@ mod tests {
   #[tokio::test]
   async fn a_bucket_count_divides_the_window_in_whole_seconds() {
     let reports = Reports::new(transfers().await);
-    let mut q = query(at(0, 0), at(0, 0) + chrono::Duration::days(7));
-    q.buckets = Some(84);
-    let histogram = reports.histogram(q).await.unwrap();
+    let week = at(0, 0) + chrono::Duration::days(7);
+    let histogram = cut(&reports, at(0, 0), week, Width::Buckets(84))
+      .await
+      .unwrap();
     assert_eq!(histogram.len(), 84);
     let mut keys = histogram.keys();
     keys.next();
@@ -207,10 +220,12 @@ mod tests {
       "2026-03-01T02:00:00Z",
       "7 days / 84 is 2 hours"
     );
-    let mut odd = query(at(0, 7), at(0, 7) + chrono::Duration::days(1));
-    odd.buckets = Some(24);
+    let day = at(0, 7) + chrono::Duration::days(1);
     assert_eq!(
-      reports.histogram(odd).await.unwrap().len(),
+      cut(&reports, at(0, 7), day, Width::Buckets(24))
+        .await
+        .unwrap()
+        .len(),
       25,
       "a start between bucket starts adds one"
     );
@@ -223,15 +238,15 @@ mod tests {
     old.requested_at = at(4, 10);
     insert(&db, vec![old]).await;
     let reports = Reports::new(db);
-    let mut q = query("1970-01-01T00:00:00Z".parse().unwrap(), at(6, 0));
-    q.interval = Some(60);
-    let histogram = reports.histogram(q).await.unwrap();
+    let epoch = "1970-01-01T00:00:00Z".parse().unwrap();
+    let histogram = cut(&reports, epoch, at(6, 0), Width::Minutes(60))
+      .await
+      .unwrap();
     assert_eq!(histogram.keys().next().unwrap(), "2026-03-01T04:00:00Z");
     assert_eq!(histogram.len(), 2);
-    let mut tiny = query(at(0, 0), at(0, 0) + chrono::Duration::days(365));
-    tiny.interval = Some(1);
+    let year = at(0, 0) + chrono::Duration::days(365);
     assert!(matches!(
-      reports.histogram(tiny).await,
+      cut(&reports, at(0, 0), year, Width::Minutes(1)).await,
       Err(HistogramError::TooManyBuckets(_))
     ));
   }

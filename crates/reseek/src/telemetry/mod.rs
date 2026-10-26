@@ -28,7 +28,7 @@ use crate::db::Database;
 use crate::services::ReportService;
 use catalogue::Catalogue;
 use registry::Family;
-use reports::{HistogramError, Reports};
+use reports::{HistogramError, Reports, Width, Window};
 use system::SystemProbe;
 
 /// How long a per-minute count runs before it is published.
@@ -94,6 +94,16 @@ fn is_kpi(name: &str) -> bool {
     || (name.starts_with("node_") && !name.starts_with("node_cpu"))
 }
 
+/// The window the API filled into a query.
+fn window(start: Option<DateTime<Utc>>, end: Option<DateTime<Utc>>) -> Result<Window, ApiError> {
+  match (start, end) {
+    (Some(start), Some(end)) => Ok(Window { start, end }),
+    _ => Err(ApiError::internal(
+      "a report was asked for with its window left open",
+    )),
+  }
+}
+
 /// A failed report as the API answers it, logged with the report and its window.
 fn failed(
   report: &str,
@@ -132,7 +142,7 @@ impl ReportService for Telemetry {
     let (start, end) = (query.start, query.end);
     self
       .reports
-      .summary(query)
+      .summary(window(start, end)?, query)
       .await
       .map_err(|e| failed("summary", start, end, e))
   }
@@ -142,7 +152,20 @@ impl ReportService for Telemetry {
     query: HistogramQuery,
   ) -> Result<BTreeMap<String, DirectionSummaries>, ApiError> {
     let (start, end) = (query.start, query.end);
-    match self.reports.histogram(query).await {
+    let width = match (query.interval, query.buckets) {
+      (Some(minutes), _) => Width::Minutes(minutes),
+      (None, Some(buckets)) => Width::Buckets(buckets),
+      (None, None) => {
+        return Err(ApiError::internal(
+          "a histogram was asked for without its width",
+        ));
+      }
+    };
+    match self
+      .reports
+      .histogram(window(start, end)?, width, query)
+      .await
+    {
       Ok(histogram) => Ok(histogram),
       Err(e @ HistogramError::TooManyBuckets(_)) => Err(ApiError::bad_request(e.to_string())),
       Err(HistogramError::Db(e)) => Err(failed("histogram", start, end, e)),
@@ -153,7 +176,7 @@ impl ReportService for Telemetry {
     let (start, end) = (query.start, query.end);
     self
       .reports
-      .leaderboard(query)
+      .leaderboard(window(start, end)?, query)
       .await
       .map_err(|e| failed("leaderboard", start, end, e))
   }
@@ -165,7 +188,7 @@ impl ReportService for Telemetry {
     let (start, end) = (query.start, query.end);
     self
       .reports
-      .exceptions(query)
+      .exceptions(window(start, end)?, query)
       .await
       .map_err(|e| failed("exceptions", start, end, e))
   }
@@ -174,7 +197,7 @@ impl ReportService for Telemetry {
     let (start, end) = (query.start, query.end);
     self
       .reports
-      .pareto(query)
+      .pareto(window(start, end)?, query)
       .await
       .map_err(|e| failed("exceptions pareto", start, end, e))
   }
@@ -183,7 +206,7 @@ impl ReportService for Telemetry {
     let (start, end) = (query.start, query.end);
     self
       .reports
-      .directories(query)
+      .directories(window(start, end)?, query)
       .await
       .map_err(|e| failed("directories", start, end, e))
   }
@@ -192,7 +215,7 @@ impl ReportService for Telemetry {
     let (start, end) = (query.start, query.end);
     self
       .reports
-      .user(username, query)
+      .user(username, window(start, end)?)
       .await
       .map_err(|e| failed("user", start, end, e))
   }

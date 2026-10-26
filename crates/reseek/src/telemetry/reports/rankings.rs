@@ -10,8 +10,8 @@ use api_types::transfers::{SortOrder, TransferDirection};
 use rusqlite::params_from_iter;
 use rusqlite::types::Value;
 
-use super::{Filter, Reports, SUMMARY, summary_at};
-use crate::db::{self, DbError};
+use super::{Filter, Reports, SUMMARY, Window, summary_at};
+use crate::db::DbError;
 use crate::transfers::categories::SUCCESSFUL;
 
 impl Reports {
@@ -19,13 +19,11 @@ impl Reports {
   /// descending.
   pub async fn leaderboard(
     &self,
+    window: Window,
     query: LeaderboardQuery,
   ) -> Result<Vec<LeaderboardEntry>, DbError> {
     let filter = Filter::default()
-      .ended_between(
-        query.start.unwrap_or_else(db::earliest),
-        query.end.unwrap_or_else(db::latest),
-      )
+      .ended_between(window)
       .direction(Some(query.direction))
       .states(SUCCESSFUL);
     let column = match query.sort_by {
@@ -65,12 +63,13 @@ impl Reports {
 
   /// Our shared directories by how many distinct users downloaded from them successfully,
   /// then by how many downloads; a directory is a filename without its last segment.
-  pub async fn directories(&self, query: DirectoriesQuery) -> Result<Vec<DirectoryCount>, DbError> {
+  pub async fn directories(
+    &self,
+    window: Window,
+    query: DirectoriesQuery,
+  ) -> Result<Vec<DirectoryCount>, DbError> {
     let filter = Filter::default()
-      .ended_between(
-        query.start.unwrap_or_else(db::earliest),
-        query.end.unwrap_or_else(db::latest),
-      )
+      .ended_between(window)
       .direction(Some(TransferDirection::Upload))
       .states(SUCCESSFUL)
       .username(query.username.as_deref());
@@ -133,7 +132,7 @@ fn directory_of(filename: &str) -> &str {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::telemetry::reports::tests::{at, row};
+  use crate::telemetry::reports::tests::{all, at, row};
   use crate::transfers::fixtures::{insert, transfers};
   use api_types::transfers::TransferDirection::{Download, Upload};
 
@@ -189,7 +188,7 @@ mod tests {
         .collect::<Vec<_>>()
     };
     let by_count = reports
-      .leaderboard(leaderboard(LeaderboardSort::Count, SortOrder::Desc))
+      .leaderboard(all(), leaderboard(LeaderboardSort::Count, SortOrder::Desc))
       .await
       .unwrap();
     assert_eq!(by_count[0].summary.distinct_users, 1);
@@ -200,7 +199,10 @@ mod tests {
       "a failed upload and a download do not count; ties by name descending"
     );
     let by_bytes = reports
-      .leaderboard(leaderboard(LeaderboardSort::TotalBytes, SortOrder::Asc))
+      .leaderboard(
+        all(),
+        leaderboard(LeaderboardSort::TotalBytes, SortOrder::Asc),
+      )
       .await
       .unwrap();
     assert_eq!(by_bytes[0].username, "carol");
@@ -208,7 +210,7 @@ mod tests {
     paged.offset = 1;
     paged.limit = 1;
     assert_eq!(
-      names(reports.leaderboard(paged).await.unwrap()),
+      names(reports.leaderboard(all(), paged).await.unwrap()),
       [("alice".into(), 2)]
     );
   }
@@ -234,13 +236,16 @@ mod tests {
     )
     .await;
     let counts = Reports::new(db)
-      .directories(DirectoriesQuery {
-        start: None,
-        end: None,
-        username: None,
-        limit: 25,
-        offset: 0,
-      })
+      .directories(
+        all(),
+        DirectoriesQuery {
+          start: None,
+          end: None,
+          username: None,
+          limit: 25,
+          offset: 0,
+        },
+      )
       .await
       .unwrap();
     let ranked: Vec<_> = counts

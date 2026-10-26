@@ -4,15 +4,16 @@ use std::collections::BTreeMap;
 
 use api_types::reports::{
   DirectionSummaries, SummaryQuery, SummaryReport, TransferOutcome, TransferSummary,
-  UserDirectionReport, UserReport, UserReportQuery, UserTransferStatistics,
+  UserDirectionReport, UserReport, UserTransferStatistics,
 };
 use api_types::transfers::TransferDirection;
 use rusqlite::{Connection, params_from_iter};
 
 use super::failures::pareto_rows;
-use super::{Filter, Reports, SUMMARY, outcome, summary_at};
-use crate::db::{self, DbError};
+use super::{Filter, Reports, SUMMARY, Window, outcome, summary_at};
+use crate::db::DbError;
 use crate::transfers::categories::{COMPLETED, SUCCESSFUL};
+use crate::transfers::direction_at;
 
 /// How many error messages a user report lists.
 const USER_EXCEPTIONS: u32 = 25;
@@ -20,15 +21,17 @@ const USER_EXCEPTIONS: u32 = 25;
 impl Reports {
   /// Finished transfers in the window by direction and outcome, with how many distinct users
   /// we transferred with successfully.
-  pub async fn summary(&self, query: SummaryQuery) -> Result<SummaryReport, DbError> {
-    let start = query.start.unwrap_or_else(db::earliest);
-    let end = query.end.unwrap_or_else(db::latest);
+  pub async fn summary(
+    &self,
+    window: Window,
+    query: SummaryQuery,
+  ) -> Result<SummaryReport, DbError> {
     self
       .db
       .read(move |conn| {
         let filter = || {
           Filter::default()
-            .ended_between(start, end)
+            .ended_between(window)
             .direction(query.direction)
             .username(query.username.as_deref())
         };
@@ -52,9 +55,7 @@ impl Reports {
 
   /// One user's finished transfers in the window, each direction with its outcomes, their
   /// counts and the most frequent error messages.
-  pub async fn user(&self, username: &str, query: UserReportQuery) -> Result<UserReport, DbError> {
-    let start = query.start.unwrap_or_else(db::earliest);
-    let end = query.end.unwrap_or_else(db::latest);
+  pub async fn user(&self, username: &str, window: Window) -> Result<UserReport, DbError> {
     let username = username.to_string();
     self
       .db
@@ -62,7 +63,7 @@ impl Reports {
         let direction = |direction| -> rusqlite::Result<UserDirectionReport> {
           let filter = || {
             Filter::default()
-              .ended_between(start, end)
+              .ended_between(window)
               .direction(Some(direction))
               .username(Some(&username))
           };
@@ -96,7 +97,7 @@ fn by_outcome(conn: &Connection, filter: Filter) -> rusqlite::Result<DirectionSu
   let mut statement = conn.prepare(&sql)?;
   let rows = statement.query_map(params_from_iter(&filter.values), |row| {
     Ok((
-      row.get::<_, String>(0)?,
+      direction_at(row, 0)?,
       row.get::<_, u32>(1)?,
       summary_at(row, 2)?,
     ))
@@ -104,10 +105,9 @@ fn by_outcome(conn: &Connection, filter: Filter) -> rusqlite::Result<DirectionSu
   let mut summaries = DirectionSummaries::default();
   for row in rows {
     let (direction, state, summary) = row?;
-    let into = match direction.as_str() {
-      "Download" => &mut summaries.download,
-      "Upload" => &mut summaries.upload,
-      _ => continue,
+    let into = match direction {
+      TransferDirection::Download => &mut summaries.download,
+      TransferDirection::Upload => &mut summaries.upload,
     };
     into.insert(outcome(state), summary);
   }
@@ -136,18 +136,19 @@ fn statistics(summary: &BTreeMap<TransferOutcome, TransferSummary>) -> UserTrans
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::telemetry::reports::tests::{at, fixture_reports};
+  use crate::telemetry::reports::tests::{all, at, fixture_reports};
 
   #[tokio::test]
   async fn the_summary_counts_finished_transfers_by_outcome_within_both_ends() {
     let reports = fixture_reports().await;
     let report = reports
-      .summary(SummaryQuery {
-        start: Some(at(10, 0)),
-        end: Some(at(12, 0)),
-        direction: None,
-        username: None,
-      })
+      .summary(
+        Window {
+          start: at(10, 0),
+          end: at(12, 0),
+        },
+        SummaryQuery::default(),
+      )
       .await
       .unwrap();
     let up = &report.directions.upload[&TransferOutcome::Succeeded];
@@ -167,12 +168,14 @@ mod tests {
     );
     assert_eq!(report.distinct_users, 2, "alice and bob succeeded");
     let only_dave = reports
-      .summary(SummaryQuery {
-        start: Some(at(0, 0)),
-        end: Some(at(23, 0)),
-        direction: Some(TransferDirection::Download),
-        username: Some("dave".into()),
-      })
+      .summary(
+        all(),
+        SummaryQuery {
+          direction: Some(TransferDirection::Download),
+          username: Some("dave".into()),
+          ..SummaryQuery::default()
+        },
+      )
       .await
       .unwrap();
     assert!(only_dave.directions.upload.is_empty());
@@ -182,16 +185,7 @@ mod tests {
   #[tokio::test]
   async fn a_user_report_counts_outcomes_and_lists_the_errors() {
     let reports = fixture_reports().await;
-    let report = reports
-      .user(
-        "dave",
-        UserReportQuery {
-          start: Some(at(0, 0)),
-          end: Some(at(23, 0)),
-        },
-      )
-      .await
-      .unwrap();
+    let report = reports.user("dave", all()).await.unwrap();
     assert_eq!(
       report.download.statistics,
       UserTransferStatistics {
