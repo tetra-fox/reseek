@@ -47,6 +47,7 @@ use crate::files::Files;
 use crate::live::Live;
 use crate::network::Network;
 use crate::paths::Paths;
+use crate::searches::Searches;
 use crate::telemetry::Telemetry;
 use crate::turns::{Turn, Turns};
 use crate::users::Directory;
@@ -80,6 +81,7 @@ pub struct Downloads {
   network: Arc<Network>,
   users: Arc<Directory>,
   files: Arc<Files>,
+  searches: Arc<Searches>,
   events: EventBus,
   live: Live,
   telemetry: Arc<Telemetry>,
@@ -106,7 +108,8 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 impl Downloads {
   /// The engine over `transfers.db`, reaching peers through `network`, asking `users` who is
-  /// blocked, marking the files it writes in `files`, raising its events on `events`, pushing
+  /// blocked, marking the files it writes in `files`, reading what a batch searched for from
+  /// `searches`, raising its events on `events`, pushing
   /// its records to `live` and counting the downloads that end in `telemetry`. Its tasks end
   /// when `shutdown` is cancelled.
   #[allow(
@@ -119,6 +122,7 @@ impl Downloads {
     network: Arc<Network>,
     users: Arc<Directory>,
     files: Arc<Files>,
+    searches: Arc<Searches>,
     events: EventBus,
     live: Live,
     telemetry: Arc<Telemetry>,
@@ -132,6 +136,7 @@ impl Downloads {
       network,
       users,
       files,
+      searches,
       events,
       live,
       telemetry,

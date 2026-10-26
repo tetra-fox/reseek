@@ -213,6 +213,7 @@ impl AppState {
       network.clone(),
       users.clone(),
       files.clone(),
+      searches.clone(),
       events.clone(),
       live.clone(),
       telemetry.clone(),

@@ -25,12 +25,6 @@ use crate::transfers::categories::UNFINISHED;
 use crate::transfers::listing::remote_directory;
 use crate::transfers::{Record, direction_text};
 
-/// The search a batch was made from, by its id, which the searches engine keeps; none is
-/// found until it keeps them.
-fn search_of(_id: uuid::Uuid) -> Option<SearchFound> {
-  None
-}
-
 impl Downloads {
   /// Moves the arrived file of `record` from `incomplete` to its destination and raises the
   /// events that follow.
@@ -96,7 +90,10 @@ impl Downloads {
         .map_err(|e| format!("the batch was not read: {e}"))?,
       None => None,
     };
-    let search = batch.as_ref().and_then(|b| b.search_id).and_then(search_of);
+    let search = match batch.as_ref().and_then(|b| b.search_id) {
+      Some(id) => self.search_of(id).await,
+      None => None,
+    };
     let source = Source {
       username: &record.username,
       filename: &record.filename,
@@ -119,6 +116,18 @@ impl Downloads {
       warn!(directory = %directory.display(), "destination path too long; the file goes under the peer's directory");
     }
     Ok(directory)
+  }
+
+  /// The search a batch was made from, when it is still kept; a search deleted since, or one
+  /// that could not be read, is none.
+  async fn search_of(&self, id: uuid::Uuid) -> Option<SearchFound> {
+    match self.searches.text_of(id).await {
+      Ok(text) => text.map(|text| SearchFound { id, text }),
+      Err(e) => {
+        warn!(search = %id, error = %e, "the batch's search not read");
+        None
+      }
+    }
   }
 
   /// Keeps the download of `record` succeeded with `reason` as its error, since every byte
