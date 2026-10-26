@@ -36,6 +36,7 @@ bytesize.workspace = true
 chrono.workspace = true
 crc32fast = "1"
 directories = "6"
+flate2.workspace = true
 form_urlencoded = "1"
 futures-util.workspace = true
 hmac = "0.12"

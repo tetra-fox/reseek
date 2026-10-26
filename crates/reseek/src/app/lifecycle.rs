@@ -2,11 +2,12 @@
 //!
 //! Starting: the client's events and the options are followed, the transfers the last run left
 //! unfinished are ended and the downloads among them marked to resume after the login, the
-//! release feed is read, the shares are initialized, the clock starts, and then the watchdog
-//! connects, unless this is a relay agent, connecting is turned off or there are no
-//! credentials. Stopping, once the HTTP host has stopped: the watchdog stops, the client
-//! disconnects and is disposed, the events this raised are handled, the transfer tasks end,
-//! and the transfers still unfinished are ended as shut down.
+//! searches it left running are ended, the release feed is read, the shares are initialized,
+//! the clock starts, and then the watchdog connects, unless this is a relay agent, connecting
+//! is turned off or there are no credentials. Stopping, once the HTTP host has stopped: the
+//! watchdog stops, the client disconnects and is disposed, the events this raised are
+//! handled, the searches and the transfer tasks end, and the transfers still unfinished are
+//! ended as shut down.
 
 use tracing::{Instrument, debug, info, info_span, warn};
 
@@ -30,6 +31,7 @@ async fn run(app: AppState) {
   if let Err(e) = cleanup::end_unfinished(&app.transfers).await {
     warn!(error = %e, "transfers left unfinished at the last stop not ended");
   }
+  app.searches.end_dangling().await;
   let options = app.config.current().values.clone();
   let soulseek = &options.soulseek;
   info!(
@@ -73,6 +75,13 @@ async fn run(app: AppState) {
         prune::prune(&app.transfers, &app.live, &retention).await;
       }
     });
+  let searches = app.searches.clone();
+  app
+    .clock
+    .every(Every::FiveMinutes, "prune searches", move |_| {
+      let searches = searches.clone();
+      async move { searches.prune().await }
+    });
   app.clock.start();
 
   let relay = &options.relay;
@@ -115,6 +124,7 @@ async fn check_versions(app: AppState) {
 pub(super) async fn stop(app: &AppState) {
   info!("Application is shutting down");
   app.network.stop().await;
+  app.searches.stop().await;
   app.downloads.stop().await;
   app.uploads.stop().await;
   match cleanup::end_unfinished(&app.transfers).await {

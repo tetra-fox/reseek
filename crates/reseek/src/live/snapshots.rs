@@ -7,6 +7,7 @@ use api_types::options::OptionsDocument;
 use super::Topic;
 use crate::app::AppState;
 use crate::config::redact;
+use tracing::warn;
 
 /// The snapshot frames of `topic`, in the order they are sent.
 pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
@@ -18,9 +19,16 @@ pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
       LiveFrame::ApplicationOptions(OptionsDocument(redact::values(&app.config.current()))),
     ],
     Topic::Logs => vec![LiveFrame::LogsBuffer(app.logs.snapshot())],
-    // searches, conversations, rooms and transfer figures are kept by services that send
-    // their snapshot here once they exist; until then these topics have none
-    Topic::Search | Topic::Conversations | Topic::Rooms | Topic::Metrics => Vec::new(),
+    Topic::Search => match app.searches.snapshot().await {
+      Ok(searches) => vec![LiveFrame::SearchList(searches)],
+      Err(e) => {
+        warn!(error = %e, "searches not read for a stream's snapshot");
+        Vec::new()
+      }
+    },
+    // conversations, rooms and transfer figures are kept by services that send their
+    // snapshot here once they exist; until then these topics have none
+    Topic::Conversations | Topic::Rooms | Topic::Metrics => Vec::new(),
     // clients fetch these lists themselves
     Topic::SearchResponses(_) | Topic::Transfers | Topic::Users | Topic::Events => Vec::new(),
   }

@@ -35,6 +35,7 @@ use crate::live::Live;
 use crate::logging::{self, LogBuffer, Logging, Sinks};
 use crate::network::Network;
 use crate::paths::{Defaults, InstanceLock, Paths};
+use crate::searches::Searches;
 use crate::services::Services;
 use crate::shares::Shares;
 use crate::state::StateOwner;
@@ -114,6 +115,8 @@ pub struct AppState {
   pub shares: Arc<Shares>,
   /// the Soulseek client and what keeps it connected
   pub network: Arc<Network>,
+  /// the searches we start
+  pub searches: Arc<Searches>,
   /// the download engine
   pub downloads: Arc<Downloads>,
   /// the upload engine
@@ -197,6 +200,9 @@ impl AppState {
       shutdown.clone(),
     )
     .map_err(StartError::Config)?;
+    let searches = Searches::open(&location, network.clone(), live.clone(), config.clone())
+      .await
+      .map_err(|e| StartError::Open(format!("search.db: {e}")))?;
     let releases = Arc::new(
       Releases::new(RELEASE_FEED)
         .map_err(|e| StartError::Open(format!("release feed HTTP client: {e}")))?,
@@ -235,6 +241,7 @@ impl AppState {
     services.events = event_log;
     services.files = files.clone();
     services.reports = telemetry.clone();
+    services.searches = searches.clone();
     services.users = users.clone();
     services.blocking = users.clone();
     let databases = Arc::new(Databases::new(vec![
@@ -243,6 +250,7 @@ impl AppState {
       transfers.clone(),
       users.database().clone(),
       shares.database(),
+      searches.database().clone(),
     ]));
     services.application = Arc::new(Application {
       network: network.clone(),
@@ -270,6 +278,7 @@ impl AppState {
       files,
       shares,
       network,
+      searches,
       downloads,
       uploads,
       clock,

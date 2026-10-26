@@ -20,6 +20,7 @@ pub mod logging;
 pub mod network;
 pub mod paths;
 pub mod safety;
+pub mod searches;
 pub mod services;
 pub mod shares;
 pub mod state;

@@ -2880,6 +2880,7 @@ dependencies = [
  "chrono",
  "crc32fast",
  "directories",
+ "flate2",
  "form_urlencoded",
  "futures-util",
  "hmac 0.12.1",

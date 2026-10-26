@@ -37,6 +37,7 @@ fn answered_here(operation: &Operation) -> bool {
     || under("/api/v0/telemetry")
     || under("/api/v0/transfers")
     || route == "/api/v0/debug/transfers"
+    || under("/api/v0/searches")
     || DIRECTORY.contains(&route)
 }
 
@@ -215,13 +216,13 @@ async fn requests_are_checked_before_any_service_is_asked() {
       "GET",
       "/api/v0/searches/{00000000-0000-4000-8000-000000000001}".into(),
       None,
-      503,
+      404,
     ),
     (
       "GET",
       "/api/v0/searches/0000000000004000800000000000000a".into(),
       None,
-      503,
+      404,
     ),
     ("GET", "/api/v0/searches?limit=0".into(), None, 400),
     (
@@ -240,7 +241,7 @@ async fn requests_are_checked_before_any_service_is_asked() {
       "POST",
       "/api/v0/searches".into(),
       Some(json!({ "searchText": "animals", "searchTimeout": "20s" })),
-      503,
+      409,
     ),
     (
       "POST",
