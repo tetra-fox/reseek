@@ -8,7 +8,6 @@ pub mod flow;
 pub mod logout;
 
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -22,8 +21,6 @@ use openidconnect::{
   EndpointNotSet, EndpointSet, IdToken, IdTokenFields, IssuerUrl, JsonWebKeySet,
   ProviderMetadataWithLogout, RedirectUrl, StandardErrorResponse, StandardTokenResponse,
 };
-use rustls::pki_types::CertificateDer;
-use rustls::pki_types::pem::PemObject;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 use tracing::{Instrument, debug, error, info, info_span, warn};
@@ -93,9 +90,6 @@ const RETRY: Duration = Duration::from_secs(60);
 /// How far a provider's clock may be from ours when its tokens' times are checked.
 pub const LEEWAY: chrono::Duration = chrono::Duration::minutes(5);
 
-/// How long a call to a provider may take.
-const TIMEOUT: Duration = Duration::from_secs(10);
-
 /// The providers in use, each kept while its configuration stays the same.
 #[derive(Default)]
 pub struct Providers {
@@ -142,7 +136,7 @@ impl Provider {
   fn new(name: &str, options: Oidc) -> Result<Self, String> {
     Ok(Self {
       name: name.to_string(),
-      http: http_client(options.ca_certificate.as_deref())?,
+      http: crate::http::outbound::client(options.ca_certificate.as_deref())?,
       options,
       discovery: tokio::sync::Mutex::new(Discovery::default()),
     })
@@ -248,37 +242,6 @@ impl Provider {
   pub fn http(&self) -> &openidconnect::reqwest::Client {
     &self.http
   }
-}
-
-/// An HTTP client that trusts the usual certificate authorities and the one in `ca`, does not
-/// follow redirects, and gives up after [`TIMEOUT`].
-fn http_client(ca: Option<&Path>) -> Result<openidconnect::reqwest::Client, String> {
-  let mut roots = rustls::RootCertStore {
-    roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-  };
-  if let Some(path) = ca {
-    let certificates = CertificateDer::pem_file_iter(path)
-      .and_then(|certificates| certificates.collect::<Result<Vec<_>, _>>())
-      .map_err(|e| format!("{}: {e}", path.display()))?;
-    for certificate in certificates {
-      roots
-        .add(certificate)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
-    }
-  }
-  let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
-    rustls::crypto::aws_lc_rs::default_provider(),
-  ))
-  .with_safe_default_protocol_versions()
-  .map_err(|e| e.to_string())?
-  .with_root_certificates(roots)
-  .with_no_client_auth();
-  openidconnect::reqwest::Client::builder()
-    .use_preconfigured_tls(tls)
-    .redirect(openidconnect::reqwest::redirect::Policy::none())
-    .timeout(TIMEOUT)
-    .build()
-    .map_err(|e| e.to_string())
 }
 
 /// The public base URL of the daemon: `web.external_url` when set, else the scheme and host

@@ -1,6 +1,7 @@
 //! The HTTP host: the listeners, serving connections on them, and the request pipeline.
 
 mod listen;
+pub mod outbound;
 pub mod pipeline;
 mod tls;
 
