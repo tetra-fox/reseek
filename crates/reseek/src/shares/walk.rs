@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
+use soulseek_client::LogLimiter;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
@@ -17,6 +18,9 @@ use super::repository::{self, DirectoryRows, FileRow, Known};
 use super::scanner::{ScanError, Settings};
 use super::share::{self, CASE_SENSITIVE, Share};
 use crate::db::Database;
+
+/// Directories the walk can not read, which a large share can hold many of.
+static UNREADABLE: LogLimiter = LogLimiter::new();
 
 /// Whether a directory entry is hidden or the system's own, by its attributes.
 #[cfg(windows)]
@@ -106,7 +110,15 @@ pub(super) fn directories_under(
       break;
     }
     // a directory that can not be read is left out, with everything under it
-    let Ok(entry) = entry else { continue };
+    let entry = match entry {
+      Ok(entry) => entry,
+      Err(e) => {
+        if let Some(suppressed) = UNREADABLE.allow() {
+          warn!(error = %e, suppressed, "a shared directory can not be read; it is left out");
+        }
+        continue;
+      }
+    };
     if entry.depth() > 0 && seen.insert(key(entry.path())) {
       found.push(entry.into_path());
     }

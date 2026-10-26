@@ -20,14 +20,18 @@ pub const TEXT: &str = "text/plain; version=0.0.4; charset=utf-8";
 /// What a refused request is told to answer with.
 const CHALLENGE: &str = "Basic realm=\"metrics\"";
 
+/// The route `metrics.url` names: the url with a leading `/` added when it has none.
+pub fn path(url: &str) -> String {
+  if url.starts_with('/') {
+    url.to_string()
+  } else {
+    format!("/{url}")
+  }
+}
+
 /// The endpoint's route at `metrics.url`, with a leading `/` added when it has none.
 pub fn routes(app: &AppState) -> Router {
-  let options = &app.startup.values.metrics;
-  let path = if options.url.starts_with('/') {
-    options.url.clone()
-  } else {
-    format!("/{}", options.url)
-  };
+  let path = path(&app.startup.values.metrics.url);
   info!(url = path, "Publishing Prometheus metrics");
   let app = app.clone();
   Router::new().route(
@@ -145,5 +149,12 @@ mod tests {
     );
     let off = app("", &[]).await;
     assert_eq!(off.send(request("GET", "/metrics", None)).await.status, 404);
+    let moved = app("[metrics]\nurl = \"stats\"\n", &[]).await.with_page();
+    assert_eq!(
+      moved.send(request("GET", "/stats", None)).await.status,
+      404,
+      "the configured path is no UI page while the endpoint is off"
+    );
+    assert_eq!(moved.send(request("GET", "/other", None)).await.status, 200);
   }
 }

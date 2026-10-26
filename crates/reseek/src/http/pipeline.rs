@@ -260,7 +260,8 @@ async fn health() -> &'static str {
 async fn fallback(app: &AppState, ui: &Ui, request: Request) -> Response {
   let path = request.uri().path();
   let under = |prefix: &str| path == prefix || path.starts_with(&format!("{prefix}/"));
-  if under("/api") || under("/metrics") || under("/swagger") {
+  let metrics = telemetry::exposition::path(&app.startup.values.metrics.url);
+  if under("/api") || under(&metrics) || under("/swagger") {
     return StatusCode::NOT_FOUND.into_response();
   }
   let page = ui.is_page(request.method(), path);

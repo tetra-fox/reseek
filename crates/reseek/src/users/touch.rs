@@ -12,7 +12,7 @@ use rusqlite::{Connection, params};
 use soulseek_client::LogLimiter;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::debug;
+use tracing::warn;
 
 use super::store::{ensure, presence_text};
 use crate::db::timestamp;
@@ -94,7 +94,7 @@ impl Toucher {
         Ok(()) => true,
         Err(mpsc::error::TrySendError::Full(_)) => {
           if let Some(suppressed) = DROPPED.allow() {
-            debug!(suppressed, "user touch dropped; the writer is behind");
+            warn!(suppressed, "user touch dropped; the writer is behind");
           }
           false
         }

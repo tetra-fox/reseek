@@ -219,14 +219,9 @@ async fn get_databases(
 )]
 async fn vacuum_database(
   State(app): State<AppState>,
-  admin: Authorized<Administrator>,
+  _admin: Authorized<Administrator>,
   Path(name): Path<String>,
 ) -> Result<StatusCode, ApiError> {
-  info!(
-    by = admin.principal.subject,
-    database = name,
-    "vacuum asked for"
-  );
   app.services.application.vacuum(&name).await?;
   Ok(StatusCode::NO_CONTENT)
 }
