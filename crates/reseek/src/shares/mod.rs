@@ -45,6 +45,9 @@ use share::Share;
 /// Failed share queries, which arrive at the network's search rate.
 static QUERY_FAILED: LogLimiter = LogLimiter::new();
 
+/// Profile pictures not read, which a peer's every user info request would repeat.
+static PICTURE_UNREAD: LogLimiter = LogLimiter::new();
+
 /// How long a path must be quiet after a change before the change is applied.
 const QUIET: Duration = Duration::from_secs(2);
 
@@ -343,7 +346,9 @@ impl Shares {
       Some(path) => match tokio::fs::read(path).await {
         Ok(bytes) => Some(bytes),
         Err(e) => {
-          warn!(path = %path.display(), error = %e, "profile picture not read");
+          if let Some(suppressed) = PICTURE_UNREAD.allow() {
+            warn!(path = %path.display(), error = %e, suppressed, "profile picture not read");
+          }
           None
         }
       },
