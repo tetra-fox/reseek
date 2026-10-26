@@ -11,6 +11,7 @@ pub mod crypto;
 pub mod databases;
 pub mod db;
 pub mod events;
+pub mod files;
 pub mod http;
 pub mod live;
 pub mod logging;

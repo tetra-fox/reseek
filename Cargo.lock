@@ -2832,9 +2832,11 @@ dependencies = [
  "async-trait",
  "axum",
  "base64 0.22.1",
+ "bytes",
  "bytesize",
  "cascade",
  "chrono",
+ "crc32fast",
  "directories",
  "form_urlencoded",
  "futures-util",
@@ -2847,6 +2849,7 @@ dependencies = [
  "mime_guess",
  "openidconnect",
  "p12-keystore",
+ "percent-encoding",
  "rand 0.9.5",
  "rcgen",
  "regex",
@@ -2855,6 +2858,7 @@ dependencies = [
  "rsa",
  "rusqlite",
  "rust-embed",
+ "rustix",
  "rustls",
  "serde",
  "serde_html_form",
@@ -2882,6 +2886,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "webpki-roots",
+ "zip 6.0.0",
 ]
 
 [[package]]
@@ -4074,7 +4079,7 @@ dependencies = [
  "url",
  "utoipa",
  "utoipa-swagger-ui-vendored",
- "zip",
+ "zip 3.0.0",
 ]
 
 [[package]]
@@ -4636,6 +4641,18 @@ dependencies = [
  "indexmap 2.14.2",
  "memchr",
  "zopfli",
+]
+
+[[package]]
+name = "zip"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb2a05c7c36fde6c09b08576c9f7fb4cda705990f73b58fe011abf7dfb24168b"
+dependencies = [
+ "arbitrary",
+ "crc32fast",
+ "indexmap 2.14.2",
+ "memchr",
 ]
 
 [[package]]

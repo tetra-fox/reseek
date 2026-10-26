@@ -30,8 +30,10 @@ argon2 = { version = "0.5", default-features = false, features = ["alloc", "pass
 async-trait = "0.1"
 axum = { version = "0.8", features = ["multipart"] }
 base64 = "0.22"
+bytes = "1"
 bytesize.workspace = true
 chrono.workspace = true
+crc32fast = "1"
 directories = "6"
 form_urlencoded = "1"
 futures-util.workspace = true
@@ -44,6 +46,7 @@ hyper-util = { version = "0.1", features = ["server-auto", "server-graceful", "s
 mime_guess = "2"
 openidconnect = { version = "4", default-features = false, features = ["reqwest"] }
 p12-keystore = "0.4"
+percent-encoding = "2"
 rand = "0.9"
 rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs", "pem"] }
 regex = "1"
@@ -77,11 +80,17 @@ utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid.workspace = true
 webpki-roots.workspace = true
 
+# deletes relative to an opened directory, never through a link
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", features = ["fs"] }
+
 [dev-dependencies]
 api-client.workspace = true
 # turns a generated key into the PKCS#1 form the test identity provider signs with
 rsa = "0.9"
 tempfile.workspace = true
+# reads back the archives the files service writes
+zip = { version = "6", default-features = false }
 tokio = { workspace = true, features = ["test-util"] }
 
 [lints]

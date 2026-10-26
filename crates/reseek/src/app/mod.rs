@@ -26,6 +26,7 @@ use crate::config::{Options, redact};
 use crate::databases::Databases;
 use crate::db::Database;
 use crate::events::{EventBus, EventLog};
+use crate::files::Files;
 use crate::http::{self, pipeline};
 use crate::live::Live;
 use crate::logging::{self, LogBuffer, Logging, Sinks};
@@ -98,6 +99,8 @@ pub struct AppState {
   pub databases: Arc<Databases>,
   /// the users directory, which the network engines touch and ask who is blocked
   pub users: Arc<Directory>,
+  /// the files under the download and log directories, and which of them downloads write
+  pub files: Arc<Files>,
   /// the engine of every domain
   pub services: Services,
   /// set when the daemon is to start again once it has stopped
@@ -138,6 +141,8 @@ impl AppState {
     let transfers = crate::transfers::open(&location)
       .await
       .map_err(|e| StartError::Open(format!("transfers.db: {e}")))?;
+    let auth = Arc::new(auth);
+    let files = Files::start(config.clone(), &paths, auth.clone(), shutdown.clone());
     let event_log = EventLog::open(&location, &events, config.clone(), shutdown.clone())
       .await
       .map_err(|e| StartError::Open(format!("events.db: {e}")))?;
@@ -155,6 +160,7 @@ impl AppState {
     let telemetry = Telemetry::new(transfers.clone(), shutdown.clone());
     let mut services = Services::unavailable();
     services.events = event_log;
+    services.files = files.clone();
     services.reports = telemetry.clone();
     services.users = users.clone();
     services.blocking = users.clone();
@@ -171,7 +177,7 @@ impl AppState {
       primary_key,
       logs,
       url_base,
-      auth: Arc::new(auth),
+      auth,
       events,
       live,
       state,
@@ -181,6 +187,7 @@ impl AppState {
       telemetry,
       databases,
       users,
+      files,
       services,
       restart: Arc::new(AtomicBool::new(false)),
     })

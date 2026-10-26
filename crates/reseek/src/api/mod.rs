@@ -20,7 +20,7 @@ mod telemetry;
 mod tokens;
 mod transfers;
 mod users;
-mod validate;
+pub(crate) mod validate;
 
 use axum::Router;
 use axum::middleware;
