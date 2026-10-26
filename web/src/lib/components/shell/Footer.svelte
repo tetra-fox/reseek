@@ -44,6 +44,7 @@
     target="_blank"
     rel="noreferrer"
     class="ml-auto flex shrink-0 items-center gap-1.5 text-fg-muted hover:text-fg">
+    <img src="./favicon.svg" width="18" height="18" alt="" />
     <span class="font-medium">reseek</span>
     <span class="font-mono opacity-70">{app.state?.version.current ?? ""}</span>
     <span class="font-mono opacity-50">AGPL-3.0</span>
