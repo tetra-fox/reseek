@@ -1,6 +1,8 @@
 //! Blocking users: the list of who is blocked and by what rule, blocking and unblocking one
 //! user, and importing and exporting the list.
 
+use std::time::Duration;
+
 use api_types::blocking::{Block, BlockImportResult, BlockRequest, BlockedQuery, BlockedUsers};
 use api_types::chat::{ExportFormat, ExportQuery};
 use api_types::users::UsernameQuery;
@@ -70,19 +72,19 @@ async fn block(
   NamedUser(username): NamedUser,
   Json(request): Json<BlockRequest>,
 ) -> Result<Json<Block>, ApiError> {
-  block_request(&request)?;
+  let expires_in = block_request(&request)?;
   let block = app
     .services
     .blocking
-    .block(&caller.principal, &username, request)
+    .block(&caller.principal, &username, request, expires_in)
     .await?;
   info!(by = caller.principal.subject, username, "user blocked");
   Ok(Json(block))
 }
 
 /// Refuses a reason over 500 characters, both `expiresIn` and `expiresAt`, and an `expiresIn`
-/// that is no duration.
-fn block_request(request: &BlockRequest) -> Result<(), ApiError> {
+/// that is no duration; the duration `expiresIn` gives otherwise.
+fn block_request(request: &BlockRequest) -> Result<Option<Duration>, ApiError> {
   if request.reason.chars().count() > REASON_CHARS {
     return Err(ApiError::bad_request(
       "reason must be at most 500 characters",
@@ -93,10 +95,11 @@ fn block_request(request: &BlockRequest) -> Result<(), ApiError> {
       "give expiresIn or expiresAt, not both",
     ));
   }
-  if let Some(text) = &request.expires_in {
-    validate::duration("expiresIn", text)?;
-  }
-  Ok(())
+  request
+    .expires_in
+    .as_deref()
+    .map(|text| validate::duration("expiresIn", text))
+    .transpose()
 }
 
 /// Removes a user's block.

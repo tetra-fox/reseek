@@ -282,15 +282,15 @@ impl BlockingService for Directory {
     by: &Principal,
     username: &str,
     request: BlockRequest,
+    expires_in: Option<std::time::Duration>,
   ) -> Result<Block, ApiError> {
     if self.is_us(username) {
       return Err(ApiError::conflict("we can not block ourselves", None));
     }
     let now = Utc::now();
-    let expires_at = match (&request.expires_in, request.expires_at) {
-      (Some(text), _) => {
-        let length = humantime::parse_duration(text.trim())
-          .map_err(|e| ApiError::invalid("expiresIn is not a duration", e.to_string()))?;
+    let expires_at = match (expires_in, request.expires_at) {
+      (Some(length), _) => {
+        // a length too long for chrono ends at the last time stored, as `shifted` bounds it
         let length = chrono::Duration::from_std(length).unwrap_or(chrono::Duration::MAX);
         Some(shifted(now, length))
       }

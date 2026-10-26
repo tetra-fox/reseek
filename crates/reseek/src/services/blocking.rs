@@ -29,13 +29,14 @@ pub trait BlockingService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// Blocks a user, or replaces their block, as `by`. `request` has passed the API's checks.
-  /// Blocking ourselves is a conflict.
+  /// Blocks a user, or replaces their block, as `by`. `request` has passed the API's checks,
+  /// and its `expiresIn` is read as `expires_in`. Blocking ourselves is a conflict.
   async fn block(
     &self,
     by: &Principal,
     username: &str,
     request: BlockRequest,
+    expires_in: Option<std::time::Duration>,
   ) -> Result<Block, ApiError> {
     Err(not_yet(DOMAIN))
   }
