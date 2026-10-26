@@ -97,7 +97,13 @@ pub fn files_path(encoded: &str, deleting: bool) -> Result<String, ApiError> {
   if deleting {
     path = path.trim_start_matches('/').to_string();
   }
-  if safety::is_absolute(&path, Os::Unix) || safety::is_absolute(&path, Os::Windows) {
+  // a segment such as `C:x` is relative to a drive, not to the root it is joined to
+  if safety::is_absolute(&path, Os::Unix)
+    || safety::is_absolute(&path, Os::Windows)
+    || path
+      .split('/')
+      .any(|segment| safety::drive_relative(segment, Os::CURRENT))
+  {
     return Err(ApiError::bad_request(
       "Only relative paths may be specified",
     ));
@@ -156,6 +162,11 @@ mod tests {
         "{bad:?}"
       );
     }
+    #[cfg(windows)]
+    assert_eq!(
+      files_path(&encode("a/C:x"), false).unwrap_err().status(),
+      400
+    );
     assert_eq!(files_path("!!!", false).unwrap_err().status(), 400);
     assert_eq!(
       files_path("/w==", false).unwrap_err().status(),

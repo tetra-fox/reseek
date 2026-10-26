@@ -24,7 +24,7 @@ pub(super) struct Located {
 pub(super) enum Refused {
   /// the root directory itself does not exist
   RootMissing,
-  /// the path leads out of its root, through a link or by naming a drive
+  /// the path leads out of its root through a link
   Outside,
   /// the system denied reading on the way
   Denied(io::Error),
@@ -44,7 +44,8 @@ impl Located {
   }
 }
 
-/// `relative`, a `/`-separated path without `.` or `..` segments, found under `root`.
+/// `relative`, a `/`-separated path without `.`, `..` or drive-relative segments, found under
+/// `root`.
 pub(super) fn locate(root: &Path, relative: &str) -> Result<Located, Refused> {
   let root_resolved = std::fs::canonicalize(root).map_err(|e| match e.kind() {
     io::ErrorKind::NotFound => Refused::RootMissing,
@@ -53,9 +54,6 @@ pub(super) fn locate(root: &Path, relative: &str) -> Result<Located, Refused> {
   })?;
   let mut path = root.to_path_buf();
   for segment in relative.split('/').filter(|s| !s.is_empty()) {
-    if crate::safety::drive_relative(segment, crate::safety::Os::CURRENT) {
-      return Err(Refused::Outside);
-    }
     path.push(segment);
   }
   let (resolved, exists) = match std::fs::canonicalize(&path) {
