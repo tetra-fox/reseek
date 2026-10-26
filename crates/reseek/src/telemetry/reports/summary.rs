@@ -10,7 +10,8 @@ use api_types::transfers::TransferDirection;
 use rusqlite::{Connection, params_from_iter};
 
 use super::failures::pareto_rows;
-use super::{Filter, Reports, SUCCEEDED, SUMMARY, TERMINAL, outcome, summary_at};
+use super::{Filter, Reports, SUMMARY, outcome, summary_at};
+use crate::transfers::categories::{COMPLETED, SUCCESSFUL};
 use crate::db::{self, DbError};
 
 /// How many error messages a user report lists.
@@ -31,8 +32,8 @@ impl Reports {
             .direction(query.direction)
             .username(query.username.as_deref())
         };
-        let directions = by_outcome(conn, filter().states(TERMINAL))?;
-        let succeeded = filter().states(&SUCCEEDED.to_string());
+        let directions = by_outcome(conn, filter().states(COMPLETED))?;
+        let succeeded = filter().states(SUCCESSFUL);
         let distinct_users: i64 = conn.query_row(
           &format!(
             "SELECT COUNT(DISTINCT Username) FROM Transfers{}",
@@ -65,7 +66,7 @@ impl Reports {
               .direction(Some(direction))
               .username(Some(&username))
           };
-          let summaries = by_outcome(conn, filter().states(TERMINAL))?;
+          let summaries = by_outcome(conn, filter().states(COMPLETED))?;
           let summary = match direction {
             TransferDirection::Download => summaries.download,
             TransferDirection::Upload => summaries.upload,

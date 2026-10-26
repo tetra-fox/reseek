@@ -10,7 +10,8 @@ use api_types::transfers::{SortOrder, TransferDirection};
 use rusqlite::params_from_iter;
 use rusqlite::types::Value;
 
-use super::{Filter, Reports, SUCCEEDED, SUMMARY, summary_at};
+use super::{Filter, Reports, SUMMARY, summary_at};
+use crate::transfers::categories::SUCCESSFUL;
 use crate::db::{self, DbError};
 
 impl Reports {
@@ -26,7 +27,7 @@ impl Reports {
         query.end.unwrap_or_else(db::latest),
       )
       .direction(Some(query.direction))
-      .states(&SUCCEEDED.to_string());
+      .states(SUCCESSFUL);
     let column = match query.sort_by {
       LeaderboardSort::Count => "COUNT(*)",
       LeaderboardSort::TotalBytes => "SUM(Size)",
@@ -71,7 +72,7 @@ impl Reports {
         query.end.unwrap_or_else(db::latest),
       )
       .direction(Some(TransferDirection::Upload))
-      .states(&SUCCEEDED.to_string())
+      .states(SUCCESSFUL)
       .username(query.username.as_deref());
     let sql = format!(
       "SELECT Filename, Username FROM Transfers{}",

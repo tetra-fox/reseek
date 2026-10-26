@@ -20,15 +20,6 @@ use rusqlite::types::Value;
 use crate::db::{self, Database};
 use crate::transfers::direction_text;
 
-/// The state of a transfer that succeeded.
-const SUCCEEDED: u32 = 48;
-
-/// Every state a finished transfer can be in: `Completed` alone and with each outcome.
-const TERMINAL: &str = "16, 48, 80, 144, 272, 528, 1040";
-
-/// The states of a transfer that failed: cancelled, timed out, errored, rejected or aborted.
-const FAILED: &str = "80, 144, 272, 528, 1040";
-
 /// The aggregate columns a [`TransferSummary`] is read from, at the start of a row.
 const SUMMARY: &str = "COALESCE(SUM(Size), 0), COUNT(*), COUNT(DISTINCT Username), \
                        COALESCE(AVG(AverageSpeed), 0), \
@@ -100,9 +91,9 @@ impl Filter {
     self
   }
 
-  /// Transfers in one of the states of the list `states`.
-  fn states(mut self, states: &str) -> Self {
-    self.conditions.push(format!("State IN ({states})"));
+  /// Transfers in the state category whose condition is `category`.
+  fn states(mut self, category: &str) -> Self {
+    self.conditions.push(category.to_string());
     self
   }
 

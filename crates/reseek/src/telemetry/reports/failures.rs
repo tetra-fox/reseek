@@ -7,7 +7,8 @@ use api_types::transfers::{SortOrder, TransferDirection, TransferStates};
 use rusqlite::types::{Type, Value};
 use rusqlite::{Connection, params_from_iter};
 
-use super::{FAILED, Filter, Reports};
+use super::{Filter, Reports};
+use crate::transfers::categories::FAILED;
 use crate::db::{self, DbError};
 
 impl Reports {
@@ -74,7 +75,7 @@ pub(super) fn pareto_rows(
   offset: u32,
 ) -> rusqlite::Result<Vec<ExceptionCount>> {
   let mut conditions = filter.conditions.clone();
-  conditions.push(format!("State IN ({FAILED})"));
+  conditions.push(FAILED.to_string());
   let sql = format!(
     "SELECT Exception, COUNT(*) AS Occurrences, COUNT(DISTINCT Username) FROM Transfers \
      WHERE {} GROUP BY Exception ORDER BY Occurrences DESC, Exception ASC LIMIT ? OFFSET ?",

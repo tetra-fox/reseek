@@ -8,7 +8,8 @@ use api_types::reports::{DirectionSummaries, HistogramQuery, TransferSummary};
 use chrono::{DateTime, SecondsFormat, Utc};
 use rusqlite::{OptionalExtension, params_from_iter};
 
-use super::{Filter, Reports, TERMINAL, outcome};
+use super::{Filter, Reports, outcome};
+use crate::transfers::categories::COMPLETED;
 use crate::db::{self, DbError};
 
 /// The first release; a window that starts earlier starts at the oldest transfer instead.
@@ -80,7 +81,7 @@ impl Reports {
     }
     let filter = Filter::default()
       .ended_from(start, end)
-      .states(TERMINAL)
+      .states(COMPLETED)
       .direction(query.direction)
       .username(query.username.as_deref());
     let rows = self

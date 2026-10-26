@@ -1,22 +1,23 @@
-//! The state categories as SQL conditions on the `State` column of `Transfers`, so a query and
-//! the listings agree on what "queued" or "failed" means.
+//! The state categories as SQL conditions on the `State` column of `Transfers`, so the
+//! listings, the users directory and the reports agree on what "queued" or "failed" means.
 
 use api_types::transfers::TransferStateCategory;
 
-/// `Requested` and every `Queued` state.
-pub const QUEUED: &str = "(State = 1 OR (State & 2 != 0 AND State & 16 = 0))";
+/// `Requested`, bare `Queued`, `Queued, Locally` and `Queued, Remotely`.
+pub const QUEUED: &str = "(State IN (1, 2, 2050, 4098))";
 /// `Initializing` and `InProgress`.
 pub const IN_PROGRESS: &str = "(State IN (4, 8))";
-/// Every `Completed` state.
-pub const COMPLETED: &str = "(State & 16 != 0)";
+/// Every finished state: bare `Completed` and `Completed` with each outcome.
+pub const COMPLETED: &str = "(State IN (16, 48, 80, 144, 272, 528, 1040))";
 /// `Completed, Succeeded`.
 pub const SUCCESSFUL: &str = "(State = 48)";
-/// Every `Completed` state other than `Completed, Succeeded`.
-pub const FAILED: &str = "(State & 16 != 0 AND State != 48)";
+/// `Completed` with `Cancelled`, `TimedOut`, `Errored`, `Rejected` or `Aborted`; a bare
+/// `Completed` is finished but neither succeeded nor failed.
+pub const FAILED: &str = "(State IN (80, 144, 272, 528, 1040))";
 /// `Completed` with `TimedOut`, `Errored`, `Rejected` or `Aborted`.
-pub const ERRORED: &str = "(State & 16 != 0 AND State & 1920 != 0)";
+pub const ERRORED: &str = "(State IN (144, 272, 528, 1040))";
 /// `Completed, Cancelled`.
-pub const CANCELLED: &str = "(State & 16 != 0 AND State & 64 != 0)";
+pub const CANCELLED: &str = "(State = 80)";
 
 /// The condition a category stands for.
 pub fn condition(category: TransferStateCategory) -> &'static str {
@@ -61,7 +62,8 @@ mod tests {
       (272, &[C::Completed, C::Failed, C::Errored]),
       (528, &[C::Completed, C::Failed, C::Errored]),
       (1040, &[C::Completed, C::Failed, C::Errored]),
-      (16, &[C::Completed, C::Failed]),
+      (2, &[C::Queued]),
+      (16, &[C::Completed]),
     ];
     let all = [
       C::Queued,
