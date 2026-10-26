@@ -2,6 +2,7 @@
 //! as the API shows it.
 
 pub mod categories;
+pub mod cleanup;
 #[cfg(test)]
 pub mod fixtures;
 
