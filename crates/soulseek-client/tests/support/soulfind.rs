@@ -2,7 +2,8 @@
 //! server. The binary is `SOULFIND_BIN`, else `soulfind` on `PATH`; without one the suites skip
 //! with a line on stderr, unless `SOULFIND_REQUIRED=1` makes that a failure. The tests of a binary
 //! that run at the same time share one server on a free port with a temporary data directory;
-//! the last of them to let go stops it and removes the directory.
+//! the last of them to let go stops it and removes the directory. A test that stops and starts
+//! its server takes one of its own.
 
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
@@ -30,6 +31,7 @@ pub struct Soulfind {
   address: SocketAddr,
   child: Child,
   data: PathBuf,
+  binary: PathBuf,
 }
 
 /// The server the tests running now share, or `None` when there is no soulfind to run
@@ -42,6 +44,12 @@ pub fn server() -> Option<Arc<Soulfind>> {
   let server = Arc::new(Soulfind::start(&binary));
   *shared = Arc::downgrade(&server);
   Some(server)
+}
+
+/// A server of the calling test's own, which it can stop and start again, or `None` when there
+/// is no soulfind to run
+pub fn own() -> Option<Soulfind> {
+  Some(Soulfind::start(&binary()?))
 }
 
 fn binary() -> Option<PathBuf> {
@@ -70,20 +78,11 @@ impl Soulfind {
       let data = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("soulfind-{}-{port}", std::process::id()));
       std::fs::create_dir_all(&data).unwrap();
-      let child = Command::new(binary)
-        .arg("-p")
-        .arg(port.to_string())
-        .arg("-d")
-        .arg(data.join("soulfind.db"))
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap_or_else(|error| panic!("cannot run {}: {error}", binary.display()));
       let mut server = Self {
         address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
-        child,
+        child: spawn(binary, port, &data),
         data,
+        binary: binary.to_path_buf(),
       };
       if server.ready() {
         return server;
@@ -91,6 +90,27 @@ impl Soulfind {
       // dropping it removes the data directory of the failed attempt
     }
     panic!("soulfind did not start on any of {ATTEMPTS} ports");
+  }
+
+  /// Stops the server, closing every connection to it; its accounts stay for
+  /// [`Soulfind::start_again`].
+  pub fn stop(&mut self) {
+    // the server may have exited already; either way it is gone afterwards
+    let _ = self.child.kill();
+    let _ = self.child.wait();
+  }
+
+  /// Starts the stopped server again on its port with its accounts, trying for a while in case
+  /// the port is not free again yet.
+  pub fn start_again(&mut self) {
+    for _ in 0..ATTEMPTS * 10 {
+      self.child = spawn(&self.binary, self.address.port(), &self.data);
+      if self.ready() {
+        return;
+      }
+      std::thread::sleep(Duration::from_millis(200));
+    }
+    panic!("soulfind did not start again on {}", self.address);
   }
 
   /// Waits until the server accepts connections; false when it exited first, which is what it
@@ -160,6 +180,20 @@ impl Soulfind {
     .await
     .expect("soulfind answers the login")
   }
+}
+
+/// soulfind on `port` with its database in `data`
+fn spawn(binary: &Path, port: u16, data: &Path) -> Child {
+  Command::new(binary)
+    .arg("-p")
+    .arg(port.to_string())
+    .arg("-d")
+    .arg(data.join("soulfind.db"))
+    .stdin(Stdio::null())
+    .stdout(Stdio::null())
+    .stderr(Stdio::null())
+    .spawn()
+    .unwrap_or_else(|error| panic!("cannot run {}: {error}", binary.display()))
 }
 
 impl Drop for Soulfind {
