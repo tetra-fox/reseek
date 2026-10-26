@@ -241,6 +241,35 @@ pub struct File {
   pub attributes: Vec<FileAttribute>,
 }
 
+/// A file as a peer listed it, its named attributes read from the list, not locked and with no
+/// hint.
+impl From<soulseek_proto::peer::File> for File {
+  fn from(file: soulseek_proto::peer::File) -> Self {
+    let (bit_rate, length) = (file.bit_rate(), file.length());
+    let (is_variable_bit_rate, sample_rate, bit_depth) = (
+      file.is_variable_bit_rate(),
+      file.sample_rate(),
+      file.bit_depth(),
+    );
+    let attributes: Vec<FileAttribute> = file.attributes.into_iter().map(Into::into).collect();
+    Self {
+      code: file.code,
+      bit_rate,
+      length,
+      is_variable_bit_rate,
+      sample_rate,
+      bit_depth,
+      attribute_count: u32::try_from(attributes.len()).unwrap_or(u32::MAX),
+      filename: file.filename.as_str().to_string(),
+      size: file.size,
+      extension: file.extension,
+      is_locked: false,
+      suspect: None,
+      attributes,
+    }
+  }
+}
+
 /// A hint that a file's size is too small for its duration and declared format, such as a
 /// "320 kbps" MP3 whose size works out to 128 kbps. It is a reason to look twice, not a
 /// verdict.

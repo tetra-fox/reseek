@@ -138,6 +138,18 @@ pub struct Directory {
   pub files: Vec<File>,
 }
 
+/// A directory as a peer listed it.
+impl From<soulseek_proto::peer::Directory> for Directory {
+  fn from(directory: soulseek_proto::peer::Directory) -> Self {
+    let files: Vec<File> = directory.files.into_iter().map(File::from).collect();
+    Self {
+      name: directory.name.as_str().to_string(),
+      file_count: u32::try_from(files.len()).unwrap_or(u32::MAX),
+      files,
+    }
+  }
+}
+
 /// Asks a user for the contents of one directory, the body of
 /// `POST /users/{username}/directory`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
