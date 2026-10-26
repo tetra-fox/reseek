@@ -17,6 +17,7 @@ use super::{InFlight, Uploads, lock};
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::removal::{self, Removed};
 use crate::transfers::{Record, direction_text, store};
+use crate::users::Touch;
 
 /// Why a record of an upload the client already runs is not written.
 const DUPLICATE: &str =
@@ -139,6 +140,7 @@ impl Uploads {
       }
     };
     removal::push(&self.live, TransferDirection::Upload, &superseded);
+    self.users.touch(username, Touch::Transfer).await;
     self
       .live
       .publish(LiveFrame::TransfersAdded(Box::new(record.transfer())));

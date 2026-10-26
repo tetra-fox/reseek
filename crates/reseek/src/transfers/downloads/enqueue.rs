@@ -22,6 +22,7 @@ use crate::safety::traverses;
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::removal::{self, Removed};
 use crate::transfers::{Record, direction_text, store};
+use crate::users::Touch;
 
 /// Up to this many files, every one of a request asks its peer at once; more than this, five
 /// at a time, since some peers drop connections asked for dozens of files at once.
@@ -198,6 +199,9 @@ impl Downloads {
       }
     }
     removal::push(&self.live, TransferDirection::Download, &written.superseded);
+    if !written.inserted.is_empty() {
+      self.users.touch(username, Touch::Transfer).await;
+    }
     let gate = Arc::new(Semaphore::new(if files.len() <= ALL_AT_ONCE {
       files.len()
     } else {
