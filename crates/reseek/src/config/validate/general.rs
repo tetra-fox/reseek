@@ -256,6 +256,10 @@ fn check_retention(retention: &Retention, report: &mut Report) {
   ] {
     check_transfer_retention(direction, transfers, report);
   }
+  if let Some(purge) = retention.transfers.purge_removed_after {
+    let key = "retention.transfers.purge_removed_after";
+    report.check(key, duration_at_least(key, purge, 5 * MINUTE));
+  }
   for (key, value) in [
     ("retention.files.complete", retention.files.complete),
     ("retention.files.incomplete", retention.files.incomplete),

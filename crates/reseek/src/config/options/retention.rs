@@ -55,7 +55,7 @@ impl Default for Retention {
   }
 }
 
-/// Finished transfers, by direction.
+/// Finished transfers, by direction, and how long removed ones are kept.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct TransfersRetention {
@@ -63,6 +63,10 @@ pub struct TransfersRetention {
   pub upload: TransferRetention,
   /// Finished downloads.
   pub download: TransferRetention,
+  /// Transfers removed from the listings longer ago than this are deleted for good, at least
+  /// five minutes; removed transfers are kept for the history when not set.
+  #[serde(with = "humantime_serde")]
+  pub purge_removed_after: Option<Duration>,
 }
 
 /// Finished transfers older than these are removed, each at least five minutes.

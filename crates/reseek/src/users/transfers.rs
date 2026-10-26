@@ -165,8 +165,8 @@ pub async fn remove_all(transfers: &Database, username: &str) -> Result<usize, D
   transfers
     .write(move |conn| {
       conn.execute(
-        "UPDATE Transfers SET Removed = 1 WHERE Username = ?1 AND Removed = 0",
-        [username],
+        "UPDATE Transfers SET Removed = 1, RemovedAt = ?2 WHERE Username = ?1 AND Removed = 0",
+        rusqlite::params![username, crate::db::timestamp(chrono::Utc::now())],
       )
     })
     .await
