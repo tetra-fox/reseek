@@ -23,7 +23,7 @@ struct Candidate {
 
 impl Directory {
   /// The page `query` asks for.
-  pub(super) async fn list(&self, query: UserListQuery) -> Result<UserList, ApiError> {
+  pub(crate) async fn list(&self, query: UserListQuery) -> Result<UserList, ApiError> {
     let mut filter = vec!["1 = 1".to_string()];
     let mut values = vec![Value::Text(timestamp(Utc::now()))];
     if let Some(pinned) = query.pinned {

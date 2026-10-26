@@ -1,16 +1,21 @@
 //! What the daemon does with each client event: the server connection's state into
 //! `State.server` and `State.user`, starting and stopping the watchdog, what follows a login,
-//! the distributed network into `State.distributedNetwork` and its metrics, and the log lines
-//! of the rest. Events whose engine is another part of the daemon are handed on where that
+//! the distributed network into `State.distributedNetwork` and its metrics, the server's
+//! messages to everyone, the presence of watched users, and the log lines of the rest. Events
+//! about messages and rooms, the login and the disconnect go on to the messaging engine in the
+//! order they came; events whose engine is another part of the daemon are handed on where that
 //! engine takes them.
 
+use api_types::chat::ServerMessage;
 use api_types::events::{Event as BusEvent, EventError, NoFields, SoulseekClientDisconnected};
+use api_types::live::LiveFrame;
 use api_types::state::{DistributedNetworkState, ServerConnectionState, ServerState};
+use api_types::users::{UserPresence, UserStatus, UserStatusChanged};
+use chrono::Utc;
 use soulseek_client::{
-  BrowseProgress, ClientError, ClientState, DistributedNetworkInfo, Event, LogLimiter,
-  PrivateMessage, Transfer, TransferState,
+  ClientError, ClientState, DistributedNetworkInfo, Event, LogLimiter, PrivateMessage, Transfer,
+  TransferState,
 };
-use soulseek_proto::RoomType;
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, trace, warn};
@@ -66,10 +71,17 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
       server_state(app, state);
     }
     Event::Connected => connected(app).await,
-    Event::LoggedIn => logged_in(app),
+    Event::LoggedIn => {
+      logged_in(app);
+      app.messaging.take(Event::LoggedIn).await;
+    }
     Event::Disconnected { message, error } => {
       disconnected(app, &message, error.as_ref(), *reached);
       *reached = false;
+      app
+        .messaging
+        .take(Event::Disconnected { message, error })
+        .await;
     }
     Event::KickedFromServer => debug!("kicked from the server; the disconnect follows"),
     Event::DistributedNetworkStateChanged(info) => distributed_network(app, &info),
@@ -81,7 +93,7 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
       );
       app.network.exclude(phrases);
     }
-    Event::PrivateMessageReceived(message) => private_message(app, message),
+    Event::PrivateMessageReceived(message) => private_message(app, message).await,
     Event::TransferStateChanged {
       previous_state,
       transfer,
@@ -116,48 +128,24 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
       %filename,
       "Download was reported as failed by the remote user"
     ),
-    Event::RoomJoined {
-      room_name,
-      username,
-      ..
-    } => {
-      if app.network.client().username().as_deref() == Some(username.as_str()) {
-        app.state.update(|state| {
-          if !state.rooms.contains(&room_name) {
-            state.rooms.push(room_name);
-          }
-        });
-      }
-    }
-    Event::RoomLeft {
-      room_name,
-      username,
-    } => {
-      if app.network.client().username().as_deref() == Some(username.as_str()) {
-        app
-          .state
-          .update(|state| state.rooms.retain(|room| *room != room_name));
-      }
-    }
-    Event::PrivateRoomMembershipAdded(room) => info!(room, "Added to private room"),
-    Event::PrivateRoomMembershipRemoved(room) => info!(room, "Removed from private room"),
-    Event::PrivateRoomModerationAdded(room) => {
-      info!(room, "Promoted to moderator in private room");
-    }
-    Event::PrivateRoomModerationRemoved(room) => {
-      info!(room, "Demoted from moderator in private room");
-    }
-    Event::BrowseProgressUpdated(progress) => browse_progress(&progress),
-    Event::GlobalMessageReceived(message) => server_message(&message),
-    Event::UserStatusChanged(status) => {
-      trace!(username = status.username, "user status changed");
-      app
-        .users
-        .status_received(&status.username, status.is_privileged);
-      if app.users.is_watched(&status.username) {
-        app.users.refetch_statistics(&status.username);
-      }
-    }
+    room @ (Event::RoomJoined { .. }
+    | Event::RoomLeft { .. }
+    | Event::RoomMessageReceived { .. }
+    | Event::RoomTickerListReceived { .. }
+    | Event::RoomTickerAdded { .. }
+    | Event::RoomTickerRemoved { .. }
+    | Event::PrivateRoomUserAdded { .. }
+    | Event::PrivateRoomUserRemoved { .. }
+    | Event::PrivateRoomOperatorAdded { .. }
+    | Event::PrivateRoomOperatorRemoved { .. }
+    | Event::PrivateRoomUserListReceived(_)
+    | Event::PrivateRoomModeratedUserListReceived(_)
+    | Event::PrivateRoomMembershipAdded(_)
+    | Event::PrivateRoomMembershipRemoved(_)
+    | Event::PrivateRoomModerationAdded(_)
+    | Event::PrivateRoomModerationRemoved(_)) => app.messaging.take(room).await,
+    Event::GlobalMessageReceived(message) => server_message(app, message),
+    Event::UserStatusChanged(status) => user_status(app, &status).await,
     Event::UserStatisticsChanged(statistics) => {
       app
         .users
@@ -170,17 +158,8 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
     | Event::PrivilegeNotificationReceived { .. }
     | Event::UserCannotConnect { .. }
     | Event::RoomListReceived(_)
-    | Event::RoomMessageReceived { .. }
     | Event::PublicChatMessageReceived { .. }
-    | Event::RoomTickerListReceived { .. }
-    | Event::RoomTickerAdded { .. }
-    | Event::RoomTickerRemoved { .. }
-    | Event::PrivateRoomUserAdded { .. }
-    | Event::PrivateRoomUserRemoved { .. }
-    | Event::PrivateRoomOperatorAdded { .. }
-    | Event::PrivateRoomOperatorRemoved { .. }
-    | Event::PrivateRoomUserListReceived(_)
-    | Event::PrivateRoomModeratedUserListReceived(_)
+    | Event::BrowseProgressUpdated(_)
     | Event::DistributedNetworkReset
     | Event::DistributedParentAdopted(_)
     | Event::DistributedParentDisconnected(_)
@@ -194,6 +173,46 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
     | Event::TransferProgressUpdated { .. }
     | Event::SearchStateChanged { .. }
     | Event::SearchResponseReceived { .. } => {}
+  }
+}
+
+/// A user's presence, which the server sends for watched users, for room members and in reply
+/// to our own requests. A watched user's row is touched with it, and their statistics are
+/// asked for again when the server sent it on its own, since it pushes their presence and not
+/// what they share; it is pushed as `users.status` for a user we have a conversation or a
+/// transfer with.
+async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus) {
+  let username = &status.username;
+  let presence = UserPresence::from(status.presence);
+  trace!(username, ?presence, "user status changed");
+  let asked = app
+    .users
+    .status_received(username, presence, status.is_privileged);
+  if !app.users.is_watched(username) {
+    return;
+  }
+  let touch = crate::users::Touch::Status {
+    presence,
+    is_privileged: status.is_privileged,
+  };
+  app.users.touch(username, touch).await;
+  if !asked {
+    app.users.refetch_statistics(username);
+  }
+  let client = app.network.client();
+  let transferring = client
+    .uploads()
+    .iter()
+    .chain(client.downloads().iter())
+    .any(|transfer| transfer.username == *username);
+  if transferring || app.messaging.is_open(username) {
+    app.live.publish(LiveFrame::UsersStatus(UserStatusChanged {
+      username: username.clone(),
+      status: UserStatus {
+        presence,
+        is_privileged: status.is_privileged,
+      },
+    }));
   }
 }
 
@@ -248,9 +267,9 @@ fn logged_in(app: &AppState) {
 }
 
 /// Once the shares are initialized: the server is told what we share, our statistics are
-/// fetched, the configured rooms are joined, the users with queued uploads and the members of
-/// the user-defined groups are watched, and, after the first login, the downloads a stop
-/// interrupted are enqueued again.
+/// fetched, the users with queued uploads and the members of the user-defined groups are
+/// watched, and, after the first login, the downloads a stop interrupted are enqueued again.
+/// The messaging engine joins the rooms.
 async fn after_login(app: AppState) {
   app.shares.initialized().await;
   let client = app.network.client();
@@ -263,13 +282,6 @@ async fn after_login(app: AppState) {
   }
   if let Err(e) = app.network.refresh_user_statistics(true).await {
     warn!(error = %e, "Failed to execute post-login actions: statistics not fetched");
-  }
-  let rooms = app.config.current().values.rooms.clone();
-  for room in rooms {
-    match client.join_room(&room, RoomType::Public).await {
-      Ok(_) => info!(room, "room joined"),
-      Err(e) => warn!(room, error = %e, "room not joined"),
-    }
   }
   let uploads = app.uploads.clone();
   tokio::spawn(async move { uploads.logged_in().await }.in_current_span());
@@ -309,7 +321,6 @@ pub async fn follow_shared_counts(app: AppState) {
 /// another session took our name, and the event is raised.
 fn disconnected(app: &AppState, message: &str, error: Option<&ClientError>, reached: bool) {
   app.network.forget_reconnect();
-  app.state.update(|state| state.rooms.clear());
   let intent = error.and_then(Intent::of);
   match error {
     Some(ClientError::Disposed) => {
@@ -406,8 +417,9 @@ fn distributed_network(app: &AppState, info: &DistributedNetworkInfo) {
 }
 
 /// A private message: one from a user blocked from messages is acknowledged so the server
-/// stops replaying it, and dropped.
-fn private_message(app: &AppState, message: PrivateMessage) {
+/// stops replaying it, and dropped; the others go to the messaging engine, which keeps them
+/// unacknowledged until they are read.
+async fn private_message(app: &AppState, message: PrivateMessage) {
   if app.users.is_blocked(
     &message.username,
     None,
@@ -428,12 +440,10 @@ fn private_message(app: &AppState, message: PrivateMessage) {
     );
     return;
   }
-  // unacknowledged, the server replays it at the next login until conversations keep it
-  debug!(
-    username = message.username,
-    replayed = message.replayed,
-    "private message not kept; conversations are not kept yet"
-  );
+  app
+    .messaging
+    .take(Event::PrivateMessageReceived(message))
+    .await;
 }
 
 /// A transfer moved on: logged, its direction's queued and in-progress gauges counted again, and
@@ -484,15 +494,15 @@ fn transfer_state(app: &AppState, previous: TransferState, transfer: &Transfer) 
   }
 }
 
-/// Browse progress, which the browse tracker will push to the UI.
-fn browse_progress(progress: &BrowseProgress) {
-  trace!(?progress, "browse progress");
-}
-
-/// A message from the server's administrators to every user, which the messaging engine will
-/// push to the UI.
-fn server_message(message: &str) {
+/// A message from the server's administrators to every user: logged and pushed.
+fn server_message(app: &AppState, message: String) {
   info!(message, "Server message");
+  app
+    .live
+    .publish(LiveFrame::ApplicationServerMessage(ServerMessage {
+      message,
+      received_at: Utc::now(),
+    }));
 }
 
 /// Reads into the metrics what only the client knows: the distributed network's broadcast

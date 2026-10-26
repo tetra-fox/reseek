@@ -38,27 +38,11 @@ fn answered_here(operation: &Operation) -> bool {
     || under("/api/v0/transfers")
     || route == "/api/v0/debug/transfers"
     || under("/api/v0/searches")
-    || DIRECTORY.contains(&route)
+    || under("/api/v0/conversations")
+    || under("/api/v0/rooms")
+    || under("/api/v0/messages")
+    || under("/api/v0/users")
 }
-
-/// The users routes the users directory and the blocks answer.
-const DIRECTORY: &[&str] = &[
-  "/api/v0/users",
-  "/api/v0/users/{username}",
-  "/api/v0/users/{username}/summary",
-  "/api/v0/users/{username}/profile",
-  "/api/v0/users/{username}/picture",
-  "/api/v0/users/{username}/transfers",
-  "/api/v0/users/{username}/notes",
-  "/api/v0/users/{username}/tags",
-  "/api/v0/users/{username}/pin",
-  "/api/v0/users/{username}/mute",
-  "/api/v0/users/{username}/group",
-  "/api/v0/users/{username}/block",
-  "/api/v0/users/blocked",
-  "/api/v0/users/blocked/import",
-  "/api/v0/users/blocked/export",
-];
 
 #[tokio::test]
 async fn every_route_is_answered_and_the_unbuilt_ones_say_so() {
@@ -114,6 +98,9 @@ async fn each_route_takes_its_least_role() {
       "/api/v0/transfers/uploads/{username}/{id}/bump",
       admin,
     ),
+    // messaging alice comes before the block of alice below refuses it
+    (Method::GET, "/api/v0/conversations", read),
+    (Method::POST, "/api/v0/conversations/{username}", write),
     (Method::GET, "/api/v0/users/{username}/browse", read),
     (Method::POST, "/api/v0/users/{username}/directory", read),
     (Method::PUT, "/api/v0/users/{username}/tags", write),
@@ -122,8 +109,6 @@ async fn each_route_takes_its_least_role() {
     (Method::GET, "/api/v0/users/blocked", read),
     (Method::PUT, "/api/v0/users/{username}/block", write),
     (Method::POST, "/api/v0/users/blocked/import", admin),
-    (Method::GET, "/api/v0/conversations", read),
-    (Method::POST, "/api/v0/conversations/{username}", write),
     (Method::GET, "/api/v0/rooms/joined", read),
     (Method::POST, "/api/v0/rooms/joined", write),
     (Method::GET, "/api/v0/messages/search", read),
@@ -359,7 +344,7 @@ async fn requests_are_checked_before_any_service_is_asked() {
       "POST",
       "/api/v0/rooms/joined".into(),
       Some(json!({ "name": "indie", "private": true })),
-      503,
+      409,
     ),
     (
       "POST",

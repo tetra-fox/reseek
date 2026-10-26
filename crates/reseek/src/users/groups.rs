@@ -2,7 +2,7 @@
 //! the configuration lists them in, then one we put them in, then leechers by their
 //! statistics, then the default group.
 
-use api_types::users::{GroupSource, UserGroup};
+use api_types::users::{GroupSource, StatisticsSnapshot, UserGroup, UserPresence};
 
 use super::store::Stored;
 use crate::config::Options;
@@ -27,24 +27,18 @@ pub fn configured(options: &Options, username: &str) -> Option<(String, u32)> {
     .min_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)))
 }
 
-/// What a user's group is worked out from, besides the configuration.
+/// What a user's group is worked out from, besides the configuration, and what else the
+/// server last said of them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Facts {
   /// the server calls them privileged
   pub privileged: bool,
-  /// the files and directories they share, as the server last said; `None` until it said
-  pub shared: Option<Shared>,
+  /// their presence as the server last said, `None` until it said
+  pub presence: Option<UserPresence>,
+  /// their statistics as the server last said, with when; `None` until it said
+  pub statistics: Option<StatisticsSnapshot>,
   /// the user-defined group we put them in
   pub group_override: Option<String>,
-}
-
-/// How much a user shares.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Shared {
-  /// shared files
-  pub files: u32,
-  /// shared directories
-  pub directories: u32,
 }
 
 impl Facts {
@@ -52,10 +46,14 @@ impl Facts {
   pub fn of(stored: &Stored) -> Self {
     Self {
       privileged: stored.is_privileged,
-      shared: stored.statistics.as_ref().map(|(statistics, _)| Shared {
-        files: statistics.file_count,
-        directories: statistics.directory_count,
-      }),
+      presence: stored.presence.map(|(presence, _)| presence),
+      statistics: stored
+        .statistics
+        .as_ref()
+        .map(|(statistics, at)| StatisticsSnapshot {
+          statistics: statistics.clone(),
+          updated_at: *at,
+        }),
       group_override: stored.group_override.clone(),
     }
   }
@@ -99,8 +97,9 @@ pub fn resolve(options: &Options, username: &str, facts: &Facts) -> UserGroup {
     };
   }
   let thresholds = &groups.leechers.thresholds;
-  let leeches = facts.shared.is_some_and(|shared| {
-    shared.files < thresholds.files || shared.directories < thresholds.directories
+  let leeches = facts.statistics.as_ref().is_some_and(|snapshot| {
+    let shared = &snapshot.statistics;
+    shared.file_count < thresholds.files || shared.directory_count < thresholds.directories
   });
   if leeches {
     return builtin(LEECHERS, groups.leechers.upload.priority);

@@ -33,6 +33,7 @@ use crate::files::Files;
 use crate::http::{self, pipeline};
 use crate::live::Live;
 use crate::logging::{self, LogBuffer, Logging, Sinks};
+use crate::messaging::Messaging;
 use crate::network::Network;
 use crate::paths::{Defaults, InstanceLock, Paths};
 use crate::searches::Searches;
@@ -44,7 +45,7 @@ use crate::transfers::downloads::Downloads;
 use crate::transfers::service::Transfers;
 use crate::transfers::uploads::Uploads;
 use crate::ui::{Bundle, Ui};
-use crate::users::Directory;
+use crate::users::{Directory, Users};
 use crate::version::{self, RELEASE_FEED, Releases};
 use service::Application;
 use signals::spawn_signals;
@@ -117,6 +118,8 @@ pub struct AppState {
   pub network: Arc<Network>,
   /// the searches we start
   pub searches: Arc<Searches>,
+  /// private conversations and the rooms we are in
+  pub messaging: Arc<Messaging>,
   /// the download engine
   pub downloads: Arc<Downloads>,
   /// the upload engine
@@ -176,9 +179,13 @@ impl AppState {
     let event_log = EventLog::open(&location, &events, config.clone(), shutdown.clone())
       .await
       .map_err(|e| StartError::Open(format!("events.db: {e}")))?;
+    let messaging_db = crate::messaging::open(&location)
+      .await
+      .map_err(|e| StartError::Open(format!("messaging.db: {e}")))?;
     let users = Directory::open(
       &location,
       transfers.clone(),
+      messaging_db.clone(),
       config.clone(),
       live.clone(),
       events.clone(),
@@ -201,6 +208,18 @@ impl AppState {
     )
     .map_err(StartError::Config)?;
     users.attach_client(network.client().clone());
+    let messaging = Messaging::open(
+      messaging_db.clone(),
+      network.clone(),
+      users.clone(),
+      live.clone(),
+      events.clone(),
+      config.clone(),
+      state.clone(),
+      shutdown.clone(),
+    )
+    .await
+    .map_err(|e| StartError::Open(format!("messaging.db: {e}")))?;
     let searches = Searches::open(&location, network.clone(), live.clone(), config.clone())
       .await
       .map_err(|e| StartError::Open(format!("search.db: {e}")))?;
@@ -244,7 +263,15 @@ impl AppState {
     services.files = files.clone();
     services.reports = telemetry.clone();
     services.searches = searches.clone();
-    services.users = users.clone();
+    services.messaging = messaging.clone();
+    services.users = Arc::new(Users::new(
+      users.clone(),
+      network.clone(),
+      messaging.clone(),
+      config.clone(),
+      live.clone(),
+      crate::api::agent::is_agent(&startup.values),
+    ));
     services.blocking = users.clone();
     let databases = Arc::new(Databases::new(vec![
       auth.db.clone(),
@@ -253,6 +280,7 @@ impl AppState {
       users.database().clone(),
       shares.database(),
       searches.database().clone(),
+      messaging_db,
     ]));
     services.application = Arc::new(Application {
       network: network.clone(),
@@ -281,6 +309,7 @@ impl AppState {
       shares,
       network,
       searches,
+      messaging,
       downloads,
       uploads,
       clock,

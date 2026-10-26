@@ -1,0 +1,376 @@
+//! The private conversations in `messaging.db`: the conversations, their messages, and what
+//! each notifies of and keeps as a draft.
+
+use std::collections::BTreeMap;
+
+use api_types::chat::NotifyLevel;
+use api_types::conversations::{
+  Conversation, ConversationListQuery, ConversationSummary, MessageDirection, PrivateMessage,
+};
+use api_types::users::MessageCounts;
+use chrono::{DateTime, Utc};
+use rusqlite::types::Value;
+use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
+
+use crate::db::{read_timestamp, timestamp};
+use crate::messaging::{notify_level, notify_text};
+
+/// The name the server's own notices come from: never a user, never unread, never answered.
+pub const SERVER: &str = "server";
+
+/// The columns [`message`] reads, in its order.
+const MESSAGE: &str =
+  "local_id, remote_id, timestamp, username, direction, message, is_acknowledged, was_replayed";
+
+/// A private message as it arrived.
+pub struct Inbound {
+  /// the server's id for it
+  pub id: u32,
+  /// when the server says it was sent
+  pub timestamp: DateTime<Utc>,
+  /// who sent it
+  pub username: String,
+  /// the text
+  pub message: String,
+  /// the server delivered it again because it was not acknowledged
+  pub replayed: bool,
+}
+
+fn direction(row: &Row, i: usize) -> rusqlite::Result<MessageDirection> {
+  Ok(match row.get::<_, i64>(i)? {
+    0 => MessageDirection::Out,
+    _ => MessageDirection::In,
+  })
+}
+
+/// The message in `row`, read with [`MESSAGE`].
+fn message(row: &Row) -> rusqlite::Result<PrivateMessage> {
+  Ok(PrivateMessage {
+    local_id: row.get(0)?,
+    id: row.get(1)?,
+    timestamp: read_timestamp(&row.get::<_, String>(2)?)?,
+    username: row.get(3)?,
+    direction: direction(row, 4)?,
+    message: row.get(5)?,
+    is_acknowledged: row.get(6)?,
+    was_replayed: row.get(7)?,
+  })
+}
+
+/// The message with `local_id`.
+fn message_at(conn: &Connection, local_id: i64) -> rusqlite::Result<PrivateMessage> {
+  conn
+    .prepare_cached(&format!(
+      "SELECT {MESSAGE} FROM private_messages WHERE local_id = ?1"
+    ))?
+    .query_row([local_id], message)
+}
+
+/// Opens the conversation with `username`, making it when there is none.
+pub fn activate(conn: &Connection, username: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
+  conn.execute(
+    "INSERT INTO conversations (username, is_active, created_at, updated_at) \
+     VALUES (?1, 1, ?2, ?2) \
+     ON CONFLICT (username) DO UPDATE SET is_active = 1, updated_at = excluded.updated_at",
+    params![username, timestamp(now)],
+  )?;
+  Ok(())
+}
+
+/// Makes the conversation with `username` when there is none, leaving one that exists as it is.
+pub fn ensure(conn: &Connection, username: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
+  conn.execute(
+    "INSERT INTO conversations (username, is_active, created_at, updated_at) \
+     VALUES (?1, 1, ?2, ?2) ON CONFLICT (username) DO NOTHING",
+    params![username, timestamp(now)],
+  )?;
+  Ok(())
+}
+
+/// Stores an inbound message. A message the server delivers again is the one stored already: it
+/// is marked unacknowledged and replayed as the server now says, its text left as it is.
+pub fn receive(conn: &Connection, inbound: &Inbound) -> rusqlite::Result<PrivateMessage> {
+  let stored: Option<i64> = conn
+    .prepare_cached("SELECT local_id FROM private_messages WHERE username = ?1 AND remote_id = ?2")?
+    .query_row(params![inbound.username, inbound.id], |row| row.get(0))
+    .optional()?;
+  let local_id = match stored {
+    Some(local_id) => {
+      conn.execute(
+        "UPDATE private_messages SET is_acknowledged = 0, was_replayed = ?2 WHERE local_id = ?1",
+        params![local_id, inbound.replayed],
+      )?;
+      local_id
+    }
+    None => {
+      conn.execute(
+        "INSERT INTO private_messages (username, remote_id, timestamp, direction, message, \
+         is_acknowledged, was_replayed) VALUES (?1, ?2, ?3, 1, ?4, 0, ?5)",
+        params![
+          inbound.username,
+          inbound.id,
+          timestamp(inbound.timestamp),
+          inbound.message,
+          inbound.replayed
+        ],
+      )?;
+      conn.last_insert_rowid()
+    }
+  };
+  message_at(conn, local_id)
+}
+
+/// Stores a message we sent to `username` at `now`.
+pub fn sent(
+  conn: &Connection,
+  username: &str,
+  text: &str,
+  now: DateTime<Utc>,
+) -> rusqlite::Result<PrivateMessage> {
+  conn.execute(
+    "INSERT INTO private_messages (username, remote_id, timestamp, direction, message, \
+     is_acknowledged, was_replayed) VALUES (?1, NULL, ?2, 0, ?3, 1, 0)",
+    params![username, timestamp(now), text],
+  )?;
+  message_at(conn, conn.last_insert_rowid())
+}
+
+/// The server's ids of the inbound messages from `username` not acknowledged yet.
+pub fn unacknowledged(conn: &Connection, username: &str) -> rusqlite::Result<Vec<u32>> {
+  conn
+    .prepare_cached(
+      "SELECT remote_id FROM private_messages WHERE username = ?1 AND direction = 1 \
+       AND is_acknowledged = 0 AND remote_id IS NOT NULL ORDER BY local_id",
+    )?
+    .query_map([username], |row| row.get(0))?
+    .collect()
+}
+
+/// Marks the messages from `username` with the server's `ids` acknowledged.
+pub fn acknowledged(conn: &mut Connection, username: &str, ids: &[u32]) -> rusqlite::Result<()> {
+  let tx = conn.transaction()?;
+  {
+    let mut statement = tx.prepare_cached(
+      "UPDATE private_messages SET is_acknowledged = 1 WHERE username = ?1 AND remote_id = ?2",
+    )?;
+    for id in ids {
+      statement.execute(params![username, id])?;
+    }
+  }
+  tx.commit()
+}
+
+/// Whether the inbound message from `username` with the server's `id` is stored.
+pub fn has_message(conn: &Connection, username: &str, id: u32) -> rusqlite::Result<bool> {
+  conn
+    .prepare_cached(
+      "SELECT EXISTS (SELECT 1 FROM private_messages WHERE username = ?1 AND remote_id = ?2)",
+    )?
+    .query_row(params![username, id], |row| row.get(0))
+}
+
+/// Whether there is a conversation with `username`, open or closed.
+pub fn exists(conn: &Connection, username: &str) -> rusqlite::Result<bool> {
+  conn
+    .prepare_cached("SELECT EXISTS (SELECT 1 FROM conversations WHERE username = ?1)")?
+    .query_row([username], |row| row.get(0))
+}
+
+/// The conversation columns [`conversation`] reads, joined with their state and their count of
+/// unacknowledged messages; the server's notices never count.
+const CONVERSATION: &str = "SELECT c.username, c.is_active, \
+   COALESCE(s.notify, 'all'), COALESCE(s.draft, ''), \
+   CASE WHEN c.username = 'server' THEN 0 ELSE \
+     (SELECT COUNT(*) FROM private_messages m WHERE m.username = c.username \
+      AND m.direction = 1 AND m.is_acknowledged = 0) END AS unacknowledged \
+   FROM conversations c LEFT JOIN conversation_state s ON s.username = c.username";
+
+/// The conversation in `row`, read with [`CONVERSATION`], without its messages.
+fn conversation_of(row: &Row) -> rusqlite::Result<Conversation> {
+  let username: String = row.get(0)?;
+  let unacknowledged = u32::try_from(row.get::<_, i64>(4)?).unwrap_or(u32::MAX);
+  Ok(Conversation {
+    is_server_notice: username == SERVER,
+    username,
+    is_active: row.get(1)?,
+    un_acknowledged_message_count: unacknowledged,
+    has_un_acknowledged_messages: unacknowledged > 0,
+    notify: notify_level(&row.get::<_, String>(2)?)?,
+    draft: row.get(3)?,
+    messages: None,
+  })
+}
+
+/// The conversation with `username`, without its messages.
+pub fn conversation(conn: &Connection, username: &str) -> rusqlite::Result<Option<Conversation>> {
+  conn
+    .prepare_cached(&format!("{CONVERSATION} WHERE c.username = ?1"))?
+    .query_row([username], conversation_of)
+    .optional()
+}
+
+/// The conversations `query` asks for, by username.
+pub fn list(
+  conn: &Connection,
+  query: &ConversationListQuery,
+) -> rusqlite::Result<Vec<Conversation>> {
+  let mut filter = vec!["1 = 1"];
+  if !query.include_inactive {
+    filter.push("c.is_active = 1");
+  }
+  if !query.include_server {
+    filter.push("c.username <> 'server'");
+  }
+  let having = if query.un_acknowledged_only {
+    "WHERE unacknowledged > 0"
+  } else {
+    ""
+  };
+  conn
+    .prepare(&format!(
+      "SELECT * FROM ({CONVERSATION} WHERE {}) {having} ORDER BY username",
+      filter.join(" AND ")
+    ))?
+    .query_map([], conversation_of)?
+    .collect()
+}
+
+/// A page of the messages with `username`, oldest first: the newest `limit` before the message
+/// `before` when given, else the newest, only the unacknowledged ones with `unacknowledged`.
+pub fn messages(
+  conn: &Connection,
+  username: &str,
+  before: Option<i64>,
+  limit: u32,
+  unacknowledged: bool,
+) -> rusqlite::Result<Vec<PrivateMessage>> {
+  let mut filter = String::from("username = ?1");
+  let mut values = vec![Value::Text(username.to_string())];
+  if let Some(before) = before {
+    values.push(Value::Integer(before));
+    filter.push_str(&format!(" AND local_id < ?{}", values.len()));
+  }
+  if unacknowledged {
+    filter.push_str(" AND direction = 1 AND is_acknowledged = 0");
+  }
+  values.push(Value::Integer(i64::from(limit)));
+  let mut page: Vec<PrivateMessage> = conn
+    .prepare(&format!(
+      "SELECT {MESSAGE} FROM private_messages WHERE {filter} ORDER BY local_id DESC LIMIT ?{}",
+      values.len()
+    ))?
+    .query_map(params_from_iter(&values), message)?
+    .collect::<rusqlite::Result<_>>()?;
+  page.reverse();
+  Ok(page)
+}
+
+/// Every message with `username`, oldest first.
+pub fn all(conn: &Connection, username: &str) -> rusqlite::Result<Vec<PrivateMessage>> {
+  conn
+    .prepare(&format!(
+      "SELECT {MESSAGE} FROM private_messages WHERE username = ?1 ORDER BY local_id"
+    ))?
+    .query_map([username], message)?
+    .collect()
+}
+
+/// Closes the conversation with `username`; with `purge` its messages are deleted too.
+pub fn close(
+  conn: &mut Connection,
+  username: &str,
+  purge: bool,
+  now: DateTime<Utc>,
+) -> rusqlite::Result<()> {
+  let tx = conn.transaction()?;
+  tx.execute(
+    "UPDATE conversations SET is_active = 0, updated_at = ?2 WHERE username = ?1",
+    params![username, timestamp(now)],
+  )?;
+  if purge {
+    tx.execute(
+      "DELETE FROM private_messages WHERE username = ?1",
+      [username],
+    )?;
+  }
+  tx.commit()
+}
+
+/// Sets what the conversation with `username` notifies of.
+pub fn set_notify(conn: &Connection, username: &str, notify: NotifyLevel) -> rusqlite::Result<()> {
+  conn.execute(
+    "INSERT INTO conversation_state (username, notify) VALUES (?1, ?2) \
+     ON CONFLICT (username) DO UPDATE SET notify = excluded.notify",
+    params![username, notify_text(notify)],
+  )?;
+  Ok(())
+}
+
+/// Keeps `draft` as the unsent text of the conversation with `username`.
+pub fn set_draft(conn: &Connection, username: &str, draft: &str) -> rusqlite::Result<()> {
+  conn.execute(
+    "INSERT INTO conversation_state (username, draft) VALUES (?1, ?2) \
+     ON CONFLICT (username) DO UPDATE SET draft = excluded.draft",
+    params![username, draft],
+  )?;
+  Ok(())
+}
+
+/// The counts of our messages with `username`, and when the latest was sent.
+pub fn figures(
+  conn: &Connection,
+  username: &str,
+) -> rusqlite::Result<(MessageCounts, Option<DateTime<Utc>>)> {
+  conn
+    .prepare_cached(
+      "SELECT COALESCE(SUM(direction = 1), 0), COALESCE(SUM(direction = 0), 0), \
+       COALESCE(SUM(direction = 1 AND is_acknowledged = 0), 0), MAX(timestamp) \
+       FROM private_messages WHERE username = ?1",
+    )?
+    .query_row([username], |row| {
+      let count = |i| -> rusqlite::Result<u32> {
+        Ok(u32::try_from(row.get::<_, i64>(i)?).unwrap_or(u32::MAX))
+      };
+      let latest: Option<String> = row.get(3)?;
+      Ok((
+        MessageCounts {
+          inbound: count(0)?,
+          outbound: count(1)?,
+          unread: if username == SERVER { 0 } else { count(2)? },
+        },
+        latest.as_deref().map(read_timestamp).transpose()?,
+      ))
+    })
+}
+
+/// The state of the conversation with `username`, when there is one.
+pub fn summary(conn: &Connection, username: &str) -> rusqlite::Result<Option<ConversationSummary>> {
+  Ok(conversation(conn, username)?.map(|c| ConversationSummary {
+    is_active: c.is_active,
+    un_acknowledged_message_count: c.un_acknowledged_message_count,
+  }))
+}
+
+/// The unacknowledged messages of every conversation that has any, by peer.
+pub fn unread(conn: &Connection) -> rusqlite::Result<BTreeMap<String, u32>> {
+  conn
+    .prepare_cached(
+      "SELECT username, COUNT(*) FROM private_messages WHERE direction = 1 \
+       AND is_acknowledged = 0 AND username <> 'server' GROUP BY username",
+    )?
+    .query_map([], |row| {
+      Ok((
+        row.get::<_, String>(0)?,
+        u32::try_from(row.get::<_, i64>(1)?).unwrap_or(u32::MAX),
+      ))
+    })?
+    .collect()
+}
+
+/// The peers of the open conversations.
+pub fn active(conn: &Connection) -> rusqlite::Result<Vec<String>> {
+  conn
+    .prepare("SELECT username FROM conversations WHERE is_active = 1 AND username <> 'server'")?
+    .query_map([], |row| row.get(0))?
+    .collect()
+}

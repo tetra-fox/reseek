@@ -68,8 +68,14 @@ pub struct FigureCache {
 }
 
 impl FigureCache {
-  /// `username`'s figures, computed again when the kept ones are older than five seconds.
-  pub async fn get(&self, transfers: &Database, username: &str) -> Result<UserFigures, DbError> {
+  /// `username`'s figures from `transfers` and `messaging`, computed again when the kept ones
+  /// are older than five seconds.
+  pub async fn get(
+    &self,
+    transfers: &Database,
+    messaging: &Database,
+    username: &str,
+  ) -> Result<UserFigures, DbError> {
     let kept = self
       .entries
       .lock()
@@ -80,7 +86,11 @@ impl FigureCache {
     if let Some(figures) = kept {
       return Ok(figures);
     }
-    let fresh = figures(transfers, username).await?;
+    let mut fresh = figures(transfers, username).await?;
+    let name = username.to_string();
+    (fresh.messages, fresh.last_message_at) = messaging
+      .read(move |conn| crate::messaging::message_figures(conn, &name))
+      .await?;
     let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
     entries.retain(|_, (at, _)| at.elapsed() < FIGURES_FOR);
     entries.insert(username.to_string(), (Instant::now(), fresh.clone()));

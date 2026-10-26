@@ -17,6 +17,7 @@ pub mod files;
 pub mod http;
 pub mod live;
 pub mod logging;
+pub mod messaging;
 pub mod network;
 pub mod paths;
 pub mod safety;

@@ -463,11 +463,6 @@ async fn forgetting_a_user_drops_their_block_and_purges_their_transfers() {
   assert_eq!(profile["known"], false);
   let refresh = "/api/v0/users/alice/profile?refresh=true";
   let (status, body) = send(&app, "GET", refresh, None).await;
-  assert_eq!(status, 503);
-  assert!(
-    body["detail"]
-      .as_str()
-      .unwrap()
-      .ends_with(" not implemented yet")
-  );
+  assert_eq!(status, 200, "offline, nothing could be asked");
+  assert_eq!(body["known"], false);
 }

@@ -2,15 +2,19 @@
 //! deal with them, our notes, tags, pins, mutes and groups for them, the figures of their
 //! transfers, and who is blocked from what.
 //!
-//! [`Directory`] is the one engine: the API's users directory and blocking calls, and what the
-//! network engines ask of it: [`Directory::touch`], [`Directory::is_blocked`] and each user's
-//! upload group, [`Directory::group`] and [`Directory::fetch_group`].
+//! [`Directory`] is the engine: the API's users directory and blocking calls, and what the
+//! network engines ask of it: [`Directory::touch`], [`Directory::is_blocked`], each user's
+//! upload group, [`Directory::group`] and [`Directory::fetch_group`], and watching users,
+//! [`Directory::watch`]. [`Users`] answers the API's user calls with it and with what the
+//! network says about users.
 
 mod blocking;
 mod blocklist;
+mod browse;
 mod group_cache;
 mod groups;
 mod listing;
+mod network;
 mod profile;
 mod retention;
 mod service;
@@ -32,15 +36,17 @@ use std::time::{Duration, Instant};
 use api_types::blocking::{Block, BlockScope};
 use api_types::events::{Event, UnblockReason, UserUnblocked};
 use api_types::live::LiveFrame;
-use api_types::users::{UserRemoved, UserSummary};
+use api_types::users::{KnownUser, UserEndpoint, UserRemoved, UserSummary};
 use cascade::Watcher;
 use chrono::Utc;
+use rusqlite::params;
 use soulseek_client::Client;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
+pub use network::Users;
 pub use touch::{PeerInfo, Touch};
 
 use crate::config::{Options, RETENTION_SWEEP};
@@ -65,6 +71,8 @@ const STOPPING: Duration = Duration::from_secs(5);
 pub struct Directory {
   db: Database,
   transfers: Database,
+  /// `messaging.db`, for what our private messages with a user add up to
+  messaging: Database,
   /// the Soulseek client, once the network is built
   client: OnceLock<Client>,
   /// the statistics fetched again in the background, so the stop waits for them
@@ -83,10 +91,12 @@ pub struct Directory {
 impl Directory {
   /// Opens `users.db` in `location` and loads the blocks, the groups we put users in and the
   /// blocklist file, then starts the touch writer, the expiry and retention sweeps and the
-  /// follower of the configuration, which all stop when `shutdown` is cancelled.
+  /// follower of the configuration, which all stop when `shutdown` is cancelled. A user's
+  /// figures are read from `transfers` and `messaging`.
   pub async fn open(
     location: &Location,
     transfers: Database,
+    messaging: Database,
     config: Watcher<Options>,
     live: Live,
     events: EventBus,
@@ -114,6 +124,7 @@ impl Directory {
     let directory = Arc::new(Self {
       db,
       transfers,
+      messaging,
       client: OnceLock::new(),
       tasks: TaskTracker::new(),
       config,
@@ -170,6 +181,74 @@ impl Directory {
         "statistics still being fetched at shutdown"
       );
     }
+  }
+
+  /// Whether the configuration's blacklist names `username`; nothing of ours counts.
+  pub fn configuration_blocks(&self, username: &str) -> bool {
+    self.blocks.configuration_blocks(username)
+  }
+
+  /// Takes the countries room member lists gave for users we know, as `(username, code)`; a
+  /// user without a row is not made one.
+  pub async fn countries_seen(&self, countries: Vec<(String, String)>) {
+    if countries.is_empty() {
+      return;
+    }
+    let written = self
+      .db
+      .write(move |conn| {
+        let tx = conn.transaction()?;
+        let mut changed = Vec::new();
+        {
+          let mut statement = tx.prepare_cached(
+            "UPDATE users SET country_code = ?2 WHERE username = ?1 \
+             AND country_code IS NOT ?2",
+          )?;
+          for (username, code) in countries {
+            if statement.execute(params![username, code])? > 0 {
+              changed.push(username);
+            }
+          }
+        }
+        tx.commit()?;
+        Ok(changed)
+      })
+      .await;
+    match written {
+      Ok(changed) => {
+        for username in changed {
+          self.changed(&username).await;
+        }
+      }
+      Err(e) => warn!(error = %e, "countries from a room member list not written"),
+    }
+  }
+
+  /// `username`'s address from the client's cache, never a round trip.
+  fn endpoint_of(&self, username: &str) -> Option<UserEndpoint> {
+    let endpoint = self.client.get()?.cached_user_endpoint(username)?;
+    Some(UserEndpoint {
+      address: endpoint.ip().to_string(),
+      port: endpoint.port(),
+      obfuscation_type: None,
+      obfuscated_port: None,
+    })
+  }
+
+  /// Adds to `user` what is not in `users.db`: their cached address and our conversation with
+  /// them.
+  async fn with_network_and_conversation(&self, mut user: KnownUser) -> KnownUser {
+    user.endpoint = self.endpoint_of(&user.username);
+    let name = user.username.clone();
+    match self
+      .messaging
+      .read(move |conn| crate::messaging::conversation_summary(conn, &name))
+      .await
+    {
+      Ok(conversation) => user.conversation = conversation,
+      Err(e) => warn!(username = user.username, error = %e, "conversation not read for a user"),
+    }
+    user
   }
 
   /// Marks that we dealt with `username` for the reason `touch` gives, storing what came with
@@ -241,11 +320,12 @@ impl Directory {
     let (row, block) = self.stored(username).await.map_err(internal)?;
     let figures = self
       .figures
-      .get(&self.transfers, username)
+      .get(&self.transfers, &self.messaging, username)
       .await
       .map_err(internal)?;
     let options = self.config.current().values.clone();
     let user = profile::known(&options, username, row.as_ref(), block);
+    let user = self.with_network_and_conversation(user).await;
     let summary = profile::summary(user, row.as_ref(), &figures);
     let mut summaries = self
       .summaries

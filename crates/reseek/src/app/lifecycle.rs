@@ -6,8 +6,8 @@
 //! the clock starts, and then the watchdog connects, unless this is a relay agent, connecting
 //! is turned off or there are no credentials. Stopping, once the HTTP host has stopped: the
 //! watchdog stops, the client disconnects and is disposed, the events this raised are
-//! handled, the statistics fetched again, the searches and the transfer tasks end, and the
-//! transfers still unfinished are ended as shut down.
+//! handled, the session is closed, the searches, the statistics fetched again and the transfer
+//! tasks end, and the transfers still unfinished are ended as shut down.
 
 use tracing::{Instrument, debug, info, info_span, warn};
 
@@ -82,6 +82,27 @@ async fn run(app: AppState) {
       let searches = searches.clone();
       async move { searches.prune().await }
     });
+  let messaging = app.messaging.clone();
+  app
+    .clock
+    .every(Every::Minute, "session heartbeat", move |_| {
+      let messaging = messaging.clone();
+      async move { messaging.heartbeat().await }
+    });
+  let messaging = app.messaging.clone();
+  app
+    .clock
+    .every(Every::FiveMinutes, "prune private messages", move |_| {
+      let messaging = messaging.clone();
+      async move { messaging.prune_private().await }
+    });
+  let messaging = app.messaging.clone();
+  app
+    .clock
+    .every(Every::Hour, "prune room messages", move |_| {
+      let messaging = messaging.clone();
+      async move { messaging.prune_rooms().await }
+    });
   app.clock.start();
 
   let relay = &options.relay;
@@ -124,6 +145,7 @@ async fn check_versions(app: AppState) {
 pub(super) async fn stop(app: &AppState) {
   info!("Application is shutting down");
   app.network.stop().await;
+  app.messaging.stop().await;
   app.users.stop().await;
   app.searches.stop().await;
   app.downloads.stop().await;

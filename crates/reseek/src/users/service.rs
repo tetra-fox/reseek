@@ -1,14 +1,12 @@
-//! The users directory and blocking calls of the API, answered by the [`Directory`]. The calls
-//! that ask the network about a user are not here.
+//! The users directory calls of the API and its blocking calls, answered by the [`Directory`]
+//! from what it stores. The calls that ask the network about a user are the users service's.
 
 use api_types::auth::Principal;
 use api_types::blocking::{
   Block, BlockImportResult, BlockRequest, BlockScope, BlockSource, BlockedUsers,
 };
 use api_types::events::{Event, UnblockReason, UserBlocked, UserUnblocked};
-use api_types::users::{
-  UserList, UserListQuery, UserProfile, UserSummary, UserTransfers, UserTransfersQuery,
-};
+use api_types::users::{UserProfile, UserSummary, UserTransfers, UserTransfersQuery};
 use async_trait::async_trait;
 use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
@@ -21,7 +19,7 @@ use super::store::{self, Change};
 use super::{Directory, SUMMARY_FOR, blocking, groups, profile, transfers};
 use crate::api::error::ApiError;
 use crate::db::shifted;
-use crate::services::{BlockImport, BlockingService, UserService};
+use crate::services::{BlockImport, BlockingService};
 
 fn internal(error: impl std::fmt::Display) -> ApiError {
   ApiError::internal(error)
@@ -110,13 +108,9 @@ impl Directory {
   }
 }
 
-#[async_trait]
-impl UserService for Directory {
-  async fn list(&self, query: UserListQuery) -> Result<UserList, ApiError> {
-    Directory::list(self, query).await
-  }
-
-  async fn summary(&self, username: &str) -> Result<UserSummary, ApiError> {
+impl Directory {
+  /// What is stored about `username`, kept a minute.
+  pub(crate) async fn summary(&self, username: &str) -> Result<UserSummary, ApiError> {
     let cached = self
       .summaries
       .lock()
@@ -130,24 +124,22 @@ impl UserService for Directory {
     }
   }
 
-  async fn profile(&self, username: &str, refresh: bool) -> Result<UserProfile, ApiError> {
-    if refresh {
-      return Err(ApiError::unavailable(Some(
-        "refreshing a profile from the network not implemented yet".to_string(),
-      )));
-    }
+  /// `username`'s whole profile from what is stored.
+  pub(crate) async fn profile(&self, username: &str) -> Result<UserProfile, ApiError> {
     let (row, block) = self.stored(username).await.map_err(internal)?;
     let figures = self
       .figures
-      .get(&self.transfers, username)
+      .get(&self.transfers, &self.messaging, username)
       .await
       .map_err(internal)?;
     let options = self.config.current().values.clone();
     let user = profile::known(&options, username, row.as_ref(), block);
+    let user = self.with_network_and_conversation(user).await;
     Ok(profile::profile(user, row.as_ref(), figures))
   }
 
-  async fn picture(&self, username: &str) -> Result<Response, ApiError> {
+  /// `username`'s stored picture as the whole response, with its type and caching headers.
+  pub(crate) async fn picture(&self, username: &str) -> Result<Response, ApiError> {
     let name = username.to_string();
     let picture = self
       .db
@@ -172,11 +164,13 @@ impl UserService for Directory {
     Ok(response)
   }
 
-  async fn set_notes(&self, username: &str, notes: String) -> Result<(), ApiError> {
+  /// Replaces our notes on `username`.
+  pub(crate) async fn set_notes(&self, username: &str, notes: String) -> Result<(), ApiError> {
     self.change(username, Change::Notes(notes)).await
   }
 
-  async fn set_tags(&self, username: &str, tags: Vec<String>) -> Result<(), ApiError> {
+  /// Replaces our tags on `username`, each kept once.
+  pub(crate) async fn set_tags(&self, username: &str, tags: Vec<String>) -> Result<(), ApiError> {
     let mut unique = Vec::new();
     for tag in tags {
       if !unique.contains(&tag) {
@@ -186,15 +180,23 @@ impl UserService for Directory {
     self.change(username, Change::Tags(unique)).await
   }
 
-  async fn set_pinned(&self, username: &str, pinned: bool) -> Result<(), ApiError> {
+  /// Pins or unpins `username`.
+  pub(crate) async fn set_pinned(&self, username: &str, pinned: bool) -> Result<(), ApiError> {
     self.change(username, Change::Pinned(pinned)).await
   }
 
-  async fn set_muted(&self, username: &str, muted: bool) -> Result<(), ApiError> {
+  /// Mutes or unmutes `username`.
+  pub(crate) async fn set_muted(&self, username: &str, muted: bool) -> Result<(), ApiError> {
     self.change(username, Change::Muted(muted)).await
   }
 
-  async fn set_group(&self, username: &str, group: Option<String>) -> Result<(), ApiError> {
+  /// Puts `username` in a user-defined upload group, or takes them out; a user the
+  /// configuration lists for another group is a conflict.
+  pub(crate) async fn set_group(
+    &self,
+    username: &str,
+    group: Option<String>,
+  ) -> Result<(), ApiError> {
     let options = self.config.current().values.clone();
     if let Some(wanted) = &group
       && let Some((configured, _)) = groups::configured(&options, username)
@@ -212,7 +214,8 @@ impl UserService for Directory {
     Ok(())
   }
 
-  async fn transfers(
+  /// A page of `username`'s transfers.
+  pub(crate) async fn transfers(
     &self,
     username: &str,
     query: UserTransfersQuery,
@@ -222,7 +225,8 @@ impl UserService for Directory {
       .map_err(internal)
   }
 
-  async fn remove(&self, username: &str, purge: bool) -> Result<(), ApiError> {
+  /// Forgets `username` and their block; with `purge` their transfers leave the listings.
+  pub(crate) async fn remove(&self, username: &str, purge: bool) -> Result<(), ApiError> {
     let name = username.to_string();
     let deleted = self
       .db

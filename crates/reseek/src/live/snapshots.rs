@@ -1,13 +1,14 @@
 //! What a stream is sent for each topic when it opens without resuming: the one place each
 //! topic's snapshot is made.
 
+use api_types::conversations::ConversationListQuery;
 use api_types::live::LiveFrame;
 use api_types::options::OptionsDocument;
+use tracing::warn;
 
 use super::Topic;
 use crate::app::AppState;
 use crate::config::redact;
-use tracing::warn;
 
 /// The snapshot frames of `topic`, in the order they are sent.
 pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
@@ -26,10 +27,47 @@ pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
         Vec::new()
       }
     },
-    // conversations, rooms and transfer figures are kept by services that send their
-    // snapshot here once they exist; until then these topics have none
-    Topic::Conversations | Topic::Rooms | Topic::Metrics => Vec::new(),
+    Topic::Conversations => {
+      let listed = app
+        .services
+        .messaging
+        .conversations(ConversationListQuery::default())
+        .await;
+      let mut frames = match listed {
+        Ok(conversations) => vec![LiveFrame::ConversationsList(conversations)],
+        Err(e) => {
+          warn!(error = ?e, "conversations not read for a stream's snapshot");
+          Vec::new()
+        }
+      };
+      frames.extend(unread(app).await);
+      frames
+    }
+    Topic::Rooms => {
+      let mut frames = match app.services.messaging.joined_rooms().await {
+        Ok(rooms) => vec![LiveFrame::RoomsList(rooms)],
+        Err(e) => {
+          warn!(error = ?e, "rooms not read for a stream's snapshot");
+          Vec::new()
+        }
+      };
+      frames.extend(unread(app).await);
+      frames
+    }
+    // the transfer figures are kept by a service that sends its snapshot here once it exists
+    Topic::Metrics => Vec::new(),
     // clients fetch these lists themselves
     Topic::SearchResponses(_) | Topic::Transfers | Topic::Users | Topic::Events => Vec::new(),
+  }
+}
+
+/// The unread counts, the snapshot both chat topics end with.
+async fn unread(app: &AppState) -> Option<LiveFrame> {
+  match app.messaging.unread_counts().await {
+    Ok(counts) => Some(LiveFrame::ChatUnread(counts)),
+    Err(e) => {
+      warn!(error = %e, "unread counts not read for a stream's snapshot");
+      None
+    }
   }
 }

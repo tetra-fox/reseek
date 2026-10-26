@@ -1,7 +1,7 @@
 //! Following the options while running: a change to the search request filters compiles them
 //! again, a change to the Soulseek, upload or download options patches the client, a change
-//! that takes effect only on a new session is flagged while connected, and a change to how we
-//! reach the server starts the watchdog over.
+//! that takes effect only on a new session is flagged while connected, a change to how we
+//! reach the server starts the watchdog over, and rooms added to the configuration are joined.
 
 use std::sync::Arc;
 
@@ -89,7 +89,9 @@ async fn apply(app: &AppState, applied: &Options, current: &Arc<Loaded<Options>>
     network.watchdog().restart();
   }
   if applied.rooms != values.rooms {
-    debug!("room list changed; the rooms added are joined at the next login");
+    app
+      .messaging
+      .configured_rooms_changed(&applied.rooms, &values.rooms);
   }
   true
 }
