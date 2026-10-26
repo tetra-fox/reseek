@@ -33,11 +33,11 @@ async fn a_signed_in_client_reads_what_is_built_and_hears_what_is_not() {
   assert_eq!(client.version().await.unwrap(), env!("CARGO_PKG_VERSION"));
   let state = client.application().await.unwrap();
   assert!(!state.server.is_connected);
-  match client.searches(&SearchListQuery::default()).await {
+  match client.analysis_jobs().await {
     Err(Error::Api { status, body }) => {
       assert_eq!(status.as_u16(), 503);
       assert_eq!(body.error, "soulseek_unavailable");
-      assert_eq!(body.detail.as_deref(), Some("searches not implemented yet"));
+      assert_eq!(body.detail.as_deref(), Some("analysis not implemented yet"));
     }
     other => panic!("{:?}", other.map(|_| ())),
   }
