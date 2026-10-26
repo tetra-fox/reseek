@@ -50,7 +50,7 @@
   </Button>
   <div class="mx-1 h-4 w-px bg-border"></div>
   <h1 class="flex min-w-0 items-center gap-1.5 text-sm select-none">
-    {#each heading as part, i (i)}
+    {#each heading as part, i (part)}
       {#if i > 0}<span class="text-fg-subtle">/</span>{/if}
       <span class={["truncate", i === heading.length - 1 ? "font-medium" : "text-fg-muted"]}>
         {part}
