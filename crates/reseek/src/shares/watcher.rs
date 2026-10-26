@@ -119,7 +119,7 @@ pub(super) async fn start(shares: Arc<Shares>, settings: Arc<Settings>) -> Optio
 
 /// What a watched path needs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Need {
+pub(super) enum Need {
   /// it changed: apply what is on disk
   Change,
   /// changes under it were dropped: scan it again
@@ -223,7 +223,7 @@ enum Write {
 }
 
 /// Applies the due paths in one transaction, then counts the shares again.
-async fn apply(
+pub(super) async fn apply(
   shares: &Arc<Shares>,
   settings: &Arc<Settings>,
   roots: &[PathBuf],

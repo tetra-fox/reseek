@@ -238,3 +238,74 @@ async fn a_startup_scan_leaves_a_held_slot_to_its_scan() {
   *lock(&shares.running) = None;
   drop(files);
 }
+
+#[tokio::test]
+async fn lost_events_rescan_the_directory_and_drop_what_is_gone() {
+  let (files, app) = shared_app().await;
+  let shares = app.state.shares.clone();
+  eventually(async || lock(&shares.running).is_none()).await;
+  let album = files.path().join("music/Album");
+  std::fs::remove_file(album.join("01.mp3")).unwrap();
+  std::fs::write(album.join("02.mp3"), "two").unwrap();
+  let settings = Arc::new(scanner::Settings::new(
+    shares.listed(),
+    &app.state.config.current().values,
+  ));
+  let roots = vec![files.path().join("music")];
+  watcher::apply(
+    &shares,
+    &settings,
+    &roots,
+    vec![(album, watcher::Need::Rescan)],
+  )
+  .await
+  .unwrap();
+  assert!(
+    names(&shares, "01").await.is_empty(),
+    "what is gone is pruned"
+  );
+  assert_eq!(names(&shares, "02").await, ["Music\\Album\\02.mp3"]);
+  drop(files);
+}
+
+#[tokio::test]
+async fn a_faulted_scan_keeps_the_served_index_ready_and_marks_a_scan_pending() {
+  let (files, app) = shared_app().await;
+  let shares = app.state.shares.clone();
+  eventually(async || lock(&shares.running).is_none()).await;
+  let before = lock(&shares.status).clone();
+  assert!(before.ready);
+  shares.publish(|status| {
+    status.scanning = true;
+    status.ready = false;
+  });
+  shares.faulted("the index refused a write", &before);
+  let shown = app.state.state.current().shares.clone();
+  assert!(shown.ready, "the index from before is still served");
+  assert!(shown.faulted && shown.scan_pending && !shown.scanning);
+  assert_eq!(shown.files, before.files);
+  drop(files);
+}
+
+#[tokio::test]
+async fn the_retention_check_rescans_only_without_a_recent_trusted_scan() {
+  let files = tempfile::tempdir().unwrap();
+  let config = config(files.path()).replace(
+    "[shares]\n",
+    "[shares.cache]\nretention = \"1h\"\n[shares]\n",
+  );
+  let app = app(&config, &[]).await;
+  let shares = app.state.shares.clone();
+  eventually(async || lock(&shares.running).is_none()).await;
+  assert!(!shares.retention_tick().await, "the startup scan is recent");
+  shares
+    .db
+    .write(|conn| repository::mark_latest_suspect(conn))
+    .await
+    .unwrap();
+  assert!(
+    shares.retention_tick().await,
+    "a suspect scan is no trusted one"
+  );
+  eventually(async || lock(&shares.running).is_none()).await;
+}

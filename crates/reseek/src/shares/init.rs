@@ -156,34 +156,44 @@ impl Shares {
         () = self.shutdown.cancelled() => return,
         _ = every.tick() => {}
       }
-      if lock(&self.status).scanning {
-        continue;
+      self.retention_tick().await;
+    }
+  }
+
+  /// Starts a scan when `shares.cache.retention` is set and no complete, trusted scan started
+  /// within it; true when one was started.
+  pub(super) async fn retention_tick(self: &Arc<Self>) -> bool {
+    if lock(&self.status).scanning {
+      return false;
+    }
+    let Some(retention) = self.config.current().values.shares.cache.retention else {
+      return false;
+    };
+    // a retention too long for the clock's milliseconds reaches back past every scan
+    let cutoff = scanner::now_ms() - i64::try_from(retention.as_millis()).unwrap_or(i64::MAX);
+    let scans = match self
+      .db
+      .read(move |conn| repository::scans_since(conn, cutoff))
+      .await
+    {
+      Ok(scans) => scans,
+      Err(e) => {
+        warn!(error = %e, "scheduled share rescan not checked");
+        return false;
       }
-      let Some(retention) = self.config.current().values.shares.cache.retention else {
-        continue;
-      };
-      // a retention too long for the clock's milliseconds reaches back past every scan
-      let cutoff = scanner::now_ms() - i64::try_from(retention.as_millis()).unwrap_or(i64::MAX);
-      let scans = match self
-        .db
-        .read(move |conn| repository::scans_since(conn, cutoff))
-        .await
-      {
-        Ok(scans) => scans,
-        Err(e) => {
-          warn!(error = %e, "scheduled share rescan not checked");
-          continue;
-        }
-      };
-      if scans.iter().any(|s| s.ended_at.is_some() && !s.suspect) {
-        continue;
-      }
-      info!(
-        minutes = retention.as_secs() / 60,
-        "Beginning scheduled re-scan of shares (previous scan is older than the retention)"
-      );
-      if let Err(e) = self.scan(false) {
+    };
+    if scans.iter().any(|s| s.ended_at.is_some() && !s.suspect) {
+      return false;
+    }
+    info!(
+      minutes = retention.as_secs() / 60,
+      "Beginning scheduled re-scan of shares (previous scan is older than the retention)"
+    );
+    match self.scan(false) {
+      Ok(()) => true,
+      Err(e) => {
         info!(?e, "scheduled share rescan not started");
+        false
       }
     }
   }
