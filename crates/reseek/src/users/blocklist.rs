@@ -7,7 +7,9 @@ use std::net::IpAddr;
 use std::path::Path;
 
 use crate::config::cidr::{IpRange, unmapped};
-use crate::config::validate::blacklist::{Format, UNDETECTED, detect, without_leading_zeros};
+use crate::config::validate::blacklist::{
+  Format, UNDETECTED, detect, is_data, without_leading_zeros,
+};
 
 /// How much of the file is read at a time.
 const READ_BUFFER: usize = 256 * 1024;
@@ -22,12 +24,10 @@ pub struct Blocklist {
 }
 
 impl Blocklist {
-  /// Reads the blocklist at `path`, its format told from its first data line.
+  /// Reads the blocklist at `path` in one pass, its format told from its first data line.
   pub fn load(path: &Path) -> Result<Self, String> {
-    let head = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let format = detect(&String::from_utf8_lossy(&head)).ok_or_else(|| UNDETECTED.to_string())?;
-    drop(head);
     let file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut format = None;
     let mut buckets: HashMap<u8, Vec<(u32, u32)>> = HashMap::new();
     for (index, line) in BufReader::with_capacity(READ_BUFFER, file)
       .split(b'\n')
@@ -36,9 +36,13 @@ impl Blocklist {
       let line = line.map_err(|e| format!("{}: {e}", path.display()))?;
       let line = String::from_utf8_lossy(&line);
       let line = line.trim();
-      if line.is_empty() || line.starts_with('#') {
+      if !is_data(line) {
         continue;
       }
+      let format = match format {
+        Some(format) => format,
+        None => *format.insert(detect(line).ok_or_else(|| UNDETECTED.to_string())?),
+      };
       let (first, last) = range(format, line).map_err(|reason| {
         let name = match format {
           Format::Cidr => "CIDR",
@@ -54,6 +58,9 @@ impl Blocklist {
         let octet = u8::try_from(octet).expect("the top byte of a u32");
         buckets.entry(octet).or_default().push((first, last));
       }
+    }
+    if format.is_none() {
+      return Err(UNDETECTED.to_string());
     }
     let mut count = 0;
     for ranges in buckets.values_mut() {

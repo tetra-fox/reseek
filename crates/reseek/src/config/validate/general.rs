@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use super::blacklist::{UNDETECTED, detect};
+use super::blacklist::{UNDETECTED, detect_file};
 use super::fields::{
   cidr_list, duration_at_least, duration_off_or_at_least, http_url, is_regex, length,
   off_or_at_least, range, required, url_path,
@@ -185,10 +185,8 @@ fn check_blacklist(blacklist: &Blacklist, report: &mut Report) {
     Some(file) => match readable_file(key, file) {
       Err(message) => report.add(key, message),
       Ok(()) if blacklist.enabled => {
-        let detected = std::fs::read(file)
-          .ok()
-          .and_then(|bytes| detect(&String::from_utf8_lossy(&bytes)));
-        if detected.is_none() {
+        // a file that can not be read was refused by the readable check above
+        if detect_file(file).ok().flatten().is_none() {
           report.add(key, UNDETECTED);
         }
       }
@@ -435,7 +433,10 @@ mod tests {
   fn unknown_block_scopes_are_refused() {
     let mut options = Options::default();
     options.blocking.default_scopes.push("downloads".into());
-    assert!(problems(&options).is_empty(), "every scope may be a default");
+    assert!(
+      problems(&options).is_empty(),
+      "every scope may be a default"
+    );
     options.blocking.default_scopes.push("everything".into());
     assert_eq!(
       problems(&options),

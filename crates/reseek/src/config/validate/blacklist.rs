@@ -5,6 +5,10 @@
 //! - DAT: `<first> - <last> , <level> , <description>` with zero-padded octets; the range is
 //!   the text before the first `,`.
 
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
+
 use crate::config::cidr::IpRange;
 
 /// A blocklist file format.
@@ -19,12 +23,13 @@ pub(crate) enum Format {
 pub(crate) const UNDETECTED: &str =
   "Failed to detect blacklist format. Only CIDR, P2P and DAT formats are supported";
 
-/// The format of a blocklist with this text, from its first data line.
-pub(crate) fn detect(text: &str) -> Option<Format> {
-  let line = text
-    .lines()
-    .map(str::trim)
-    .find(|line| !line.is_empty() && !line.starts_with('#'))?;
+/// Whether a trimmed line of a blocklist holds a range: it is not blank or a comment.
+pub(crate) fn is_data(line: &str) -> bool {
+  !line.is_empty() && !line.starts_with('#')
+}
+
+/// The format a blocklist whose first data line is `line` is in.
+pub(crate) fn detect(line: &str) -> Option<Format> {
   if line.parse::<IpRange>().is_ok() {
     return Some(Format::Cidr);
   }
@@ -36,6 +41,20 @@ pub(crate) fn detect(text: &str) -> Option<Format> {
   let first = line.split(',').next().unwrap_or(line);
   let range: String = first.chars().filter(|c| !c.is_whitespace()).collect();
   is_range(&without_leading_zeros(&range)).then_some(Format::Dat)
+}
+
+/// The format of the blocklist file at `path`, read up to its first data line; `None` when it
+/// has none or that line is in no format.
+pub(crate) fn detect_file(path: &Path) -> std::io::Result<Option<Format>> {
+  let reader = BufReader::new(File::open(path)?);
+  for line in reader.split(b'\n') {
+    let line = line?;
+    let line = String::from_utf8_lossy(&line);
+    if is_data(line.trim()) {
+      return Ok(detect(line.trim()));
+    }
+  }
+  Ok(None)
 }
 
 /// A `first-last` range.
@@ -71,7 +90,6 @@ mod tests {
 
   #[test]
   fn formats_are_told_from_the_first_data_line() {
-    assert_eq!(detect("# list\n\n1.2.4.0/24\n"), Some(Format::Cidr));
     assert_eq!(detect("1.2.4.7"), Some(Format::Cidr));
     assert_eq!(
       detect("China Internet Information Center (CNNIC):1.2.4.0-1.2.4.255"),
@@ -86,8 +104,22 @@ mod tests {
       detect("001.002.004.000 - 001.002.004.255 , 000 , Botnet on Telekom Malaysia"),
       Some(Format::Dat)
     );
-    assert_eq!(detect("# only comments\n\n"), None);
-    assert_eq!(detect(""), None);
     assert_eq!(detect("hello world"), None);
+  }
+
+  #[test]
+  fn a_file_is_told_from_its_first_data_line_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = |text: &str| {
+      let path = dir.path().join("list");
+      std::fs::write(&path, text).unwrap();
+      detect_file(&path).unwrap()
+    };
+    assert_eq!(
+      file("# list\n\n1.2.4.0/24\nhello world\n"),
+      Some(Format::Cidr)
+    );
+    assert_eq!(file("# only comments\n\n"), None);
+    assert_eq!(file(""), None);
   }
 }
