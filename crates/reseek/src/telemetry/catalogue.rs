@@ -3,11 +3,14 @@
 //! network. The engines hold the handles and update them where things happen; until then every
 //! value is zero. None of these carries labels.
 
+use std::sync::{Mutex, MutexGuard, PoisonError};
+
 use super::derived::{Ema, TimedCounter};
 use super::registry::{Counter, Gauge, Histogram, Registry, exponential};
+use super::transfers::{TransferFamily, TransferMetrics};
 
 /// The prefix of every metric of the daemon's own.
-const PREFIX: &str = "reseek";
+pub(super) const PREFIX: &str = "reseek";
 
 /// Latencies of small steps, in milliseconds: 0.1 to 102.4.
 fn small_latency() -> Vec<f64> {
@@ -22,31 +25,6 @@ fn browse_latency() -> Vec<f64> {
 /// Enqueue latencies, in milliseconds: 1 to 32768.
 fn enqueue_latency() -> Vec<f64> {
   exponential(1.0, 2.0, 16)
-}
-
-/// Transfer speeds, in bytes per second: 1 KiB/s to 1 GiB/s.
-fn speeds() -> Vec<f64> {
-  vec![
-    1024.0,
-    10240.0,
-    51200.0,
-    102_400.0,
-    204_800.0,
-    307_200.0,
-    409_600.0,
-    512_000.0,
-    1_048_576.0,
-    2_097_152.0,
-    4_194_304.0,
-    6_291_456.0,
-    10_485_760.0,
-    26_214_400.0,
-    52_428_800.0,
-    104_857_600.0,
-    262_144_000.0,
-    524_288_000.0,
-    1_073_741_824.0,
-  ]
 }
 
 /// Other users' searches that reach us.
@@ -118,37 +96,6 @@ pub struct EnqueueMetrics {
   pub requests_rejected: Counter,
 }
 
-/// The transfers of one direction.
-#[derive(Debug)]
-pub struct TransferMetrics {
-  /// users with queued transfers
-  pub queued_users: Gauge,
-  /// queued transfers
-  pub queued_files: Gauge,
-  /// the size of the queued transfers in bytes
-  pub queued_bytes: Gauge,
-  /// users with transfers in progress
-  pub in_progress_users: Gauge,
-  /// transfers in progress
-  pub in_progress_files: Gauge,
-  /// the size of the transfers in progress in bytes
-  pub in_progress_bytes: Gauge,
-  /// the moving average of the summed speed of the transfers in progress
-  pub in_progress_speed_total: Ema,
-  /// the moving average of the mean speed of the transfers in progress
-  pub in_progress_speed_average: Ema,
-  /// transfers that succeeded
-  pub completed_succeeded: Counter,
-  /// bytes moved by the transfers that succeeded
-  pub completed_bytes: Counter,
-  /// transfers that failed in any way
-  pub completed_failed: Counter,
-  /// the average speeds of the transfers that succeeded
-  pub completed_speed_average: Histogram,
-  /// the moving average of `completed_speed_average`
-  pub completed_speed_average_current: Ema,
-}
-
 /// Our place in the distributed search network.
 #[derive(Debug)]
 pub struct DistributedMetrics {
@@ -175,10 +122,8 @@ pub struct Catalogue {
   pub browse: BrowseMetrics,
   /// incoming enqueue requests
   pub enqueue: EnqueueMetrics,
-  /// uploads
-  pub uploads: TransferMetrics,
-  /// downloads
-  pub downloads: TransferMetrics,
+  /// both directions of transfers, taken under their lock
+  transfers: Mutex<TransferFamily>,
   /// the distributed network
   pub distributed: DistributedMetrics,
   /// where they are all registered
@@ -317,8 +262,10 @@ impl Default for Catalogue {
         "Total number of incoming enqueue requests rejected",
       ),
     };
-    let uploads = transfers(&mut r, "uploads");
-    let downloads = transfers(&mut r, "downloads");
+    let transfers = TransferFamily {
+      uploads: TransferMetrics::register(&mut r, "uploads"),
+      downloads: TransferMetrics::register(&mut r, "downloads"),
+    };
     let distributed = DistributedMetrics {
       children: r.gauge(
         name("dnet_children"),
@@ -348,8 +295,7 @@ impl Default for Catalogue {
       search,
       browse,
       enqueue,
-      uploads,
-      downloads,
+      transfers: Mutex::new(transfers),
       distributed,
       registry: r,
     }
@@ -357,71 +303,21 @@ impl Default for Catalogue {
 }
 
 impl Catalogue {
+  /// The metrics of both directions of transfers, held until the guard is dropped, so the
+  /// figures one update changes together are seen together.
+  pub fn transfers(&self) -> MutexGuard<'_, TransferFamily> {
+    // every update is made whole before the lock is let go
+    self
+      .transfers
+      .lock()
+      .unwrap_or_else(PoisonError::into_inner)
+  }
+
   /// Ends the minute of every per-minute count, publishing each to its gauge.
   pub fn elapse_minute(&self) {
     self.search.request_receive_rate.elapse();
     self.search.request_drop_rate.elapse();
     self.search.response_send_rate.elapse();
-  }
-}
-
-/// The transfer metrics of `dir`, `uploads` or `downloads`.
-fn transfers(r: &mut Registry, dir: &str) -> TransferMetrics {
-  let name = |rest: &str| format!("{PREFIX}_transfers_{dir}_{rest}");
-  TransferMetrics {
-    queued_users: r.gauge(
-      name("queued_users_current"),
-      format!("Current number of unique users with queued {dir}"),
-    ),
-    queued_files: r.gauge(
-      name("queued_files_current"),
-      format!("Current number of queued {dir}"),
-    ),
-    queued_bytes: r.gauge(
-      name("queued_bytes_current"),
-      format!("Current total size, in bytes, of queued {dir}"),
-    ),
-    in_progress_users: r.gauge(
-      name("in_progress_users_current"),
-      format!("Current number of unique users with in-progress {dir}"),
-    ),
-    in_progress_files: r.gauge(
-      name("in_progress_files_current"),
-      format!("Current number of in-progress {dir}"),
-    ),
-    in_progress_bytes: r.gauge(
-      name("in_progress_bytes_current"),
-      format!("Current total size, in bytes, of in-progress {dir}"),
-    ),
-    in_progress_speed_total: Ema::new(r.gauge(
-      name("in_progress_speed_total_current"),
-      format!("Current total speed, in bytes per second, of in-progress {dir}"),
-    )),
-    in_progress_speed_average: Ema::new(r.gauge(
-      name("in_progress_speed_average_current"),
-      format!("Current average speed, in bytes per second, of in-progress {dir}"),
-    )),
-    completed_succeeded: r.counter(
-      name("completed_succeeded"),
-      format!("Total number of {dir} that completed successfully"),
-    ),
-    completed_bytes: r.counter(
-      name("completed_bytes"),
-      format!("Total number of bytes transferred by successfully completed {dir}"),
-    ),
-    completed_failed: r.counter(
-      name("completed_failed"),
-      format!("Total number of {dir} that failed"),
-    ),
-    completed_speed_average: r.histogram(
-      name("completed_speed_average"),
-      format!("The average speed of completed {dir}, in bytes per second"),
-      speeds(),
-    ),
-    completed_speed_average_current: Ema::new(r.gauge(
-      name("completed_speed_average_current"),
-      format!("Current average speed, in bytes per second, of completed {dir}"),
-    )),
   }
 }
 

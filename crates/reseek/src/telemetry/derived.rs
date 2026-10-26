@@ -61,13 +61,14 @@ impl Ema {
     }
   }
 
-  /// Moves the average towards `x`; the first value is the average.
-  pub fn update(&self, x: f64) {
+  /// Moves the average towards `x` and returns it; the first value is the average.
+  pub fn update(&self, x: f64) -> f64 {
     // the value is replaced whole before the lock is let go
     let mut value = self.value.lock().unwrap_or_else(PoisonError::into_inner);
     let next = value.map_or(x, |v| v + (x - v) * ALPHA);
     *value = Some(next);
     self.gauge.set(next);
+    next
   }
 
   /// Empties the average and publishes 0.

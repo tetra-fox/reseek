@@ -7,6 +7,7 @@ pub mod exposition;
 pub mod registry;
 pub mod reports;
 mod system;
+pub mod transfers;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
