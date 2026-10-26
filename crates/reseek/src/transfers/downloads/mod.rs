@@ -30,7 +30,7 @@ use api_types::transfers::{TransferDirection, TransferStates};
 use cascade::Watcher;
 use chrono::Utc;
 use rusqlite::params;
-use tokio::sync::{OwnedMutexGuard, Semaphore};
+use tokio::sync::Semaphore;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -48,6 +48,7 @@ use crate::live::Live;
 use crate::network::Network;
 use crate::paths::Paths;
 use crate::telemetry::Telemetry;
+use crate::turns::{Turn, Turns};
 use crate::users::Directory;
 pub use enqueue::{Batching, Enqueued, FileRequest, NewBatch};
 
@@ -89,7 +90,7 @@ pub struct Downloads {
   tasks: TaskTracker,
   in_flight: Mutex<HashMap<Uuid, InFlight>>,
   /// one enqueue per user at a time
-  turns: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
+  turns: Turns,
   /// the enqueue calls of the API that may run at once
   enqueue_calls: Semaphore,
   /// whether the downloads a stop interrupted were resumed, which the first login does
@@ -101,29 +102,6 @@ pub struct Downloads {
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
   // every change under these locks is made whole before the lock is let go
   mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-/// One user's turn to enqueue, held until dropped; the user's entry goes once nobody holds or
-/// waits for it.
-pub(crate) struct Turn {
-  turns: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
-  username: String,
-  guard: Option<OwnedMutexGuard<()>>,
-}
-
-impl Drop for Turn {
-  fn drop(&mut self) {
-    let mut turns = lock(&self.turns);
-    let Some(mutex) = turns.get(&self.username) else {
-      return;
-    };
-    // the map's and the guard's references are the only ones when nobody waits
-    let idle = Arc::strong_count(mutex) == 2;
-    self.guard.take();
-    if idle {
-      turns.remove(&self.username);
-    }
-  }
 }
 
 impl Downloads {
@@ -162,7 +140,7 @@ impl Downloads {
       shutdown,
       tasks: TaskTracker::new(),
       in_flight: Mutex::new(HashMap::new()),
-      turns: Arc::default(),
+      turns: Turns::default(),
       enqueue_calls: Semaphore::new(ENQUEUE_CALLS),
       resumed: AtomicBool::new(false),
       asked: Mutex::new(HashMap::new()),
@@ -179,16 +157,7 @@ impl Downloads {
 
   /// Waits for `username`'s turn to enqueue.
   async fn turn(&self, username: &str) -> Turn {
-    let mutex = lock(&self.turns)
-      .entry(username.to_string())
-      .or_default()
-      .clone();
-    let guard = mutex.lock_owned().await;
-    Turn {
-      turns: self.turns.clone(),
-      username: username.to_string(),
-      guard: Some(guard),
-    }
+    self.turns.take(username).await
   }
 
   /// Writes `record` whole, adds its state to its history when it `entered` it, and pushes it:

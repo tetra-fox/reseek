@@ -25,6 +25,7 @@ pub mod shares;
 pub mod state;
 pub mod telemetry;
 pub mod transfers;
+pub mod turns;
 pub mod ui;
 pub mod users;
 pub mod version;
