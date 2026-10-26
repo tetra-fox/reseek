@@ -72,6 +72,11 @@ fn walk(dir: &Path, prefix: &str, found: &mut Vec<Member>, top: bool) -> io::Res
     if metadata.is_dir() {
       walk(&path, &inner, found, false)?;
     } else if metadata.is_file() {
+      // a zip records a name's length in 16 bits
+      if u16::try_from(inner.len()).is_err() {
+        debug!(path = %path.display(), "file left out of an archive: its name is too long for a zip");
+        continue;
+      }
       found.push(Member {
         path,
         name: inner,
@@ -81,6 +86,11 @@ fn walk(dir: &Path, prefix: &str, found: &mut Vec<Member>, top: bool) -> io::Res
     }
   }
   Ok(())
+}
+
+/// The length field of a member's name, which the walk keeps within 16 bits.
+fn name_length(name: &[u8]) -> u16 {
+  u16::try_from(name.len()).expect("the walk leaves out names too long for a zip")
 }
 
 /// What the writer keeps of an entry until its central record is written.
@@ -174,7 +184,7 @@ impl Writer {
     let unknown = if large { u32::MAX } else { 0 };
     u32le(&mut out, unknown);
     u32le(&mut out, unknown);
-    u16le(&mut out, name.len() as u16);
+    u16le(&mut out, name_length(name.as_bytes()));
     u16le(&mut out, if large { 20 } else { 0 });
     out.extend_from_slice(name.as_bytes());
     if large {
@@ -251,7 +261,7 @@ impl Writer {
       };
       u32le(&mut out, size);
       u32le(&mut out, size);
-      u16le(&mut out, entry.name.len() as u16);
+      u16le(&mut out, name_length(&entry.name));
       u16le(&mut out, if large { extra.len() as u16 + 4 } else { 0 });
       u16le(&mut out, 0);
       u16le(&mut out, 0);
