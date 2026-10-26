@@ -204,19 +204,20 @@ pub async fn user_info(edges: &Edges, username: &str, endpoint: SocketAddr) -> U
       upload_permitted: None,
     };
   }
-  profile(username)
+  profile(edges, username).await
 }
 
-/// Our user info with our upload slots and this user's place in the queue. Until the share and
-/// the upload queue answer it, it is the empty info.
-fn profile(username: &str) -> UserInfo {
+/// Our user info: our description and picture, with our upload slots and this user's place in
+/// the queue. Until the upload queue is wired the slots and the place are 0.
+async fn profile(edges: &Edges, username: &str) -> UserInfo {
   debug!(
     username,
-    "user info answered empty; user info is not answered yet"
+    "user info answered without upload figures; the upload queue is not wired yet"
   );
+  let local = edges.shares.user_info().await;
   UserInfo {
-    description: String::new(),
-    picture: None,
+    description: local.description,
+    picture: local.picture,
     upload_slots: 0,
     queue_length: 0,
     has_free_upload_slot: false,
@@ -325,7 +326,9 @@ mod tests {
       directory_contents(&edges, "alice", peer, &name("@@music")),
       None
     );
-    assert_eq!(user_info(&edges, "alice", peer).await.description, "");
+    let info = user_info(&edges, "alice", peer).await;
+    assert_eq!(info.description, "A reseek user.");
+    assert_eq!((info.upload_slots, info.queue_length), (0, 0));
   }
 
   #[tokio::test]
