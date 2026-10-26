@@ -94,7 +94,6 @@ impl Directory {
           path.display()
         )
       })?;
-      info!(count = list.count(), path = %path.display(), "Blacklist updated");
       blocks.set_blocklist(Some((path, list)));
     }
     let (toucher, receiver) = Toucher::channel();
@@ -367,10 +366,7 @@ impl Directory {
       return;
     };
     match load_blocklist(path.clone()).await {
-      Ok(list) => {
-        info!(count = list.count(), path = %path.display(), "Blacklist updated");
-        self.blocks.set_blocklist(Some((path, list)));
-      }
+      Ok(list) => self.blocks.set_blocklist(Some((path, list))),
       Err(e) => error!(
         path = %path.display(),
         error = e,
@@ -389,16 +385,17 @@ fn blocklist_file(options: &Options) -> Option<PathBuf> {
     .flatten()
 }
 
-/// Reads the blocklist file at `path` on a blocking thread, logging how long it took.
+/// Reads the blocklist file at `path` on a blocking thread, logging what it holds and how long
+/// it took.
 async fn load_blocklist(path: PathBuf) -> Result<Blocklist, String> {
   let started = Instant::now();
   tokio::task::spawn_blocking(move || {
     let list = Blocklist::load(&path)?;
-    debug!(
-      file = %path.display(),
-      entries = list.count(),
+    info!(
+      count = list.count(),
+      path = %path.display(),
       ms = started.elapsed().as_millis() as u64,
-      "blocklist loaded"
+      "Blacklist updated"
     );
     Ok(list)
   })
