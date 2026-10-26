@@ -1,5 +1,6 @@
 //! The daemon's own secret key, kept in `auth.db` so sessions last across restarts, and what is
-//! made with it: the MAC on session cookies and sealed state the browser carries.
+//! made with it: the MAC on session cookies and on file links, and sealed state the browser
+//! carries.
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -29,6 +30,8 @@ const NONCE_BYTES: usize = 12;
 pub struct Secret {
   /// signs session ids
   mac_key: [u8; 32],
+  /// signs the tokens that let a link load a file
+  link_key: [u8; 32],
   /// seals what the browser carries for us
   sealer: Aes256Gcm,
 }
@@ -56,6 +59,12 @@ impl Secret {
     Ok(Self::from_master(&master))
   }
 
+  /// The keys derived from `master`, for tests that need a secret without a database.
+  #[cfg(test)]
+  pub fn for_tests(master: &[u8]) -> Self {
+    Self::from_master(master)
+  }
+
   fn from_master(master: &[u8]) -> Self {
     let derive = |label: &[u8]| -> [u8; 32] {
       let mut mac =
@@ -66,6 +75,7 @@ impl Secret {
     let seal_key = derive(b"reseek sealed state");
     Self {
       mac_key: derive(b"reseek session cookie"),
+      link_key: derive(b"reseek file link"),
       sealer: Aes256Gcm::new(&seal_key.into()),
     }
   }
@@ -83,11 +93,22 @@ impl Secret {
     self.mac(data).verify_slice(&signature).is_ok()
   }
 
+  /// The MAC of `data` with the key of file links, as base64url: an HMAC-SHA256 that a
+  /// session cookie's MAC never equals.
+  pub fn sign_link(&self, data: &str) -> String {
+    URL_SAFE_NO_PAD.encode(keyed(&self.link_key, data).finalize().into_bytes())
+  }
+
+  /// Whether `signature` is the file-link MAC of `data`, compared in constant time.
+  pub fn verify_link(&self, data: &str, signature: &str) -> bool {
+    let Ok(signature) = URL_SAFE_NO_PAD.decode(signature) else {
+      return false;
+    };
+    keyed(&self.link_key, data).verify_slice(&signature).is_ok()
+  }
+
   fn mac(&self, data: &str) -> HmacSha256 {
-    let mut mac =
-      <HmacSha256 as Mac>::new_from_slice(&self.mac_key).expect("HMAC takes a 32-byte key");
-    mac.update(data.as_bytes());
-    mac
+    keyed(&self.mac_key, data)
   }
 
   /// `plain` encrypted and authenticated, as base64url text.
@@ -113,6 +134,13 @@ impl Secret {
   }
 }
 
+/// An HMAC-SHA256 of `data` under `key`, ready to finish or verify.
+fn keyed(key: &[u8; 32], data: &str) -> HmacSha256 {
+  let mut mac = <HmacSha256 as Mac>::new_from_slice(key).expect("HMAC takes a 32-byte key");
+  mac.update(data.as_bytes());
+  mac
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -126,6 +154,13 @@ mod tests {
     assert!(!secret.verify("session-ie", &signature));
     assert!(!other.verify("session-id", &signature));
     assert!(!secret.verify("session-id", "not base64!"));
+    let link = secret.sign_link("session-id");
+    assert!(secret.verify_link("session-id", &link));
+    assert!(
+      !secret.verify("session-id", &link),
+      "a link MAC is no cookie MAC"
+    );
+    assert!(!other.verify_link("session-id", &link));
 
     let sealed = secret.seal(b"state and nonce");
     assert_eq!(secret.open(&sealed).unwrap(), b"state and nonce");
