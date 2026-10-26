@@ -96,6 +96,39 @@ fn raisable(name: &str) -> Result<EventType, ApiError> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::testing::{app, request};
+  use std::time::Duration;
+
+  #[tokio::test]
+  async fn a_raised_sample_is_logged_and_counted() {
+    let app = app(
+      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
+      &[],
+    )
+    .await;
+    let raised = app
+      .send(request(
+        "POST",
+        "/api/v0/events/noop",
+        Some(serde_json::json!("x")),
+      ))
+      .await;
+    assert_eq!(raised.status, 201);
+    let id = raised.json()["id"].clone();
+    assert_eq!(raised.json()["type"], "Noop");
+    for _ in 0..200 {
+      let listed = app
+        .send(request("GET", "/api/v0/events?type=Noop,UserBlocked", None))
+        .await;
+      assert_eq!(listed.status, 200);
+      if listed.headers["x-total-count"] == "1" {
+        assert_eq!(listed.json()[0]["id"], id);
+        return;
+      }
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the sample was never logged");
+  }
 
   #[test]
   fn samples_are_made_of_known_types_but_not_the_script_record() {

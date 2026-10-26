@@ -24,7 +24,7 @@ use crate::config::api_key::PrimaryApiKey;
 use crate::config::load::{self, ConfigFiles, Sources};
 use crate::config::{Options, redact};
 use crate::db::Database;
-use crate::events::EventBus;
+use crate::events::{EventBus, EventLog};
 use crate::http::{self, pipeline};
 use crate::live::Live;
 use crate::logging::{self, LogBuffer, Logging, Sinks};
@@ -109,10 +109,9 @@ impl AppState {
   ) -> Result<Self, StartError> {
     let startup = config.current();
     let primary_key = match &startup.values.web.authentication.api_key {
-      Some(text) => Some(Arc::new(
-        PrimaryApiKey::parse(text)
-          .map_err(|e| StartError::Config(format!("web.authentication.api_key: {e}")))?,
-      )),
+      Some(text) => Some(Arc::new(PrimaryApiKey::parse(text).map_err(|e| {
+        StartError::Config(format!("web.authentication.api_key: {e}"))
+      })?)),
       None => None,
     };
     let url_base = pipeline::url_base(&startup.values.web.url_base).into();
@@ -130,7 +129,11 @@ impl AppState {
     let transfers = crate::transfers::open(&location)
       .await
       .map_err(|e| StartError::Open(format!("transfers.db: {e}")))?;
-    let services = Services::unavailable();
+    let event_log = EventLog::open(&location, &events, config.clone(), shutdown.clone())
+      .await
+      .map_err(|e| StartError::Open(format!("events.db: {e}")))?;
+    let mut services = Services::unavailable();
+    services.events = event_log;
     Ok(Self {
       config,
       startup,
