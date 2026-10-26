@@ -1,11 +1,12 @@
-//! Every operation of the API document, and a request for each that its checks let through:
-//! the path parameters, the queries and the bodies a route needs, with the relay's headers.
+//! Every operation of the API document, a request for each that its checks let through (the
+//! path parameters, the queries and the bodies a route needs, with the relay's headers), and
+//! sending it.
 
 use axum::body::Body;
 use axum::http::{Method, Request};
 use serde_json::{Value, json};
 
-use super::{request, with};
+use super::{Answer, TestApp, request, with};
 
 /// The API key [`CONFIG`] gives an administrator, for the routes an agent calls.
 pub const KEY: &str = "robot-key-0123456789";
@@ -43,6 +44,26 @@ pub fn operations() -> Vec<Operation> {
       }
     }
   }
+  operations
+}
+
+/// Sends `operation`'s probe, the event stream read only for its status.
+pub async fn answer(app: &TestApp, operation: &Operation) -> Answer {
+  if operation.route == "/api/v0/live" {
+    let stream = app.stream_from("127.0.0.1:40000", probe(operation)).await;
+    return Answer {
+      status: stream.status,
+      headers: stream.headers,
+      body: Default::default(),
+    };
+  }
+  app.send(probe(operation)).await
+}
+
+/// The operations in the order they are probed: stopping and restarting the daemon last.
+pub fn in_order() -> Vec<Operation> {
+  let mut operations = operations();
+  operations.sort_by_key(|op| op.route == "/api/v0/application" && op.method != Method::GET);
   operations
 }
 
