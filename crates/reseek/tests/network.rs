@@ -104,10 +104,7 @@ async fn the_daemon_logs_in_with_its_shares_counted_and_connects_when_asked() {
     !state.connection_watchdog.is_enabled,
     "stopped once connected"
   );
-  assert_eq!(
-    state.shares.files, 2,
-    "the shares were ready before the login"
-  );
+  assert_eq!(state.shares.files, 2);
 
   // the server learnt what we share, which another user reads from it
   let watcher = server.login("watcher", quiet()).await;
