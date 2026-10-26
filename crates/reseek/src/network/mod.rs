@@ -28,10 +28,11 @@ use crate::config::Options;
 use crate::services::Connected;
 use crate::shares::Shares;
 use crate::state::StateOwner;
+use crate::telemetry::Telemetry;
 use crate::users::Directory;
 pub use changes::follow_changes;
-pub use events::{follow_shared_counts, observe_latency};
-use resolvers::{Edges, resolvers};
+pub use events::{follow_shared_counts, observe_client};
+use resolvers::{Edges, IncomingSearches, resolvers};
 use watchdog::Watchdog;
 
 /// How long our own statistics and privileges are kept before a search response fetches them
@@ -104,6 +105,8 @@ pub struct Network {
   following: Mutex<Option<JoinHandle<()>>>,
   /// tells that task to end once it has handled every event raised so far
   drained: CancellationToken,
+  /// what other users are answered from
+  edges: Arc<Edges>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -113,38 +116,51 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 impl Network {
   /// A disconnected client with the options `config` gives, answering other users through
-  /// `users` and `shares`, and a watchdog that is off. Fails only for options that did not pass
-  /// validation.
+  /// `users` and `shares` and counting the answers in `telemetry`, and a watchdog that is off.
+  /// Fails only for options that did not pass validation.
   pub fn new(
     config: &Watcher<Options>,
     users: Arc<Directory>,
     shares: Arc<Shares>,
+    telemetry: Arc<Telemetry>,
     state: StateOwner,
     shutdown: CancellationToken,
   ) -> Result<Arc<Self>, String> {
-    let mut client_options = options::client_options(&config.current().values)?;
-    client_options.resolvers = resolvers(Arc::new(Edges {
-      users,
-      shares: shares.clone(),
-    }));
-    let client = Client::new(client_options).map_err(|e| e.to_string())?;
-    let events = client.subscribe();
-    let watchdog = Watchdog::new(
-      client.clone(),
-      config.clone(),
-      state.clone(),
-      shares,
-      shutdown,
-    );
-    Ok(Arc::new(Self {
-      client,
-      watchdog,
-      state,
-      excluded: Mutex::new(Arc::from(Vec::new())),
-      statistics: tokio::sync::Mutex::new(None),
-      events: Mutex::new(Some(events)),
-      following: Mutex::new(None),
-      drained: CancellationToken::new(),
+    let startup = config.current();
+    let mut client_options = options::client_options(&startup.values)?;
+    client_options.validate().map_err(|e| e.to_string())?;
+    let searches = IncomingSearches::new(&startup.values, shutdown.clone());
+    Ok(Arc::new_cyclic(|this| {
+      let edges = Arc::new(Edges::new(
+        users,
+        shares.clone(),
+        config.clone(),
+        telemetry,
+        this.clone(),
+        searches,
+      ));
+      client_options.resolvers = resolvers(edges.clone());
+      // the options were validated above, which is all a new client can fail on
+      let client = Client::new(client_options).expect("the client options were validated");
+      let events = client.subscribe();
+      let watchdog = Watchdog::new(
+        client.clone(),
+        config.clone(),
+        state.clone(),
+        shares,
+        shutdown,
+      );
+      Self {
+        client,
+        watchdog,
+        state,
+        excluded: Mutex::new(Arc::from(Vec::new())),
+        statistics: tokio::sync::Mutex::new(None),
+        events: Mutex::new(Some(events)),
+        following: Mutex::new(None),
+        drained: CancellationToken::new(),
+        edges,
+      }
     }))
   }
 
@@ -161,6 +177,11 @@ impl Network {
   /// The phrases the server asks our search responses to leave out.
   pub fn excluded_phrases(&self) -> Arc<[String]> {
     lock(&self.excluded).clone()
+  }
+
+  /// How many of other users' searches wait for a worker now.
+  pub fn searches_waiting(&self) -> usize {
+    self.edges.searches.waiting()
   }
 
   /// Starts following the client's events for `app`; called once, before anything connects.

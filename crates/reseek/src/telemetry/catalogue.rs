@@ -78,6 +78,8 @@ pub struct SearchMetrics {
   pub responses_sent: Counter,
   /// responses sent in the last minute
   pub response_send_rate: TimedCounter,
+  /// responses kept for searchers that could not be reached yet
+  pub response_cache_size: Gauge,
 }
 
 /// Other users browsing our shares.
@@ -246,6 +248,10 @@ impl Default for Catalogue {
         name("search_incoming_response_send_rate_current"),
         "Number of search responses sent in the last minute",
       )),
+      response_cache_size: r.gauge(
+        name("search_response_cache_size"),
+        "Number of search responses kept for searchers that could not be reached yet",
+      ),
     };
     let browse = BrowseMetrics {
       requests_received: r.counter(
@@ -425,7 +431,7 @@ mod tests {
   use crate::telemetry::registry::text;
 
   /// The names dashboards are built on, besides the transfer families.
-  const FIXED: [&str; 32] = [
+  const FIXED: [&str; 33] = [
     "reseek_search_incoming_requests_received",
     "reseek_search_incoming_request_receive_rate_current",
     "reseek_search_incoming_requests_dropped",
@@ -439,6 +445,7 @@ mod tests {
     "reseek_search_incoming_response_latency_current",
     "reseek_search_incoming_responses_sent",
     "reseek_search_incoming_response_send_rate_current",
+    "reseek_search_response_cache_size",
     "reseek_browse_requests_received",
     "reseek_browse_response_latency",
     "reseek_browse_response_latency_current",

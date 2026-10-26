@@ -51,13 +51,11 @@ async fn run(app: AppState) {
   }
   app.shares.initialized().await;
 
-  let latency = app.clone();
-  app
-    .clock
-    .every(Every::Minute, "distributed latency", move |_| {
-      network::observe_latency(&latency);
-      async {}
-    });
+  let observed = app.clone();
+  app.clock.every(Every::Minute, "client figures", move |_| {
+    network::observe_client(&observed);
+    async {}
+  });
   app.clock.start();
 
   let relay = &options.relay;

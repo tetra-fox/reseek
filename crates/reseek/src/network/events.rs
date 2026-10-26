@@ -455,16 +455,18 @@ fn server_message(message: &str) {
   info!(message, "Server message");
 }
 
-/// Observes the distributed network's broadcast latency into its metrics; run once a minute.
-pub fn observe_latency(app: &AppState) {
-  let latency = app
-    .network
-    .client()
+/// Reads into the metrics what only the client knows: the distributed network's broadcast
+/// latency and how many search responses wait for their searcher; run once a minute.
+pub fn observe_client(app: &AppState) {
+  let client = app.network.client();
+  let latency = client
     .distributed_network()
     .average_broadcast_latency
     .unwrap_or(0.0);
-  let metrics = &app.telemetry.metrics().distributed;
-  metrics.broadcast_latency.observe(latency);
-  metrics.broadcast_latency_current.set(latency);
-  trace!(latency, "distributed broadcast latency observed");
+  let metrics = app.telemetry.metrics();
+  metrics.distributed.broadcast_latency.observe(latency);
+  metrics.distributed.broadcast_latency_current.set(latency);
+  let kept = client.undelivered_search_responses();
+  metrics.search.response_cache_size.set(kept as f64);
+  trace!(latency, kept, "client figures observed");
 }

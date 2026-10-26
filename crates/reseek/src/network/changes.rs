@@ -1,6 +1,7 @@
-//! Following the options while running: a change to the Soulseek, upload or download options
-//! patches the client, a change that takes effect only on a new session is flagged while
-//! connected, and a change to how we reach the server starts the watchdog over.
+//! Following the options while running: a change to the search request filters compiles them
+//! again, a change to the Soulseek, upload or download options patches the client, a change
+//! that takes effect only on a new session is flagged while connected, and a change to how we
+//! reach the server starts the watchdog over.
 
 use std::sync::Arc;
 
@@ -42,6 +43,12 @@ pub async fn follow_changes(app: AppState) {
 async fn apply(app: &AppState, applied: &Options, current: &Arc<Loaded<Options>>) -> bool {
   let network = &app.network;
   let values = &current.values;
+  if applied.filters.search.request != values.filters.search.request {
+    network
+      .edges
+      .searches
+      .refilter(&values.filters.search.request);
+  }
   let mut reconnect_required = false;
   if applied.soulseek != values.soulseek
     || applied.transfers.upload != values.transfers.upload

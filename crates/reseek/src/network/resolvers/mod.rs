@@ -1,21 +1,32 @@
 //! How we answer what other users ask of us: an upload queued, our share listing, a folder's
 //! contents, a search, our user info and a file's place in our upload queue. Each answer passes
 //! the checks at the network's edge first: a name with a `.` or `..` part is refused, and a user
-//! blocked from what they ask for gets what a blocked user gets. What is shared and the upload
-//! queue then decide the answer; until they are wired, each answers that nothing is here.
+//! blocked from what they ask for gets what a blocked user gets. Listings, folders and searches
+//! are answered from what we share. Until the upload queue is wired, uploads are refused, places
+//! in the queue go unanswered, and the queue figures say every slot is free.
+
+mod browse;
+mod search;
 
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use api_types::blocking::BlockScope;
-use soulseek_client::{BrowseReply, ClientError, LogLimiter, Resolvers, SearchReply};
-use soulseek_proto::peer::{BrowseResponse, Directory, UserInfo};
-use soulseek_proto::{RemoteFilename, SearchQuery};
+use cascade::Watcher;
+use soulseek_client::{ClientError, LogLimiter, Resolvers};
+use soulseek_proto::RemoteFilename;
+use soulseek_proto::peer::UserInfo;
 use tracing::{debug, info, trace, warn};
 
+pub use browse::{browse, directory_contents};
+pub use search::{IncomingSearches, search};
+
+use super::Network;
+use crate::config::Options;
 use crate::safety::traverses;
 use crate::shares::Shares;
-use crate::users::Directory as Users;
+use crate::telemetry::Telemetry;
+use crate::users::{DEFAULT_GROUP, Directory as Users};
 
 /// The refusal a peer gets for a file we do not share to them.
 pub const NOT_SHARED: &str = "File not shared.";
@@ -28,9 +39,43 @@ static BLOCKED: LogLimiter = LogLimiter::new();
 /// What the answers are made from.
 pub struct Edges {
   /// who is blocked from what
-  pub users: Arc<Users>,
+  users: Arc<Users>,
   /// what we share
-  pub shares: Arc<Shares>,
+  shares: Arc<Shares>,
+  /// the options, read once per request
+  config: Watcher<Options>,
+  /// the metrics the answers are counted in
+  telemetry: Arc<Telemetry>,
+  /// the network the answers go out on, for the requester's address and our own figures
+  network: Weak<Network>,
+  /// the workers, the waiting count and the request filters of other users' searches
+  pub(super) searches: IncomingSearches,
+  /// held while a missing browse cache is written, so browses that find it missing at once
+  /// write it once
+  rebuilding: tokio::sync::Mutex<()>,
+}
+
+impl Edges {
+  /// The answers from `users`, `shares` and `config`, counted in `telemetry` and sent through
+  /// `network`, with `searches` working out the searches.
+  pub(super) fn new(
+    users: Arc<Users>,
+    shares: Arc<Shares>,
+    config: Watcher<Options>,
+    telemetry: Arc<Telemetry>,
+    network: Weak<Network>,
+    searches: IncomingSearches,
+  ) -> Self {
+    Self {
+      users,
+      shares,
+      config,
+      telemetry,
+      network,
+      searches,
+      rebuilding: tokio::sync::Mutex::new(()),
+    }
+  }
 }
 
 /// The resolvers the client answers peers with.
@@ -48,15 +93,15 @@ pub fn resolvers(edges: Arc<Edges>) -> Resolvers {
     })),
     browse_response_resolver: Some(Arc::new(move |username, endpoint| {
       let edges = browsing.clone();
-      Box::pin(async move { Ok(browse(&edges, &username, endpoint)) })
+      Box::pin(async move { Ok(browse(&edges, &username, endpoint).await) })
     })),
     directory_contents_resolver: Some(Arc::new(move |username, endpoint, _token, directory| {
       let edges = folder.clone();
-      Box::pin(async move { Ok(directory_contents(&edges, &username, endpoint, &directory)) })
+      Box::pin(async move { Ok(directory_contents(&edges, &username, endpoint, &directory).await) })
     })),
     search_response_resolver: Some(Arc::new(move |username, token, query| {
       let edges = searching.clone();
-      Box::pin(async move { Ok(search(&edges, &username, token, &query)) })
+      Box::pin(async move { Ok(search(&edges, &username, token, &query).await) })
     })),
     user_info_resolver: Some(Arc::new(move |username, endpoint| {
       let edges = info.clone();
@@ -79,14 +124,22 @@ fn suspicious(username: &str, what: &str, name: &str) {
   }
 }
 
+/// Logs, at most once a minute with a count, a request refused because `username` is blocked
+/// from `scope`.
+fn log_refused(username: &str, scope: BlockScope) {
+  if let Some(suppressed) = BLOCKED.allow() {
+    info!(username, %scope, suppressed, "request from a blocked user refused");
+  }
+}
+
 /// Whether `username` from `endpoint` is blocked from `scope`, logged at most once a minute
 /// with a count when they are.
 fn blocked(edges: &Edges, username: &str, endpoint: Option<SocketAddr>, scope: BlockScope) -> bool {
   let blocked = edges
     .users
     .is_blocked(username, endpoint.map(|e| e.ip()), scope);
-  if blocked && let Some(suppressed) = BLOCKED.allow() {
-    info!(username, %scope, suppressed, "request from a blocked user refused");
+  if blocked {
+    log_refused(username, scope);
   }
   blocked
 }
@@ -115,80 +168,41 @@ fn queue_upload(username: &str, filename: &RemoteFilename) -> Result<(), ClientE
   Err(ClientError::DownloadEnqueue(NOT_SHARED.into()))
 }
 
-/// A peer browses us: a blocked user sees an empty share.
-pub fn browse(edges: &Edges, username: &str, endpoint: SocketAddr) -> BrowseReply {
-  if blocked(edges, username, Some(endpoint), BlockScope::Browse) {
-    return BrowseReply::Response(empty_listing());
-  }
-  listing(username)
+/// Where a new upload request from a user would land in our upload queue.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Forecast {
+  /// the group the request would be queued in
+  pub group: String,
+  /// the uploads that group runs at once
+  pub total_slots: u32,
+  /// how many of those are free
+  pub free_slots: u32,
+  /// the place the request would take in the queue, 0 when a slot is free
+  pub position: u32,
 }
 
-/// Our share listing. Until the share index answers browses it is empty.
-fn listing(username: &str) -> BrowseReply {
-  debug!(
-    username,
-    "browse answered with an empty share; browses are not answered yet"
-  );
-  BrowseReply::Response(empty_listing())
-}
-
-fn empty_listing() -> BrowseResponse {
-  BrowseResponse {
-    directories: Vec::new(),
-    locked_directories: Vec::new(),
-  }
-}
-
-/// A peer asks for the contents of `directory`: a name with a `.` or `..` part gets no
-/// directories, a blocked user the directory empty.
-pub fn directory_contents(
-  edges: &Edges,
-  username: &str,
-  endpoint: SocketAddr,
-  directory: &RemoteFilename,
-) -> Option<Vec<Directory>> {
-  if traverses(directory.as_str()) {
-    suspicious(username, "folder", directory.as_str());
-    return Some(Vec::new());
-  }
-  if blocked(edges, username, Some(endpoint), BlockScope::Browse) {
-    return Some(vec![Directory {
-      name: directory.clone(),
-      files: Vec::new(),
-    }]);
-  }
-  folder(username, directory)
-}
-
-/// The contents of a shared directory. Until the share index answers folder requests none is
-/// sent.
-fn folder(username: &str, directory: &RemoteFilename) -> Option<Vec<Directory>> {
-  debug!(username, %directory, "folder request not answered; folders are not answered yet");
-  None
-}
-
-/// Another user's search reached us: a user blocked from searches gets nothing.
-pub fn search(
-  edges: &Edges,
-  username: &str,
-  token: u32,
-  query: &SearchQuery,
-) -> Option<SearchReply> {
-  if blocked(edges, username, None, BlockScope::Searches) {
-    return None;
-  }
-  results(username, token, query)
-}
-
-/// Our response to a search. Until the share index answers searches there are no results.
-fn results(username: &str, token: u32, query: &SearchQuery) -> Option<SearchReply> {
+/// The forecast for a new upload request from `username`. Nothing is queued for upload yet, so
+/// every user is forecast in the default group, with all its slots free and no place to wait.
+pub fn forecast(edges: &Edges, username: &str) -> Forecast {
+  let options = edges.config.current();
+  let transfers = &options.values.transfers;
+  let global = transfers.upload.slots;
+  let slots = transfers
+    .groups
+    .default
+    .upload
+    .slots
+    .map_or(global, |group| group.min(global));
   trace!(
     username,
-    token,
-    query = query.search_text(),
-    "search not answered; searches are not answered yet"
+    slots, "upload forecast; nothing is queued for upload yet"
   );
-  None
+  Forecast {
+    group: DEFAULT_GROUP.to_string(),
+    total_slots: slots,
+    free_slots: slots,
+    position: 0,
+  }
 }
 
 /// A peer asks for our user info: a blocked user is shown no free slot and the longest queue.
@@ -207,20 +221,17 @@ pub async fn user_info(edges: &Edges, username: &str, endpoint: SocketAddr) -> U
   profile(edges, username).await
 }
 
-/// Our user info: our description and picture, with our upload slots and this user's place in
-/// the queue. Until the upload queue is wired the slots and the place are 0.
+/// Our user info: our description and picture, with the slots of the group `username` would be
+/// queued in and the place they would take.
 async fn profile(edges: &Edges, username: &str) -> UserInfo {
-  debug!(
-    username,
-    "user info answered without upload figures; the upload queue is not wired yet"
-  );
   let local = edges.shares.user_info().await;
+  let forecast = forecast(edges, username);
   UserInfo {
     description: local.description,
     picture: local.picture,
-    upload_slots: 0,
-    queue_length: 0,
-    has_free_upload_slot: false,
+    upload_slots: forecast.total_slots,
+    queue_length: forecast.position,
+    has_free_upload_slot: forecast.free_slots > 0,
     upload_permitted: None,
   }
 }
@@ -245,16 +256,21 @@ fn queue_place(username: &str, filename: &RemoteFilename) -> Option<u32> {
   None
 }
 
+/// The time since `started`, in milliseconds.
+fn millis(started: std::time::Instant) -> f64 {
+  started.elapsed().as_secs_f64() * 1000.0
+}
+
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
   use super::*;
-  use crate::testing::{app, request};
+  use crate::testing::{TestApp, app, request};
   use serde_json::json;
 
   const CONFIG: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n\
                         [transfers.groups.blacklisted]\ncidrs = [\"192.0.2.0/24\"]\n";
 
-  fn from(ip: &str) -> SocketAddr {
+  pub(crate) fn from(ip: &str) -> SocketAddr {
     format!("{ip}:2234").parse().unwrap()
   }
 
@@ -262,12 +278,23 @@ mod tests {
     RemoteFilename::from(text)
   }
 
+  /// The answers of the daemon `app`.
+  pub(crate) fn edges(app: &TestApp) -> Arc<Edges> {
+    app.state.network.edges.clone()
+  }
+
+  /// Every metric of `app` as the exposition writes it.
+  pub(crate) fn exposed(app: &TestApp) -> String {
+    let metrics = app.state.telemetry.metrics();
+    crate::telemetry::registry::text(&metrics.registry.families())
+  }
+
   fn refused(result: Result<(), ClientError>) -> bool {
     matches!(result, Err(ClientError::DownloadEnqueue(reason)) if reason == NOT_SHARED)
   }
 
-  fn empty_share(reply: BrowseReply) -> bool {
-    matches!(reply, BrowseReply::Response(r) if r.directories.is_empty())
+  fn empty_share(reply: soulseek_client::BrowseReply) -> bool {
+    matches!(reply, soulseek_client::BrowseReply::Response(r) if r.directories.is_empty())
   }
 
   #[tokio::test]
@@ -278,23 +305,19 @@ mod tests {
       .send(request("PUT", "/api/v0/users/mallory/block", Some(block)))
       .await;
     assert_eq!(answer.status, 200);
-    let edges = Edges {
-      users: app.state.users.clone(),
-      shares: app.state.shares.clone(),
-    };
+    let edges = edges(&app);
     let peer = from("198.51.100.7");
     let file = name("@@music\\a.mp3");
 
     assert!(refused(
       enqueue_download(&edges, "mallory", peer, &file).await
     ));
-    assert!(empty_share(browse(&edges, "mallory", peer)));
-    let folder = directory_contents(&edges, "mallory", peer, &name("@@music\\album"));
+    assert!(empty_share(browse(&edges, "mallory", peer).await));
+    let folder = directory_contents(&edges, "mallory", peer, &name("@@music\\album")).await;
     let folder = folder.expect("a blocked user is answered");
     assert_eq!(folder.len(), 1);
     assert_eq!(folder[0].name.as_str(), "@@music\\album");
     assert!(folder[0].files.is_empty());
-    assert_eq!(search(&edges, "mallory", 1, &SearchQuery::parse("a")), None);
     let info = user_info(&edges, "mallory", peer).await;
     assert_eq!(info.description, "A reseek user.");
     assert_eq!(
@@ -309,9 +332,11 @@ mod tests {
 
     // an address the configuration blocks is blocked whoever connects from it
     let blocked_network = from("192.0.2.9");
-    assert!(empty_share(browse(&edges, "alice", blocked_network)));
+    assert!(empty_share(browse(&edges, "alice", blocked_network).await));
     assert_eq!(
-      directory_contents(&edges, "alice", blocked_network, &name("@@music")).map(|d| d.len()),
+      directory_contents(&edges, "alice", blocked_network, &name("@@music"))
+        .await
+        .map(|d| d.len()),
       Some(1)
     );
     assert_eq!(
@@ -320,24 +345,12 @@ mod tests {
         .queue_length,
       i32::MAX as u32
     );
-
-    // anyone else gets what is here, which is nothing yet
-    assert_eq!(
-      directory_contents(&edges, "alice", peer, &name("@@music")),
-      None
-    );
-    let info = user_info(&edges, "alice", peer).await;
-    assert_eq!(info.description, "A reseek user.");
-    assert_eq!((info.upload_slots, info.queue_length), (0, 0));
   }
 
   #[tokio::test]
   async fn a_name_that_climbs_out_of_the_share_is_refused() {
     let app = app(CONFIG, &[]).await;
-    let edges = Edges {
-      users: app.state.users.clone(),
-      shares: app.state.shares.clone(),
-    };
+    let edges = edges(&app);
     let peer = from("198.51.100.7");
     for traversing in ["@@music\\..\\secret.txt", "@@music/./a.mp3", ".."] {
       assert!(
@@ -345,10 +358,30 @@ mod tests {
         "{traversing}"
       );
       assert_eq!(
-        directory_contents(&edges, "alice", peer, &name(traversing)),
+        directory_contents(&edges, "alice", peer, &name(traversing)).await,
         Some(Vec::new()),
         "{traversing}"
       );
     }
+  }
+
+  #[tokio::test]
+  async fn user_info_carries_the_upload_forecast() {
+    let app = app(
+      "[transfers.upload]\nslots = 4\n[transfers.groups.default.upload]\nslots = 3\n",
+      &[],
+    )
+    .await;
+    let info = user_info(&edges(&app), "alice", from("198.51.100.7")).await;
+    assert_eq!(info.description, "A reseek user.");
+    assert_eq!(
+      (
+        info.upload_slots,
+        info.queue_length,
+        info.has_free_upload_slot
+      ),
+      (3, 0, true),
+      "the group's own slots, all free, with no one waiting"
+    );
   }
 }

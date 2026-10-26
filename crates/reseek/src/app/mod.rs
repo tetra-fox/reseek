@@ -179,6 +179,7 @@ impl AppState {
       &config,
       users.clone(),
       shares.clone(),
+      telemetry.clone(),
       state.clone(),
       shutdown.clone(),
     )
