@@ -31,10 +31,10 @@ class Users {
     return this.#entries.get(username)?.summary;
   }
 
-  /** Fetches the summary unless one younger than a minute is held */
-  load(username: string, now = Date.now()): Promise<void> {
+  /** Fetches the summary unless one younger than a minute is held, or `fresh` asks for it anyway */
+  load(username: string, { now = Date.now(), fresh = false } = {}): Promise<void> {
     const entry = this.#entries.get(username);
-    if (entry && now - entry.at < SUMMARY_TTL_MS) return Promise.resolve();
+    if (!fresh && entry && now - entry.at < SUMMARY_TTL_MS) return Promise.resolve();
     const running = this.#loading.get(username);
     if (running) return running;
     const loading = call(() =>

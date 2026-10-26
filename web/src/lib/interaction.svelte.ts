@@ -1,3 +1,5 @@
+import { untrack } from "svelte";
+
 /**
  * Whether the user is in the middle of something a list must not move under: a text selection
  * in it, a pointer pressed on it, a hover card or menu open from it. While anything holds it,
@@ -11,15 +13,16 @@ class Interaction {
     return this.#holds > 0;
   }
 
-  /** Freezes until the returned function is called */
+  /** Freezes until the returned function is called. Callable from an effect: the count it
+   * changes is not one the effect follows */
   hold(): () => void {
-    this.#holds += 1;
+    untrack(() => (this.#holds += 1));
     let released = false;
     return () => {
       if (released) return;
       released = true;
-      this.#holds -= 1;
-      if (this.#holds === 0) for (const run of this.#thawed.splice(0)) run();
+      const left = untrack(() => (this.#holds -= 1));
+      if (left === 0) for (const run of this.#thawed.splice(0)) run();
     };
   }
 
