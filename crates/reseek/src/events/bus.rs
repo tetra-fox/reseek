@@ -174,16 +174,10 @@ async fn deliver<F, Fut>(
         "Subscriber encountered an error"
       ),
       Err(panic) => {
-        // a panic carries a text unless it was raised with some other value
-        let message = panic
-          .downcast_ref::<&str>()
-          .map(|s| s.to_string())
-          .or_else(|| panic.downcast_ref::<String>().cloned())
-          .unwrap_or_default();
         error!(
           subscriber = name,
           kind = kind.name(),
-          panic = message,
+          panic = crate::logging::panic_message(panic.as_ref()),
           "Subscriber panicked"
         );
       }

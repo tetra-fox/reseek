@@ -243,11 +243,7 @@ fn loggable(uri: &Uri) -> String {
 /// The answer to a handler that panicked: a 500 whose log line, in the request's span, carries
 /// the panic's message.
 fn panicked(payload: Box<dyn std::any::Any + Send>) -> Response {
-  let message = payload
-    .downcast_ref::<&str>()
-    .map(|s| s.to_string())
-    .or_else(|| payload.downcast_ref::<String>().cloned())
-    .unwrap_or_else(|| "a panic without a message".to_string());
+  let message = crate::logging::panic_message(payload.as_ref());
   ApiError::internal(format!("a handler panicked: {message}")).into_response()
 }
 

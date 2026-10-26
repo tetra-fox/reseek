@@ -26,6 +26,16 @@ use format::{Clock, Line};
 /// the invocation id and the process id. The text sinks leave it out of each line.
 pub const PROCESS_SPAN: &str = "process";
 
+/// The message a caught panic carries, which is a text unless it was raised with some other
+/// value.
+pub fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+  payload
+    .downcast_ref::<&str>()
+    .copied()
+    .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+    .unwrap_or("a panic without a message")
+}
+
 /// How many lines may wait for the log file writer before new ones are dropped.
 const FILE_QUEUE: usize = 128_000;
 
