@@ -119,6 +119,138 @@ async fn the_directory_filters_and_sorts_with_pinned_users_first() {
   let page = directory.list(idle).await.unwrap();
   assert_eq!(page.total, 1);
   assert_eq!(names(page), ["alice"]);
+
+  let mut tagged = query();
+  tagged.tag = Some("jazzy".into());
+  assert_eq!(names(directory.list(tagged).await.unwrap()), ["carol"]);
+  let mut pinned = query();
+  pinned.pinned = Some(true);
+  assert_eq!(names(directory.list(pinned).await.unwrap()), ["alice"]);
+  let (status, _) = send(&app, "PUT", "/api/v0/users/carol/block", Some(json!({}))).await;
+  assert_eq!(status, 200);
+  let mut blocked = query();
+  blocked.blocked = Some(true);
+  assert_eq!(
+    names(directory.list(blocked.clone()).await.unwrap()),
+    ["carol"]
+  );
+  blocked.blocked = Some(false);
+  assert_eq!(
+    names(directory.list(blocked).await.unwrap()),
+    ["alice", "Bob"]
+  );
+  let mut first = query();
+  first.sort = UserSort::FirstSeen;
+  first.order = Some(SortOrder::Asc);
+  assert_eq!(
+    names(directory.list(first).await.unwrap()),
+    ["alice", "Bob", "carol"],
+    "pinned first, then in the order they were first seen"
+  );
+  insert(
+    &app.state.transfers,
+    vec![Row::new("carol", TransferDirection::Download, 48)],
+  )
+  .await;
+  let mut downloads = query();
+  downloads.sort = UserSort::Downloads;
+  assert_eq!(
+    names(directory.list(downloads).await.unwrap()),
+    ["alice", "carol", "Bob"],
+    "most succeeded downloads first after the pinned"
+  );
+}
+
+#[tokio::test]
+async fn a_block_request_is_checked_before_it_is_made() {
+  let app = app(CONFIG, &[]).await;
+  for body in [
+    json!({ "reason": "x".repeat(501) }),
+    json!({ "expiresIn": "1h", "expiresAt": "2099-01-01T00:00:00Z" }),
+    json!({ "expiresIn": "soon" }),
+    json!({ "expiresAt": "2001-01-01T00:00:00Z" }),
+    json!({ "scopes": ["everything"] }),
+  ] {
+    let (status, _) = send(&app, "PUT", "/api/v0/users/alice/block", Some(body.clone())).await;
+    assert_eq!(status, 400, "{body}");
+  }
+  let (status, block) = send(
+    &app,
+    "PUT",
+    "/api/v0/users/alice/block",
+    Some(json!({ "expiresIn": "1h", "scopes": ["downloads"] })),
+  )
+  .await;
+  assert_eq!(status, 200);
+  assert_eq!(block["scopes"], json!(["downloads"]));
+}
+
+#[tokio::test]
+async fn writes_push_the_users_summary_and_forgetting_pushes_the_removal() {
+  let app = app(CONFIG, &[]).await;
+  let mut stream = app
+    .stream_from(
+      "127.0.0.1:1",
+      request("GET", "/api/v0/live?topics=users", None),
+    )
+    .await;
+  stream.until("hello").await;
+  let (status, _) = send(
+    &app,
+    "PUT",
+    "/api/v0/users/alice/notes",
+    Some(json!({ "notes": "kind" })),
+  )
+  .await;
+  assert_eq!(status, 204);
+  let updated = stream.until("users.updated").await.pop().unwrap();
+  assert_eq!(updated.data["username"], "alice");
+  let (status, _) = send(&app, "DELETE", "/api/v0/users/alice", None).await;
+  assert_eq!(status, 204);
+  let removed = stream.until("users.removed").await.pop().unwrap();
+  assert_eq!(removed.data, json!({ "username": "alice" }));
+}
+
+#[tokio::test]
+async fn users_not_seen_for_the_retention_are_forgotten_unless_they_hold_something() {
+  let app = app(&format!("[retention]\nusers = \"1d\"\n{CONFIG}"), &[]).await;
+  let directory = &app.state.users;
+  let old = Utc::now() - chrono::Duration::days(3);
+  let seen = |at| touch::Pending {
+    seen_at: Some(at),
+    creates: true,
+    ..Default::default()
+  };
+  let batch = std::collections::BTreeMap::from([
+    ("gone".to_string(), seen(old)),
+    ("noted".to_string(), seen(old)),
+    ("recent".to_string(), seen(Utc::now())),
+  ]);
+  directory
+    .db
+    .write(move |conn| touch::write(conn, &batch))
+    .await
+    .unwrap();
+  directory
+    .db
+    .write(|conn| {
+      conn.execute(
+        "UPDATE users SET notes = 'keep' WHERE username = 'noted'",
+        [],
+      )
+    })
+    .await
+    .unwrap();
+  directory.forget_unseen().await;
+  let left: Vec<String> = directory
+    .db
+    .read(|conn| {
+      let mut statement = conn.prepare("SELECT username FROM users ORDER BY username")?;
+      statement.query_map([], |row| row.get(0))?.collect()
+    })
+    .await
+    .unwrap();
+  assert_eq!(left, ["noted", "recent"]);
 }
 
 #[tokio::test]
