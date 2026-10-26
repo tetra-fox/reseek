@@ -224,7 +224,9 @@ impl Watchdog {
     lock(&inner.status).attempting = true;
     while self.is_enabled() {
       let failed = inner.failures.load(Ordering::Relaxed);
+      // connected already, as when asked to connect while connected
       if inner.client.state().contains(ClientState::CONNECTED) {
+        self.stop(false);
         return;
       }
       let attempt = inner.shutdown.child_token();

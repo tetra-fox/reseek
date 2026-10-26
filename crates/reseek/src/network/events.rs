@@ -269,9 +269,9 @@ pub async fn follow_shared_counts(app: AppState) {
   }
 }
 
-/// The server session ended: why is logged, the watchdog starts again unless the daemon asked
-/// for it, the server refused our login or another session took our name, and the event is
-/// raised.
+/// The server session ended: why is logged, the watchdog starts again after a session that
+/// reached the server unless the daemon asked for the end, the server refused our login or
+/// another session took our name, and the event is raised.
 fn disconnected(app: &AppState, message: &str, error: Option<&ClientError>, reached: bool) {
   app.network.forget_reconnect();
   app.state.update(|state| state.rooms.clear());
@@ -300,12 +300,10 @@ fn disconnected(app: &AppState, message: &str, error: Option<&ClientError>, reac
     Some(ClientError::KickedFromServer) => error!(
       "Disconnected from the Soulseek server: another client logged in using the same username"
     ),
+    // the watchdog's own attempt failed before reaching the server; its loop goes on
+    _ if !reached => debug!(message, "connection attempt failed"),
     _ => {
-      if reached {
-        warn!(message, "Disconnected from the Soulseek server");
-      } else {
-        debug!(message, "connection attempt failed");
-      }
+      warn!(message, "Disconnected from the Soulseek server");
       app.network.watchdog().start();
     }
   }
