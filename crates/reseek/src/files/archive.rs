@@ -356,6 +356,7 @@ pub(super) async fn send(members: Vec<Member>, sender: mpsc::Sender<io::Result<B
       return;
     }
   }
+  // the archive's last bytes; a receiver gone by now has nothing left to be told
   drop(send(writer.finish()).await);
 }
 

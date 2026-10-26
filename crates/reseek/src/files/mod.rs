@@ -87,6 +87,7 @@ impl Files {
   /// pruned until the guard is dropped.
   pub fn writing(&self, path: &Path) -> WriteGuard {
     let mut spellings = vec![path.to_path_buf()];
+    // a parent that does not resolve has only the spelling given
     if let (Some(parent), Some(name)) = (path.parent(), path.file_name())
       && let Ok(resolved) = std::fs::canonicalize(parent)
     {
