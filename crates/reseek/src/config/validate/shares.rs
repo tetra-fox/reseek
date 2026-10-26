@@ -5,6 +5,7 @@
 //! path. Without an alias the alias is the path's last segment. The first `]` ends the alias,
 //! so a path may itself hold `]`.
 
+use std::path::Path;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -12,6 +13,7 @@ use regex::Regex;
 use super::Report;
 use super::fields::{duration_at_least, is_regex, range};
 use crate::config::{MAX_SCAN_WORKERS, ShareCache, Shares};
+use crate::shares::share::{self, DERIVED_FROM_DOWNLOADS, trimmed};
 
 const KEY: &str = "shares.directories";
 
@@ -20,47 +22,94 @@ static NO_PATH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(!|-)?(\[.*\])$
 /// Nothing but separators after the optional alias: the root of a filesystem.
 static ROOT: LazyLock<Regex> =
   LazyLock::new(|| Regex::new(r"^(!|-)?(\[[^\]]*\])?[/\\]+$").unwrap());
-/// An alias in brackets, then the path.
-static ALIASED: LazyLock<Regex> =
-  LazyLock::new(|| Regex::new(r"^(!|-)?\[([^\]]*)\](.*)$").unwrap());
 /// A segment of only dots.
 static TRAVERSAL: LazyLock<Regex> =
   LazyLock::new(|| Regex::new(r"^\.+[/\\]?|[/\\]\.+[/\\]|[/\\]\.+$").unwrap());
 
-/// One entry of `shares.directories`, taken apart.
+/// One entry of `shares.directories`, or the share `shares.share_downloads` adds, taken apart.
 #[derive(Debug, PartialEq, Eq)]
 struct Entry<'a> {
   written: &'a str,
-  alias: String,
+  alias: &'a str,
   path: &'a str,
+  excluded: bool,
+  /// the share the downloads option adds
+  derived: bool,
 }
 
-pub(super) fn check(shares: &Shares, report: &mut Report) {
-  let mut entries = Vec::new();
+impl Entry<'_> {
+  /// How a message names the entry.
+  fn named(&self) -> String {
+    if self.derived {
+      format!("'{}' (from {DERIVED_FROM_DOWNLOADS})", self.written)
+    } else {
+      format!("'{}'", self.written)
+    }
+  }
+}
+
+/// Checks the shared directories, with the share of the downloads directory `downloads` when
+/// `shares.share_downloads` adds it, and the filters and cache options.
+pub(super) fn check(shares: &Shares, downloads: &Path, report: &mut Report) {
+  let mut entries: Vec<Entry> = Vec::new();
   for written in &shares.directories {
     match entry(written) {
+      // an entry written twice, perhaps with a trailing separator, is the same share
+      Ok(_)
+        if entries
+          .iter()
+          .any(|e| trimmed(e.written) == trimmed(written)) => {}
       Ok(entry) => entries.push(entry),
       Err(message) => report.add(KEY, message),
     }
   }
+  let downloads = downloads.to_string_lossy();
+  if shares.share_downloads {
+    let path = trimmed(&downloads);
+    let shared = entries
+      .iter()
+      .any(|e| !e.excluded && share::same_path(Path::new(e.path), Path::new(path)));
+    if !shared {
+      let parts = share::entry(path);
+      entries.push(Entry {
+        written: path,
+        alias: parts.alias,
+        path: parts.path,
+        excluded: false,
+        derived: true,
+      });
+    }
+  }
   for (i, a) in entries.iter().enumerate() {
     for b in &entries[i + 1..] {
-      if a.alias == b.alias {
-        report.add(
-          KEY,
+      let (first, second) = if b.derived { (b, a) } else { (a, b) };
+      if a.alias.to_lowercase() == b.alias.to_lowercase() {
+        let message = if first.derived {
           format!(
-            "Shares '{}', '{}' collide. Specify an alias for one or both to disambiguate them.",
-            a.written, b.written
-          ),
-        );
-      } else if a.path == b.path {
-        report.add(
-          KEY,
+            "Share {} collides with {}. Specify an alias for {} to disambiguate them.",
+            first.named(),
+            second.named(),
+            second.named()
+          )
+        } else {
           format!(
-            "Shares '{}', '{}' alias the same path",
-            a.written, b.written
-          ),
-        );
+            "Shares {}, {} collide. Specify an alias for one or both to disambiguate them.",
+            a.named(),
+            b.named()
+          )
+        };
+        report.add(KEY, message);
+      } else if share::same_path(Path::new(a.path), Path::new(b.path)) {
+        let message = if first.derived {
+          format!(
+            "Share {} aliases the same path as {}",
+            first.named(),
+            second.named()
+          )
+        } else {
+          format!("Shares {}, {} alias the same path", a.named(), b.named())
+        };
+        report.add(KEY, message);
       }
     }
   }
@@ -99,22 +148,12 @@ fn entry(written: &str) -> Result<Entry<'_>, String> {
       "Share {written} specifies a root mount, which is not supported."
     ));
   }
-  let trimmed = written.trim_end_matches(['/', '\\']);
+  let trimmed = trimmed(written);
   if NO_PATH.is_match(trimmed) {
     return Err(format!("Share {written} does not specify a path"));
   }
-  let (alias, path) = match ALIASED.captures(trimmed) {
-    Some(captures) => {
-      let alias = captures.get(2).map_or("", |m| m.as_str()).to_string();
-      let path = captures.get(3).map_or("", |m| m.as_str());
-      (alias, path)
-    }
-    None => {
-      let path = trimmed.strip_prefix(['!', '-']).unwrap_or(trimmed);
-      let alias = path.rsplit(['/', '\\']).next().unwrap_or(path).to_string();
-      (alias, path)
-    }
-  };
+  let parts = share::entry(trimmed);
+  let (alias, path) = (parts.alias, parts.path);
   if !(path.starts_with('/') || path.starts_with("\\\\") || has_drive(path)) {
     return Err(format!(
       "Share {written} contains a relative path; only absolute paths are supported."
@@ -135,10 +174,17 @@ fn entry(written: &str) -> Result<Entry<'_>, String> {
       "Share '{written}' is invalid; aliases may not contain path separators '/' or '\\'"
     ));
   }
+  if alias == "." || alias == ".." || alias.chars().any(char::is_control) {
+    return Err(format!(
+      "Share '{written}' is invalid; alias may not be '.', '..' or contain control characters"
+    ));
+  }
   Ok(Entry {
     written,
     alias,
     path,
+    excluded: parts.excluded,
+    derived: false,
   })
 }
 
@@ -152,30 +198,29 @@ fn has_drive(path: &str) -> bool {
 mod tests {
   use super::*;
 
-  fn problems(directories: &[&str]) -> Vec<String> {
+  fn problems_with(directories: &[&str], share_downloads: bool) -> Vec<String> {
     let shares = Shares {
       directories: directories.iter().map(|d| d.to_string()).collect(),
+      share_downloads,
       ..Shares::default()
     };
     let mut report = Report::default();
-    check(&shares, &mut report);
+    check(&shares, Path::new("/srv/downloads"), &mut report);
     report.messages()
+  }
+
+  fn problems(directories: &[&str]) -> Vec<String> {
+    problems_with(directories, false)
   }
 
   #[test]
   fn entries_take_their_alias_from_brackets_or_the_last_segment() {
-    assert_eq!(
-      entry("/music/flac/").unwrap(),
-      Entry {
-        written: "/music/flac/",
-        alias: "flac".into(),
-        path: "/music/flac"
-      }
-    );
+    let flac = entry("/music/flac/").unwrap();
+    assert_eq!((flac.alias, flac.path), ("flac", "/music/flac"));
     assert_eq!(entry("![lossy]/music/mp3").unwrap().alias, "lossy");
     let bracket = entry("[a]/music/odd]name").unwrap();
     assert_eq!(
-      (bracket.alias.as_str(), bracket.path),
+      (bracket.alias, bracket.path),
       ("a", "/music/odd]name"),
       "the first ] ends the alias"
     );
@@ -210,6 +255,14 @@ mod tests {
       problems(&["[a\\b]/music"]),
       ["Share '[a\\b]/music' is invalid; aliases may not contain path separators '/' or '\\'"]
     );
+    for alias in ["[.]/music", "[..]/music", "[a\u{7}]/music"] {
+      assert_eq!(
+        problems(&[alias]),
+        [format!(
+          "Share '{alias}' is invalid; alias may not be '.', '..' or contain control characters"
+        )]
+      );
+    }
   }
 
   #[test]
@@ -222,9 +275,40 @@ mod tests {
       ]
     );
     assert_eq!(
+      problems(&["/a/Music", "/b/music"]).len(),
+      1,
+      "aliases differing only in case collide"
+    );
+    assert_eq!(
       problems(&["[one]/music", "[two]/music/"]),
       ["Shares '[one]/music', '[two]/music/' alias the same path"]
     );
     assert!(problems(&["[one]/a/music", "/b/music"]).is_empty());
+    assert!(
+      problems(&["/a/music", "/a/music/"]).is_empty(),
+      "the same entry twice is one share"
+    );
+  }
+
+  #[test]
+  fn the_shared_downloads_directory_is_named_by_its_option() {
+    assert!(
+      problems_with(&["/srv/downloads/"], true).is_empty(),
+      "shared already"
+    );
+    assert_eq!(
+      problems_with(&["/mnt/downloads"], true),
+      [
+        "Share '/srv/downloads' (from shares.share_downloads) collides with '/mnt/downloads'. \
+         Specify an alias for '/mnt/downloads' to disambiguate them."
+      ]
+    );
+    assert_eq!(
+      problems_with(&["![dl]/srv/downloads"], true),
+      [
+        "Share '/srv/downloads' (from shares.share_downloads) aliases the same path as '![dl]/srv/downloads'"
+      ]
+    );
+    assert!(problems_with(&["/mnt/downloads"], false).is_empty());
   }
 }

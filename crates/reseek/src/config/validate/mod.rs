@@ -33,7 +33,12 @@ pub struct Context {
 pub fn validate(options: &Options, context: &Context) -> Result<(), Vec<Invalid>> {
   let mut report = Report::default();
   general::check(options, context, &mut report);
-  shares::check(&options.shares, &mut report);
+  let downloads = options
+    .directories
+    .downloads
+    .clone()
+    .unwrap_or_else(|| context.default_downloads.clone());
+  shares::check(&options.shares, &downloads, &mut report);
   transfers::check(&options.transfers, &mut report);
   web::check(&options.web, context, &mut report);
   soulseek::check(&options.soulseek, &mut report);
