@@ -116,6 +116,26 @@ async fn an_incomplete_file_is_served_only_once_no_download_writes_it() {
 }
 
 #[tokio::test]
+async fn an_incomplete_archive_leaves_out_the_files_a_download_writes() {
+  let app = with_files(CONFIG).await;
+  let album = app.state.paths.incomplete.join("Album");
+  std::fs::create_dir_all(&album).unwrap();
+  std::fs::write(album.join("done.flac"), b"done").unwrap();
+  std::fs::write(album.join("partial.flac"), b"part").unwrap();
+  let guard = app.state.files.writing(&album.join("partial.flac"));
+  let uri = format!(
+    "/api/v0/files/incomplete/directories/{}/archive",
+    b64("Album")
+  );
+  let answer = app.send(request("GET", &uri, None)).await;
+  assert_eq!(answer.status, 200);
+  let zip = zip::ZipArchive::new(std::io::Cursor::new(answer.body.to_vec())).unwrap();
+  let names: Vec<_> = zip.file_names().map(str::to_string).collect();
+  assert_eq!(names, ["done.flac"]);
+  drop(guard);
+}
+
+#[tokio::test]
 async fn a_link_token_opens_its_one_file_without_a_session() {
   let app = with_files(CONFIG).await;
   let path = format!("downloads/{}", b64("Album/01.flac"));
@@ -292,6 +312,16 @@ async fn a_directory_is_sent_as_a_zip_one_at_a_time_and_within_the_limit() {
   let second = app.send(request("GET", &uri, None)).await;
   assert_eq!(second.status, 429);
   drop(first);
+  // the slot is freed once the writer sees the first stream gone
+  let mut third = 429;
+  for _ in 0..200 {
+    third = app.send(request("GET", &uri, None)).await.status.as_u16();
+    if third != 429 {
+      break;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+  }
+  assert_eq!(third, 200, "a finished archive frees its principal's slot");
 
   let small = with_files(&format!(
     "{CONFIG}[web.files]\narchive_max_bytes = \"5B\"\n"

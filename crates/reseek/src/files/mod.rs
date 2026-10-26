@@ -37,7 +37,7 @@ use chrono::Utc;
 use futures_util::stream;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, warn};
+use tracing::{Instrument, debug, warn};
 
 use crate::api::error::ApiError;
 use crate::auth::Auth;
@@ -303,6 +303,24 @@ impl FileService for Files {
       Ok((located.name(), members))
     })
     .await?;
+    // the incomplete directory serves only files no download is writing
+    let members = if root == FileRoot::Incomplete {
+      let lexical = self.root(root).join(path);
+      members
+        .into_iter()
+        .filter(|member| {
+          let written = self
+            .writing
+            .holds(&[&member.path, &lexical.join(&member.name)]);
+          if written {
+            debug!(file = %member.path.display(), "file a download writes left out of an archive");
+          }
+          !written
+        })
+        .collect()
+    } else {
+      members
+    };
     let total: u64 = members.iter().map(|m| m.size).sum();
     let limit = self
       .config
@@ -331,10 +349,13 @@ impl FileService for Files {
     };
     debug!(files = members.len(), bytes = total, "sending an archive");
     let (sender, receiver) = mpsc::channel(ARCHIVE_BACKLOG);
-    tokio::spawn(async move {
-      archive::send(members, sender).await;
-      drop(slot);
-    });
+    tokio::spawn(
+      async move {
+        archive::send(members, sender).await;
+        drop(slot);
+      }
+      .instrument(tracing::Span::current()),
+    );
     let body = Body::from_stream(stream::unfold(receiver, |mut receiver| async move {
       receiver.recv().await.map(|piece| (piece, receiver))
     }));
