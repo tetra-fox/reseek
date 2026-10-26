@@ -5,78 +5,12 @@
 mod support;
 
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::time::{Duration, Instant};
 
-use api_client::Client;
 use api_types::options::OptionsPatch;
-use api_types::state::State;
 use serde_json::json;
-use soulseek_client::ClientOptions;
-use support::soulfind::{self, PASSWORD, Soulfind};
-use support::{Daemon, PATIENCE};
-
-const ACCOUNT: [(&str, &str); 2] = [("RESEEK_USERNAME", "admin"), ("RESEEK_PASSWORD", "hunter2")];
-
-/// The daemon in `dir` logging in to `server` as `username`, with `extra` arguments.
-fn daemon(dir: &Path, server: &Soulfind, username: &str, extra: &[&str]) -> Daemon {
-  let address = server.address();
-  let port = address.port().to_string();
-  let listen = support::free_port().to_string();
-  let mut args = vec![
-    "--slsk-address",
-    "127.0.0.1",
-    "--slsk-port",
-    &port,
-    "--slsk-username",
-    username,
-    "--slsk-password",
-    PASSWORD,
-    "--slsk-listen-ip-address",
-    "127.0.0.1",
-    "--slsk-listen-port",
-    &listen,
-    "--remote-configuration",
-  ];
-  args.extend_from_slice(extra);
-  Daemon::start(dir, &args, &ACCOUNT)
-}
-
-async fn signed_in(daemon: &Daemon) -> Client {
-  let client = Client::new(&daemon.url()).unwrap();
-  client.login("admin", "hunter2").await.unwrap();
-  client
-}
-
-/// The state once `ready` holds for it.
-async fn until(client: &Client, what: &str, ready: impl Fn(&State) -> bool) -> State {
-  let started = Instant::now();
-  loop {
-    let state = client.application().await.unwrap();
-    if ready(&state) {
-      return state;
-    }
-    assert!(
-      started.elapsed() < PATIENCE,
-      "never {what}: {:?} {:?}",
-      state.server,
-      state.connection_watchdog
-    );
-    tokio::time::sleep(Duration::from_millis(50)).await;
-  }
-}
-
-/// Options for a client of the test's own, which takes no listening port.
-fn quiet() -> ClientOptions {
-  ClientOptions {
-    enable_listener: false,
-    ..ClientOptions::default()
-  }
-}
-
-fn logged_in(state: &State) -> bool {
-  state.server.is_logged_in
-}
+use support::soulfind;
+use support::{ACCOUNT, Daemon, PATIENCE, daemon, logged_in, quiet, signed_in, until};
 
 #[tokio::test]
 async fn the_daemon_logs_in_with_its_shares_counted_and_connects_when_asked() {

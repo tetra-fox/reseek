@@ -9,7 +9,10 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use soulseek_client::Event;
+use api_client::Client;
+use api_types::state::State;
+use soulfind::{PASSWORD, Soulfind};
+use soulseek_client::{ClientOptions, Event};
 use tokio::sync::broadcast;
 
 /// The Soulseek server the network tests run against, from the client's test harness.
@@ -132,4 +135,70 @@ impl Drop for Daemon {
     let _ = self.child.kill();
     let _ = self.child.wait();
   }
+}
+
+/// The administrator account the daemon is started with.
+pub const ACCOUNT: [(&str, &str); 2] =
+  [("RESEEK_USERNAME", "admin"), ("RESEEK_PASSWORD", "hunter2")];
+
+/// The daemon in `dir` logging in to `server` as `username`, with `extra` arguments.
+pub fn daemon(dir: &Path, server: &Soulfind, username: &str, extra: &[&str]) -> Daemon {
+  let address = server.address();
+  let port = address.port().to_string();
+  let listen = free_port().to_string();
+  let mut args = vec![
+    "--slsk-address",
+    "127.0.0.1",
+    "--slsk-port",
+    &port,
+    "--slsk-username",
+    username,
+    "--slsk-password",
+    PASSWORD,
+    "--slsk-listen-ip-address",
+    "127.0.0.1",
+    "--slsk-listen-port",
+    &listen,
+    "--remote-configuration",
+  ];
+  args.extend_from_slice(extra);
+  Daemon::start(dir, &args, &ACCOUNT)
+}
+
+/// An API client of `daemon`, logged in as its administrator.
+pub async fn signed_in(daemon: &Daemon) -> Client {
+  let client = Client::new(&daemon.url()).unwrap();
+  client.login("admin", "hunter2").await.unwrap();
+  client
+}
+
+/// The state once `ready` holds for it.
+pub async fn until(client: &Client, what: &str, ready: impl Fn(&State) -> bool) -> State {
+  let started = Instant::now();
+  loop {
+    let state = client.application().await.unwrap();
+    if ready(&state) {
+      return state;
+    }
+    assert!(
+      started.elapsed() < PATIENCE,
+      "never {what}: {:?} {:?}",
+      state.server,
+      state.connection_watchdog
+    );
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  }
+}
+
+/// Options for a client of the test's own, which takes no listening port.
+pub fn quiet() -> ClientOptions {
+  ClientOptions {
+    enable_listener: false,
+    ..ClientOptions::default()
+  }
+}
+
+/// Whether the daemon is logged in to the server.
+pub fn logged_in(state: &State) -> bool {
+  state.server.is_logged_in
 }
