@@ -239,10 +239,10 @@ pub async fn scan(
       tx.commit()
     })
     .await?;
-    current += 1;
+    current = current.saturating_add(1);
     cached = cached.saturating_add(count);
-    filtered += read.filtered;
-    lossy += read.lossy;
+    filtered = filtered.saturating_add(read.filtered);
+    lossy = lossy.saturating_add(read.lossy);
     debug!(
       directory = name,
       added = count,
@@ -264,7 +264,7 @@ pub async fn scan(
     done.map_err(|e| ScanError::Task(e.to_string()))??;
   }
   info!(
-    files = cached + filtered,
+    files = cached.saturating_add(filtered),
     cached,
     filtered,
     ms = files_started.elapsed().as_millis() as u64,
