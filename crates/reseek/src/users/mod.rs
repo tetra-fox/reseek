@@ -391,10 +391,21 @@ fn blocklist_file(options: &Options) -> Option<PathBuf> {
     .flatten()
 }
 
+/// Reads the blocklist file at `path` on a blocking thread, logging how long it took.
 async fn load_blocklist(path: PathBuf) -> Result<Blocklist, String> {
-  tokio::task::spawn_blocking(move || Blocklist::load(&path))
-    .await
-    .map_err(|e| e.to_string())?
+  let started = Instant::now();
+  tokio::task::spawn_blocking(move || {
+    let list = Blocklist::load(&path)?;
+    debug!(
+      file = %path.display(),
+      entries = list.count(),
+      ms = started.elapsed().as_millis() as u64,
+      "blocklist loaded"
+    );
+    Ok(list)
+  })
+  .await
+  .map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]
