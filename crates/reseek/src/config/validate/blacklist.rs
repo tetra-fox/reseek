@@ -44,7 +44,7 @@ fn is_range(text: &str) -> bool {
 }
 
 /// The range with each IPv4 octet's leading zeros dropped, `001.002.004.000` to `1.2.4.0`.
-fn without_leading_zeros(range: &str) -> String {
+pub(crate) fn without_leading_zeros(range: &str) -> String {
   range
     .split('-')
     .map(|address| {

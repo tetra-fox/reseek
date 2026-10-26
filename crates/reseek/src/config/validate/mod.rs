@@ -2,7 +2,7 @@
 //! problem is reported, each under the key it is about; a problem inside a user-keyed entry
 //! is reported under the map's key, with the entry's name in the message.
 
-mod blacklist;
+pub(crate) mod blacklist;
 mod fields;
 mod general;
 mod paths;

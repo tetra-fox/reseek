@@ -39,6 +39,11 @@ pub enum RangeError {
 }
 
 impl IpRange {
+  /// The first and the last address of the range.
+  pub fn bounds(&self) -> (IpAddr, IpAddr) {
+    (self.start, self.end)
+  }
+
   /// Whether `ip` is in the range. An IPv4-mapped IPv6 address is matched as its IPv4 address.
   pub fn contains(&self, ip: IpAddr) -> bool {
     match (unmapped(ip), self.start, self.end) {

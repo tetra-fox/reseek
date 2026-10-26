@@ -21,6 +21,7 @@ pub mod state;
 pub mod telemetry;
 pub mod transfers;
 pub mod ui;
+pub mod users;
 pub mod version;
 
 #[cfg(test)]
