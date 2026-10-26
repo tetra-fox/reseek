@@ -286,7 +286,8 @@ mod tests {
         with(
           request("GET", "/api/v0/live?topics=application,users", None),
           "last-event-id",
-          &(start - 1).to_string(),
+          // below every number a sequence starts at, so older than anything the ring keeps
+          &((1u64 << 32) - 1).to_string(),
         ),
       )
       .await;

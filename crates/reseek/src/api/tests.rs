@@ -25,6 +25,7 @@ fn answered_here(operation: &Operation) -> bool {
     || (route == "/api/v0/server" && operation.method == Method::GET)
     || under("/api/v0/logs")
     || under("/api/v0/files")
+    || under("/api/v0/shares")
     || under("/api/v0/options")
     || (under("/api/v0/session") && route != "/api/v0/session/file-token")
     || under("/api/v0/sessions")

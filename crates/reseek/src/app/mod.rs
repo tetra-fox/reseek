@@ -32,6 +32,7 @@ use crate::live::Live;
 use crate::logging::{self, LogBuffer, Logging, Sinks};
 use crate::paths::{Defaults, InstanceLock, Paths};
 use crate::services::Services;
+use crate::shares::Shares;
 use crate::state::StateOwner;
 use crate::telemetry::Telemetry;
 use crate::ui::{Bundle, Ui};
@@ -101,6 +102,8 @@ pub struct AppState {
   pub users: Arc<Directory>,
   /// the files under the download and log directories, and which of them downloads write
   pub files: Arc<Files>,
+  /// what we share, with the queries other users are answered from
+  pub shares: Arc<Shares>,
   /// the engine of every domain
   pub services: Services,
   /// set when the daemon is to start again once it has stopped
@@ -158,7 +161,11 @@ impl AppState {
     .map_err(StartError::Open)?;
     let event_log_db = event_log.database();
     let telemetry = Telemetry::new(transfers.clone(), shutdown.clone());
+    let shares = Shares::open(config.clone(), &paths, state.clone(), shutdown.clone())
+      .await
+      .map_err(|e| StartError::Open(format!("shares.local.db: {e}")))?;
     let mut services = Services::unavailable();
+    services.shares = shares.clone();
     services.events = event_log;
     services.files = files.clone();
     services.reports = telemetry.clone();
@@ -169,6 +176,7 @@ impl AppState {
       event_log_db,
       transfers.clone(),
       users.database().clone(),
+      shares.database(),
     ]));
     services.application = databases.clone();
     Ok(Self {
@@ -188,6 +196,7 @@ impl AppState {
       databases,
       users,
       files,
+      shares,
       services,
       restart: Arc::new(AtomicBool::new(false)),
     })
