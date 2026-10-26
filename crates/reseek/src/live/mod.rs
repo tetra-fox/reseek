@@ -186,6 +186,12 @@ impl Live {
     }
   }
 
+  /// Whether an open stream follows `topic`.
+  pub fn followed(&self, topic: Topic) -> bool {
+    let topic = [topic];
+    self.hub.lock().streams.values().any(|q| q.follows(&topic))
+  }
+
   /// Registers a stream. When it saw a frame that is still kept, everything for its topics
   /// since then is queued for it and it needs no snapshots.
   pub fn open(&self, opening: Opening) -> Result<Registered, TooManyStreams> {

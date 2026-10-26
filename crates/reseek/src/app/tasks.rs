@@ -15,6 +15,7 @@ use tracing::{Instrument, debug, info, info_span, warn};
 use super::AppState;
 use crate::auth::{sessions, tokens};
 use crate::config::redact;
+use crate::live::Topic;
 
 /// How often ended sessions are marked and old ones pruned.
 const HOUSEKEEPING: Duration = Duration::from_secs(3600);
@@ -64,7 +65,8 @@ async fn follow_configuration(app: AppState) {
   }
 }
 
-/// Pushes every new log record to the streams following the log.
+/// Pushes every new log record to the streams following the log, while one does; without one
+/// a record would only take a place in the resume window from the other topics.
 async fn forward_logs(app: AppState) {
   let mut records = app.logs.subscribe();
   loop {
@@ -73,11 +75,15 @@ async fn forward_logs(app: AppState) {
       record = records.recv() => record,
     };
     match record {
-      Ok(record) => app
-        .live
-        .publish(LiveFrame::LogsRecord(api_types::logs::LogRecord::clone(
-          &record,
-        ))),
+      Ok(record) => {
+        if app.live.followed(Topic::Logs) {
+          app
+            .live
+            .publish(LiveFrame::LogsRecord(api_types::logs::LogRecord::clone(
+              &record,
+            )));
+        }
+      }
       Err(RecvError::Lagged(missed)) => {
         if let Some(suppressed) = LOGS_MISSED.allow() {
           warn!(
