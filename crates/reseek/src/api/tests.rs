@@ -33,7 +33,27 @@ fn answered_here(operation: &Operation) -> bool {
     || (route == "/api/v0/relay" && operation.method == Method::GET)
     || under("/api/v0/events")
     || under("/api/v0/telemetry")
+    || DIRECTORY.contains(&route)
 }
+
+/// The users routes the users directory and the blocks answer.
+const DIRECTORY: &[&str] = &[
+  "/api/v0/users",
+  "/api/v0/users/{username}",
+  "/api/v0/users/{username}/summary",
+  "/api/v0/users/{username}/profile",
+  "/api/v0/users/{username}/picture",
+  "/api/v0/users/{username}/transfers",
+  "/api/v0/users/{username}/notes",
+  "/api/v0/users/{username}/tags",
+  "/api/v0/users/{username}/pin",
+  "/api/v0/users/{username}/mute",
+  "/api/v0/users/{username}/group",
+  "/api/v0/users/{username}/block",
+  "/api/v0/users/blocked",
+  "/api/v0/users/blocked/import",
+  "/api/v0/users/blocked/export",
+];
 
 #[tokio::test]
 async fn every_route_is_answered_and_the_unbuilt_ones_say_so() {

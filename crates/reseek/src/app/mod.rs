@@ -34,6 +34,7 @@ use crate::services::Services;
 use crate::state::StateOwner;
 use crate::telemetry::Telemetry;
 use crate::ui::{Bundle, Ui};
+use crate::users::Directory;
 use crate::version;
 use signals::spawn_signals;
 use startup::{config_error, log_startup, warn_about, write_template};
@@ -95,6 +96,8 @@ pub struct AppState {
   pub telemetry: Arc<Telemetry>,
   /// every database opened, to list and to close
   pub databases: Arc<Databases>,
+  /// the users directory, which the network engines touch and ask who is blocked
+  pub users: Arc<Directory>,
   /// the engine of every domain
   pub services: Services,
   /// set when the daemon is to start again once it has stopped
@@ -138,15 +141,28 @@ impl AppState {
     let event_log = EventLog::open(&location, &events, config.clone(), shutdown.clone())
       .await
       .map_err(|e| StartError::Open(format!("events.db: {e}")))?;
+    let users = Directory::open(
+      &location,
+      transfers.clone(),
+      config.clone(),
+      live.clone(),
+      events.clone(),
+      shutdown.clone(),
+    )
+    .await
+    .map_err(StartError::Open)?;
     let event_log_db = event_log.database();
     let telemetry = Telemetry::new(transfers.clone(), shutdown.clone());
     let mut services = Services::unavailable();
     services.events = event_log;
     services.reports = telemetry.clone();
+    services.users = users.clone();
+    services.blocking = users.clone();
     let databases = Arc::new(Databases::new(vec![
       auth.db.clone(),
       event_log_db,
       transfers.clone(),
+      users.database().clone(),
     ]));
     services.application = databases.clone();
     Ok(Self {
@@ -164,6 +180,7 @@ impl AppState {
       transfers,
       telemetry,
       databases,
+      users,
       services,
       restart: Arc::new(AtomicBool::new(false)),
     })
