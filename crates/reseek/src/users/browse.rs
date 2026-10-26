@@ -26,6 +26,18 @@ struct Entry {
   ended: Option<Instant>,
 }
 
+impl Entry {
+  /// Whether progress at `percent` is pushed now: the first, the complete one, and any other
+  /// 250 ms after the last pushed.
+  fn push_due(&mut self, percent: f64) -> bool {
+    let due = percent >= 100.0 || self.pushed.is_none_or(|at| at.elapsed() >= PUSH_EVERY);
+    if due {
+      self.pushed = Some(Instant::now());
+    }
+    due
+  }
+}
+
 /// The browses of every user.
 pub struct Browses {
   live: Live,
@@ -86,9 +98,7 @@ impl Browses {
       size: progress.size,
     };
     entry.progress = Some(shown.clone());
-    let due = entry.pushed.is_none_or(|at| at.elapsed() >= PUSH_EVERY);
-    if due || shown.percent_complete >= 100.0 {
-      entry.pushed = Some(Instant::now());
+    if entry.push_due(shown.percent_complete) {
       drop(entries);
       self.live.publish(LiveFrame::UsersBrowseProgress(shown));
     }
@@ -129,6 +139,22 @@ mod tests {
       percent_complete: received as f64 / size as f64 * 100.0,
       size,
     }
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn progress_is_pushed_every_quarter_second_and_at_the_end() {
+    let mut entry = Entry {
+      browse: 1,
+      progress: None,
+      pushed: None,
+      ended: None,
+    };
+    let mut pushed = Vec::new();
+    for (wait, percent) in [(0, 0.0), (100, 10.0), (100, 20.0), (100, 30.0), (10, 100.0)] {
+      tokio::time::sleep(Duration::from_millis(wait)).await;
+      pushed.push(entry.push_due(percent));
+    }
+    assert_eq!(pushed, [true, false, false, true, true]);
   }
 
   #[tokio::test(start_paused = true)]
