@@ -268,8 +268,10 @@ impl Directory {
     }
   }
 
-  /// Removes the blocks that expired, raising `UserUnblocked` for each.
+  /// Removes the blocks that expired, raising `UserUnblocked` for each, and forgets the
+  /// remembered answers past their time.
   async fn expire_blocks(&self) {
+    self.blocks.forget_stale();
     let now = Utc::now();
     let expired = match self.db.write(move |conn| blocking::expire(conn, now)).await {
       Ok(expired) => expired,

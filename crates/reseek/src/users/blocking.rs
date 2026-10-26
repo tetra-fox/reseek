@@ -225,13 +225,27 @@ struct LoadedBlocklist {
 
 type DecisionKey = (String, Option<IpAddr>, BlockScope);
 
+/// A remembered answer: what it was, when it was worked out, and when it was last given.
+#[derive(Clone, Copy, Debug)]
+struct Decision {
+  blocked: bool,
+  decided: Instant,
+  used: Instant,
+}
+
+impl Decision {
+  fn fresh(&self) -> bool {
+    self.decided.elapsed() < DECISION_FOR
+  }
+}
+
 /// Who is blocked: our blocks and the configuration's blacklist, with the remembered answers.
 #[derive(Default)]
 pub struct Blocks {
   active: RwLock<HashMap<String, Active>>,
   rules: RwLock<Arc<Rules>>,
   blocklist: RwLock<Option<LoadedBlocklist>>,
-  decisions: Mutex<HashMap<DecisionKey, (bool, Instant)>>,
+  decisions: Mutex<HashMap<DecisionKey, Decision>>,
 }
 
 impl Blocks {
@@ -297,6 +311,15 @@ impl Blocks {
     self.forget(username);
   }
 
+  /// Drops the remembered answers older than they are kept for.
+  pub fn forget_stale(&self) {
+    self
+      .decisions
+      .lock()
+      .unwrap_or_else(PoisonError::into_inner)
+      .retain(|_, decision| decision.fresh());
+  }
+
   fn forget(&self, username: &str) {
     self
       .decisions
@@ -345,15 +368,14 @@ impl Blocks {
   pub fn is_blocked(&self, username: &str, ip: Option<IpAddr>, scope: BlockScope) -> bool {
     let key = (username.to_string(), ip, scope);
     {
-      let decisions = self
+      let mut decisions = self
         .decisions
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
-      let remembered = |key: &DecisionKey| {
-        decisions
-          .get(key)
-          .filter(|(_, at)| at.elapsed() < DECISION_FOR)
-          .map(|(blocked, _)| *blocked)
+      let mut remembered = |key: &DecisionKey| {
+        let decision = decisions.get_mut(key).filter(|d| d.fresh())?;
+        decision.used = Instant::now();
+        Some(decision.blocked)
       };
       if let Some(blocked) = remembered(&key) {
         return blocked;
@@ -367,9 +389,7 @@ impl Blocks {
       .read()
       .unwrap_or_else(PoisonError::into_inner)
       .get(username)
-      .is_some_and(|active| {
-        active.bits & bit(scope) != 0 && active.expires_at.is_none_or(|end| end > Utc::now())
-      });
+      .is_some_and(|active| active.bits & bit(scope) != 0 && stands(active.expires_at, Utc::now()));
     let blocked = ours || {
       let rules = self
         .rules
@@ -387,17 +407,25 @@ impl Blocks {
       .lock()
       .unwrap_or_else(PoisonError::into_inner);
     if decisions.len() >= DECISIONS {
-      decisions.retain(|_, (_, at)| at.elapsed() < DECISION_FOR);
+      decisions.retain(|_, decision| decision.fresh());
     }
     if decisions.len() >= DECISIONS
-      && let Some(oldest) = decisions
+      && let Some(least) = decisions
         .iter()
-        .min_by_key(|(_, (_, at))| *at)
+        .min_by_key(|(_, decision)| decision.used)
         .map(|(k, _)| k.clone())
     {
-      decisions.remove(&oldest);
+      decisions.remove(&least);
     }
-    decisions.insert(key, (blocked, Instant::now()));
+    let now = Instant::now();
+    decisions.insert(
+      key,
+      Decision {
+        blocked,
+        decided: now,
+        used: now,
+      },
+    );
     blocked
   }
 }
@@ -450,6 +478,22 @@ mod tests {
     );
     blocks.unset("alice");
     assert!(!blocks.is_blocked("alice", None, BlockScope::Uploads));
+  }
+
+  #[test]
+  fn a_full_cache_drops_the_least_recently_used_answer() {
+    let blocks = Blocks::new(&Options::default(), &[]);
+    for n in 0..DECISIONS {
+      blocks.is_blocked(&format!("user{n}"), None, BlockScope::Uploads);
+    }
+    blocks.is_blocked("user0", None, BlockScope::Uploads);
+    blocks.is_blocked("newcomer", None, BlockScope::Uploads);
+    let decisions = blocks.decisions.lock().unwrap();
+    let held = |name: &str| decisions.contains_key(&(name.to_string(), None, BlockScope::Uploads));
+    assert_eq!(decisions.len(), DECISIONS);
+    assert!(held("user0"), "asked again, so kept");
+    assert!(!held("user1"), "the least recently asked");
+    assert!(held("newcomer"));
   }
 
   #[test]
