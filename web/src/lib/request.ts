@@ -1,5 +1,8 @@
 /** What an API call came to: its data, or why it failed in words for a person */
-export type Outcome<T> = { ok: true; data: T } | { ok: false; error: string; status: number };
+export type Outcome<T> =
+  | { ok: true; data: T }
+  /** `body` is the error body as sent, for callers that place its detail themselves */
+  | { ok: false; error: string; status: number; body?: unknown };
 
 /** The error body every 4xx and 5xx carries */
 type ErrorBody = { error?: string | null; detail?: string | null };
@@ -34,5 +37,5 @@ export const call = async <T>(request: () => Promise<Reply<T>>): Promise<Outcome
   const { data, error, response } = reply;
   // a 204 has no body, which openapi-fetch reads as undefined data
   if (response.ok) return { ok: true, data: data as T };
-  return { ok: false, error: reason(response.status, error), status: response.status };
+  return { ok: false, error: reason(response.status, error), status: response.status, body: error };
 };

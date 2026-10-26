@@ -12599,7 +12599,7 @@ export interface components {
              */
             pendingRestart: string[];
             /** @description the values in effect, secrets shown as `*****` */
-            values: Record<string, never>;
+            values: Record<string, unknown>;
             /** @description keys, flags and variables that were ignored, each with where it was found */
             warnings: string[];
         };
@@ -13300,7 +13300,7 @@ export interface components {
             /** @description the file's revision the change was made against, null when the file did not exist */
             revision?: string | null;
             /** @description the keys to write and their values; `*****` for a secret keeps it, `""` clears it */
-            set?: Record<string, never>;
+            set?: Record<string, unknown>;
             /** @description the keys to take out of the file */
             unset?: string[];
         };
@@ -13626,7 +13626,7 @@ export interface components {
             username: string;
         };
         /** @description The data of a `lagged` frame, an empty object. */
-        Lagged: Record<string, never>;
+        Lagged: Record<string, unknown>;
         /** @description A user's figures, a row of `GET /telemetry/reports/transfers/leaderboard`. */
         LeaderboardEntry: components["schemas"]["TransferSummary"] & {
             /** @description the user */
@@ -13984,7 +13984,7 @@ export interface components {
             /** @description why it is not in effect */
             reason: string;
             /** @description the value the failed reload read, `*****` for a secret */
-            value: Record<string, never>;
+            value: Record<string, unknown>;
         };
         /**
          * @description Which messages of a room or conversation notify.
@@ -14111,7 +14111,7 @@ export interface components {
          * @description The options in effect, by their configuration keys, with every secret shown as `*****` and
          *     credentials taken out of URLs.
          */
-        OptionsDocument: Record<string, never>;
+        OptionsDocument: Record<string, unknown>;
         /**
          * @description Sets and removes runtime overrides, which apply on top of every other layer until they
          *     expire or the files change the value under them.
@@ -14123,7 +14123,7 @@ export interface components {
              */
             expiresIn?: string | null;
             /** @description the keys to override and their values; `*****` for a secret keeps its override */
-            set?: Record<string, never>;
+            set?: Record<string, unknown>;
             /** @description the keys whose override ends */
             unset?: string[];
         };
@@ -14142,7 +14142,7 @@ export interface components {
             /** @description who set it */
             setBy: string;
             /** @description its value, `*****` for a secret */
-            value: Record<string, never>;
+            value: Record<string, unknown>;
         };
         /** @description One page of a list, with how many items the whole list has. */
         Page_Transfer: {

@@ -49,7 +49,15 @@ for (const item of Object.values(document.paths ?? {})) {
   }
 }
 
-const text = COMMENT_HEADER + astToString(await openapiTS(document, { silent: true }));
+const text =
+  COMMENT_HEADER +
+  astToString(
+    await openapiTS(document, {
+      silent: true,
+      // option values and event data are any JSON: an object schema without properties takes any
+      emptyObjectsUnknown: true
+    })
+  );
 if (!process.argv.includes("--check")) {
   writeFileSync(target, text);
 } else if (!existsSync(target) || readFileSync(target, "utf8") !== text) {

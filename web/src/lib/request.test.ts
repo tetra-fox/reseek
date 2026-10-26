@@ -31,7 +31,7 @@ describe("call", () => {
       error: { error: "nope" },
       response: new Response(null, { status: 403 })
     }));
-    expect(refused).toEqual({ ok: false, error: "nope", status: 403 });
+    expect(refused).toEqual({ ok: false, error: "nope", status: 403, body: { error: "nope" } });
     const lost = await call(() => Promise.reject(new TypeError("Failed to fetch")));
     expect(lost).toEqual({ ok: false, error: UNREACHABLE, status: 0 });
   });
