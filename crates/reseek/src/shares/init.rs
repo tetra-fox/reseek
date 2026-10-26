@@ -48,6 +48,11 @@ impl Shares {
       if !self.scan_at_startup(true).await {
         error!("Failed to initialize shares. Sharing is disabled");
       }
+    } else if self.in_memory && self.backup.is_none() {
+      debug!("the share index is kept only in memory, so it starts with a scan");
+      if !self.scan_at_startup(false).await {
+        error!("Failed to initialize shares. Sharing is disabled");
+      }
     } else {
       match self.load(mode).await {
         Ok(settings) => {
