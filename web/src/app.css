@@ -1,0 +1,330 @@
+@import "tailwindcss";
+
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* only the tokens below exist, tailwind's default palette and radius scale are off */
+  --color-*: initial;
+  --radius-*: initial;
+  --color-page: oklch(0.982 0.003 255);
+  --color-surface: oklch(1 0 0);
+  --color-surface-muted: oklch(0.968 0.004 255);
+  --color-hover: oklch(0.95 0.006 255);
+  --color-press: oklch(0.925 0.008 255);
+  --color-overlay: oklch(1 0 0);
+  --color-border: oklch(0.918 0.005 255);
+  --color-input: oklch(0.875 0.007 255);
+  --color-fg: oklch(0.2 0.012 255);
+  --color-fg-muted: oklch(0.5 0.014 255);
+  --color-fg-subtle: oklch(0.63 0.012 255);
+  --color-accent: oklch(0.56 0.2 252);
+  --color-accent-hover: oklch(0.51 0.19 252);
+  --color-accent-press: oklch(0.46 0.17 252);
+  --color-accent-fg: oklch(0.99 0 0);
+  --color-accent-soft: oklch(0.955 0.03 252);
+  --color-accent-soft-fg: oklch(0.45 0.17 252);
+  --color-danger: oklch(0.58 0.2 25);
+  --color-danger-hover: oklch(0.53 0.19 25);
+  --color-danger-press: oklch(0.48 0.18 25);
+  --color-danger-fg: oklch(0.99 0 0);
+  --color-danger-soft: oklch(0.955 0.028 25);
+  --color-danger-soft-fg: oklch(0.5 0.17 25);
+  --color-warning: oklch(0.75 0.15 75);
+  --color-warning-soft: oklch(0.965 0.045 85);
+  --color-warning-soft-fg: oklch(0.48 0.11 65);
+  --color-success: oklch(0.64 0.15 155);
+  --color-success-soft: oklch(0.955 0.035 155);
+  --color-success-soft-fg: oklch(0.44 0.11 155);
+  --color-info: oklch(0.58 0.13 250);
+  --color-info-soft: oklch(0.955 0.025 250);
+  --color-info-soft-fg: oklch(0.45 0.13 250);
+  --color-ring: color-mix(in oklab, var(--color-accent) 50%, transparent);
+  --color-selection: oklch(0.9 0.06 252);
+  --color-scrollbar: oklch(0.82 0.008 255);
+  --color-scrim: oklch(0.15 0.006 255 / 0.45);
+  --color-glow: color-mix(in oklab, var(--color-accent) 7%, transparent);
+  --color-thumb: oklch(1 0 0);
+
+  --shadow-card: var(--elevation-card);
+  --shadow-raised: var(--elevation-raised);
+
+  --radius-control: 0.5rem;
+  --radius-card: 0.875rem;
+  --radius-badge: 0.375rem;
+
+  --spacing-control: 2rem;
+  --spacing-control-sm: 1.75rem;
+  --spacing-section: 1.5rem;
+  --spacing-group: 1rem;
+  --spacing-inline: 0.5rem;
+  --spacing-gutter: 1rem;
+
+  --container-page: 88rem;
+
+  --motion-fast: 150ms;
+  --ease-out-soft: cubic-bezier(0.2, 0, 0, 1);
+  --animate-popover-in: popover-in var(--motion-fast) var(--ease-out-soft);
+  --animate-popover-out: popover-out var(--motion-fast) var(--ease-out-soft) forwards;
+
+  @keyframes popover-in {
+    from {
+      opacity: 0;
+      scale: 0.96;
+    }
+  }
+
+  @keyframes popover-out {
+    to {
+      opacity: 0;
+      scale: 0.96;
+    }
+  }
+
+  --animate-fade-in: fade-in var(--motion-fast) var(--ease-out-soft);
+  --animate-fade-out: fade-out var(--motion-fast) var(--ease-out-soft) forwards;
+  --animate-sheet-in: sheet-in var(--motion-fast) var(--ease-out-soft);
+  --animate-sheet-out: sheet-out var(--motion-fast) var(--ease-out-soft) forwards;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes sheet-in {
+    from {
+      translate: -100% 0;
+    }
+  }
+
+  @keyframes sheet-out {
+    to {
+      translate: -100% 0;
+    }
+  }
+
+  --font-sans: "Inter Variable", sans-serif;
+  --font-mono:
+    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+/* shadows refer to these so dark mode can swap them, tailwind inlines theme shadows otherwise */
+:root {
+  --elevation-card: 0 1px 2px 0 oklch(0.2 0.01 255 / 0.04), 0 1px 3px 0 oklch(0.2 0.01 255 / 0.03);
+  --elevation-raised:
+    0 8px 24px -6px oklch(0.2 0.01 255 / 0.14), 0 2px 6px oklch(0.2 0.01 255 / 0.06);
+}
+
+@media (width >= 48rem) {
+  :root {
+    --spacing-gutter: 2rem;
+  }
+}
+
+.dark {
+  --color-page: oklch(0.135 0.006 255);
+  --color-surface: oklch(0.168 0.007 255);
+  --color-surface-muted: oklch(0.198 0.008 255);
+  --color-hover: oklch(0.225 0.009 255);
+  --color-press: oklch(0.26 0.01 255);
+  --color-overlay: oklch(0.2 0.008 255);
+  --color-border: oklch(0.25 0.009 255);
+  --color-input: oklch(0.315 0.011 255);
+  --color-fg: oklch(0.955 0.004 255);
+  --color-fg-muted: oklch(0.69 0.012 255);
+  --color-fg-subtle: oklch(0.54 0.012 255);
+  --color-accent: oklch(0.73 0.16 252);
+  --color-accent-hover: oklch(0.78 0.14 252);
+  --color-accent-press: oklch(0.82 0.12 252);
+  --color-accent-fg: oklch(0.17 0.02 252);
+  --color-accent-soft: oklch(0.27 0.065 252);
+  --color-accent-soft-fg: oklch(0.87 0.085 252);
+  --color-danger: oklch(0.68 0.17 25);
+  --color-danger-hover: oklch(0.73 0.15 25);
+  --color-danger-press: oklch(0.78 0.13 25);
+  --color-danger-fg: oklch(0.17 0.02 25);
+  --color-danger-soft: oklch(0.27 0.065 25);
+  --color-danger-soft-fg: oklch(0.84 0.09 25);
+  --color-warning: oklch(0.8 0.14 80);
+  --color-warning-soft: oklch(0.28 0.055 80);
+  --color-warning-soft-fg: oklch(0.88 0.1 85);
+  --color-success: oklch(0.73 0.15 155);
+  --color-success-soft: oklch(0.27 0.055 155);
+  --color-success-soft-fg: oklch(0.86 0.1 155);
+  --color-info: oklch(0.7 0.11 250);
+  --color-info-soft: oklch(0.27 0.05 250);
+  --color-info-soft-fg: oklch(0.86 0.07 250);
+  --color-selection: oklch(0.38 0.09 252);
+  --color-scrollbar: oklch(0.36 0.012 255);
+  --color-scrim: oklch(0.08 0.006 255 / 0.6);
+  --color-glow: color-mix(in oklab, var(--color-accent) 9%, transparent);
+  --color-thumb: oklch(0.3 0.01 255);
+  --elevation-card: inset 0 1px 0 0 oklch(1 0 0 / 0.03), 0 1px 2px 0 oklch(0 0 0 / 0.35);
+  --elevation-raised: inset 0 1px 0 0 oklch(1 0 0 / 0.05), 0 12px 32px -8px oklch(0 0 0 / 0.6);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-scrollbar) transparent;
+  }
+
+  /* a faint accent glow at the top of every page, behind the content */
+  body {
+    @apply bg-page font-sans text-fg antialiased;
+    background-image: radial-gradient(
+      ellipse 70rem 24rem at 60% -10rem,
+      var(--color-glow),
+      transparent 70%
+    );
+    background-repeat: no-repeat;
+  }
+
+  code {
+    @apply font-mono text-[0.9em];
+  }
+
+  ::selection {
+    background: var(--color-selection);
+  }
+
+  /* tailwind v4's preflight no longer gives buttons a pointer, and :where keeps the disabled rule below winning */
+  :where(
+    button:not(:disabled),
+    a[href],
+    [role="button"],
+    [role="menuitem"],
+    [role="menuitemradio"],
+    [role="option"],
+    [role="tab"],
+    [role="switch"],
+    [role="radio"],
+    label:has(> [role="switch"]),
+    label:has(> [role="radio"]),
+    summary
+  ) {
+    cursor: pointer;
+  }
+
+  :disabled,
+  [aria-disabled="true"],
+  [data-disabled] {
+    cursor: not-allowed;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
+  }
+
+  input[type="number"] {
+    appearance: textfield;
+  }
+
+  input::-webkit-inner-spin-button,
+  input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* 0.01ms rather than 0 so animationend still fires, bits-ui waits on it before unmounting */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* the nav link for where the page is, marked with aria-current */
+@utility nav-current {
+  @apply bg-surface-muted font-medium text-fg shadow-xs ring-1 ring-border;
+}
+
+/* a row's buttons, put on an element inside a `group` row. Half shown until the row is hovered or
+   focused where the pointer can hover, always shown on touch screens */
+@utility row-action {
+  transition-property: color, background-color, opacity;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-out-soft);
+  @media (hover: hover) {
+    opacity: 0.5;
+    &:is(:where(.group):hover *, :where(.group):focus-within *) {
+      opacity: 1;
+    }
+  }
+}
+
+/* Table.svelte's cells. in the components layer so a class on a cell, like text-right or py-6, still
+   wins */
+@layer components {
+  .data-table {
+    tr {
+      border-bottom: 1px solid var(--color-border);
+    }
+    tbody tr:last-child {
+      border-bottom: 0;
+    }
+    thead tr {
+      background: color-mix(in oklab, var(--color-surface-muted) 60%, transparent);
+    }
+    th {
+      height: 2.5rem;
+      padding-inline: 0.75rem;
+      text-align: left;
+      vertical-align: middle;
+      font-size: var(--text-xs);
+      font-weight: 500;
+      color: var(--color-fg-muted);
+      white-space: nowrap;
+      user-select: none;
+    }
+    td {
+      height: 2.75rem;
+      padding: 0.375rem 0.75rem;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    /* the outer columns line up with a card's padding, so a switch or a name isn't against the edge */
+    tr > :first-child {
+      padding-left: 1.25rem;
+    }
+    tr > :last-child {
+      padding-right: 1.25rem;
+    }
+    /* data-stripe overrides the position-based stripe for rows that move, and :where keeps hover above both */
+    tbody tr:where(:nth-child(even):not([data-stripe]), [data-stripe="even"]) {
+      background: color-mix(in oklab, var(--color-surface-muted) 55%, transparent);
+    }
+    tbody tr {
+      transition: background-color var(--motion-fast) var(--ease-out-soft);
+    }
+    tbody tr:hover {
+      background: var(--color-hover);
+    }
+  }
+}
+
+/* chrome paints autofilled fields with an !important user agent background, so the only way to keep
+   ours is to delay the change. unlayered so a transition utility on the input can't override it */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-fg);
+  caret-color: var(--color-fg);
+  transition: background-color 0s 600000s;
+}

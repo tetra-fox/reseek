@@ -4,42 +4,58 @@ default:
     @just --list
 
 # headless daemon with restart-on-change plus the vite ui with proxy
-dev:
-    @echo "dev: not yet (no daemon or web ui)"
+dev: web-install
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trap 'kill 0' EXIT
+    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek --bin reseek-headless &
+    pnpm --dir web dev
 
 # pnpm build, then cargo build --release (cargo never runs pnpm)
 build: web-build
     cargo build --release
 
 # only the ui into web/build
-web-build:
-    @echo "web-build: not yet (no web/)"
+web-build: web-install
+    pnpm --dir web build
 
 # cargo nextest, the doc examples nextest does not run, then vitest
-test:
+test: web-install
     cargo nextest run --workspace --all-features
     cargo test --workspace --all-features --doc
     @[ -n "$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)" ] || echo "soulfind not found at SOULFIND_BIN or on PATH: the soulfind suites were skipped"
-    @echo "vitest: not yet (no web/)"
+    pnpm --dir web test
 
-# fmt --check, clippy -D warnings, oxlint, oxfmt --check
-lint:
+# fmt --check, clippy -D warnings, oxlint, oxfmt --check, svelte-check
+lint: web-install
     cargo fmt --all --check
     cargo fmt --manifest-path fuzz/Cargo.toml --all --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings
-    @echo "oxlint, oxfmt: not yet (no web/)"
+    pnpm --dir web lint
+    pnpm --dir web check
 
 # regenerate api/openapi.json from the handlers
 api-spec:
     cargo run -q -p reseek --example openapi > api/openapi.json
 
 # regenerate web/src/lib/api/schema.d.ts from api/openapi.json
-api:
-    @echo "api: not yet (no web/)"
+api: web-install
+    pnpm --dir web api
 
-# fail if api/openapi.json no longer matches the handlers
-api-check:
+# fail if api/openapi.json no longer matches the handlers, or the UI's types no longer match it
+api-check: web-install
     cargo nextest run -p reseek -E "test(the_committed_openapi_document_is_current)"
+    pnpm --dir web api-check
+
+# the built UI served by the daemon in a browser: it loads, logs in and moves between screens
+web-smoke: web-build
+    cargo build -p reseek --bin reseek
+    pnpm --dir web smoke
+
+# the web UI's packages as the lockfile pins them
+[private]
+web-install:
+    pnpm --dir web install --frozen-lockfile --prefer-offline --silent
 
 # soulfind and the soulseek-rs cli as the other user: search, browse and transfers both ways
 e2e:
@@ -88,7 +104,7 @@ soulfind-bin:
     echo "$soulfind"
 
 # the gate for every push
-ci: lint test api-check e2e live-smoke-local
+ci: lint test api-check web-smoke e2e live-smoke-local
 
 # soulfind on its default port 2242 with its data under target/soulfind, for trying things by hand
 soulfind:

@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": ["oxlint-tailwindcss"],
+  "settings": {
+    "tailwindcss": {
+      "entryPoint": "src/app.css"
+    }
+  },
+  "rules": {
+    "func-style": ["error", "expression"],
+    "no-console": "error",
+    "tailwindcss/no-unknown-classes": "error",
+    "tailwindcss/no-conflicting-classes": "error",
+    "tailwindcss/no-duplicate-classes": "error",
+    "tailwindcss/no-deprecated-classes": "error",
+    "tailwindcss/no-contradicting-variants": "error"
+  },
+  "ignorePatterns": ["src/lib/api/schema.d.ts", "build", ".svelte-kit"]
+}
