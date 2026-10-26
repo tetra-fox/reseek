@@ -78,7 +78,14 @@ impl Daemon {
   /// Starts the daemon as [`Daemon::start`] does, on `port`.
   pub fn start_on(port: u16, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Self {
     let child = Command::new(PROGRAM)
-      .args(["--app-dir", dir.to_str().unwrap(), "-n", "--no-https"])
+      // never the release feed, which a release build would read
+      .args([
+        "--app-dir",
+        dir.to_str().unwrap(),
+        "-n",
+        "--no-https",
+        "--no-version-check",
+      ])
       .args([
         "--http-ip-address",
         "127.0.0.1",

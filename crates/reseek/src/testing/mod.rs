@@ -58,8 +58,10 @@ pub async fn app(config: &str, env: &[(&str, &str)]) -> TestApp {
   std::fs::write(dir.path().join("config.toml"), config).unwrap();
   let defaults = Defaults::new(Some(dir.path()));
   let sources = Sources {
+    // a release build is not a development build, and tests never reach the release feed
     env: env
       .iter()
+      .chain(&[("RESEEK_NO_VERSION_CHECK", "true")])
       .map(|(k, v)| (OsString::from(k), OsString::from(v)))
       .collect(),
     files: ConfigFiles::new(&[], dir.path()),

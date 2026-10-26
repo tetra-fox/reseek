@@ -207,6 +207,7 @@ impl AppState {
       releases: releases.clone(),
       state: state.clone(),
       databases: databases.clone(),
+      config: config.clone(),
     });
     Ok(Self {
       config,

@@ -6,9 +6,11 @@ use std::sync::Arc;
 use api_types::application::DatabaseFile;
 use api_types::state::VersionInfo;
 use async_trait::async_trait;
-use tracing::warn;
+use cascade::Watcher;
+use tracing::{info, warn};
 
 use crate::api::error::ApiError;
+use crate::config::Options;
 use crate::databases::Databases;
 use crate::network::Network;
 use crate::services::{ApplicationService, Connected};
@@ -25,6 +27,8 @@ pub struct Application {
   pub state: StateOwner,
   /// the database files
   pub databases: Arc<Databases>,
+  /// whether the release feed may be read at all
+  pub config: Watcher<Options>,
 }
 
 #[async_trait]
@@ -39,6 +43,10 @@ impl ApplicationService for Application {
   }
 
   async fn check_version(&self) -> Result<VersionInfo, ApiError> {
+    if self.config.current().values.flags.no_version_check {
+      info!("Skipping version check; the no-version-check flag is set");
+      return Ok(self.state.current().version.clone());
+    }
     self.releases.update(&self.state).await.map_err(|e| {
       warn!(error = e, "Failed to check version");
       ApiError::upstream("Failed to check version", Some(e))
