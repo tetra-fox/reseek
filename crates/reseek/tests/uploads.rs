@@ -2,7 +2,8 @@
 //! with one slot, a second request waits its place, the forecast says so in search responses
 //! and the user info, why it waits is told, a cancelled upload leaves the listings once it
 //! ended, and a live change of the group's speed lets the running upload finish and the queued
-//! one start.
+//! one start; an upload that fails once started is queued anew when its peer, told of the
+//! failure, asks again at once.
 
 mod support;
 
@@ -17,7 +18,7 @@ use api_types::options::OptionsPatch;
 use api_types::transfers::{Transfer, TransferStates, UploadsQuery};
 use serde_json::json;
 use soulseek_client::{
-  ClientError, ClientOptions, DownloadOutput, DownloadRequest, SearchOptions, SearchScope,
+  ClientError, ClientOptions, DownloadOutput, DownloadRequest, Event, SearchOptions, SearchScope,
 };
 use support::soulfind::{self, Soulfind, User};
 use support::transfers::{content, file, scratch};
@@ -339,4 +340,67 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
     metric(&api, "reseek_transfers_uploads_completed_failed").await,
     1.0
   );
+}
+
+#[tokio::test]
+async fn an_upload_that_failed_once_started_is_queued_anew_when_the_peer_asks_again() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let dir = tempfile::tempdir().unwrap();
+  let album = dir.path().join("share").join("album");
+  std::fs::create_dir_all(&album).unwrap();
+  let size = 100_000;
+  file(&album, "slow.flac", size);
+  let name = soulfind::username("daemon");
+  // the test's users share nothing, so they are leechers, and 1 KiB/s keeps the upload going
+  let config = "[transfers.groups.leechers.upload]\nspeed_limit = 1\n";
+  let (_daemon, api) = sharing(dir.path(), &server, &name, config, 1).await;
+  let mut other = peer(&server, "again").await;
+  let remote = "share\\album\\slow.flac";
+
+  let (failing, _) = download(&other, &name, remote, size);
+  let first = upload_when(&api, &other.username, remote, "under way", |t| {
+    t.state == TransferStates::InProgress && t.bytes_transferred > 0
+  })
+  .await;
+  // the shared file shrinks under the upload, which then fails and tells the peer
+  let path = album.join("slow.flac");
+  std::fs::File::options()
+    .write(true)
+    .open(&path)
+    .unwrap()
+    .set_len(10)
+    .unwrap();
+  let failed = tokio::time::timeout(PATIENCE, failing)
+    .await
+    .expect("the download ends")
+    .unwrap();
+  assert!(failed.is_err(), "{failed:?}");
+  other
+    .event(|event| matches!(event, Event::DownloadFailed { .. }).then_some(()))
+    .await;
+  // the file is whole again, and the peer asks again as soon as it is told, as clients do
+  file(&album, "slow.flac", size);
+  let (_again, _) = download(&other, &name, remote, size);
+  let second = upload_when(&api, &other.username, remote, "queued anew", |t| {
+    t.id != first.id
+  })
+  .await;
+  assert!(!second.removed);
+  let query = UploadsQuery {
+    include_removed: true,
+    ..UploadsQuery::default()
+  };
+  let ended = api
+    .uploads(&query)
+    .await
+    .unwrap()
+    .into_iter()
+    .flat_map(|user| user.directories)
+    .flat_map(|directory| directory.files)
+    .find(|t| t.id == first.id)
+    .unwrap();
+  assert!(ended.removed, "the new request takes its place");
+  assert!(ended.state.contains(TransferStates::Completed));
 }
