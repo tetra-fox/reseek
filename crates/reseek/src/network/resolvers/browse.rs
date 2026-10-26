@@ -12,8 +12,9 @@ use soulseek_proto::RemoteFilename;
 use soulseek_proto::peer::{BrowseResponse, Directory};
 use tracing::{debug, error, trace, warn};
 
-use super::{Edges, blocked, millis, suspicious};
+use super::{Edges, blocked, suspicious};
 use crate::safety::traverses;
+use crate::telemetry::millis;
 
 /// Browses that found the cache missing, which repeat while it cannot be written.
 static UNCACHED: LogLimiter = LogLimiter::new();

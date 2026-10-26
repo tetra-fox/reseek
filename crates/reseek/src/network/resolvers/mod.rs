@@ -247,11 +247,6 @@ pub fn place_in_queue(
   edges.uploads().place(username, filename.as_str())
 }
 
-/// The time since `started`, in milliseconds.
-fn millis(started: std::time::Instant) -> f64 {
-  started.elapsed().as_secs_f64() * 1000.0
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
   use super::*;

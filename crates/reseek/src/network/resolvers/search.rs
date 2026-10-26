@@ -19,9 +19,10 @@ use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 
-use super::{Edges, blocked, forecast, log_refused, millis};
+use super::{Edges, blocked, forecast, log_refused};
 use crate::config::{Options, patterns};
 use crate::telemetry::catalogue::SearchMetrics;
+use crate::telemetry::millis;
 use crate::telemetry::registry::Gauge;
 
 /// How long the share query of one request may take before the request is dropped.

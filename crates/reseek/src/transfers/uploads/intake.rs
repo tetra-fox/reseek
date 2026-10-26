@@ -18,6 +18,7 @@ use tracing::{debug, info, trace, warn};
 
 use super::{Uploads, limits};
 use crate::shares::Resolved;
+use crate::telemetry::millis;
 use crate::users::PRIVILEGED;
 
 /// What a peer is told when too many requests wait to be decided.
@@ -149,11 +150,6 @@ pub(super) struct Located {
   pub resolved: Resolved,
   /// its size on disk now
   pub size: u64,
-}
-
-/// The time since `started`, in milliseconds.
-fn millis(started: Instant) -> f64 {
-  started.elapsed().as_secs_f64() * 1000.0
 }
 
 impl Uploads {

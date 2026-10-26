@@ -87,6 +87,11 @@ impl Telemetry {
   }
 }
 
+/// The time since `started`, in milliseconds, the unit latencies are kept in.
+pub fn millis(started: std::time::Instant) -> f64 {
+  started.elapsed().as_secs_f64() * 1000.0
+}
+
 /// Whether a family is one a dashboard shows: the daemon's own, the process's, and the host's
 /// except its processor times.
 fn is_kpi(name: &str) -> bool {
