@@ -50,14 +50,12 @@
   const readWrite = $derived(session.can("ReadWrite"));
 
   // another username's card or menu opening closes this one
-  $effect(() => {
-    if (open.owner !== me && shown) shown = null;
-  });
+  const active = $derived(open.owner === me ? shown : null);
   // the list the name is in holds still while its card or menu is open
-  $effect(() => (shown ? interaction.hold() : undefined));
+  $effect(() => (active ? interaction.hold() : undefined));
   // a scroll of what is under the card closes it
   $effect(() => {
-    if (shown !== "card") return;
+    if (active !== "card") return;
     const close = () => hide();
     window.addEventListener("scroll", close, { capture: true, passive: true });
     return () => window.removeEventListener("scroll", close, { capture: true });
@@ -86,14 +84,14 @@
   const enter = (e: PointerEvent) => {
     // touch has no hover card: a tap follows the link and a long press opens the menu
     if (e.pointerType === "touch") return;
-    if (shown === "card") clearTimeout(timer);
-    else if (!shown) later(() => show("card"), OPEN_DELAY_MS);
+    if (active === "card") clearTimeout(timer);
+    else if (!active) later(() => show("card"), OPEN_DELAY_MS);
   };
 
   const leave = (e: PointerEvent) => {
     if (e.pointerType === "touch") return;
-    if (shown === "card") later(hide, CLOSE_DELAY_MS);
-    else if (!shown) clearTimeout(timer);
+    if (active === "card") later(hide, CLOSE_DELAY_MS);
+    else if (!active) clearTimeout(timer);
   };
 
   const down = (e: PointerEvent) => {
@@ -172,7 +170,7 @@
   </button>
 </span>
 
-{#if shown === "card"}
+{#if active === "card"}
   <Popover.Root open onOpenChange={(o) => !o && hide()}>
     <Popover.Portal>
       <Popover.Content
@@ -196,7 +194,7 @@
   </Popover.Root>
 {/if}
 
-{#if shown === "menu"}
+{#if active === "menu"}
   <DropdownMenu.Root open onOpenChange={(o) => !o && hide()}>
     <Menu.Content customAnchor={link} align="start" class="min-w-52">
       <div class="flex items-center gap-2 px-2 py-1.5 text-xs">

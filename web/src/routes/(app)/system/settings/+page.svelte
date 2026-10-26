@@ -37,7 +37,7 @@
   <nav aria-label="Settings sections" class="flex flex-wrap gap-x-3 gap-y-1 text-sm">
     {#each all as section (section.id)}
       <a
-        href={`#/system/settings`}
+        href="#/system/settings"
         class="text-fg-muted hover:text-fg"
         onclick={(e) => {
           e.preventDefault();

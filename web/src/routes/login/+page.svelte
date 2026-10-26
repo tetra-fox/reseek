@@ -99,7 +99,6 @@
         {/if}
         <Form layout="stacked" class="flex flex-col gap-4" onsubmit={login}>
           <Field label="Username" for="username">
-            <!-- svelte-ignore a11y_autofocus -->
             <Input
               id="username"
               autocomplete="username"
