@@ -206,7 +206,7 @@ impl Shares {
     )
     .await?;
     let browse = browse::path(&paths.cache);
-    match std::fs::remove_file(&browse) {
+    match tokio::fs::remove_file(&browse).await {
       Ok(()) => debug!("browse cache of the last run removed"),
       Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
       Err(e) => warn!(error = %e, "browse cache of the last run not removed"),

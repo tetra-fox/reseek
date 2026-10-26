@@ -387,8 +387,8 @@ impl FileService for Files {
     let relative = relative.to_string();
     let dir = self.root(root).to_path_buf();
     let checked = relative.clone();
-    let resolved = blocking(move || served_path(&dir, &checked)).await?;
-    if !resolved.is_file() {
+    let is_file = blocking(move || served_path(&dir, &checked).map(|path| path.is_file())).await?;
+    if !is_file {
       return Err(ApiError::not_found(format!(
         "'{}' is not a file",
         self.root(root).join(&relative).display()
