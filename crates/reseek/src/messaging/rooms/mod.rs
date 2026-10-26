@@ -7,6 +7,8 @@ pub mod history;
 mod private;
 pub mod tracker;
 
+pub use events::room_of;
+
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -21,7 +23,7 @@ use chrono::Utc;
 use soulseek_client::{ClientError, RoomErrorKind};
 use soulseek_proto::RoomType;
 use soulseek_proto::server::RoomList;
-use tracing::{debug, info, warn};
+use tracing::{Instrument, debug, info, info_span, warn};
 
 use super::conversations::unsent;
 use super::{Messaging, export, sessions};
@@ -95,6 +97,13 @@ impl Messaging {
   /// the room already, which it says by not answering, is made to forget it by leaving, and the
   /// room is joined again once.
   async fn join_now(&self, name: &str, private: bool) -> Result<Room, ClientError> {
+    self
+      .join_room(name, private)
+      .instrument(info_span!("room", room = name))
+      .await
+  }
+
+  async fn join_room(&self, name: &str, private: bool) -> Result<Room, ClientError> {
     let room_type = if private {
       RoomType::Private
     } else {
@@ -220,6 +229,13 @@ impl Messaging {
   }
 
   pub(super) async fn leave(&self, room: &str) -> Result<(), ApiError> {
+    self
+      .leave_room(room)
+      .instrument(info_span!("room", room))
+      .await
+  }
+
+  async fn leave_room(&self, room: &str) -> Result<(), ApiError> {
     let joined = match self.rooms.tracker().get(room) {
       Some(tracked) => tracked.joined,
       None => return Err(not_in(room)),

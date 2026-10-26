@@ -19,6 +19,29 @@ use super::tracker::room_user;
 use crate::messaging::{Messaging, mentions};
 use crate::users::Touch;
 
+/// The room a client event is about, when it is about one.
+pub fn room_of(event: &Event) -> Option<&str> {
+  match event {
+    Event::RoomJoined { room_name, .. }
+    | Event::RoomLeft { room_name, .. }
+    | Event::RoomMessageReceived { room_name, .. }
+    | Event::RoomTickerListReceived { room_name, .. }
+    | Event::RoomTickerAdded { room_name, .. }
+    | Event::RoomTickerRemoved { room_name, .. }
+    | Event::PrivateRoomUserAdded { room_name, .. }
+    | Event::PrivateRoomUserRemoved { room_name, .. }
+    | Event::PrivateRoomOperatorAdded { room_name, .. }
+    | Event::PrivateRoomOperatorRemoved { room_name, .. }
+    | Event::PrivateRoomUserListReceived(RoomMembers { room_name, .. })
+    | Event::PrivateRoomModeratedUserListReceived(RoomMembers { room_name, .. })
+    | Event::PrivateRoomMembershipAdded(room_name)
+    | Event::PrivateRoomMembershipRemoved(room_name)
+    | Event::PrivateRoomModerationAdded(room_name)
+    | Event::PrivateRoomModerationRemoved(room_name) => Some(room_name),
+    _ => None,
+  }
+}
+
 impl Messaging {
   /// Handles a client event about a room.
   pub(in crate::messaging) async fn room_event(&self, event: Event) {

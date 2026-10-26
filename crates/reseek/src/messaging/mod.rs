@@ -245,7 +245,10 @@ impl Messaging {
         self.session_ended(shutdown).await;
         self.rooms_disconnected();
       }
-      other => self.room_event(other).await,
+      other => {
+        let span = info_span!("room", room = rooms::room_of(&other));
+        self.room_event(other).instrument(span).await;
+      }
     }
   }
 
