@@ -36,6 +36,7 @@ pub fn known(
       }),
     country_code: stored.and_then(|s| s.country_code.clone()),
     group: groups::effective(options, username, stored),
+    group_override: stored.and_then(|s| s.group_override.clone()),
     block,
     tags: stored.map(|s| s.tags.clone()).unwrap_or_default(),
     muted: stored.is_some_and(|s| s.muted),

@@ -273,7 +273,17 @@ async fn a_group_the_configuration_contradicts_is_refused() {
     summary["group"],
     json!({ "name": "vip", "source": "override", "priority": 1 })
   );
+  assert_eq!(summary["groupOverride"], "vip");
   assert_eq!(summary["known"], true);
+  let without_vip = CONFIG.replace("[transfers.groups.user_defined.vip]\nmembers = []\n", "");
+  std::fs::write(app.dir.path().join("config.toml"), without_vip).unwrap();
+  app.state.config.reload().await.unwrap();
+  let (_, profile) = send(&app, "GET", "/api/v0/users/alice/profile", None).await;
+  assert_eq!(profile["group"]["source"], "builtin");
+  assert_eq!(
+    profile["groupOverride"], "vip",
+    "kept, so the page can say its group is gone"
+  );
 }
 
 /// Each listed block's user and source.

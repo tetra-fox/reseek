@@ -179,6 +179,9 @@ pub struct KnownUser {
   pub country_code: Option<String>,
   /// the upload group the user is in
   pub group: UserGroup,
+  /// the user-defined group we put the user in, null when none; kept also when that group no
+  /// longer exists, so a client can say the override has no effect
+  pub group_override: Option<String>,
   /// our block of the user, or the configuration's; null when not blocked
   pub block: Option<Block>,
   /// our labels for the user, lower case

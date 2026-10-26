@@ -17008,6 +17008,13 @@
             "$ref": "#/components/schemas/UserGroup",
             "description": "the upload group the user is in"
           },
+          "groupOverride": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the user-defined group we put the user in, null when none; kept also when that group no\nlonger exists, so a client can say the override has no effect"
+          },
           "isPrivileged": {
             "type": "boolean",
             "description": "the server last reported the user as privileged"
