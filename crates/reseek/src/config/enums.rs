@@ -159,6 +159,17 @@ option_enum! {
 }
 
 option_enum! {
+  /// How a download asks the peer for the file.
+  pub enum RequestStyle {
+    /// the queue request every current client sends; the peer does not answer it
+    #[default]
+    Queue = "queue",
+    /// the older transfer request, which the peer answers with queued, start now or a refusal
+    TransferRequest = "transfer_request",
+  }
+}
+
+option_enum! {
   /// The least severe protocol diagnostic that is logged.
   pub enum DiagnosticLevel {
     /// none
@@ -168,7 +179,7 @@ option_enum! {
     /// warnings and information
     #[default]
     Info = "info",
-    /// everything
+    /// warnings, information and the protocol narrative
     Debug = "debug",
   }
 }

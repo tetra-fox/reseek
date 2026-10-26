@@ -41,6 +41,11 @@ pub(super) fn check(soulseek: &Soulseek, report: &mut Report) {
       1,
     ),
     ("soulseek.connection.timeout.transfer", timeout.transfer, 30),
+    (
+      "soulseek.connection.timeout.transfer_response",
+      timeout.transfer_response,
+      1,
+    ),
   ] {
     report.check(key, duration_at_least(key, value, Duration::from_secs(min)));
   }
@@ -83,6 +88,14 @@ pub(super) fn check(soulseek: &Soulseek, report: &mut Report) {
   ] {
     report.check(key, length(key, value.as_deref(), 1, 255));
   }
+  // the proxy is offered both or neither
+  if proxy.username.is_some() != proxy.password.is_some() {
+    report.add(
+      "soulseek.connection.proxy.username",
+      "The fields soulseek.connection.proxy.username and soulseek.connection.proxy.password \
+       must be set together.",
+    );
+  }
   if let Some(port) = proxy.port {
     let key = "soulseek.connection.proxy.port";
     report.check(key, range(key, port, 1, 65535));
@@ -91,11 +104,96 @@ pub(super) fn check(soulseek: &Soulseek, report: &mut Report) {
     let key = "soulseek.connection.mtu";
     report.check(key, range(key, mtu, 576, 65535));
   }
+  check_keepalive(soulseek, report);
+  check_limits(soulseek, report);
+}
+
+fn check_keepalive(soulseek: &Soulseek, report: &mut Report) {
+  let keepalive = &soulseek.server_keepalive;
+  // the other fields mean nothing while it is off
+  if !keepalive.enabled {
+    return;
+  }
+  for (key, value) in [
+    ("soulseek.server_keepalive.idle", keepalive.idle),
+    ("soulseek.server_keepalive.interval", keepalive.interval),
+  ] {
+    report.check(key, duration_at_least(key, value, Duration::from_secs(1)));
+  }
+  let key = "soulseek.server_keepalive.probes";
+  report.check(key, at_least(key, keepalive.probes, 1));
+}
+
+fn check_limits(soulseek: &Soulseek, report: &mut Report) {
+  let limits = &soulseek.limits;
+  let key = "soulseek.limits.max_message_size";
+  // a message must at least hold its 4-byte code, and the client counts it in 32 bits
+  if !(4..=u64::from(u32::MAX)).contains(&limits.max_message_size.as_u64()) {
+    report.add(
+      key,
+      format!(
+        "The field {key} must be between 4 bytes and {}.",
+        bytesize::ByteSize(u64::from(u32::MAX))
+      ),
+    );
+  }
+  for (key, value) in [
+    (
+      "soulseek.limits.max_concurrent_peer_connects",
+      limits.max_concurrent_peer_connects,
+    ),
+    (
+      "soulseek.limits.max_cached_peer_connections",
+      limits.max_cached_peer_connections,
+    ),
+    (
+      "soulseek.limits.max_concurrent_search_responses",
+      limits.max_concurrent_search_responses,
+    ),
+    (
+      "soulseek.limits.search_response_cache_size",
+      limits.search_response_cache_size,
+    ),
+    (
+      "soulseek.limits.user_endpoint_cache_size",
+      limits.user_endpoint_cache_size,
+    ),
+  ] {
+    report.check(key, at_least(key, value, 1));
+  }
+  let key = "soulseek.limits.distributed_parent_negotiation_timeout";
+  report.check(
+    key,
+    duration_at_least(
+      key,
+      limits.distributed_parent_negotiation_timeout,
+      Duration::from_millis(1),
+    ),
+  );
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn proxy_credentials_come_in_pairs() {
+    let mut soulseek = Soulseek::default();
+    soulseek.connection.proxy.username = Some("user".into());
+    let mut report = Report::default();
+    check(&soulseek, &mut report);
+    assert_eq!(
+      report.messages(),
+      [
+        "The fields soulseek.connection.proxy.username and soulseek.connection.proxy.password \
+        must be set together."
+      ]
+    );
+    soulseek.connection.proxy.password = Some("secret".into());
+    let mut report = Report::default();
+    check(&soulseek, &mut report);
+    assert!(report.messages().is_empty());
+  }
 
   #[test]
   fn an_enabled_proxy_needs_its_address_and_port() {

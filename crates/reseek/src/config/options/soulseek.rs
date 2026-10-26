@@ -63,6 +63,11 @@ pub struct Soulseek {
   pub distributed_network: DistributedNetwork,
   /// Connection tuning.
   pub connection: SoulseekConnection,
+  /// TCP keep-alive on the server connection. The server never answers a ping, so this is how
+  /// a dead server connection is noticed: after about `idle + probes * interval`.
+  pub server_keepalive: ServerKeepalive,
+  /// Bounds on what other users can make us hold or start.
+  pub limits: SoulseekLimits,
 }
 
 impl Default for Soulseek {
@@ -79,6 +84,8 @@ impl Default for Soulseek {
       diagnostic_level: DiagnosticLevel::default(),
       distributed_network: DistributedNetwork::default(),
       connection: SoulseekConnection::default(),
+      server_keepalive: ServerKeepalive::default(),
+      limits: SoulseekLimits::default(),
     }
   }
 }
@@ -153,6 +160,10 @@ pub struct ConnectionTimeouts {
   #[cascade(env = "RESEEK_SLSK_TRANSFER_TIMEOUT", cli = "--slsk-transfer-timeout")]
   #[serde(with = "humantime_serde")]
   pub transfer: Duration,
+  /// How long an upload, or a download asked for with a transfer request, waits for the peer
+  /// to answer the request, at least a second.
+  #[serde(with = "humantime_serde")]
+  pub transfer_response: Duration,
 }
 
 impl Default for ConnectionTimeouts {
@@ -161,6 +172,7 @@ impl Default for ConnectionTimeouts {
       connect: Duration::from_secs(10),
       inactivity: Duration::from_secs(15),
       transfer: Duration::from_secs(60),
+      transfer_response: Duration::from_secs(15),
     }
   }
 }
@@ -175,12 +187,9 @@ pub struct ConnectionBuffers {
   /// The write buffer of a connection, at least 1024.
   #[cascade(env = "RESEEK_SLSK_WRITE_BUFFER", cli = "--slsk-write-buffer")]
   pub write: u32,
-  /// The buffer of a transfer connection, at least 81920.
-  #[cascade(
-    env = "RESEEK_SLSK_TRANSFER_BUFFER",
-    cli = "--slsk-transfer-buffer",
-    apply = "restart"
-  )]
+  /// The buffer of a transfer connection, at least 81920; a change applies to the transfers
+  /// that start after it.
+  #[cascade(env = "RESEEK_SLSK_TRANSFER_BUFFER", cli = "--slsk-transfer-buffer")]
   pub transfer: u32,
   /// How many writes may wait per connection, from 5 to 5000.
   #[cascade(env = "RESEEK_SLSK_WRITE_QUEUE", cli = "--slsk-write-queue")]
@@ -221,4 +230,72 @@ pub struct SoulseekProxy {
     secret
   )]
   pub password: Option<String>,
+}
+
+/// TCP keep-alive on the server connection.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct ServerKeepalive {
+  /// Sends keep-alive probes on the server connection.
+  #[cascade(env = "RESEEK_SLSK_SERVER_KEEPALIVE_ENABLED", apply = "reconnect")]
+  pub enabled: bool,
+  /// How long the connection is silent before the first probe, at least a second.
+  #[cascade(env = "RESEEK_SLSK_SERVER_KEEPALIVE_IDLE", apply = "reconnect")]
+  #[serde(with = "humantime_serde")]
+  pub idle: Duration,
+  /// The time between probes, at least a second.
+  #[cascade(env = "RESEEK_SLSK_SERVER_KEEPALIVE_INTERVAL", apply = "reconnect")]
+  #[serde(with = "humantime_serde")]
+  pub interval: Duration,
+  /// How many probes go unanswered before the connection is dropped, at least 1.
+  #[cascade(env = "RESEEK_SLSK_SERVER_KEEPALIVE_PROBES", apply = "reconnect")]
+  pub probes: u32,
+}
+
+impl Default for ServerKeepalive {
+  fn default() -> Self {
+    Self {
+      enabled: true,
+      idle: Duration::from_secs(10),
+      interval: Duration::from_secs(2),
+      probes: 3,
+    }
+  }
+}
+
+/// Bounds on what other users can make us hold or start.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct SoulseekLimits {
+  /// The largest message accepted from another user; a large share's browse listing is the only
+  /// message that is legitimately big.
+  #[cascade(kind = "size")]
+  pub max_message_size: bytesize::ByteSize,
+  /// How many connections to other users are being opened at once.
+  pub max_concurrent_peer_connects: u32,
+  /// How many message connections to other users are kept open.
+  pub max_cached_peer_connections: u32,
+  /// How many searches from the distributed network are answered at once.
+  pub max_concurrent_search_responses: u32,
+  /// How many search responses are kept for a searcher we could not reach yet.
+  pub search_response_cache_size: u32,
+  /// How many users' addresses are remembered between connections.
+  pub user_endpoint_cache_size: u32,
+  /// How long a would-be distributed parent has to send its branch level, root and a search.
+  #[serde(with = "humantime_serde")]
+  pub distributed_parent_negotiation_timeout: Duration,
+}
+
+impl Default for SoulseekLimits {
+  fn default() -> Self {
+    Self {
+      max_message_size: bytesize::ByteSize::mib(256),
+      max_concurrent_peer_connects: 50,
+      max_cached_peer_connections: 1000,
+      max_concurrent_search_responses: 20,
+      search_response_cache_size: 1000,
+      user_endpoint_cache_size: 10_000,
+      distributed_parent_negotiation_timeout: Duration::from_secs(5),
+    }
+  }
 }

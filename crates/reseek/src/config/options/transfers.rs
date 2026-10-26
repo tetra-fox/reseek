@@ -8,7 +8,7 @@ use std::time::Duration;
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
 
-use crate::config::enums::{DestinationExists, QueueStrategy, RetryPartial};
+use crate::config::enums::{DestinationExists, QueueStrategy, RequestStyle, RetryPartial};
 
 /// Uploads, downloads and the user groups uploads are queued by.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
@@ -28,8 +28,9 @@ pub struct Transfers {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Upload {
-  /// How many uploads run at the same time over every group.
-  #[cascade(env = "RESEEK_UPLOAD_SLOTS", cli = "--upload-slots", apply = "restart")]
+  /// How many uploads run at the same time over every group. A lower number lets the uploads
+  /// that run finish and starts no new one until fewer run.
+  #[cascade(env = "RESEEK_UPLOAD_SLOTS", cli = "--upload-slots")]
   pub slots: u32,
   /// The total upload speed in KiB/s; no limit when not set.
   #[cascade(env = "RESEEK_UPLOAD_SPEED_LIMIT", cli = "--upload-speed-limit")]
@@ -77,16 +78,16 @@ pub struct Limit {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Download {
-  /// How many downloads run at the same time; no limit when not set.
-  #[cascade(
-    env = "RESEEK_DOWNLOAD_SLOTS",
-    cli = "--download-slots",
-    apply = "restart"
-  )]
+  /// How many downloads run at the same time; no limit when not set. A lower number lets the
+  /// downloads that run finish and starts no new one until fewer run.
+  #[cascade(env = "RESEEK_DOWNLOAD_SLOTS", cli = "--download-slots")]
   pub slots: Option<u32>,
   /// The total download speed in KiB/s; no limit when not set.
   #[cascade(env = "RESEEK_DOWNLOAD_SPEED_LIMIT", cli = "--download-speed-limit")]
   pub speed_limit: Option<u32>,
+  /// How a file is asked for: `queue`, the queue request every current client sends, or
+  /// `transfer_request`, the older transfer request the peer answers.
+  pub request_style: RequestStyle,
   /// Retrying failed downloads.
   pub retry: Retry,
   /// Where finished downloads go.

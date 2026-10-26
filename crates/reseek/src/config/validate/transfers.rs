@@ -107,8 +107,14 @@ pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Re
   }
 }
 
+/// A speed limit, when set, is at least 1 KiB/s; no limit is the option left unset.
 fn check_speed(key: &str, limit: Option<u32>, report: &mut Report) {
-  report.check(key, optional_at_least(key, limit, 1));
+  if limit == Some(0) {
+    report.add(
+      key,
+      format!("The field {key} must be at least 1 KiB/s; leave it unset for no limit."),
+    );
+  }
 }
 
 fn check_limits(prefix: &str, limits: &Limits, report: &mut Report) {
@@ -179,6 +185,23 @@ mod tests {
     let mut report = Report::default();
     check(transfers, false, &mut report);
     report.0.into_iter().map(|i| (i.key, i.message)).collect()
+  }
+
+  #[test]
+  fn a_speed_limit_of_zero_is_refused_and_unset_is_no_limit() {
+    let mut transfers = Transfers::default();
+    assert!(problems(&transfers).is_empty());
+    transfers.upload.speed_limit = Some(0);
+    transfers.download.speed_limit = Some(1);
+    assert_eq!(
+      problems(&transfers),
+      [(
+        "transfers.upload.speed_limit".to_string(),
+        "The field transfers.upload.speed_limit must be at least 1 KiB/s; leave it unset for no \
+         limit."
+          .to_string()
+      )]
+    );
   }
 
   #[test]

@@ -33,8 +33,8 @@ pub use retention::{
 };
 pub use shares::{MAX_SCAN_WORKERS, ShareCache, Shares};
 pub use soulseek::{
-  ConnectionBuffers, ConnectionTimeouts, DistributedNetwork, Soulseek, SoulseekConnection,
-  SoulseekProxy,
+  ConnectionBuffers, ConnectionTimeouts, DistributedNetwork, ServerKeepalive, Soulseek,
+  SoulseekConnection, SoulseekLimits, SoulseekProxy,
 };
 pub use transfers::{
   Blacklisted, Destination, Download, Group, GroupUpload, Groups, LeecherThresholds, Leechers,
