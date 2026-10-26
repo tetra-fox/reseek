@@ -157,12 +157,10 @@ impl UserService for Directory {
       .ok_or_else(|| ApiError::not_found(format!("no picture of {username} is kept")))?;
     let digest = Sha256::digest(&picture);
     let tag: String = digest.iter().map(|b| format!("{b:02x}")).collect();
-    let mut response = picture.clone().into_response();
+    let content_type = picture_type(&picture);
+    let mut response = picture.into_response();
     let headers = response.headers_mut();
-    headers.insert(
-      header::CONTENT_TYPE,
-      HeaderValue::from_static(picture_type(&picture)),
-    );
+    headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
     headers.insert(
       header::CACHE_CONTROL,
       HeaderValue::from_static("private, max-age=3600"),
