@@ -384,6 +384,10 @@ impl Downloads {
     record.take_figures(&snapshot);
     record.state = state;
     record.exception = None;
+    if state == TransferStates::Initializing && previous != state {
+      // the server never pushes what a user shares
+      self.users.refetch_statistics(&record.username);
+    }
     if snapshot.size != record.size {
       info!(
         asked = record.size,

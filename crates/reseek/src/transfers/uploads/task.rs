@@ -214,6 +214,10 @@ impl Uploads {
     let previous = record.state;
     record.take_figures(&snapshot);
     record.state = state;
+    if state == TransferStates::Initializing && previous != state {
+      // the server never pushes what a user shares, and their group depends on it
+      self.users.refetch_statistics(&record.username);
+    }
     if state == TransferStates::InProgress && previous != state {
       info!(
         filename = record.filename,
