@@ -103,7 +103,11 @@ fuzz-seed:
 
 # run every fuzz target for 30 seconds
 fuzz-smoke: fuzz-seed
-    for target in $(cargo fuzz list); do cargo fuzz run "$target" -- -max_total_time=30 || exit 1; done
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # without cargo-fuzz the list fails, so the smoke fails rather than running nothing
+    targets=$(cargo fuzz list)
+    for target in $targets; do cargo fuzz run "$target" -- -max_total_time=30; done
 
 # run one fuzz target, indefinitely unless SECONDS is given
 fuzz TARGET SECONDS="": fuzz-seed
