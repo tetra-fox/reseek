@@ -506,6 +506,10 @@ async fn follow_changes(
         if change.changed.iter().any(|k| k.starts_with("logging.")) {
           logging.apply(&change.current.values);
         }
+        let limit = change.current.values.web.files.serve_speed_limit;
+        if limit != change.previous.values.web.files.serve_speed_limit {
+          startup::warn_about_serve_speed_limit(limit);
+        }
         if !change.by_apply.reconnect.is_empty() {
           info!(
             keys = change.by_apply.reconnect.join(", "),

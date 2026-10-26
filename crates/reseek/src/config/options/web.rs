@@ -160,7 +160,7 @@ pub struct WebFiles {
   #[cascade(env = "RESEEK_WEB_FILES_ARCHIVE_MAX_BYTES", kind = "size")]
   pub archive_max_bytes: bytesize::ByteSize,
   /// The speed files are served to the browser at, in KiB/s; no limit when not set. Not
-  /// applied in this build, which warns at startup when it is set.
+  /// applied in this build, which warns when it is set.
   #[cascade(env = "RESEEK_WEB_FILES_SERVE_SPEED_LIMIT")]
   pub serve_speed_limit: Option<u32>,
 }
