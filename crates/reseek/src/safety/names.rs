@@ -70,6 +70,12 @@ pub fn sanitize_path_segment(segment: &str, replacement: char, os: Os) -> Result
   Ok(sanitized)
 }
 
+/// [`sanitize_path_segment`] with `_` as the replacement.
+fn underscored(segment: &str, os: Os) -> String {
+  // `_` is no separator and no character any system forbids, so it is never refused
+  sanitize_path_segment(segment, '_', os).unwrap_or_default()
+}
+
 /// A relative path made of `path`'s segments, each made safe, joined with `os`'s separator:
 /// empty segments and segments that end up empty are dropped, so a leading root goes too.
 pub fn sanitize_path(path: &str, replacement: char, os: Os) -> Result<String, String> {
@@ -92,7 +98,7 @@ pub fn file_name_safely(path: &str, sanitize: bool, os: Os) -> Option<String> {
   let localized = localize_path(path, os);
   let name = localized.rsplit(os.separator()).next().unwrap_or_default();
   if sanitize {
-    sanitize_path_segment(name, '_', os).ok()
+    Some(underscored(name, os))
   } else {
     Some(name.to_string())
   }
@@ -129,7 +135,7 @@ pub fn directory_name_safely(
     .iter()
     .map(|segment| {
       if sanitize {
-        sanitize_path_segment(segment, '_', os).unwrap_or_default()
+        underscored(segment, os)
       } else {
         segment.to_string()
       }
