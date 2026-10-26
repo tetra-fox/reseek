@@ -13,6 +13,8 @@ mod profile;
 mod retention;
 mod service;
 mod store;
+#[cfg(test)]
+mod tests;
 mod touch;
 mod transfers;
 
