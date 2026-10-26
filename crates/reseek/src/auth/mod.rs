@@ -6,9 +6,9 @@
 //! the request at once rather than falling through to a weaker way in; a session cookie that is
 //! not valid is cleared and the next ways are tried. A request that changes something on the
 //! strength of the session cookie alone must come from a page of this site, and one let in by a
-//! trusted network may not come from a page of another site. The principal, or its absence, is
-//! put on the request as an [`Authentication`]; a handler takes an [`Authorized`] to require a
-//! role.
+//! trusted network or a proxy's forwarded identity may not come from a page of another site.
+//! The principal, or its absence, is put on the request as an [`Authentication`]; a handler
+//! takes an [`Authorized`] to require a role.
 
 mod chain;
 pub mod client;
@@ -108,12 +108,14 @@ pub async fn authenticate(
   if csrf::changes_state(request.method()) {
     let headers = request.headers();
     let client = &presented.client;
-    let by_network = identified
+    // a browser on a trusted network, or behind a proxy that signs it in from its own cookies,
+    // is let in on any request a page makes it send, as with the session cookie
+    let ambient = identified
       .principal
       .as_ref()
-      .is_some_and(|p| matches!(p.via, Via::TrustedNetwork { .. }));
+      .is_some_and(|p| matches!(p.via, Via::TrustedNetwork { .. } | Via::Proxy));
     let cross_site = (identified.by_cookie && !csrf::same_origin(headers, client, &current.values))
-      || (by_network && csrf::foreign_origin(headers, client, &current.values));
+      || (ambient && csrf::foreign_origin(headers, client, &current.values));
     if cross_site {
       debug!(ip = %client.ip, "cross-site request refused");
       return ApiError::forbidden("cross-site request refused")
@@ -273,6 +275,37 @@ mod tests {
     );
     let read = with_header("origin", "http://evil.example");
     assert_eq!(app.send(read).await.status, 200, "reads are not refused");
+  }
+
+  #[tokio::test]
+  async fn a_proxy_identity_change_may_not_come_from_another_site() {
+    let app = app(
+      "remote_configuration = true\n[web]\ntrusted_proxies = [\"127.0.0.1/32\"]\n\
+       [web.authentication.proxy]\nenabled = true\n\
+       [web.authentication.proxy.role_mapping]\nadministrator = [\"admins\"]\n",
+      &[],
+    )
+    .await;
+    let patch = |origin: Option<&str>| {
+      let mut r = request("PATCH", "/api/v0/options", Some(serde_json::json!({})));
+      let headers = r.headers_mut();
+      headers.insert("x-authentik-username", "alice".parse().unwrap());
+      headers.insert("x-authentik-groups", "admins".parse().unwrap());
+      if let Some(origin) = origin {
+        headers.insert("origin", origin.parse().unwrap());
+      }
+      r
+    };
+    let foreign = app.send(patch(Some("http://evil.example"))).await;
+    assert_eq!(foreign.status, 403);
+    assert_eq!(foreign.json()["error"], "cross-site request refused");
+    assert_eq!(app.send(patch(Some("null"))).await.status, 403);
+    assert_eq!(app.send(patch(Some("http://localhost"))).await.status, 204);
+    assert_eq!(
+      app.send(patch(None)).await.status,
+      204,
+      "scripts send no Origin"
+    );
   }
 
   #[tokio::test]
