@@ -64,7 +64,6 @@ pub fn configured(username: &str) -> Block {
   }
 }
 
-/// The columns [`block`] reads, in its order.
 /// The most characters a block's reason has.
 const REASON_CHARS: usize = 500;
 
@@ -73,6 +72,7 @@ pub fn reason_fits(reason: &str) -> bool {
   reason.chars().count() <= REASON_CHARS
 }
 
+/// The columns [`block`] reads, in its order.
 const COLUMNS: &str = "username, reason, scopes, created_at, expires_at, created_by";
 
 fn block(row: &Row) -> rusqlite::Result<Block> {
