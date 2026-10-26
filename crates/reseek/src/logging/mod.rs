@@ -20,6 +20,7 @@ pub use buffer::{BufferLayer, CAPACITY, LogBuffer};
 pub use file::DailyFile;
 
 use crate::config::Options;
+use crate::config::enums::DiagnosticLevel;
 use format::{Clock, Line};
 
 /// The name of the span every event of the process is in, which carries the instance name,
@@ -43,6 +44,8 @@ const FILE_QUEUE: usize = 128_000;
 /// reads.
 pub struct Logging {
   filter: reload::Handle<EnvFilter, Registry>,
+  /// `soulseek.diagnostic_level` as the daemon started with it, which a reload does not change
+  diagnostics: DiagnosticLevel,
   buffer: Arc<LogBuffer>,
   /// whether `RUST_LOG` set the filter, which the options then do not change
   from_env: bool,
@@ -75,10 +78,11 @@ impl<'writer> FormatFields<'writer> for ConsoleFields {
 /// Installs the global subscriber for `options`.
 pub fn init(options: &Options, sinks: Sinks) -> Result<Logging, String> {
   let from_env = std::env::var_os("RUST_LOG").is_some();
+  let diagnostics = options.soulseek.diagnostic_level;
   let filter = if from_env {
     EnvFilter::try_from_default_env().map_err(|e| format!("RUST_LOG: {e}"))?
   } else {
-    filter(options)?
+    filter(options, diagnostics)?
   };
   let (filter, handle) = reload::Layer::new(filter);
   let colour = !(options.logger.no_color || sinks.no_color_env);
@@ -120,6 +124,7 @@ pub fn init(options: &Options, sinks: Sinks) -> Result<Logging, String> {
     .map_err(|e| e.to_string())?;
   Ok(Logging {
     filter: handle,
+    diagnostics,
     buffer,
     from_env,
     _file: guard,
@@ -127,13 +132,13 @@ pub fn init(options: &Options, sinks: Sinks) -> Result<Logging, String> {
 }
 
 impl Logging {
-  /// Applies `logging.level` and `logging.targets` from `options`; nothing when `RUST_LOG`
-  /// set the filter.
+  /// Applies `logging.level`, `logging.targets` and `soulseek.distributed_network.logging` from
+  /// `options`; nothing when `RUST_LOG` set the filter.
   pub fn apply(&self, options: &Options) {
     if self.from_env {
       return;
     }
-    match filter(options) {
+    match filter(options, self.diagnostics) {
       Ok(filter) => {
         if let Err(e) = self.filter.reload(filter) {
           tracing::error!(error = %e, "log filter not changed");
@@ -156,15 +161,20 @@ impl Logging {
   }
 }
 
-/// The filter for `options`: `logging.level`, at least `debug` in debug mode, then each of
-/// `logging.targets`.
-pub fn filter(options: &Options) -> Result<EnvFilter, String> {
+/// The filter for `options`: `logging.level`, at least `debug` in debug mode, then the Soulseek
+/// client's level from `diagnostics` with its distributed network left out unless
+/// `soulseek.distributed_network.logging` is on, then each of `logging.targets`, which can
+/// override both.
+pub fn filter(options: &Options, diagnostics: DiagnosticLevel) -> Result<EnvFilter, String> {
   EnvFilter::builder()
-    .parse(directives(options))
+    .parse(directives(options, diagnostics))
     .map_err(|e| e.to_string())
 }
 
-fn directives(options: &Options) -> String {
+/// The target the Soulseek client logs under.
+const CLIENT: &str = "soulseek_client";
+
+fn directives(options: &Options, diagnostics: DiagnosticLevel) -> String {
   const VERBOSITY: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
   let level = options.logging.level.to_ascii_lowercase();
   let rank = |l: &str| VERBOSITY.iter().position(|v| *v == l);
@@ -172,10 +182,18 @@ fn directives(options: &Options) -> String {
     (true, Some(r), Some(debug)) if r < debug => "debug".to_string(),
     _ => level,
   };
-  std::iter::once(level)
-    .chain(options.logging.targets.iter().cloned())
-    .collect::<Vec<_>>()
-    .join(",")
+  let client = match diagnostics {
+    DiagnosticLevel::None => "off",
+    DiagnosticLevel::Warning => "warn",
+    DiagnosticLevel::Info => "info",
+    DiagnosticLevel::Debug => "debug",
+  };
+  let mut directives = vec![level, format!("{CLIENT}={client}")];
+  if !options.soulseek.distributed_network.logging {
+    directives.push(format!("{CLIENT}::distributed=off"));
+  }
+  directives.extend(options.logging.targets.iter().cloned());
+  directives.join(",")
 }
 
 #[cfg(test)]
@@ -183,14 +201,25 @@ mod tests {
   use super::*;
 
   #[test]
-  fn the_filter_is_the_level_lowered_by_debug_then_the_targets() {
+  fn the_filter_is_the_level_lowered_by_debug_then_the_client_then_the_targets() {
     let mut options = Options::default();
-    assert_eq!(directives(&options), "info");
+    let quiet_tree = "soulseek_client=info,soulseek_client::distributed=off";
+    assert_eq!(
+      directives(&options, DiagnosticLevel::Info),
+      format!("info,{quiet_tree}")
+    );
     options.debug = true;
-    assert_eq!(directives(&options), "debug");
+    assert_eq!(
+      directives(&options, DiagnosticLevel::Info),
+      format!("debug,{quiet_tree}")
+    );
     options.logging.level = "TRACE".into();
     options.logging.targets = vec!["hyper=warn".into(), "reseek::http=trace".into()];
-    assert_eq!(directives(&options), "trace,hyper=warn,reseek::http=trace");
-    assert!(filter(&options).is_ok());
+    options.soulseek.distributed_network.logging = true;
+    assert_eq!(
+      directives(&options, DiagnosticLevel::None),
+      "trace,soulseek_client=off,hyper=warn,reseek::http=trace"
+    );
+    assert!(filter(&options, DiagnosticLevel::Debug).is_ok());
   }
 }

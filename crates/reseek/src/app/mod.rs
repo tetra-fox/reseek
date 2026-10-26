@@ -503,7 +503,11 @@ async fn follow_changes(
     };
     match change {
       Ok(change) => {
-        if change.changed.iter().any(|k| k.starts_with("logging.")) {
+        if change
+          .changed
+          .iter()
+          .any(|k| k.starts_with("logging.") || k == "soulseek.distributed_network.logging")
+        {
           logging.apply(&change.current.values);
         }
         let limit = change.current.values.web.files.serve_speed_limit;
