@@ -3,6 +3,7 @@
 //! transaction of its own, and at the end every row the scan did not see is pruned and the
 //! filename index rebuilt. Which directories and files the walk takes is in `walk`.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -39,6 +40,12 @@ pub struct Settings {
   pub snapshot: serde_json::Value,
 }
 
+/// The share filters as a set, which is what a scan depends on: their order and repeats do not
+/// change what it leaves out.
+pub(super) fn filter_set(filters: &[String]) -> BTreeSet<&str> {
+  filters.iter().map(String::as_str).collect()
+}
+
 impl Settings {
   /// The settings of `options` for the share list `shares`.
   pub fn new(shares: Vec<Share>, options: &Options) -> Self {
@@ -55,13 +62,10 @@ impl Settings {
     let mut directories: Vec<&str> = shares.iter().map(|s| s.raw.as_str()).collect();
     directories.sort_unstable();
     directories.dedup();
-    let mut patterns: Vec<&str> = options.shares.filters.iter().map(String::as_str).collect();
-    patterns.sort_unstable();
-    patterns.dedup();
     let snapshot = json!({
       "content": {
         "directories": directories,
-        "filters": patterns,
+        "filters": filter_set(&options.shares.filters),
         "followSymlinks": options.shares.follow_symlinks,
       },
       "shares": options.shares,

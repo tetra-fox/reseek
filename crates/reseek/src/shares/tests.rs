@@ -139,13 +139,31 @@ async fn a_scan_is_one_at_a_time_and_only_a_running_one_cancels() {
 }
 
 #[tokio::test]
-async fn a_changed_share_list_marks_a_scan_pending() {
+async fn changed_filters_mark_a_scan_pending() {
   let (files, app) = shared_app().await;
   let mut changed = config(files.path());
   changed = changed.replace("[shares]\n", "[shares]\nfilters = [\"\\\\.mp3$\"]\n");
   std::fs::write(app.dir.path().join("config.toml"), changed).unwrap();
   app.state.config.reload().await.unwrap();
   eventually(async || app.state.state.current().shares.scan_pending).await;
+}
+
+#[tokio::test]
+async fn filters_only_reordered_or_repeated_mark_no_scan_pending() {
+  let (_files, app) = shared_app().await;
+  let shares = &app.state.shares;
+  eventually(async || lock(&shares.running).is_none()).await;
+  let mut options = app.state.config.current().values.clone();
+  options.shares.filters = vec!["a$".into(), "b$".into()];
+  shares.apply_options(&options);
+  // a scan would clear what the first change marked
+  shares.publish(|status| status.scan_pending = false);
+  options.shares.filters = vec!["b$".into(), "a$".into(), "b$".into()];
+  shares.apply_options(&options);
+  assert!(!app.state.state.current().shares.scan_pending);
+  options.shares.filters = vec!["b$".into()];
+  shares.apply_options(&options);
+  assert!(app.state.state.current().shares.scan_pending);
 }
 
 #[tokio::test]

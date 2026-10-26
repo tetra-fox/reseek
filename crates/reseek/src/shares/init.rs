@@ -239,7 +239,7 @@ impl Shares {
         watching.keep_only(&list);
       }
     }
-    if previous.filters != current.shares.filters {
+    if scanner::filter_set(&previous.filters) != scanner::filter_set(&current.shares.filters) {
       info!(
         "File filter configuration changed.  Shares must be re-scanned for changes to take effect."
       );
