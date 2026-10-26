@@ -22,7 +22,7 @@ fn answered_here(operation: &Operation) -> bool {
   let route = operation.route.as_str();
   let under = |prefix: &str| route == prefix || route.starts_with(&format!("{prefix}/"));
   under("/api/v0/application")
-    || (route == "/api/v0/server" && operation.method == Method::GET)
+    || under("/api/v0/server")
     || under("/api/v0/logs")
     || under("/api/v0/files")
     || under("/api/v0/shares")
@@ -189,7 +189,8 @@ async fn each_route_takes_its_least_role() {
       .send_from("192.0.2.1:1", force(roles[write]))
       .await
       .status,
-    503
+    200,
+    "a development build is not checked and answers its version"
   );
 }
 

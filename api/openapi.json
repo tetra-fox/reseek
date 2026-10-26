@@ -415,7 +415,7 @@
               }
             }
           },
-          "503": {
+          "502": {
             "description": "",
             "content": {
               "application/json": {
@@ -7080,16 +7080,6 @@
                 }
               }
             }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
           }
         }
       },
@@ -7140,16 +7130,6 @@
             }
           },
           "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "503": {
             "description": "",
             "content": {
               "application/json": {

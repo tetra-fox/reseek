@@ -58,12 +58,12 @@ impl StateOwner {
   }
 
   /// Takes the outcome of a configuration load: its reload error and what waits for a
-  /// reconnect or a restart.
+  /// restart. What waits for a reconnect is the network's to say, since it depends on the
+  /// connection.
   pub fn configured(&self, loaded: &Loaded<Options>) {
     self.update(|state| {
       state.configuration = configuration(loaded);
       state.pending_restart = !loaded.pending_restart.is_empty();
-      state.pending_reconnect = !loaded.pending_reconnect.is_empty();
     });
   }
 }
@@ -95,7 +95,7 @@ fn initial(loaded: &Loaded<Options>) -> State {
   };
   State {
     version: version::info(),
-    pending_reconnect: !loaded.pending_reconnect.is_empty(),
+    pending_reconnect: false,
     pending_restart: !loaded.pending_restart.is_empty(),
     server: ServerState {
       address: None,

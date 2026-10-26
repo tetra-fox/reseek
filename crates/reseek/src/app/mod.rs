@@ -2,7 +2,9 @@
 //! directories, logging and the instance lock, opening the databases, serving HTTP until a
 //! signal, and shutting down.
 
+mod lifecycle;
 mod restart;
+mod service;
 mod signals;
 mod startup;
 mod tasks;
@@ -20,6 +22,7 @@ use tracing::{Instrument, debug, error, info, info_span, warn};
 
 use crate::auth::Auth;
 use crate::cli::{self, Command, Invocation};
+use crate::clock::Clock;
 use crate::config::api_key::PrimaryApiKey;
 use crate::config::load::{self, ConfigFiles, Sources};
 use crate::config::{Options, redact};
@@ -30,6 +33,7 @@ use crate::files::Files;
 use crate::http::{self, pipeline};
 use crate::live::Live;
 use crate::logging::{self, LogBuffer, Logging, Sinks};
+use crate::network::Network;
 use crate::paths::{Defaults, InstanceLock, Paths};
 use crate::services::Services;
 use crate::shares::Shares;
@@ -37,7 +41,8 @@ use crate::state::StateOwner;
 use crate::telemetry::Telemetry;
 use crate::ui::{Bundle, Ui};
 use crate::users::Directory;
-use crate::version;
+use crate::version::{self, RELEASE_FEED, Releases};
+use service::Application;
 use signals::spawn_signals;
 use startup::{config_error, log_startup, warn_about, write_template};
 
@@ -104,6 +109,12 @@ pub struct AppState {
   pub files: Arc<Files>,
   /// what we share, with the queries other users are answered from
   pub shares: Arc<Shares>,
+  /// the Soulseek client and what keeps it connected
+  pub network: Arc<Network>,
+  /// the jobs that run at fixed intervals
+  pub clock: Clock,
+  /// the release feed the version is checked against
+  pub releases: Arc<Releases>,
   /// the engine of every domain
   pub services: Services,
   /// set when the daemon is to start again once it has stopped
@@ -164,6 +175,16 @@ impl AppState {
     let shares = Shares::open(config.clone(), &paths, state.clone(), shutdown.clone())
       .await
       .map_err(|e| StartError::Open(format!("shares.local.db: {e}")))?;
+    let network = Network::new(
+      &config,
+      users.clone(),
+      shares.clone(),
+      state.clone(),
+      shutdown.clone(),
+    )
+    .map_err(StartError::Config)?;
+    let releases = Arc::new(Releases::new(RELEASE_FEED).map_err(StartError::Open)?);
+    let clock = Clock::new(shutdown.clone());
     let mut services = Services::unavailable();
     services.shares = shares.clone();
     services.events = event_log;
@@ -178,7 +199,12 @@ impl AppState {
       users.database().clone(),
       shares.database(),
     ]));
-    services.application = databases.clone();
+    services.application = Arc::new(Application {
+      network: network.clone(),
+      releases: releases.clone(),
+      state: state.clone(),
+      databases: databases.clone(),
+    });
     Ok(Self {
       config,
       startup,
@@ -197,6 +223,9 @@ impl AppState {
       users,
       files,
       shares,
+      network,
+      clock,
+      releases,
       services,
       restart: Arc::new(AtomicBool::new(false)),
     })
@@ -217,6 +246,18 @@ impl AppState {
   /// configuration and the log, and ended sessions are pruned.
   pub fn spawn_tasks(&self) {
     tasks::spawn(self);
+  }
+
+  /// Starts the daemon's own work in the background: following the client and the options,
+  /// the startup tasks, the clock, and connecting to the Soulseek server.
+  pub fn start(&self) {
+    lifecycle::start(self);
+  }
+
+  /// Stops the daemon's own work once the HTTP host has stopped: the client disconnects and
+  /// what that raised is handled.
+  pub async fn stop(&self) {
+    lifecycle::stop(self).await;
   }
 }
 
@@ -477,9 +518,11 @@ async fn serve(
     }
   };
   state.spawn_tasks();
+  state.start();
   info!(base = %state.url_base, "Using base url");
   info!("reseek started");
   http::serve(listeners, pipeline::app(state.clone(), ui), cancel, grace).await;
+  state.stop().await;
   state.databases.close().await;
   if state.restart_requested() {
     info!("reseek stopped to start again");
@@ -513,12 +556,6 @@ async fn follow_changes(
         let limit = change.current.values.web.files.serve_speed_limit;
         if limit != change.previous.values.web.files.serve_speed_limit {
           startup::warn_about_serve_speed_limit(limit);
-        }
-        if !change.by_apply.reconnect.is_empty() {
-          info!(
-            keys = change.by_apply.reconnect.join(", "),
-            "One or more updated Soulseek options requires the client to be disconnected, then reconnected to the network to take effect."
-          );
         }
         if !change.by_apply.restart.is_empty() {
           info!(

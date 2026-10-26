@@ -114,7 +114,7 @@ async fn get_version(State(app): State<AppState>, _caller: Authorized<AnyRole>) 
   get, path = "/application/version/latest", tag = "application", params(VersionLatestQuery),
   responses(
     (status = 200, body = VersionInfo), (status = 401, body = api_types::ErrorBody),
-    (status = 403, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+    (status = 403, body = api_types::ErrorBody), (status = 502, body = api_types::ErrorBody)
   )
 )]
 async fn get_latest_version(
@@ -152,8 +152,7 @@ async fn get_server(
   responses(
     (status = 200, description = "connecting"),
     (status = 205, description = "was trying already; trying again now"),
-    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
-    (status = 503, body = api_types::ErrorBody)
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody)
   )
 )]
 async fn connect(
@@ -178,8 +177,7 @@ async fn connect(
   delete, path = "/server", tag = "server", request_body = Option<DisconnectReason>,
   responses(
     (status = 204, description = "disconnected"), (status = 400, body = api_types::ErrorBody),
-    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
-    (status = 503, body = api_types::ErrorBody)
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody)
   )
 )]
 async fn disconnect(
