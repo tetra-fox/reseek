@@ -139,6 +139,7 @@ impl Shares {
           status.scanning = false;
           status.cancelled = true;
           status.faulted = false;
+          status.progress = 1.0;
           status.scan_pending = true;
           status.ready = before.ready;
           status.directories = before.directories;

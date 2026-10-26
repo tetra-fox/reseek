@@ -338,3 +338,18 @@ async fn changes_waiting_for_quiet_are_applied_when_the_watches_are_replaced() {
   eventually(async || names(&shares, "05").await == ["Music\\Album\\05.mp3"]).await;
   drop(files);
 }
+
+#[tokio::test]
+async fn a_cancelled_scan_leaves_the_engine_idle_at_full_progress() {
+  let (files, app) = shared_app().await;
+  let shares = app.state.shares.clone();
+  eventually(async || lock(&shares.running).is_none()).await;
+  let cancel = shares.take_slot().unwrap();
+  cancel.cancel();
+  assert!(!shares.run_scan(false, cancel).await);
+  let shown = app.state.state.current().shares.clone();
+  assert!(shown.cancelled && shown.scan_pending && !shown.scanning);
+  assert_eq!(shown.scan_progress, 1.0);
+  assert!(shown.ready, "the index from before is still served");
+  drop(files);
+}
