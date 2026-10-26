@@ -18,6 +18,8 @@ export default defineConfig({
   testDir: "e2e",
   testMatch: "**/*.e2e.ts",
   retries: 0,
+  // the tests share one daemon, and one of them changes its configuration
+  workers: 1,
   use: {
     baseURL: `http://127.0.0.1:${port}/reseek/`,
     launchOptions: { executablePath: chromium() }
