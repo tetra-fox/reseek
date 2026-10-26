@@ -3,6 +3,7 @@ import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 import { session } from "#lib/session.svelte.js";
 import { settings } from "#lib/settings.svelte.js";
+import { toast } from "#lib/toast.svelte.js";
 import { users } from "#lib/users.svelte.js";
 
 export type AppState = Schemas["State"];
@@ -31,6 +32,10 @@ class App {
     live.on("application.state", (data) => (this.state = data));
     live.on("application.options", (data) => (this.options = data));
     live.on("metrics.update", (data) => (this.metrics = data));
+    // a broadcast from the Soulseek server's administrators, or a notice to us
+    live.on("application.server_message", ({ message }) =>
+      toast(`Soulseek server: ${message}`, "info", { ms: 30_000 })
+    );
     onUnauthorized(() => this.signedOut());
     session.onEnded(() => this.signedOut());
   }
