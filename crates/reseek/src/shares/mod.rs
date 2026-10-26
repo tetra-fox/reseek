@@ -205,12 +205,7 @@ impl Shares {
       options.flags.volatile,
     )
     .await?;
-    let browse = browse::path(&paths.cache);
-    match tokio::fs::remove_file(&browse).await {
-      Ok(()) => debug!("browse cache of the last run removed"),
-      Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-      Err(e) => warn!(error = %e, "browse cache of the last run not removed"),
-    }
+    browse::remove_stale(&paths.cache).await;
     let shares = Arc::new_cyclic(|this| Self {
       this: this.clone(),
       db: storage.db,
