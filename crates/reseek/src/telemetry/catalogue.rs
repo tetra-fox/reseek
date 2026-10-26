@@ -424,16 +424,75 @@ mod tests {
   use super::*;
   use crate::telemetry::registry::text;
 
+  /// The names dashboards are built on, besides the transfer families.
+  const FIXED: [&str; 32] = [
+    "reseek_search_incoming_requests_received",
+    "reseek_search_incoming_request_receive_rate_current",
+    "reseek_search_incoming_requests_dropped",
+    "reseek_search_incoming_request_drop_rate_current",
+    "reseek_search_incoming_request_queue_depth_current",
+    "reseek_search_incoming_filter_latency",
+    "reseek_search_incoming_filter_latency_current",
+    "reseek_search_incoming_query_latency",
+    "reseek_search_incoming_query_latency_current",
+    "reseek_search_incoming_response_latency",
+    "reseek_search_incoming_response_latency_current",
+    "reseek_search_incoming_responses_sent",
+    "reseek_search_incoming_response_send_rate_current",
+    "reseek_browse_requests_received",
+    "reseek_browse_response_latency",
+    "reseek_browse_response_latency_current",
+    "reseek_browse_responses_sent",
+    "reseek_enqueue_requests_received",
+    "reseek_enqueue_requests_dropped",
+    "reseek_enqueue_queue_depth_current",
+    "reseek_enqueue_decision_latency",
+    "reseek_enqueue_decision_latency_current",
+    "reseek_enqueue_latency",
+    "reseek_enqueue_latency_current",
+    "reseek_enqueue_requests_accepted",
+    "reseek_enqueue_requests_rejected",
+    "reseek_dnet_children",
+    "reseek_dnet_child_limit",
+    "reseek_dnet_has_parent",
+    "reseek_dnet_branch_level",
+    "reseek_dnet_broadcast_latency",
+    "reseek_dnet_broadcast_latency_current",
+  ];
+
+  /// The names of each transfer direction's families after `reseek_transfers_<direction>_`.
+  const PER_DIRECTION: [&str; 13] = [
+    "queued_users_current",
+    "queued_files_current",
+    "queued_bytes_current",
+    "in_progress_users_current",
+    "in_progress_files_current",
+    "in_progress_bytes_current",
+    "in_progress_speed_total_current",
+    "in_progress_speed_average_current",
+    "completed_succeeded",
+    "completed_bytes",
+    "completed_failed",
+    "completed_speed_average",
+    "completed_speed_average_current",
+  ];
+
   #[test]
   fn the_catalogue_registers_every_family_once_at_zero() {
     let catalogue = Catalogue::default();
     let families = catalogue.registry.families();
-    assert_eq!(families.len(), 13 + 4 + 9 + 2 * 13 + 6);
-    let mut names: Vec<_> = families.iter().map(|f| f.name.as_str()).collect();
+    let mut names: Vec<_> = families.iter().map(|f| f.name.clone()).collect();
     names.sort_unstable();
-    names.dedup();
-    assert_eq!(names.len(), families.len(), "no name twice");
-    assert!(names.iter().all(|n| n.starts_with("reseek_")));
+    let mut expected: Vec<String> = FIXED.iter().map(ToString::to_string).collect();
+    for dir in ["uploads", "downloads"] {
+      expected.extend(
+        PER_DIRECTION
+          .iter()
+          .map(|suffix| format!("reseek_transfers_{dir}_{suffix}")),
+      );
+    }
+    expected.sort_unstable();
+    assert_eq!(names, expected);
     let written = text(&families);
     assert!(written.contains("\nreseek_transfers_uploads_completed_failed 0\n"));
     assert!(written.contains(
