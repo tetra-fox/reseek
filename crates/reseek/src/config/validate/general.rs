@@ -75,6 +75,7 @@ pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
   check_logging(&options.logging, report);
   let metrics = &options.metrics;
   report.check("metrics.url", url_path("metrics.url", &metrics.url));
+  report.check("metrics.url", metrics_url(&metrics.url));
   for (key, value) in [
     (
       "metrics.authentication.username",
@@ -236,6 +237,22 @@ fn check_logging(logging: &Logging, report: &mut Report) {
   }
 }
 
+/// Refuses a metrics path that is the web UI's root or lies under a path the daemon serves
+/// itself.
+fn metrics_url(url: &str) -> Result<(), String> {
+  let path = format!("/{}", url.trim_start_matches('/'));
+  let path = path.trim_end_matches('/');
+  if path.is_empty() {
+    return Err("The field metrics.url must not be the root of the web UI.".to_string());
+  }
+  for taken in ["/api", "/hub", "/health", "/swagger"] {
+    if path == taken || path.starts_with(&format!("{taken}/")) {
+      return Err(format!("The field metrics.url must not be under {taken}."));
+    }
+  }
+  Ok(())
+}
+
 fn check_retention(retention: &Retention, report: &mut Report) {
   if let Some(search) = retention.search {
     report.check(
@@ -306,6 +323,24 @@ mod tests {
     let mut report = Report::default();
     check(options, &context, &mut report);
     report.0.into_iter().map(|i| (i.key, i.message)).collect()
+  }
+
+  #[test]
+  fn the_metrics_path_stays_clear_of_the_daemons_own() {
+    assert!(metrics_url("/metrics").is_ok());
+    assert!(metrics_url("stats/prometheus").is_ok());
+    assert!(metrics_url("/apis").is_ok());
+    for taken in [
+      "/",
+      "",
+      "/api",
+      "api/metrics",
+      "/health",
+      "/hub/x",
+      "/swagger/",
+    ] {
+      assert!(metrics_url(taken).is_err(), "{taken:?}");
+    }
   }
 
   #[test]

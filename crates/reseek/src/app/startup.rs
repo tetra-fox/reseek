@@ -84,6 +84,20 @@ pub(super) fn warn_about(options: &Options, logging: &Logging) {
       );
     }
   }
+  let metrics = &options.metrics;
+  if metrics.enabled {
+    let credentials = &metrics.authentication;
+    let defaults = crate::config::MetricsAuthentication::default();
+    if credentials.disabled {
+      warn!("Authentication for the metrics endpoint is DISABLED");
+    } else if credentials.username == defaults.username && credentials.password == defaults.password
+    {
+      warn!(
+        "the metrics endpoint still has the default credentials; set \
+         metrics.authentication.username and metrics.authentication.password"
+      );
+    }
+  }
   if options.logger.loki.is_some() {
     warn!("forwarding logs to Grafana Loki is not available in this build; logger.loki ignored");
   }
