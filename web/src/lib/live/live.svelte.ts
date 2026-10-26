@@ -64,7 +64,10 @@ export class Live {
   #replacing: Stream | null = null;
   #lastId: string | null = null;
   #running = false;
+  /** when the recent losses happened, to tell a burst from an occasional drop */
   #failures: number[] = [];
+  /** losses since the last greeting once a burst started the growing wait, else 0 */
+  #streak = 0;
   #retry: ReturnType<typeof setTimeout> | undefined;
   #debounce: ReturnType<typeof setTimeout> | undefined;
   #warned = false;
@@ -184,6 +187,7 @@ export class Live {
       }
       this.principal = frame.data.principal;
       this.#failures = [];
+      this.#streak = 0;
       if (this.#warned) this.#deps.notice("Live connection back", "info");
       this.#warned = false;
       this.status = "connected";
@@ -222,10 +226,10 @@ export class Live {
     if (!this.#running) return;
     const now = Date.now();
     this.#failures = [...this.#failures.filter((t) => now - t < BURST_MS), now];
-    let delay = RETRY_MS;
-    if (this.#failures.length >= 3) {
-      delay = Math.min(RETRY_MS * 2 ** (this.#failures.length - 2), MAX_RETRY_MS);
-    }
+    // three losses within the window start the growing wait; from then on every loss until the
+    // stream greets again doubles it, however far apart the losses fall
+    if (this.#streak > 0 || this.#failures.length >= 3) this.#streak += 1;
+    let delay = this.#streak > 0 ? Math.min(RETRY_MS * 2 ** this.#streak, MAX_RETRY_MS) : RETRY_MS;
     if (end.kind === "refused" && end.retryAfterMs !== null)
       delay = Math.max(delay, end.retryAfterMs);
     this.status = "polling";
@@ -250,6 +254,7 @@ export class Live {
     this.#stream = null;
     this.#replacing = null;
     this.#failures = [];
+    this.#streak = 0;
     this.#warned = false;
     this.status = status;
   }

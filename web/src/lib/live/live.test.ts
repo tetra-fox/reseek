@@ -107,9 +107,10 @@ describe("Live", () => {
     expect(server.opened).toHaveLength(2);
     expect(server.opened[1].headers["Last-Event-ID"]).toBe("6");
 
-    // the second loss waits 1 s again, the third 2 s and the fourth 4 s
+    // the second loss waits 1 s again, the third starts the growing wait, which doubles with
+    // every loss after it, however long each attempt took, up to 30 s
     const waits: number[] = [];
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 7; attempt++) {
       server.opened.at(-1)!.end();
       await settle();
       const before = server.opened.length;
@@ -120,7 +121,7 @@ describe("Live", () => {
       }
       waits.push(waited);
     }
-    expect(waits).toEqual([1000, 2000, 4000]);
+    expect(waits).toEqual([1000, 2000, 4000, 8000, 16000, 30000, 30000]);
     expect(notices).toHaveLength(1);
 
     server.opened.at(-1)!.send(hello(6, true));
