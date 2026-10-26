@@ -117,8 +117,8 @@ fn unreachable(username: &str, error: ClientError) -> ApiError {
 }
 
 /// The answer for a user who is offline, or whom the configuration blocks: the two look the
-/// same from outside.
-fn offline(username: &str) -> ApiError {
+/// same from outside, and scripts match on its wording.
+pub(super) fn offline(username: &str) -> ApiError {
   ApiError::not_found(format!("User {username} appears to be offline"))
 }
 
