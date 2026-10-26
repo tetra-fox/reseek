@@ -27,7 +27,7 @@ fn answered_here(operation: &Operation) -> bool {
     || under("/api/v0/files")
     || under("/api/v0/shares")
     || under("/api/v0/options")
-    || (under("/api/v0/session") && route != "/api/v0/session/file-token")
+    || under("/api/v0/session")
     || under("/api/v0/sessions")
     || under("/api/v0/tokens")
     || under("/api/v0/auth")
@@ -35,6 +35,8 @@ fn answered_here(operation: &Operation) -> bool {
     || (route == "/api/v0/relay" && operation.method == Method::GET)
     || under("/api/v0/events")
     || under("/api/v0/telemetry")
+    || under("/api/v0/transfers/downloads")
+    || route == "/api/v0/debug/transfers"
     || DIRECTORY.contains(&route)
 }
 
@@ -306,7 +308,7 @@ async fn requests_are_checked_before_any_service_is_asked() {
       "GET",
       "/api/v0/transfers/downloads/list?state=Failed&state=Queued%2C%20Remotely".into(),
       None,
-      503,
+      200,
     ),
     ("GET", "/api/v0/users?limit=501".into(), None, 400),
     ("GET", "/api/v0/users?presence=online".into(), None, 400),

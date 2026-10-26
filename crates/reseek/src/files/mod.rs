@@ -32,20 +32,23 @@ use axum::response::{IntoResponse, Response};
 use cascade::Watcher;
 use chrono::Utc;
 use futures_util::stream;
+use rusqlite::OptionalExtension;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, warn};
+use uuid::Uuid;
 
 use crate::api::error::ApiError;
 use crate::auth::Auth;
 use crate::config::Options;
+use crate::db::Database;
 use crate::paths::Paths;
 use crate::safety::{self, Os};
 use crate::services::{ContentRequest, FileService, FileTarget};
 use delete::Kind;
+pub use placing::{create_file, move_file};
 use roots::{Refused, locate};
 use serve::Served;
-pub use placing::{create_file, move_file};
 pub use writing::{WriteGuard, Writing};
 
 /// How many pieces of an archive wait to be sent before its writer waits.
@@ -54,6 +57,8 @@ const ARCHIVE_BACKLOG: usize = 8;
 /// The files service.
 pub struct Files {
   config: Watcher<Options>,
+  /// `transfers.db`, where a download's file is found
+  transfers: Database,
   downloads: PathBuf,
   incomplete: PathBuf,
   logs: PathBuf,
@@ -64,16 +69,18 @@ pub struct Files {
 }
 
 impl Files {
-  /// The service over the directories of `paths`, pruning them by `retention.files` until
-  /// `shutdown` is cancelled.
+  /// The service over the directories of `paths`, finding downloads' files in `transfers`,
+  /// pruning them by `retention.files` until `shutdown` is cancelled.
   pub fn start(
     config: Watcher<Options>,
+    transfers: Database,
     paths: &Paths,
     auth: Arc<Auth>,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
     let files = Arc::new(Self {
       config,
+      transfers,
       downloads: paths.downloads.clone(),
       incomplete: paths.incomplete.clone(),
       logs: paths.logs.clone(),
@@ -96,6 +103,47 @@ impl Files {
       spellings.push(resolved.join(name));
     }
     self.writing.hold(spellings)
+  }
+
+  /// The path under the downloads directory of the file the succeeded download `id` was moved
+  /// to, `/`-separated; `username`, when given, must be the download's peer. 404 when there is
+  /// no such download, it has no file, or its file is no longer under the downloads directory.
+  async fn download_file(&self, username: Option<&str>, id: Uuid) -> Result<String, ApiError> {
+    let found = self
+      .transfers
+      .read(move |conn| {
+        conn
+          .query_row(
+            "SELECT Username, LocalPath FROM Transfers WHERE Id = ?1 AND Direction = 'Download'",
+            [id.to_string()],
+            |row| {
+              Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, Option<String>>(1)?,
+              ))
+            },
+          )
+          .optional()
+      })
+      .await
+      .map_err(ApiError::internal)?;
+    let missing = || ApiError::not_found(format!("no file of the download {id}"));
+    let Some((peer, local)) = found else {
+      return Err(missing());
+    };
+    if username.is_some_and(|username| peer.as_deref() != Some(username)) {
+      return Err(missing());
+    }
+    let local = PathBuf::from(local.ok_or_else(missing)?);
+    let relative = local.strip_prefix(&self.downloads).map_err(|_| {
+      debug!(path = %local.display(), "a download's file outside the downloads directory");
+      missing()
+    })?;
+    let segments: Option<Vec<&str>> = relative
+      .components()
+      .map(|c| c.as_os_str().to_str())
+      .collect();
+    Ok(segments.ok_or_else(missing)?.join("/"))
   }
 
   fn root(&self, root: FileRoot) -> &Path {
@@ -131,13 +179,6 @@ fn unreadable(what: &str, path: &Path, error: std::io::Error) -> ApiError {
       path.display()
     ))
   }
-}
-
-/// The answer for a call that needs a download's file, which the downloads engine gives.
-fn download_files() -> ApiError {
-  ApiError::unavailable(Some(
-    "the files of downloads not implemented yet".to_string(),
-  ))
 }
 
 /// Finds the file `relative` under `root` to serve.
@@ -220,14 +261,19 @@ impl FileService for Files {
     target: FileTarget,
     request: ContentRequest,
   ) -> Result<Response, ApiError> {
-    let FileTarget::File { root, path } = target else {
-      return Err(download_files());
+    let link = match (&request.principal, request.link.as_deref()) {
+      (Some(_), _) => None,
+      (None, Some(token)) => Some(token),
+      (None, None) => return Err(ApiError::unauthorized("authentication required")),
     };
-    if request.principal.is_none() {
-      let token = request
-        .link
-        .as_deref()
-        .ok_or_else(|| ApiError::unauthorized("authentication required"))?;
+    let (root, path) = match target {
+      FileTarget::File { root, path } => (root, path),
+      FileTarget::Download { username, id } => (
+        FileRoot::Downloads,
+        self.download_file(Some(&username), id).await?,
+      ),
+    };
+    if let Some(token) = link {
       let claimed = link::claimed(&root.to_string(), &path);
       match link::check(&self.auth.secret, token, &claimed, Utc::now()) {
         Ok(subject) => debug!(subject, "file served by its link token"),
@@ -375,10 +421,13 @@ impl FileService for Files {
 
   async fn download_link_token(
     &self,
-    _principal: &Principal,
-    _id: uuid::Uuid,
+    principal: &Principal,
+    id: Uuid,
   ) -> Result<FileToken, ApiError> {
-    Err(download_files())
+    let relative = self.download_file(None, id).await?;
+    self
+      .link_token(principal, FileRoot::Downloads, &relative)
+      .await
   }
 
   async fn link_token(

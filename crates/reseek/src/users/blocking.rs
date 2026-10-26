@@ -392,6 +392,17 @@ impl Blocks {
       })
   }
 
+  /// Whether a block of ours that has not expired blocks `username` from `scope`; the
+  /// configuration's blacklist is not asked.
+  pub fn ours_blocks(&self, username: &str, scope: BlockScope) -> bool {
+    self
+      .active
+      .read()
+      .unwrap_or_else(PoisonError::into_inner)
+      .get(username)
+      .is_some_and(|active| active.bits & bit(scope) != 0 && stands(active.expires_at, Utc::now()))
+  }
+
   /// Whether `username`, connecting from `ip` when known, is blocked from `scope`: by our
   /// block with that scope, or by the configuration's blacklist, which blocks from every
   /// scope. A user blocked without an address is blocked from every address.

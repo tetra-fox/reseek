@@ -39,6 +39,7 @@ use crate::services::Services;
 use crate::shares::Shares;
 use crate::state::StateOwner;
 use crate::telemetry::Telemetry;
+use crate::transfers::downloads::Downloads;
 use crate::ui::{Bundle, Ui};
 use crate::users::Directory;
 use crate::version::{self, RELEASE_FEED, Releases};
@@ -111,6 +112,8 @@ pub struct AppState {
   pub shares: Arc<Shares>,
   /// the Soulseek client and what keeps it connected
   pub network: Arc<Network>,
+  /// the download engine
+  pub downloads: Arc<Downloads>,
   /// the jobs that run at fixed intervals
   pub clock: Clock,
   /// the release feed the version is checked against
@@ -156,7 +159,13 @@ impl AppState {
       .await
       .map_err(|e| StartError::Open(format!("transfers.db: {e}")))?;
     let auth = Arc::new(auth);
-    let files = Files::start(config.clone(), &paths, auth.clone(), shutdown.clone());
+    let files = Files::start(
+      config.clone(),
+      transfers.clone(),
+      &paths,
+      auth.clone(),
+      shutdown.clone(),
+    );
     let event_log = EventLog::open(&location, &events, config.clone(), shutdown.clone())
       .await
       .map_err(|e| StartError::Open(format!("events.db: {e}")))?;
@@ -188,8 +197,20 @@ impl AppState {
       Releases::new(RELEASE_FEED)
         .map_err(|e| StartError::Open(format!("release feed HTTP client: {e}")))?,
     );
+    let downloads = Downloads::new(
+      transfers.clone(),
+      config.clone(),
+      network.clone(),
+      users.clone(),
+      files.clone(),
+      events.clone(),
+      live.clone(),
+      &paths,
+      shutdown.clone(),
+    );
     let clock = Clock::new(shutdown.clone());
     let mut services = Services::unavailable();
+    services.transfers = downloads.clone();
     services.shares = shares.clone();
     services.events = event_log;
     services.files = files.clone();
@@ -229,6 +250,7 @@ impl AppState {
       files,
       shares,
       network,
+      downloads,
       clock,
       releases,
       services,

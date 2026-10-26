@@ -48,12 +48,15 @@ pub trait TransferService: Send + Sync {
   }
 
   /// Asks the peer where a queued download is in its queue, records the answer and returns it.
+  /// A download its peer has not queued is a conflict, and a peer that does not answer in the
+  /// connection's inactivity timeout a 504.
   async fn place_in_queue(&self, username: &str, id: Uuid) -> Result<u32, ApiError> {
     Err(not_yet(DOMAIN))
   }
 
   /// Enqueues `files` from `username`, each checked by the API. The user being offline or
-  /// blocked is a 404 with the same message for both; two enqueues already running is a 429.
+  /// blocked by the configuration is a 404 with the same message for both, a user blocked
+  /// from downloads through the API a conflict; two enqueues already running is a 429.
   async fn enqueue(
     &self,
     username: &str,

@@ -1,10 +1,12 @@
 //! The order the daemon's work starts in once it is built, and the order it stops in.
 //!
 //! Starting: the client's events and the options are followed, the transfers the last run left
-//! unfinished are ended, the release feed is read, the shares are initialized, the clock
-//! starts, and then the watchdog connects, unless this is a relay agent, connecting is turned
-//! off or there are no credentials. Stopping, once the HTTP host has stopped: the watchdog
-//! stops, the client disconnects and is disposed, and the events this raised are handled.
+//! unfinished are ended and the downloads among them kept to resume after the login, the
+//! release feed is read, the shares are initialized, the clock starts, and then the watchdog
+//! connects, unless this is a relay agent, connecting is turned off or there are no
+//! credentials. Stopping, once the HTTP host has stopped: the watchdog stops, the client
+//! disconnects and is disposed, the events this raised are handled, and the transfers still
+//! running are ended as shut down.
 
 use tracing::{Instrument, info, info_span, warn};
 
@@ -12,7 +14,7 @@ use super::AppState;
 use crate::clock::Every;
 use crate::config::enums::RelayMode;
 use crate::network;
-use crate::transfers::cleanup;
+use crate::transfers::{cleanup, prune};
 use crate::version::RECHECK;
 
 /// Starts the daemon's work in order, in the background.
@@ -26,13 +28,7 @@ pub(super) fn start(app: &AppState) {
 async fn run(app: AppState) {
   info!("Application started");
   match cleanup::end_unfinished(&app.transfers).await {
-    Ok(downloads) if !downloads.is_empty() => {
-      info!(
-        downloads = downloads.len(),
-        "downloads active at the last stop are not resumed yet"
-      );
-    }
-    Ok(_) => {}
+    Ok(_) => app.downloads.remember_resumable().await,
     Err(e) => warn!(error = %e, "transfers left unfinished at the last stop not ended"),
   }
   let options = app.config.current().values.clone();
@@ -56,6 +52,16 @@ async fn run(app: AppState) {
     network::observe_client(&observed);
     async {}
   });
+  let pruned = app.clone();
+  app
+    .clock
+    .every(Every::FiveMinutes, "prune transfers", move |_| {
+      let app = pruned.clone();
+      async move {
+        let retention = app.config.current().values.retention.transfers.clone();
+        prune::prune(&app.transfers, &app.live, &retention).await;
+      }
+    });
   app.clock.start();
 
   let relay = &options.relay;
@@ -96,4 +102,5 @@ async fn check_versions(app: AppState) {
 pub(super) async fn stop(app: &AppState) {
   info!("Application is shutting down");
   app.network.stop().await;
+  app.downloads.stop().await;
 }

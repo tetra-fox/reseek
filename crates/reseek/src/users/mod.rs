@@ -164,6 +164,12 @@ impl Directory {
     self.blocks.is_blocked(username, ip, scope)
   }
 
+  /// Whether a block made through the API, not the configuration, blocks `username` from
+  /// `scope`.
+  pub fn blocked_through_api(&self, username: &str, scope: BlockScope) -> bool {
+    self.blocks.ours_blocks(username, scope)
+  }
+
   /// Whether a remembered answer says `username` is blocked from `scope`; a user without one is
   /// taken as not blocked, and nothing is worked out.
   pub fn remembers_blocked(&self, username: &str, scope: BlockScope) -> bool {

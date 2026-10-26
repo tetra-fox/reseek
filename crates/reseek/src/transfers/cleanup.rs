@@ -1,4 +1,7 @@
-//! Ending the transfers a daemon that stopped without finishing them left behind.
+//! Ending the transfers left unfinished when the daemon stops, or when it stopped without
+//! ending them, and finding the downloads among them to resume.
+
+use std::collections::BTreeMap;
 
 use api_types::transfers::{TransferDirection, TransferStates};
 use chrono::Utc;
@@ -6,7 +9,8 @@ use rusqlite::params;
 use tracing::{debug, info};
 use uuid::Uuid;
 
-use super::direction_at;
+use super::downloads::FileRequest;
+use super::{direction_at, direction_text};
 use crate::db::{Database, DbError, timestamp};
 
 /// Why a transfer left unfinished at the last stop ended.
@@ -16,9 +20,8 @@ pub const SHUT_DOWN: &str = "Application shut down";
 const UNFINISHED: &str = "EndedAt IS NULL OR (State & 16) = 0";
 
 /// Ends every transfer left unfinished, removed ones included, as `Completed, Errored` with
-/// [`SHUT_DOWN`] at the time of this call. Returns the ids of the downloads among them, which
-/// were active when the daemon last stopped.
-pub async fn end_unfinished(db: &Database) -> Result<Vec<Uuid>, DbError> {
+/// [`SHUT_DOWN`] at the time of this call. Returns how many it ended.
+pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
   let errored = TransferStates::Completed | TransferStates::Errored;
   let ended = db
     .write(move |conn| {
@@ -49,28 +52,65 @@ pub async fn end_unfinished(db: &Database) -> Result<Vec<Uuid>, DbError> {
       Ok(unfinished)
     })
     .await?;
-  let mut downloads = Vec::new();
   for (id, direction) in &ended {
-    debug!(
-      id,
-      ?direction,
-      "transfer left unfinished at the last stop ended"
-    );
-    if *direction == TransferDirection::Download {
-      // ids are written by the transfer engines as UUIDs; another one is not resumed
-      if let Ok(id) = id.parse() {
-        downloads.push(id);
-      }
-    }
+    debug!(id, ?direction, "unfinished transfer ended");
   }
   if !ended.is_empty() {
-    info!(
-      transfers = ended.len(),
-      downloads = downloads.len(),
-      "transfers left unfinished at the last stop ended"
-    );
+    info!(transfers = ended.len(), "unfinished transfers ended");
   }
-  Ok(downloads)
+  Ok(ended.len())
+}
+
+/// The downloads a stop ended, as [`end_unfinished`] ends them, that were not removed since:
+/// the ones to resume.
+pub async fn resumable(db: &Database) -> Result<Vec<Uuid>, DbError> {
+  let errored = TransferStates::Completed | TransferStates::Errored;
+  let rows = db
+    .read(move |conn| {
+      let mut statement = conn.prepare(
+        "SELECT Id FROM Transfers WHERE Direction = ?1 AND State = ?2 AND Exception = ?3 \
+         AND Removed = 0 ORDER BY RequestedAt, Id",
+      )?;
+      let rows = statement.query_map(
+        params![
+          direction_text(TransferDirection::Download),
+          errored.bits(),
+          SHUT_DOWN
+        ],
+        |row| row.get::<_, String>(0),
+      )?;
+      rows.collect::<rusqlite::Result<Vec<String>>>()
+    })
+    .await?;
+  // ids are written by the transfer engines as UUIDs; another one is not resumed
+  Ok(rows.iter().filter_map(|id| id.parse().ok()).collect())
+}
+
+/// The downloads of `ids` still not removed, as files to enqueue, grouped by user and batch.
+pub async fn resume_groups(
+  db: &Database,
+  ids: Vec<Uuid>,
+) -> Result<BTreeMap<(String, Option<Uuid>), Vec<FileRequest>>, DbError> {
+  db.read(move |conn| {
+    let mut groups: BTreeMap<(String, Option<Uuid>), Vec<FileRequest>> = BTreeMap::new();
+    for id in ids {
+      let Some(record) = super::store::get(conn, id)? else {
+        continue;
+      };
+      if record.removed {
+        continue;
+      }
+      groups
+        .entry((record.username, record.batch_id))
+        .or_default()
+        .push(FileRequest {
+          filename: record.filename,
+          size: record.size,
+        });
+    }
+    Ok(groups)
+  })
+  .await
 }
 
 #[cfg(test)]
@@ -103,11 +143,7 @@ mod tests {
       ],
     )
     .await;
-    let mut downloads = end_unfinished(&db).await.unwrap();
-    downloads.sort();
-    let mut expected = vec![queued.id, removed.id, unended.id];
-    expected.sort();
-    assert_eq!(downloads, expected);
+    assert_eq!(end_unfinished(&db).await.unwrap(), 4);
     let rows: Vec<(String, u32, Option<String>, bool)> = db
       .read(|conn| {
         conn
@@ -129,9 +165,11 @@ mod tests {
         );
       }
     }
-    assert!(
-      end_unfinished(&db).await.unwrap().is_empty(),
-      "nothing is left"
-    );
+    assert_eq!(end_unfinished(&db).await.unwrap(), 0, "nothing is left");
+    let mut resumed = resumable(&db).await.unwrap();
+    resumed.sort();
+    let mut expected = vec![queued.id, unended.id];
+    expected.sort();
+    assert_eq!(resumed, expected, "downloads not removed");
   }
 }

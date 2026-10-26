@@ -166,7 +166,8 @@ async fn place_in_queue(
     (status = 201, body = QueueDownloadResponse), (status = 200, body = QueueDownloadResponse),
     (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
     (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
-    (status = 429, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+    (status = 409, body = api_types::ErrorBody), (status = 429, body = api_types::ErrorBody),
+    (status = 502, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
 )]
 async fn enqueue(
@@ -228,7 +229,7 @@ fn queue_requests(
     (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
     (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
     (status = 409, body = api_types::ErrorBody), (status = 429, body = api_types::ErrorBody),
-    (status = 503, body = api_types::ErrorBody)
+    (status = 502, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
 )]
 async fn enqueue_batch(

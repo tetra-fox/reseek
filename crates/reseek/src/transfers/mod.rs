@@ -1,9 +1,10 @@
 //! Transfers: the database every download and upload is recorded in, reading a record back as
 //! the API shows it, and what both directions share: writing records, the listings, removal and
-//! retention.
+//! retention. The download engine is [`downloads`].
 
 pub mod categories;
 pub mod cleanup;
+pub mod downloads;
 #[cfg(test)]
 pub mod fixtures;
 pub mod listing;

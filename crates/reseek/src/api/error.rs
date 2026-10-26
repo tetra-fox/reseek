@@ -103,6 +103,11 @@ impl ApiError {
     Self::new(StatusCode::BAD_GATEWAY, error, detail)
   }
 
+  /// A 504: a peer did not answer in time.
+  pub fn gateway_timeout(error: impl Into<String>) -> Self {
+    Self::new(StatusCode::GATEWAY_TIMEOUT, error, None)
+  }
+
   /// A 503: the Soulseek connection the call needs is not there.
   pub fn unavailable(detail: Option<String>) -> Self {
     Self::new(
@@ -137,6 +142,11 @@ impl ApiError {
   /// The status that answers the error.
   pub fn status(&self) -> StatusCode {
     self.status
+  }
+
+  /// The message sent as `error`.
+  pub fn message(&self) -> &str {
+    &self.error
   }
 
   /// The longer explanation sent with the message, when there is one.

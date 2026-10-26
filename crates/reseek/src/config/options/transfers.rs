@@ -98,7 +98,7 @@ pub struct Download {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Retry {
-  /// How many times a failed download is tried again.
+  /// How many times a download is tried, the first try included; 1 never tries again.
   pub attempts: u32,
   /// How long to wait before the first retry; each later wait doubles, at least a second.
   #[serde(with = "humantime_serde")]

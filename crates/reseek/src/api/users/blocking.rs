@@ -70,12 +70,16 @@ async fn block(
   Json(request): Json<BlockRequest>,
 ) -> Result<Json<Block>, ApiError> {
   let expires_in = block_request(&request)?;
+  let cancel_transfers = request.cancel_transfers;
   let block = app
     .services
     .blocking
     .block(&caller.principal, &username, request, expires_in)
     .await?;
   info!(by = caller.principal.subject, username, "user blocked");
+  if cancel_transfers {
+    app.downloads.blocked(&username, &block.scopes).await;
+  }
   Ok(Json(block))
 }
 

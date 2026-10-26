@@ -96,6 +96,21 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
       message,
       "Download was denied by the remote user"
     ),
+    Event::PlaceInQueueReceived {
+      username,
+      filename,
+      place,
+    } => {
+      let downloads = app.downloads.clone();
+      tokio::spawn(
+        async move {
+          downloads
+            .place_received(&username, filename.as_str(), place)
+            .await;
+        }
+        .in_current_span(),
+      );
+    }
     Event::DownloadFailed { username, filename } => warn!(
       username,
       %filename,
@@ -166,7 +181,6 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
     | Event::SearchRequestReceived { .. }
     | Event::SearchResponseDelivered(_)
     | Event::SearchResponseDeliveryFailed(_)
-    | Event::PlaceInQueueReceived { .. }
     | Event::TransferProgressUpdated { .. }
     | Event::SearchStateChanged { .. }
     | Event::SearchResponseReceived { .. } => {}
@@ -222,7 +236,8 @@ fn logged_in(app: &AppState) {
 }
 
 /// Once the shares are initialized: the server is told what we share, our statistics are
-/// fetched, and the configured rooms are joined.
+/// fetched, the configured rooms are joined, and, after the first login, the downloads a stop
+/// interrupted are enqueued again.
 async fn after_login(app: AppState) {
   app.shares.initialized().await;
   let client = app.network.client();
@@ -243,7 +258,7 @@ async fn after_login(app: AppState) {
       Err(e) => warn!(room, error = %e, "room not joined"),
     }
   }
-  debug!("downloads active at the last stop are not resumed yet");
+  app.downloads.resume().await;
 }
 
 /// Tells the server what we share whenever that changes while logged in, and fetches our
