@@ -79,6 +79,8 @@ pub struct Database {
 
 struct Inner {
   name: &'static str,
+  /// the file, none for a database in memory
+  path: Option<PathBuf>,
   writer: Arc<tokio::sync::Mutex<Connection>>,
   /// none for a database in memory, whose reads go through the writer
   readers: Option<Readers>,
@@ -94,11 +96,40 @@ impl Database {
   /// Opens the database `schema` describes in `location`, creating it when it is new, and
   /// brings it to the newest migration, backing it up first when it already had data.
   pub async fn open(schema: &'static Schema, location: &Location) -> Result<Self, DbError> {
+    Self::open_as(schema, location, schema.name).await
+  }
+
+  /// Opens the database `schema` describes as [`Database::open`] does, in the file
+  /// `<stem>.db`, for a schema whose databases are several files.
+  pub async fn open_as(
+    schema: &'static Schema,
+    location: &Location,
+    stem: &str,
+  ) -> Result<Self, DbError> {
     let location = location.clone();
-    let opened = tokio::task::spawn_blocking(move || open_blocking(schema, &location))
+    let file = format!("{stem}.db");
+    let opened = tokio::task::spawn_blocking(move || open_blocking(schema, &location, &file))
       .await
       .map_err(|e| DbError::Task(e.to_string()))??;
     Ok(opened)
+  }
+
+  /// The database's name, the stem of its schema.
+  pub fn name(&self) -> &'static str {
+    self.inner.name
+  }
+
+  /// The database's file, `None` for one in memory.
+  pub fn path(&self) -> Option<&std::path::Path> {
+    self.inner.path.as_deref()
+  }
+
+  /// Rebuilds the database file without its free pages, then empties the write-ahead log into
+  /// it.
+  pub async fn vacuum(&self) -> Result<(), DbError> {
+    self
+      .write(|conn| conn.execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);"))
+      .await
   }
 
   /// Runs `f` on a read-only connection.
@@ -181,9 +212,12 @@ fn reader_count() -> usize {
   (processors / 2).max(2)
 }
 
-fn open_blocking(schema: &'static Schema, location: &Location) -> Result<Database, DbError> {
-  let file = format!("{}.db", schema.name);
-  let path = location.data.join(&file);
+fn open_blocking(
+  schema: &'static Schema,
+  location: &Location,
+  file: &str,
+) -> Result<Database, DbError> {
+  let path = location.data.join(file);
   // a name of its own per opening, so two databases in one process never share memory
   let memory = format!("file:{}-{}?mode=memory", schema.name, uuid::Uuid::new_v4());
   let flags = OpenFlags::SQLITE_OPEN_READ_WRITE
@@ -229,6 +263,7 @@ fn open_blocking(schema: &'static Schema, location: &Location) -> Result<Databas
   } else {
     path.display().to_string()
   };
+  let path = (!location.volatile).then_some(path);
   info!(
     database = schema.name,
     path = place,
@@ -240,6 +275,7 @@ fn open_blocking(schema: &'static Schema, location: &Location) -> Result<Databas
   Ok(Database {
     inner: Arc::new(Inner {
       name: schema.name,
+      path,
       writer: Arc::new(tokio::sync::Mutex::new(writer)),
       readers,
     }),

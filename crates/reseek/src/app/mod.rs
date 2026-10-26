@@ -23,7 +23,7 @@ use crate::cli::{self, Command, Invocation};
 use crate::config::api_key::PrimaryApiKey;
 use crate::config::load::{self, ConfigFiles, Sources};
 use crate::config::{Options, redact};
-use crate::db::Location;
+use crate::db::Database;
 use crate::events::EventBus;
 use crate::http::{self, pipeline};
 use crate::live::Live;
@@ -51,6 +51,17 @@ pub use restart::EXIT_RESTART;
 /// How often the configuration files are read when they are polled.
 const POLL: Duration = Duration::from_secs(4);
 
+/// Why the daemon's state could not be built.
+#[derive(Debug, thiserror::Error)]
+pub enum StartError {
+  /// an option the loader let through is not usable
+  #[error("Invalid configuration: {0}")]
+  Config(String),
+  /// a database or an engine could not be opened
+  #[error("{0}")]
+  Open(String),
+}
+
 /// What every request handler shares.
 #[derive(Clone)]
 pub struct AppState {
@@ -74,6 +85,10 @@ pub struct AppState {
   pub state: StateOwner,
   /// cancelled when the daemon shuts down
   pub shutdown: CancellationToken,
+  /// every place reseek reads or writes
+  pub paths: Paths,
+  /// `transfers.db`, the record of every download and upload
+  pub transfers: Database,
   /// the engine of every domain
   pub services: Services,
   /// set when the daemon is to start again once it has stopped
@@ -81,19 +96,22 @@ pub struct AppState {
 }
 
 impl AppState {
-  /// The state for a configuration that just loaded and an opened authentication database.
+  /// The state for a configuration that just loaded, an opened authentication database and
+  /// the paths it resolved to: the other databases are opened and every engine is built.
   /// Raised events are pushed to the event stream from here on; [`AppState::spawn_tasks`]
   /// starts the rest of the background work.
-  pub fn new(
+  pub async fn new(
     config: Watcher<Options>,
     logs: Arc<LogBuffer>,
     auth: Auth,
+    paths: Paths,
     shutdown: CancellationToken,
-  ) -> Result<Self, String> {
+  ) -> Result<Self, StartError> {
     let startup = config.current();
     let primary_key = match &startup.values.web.authentication.api_key {
       Some(text) => Some(Arc::new(
-        PrimaryApiKey::parse(text).map_err(|e| format!("web.authentication.api_key: {e}"))?,
+        PrimaryApiKey::parse(text)
+          .map_err(|e| StartError::Config(format!("web.authentication.api_key: {e}")))?,
       )),
       None => None,
     };
@@ -108,6 +126,11 @@ impl AppState {
       )));
       async { Ok(()) }
     });
+    let location = paths.databases(&startup.values);
+    let transfers = crate::transfers::open(&location)
+      .await
+      .map_err(|e| StartError::Open(format!("transfers.db: {e}")))?;
+    let services = Services::unavailable();
     Ok(Self {
       config,
       startup,
@@ -119,7 +142,9 @@ impl AppState {
       live,
       state,
       shutdown,
-      services: Services::unavailable(),
+      paths,
+      transfers,
+      services,
       restart: Arc::new(AtomicBool::new(false)),
     })
   }
@@ -358,12 +383,7 @@ async fn serve(
   spawn_signals(watcher.clone(), cancel.clone());
 
   let grace = options.shutdown_timeout;
-  let location = Location {
-    data: paths.data.clone(),
-    backups: paths.backups.clone(),
-    volatile: options.flags.volatile,
-    log_sql: options.flags.log_sql,
-  };
+  let location = paths.databases(options);
   let auth = match Auth::open(&location).await {
     Ok(auth) => auth,
     Err(e) => {
@@ -384,11 +404,23 @@ async fn serve(
     cancel.cancel();
     return 0;
   }
-  let state = match AppState::new(watcher, logging.buffer().clone(), auth, cancel.clone()) {
+  let state = match AppState::new(
+    watcher,
+    logging.buffer().clone(),
+    auth,
+    paths,
+    cancel.clone(),
+  )
+  .await
+  {
     Ok(state) => state,
-    Err(e) => {
-      error!(error = e, "Invalid configuration");
+    Err(e @ StartError::Config(_)) => {
+      error!(error = %e, "reseek could not start");
       return EXIT_CONFIG;
+    }
+    Err(e @ StartError::Open(_)) => {
+      error!(error = %e, "reseek could not start");
+      return EXIT_FATAL;
     }
   };
   state.spawn_tasks();

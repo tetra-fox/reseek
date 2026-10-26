@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use directories::ProjectDirs;
 
 use crate::config::Options;
+use crate::db::Location;
 
 /// The four base directories before the options are read.
 #[derive(Clone, Debug)]
@@ -139,6 +140,17 @@ fn no_home(key: &str) -> PathError {
 }
 
 impl Paths {
+  /// Where the databases are opened: in the data directory, or in memory with
+  /// `flags.volatile`.
+  pub fn databases(&self, options: &Options) -> Location {
+    Location {
+      data: self.data.clone(),
+      backups: self.backups.clone(),
+      volatile: options.flags.volatile,
+      log_sql: options.flags.log_sql,
+    }
+  }
+
   /// The file the runtime overrides are kept in.
   pub fn overrides(&self) -> PathBuf {
     self.data.join("overrides.toml")

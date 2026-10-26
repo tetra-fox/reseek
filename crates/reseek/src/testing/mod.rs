@@ -19,7 +19,6 @@ use tower::ServiceExt;
 use crate::app::AppState;
 use crate::auth::Auth;
 use crate::config::load::{self, ConfigFiles, Sources};
-use crate::db::Location;
 use crate::http::{Peer, Transport, pipeline};
 use crate::logging::LogBuffer;
 use crate::paths::Defaults;
@@ -68,21 +67,18 @@ pub async fn app(config: &str, env: &[(&str, &str)]) -> TestApp {
   };
   let overrides = Overrides::load(dir.path().join("overrides.toml")).unwrap();
   let watcher = Watcher::new(load::layers(&sources, &defaults, Some(overrides))).unwrap();
-  let location = Location {
-    data: dir.path().join("data"),
-    backups: dir.path().join("backups"),
-    volatile: false,
-    log_sql: false,
-  };
-  std::fs::create_dir_all(&location.data).unwrap();
-  std::fs::create_dir_all(&location.backups).unwrap();
-  let auth = Auth::open(&location).await.unwrap();
+  let options = watcher.current().values.clone();
+  let paths = defaults.resolve(&options).unwrap();
+  paths.create().unwrap();
+  let auth = Auth::open(&paths.databases(&options)).await.unwrap();
   let state = AppState::new(
     watcher,
     std::sync::Arc::new(LogBuffer::default()),
     auth,
+    paths,
     CancellationToken::new(),
   )
+  .await
   .unwrap();
   state.spawn_tasks();
   TestApp {
