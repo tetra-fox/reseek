@@ -246,6 +246,95 @@
         }
       }
     },
+    "/api/v0/application/data": {
+      "get": {
+        "tags": [
+          "application"
+        ],
+        "summary": "The database files with their sizes on disk; empty while the databases are in memory.",
+        "operationId": "get_databases",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DatabaseFile"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/application/data/{name}/vacuum": {
+      "post": {
+        "tags": [
+          "application"
+        ],
+        "summary": "Rebuilds a database file without its free pages, then empties its write-ahead log into\nit.",
+        "operationId": "vacuum_database",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "the database's name, as the listing gives it",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "vacuumed"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/application/version": {
       "get": {
         "tags": [
@@ -15000,6 +15089,40 @@
           "id": {
             "type": "string",
             "description": "the session's id"
+          }
+        }
+      },
+      "DatabaseFile": {
+        "type": "object",
+        "description": "One of the daemon's database files and its size on disk, as the Data tab lists them.",
+        "required": [
+          "name",
+          "path",
+          "sizeBytes",
+          "walSizeBytes"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "the database's name, its file name without `.db`; what the vacuum call takes",
+            "example": "transfers"
+          },
+          "path": {
+            "type": "string",
+            "description": "the absolute path of the file",
+            "example": "/var/lib/reseek/transfers.db"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the file's size in bytes",
+            "minimum": 0
+          },
+          "walSizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the size of its write-ahead log in bytes, 0 when there is none",
+            "minimum": 0
           }
         }
       },

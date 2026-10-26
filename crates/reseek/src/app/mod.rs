@@ -23,6 +23,7 @@ use crate::cli::{self, Command, Invocation};
 use crate::config::api_key::PrimaryApiKey;
 use crate::config::load::{self, ConfigFiles, Sources};
 use crate::config::{Options, redact};
+use crate::databases::Databases;
 use crate::db::Database;
 use crate::events::{EventBus, EventLog};
 use crate::http::{self, pipeline};
@@ -92,6 +93,8 @@ pub struct AppState {
   pub transfers: Database,
   /// the metrics the engines update, and the reports
   pub telemetry: Arc<Telemetry>,
+  /// every database opened, to list and to close
+  pub databases: Arc<Databases>,
   /// the engine of every domain
   pub services: Services,
   /// set when the daemon is to start again once it has stopped
@@ -135,10 +138,17 @@ impl AppState {
     let event_log = EventLog::open(&location, &events, config.clone(), shutdown.clone())
       .await
       .map_err(|e| StartError::Open(format!("events.db: {e}")))?;
+    let event_log_db = event_log.database();
     let telemetry = Telemetry::new(transfers.clone(), shutdown.clone());
     let mut services = Services::unavailable();
     services.events = event_log;
     services.reports = telemetry.clone();
+    let databases = Arc::new(Databases::new(vec![
+      auth.db.clone(),
+      event_log_db,
+      transfers.clone(),
+    ]));
+    services.application = databases.clone();
     Ok(Self {
       config,
       startup,
@@ -153,6 +163,7 @@ impl AppState {
       paths,
       transfers,
       telemetry,
+      databases,
       services,
       restart: Arc::new(AtomicBool::new(false)),
     })
@@ -436,7 +447,7 @@ async fn serve(
   info!(base = %state.url_base, "Using base url");
   info!("reseek started");
   http::serve(listeners, pipeline::app(state.clone(), ui), cancel, grace).await;
-  state.auth.db.close().await;
+  state.databases.close().await;
   if state.restart_requested() {
     info!("reseek stopped to start again");
     return EXIT_RESTART;

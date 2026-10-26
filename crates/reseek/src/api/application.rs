@@ -2,7 +2,7 @@
 //! down and restarting, the connection to the Soulseek server, and the log. Diagnostics that
 //! the API document leaves out are here too.
 
-use api_types::application::{DisconnectReason, VersionLatestQuery};
+use api_types::application::{DatabaseFile, DisconnectReason, VersionLatestQuery};
 use api_types::auth::Role;
 use api_types::files::ContentQuery;
 use api_types::logs::LogRecord;
@@ -34,6 +34,8 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(get_live_logs))
     .routes(routes!(get_log_files))
     .routes(routes!(get_log_file))
+    .routes(routes!(get_databases))
+    .routes(routes!(vacuum_database))
 }
 
 /// The diagnostic routes, which the API document leaves out.
@@ -191,6 +193,44 @@ async fn disconnect(
   Ok(StatusCode::NO_CONTENT)
 }
 
+/// The database files with their sizes on disk; empty while the databases are in memory.
+#[utoipa::path(
+  get, path = "/application/data", tag = "application",
+  responses(
+    (status = 200, body = Vec<DatabaseFile>), (status = 401, body = api_types::ErrorBody)
+  )
+)]
+async fn get_databases(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+) -> Result<Json<Vec<DatabaseFile>>, ApiError> {
+  app.services.application.databases().await.map(Json)
+}
+
+/// Rebuilds a database file without its free pages, then empties its write-ahead log into
+/// it.
+#[utoipa::path(
+  post, path = "/application/data/{name}/vacuum", tag = "application",
+  params(("name" = String, Path, description = "the database's name, as the listing gives it")),
+  responses(
+    (status = 204, description = "vacuumed"), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody)
+  )
+)]
+async fn vacuum_database(
+  State(app): State<AppState>,
+  admin: Authorized<Administrator>,
+  Path(name): Path<String>,
+) -> Result<StatusCode, ApiError> {
+  info!(
+    by = admin.principal.subject,
+    database = name,
+    "vacuum asked for"
+  );
+  app.services.application.vacuum(&name).await?;
+  Ok(StatusCode::NO_CONTENT)
+}
+
 /// The latest log records kept in memory, oldest first.
 #[utoipa::path(
   get, path = "/logs/live", tag = "logs",
@@ -330,6 +370,44 @@ mod tests {
     assert_eq!(answer.status, 204);
     assert!(app.state.shutdown.is_cancelled());
     assert!(!app.state.restart_requested());
+  }
+
+  #[tokio::test]
+  async fn the_data_tab_lists_the_database_files_and_vacuums_one() {
+    let app = app(ADMIN, &[]).await;
+    let listed = app
+      .send(request("GET", "/api/v0/application/data", None))
+      .await;
+    assert_eq!(listed.status, 200);
+    let files = listed.json();
+    let names: Vec<_> = files
+      .as_array()
+      .unwrap()
+      .iter()
+      .map(|f| f["name"].as_str().unwrap().to_string())
+      .collect();
+    for name in ["auth", "events", "transfers"] {
+      assert!(names.contains(&name.to_string()), "{names:?}");
+    }
+    let auth = files
+      .as_array()
+      .unwrap()
+      .iter()
+      .find(|f| f["name"] == "auth")
+      .unwrap();
+    assert!(auth["sizeBytes"].as_u64().unwrap() > 0);
+    assert!(auth["path"].as_str().unwrap().ends_with("auth.db"));
+    let vacuum = |name: &str| {
+      request(
+        "POST",
+        &format!("/api/v0/application/data/{name}/vacuum"),
+        None,
+      )
+    };
+    assert_eq!(app.send(vacuum("transfers")).await.status, 204);
+    assert_eq!(app.send(vacuum("nothing")).await.status, 404);
+    let by_key = with(vacuum("events"), "x-api-key", "robot-key-0123456789");
+    assert_eq!(app.send_from("192.0.2.1:1", by_key).await.status, 204);
   }
 
   #[test]

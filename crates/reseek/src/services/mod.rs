@@ -40,7 +40,7 @@ use crate::api::error::ApiError;
 /// The service of every domain.
 #[derive(Clone)]
 pub struct Services {
-  /// connecting to the Soulseek server and checking for a newer release
+  /// connecting to the Soulseek server, checking for a newer release, and the database files
   pub application: Arc<dyn ApplicationService>,
   /// searches we start
   pub searches: Arc<dyn SearchService>,

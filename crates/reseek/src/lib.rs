@@ -8,6 +8,7 @@ pub mod auth;
 pub mod cli;
 pub mod config;
 pub mod crypto;
+pub mod databases;
 pub mod db;
 pub mod events;
 pub mod http;

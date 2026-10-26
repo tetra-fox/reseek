@@ -75,6 +75,11 @@ impl EventLog {
     }))
   }
 
+  /// `events.db`.
+  pub fn database(&self) -> Database {
+    self.db.clone()
+  }
+
   /// A page of the events matching `query`, with how many match its type and username
   /// filters whatever the page and the time bounds.
   async fn page(&self, query: EventsQuery) -> Result<Page<EventRecord>, DbError> {
