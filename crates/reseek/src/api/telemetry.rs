@@ -320,6 +320,64 @@ async fn user(
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::testing::{app, request};
+
+  #[tokio::test]
+  async fn report_queries_are_checked_before_the_reports_run() {
+    let app = app(
+      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
+      &[],
+    )
+    .await;
+    let reports = "/api/v0/telemetry/reports/transfers";
+    let at = "2026-01-02T00:00:00Z";
+    let cases = [
+      (format!("{reports}/summary?start={at}&end={at}"), 400),
+      (
+        format!("{reports}/summary?start=2026-01-01T00:00:00Z&end={at}"),
+        200,
+      ),
+      (format!("{reports}/histogram?interval=0"), 400),
+      (format!("{reports}/histogram?buckets=1001"), 400),
+      (format!("{reports}/histogram?buckets=1000"), 200),
+      (format!("{reports}/histogram?buckets=5&interval=60"), 400),
+      (
+        format!("{reports}/histogram?end=2020-12-30T06:21:59Z&start=2020-01-01T00:00:00Z"),
+        400,
+      ),
+      (
+        format!("{reports}/leaderboard?direction=Upload&limit=0"),
+        400,
+      ),
+      (
+        format!("{reports}/exceptions?direction=Upload&limit=0"),
+        400,
+      ),
+      (
+        format!("{reports}/exceptions/pareto?direction=Upload&limit=0"),
+        400,
+      ),
+      (format!("{reports}/directories?limit=0"), 400),
+      (format!("{reports}/users/%20"), 400),
+      (format!("{reports}/users/alice"), 200),
+    ];
+    for (uri, status) in cases {
+      assert_eq!(
+        app.send(request("GET", &uri, None)).await.status,
+        status,
+        "{uri}"
+      );
+    }
+    let unbounded = app
+      .send(request("GET", &format!("{reports}/histogram"), None))
+      .await;
+    assert_eq!(unbounded.status, 200);
+    let buckets = unbounded.json().as_object().unwrap().len();
+    assert!(
+      (100..=101).contains(&buckets),
+      "100 buckets when neither is given: {buckets}"
+    );
+  }
 
   #[test]
   fn json_is_chosen_only_when_weighed_above_text() {
