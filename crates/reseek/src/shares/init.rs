@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{Instrument, error, info, info_span, warn};
+use tracing::{Instrument, debug, error, info, info_span, warn};
 
 use super::scanner::{self, Settings};
 use super::{Shares, lock, repository, share, storage};
@@ -35,9 +35,10 @@ pub(super) fn start(shares: &Arc<Shares>, options: &Options) {
 }
 
 impl Shares {
-  /// Loads the index, or scans when it can not be trusted, then watches the shares and, when
-  /// it did not scan, scans once with the rows it loaded reused, to find what changed while
-  /// reseek was not running. Marks the engine initialized when done.
+  /// Loads the index, or scans when it can not be trusted. A loaded index is served at once:
+  /// the shares are watched, the engine is marked initialized, and one scan reusing the loaded
+  /// rows runs in the background to find what changed while reseek was not running. Otherwise
+  /// the engine is marked initialized once the scan is done.
   async fn initialize(self: &Arc<Self>, force: bool, mode: StorageMode) {
     info!("Initializing shares");
     self.publish(|status| status.ready = false);
@@ -50,7 +51,13 @@ impl Shares {
       match self.load(mode).await {
         Ok(settings) => {
           self.watch_shares(settings).await;
-          self.scan_at_startup(false).await;
+          // a conflict means a scan asked for over the API already runs and covers the same
+          // ground
+          if self.scan(false).is_err() {
+            debug!("a share scan already runs; the startup scan is left to it");
+          }
+          self.initialized.send_replace(true);
+          return;
         }
         Err(e) => {
           warn!(error = e, "Error initializing shares");

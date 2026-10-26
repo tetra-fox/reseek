@@ -162,6 +162,11 @@ async fn a_restart_loads_the_backup_and_scans_once_reusing_it() {
   .await
   .unwrap();
   again.initialized().await;
+  assert!(
+    lock(&again.running).is_some(),
+    "the scan after loading runs in the background"
+  );
+  eventually(async || lock(&again.running).is_none()).await;
   let scans = again
     .db
     .read(|conn| repository::scans_since(conn, 0))
@@ -190,7 +195,7 @@ async fn watched_changes_are_applied_by_what_is_on_disk() {
   .unwrap();
   shares.initialized().await;
   let shares: Arc<Shares> = shares;
-  // the watches are in place once the scan after loading is done
+  // the watches are in place again once the scan after loading is done
   eventually(async || lock(&shares.running).is_none() && lock(&shares.watches).is_some()).await;
   let album = files.path().join("music/Album");
   std::fs::write(album.join("02.mp3"), "two").unwrap();
