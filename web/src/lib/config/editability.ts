@@ -6,6 +6,10 @@ import type { ConfigView } from "./fields";
  */
 export type Editability = { mode: "save" | "runtime" | "locked"; notice: string | null };
 
+/** The file a save of `key` writes: the one the daemon names for it, else the first file */
+export const fileOf = (view: ConfigView, key: string): string =>
+  view.fields[key]?.file ?? view.files[0]?.name ?? "config.toml";
+
 export const editability = (view: ConfigView, key: string): Editability => {
   const field = view.fields[key];
   if (!field) return { mode: "locked", notice: "Not an option this reseek knows" };
@@ -16,7 +20,7 @@ export const editability = (view: ConfigView, key: string): Editability => {
   if (source.layer === "cli") {
     return { mode: "locked", notice: `Set on the command line (${source.flag}); change it there` };
   }
-  const name = field.file ?? view.files[0]?.name ?? "config.toml";
+  const name = fileOf(view, key);
   const file = view.files.find((f) => f.name === name);
   const writable = !view.managedBy && (file?.writable ?? false);
   if (writable) {

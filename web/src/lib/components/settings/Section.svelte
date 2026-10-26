@@ -11,7 +11,7 @@
   import Card from "#lib/components/ui/Card.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Textarea from "#lib/components/ui/Textarea.svelte";
-  import { editability } from "#lib/config/editability.js";
+  import { editability, fileOf } from "#lib/config/editability.js";
   import {
     type ConfigView,
     controlOf,
@@ -132,7 +132,7 @@
       if (!writes) return { ok: true as const, data: null };
       const byFile = new Map<string, typeof writes>();
       for (const write of writes) {
-        const file = view.fields[write.field.key].file ?? view.files[0]?.name ?? "config.toml";
+        const file = fileOf(view, write.field.key);
         byFile.set(file, [...(byFile.get(file) ?? []), write]);
       }
       const done: string[] = [];
