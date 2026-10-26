@@ -161,6 +161,46 @@ async fn the_watchdog_reconnects_once_the_server_is_back() {
 }
 
 #[tokio::test]
+async fn a_refused_login_is_not_tried_again() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  // the account exists once someone logged in with it
+  let owner = server.login("taken", ClientOptions::default()).await;
+  let dir = tempfile::tempdir().unwrap();
+  let address = server.address().port().to_string();
+  let listen = support::free_port().to_string();
+  let daemon = Daemon::start(
+    dir.path(),
+    &[
+      "--slsk-address",
+      "127.0.0.1",
+      "--slsk-port",
+      &address,
+      "--slsk-username",
+      &owner.username,
+      "--slsk-password",
+      "not the password",
+      "--slsk-listen-ip-address",
+      "127.0.0.1",
+      "--slsk-listen-port",
+      &listen,
+    ],
+    &ACCOUNT,
+  );
+  let client = signed_in(&daemon).await;
+  until(&client, "refused and stopped", |s| {
+    !s.server.is_connected
+      && !s.connection_watchdog.is_enabled
+      && !s.connection_watchdog.is_attempting_connection
+  })
+  .await;
+  tokio::time::sleep(Duration::from_secs(2)).await;
+  let state = client.application().await.unwrap();
+  assert!(!state.server.is_connected && !state.connection_watchdog.is_enabled);
+}
+
+#[tokio::test]
 async fn option_changes_reach_the_client_and_flag_a_reconnect_only_when_needed() {
   let Some(server) = soulfind::server() else {
     return;

@@ -96,3 +96,36 @@ fn reaches_differently(previous: &Options, current: &Options) -> bool {
     || previous.password != current.password
     || previous.connection != current.connection
 }
+
+#[cfg(test)]
+mod tests {
+  use std::time::Duration;
+
+  use serde_json::json;
+
+  use crate::testing::{app, request};
+
+  #[tokio::test]
+  async fn a_live_change_reaches_the_client_without_a_reconnect() {
+    let app = app(
+      "remote_configuration = true\n[web.authentication]\n\
+       trusted_networks = [\"127.0.0.0/8\"]\n",
+      &[],
+    )
+    .await;
+    let change =
+      json!({ "set": { "transfers.upload.speed_limit": 64, "transfers.upload.slots": 3 } });
+    let answer = app
+      .send(request("PATCH", "/api/v0/options", Some(change)))
+      .await;
+    assert_eq!(answer.status, 200, "{:?}", answer.body);
+    let client = app.state.network.client();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    while client.options().maximum_upload_speed != 64 {
+      assert!(tokio::time::Instant::now() < deadline, "never applied");
+      tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(client.options().maximum_concurrent_uploads, 3);
+    assert!(!app.state.state.current().pending_reconnect);
+  }
+}
