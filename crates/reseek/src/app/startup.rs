@@ -88,6 +88,12 @@ pub(super) fn warn_about(options: &Options, logging: &Logging) {
   if options.logger.loki.is_some() {
     warn!("forwarding logs to Grafana Loki is not available in this build; logger.loki ignored");
   }
+  if options.web.files.serve_speed_limit.is_some() {
+    warn!(
+      "limiting the speed files are served at is not available in this build; \
+       web.files.serve_speed_limit ignored"
+    );
+  }
 }
 
 /// The warnings an enabled metrics endpoint calls for: no authentication, or the default
