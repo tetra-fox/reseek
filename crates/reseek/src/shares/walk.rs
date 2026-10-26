@@ -109,10 +109,15 @@ pub(super) fn directories_under(
     if cancel.is_cancelled() {
       break;
     }
-    // a directory that can not be read is left out, with everything under it
+    // a directory that can not be read is left out, with everything under it. walkdir yields
+    // the directory itself before it fails to list it, so it is taken back out here
     let entry = match entry {
       Ok(entry) => entry,
       Err(e) => {
+        if let Some(path) = e.path() {
+          found.retain(|taken| taken != path);
+          seen.remove(&key(path));
+        }
         if let Some(suppressed) = UNREADABLE.allow() {
           warn!(error = %e, suppressed, "a shared directory can not be read; it is left out");
         }
@@ -295,5 +300,37 @@ mod tests {
       .map(|p| p.strip_prefix(&music).unwrap().display().to_string())
       .collect();
     assert_eq!(names, ["", "A", "B"], "B/link is A again, A/loop the root");
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn a_directory_that_can_not_be_read_is_left_out_with_one_warning() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let music = dir.path().join("music");
+    std::fs::create_dir_all(music.join("open")).unwrap();
+    std::fs::create_dir_all(music.join("shut/inner")).unwrap();
+    std::fs::set_permissions(music.join("shut"), std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read_dir(music.join("shut")).is_ok() {
+      // run with privileges that read any directory, there is nothing to leave out
+      return;
+    }
+    let settings = settings(dir.path(), &[], &[], false);
+    let ((found, _), lines) = crate::testing::logged(|| {
+      directories_under(
+        &settings,
+        &music,
+        true,
+        &CancellationToken::new(),
+        &mut HashSet::new(),
+      )
+    });
+    std::fs::set_permissions(music.join("shut"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let names: Vec<_> = found
+      .iter()
+      .map(|p| p.strip_prefix(&music).unwrap().display().to_string())
+      .collect();
+    assert_eq!(names, ["", "open"]);
+    assert_eq!(lines.matches("can not be read").count(), 1, "{lines}");
   }
 }
