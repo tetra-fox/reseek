@@ -1,5 +1,7 @@
 //! Ending the transfers left unfinished when the daemon stops, or when it stopped without
-//! ending them, and finding the downloads among them to resume.
+//! ending them, and taking the downloads among them to resume. A download ended here is marked
+//! resumable; the first login after a start takes the marked downloads not removed since and
+//! clears every mark, so each is resumed once at most.
 
 use std::collections::BTreeMap;
 
@@ -11,14 +13,18 @@ use uuid::Uuid;
 
 use super::categories::UNFINISHED;
 use super::downloads::FileRequest;
-use super::{direction_at, direction_text};
+use super::{direction_at, direction_text, text_at};
 use crate::db::{Database, DbError, timestamp};
 
 /// Why a transfer left unfinished at the last stop ended.
 pub const SHUT_DOWN: &str = "Application shut down";
 
+/// The downloads to resume: the files of each user and batch.
+pub type Resumable = BTreeMap<(String, Option<Uuid>), Vec<FileRequest>>;
+
 /// Ends every transfer left unfinished, removed ones included, as `Completed, Errored` with
-/// [`SHUT_DOWN`] at the time of this call. Returns how many it ended.
+/// [`SHUT_DOWN`] at the time of this call, marking the downloads among them resumable. Returns
+/// how many it ended.
 pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
   let errored = TransferStates::Completed | TransferStates::Errored;
   let ended = db
@@ -37,13 +43,14 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
       tx.execute(
         &format!(
           "UPDATE Transfers SET State = ?1, StateDescription = ?2, EndedAt = ?3, \
-           Exception = ?4 WHERE {UNFINISHED}"
+           Exception = ?4, Resumable = (Direction = ?5 OR Resumable) WHERE {UNFINISHED}"
         ),
         params![
           errored.bits(),
           errored.to_string(),
           timestamp(Utc::now()),
           SHUT_DOWN,
+          direction_text(TransferDirection::Download),
         ],
       )?;
       tx.commit()?;
@@ -59,53 +66,43 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
   Ok(ended.len())
 }
 
-/// The downloads a stop ended, as [`end_unfinished`] ends them, that were not removed since:
-/// the ones to resume.
-pub async fn resumable(db: &Database) -> Result<Vec<Uuid>, DbError> {
-  let errored = TransferStates::Completed | TransferStates::Errored;
-  let rows = db
-    .read(move |conn| {
-      let mut statement = conn.prepare(
-        "SELECT Id FROM Transfers WHERE Direction = ?1 AND State = ?2 AND Exception = ?3 \
-         AND Removed = 0 ORDER BY RequestedAt, Id",
+/// Takes the downloads marked resumable that were not removed since, as files to enqueue
+/// grouped by user and batch, and clears the mark of every marked download, removed or not.
+pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
+  db.write(move |conn| {
+    let tx = conn.transaction()?;
+    let mut groups = Resumable::new();
+    {
+      let mut select = tx.prepare(
+        "SELECT Username, BatchId, Filename, Size FROM Transfers WHERE Resumable = 1 \
+         AND Direction = ?1 AND Removed = 0 ORDER BY RequestedAt, Id",
       )?;
-      let rows = statement.query_map(
-        params![
-          direction_text(TransferDirection::Download),
-          errored.bits(),
-          SHUT_DOWN
-        ],
-        |row| row.get::<_, String>(0),
+      let rows = select.query_map(
+        params![direction_text(TransferDirection::Download)],
+        |row| {
+          Ok((
+            text_at(row, 0)?,
+            row.get::<_, Option<String>>(1)?,
+            text_at(row, 2)?,
+            row.get::<_, i64>(3)?,
+          ))
+        },
       )?;
-      rows.collect::<rusqlite::Result<Vec<String>>>()
-    })
-    .await?;
-  // ids are written by the transfer engines as UUIDs; another one is not resumed
-  Ok(rows.iter().filter_map(|id| id.parse().ok()).collect())
-}
-
-/// The downloads of `ids` still not removed, as files to enqueue, grouped by user and batch.
-pub async fn resume_groups(
-  db: &Database,
-  ids: Vec<Uuid>,
-) -> Result<BTreeMap<(String, Option<Uuid>), Vec<FileRequest>>, DbError> {
-  db.read(move |conn| {
-    let mut groups: BTreeMap<(String, Option<Uuid>), Vec<FileRequest>> = BTreeMap::new();
-    for id in ids {
-      let Some(record) = super::store::get(conn, id)? else {
-        continue;
-      };
-      if record.removed {
-        continue;
+      for row in rows {
+        let (username, batch, filename, size) = row?;
+        // batch ids are written by the download engine as UUIDs; another one resumes alone
+        let batch = batch.and_then(|id| id.parse().ok());
+        groups
+          .entry((username, batch))
+          .or_default()
+          .push(FileRequest {
+            filename,
+            size: size.max(0).unsigned_abs(),
+          });
       }
-      groups
-        .entry((record.username, record.batch_id))
-        .or_default()
-        .push(FileRequest {
-          filename: record.filename,
-          size: record.size,
-        });
     }
+    tx.execute("UPDATE Transfers SET Resumable = 0 WHERE Resumable = 1", [])?;
+    tx.commit()?;
     Ok(groups)
   })
   .await
@@ -164,10 +161,56 @@ mod tests {
       }
     }
     assert_eq!(end_unfinished(&db).await.unwrap(), 0, "nothing is left");
-    let mut resumed = resumable(&db).await.unwrap();
-    resumed.sort();
-    let mut expected = vec![queued.id, unended.id];
+    let marked: Vec<String> = db
+      .read(|conn| {
+        conn
+          .prepare("SELECT Id FROM Transfers WHERE Resumable = 1 ORDER BY Id")?
+          .query_map([], |row| row.get(0))?
+          .collect()
+      })
+      .await
+      .unwrap();
+    let mut expected: Vec<String> = [queued.id, removed.id, unended.id]
+      .iter()
+      .map(Uuid::to_string)
+      .collect();
     expected.sort();
-    assert_eq!(resumed, expected, "downloads not removed");
+    assert_eq!(marked, expected, "the downloads ended, removed or not");
+  }
+
+  #[tokio::test]
+  async fn the_marked_downloads_are_taken_once_and_every_mark_is_cleared() {
+    let db = transfers().await;
+    let mut kept = Row::new("alice", TransferDirection::Download, 2 | 2048);
+    kept.filename = "a\\one.flac".to_string();
+    let removed = Row {
+      removed: true,
+      ..Row::new("alice", TransferDirection::Download, 8)
+    };
+    insert(&db, vec![kept, removed]).await;
+    end_unfinished(&db).await.unwrap();
+    let taken = take_resumable(&db).await.unwrap();
+    let files: Vec<(&str, &str)> = taken
+      .iter()
+      .flat_map(|((user, _), files)| {
+        files
+          .iter()
+          .map(move |f| (user.as_str(), f.filename.as_str()))
+      })
+      .collect();
+    assert_eq!(
+      files,
+      [("alice", "a\\one.flac")],
+      "only what was not removed"
+    );
+    assert!(
+      take_resumable(&db).await.unwrap().is_empty(),
+      "resumed once"
+    );
+    let marks: i64 = db
+      .read(|conn| conn.query_row("SELECT SUM(Resumable) FROM Transfers", [], |r| r.get(0)))
+      .await
+      .unwrap();
+    assert_eq!(marks, 0);
   }
 }

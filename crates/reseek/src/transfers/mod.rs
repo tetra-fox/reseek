@@ -23,7 +23,11 @@ pub use record::{COLUMNS, Record, transfer};
 /// `transfers.db`: the `Transfers` and `Batches` tables and each transfer's state history.
 pub static SCHEMA: Schema = db::schema!(
   "transfers",
-  ["0001_initial", "0002_local_path_history_files"]
+  [
+    "0001_initial",
+    "0002_local_path_history_files",
+    "0003_resumable"
+  ]
 );
 
 /// Opens `transfers.db` in `location`.
@@ -88,6 +92,7 @@ mod tests {
       .unwrap();
     for column in [
       "LocalPath",
+      "Resumable",
       "RemovedAt",
       "BatchId",
       "Attempts",

@@ -1,7 +1,7 @@
 //! The order the daemon's work starts in once it is built, and the order it stops in.
 //!
 //! Starting: the client's events and the options are followed, the transfers the last run left
-//! unfinished are ended and the downloads among them kept to resume after the login, the
+//! unfinished are ended and the downloads among them marked to resume after the login, the
 //! release feed is read, the shares are initialized, the clock starts, and then the watchdog
 //! connects, unless this is a relay agent, connecting is turned off or there are no
 //! credentials. Stopping, once the HTTP host has stopped: the watchdog stops, the client
@@ -27,9 +27,8 @@ pub(super) fn start(app: &AppState) {
 
 async fn run(app: AppState) {
   info!("Application started");
-  match cleanup::end_unfinished(&app.transfers).await {
-    Ok(_) => app.downloads.remember_resumable().await,
-    Err(e) => warn!(error = %e, "transfers left unfinished at the last stop not ended"),
+  if let Err(e) = cleanup::end_unfinished(&app.transfers).await {
+    warn!(error = %e, "transfers left unfinished at the last stop not ended");
   }
   let options = app.config.current().values.clone();
   let soulseek = &options.soulseek;

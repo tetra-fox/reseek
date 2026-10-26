@@ -21,6 +21,7 @@ mod tests;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use std::time::Duration;
 
@@ -89,8 +90,8 @@ pub struct Downloads {
   turns: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
   /// the enqueue calls of the API that may run at once
   enqueue_calls: Semaphore,
-  /// the downloads a stop interrupted, resumed after the first login
-  resumable: Mutex<Option<Vec<Uuid>>>,
+  /// whether the downloads a stop interrupted were resumed, which the first login does
+  resumed: AtomicBool,
   /// when each running download last asked its peer for its place in the queue
   asked: Mutex<HashMap<Uuid, Instant>>,
 }
@@ -158,7 +159,7 @@ impl Downloads {
       in_flight: Mutex::new(HashMap::new()),
       turns: Arc::default(),
       enqueue_calls: Semaphore::new(ENQUEUE_CALLS),
-      resumable: Mutex::new(None),
+      resumed: AtomicBool::new(false),
       asked: Mutex::new(HashMap::new()),
     })
   }
@@ -309,34 +310,15 @@ impl Downloads {
     );
   }
 
-  /// Takes the ids of the downloads a stop interrupted, to resume after the first login. Called
-  /// at startup, after the records left unfinished are ended.
-  pub async fn remember_resumable(&self) {
-    match cleanup::resumable(&self.db).await {
-      Ok(ids) => {
-        if !ids.is_empty() {
-          info!(
-            downloads = ids.len(),
-            "downloads interrupted at the last stop resume after login"
-          );
-        }
-        *lock(&self.resumable) = Some(ids);
-      }
-      Err(e) => warn!(error = %e, "downloads interrupted at the last stop not found"),
-    }
-  }
-
   /// Enqueues again the downloads a stop interrupted that were not removed since, each user's
-  /// together and each in its batch, as new downloads that supersede the old records. Runs
-  /// once, after the first login; a user that cannot be reached is logged.
+  /// together and each in its batch, as new downloads that supersede the old records. Only the
+  /// first call after a start does anything, which is after the first login; the marks are
+  /// cleared before the enqueues, so a user that cannot be reached is logged, not tried again.
   pub async fn resume(&self) {
-    let Some(ids) = lock(&self.resumable).take() else {
-      return;
-    };
-    if ids.is_empty() {
+    if self.resumed.swap(true, Ordering::AcqRel) {
       return;
     }
-    let groups = match cleanup::resume_groups(&self.db, ids).await {
+    let groups = match cleanup::take_resumable(&self.db).await {
       Ok(groups) => groups,
       Err(e) => return warn!(error = %e, "interrupted downloads not resumed"),
     };
