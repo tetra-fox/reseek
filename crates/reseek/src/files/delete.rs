@@ -142,13 +142,16 @@ fn remove(root: &Path, parents: &[&str], name: &str, kind: Kind) -> Result<(), F
       Err(Failure::Missing)
     }
     (Kind::File, _) => unlinkat(&dir, name, AtFlags::empty()).map_err(io_failure),
-    (Kind::Directory, _) => remove_tree(&dir, name).map_err(io_failure),
+    (Kind::Directory, _) => std::ffi::CString::new(name)
+      // a path from the API never holds a NUL, which the decoder refuses
+      .map_err(|_| io_failure(rustix::io::Errno::INVAL))
+      .and_then(|name| remove_tree(&dir, &name).map_err(io_failure)),
   }
 }
 
 /// Removes the directory `name` in `parent` with everything in it, never following a link.
 #[cfg(unix)]
-fn remove_tree(parent: &rustix::fd::OwnedFd, name: &str) -> rustix::io::Result<()> {
+fn remove_tree(parent: &rustix::fd::OwnedFd, name: &std::ffi::CStr) -> rustix::io::Result<()> {
   use rustix::fs::{AtFlags, Dir, FileType, Mode, OFlags, openat, statat, unlinkat};
 
   let fd = openat(
@@ -160,15 +163,14 @@ fn remove_tree(parent: &rustix::fd::OwnedFd, name: &str) -> rustix::io::Result<(
   let mut names = Vec::new();
   for entry in Dir::read_from(&fd)? {
     let entry = entry?;
-    let entry_name = entry.file_name().to_string_lossy().into_owned();
-    if entry_name != "." && entry_name != ".." {
+    let entry_name = entry.file_name().to_bytes();
+    if entry_name != b"." && entry_name != b".." {
       names.push(entry.file_name().to_owned());
     }
   }
   for entry in names {
     let stat = statat(&fd, entry.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)?;
     if FileType::from_raw_mode(stat.st_mode) == FileType::Directory {
-      let entry = entry.to_string_lossy().into_owned();
       remove_tree(&fd, &entry)?;
     } else {
       unlinkat(&fd, entry.as_c_str(), AtFlags::empty())?;
@@ -261,6 +263,18 @@ mod tests {
       403,
       "never the root"
     );
+  }
+
+  #[cfg(target_os = "linux")]
+  #[test]
+  fn a_tree_with_a_name_that_is_not_utf8_is_deleted_whole() {
+    use std::os::unix::ffi::OsStrExt;
+    let t = tree();
+    let odd = std::ffi::OsStr::from_bytes(b"caf\xe9");
+    std::fs::create_dir_all(t.root.join("album").join(odd)).unwrap();
+    std::fs::write(t.root.join("album").join(odd).join("x"), b"x").unwrap();
+    delete(&t.root, "album", Kind::Directory, &Writing::default()).unwrap();
+    assert!(!t.root.join("album").exists());
   }
 
   #[test]
