@@ -19,6 +19,14 @@ use tokio::sync::broadcast;
 #[path = "../../../soulseek-client/tests/support/soulfind.rs"]
 pub mod soulfind;
 
+/// A scripted peer, from the client's test harness, for what a real client never does.
+#[path = "../../../soulseek-client/tests/support/peer.rs"]
+pub mod peer;
+
+/// Files to send and an uploader that queues every request, from the client's test harness.
+#[path = "../../../soulseek-client/tests/support/transfers.rs"]
+pub mod transfers;
+
 /// How long a test waits for something that should happen promptly.
 pub const PATIENCE: Duration = Duration::from_secs(20);
 
@@ -143,9 +151,20 @@ pub const ACCOUNT: [(&str, &str); 2] =
 
 /// The daemon in `dir` logging in to `server` as `username`, with `extra` arguments.
 pub fn daemon(dir: &Path, server: &Soulfind, username: &str, extra: &[&str]) -> Daemon {
+  daemon_listening(dir, server, username, free_port(), extra)
+}
+
+/// [`daemon`], taking peers' connections on `listen`.
+pub fn daemon_listening(
+  dir: &Path,
+  server: &Soulfind,
+  username: &str,
+  listen: u16,
+  extra: &[&str],
+) -> Daemon {
   let address = server.address();
   let port = address.port().to_string();
-  let listen = free_port().to_string();
+  let listen = listen.to_string();
   let mut args = vec![
     "--slsk-address",
     "127.0.0.1",
