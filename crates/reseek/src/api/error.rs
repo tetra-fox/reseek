@@ -83,6 +83,16 @@ impl ApiError {
     Self::new(StatusCode::NOT_FOUND, error, None)
   }
 
+  /// A 413: what was asked for is larger than a configured limit.
+  pub fn too_large(error: impl Into<String>) -> Self {
+    Self::new(StatusCode::PAYLOAD_TOO_LARGE, error, None)
+  }
+
+  /// A 416: the byte range asked for is not in the file.
+  pub fn range_not_satisfiable(error: impl Into<String>) -> Self {
+    Self::new(StatusCode::RANGE_NOT_SATISFIABLE, error, None)
+  }
+
   /// A 409: the state does not allow it, such as a duplicate or a stale revision.
   pub fn conflict(error: impl Into<String>, detail: Option<String>) -> Self {
     Self::new(StatusCode::CONFLICT, error, detail)
