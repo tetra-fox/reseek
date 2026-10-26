@@ -221,17 +221,48 @@ async fn a_privileged_user_is_queued_past_the_limits() {
 }
 
 #[tokio::test]
-async fn a_request_for_a_file_queued_already_is_accepted_without_a_second_upload() {
+async fn a_running_upload_stands_for_a_new_request_and_an_ended_one_is_superseded() {
   let (_files, app) = shared_app("").await;
   let mut queued = Row::new("alice", TransferDirection::Upload, 2 | 2048);
   queued.filename = SHARED.to_string();
-  let id = queued.id;
+  let old = queued.id;
   insert(&app.state.transfers, vec![queued]).await;
+  let uploads = &app.state.uploads;
+  lock(&uploads.in_flight).insert(
+    old,
+    InFlight {
+      cancel: CancellationToken::new(),
+      remove: false,
+      reason: None,
+      ended: false,
+    },
+  );
+  let listed = async || -> Vec<Uuid> {
+    let (_, body) = send(&app, "GET", "/api/v0/transfers/uploads/alice", None).await;
+    let user: UserResponse = serde_json::from_value(body).unwrap();
+    user
+      .directories
+      .iter()
+      .flat_map(|d| d.files.iter().map(|f| f.id))
+      .collect()
+  };
   assert_eq!(asked(&app, "alice", SHARED).await, None);
-  let (_, body) = send(&app, "GET", "/api/v0/transfers/uploads/alice", None).await;
-  let user: UserResponse = serde_json::from_value(body).unwrap();
-  let ids: Vec<Uuid> = user.directories[0].files.iter().map(|f| f.id).collect();
-  assert_eq!(ids, [id]);
+  assert_eq!(listed().await, [old], "the running upload stands for it");
+
+  // the client ended the upload and told the peer, which asks again before the task wrote it
+  lock(&uploads.in_flight).get_mut(&old).unwrap().ended = true;
+  assert_eq!(asked(&app, "alice", SHARED).await, None);
+  let now = listed().await;
+  assert_eq!(now.len(), 1);
+  assert_ne!(now[0], old, "a new upload");
+  let superseded = app
+    .state
+    .transfers
+    .read(move |conn| store::get(conn, old))
+    .await
+    .unwrap()
+    .unwrap();
+  assert!(superseded.removed);
 }
 
 #[tokio::test]
@@ -377,6 +408,7 @@ async fn blocking_a_user_cancels_their_queued_uploads() {
         cancel: cancel.clone(),
         remove: false,
         reason: None,
+        ended: false,
       },
     );
   }

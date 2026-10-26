@@ -63,6 +63,8 @@ struct InFlight {
   remove: bool,
   /// why it was cancelled, when not by a plain cancel
   reason: Option<&'static str>,
+  /// the client's upload ended, before the task has written how
+  ended: bool,
 }
 
 /// The upload engine.

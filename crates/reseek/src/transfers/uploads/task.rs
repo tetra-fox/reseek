@@ -98,7 +98,17 @@ impl Uploads {
       }
     };
     let (states_sent, mut states) = mpsc::channel(STATES);
+    let ending = self.this();
+    let id = record.id;
     let state_changed: StateChanged = Arc::new(move |_, snapshot: &Snapshot| {
+      // marked before the client tells the peer, which may ask again at once
+      if snapshot
+        .state
+        .contains(soulseek_client::TransferState::COMPLETED)
+        && let Some(entry) = lock(&ending.in_flight).get_mut(&id)
+      {
+        entry.ended = true;
+      }
       if let Err(e) = states_sent.try_send(snapshot.clone()) {
         warn!(error = %e, "upload state not recorded");
       }

@@ -1,6 +1,10 @@
 //! Recording an accepted upload request: unless an upload of the same file to the same user is
 //! queued or running already, a record is written, the user's earlier records of the file are
-//! taken out of the listings, the upload enters the queue, and its task starts.
+//! taken out of the listings, the upload enters the queue, and its task starts. An upload whose
+//! client side has ended does not stand for a new request, though its task may not have written
+//! how it ended yet: a peer told the upload failed asks again at once.
+
+use std::collections::HashSet;
 
 use api_types::live::LiveFrame;
 use api_types::transfers::TransferDirection;
@@ -29,9 +33,14 @@ enum Written {
 }
 
 /// Writes `record` and takes the user's earlier records of the file out of the listings, in
-/// one transaction, unless an upload of the file to the user is unfinished, or `tracked` says
-/// the client runs one.
-fn write(conn: &mut Connection, record: &Record, tracked: bool) -> rusqlite::Result<Written> {
+/// one transaction, unless an unfinished upload of the file to the user is among `live`, the
+/// uploads whose client side has not ended, or `tracked` says the client runs one.
+fn write(
+  conn: &mut Connection,
+  record: &Record,
+  tracked: bool,
+  live: &HashSet<String>,
+) -> rusqlite::Result<Written> {
   let tx = conn.transaction()?;
   let running: Vec<String> = tx
     .prepare(&format!(
@@ -46,7 +55,10 @@ fn write(conn: &mut Connection, record: &Record, tracked: bool) -> rusqlite::Res
       ],
       |row| row.get(0),
     )?
-    .collect::<rusqlite::Result<_>>()?;
+    .collect::<rusqlite::Result<Vec<String>>>()?
+    .into_iter()
+    .filter(|id| live.contains(id))
+    .collect();
   if !running.is_empty() {
     return Ok(Written::Running(running));
   }
@@ -77,18 +89,28 @@ impl Uploads {
     let id = record.id;
     // the handle exists before the record can be seen, so a cancel always finds it
     let cancel = self.shutdown.child_token();
-    lock(&self.in_flight).insert(
-      id,
-      InFlight {
-        cancel: cancel.clone(),
-        remove: false,
-        reason: None,
-      },
-    );
+    let live: HashSet<String> = {
+      let mut in_flight = lock(&self.in_flight);
+      let live = in_flight
+        .iter()
+        .filter(|(_, entry)| !entry.ended)
+        .map(|(id, _)| id.to_string())
+        .collect();
+      in_flight.insert(
+        id,
+        InFlight {
+          cancel: cancel.clone(),
+          remove: false,
+          reason: None,
+          ended: false,
+        },
+      );
+      live
+    };
     let written = record.clone();
     let result = self
       .db
-      .write(move |conn| write(conn, &written, tracked))
+      .write(move |conn| write(conn, &written, tracked, &live))
       .await;
     let superseded = match result {
       Ok(Written::Inserted(superseded)) => superseded,
