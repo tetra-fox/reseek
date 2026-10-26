@@ -9,7 +9,6 @@ use std::sync::Arc;
 use api_types::blocking::BlockScope;
 use api_types::live::LiveFrame;
 use api_types::transfers::{EnqueueDownloadBatchItem, EnqueueFailure, Transfer, TransferDirection};
-use chrono::Utc;
 use rusqlite::params;
 use soulseek_client::ClientError;
 use tokio::sync::Semaphore;
@@ -19,7 +18,6 @@ use uuid::Uuid;
 use super::batches::{self, BatchRow, InsertError};
 use super::{Downloads, InFlight, lock};
 use crate::api::error::ApiError;
-use crate::db::timestamp;
 use crate::safety::traverses;
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::removal::{self, Removed};
@@ -338,27 +336,7 @@ fn insert_superseding(
   record: &Record,
 ) -> rusqlite::Result<Vec<Removed>> {
   store::insert(conn, record)?;
-  let mut statement = conn.prepare_cached(
-    "UPDATE Transfers SET Removed = 1, RemovedAt = ?5 WHERE Username = ?1 AND Direction = ?2 \
-     AND Filename = ?3 AND Id != ?4 AND Removed = 0 RETURNING Id",
-  )?;
-  let rows = statement.query_map(
-    params![
-      record.username,
-      direction_text(TransferDirection::Download),
-      record.filename,
-      record.id.to_string(),
-      timestamp(Utc::now()),
-    ],
-    |row| row.get::<_, String>(0),
-  )?;
-  let ids = rows.collect::<rusqlite::Result<Vec<_>>>()?;
-  Ok(
-    super::ids(ids)
-      .into_iter()
-      .map(|id| (id, record.username.clone()))
-      .collect(),
-  )
+  removal::supersede(conn, record)
 }
 
 #[cfg(test)]

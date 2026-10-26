@@ -8,7 +8,7 @@ use rusqlite::{Connection, params};
 use uuid::Uuid;
 
 use super::categories::COMPLETED;
-use super::direction_text;
+use super::{Record, direction_text};
 use crate::db::{Database, DbError, timestamp};
 use crate::live::Live;
 
@@ -110,6 +110,23 @@ pub fn remove_where(
        AND ({condition}) RETURNING Id, Username"
     ),
     params![value, direction_text(direction), timestamp(Utc::now())],
+  )
+}
+
+/// Takes the records of `record`'s file, peer and direction other than `record` out of the
+/// listings, for the new record that supersedes them.
+pub fn supersede(conn: &Connection, record: &Record) -> rusqlite::Result<Vec<Removed>> {
+  returned(
+    conn,
+    "UPDATE Transfers SET Removed = 1, RemovedAt = ?5 WHERE Username = ?1 AND Direction = ?2 \
+     AND Filename = ?3 AND Id != ?4 AND Removed = 0 RETURNING Id, Username",
+    params![
+      record.username,
+      direction_text(record.direction),
+      record.filename,
+      record.id.to_string(),
+      timestamp(Utc::now()),
+    ],
   )
 }
 

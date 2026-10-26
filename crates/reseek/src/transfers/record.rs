@@ -84,6 +84,17 @@ impl Record {
     }
   }
 
+  /// A new upload of `filename`, `size` bytes, to `username`, asked for and queued now.
+  pub fn upload(username: &str, filename: &str, size: u64) -> Self {
+    let now = Utc::now();
+    Self {
+      direction: TransferDirection::Upload,
+      requested_at: now,
+      enqueued_at: Some(now),
+      ..Self::download(username, filename, size, None)
+    }
+  }
+
   /// The record a row of [`COLUMNS`] holds.
   pub fn read(row: &Row) -> rusqlite::Result<Self> {
     let text = |i: usize| row.get::<_, Option<String>>(i);
@@ -165,6 +176,16 @@ impl Record {
       local_path: self.local_path.clone(),
       state_history: None,
     }
+  }
+
+  /// Takes the times, the bytes moved and the speed the client's `snapshot` of the transfer
+  /// has.
+  pub fn take_figures(&mut self, snapshot: &soulseek_client::Transfer) {
+    let time = |at: Option<std::time::SystemTime>| at.map(DateTime::<Utc>::from);
+    self.started_at = time(snapshot.start_time);
+    self.ended_at = time(snapshot.end_time);
+    self.bytes_transferred = snapshot.bytes_transferred;
+    self.average_speed = snapshot.average_speed;
   }
 
   /// Whether the transfer has finished, whatever the outcome.

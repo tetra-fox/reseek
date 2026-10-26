@@ -1,5 +1,6 @@
-//! Writing transfer records: a new record, a record written whole, a running transfer's
-//! progress, and the states each transfer entered, of which the newest 64 are kept.
+//! Writing transfer records: a new record, a record written whole, what a running transfer
+//! changes, its progress, and the states each transfer entered, of which the newest 64 are
+//! kept.
 
 use api_types::transfers::{TransferStateChange, TransferStates};
 use chrono::{DateTime, Utc};
@@ -73,6 +74,27 @@ pub fn save(conn: &Connection, record: &Record) -> rusqlite::Result<bool> {
       record.removed,
       timestamp(Utc::now()),
       record.local_path,
+    ],
+  )?;
+  Ok(changed > 0)
+}
+
+/// Writes what a running transfer changes: its state, times, bytes, speed and error, leaving
+/// the rest, whether it was removed included, as the row has it. Returns whether its row was
+/// there.
+pub fn save_state(conn: &Connection, record: &Record) -> rusqlite::Result<bool> {
+  let changed = conn.execute(
+    "UPDATE Transfers SET State = ?2, StateDescription = ?3, StartedAt = ?4, EndedAt = ?5, \
+     BytesTransferred = ?6, AverageSpeed = ?7, Exception = ?8 WHERE Id = ?1",
+    params![
+      record.id.to_string(),
+      record.state.bits(),
+      record.state.to_string(),
+      time_text(record.started_at),
+      time_text(record.ended_at),
+      i64::try_from(record.bytes_transferred).unwrap_or(i64::MAX),
+      record.average_speed,
+      record.exception,
     ],
   )?;
   Ok(changed > 0)
@@ -175,6 +197,34 @@ mod tests {
       .await
       .unwrap();
     assert!(removed_at.is_some(), "removing it stamps when");
+  }
+
+  #[tokio::test]
+  async fn a_state_written_leaves_a_removal_made_meanwhile() {
+    let db = transfers().await;
+    let mut record = Record::download("alice", "a.flac", 10, None);
+    let written = record.clone();
+    db.write(move |conn| insert(conn, &written)).await.unwrap();
+    let id = record.id;
+    db.write(move |conn| {
+      conn.execute(
+        "UPDATE Transfers SET Removed = 1 WHERE Id = ?1",
+        [id.to_string()],
+      )
+    })
+    .await
+    .unwrap();
+    record.state = TransferStates::Completed | TransferStates::Cancelled;
+    record.ended_at = Some(Utc::now());
+    let saved = record.clone();
+    assert!(
+      db.write(move |conn| save_state(conn, &saved))
+        .await
+        .unwrap()
+    );
+    let read = db.read(move |conn| get(conn, id)).await.unwrap().unwrap();
+    assert!(read.removed);
+    assert_eq!(read.state, record.state);
   }
 
   #[tokio::test]

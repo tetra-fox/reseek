@@ -6,6 +6,7 @@ use api_types::transfers::{
   DirectoryResponse, SortOrder, Transfer, TransferDirection, TransferListQuery, TransferSort,
   TransferStateFilter, UserResponse,
 };
+use chrono::{DateTime, Utc};
 use rusqlite::params_from_iter;
 use rusqlite::types::Value;
 use uuid::Uuid;
@@ -32,15 +33,59 @@ pub async fn grouped(
   include_removed: bool,
   username: Option<String>,
 ) -> Result<Vec<UserResponse>, DbError> {
+  let range = Range {
+    include_removed,
+    ..Range::default()
+  };
+  grouped_rows(db, direction, username, range).await
+}
+
+/// Which transfers a grouped listing holds, besides their direction and peer.
+#[derive(Clone, Debug, Default)]
+pub struct Range {
+  /// removed ones too
+  pub include_removed: bool,
+  /// only those asked for at or after this time
+  pub since: Option<DateTime<Utc>>,
+  /// only those asked for before this time
+  pub until: Option<DateTime<Utc>>,
+  /// at most this many, the first asked for
+  pub limit: Option<u32>,
+}
+
+/// The transfers of `direction` in `range`, grouped as [`grouped`] groups them.
+pub async fn grouped_in(
+  db: &Database,
+  direction: TransferDirection,
+  range: Range,
+) -> Result<Vec<UserResponse>, DbError> {
+  grouped_rows(db, direction, None, range).await
+}
+
+async fn grouped_rows(
+  db: &Database,
+  direction: TransferDirection,
+  username: Option<String>,
+  range: Range,
+) -> Result<Vec<UserResponse>, DbError> {
   let transfers = db
     .read(move |conn| {
       let sql = format!(
         "SELECT {COLUMNS} FROM Transfers WHERE Direction = ?1 AND (?2 OR Removed = 0) \
-         AND (?3 IS NULL OR Username = ?3) ORDER BY RequestedAt, Id"
+         AND (?3 IS NULL OR Username = ?3) AND (?4 IS NULL OR RequestedAt >= ?4) \
+         AND (?5 IS NULL OR RequestedAt < ?5) ORDER BY RequestedAt, Id LIMIT ?6"
       );
       let mut statement = conn.prepare_cached(&sql)?;
       let rows = statement.query_map(
-        rusqlite::params![direction_text(direction), include_removed, username],
+        rusqlite::params![
+          direction_text(direction),
+          range.include_removed,
+          username,
+          range.since.map(timestamp),
+          range.until.map(timestamp),
+          // no limit is SQLite's -1
+          range.limit.map_or(-1, i64::from),
+        ],
         transfer,
       )?;
       rows.collect::<rusqlite::Result<Vec<Transfer>>>()
@@ -261,6 +306,44 @@ mod tests {
       .await
       .unwrap();
     assert_eq!(with_removed.last().unwrap().username, "carol");
+  }
+
+  #[tokio::test]
+  async fn a_grouped_range_holds_what_was_asked_for_between_its_times_up_to_its_limit() {
+    let db = transfers().await;
+    let at = |minute: u32| {
+      let mut row = Row::new("alice", TransferDirection::Upload, 48);
+      row.filename = format!("d\\{minute}.flac");
+      row.requested_at = format!("2026-01-01T00:{minute:02}:00Z").parse().unwrap();
+      row
+    };
+    insert(&db, vec![at(1), at(2), at(3), at(4)]).await;
+    let range = Range {
+      include_removed: false,
+      since: Some("2026-01-01T00:02:00Z".parse().unwrap()),
+      until: Some("2026-01-01T00:04:00Z".parse().unwrap()),
+      limit: None,
+    };
+    let names = |users: Vec<UserResponse>| -> Vec<String> {
+      users
+        .into_iter()
+        .flat_map(|u| u.directories)
+        .flat_map(|d| d.files)
+        .map(|f| f.filename)
+        .collect()
+    };
+    let listed = grouped_in(&db, TransferDirection::Upload, range.clone())
+      .await
+      .unwrap();
+    assert_eq!(names(listed), ["d\\2.flac", "d\\3.flac"]);
+    let limited = Range {
+      limit: Some(1),
+      ..range
+    };
+    let listed = grouped_in(&db, TransferDirection::Upload, limited)
+      .await
+      .unwrap();
+    assert_eq!(names(listed), ["d\\2.flac"]);
   }
 
   #[tokio::test]
