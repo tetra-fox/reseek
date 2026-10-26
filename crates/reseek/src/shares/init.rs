@@ -102,7 +102,10 @@ impl Shares {
         .backup
         .clone()
         .ok_or("Share cache backup is missing, corrupt, or is out of date")?;
-      storage::valid(&backup)
+      let checked = backup.clone();
+      tokio::task::spawn_blocking(move || storage::valid(&checked))
+        .await
+        .map_err(|e| format!("Share cache backup was not checked: {e}"))?
         .map_err(|e| format!("Share cache backup is missing, corrupt, or is out of date: {e}"))?;
       info!("Share cache backup validated. Attempting to restore...");
       storage::restore(&self.db, &backup)
