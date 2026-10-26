@@ -27,6 +27,9 @@ pub struct Context {
   pub default_incomplete: PathBuf,
   /// the directory of the running program, which `web.content_path` is relative to
   pub program_dir: PathBuf,
+  /// whether the daemon started with case-sensitive patterns: the flag takes a restart, so the
+  /// search request filters are compiled with it until then, and checked the same way
+  pub started_case_sensitive: bool,
 }
 
 /// Every problem with `options`, all of them rather than the first.
@@ -83,6 +86,7 @@ mod tests {
       default_downloads: dir.join("downloads"),
       default_incomplete: dir.join("incomplete"),
       program_dir: dir.to_path_buf(),
+      started_case_sensitive: false,
     }
   }
 

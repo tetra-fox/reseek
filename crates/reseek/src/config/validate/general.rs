@@ -60,7 +60,7 @@ pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
   }
   check_blacklist(&options.blacklist, report);
   for filter in &options.filters.search.request {
-    if !is_regex(filter, options.flags.case_sensitive_regex) {
+    if !is_regex(filter, context.started_case_sensitive) {
       report.add(
         "filters.search.request",
         format!("Search request filter '{filter}' is not a valid regular expression"),
@@ -309,6 +309,7 @@ mod tests {
       default_downloads: dir.path().join("downloads"),
       default_incomplete: dir.path().join("incomplete"),
       program_dir: dir.path().to_path_buf(),
+      started_case_sensitive: false,
     };
     let mut report = Report::default();
     check(options, &context, &mut report);

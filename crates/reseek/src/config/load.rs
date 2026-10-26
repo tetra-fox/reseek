@@ -3,6 +3,7 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 
 use cascade::{Layers, Overrides, Schema};
 
@@ -114,6 +115,8 @@ pub fn layers(
 ) -> Layers<Options> {
   let defaults = defaults.clone();
   let program_dir = program_dir();
+  // the first options validated are the ones the daemon starts with
+  let started = Arc::new(OnceLock::new());
   let mut layers = Layers::<Options>::new()
     .env(sources.env.clone())
     .files(&sources.files.dir, sources.files.names.clone())
@@ -127,12 +130,14 @@ pub fn layers(
         .or_else(|| defaults.data().map(Path::to_path_buf))
         .unwrap_or_default();
       let (default_downloads, default_incomplete) = default_downloads(&data);
+      let started_case_sensitive = *started.get_or_init(|| options.flags.case_sensitive_regex);
       validate(
         options,
         &Context {
           default_downloads,
           default_incomplete,
           program_dir: program_dir.clone(),
+          started_case_sensitive,
         },
       )
     });
@@ -194,6 +199,40 @@ mod tests {
       files.names,
       ["config.toml", "/run/secrets/reseek.toml", "config.d/*.toml"]
     );
+  }
+
+  /// A watcher over `config.toml` in `dir` holding `text`.
+  fn watching(dir: &Path, text: &str) -> cascade::Watcher<Options> {
+    std::fs::write(dir.join("config.toml"), text).unwrap();
+    let sources = Sources {
+      env: Vec::new(),
+      files: ConfigFiles::new(&[], dir),
+      cli: Vec::new(),
+    };
+    cascade::Watcher::new(layers(&sources, &Defaults::new(Some(dir)), None)).unwrap()
+  }
+
+  #[tokio::test]
+  async fn search_filters_are_checked_with_the_flag_the_daemon_started_with() {
+    // compiles matching case, and is too large to compile ignoring it
+    let filter = "[a-z]{50000}";
+    let reloaded = |sensitive: bool| {
+      format!(
+        "[flags]\ncase_sensitive_regex = {sensitive}\n[filters.search]\nrequest = ['{filter}']\n"
+      )
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let watcher = watching(dir.path(), "");
+    std::fs::write(dir.path().join("config.toml"), reloaded(true)).unwrap();
+    // started ignoring case, the filter would not be used
+    let refused = watcher.reload().await.unwrap_err().to_string();
+    assert!(refused.contains("filters.search.request"), "{refused}");
+
+    let dir = tempfile::tempdir().unwrap();
+    let watcher = watching(dir.path(), "[flags]\ncase_sensitive_regex = true\n");
+    std::fs::write(dir.path().join("config.toml"), reloaded(false)).unwrap();
+    watcher.reload().await.unwrap();
+    assert_eq!(watcher.current().values.filters.search.request, [filter]);
   }
 
   #[test]

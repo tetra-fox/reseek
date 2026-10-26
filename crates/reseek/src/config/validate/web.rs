@@ -244,6 +244,7 @@ mod tests {
       default_downloads: dir.path().join("downloads"),
       default_incomplete: dir.path().join("incomplete"),
       program_dir: dir.path().to_path_buf(),
+      started_case_sensitive: false,
     };
     let mut report = Report::default();
     check(web, &context, &mut report);
