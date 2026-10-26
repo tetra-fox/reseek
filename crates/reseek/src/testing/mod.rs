@@ -208,6 +208,36 @@ impl Stream {
   }
 }
 
+/// What `f` logged on this thread while it ran, one line per event as the text sink writes it,
+/// without colour; for tests whose behaviour is a log line.
+pub fn logged<T>(f: impl FnOnce() -> T) -> (T, String) {
+  #[derive(Clone, Default)]
+  struct Lines(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+  impl std::io::Write for Lines {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+      self
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .extend_from_slice(bytes);
+      Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+      Ok(())
+    }
+  }
+  let lines = Lines::default();
+  let writer = lines.clone();
+  let subscriber = tracing_subscriber::fmt()
+    .with_writer(move || writer.clone())
+    .with_ansi(false)
+    .with_max_level(tracing::Level::TRACE)
+    .finish();
+  let result = tracing::subscriber::with_default(subscriber, f);
+  let text = String::from_utf8_lossy(&lines.0.lock().unwrap()).into_owned();
+  (result, text)
+}
+
 /// `request` with the header `name` set to `value`.
 pub fn with(mut request: Request<Body>, name: &'static str, value: &str) -> Request<Body> {
   request.headers_mut().append(name, value.parse().unwrap());

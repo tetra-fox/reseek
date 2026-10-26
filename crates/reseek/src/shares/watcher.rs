@@ -35,7 +35,7 @@ static WATCH_FAILED: LogLimiter = LogLimiter::new();
 pub(super) struct Watching {
   watcher: RecommendedWatcher,
   /// the share directories watched
-  roots: Vec<PathBuf>,
+  pub(super) roots: Vec<PathBuf>,
 }
 
 impl Watching {

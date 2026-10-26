@@ -84,22 +84,27 @@ pub(super) fn warn_about(options: &Options, logging: &Logging) {
       );
     }
   }
-  let metrics = &options.metrics;
-  if metrics.enabled {
-    let credentials = &metrics.authentication;
-    let defaults = crate::config::MetricsAuthentication::default();
-    if credentials.disabled {
-      warn!("Authentication for the metrics endpoint is DISABLED");
-    } else if credentials.username == defaults.username && credentials.password == defaults.password
-    {
-      warn!(
-        "the metrics endpoint still has the default credentials; set \
-         metrics.authentication.username and metrics.authentication.password"
-      );
-    }
-  }
+  warn_about_metrics(&options.metrics);
   if options.logger.loki.is_some() {
     warn!("forwarding logs to Grafana Loki is not available in this build; logger.loki ignored");
+  }
+}
+
+/// The warnings an enabled metrics endpoint calls for: no authentication, or the default
+/// credentials.
+fn warn_about_metrics(metrics: &crate::config::Metrics) {
+  if !metrics.enabled {
+    return;
+  }
+  let credentials = &metrics.authentication;
+  let defaults = crate::config::MetricsAuthentication::default();
+  if credentials.disabled {
+    warn!("Authentication for the metrics endpoint is DISABLED");
+  } else if credentials.username == defaults.username && credentials.password == defaults.password {
+    warn!(
+      "the metrics endpoint still has the default credentials; set \
+       metrics.authentication.username and metrics.authentication.password"
+    );
   }
 }
 
@@ -127,5 +132,38 @@ pub(super) fn config_error(error: &cascade::Error) -> String {
       text
     }
     other => format!("Invalid configuration: {other}"),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::config::Metrics;
+  use crate::testing::logged;
+
+  #[test]
+  fn an_open_or_default_metrics_endpoint_is_warned_about() {
+    let mut metrics = Metrics {
+      enabled: true,
+      ..Metrics::default()
+    };
+    let ((), text) = logged(|| warn_about_metrics(&metrics));
+    assert!(
+      text.contains("WARN") && text.contains("default credentials"),
+      "{text}"
+    );
+    metrics.authentication.disabled = true;
+    let ((), text) = logged(|| warn_about_metrics(&metrics));
+    assert!(
+      text.contains("Authentication for the metrics endpoint is DISABLED"),
+      "{text}"
+    );
+    metrics.authentication.disabled = false;
+    metrics.authentication.password = "something else".into();
+    let ((), text) = logged(|| warn_about_metrics(&metrics));
+    assert!(text.is_empty(), "{text}");
+    metrics.enabled = false;
+    metrics.authentication.disabled = true;
+    assert!(logged(|| warn_about_metrics(&metrics)).1.is_empty());
   }
 }

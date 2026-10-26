@@ -210,3 +210,59 @@ pub fn prune_under(tx: &Transaction, masked: &str, timestamp: i64) -> rusqlite::
   )?;
   Ok(files)
 }
+
+#[cfg(test)]
+mod tests {
+  use super::super::tests::{file, index};
+  use super::*;
+  use crate::testing::logged;
+
+  #[tokio::test]
+  async fn two_local_files_with_one_remote_name_are_warned_about() {
+    let db = index().await;
+    let (_, text) = db
+      .write(|conn| {
+        Ok(logged(|| {
+          let tx = conn.transaction().unwrap();
+          let mut first = file("Music\\a_b\\01.mp3");
+          first.original = b"/music/a\\b/01.mp3".to_vec();
+          let mut second = file("Music\\a_b\\01.mp3");
+          second.original = b"/music/a_b/01.mp3".to_vec();
+          for rows in [vec![first], vec![second]] {
+            let directory = DirectoryRows {
+              name: "Music\\a_b".to_string(),
+              files: rows,
+            };
+            write_directory(&tx, 7, &directory).unwrap();
+          }
+          tx.commit().unwrap();
+        }))
+      })
+      .await
+      .unwrap();
+    assert!(
+      text.contains("two local files share one remote name"),
+      "{text}"
+    );
+    let (_, again) = db
+      .write(|conn| {
+        Ok(logged(|| {
+          let tx = conn.transaction().unwrap();
+          let mut same = file("Music\\a_b\\01.mp3");
+          same.original = b"/music/a_b/01.mp3".to_vec();
+          let directory = DirectoryRows {
+            name: "Music\\a_b".to_string(),
+            files: vec![same],
+          };
+          write_directory(&tx, 8, &directory).unwrap();
+          tx.commit().unwrap();
+        }))
+      })
+      .await
+      .unwrap();
+    assert!(
+      !again.contains("two local files share one remote name"),
+      "a later scan of the same file is no collision: {again}"
+    );
+  }
+}
