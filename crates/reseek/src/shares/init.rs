@@ -68,7 +68,8 @@ impl Shares {
         Err(e) => {
           warn!(error = e, "Error initializing shares");
           info!("Re-attempting initialization");
-          if !self.scan_at_startup(false).await {
+          // the index that failed to load is not trusted, so no row of it is reused
+          if !self.scan_at_startup(true).await {
             error!(
               "Failed to initialize shares, and an attempt to force a full scan to repair failed. \
                Sharing is disabled"

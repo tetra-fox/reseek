@@ -196,49 +196,86 @@ async fn a_removed_share_marks_a_scan_pending_and_is_no_longer_watched() {
   assert_eq!(shares.listed().iter().filter(|s| !s.excluded).count(), 1);
 }
 
+/// What the index holds as the attributes of `Music\Album\01.mp3`.
+async fn attributes(shares: &Shares) -> String {
+  shares
+    .db
+    .read(|conn| {
+      conn.query_row(
+        "SELECT attributeJson FROM files WHERE maskedFilename = 'Music\\Album\\01.mp3'",
+        [],
+        |row| row.get::<_, String>(0),
+      )
+    })
+    .await
+    .unwrap()
+}
+
+/// Attributes no read of `01.mp3` gives, so a row that still has them was reused.
+const MARKER: &str = r#"[{"type":"BitRate","value":12345}]"#;
+
+/// Puts [`MARKER`] in place of the attributes of `Music\Album\01.mp3`.
+async fn mark_attributes(shares: &Shares) {
+  shares
+    .db
+    .write(|conn| {
+      conn.execute(
+        "UPDATE files SET attributeJson = ?1 WHERE maskedFilename = 'Music\\Album\\01.mp3'",
+        [MARKER],
+      )
+    })
+    .await
+    .unwrap();
+}
+
 #[tokio::test]
 async fn an_incremental_scan_reuses_unchanged_rows_and_a_forced_one_reads_again() {
   let (files, app) = shared_app().await;
   let shares = app.state.shares.clone();
   eventually(async || lock(&shares.running).is_none()).await;
-  let marker = r#"[{"type":"BitRate","value":12345}]"#;
-  let attributes = |shares: Arc<Shares>| async move {
-    shares
-      .db
-      .read(|conn| {
-        conn.query_row(
-          "SELECT attributeJson FROM files WHERE maskedFilename = 'Music\\Album\\01.mp3'",
-          [],
-          |row| row.get::<_, String>(0),
-        )
-      })
-      .await
-      .unwrap()
-  };
-  shares
-    .db
-    .write(move |conn| {
-      conn.execute(
-        "UPDATE files SET attributeJson = ?1 WHERE maskedFilename = 'Music\\Album\\01.mp3'",
-        [marker],
-      )
-    })
-    .await
-    .unwrap();
+  mark_attributes(&shares).await;
   shares.scan(false).unwrap();
   eventually(async || lock(&shares.running).is_none()).await;
   assert_eq!(
-    attributes(shares.clone()).await,
-    marker,
+    attributes(&shares).await,
+    MARKER,
     "size and time unchanged: reused"
   );
   shares.scan(true).unwrap();
   eventually(async || lock(&shares.running).is_none()).await;
   assert_ne!(
-    attributes(shares.clone()).await,
-    marker,
+    attributes(&shares).await,
+    MARKER,
     "a forced scan reads it again"
   );
+  drop(files);
+}
+
+#[tokio::test]
+async fn an_index_that_fails_to_load_is_scanned_again_without_reusing_rows() {
+  let (files, app) = shared_app().await;
+  let shares = app.state.shares.clone();
+  eventually(async || lock(&shares.running).is_none()).await;
+  mark_attributes(&shares).await;
+  shares
+    .db
+    .write(|conn| repository::mark_latest_suspect(conn))
+    .await
+    .unwrap();
+  let paths = app.state.paths.clone();
+  storage::back_up(&shares.db, &storage::backup_path(&paths.cache))
+    .await
+    .unwrap();
+  let again = Shares::open(
+    app.state.config.clone(),
+    &paths,
+    app.state.state.clone(),
+    CancellationToken::new(),
+  )
+  .await
+  .unwrap();
+  again.initialized().await;
+  assert_ne!(attributes(&again).await, MARKER);
   drop(files);
 }
 
