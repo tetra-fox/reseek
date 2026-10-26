@@ -47,9 +47,16 @@ fn stem(path: &Path) -> Option<String> {
     .map(str::to_string)
 }
 
-/// The size of the file at `path`, 0 when there is none.
+/// The size of the file at `path`, 0 when there is none or it can not be read.
 async fn size(path: &Path) -> u64 {
-  tokio::fs::metadata(path).await.map_or(0, |m| m.len())
+  match tokio::fs::metadata(path).await {
+    Ok(metadata) => metadata.len(),
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound => 0,
+    Err(e) => {
+      warn!(file = %path.display(), error = %e, "database file size not read");
+      0
+    }
+  }
 }
 
 #[async_trait]
