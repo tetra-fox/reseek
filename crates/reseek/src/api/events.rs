@@ -15,9 +15,9 @@ use super::validate;
 use crate::app::AppState;
 use crate::auth::{Administrator, AnyRole, Authorized};
 
-/// The event types a sample is never made of: the catalogue's pseudo-types and the record of a
-/// script run, which scripts never receive.
-const NOT_RAISABLE: &[&str] = &["None", "Any", "ScriptRunCompleted"];
+/// The catalogue's pseudo-types, which name no event; which real types have no sample is the
+/// event log's to say.
+const NOT_RAISABLE: &[&str] = &["None", "Any"];
 
 /// The events routes.
 pub fn routes() -> OpenApiRouter<AppState> {
@@ -116,6 +116,10 @@ mod tests {
     assert_eq!(raised.status, 201);
     let id = raised.json()["id"].clone();
     assert_eq!(raised.json()["type"], "Noop");
+    let record = app
+      .send(request("POST", "/api/v0/events/ScriptRunCompleted", None))
+      .await;
+    assert_eq!(record.status, 400, "no sample is made of a script run");
     for _ in 0..200 {
       let listed = app
         .send(request("GET", "/api/v0/events?type=Noop,UserBlocked", None))
@@ -131,13 +135,13 @@ mod tests {
   }
 
   #[test]
-  fn samples_are_made_of_known_types_but_not_the_script_record() {
+  fn samples_are_made_of_known_types_but_not_the_pseudo_types() {
     assert_eq!(
       raisable("downloadfilecomplete").unwrap(),
       EventType::DownloadFileComplete
     );
     assert_eq!(raisable("Noop").unwrap(), EventType::Noop);
-    for name in ["Any", "none", "ScriptRunCompleted"] {
+    for name in ["Any", "none"] {
       let error = format!("{:?}", raisable(name).unwrap_err());
       assert!(error.contains("can not be raised"), "{name}: {error}");
     }
