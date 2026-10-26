@@ -28,6 +28,13 @@ pub struct Retention {
   #[cascade(env = "RESEEK_RETENTION_USERS")]
   #[serde(with = "humantime_serde")]
   pub users: Option<Duration>,
+  /// Logged events older than this are deleted; `0` keeps them.
+  #[cascade(env = "RESEEK_RETENTION_EVENTS")]
+  #[serde(with = "humantime_serde")]
+  pub events: Duration,
+  /// The most logged events kept; the oldest beyond it are deleted, `0` keeps them all.
+  #[cascade(env = "RESEEK_RETENTION_EVENTS_MAX_ROWS")]
+  pub events_max_rows: u32,
 }
 
 impl Default for Retention {
@@ -39,6 +46,8 @@ impl Default for Retention {
       logs: Duration::from_secs(14 * 24 * 3600),
       messages: MessageRetention::default(),
       users: None,
+      events: Duration::from_secs(30 * 24 * 3600),
+      events_max_rows: 100_000,
     }
   }
 }

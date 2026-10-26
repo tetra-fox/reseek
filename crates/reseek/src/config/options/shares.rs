@@ -21,6 +21,9 @@ pub struct Shares {
   /// Regular expressions; a file whose full path matches one is not shared.
   #[cascade(env = "RESEEK_SHARE_FILTER", cli = "--share-filter")]
   pub filters: Vec<String>,
+  /// Follows links to directories and files inside the shares; share roots are always
+  /// opened through a link.
+  pub follow_symlinks: bool,
   /// The index of shared files.
   pub cache: ShareCache,
 }
