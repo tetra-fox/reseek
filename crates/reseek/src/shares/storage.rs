@@ -62,22 +62,14 @@ pub async fn open(
         error = %e,
         "Share cache is missing, corrupt, or is out of date. Attempting to load from backup..."
       );
-      remove_database(&primary);
-      match backup.as_deref().map(|backup| (backup, valid(backup))) {
-        Some((backup, Ok(()))) => {
-          if let Err(e) = std::fs::copy(backup, &primary) {
-            warn!(error = %e, "share cache backup not copied");
-            remove_database(&primary);
-          }
-        }
-        Some((_, Err(e))) => warn!(error = e, "share cache backup not used"),
-        None => {}
-      }
+      let (file, from) = (primary.clone(), backup.clone());
+      on_blocking_thread(move || replace_with_backup(&file, from.as_deref())).await?;
       match Database::open_as(&SCHEMA, &location(false), STEM).await {
         Ok(db) => db,
         Err(e) => {
           warn!(error = %e, "Share cache and backup are both missing, corrupt, or is out of date");
-          remove_database(&primary);
+          let file = primary.clone();
+          on_blocking_thread(move || remove_database(&file)).await?;
           Database::open_as(&SCHEMA, &location(false), STEM).await?
         }
       }
@@ -88,6 +80,31 @@ pub async fn open(
     backup,
     in_memory: false,
   })
+}
+
+/// Runs file work that may block, such as on a slow disk, off the runtime.
+async fn on_blocking_thread(f: impl FnOnce() + Send + 'static) -> Result<(), DbError> {
+  tokio::task::spawn_blocking(f)
+    .await
+    .map_err(|e| DbError::Task(e.to_string()))
+}
+
+/// Puts a copy of `backup`, when it is a valid index, in place of the index file `primary`,
+/// which is removed either way.
+fn replace_with_backup(primary: &Path, backup: Option<&Path>) {
+  remove_database(primary);
+  let Some(backup) = backup else {
+    return;
+  };
+  match valid(backup) {
+    Ok(()) => {
+      if let Err(e) = std::fs::copy(backup, primary) {
+        warn!(error = %e, "share cache backup not copied");
+        remove_database(primary);
+      }
+    }
+    Err(e) => warn!(error = e, "share cache backup not used"),
+  }
 }
 
 /// Removes a database file and its journal files, each when it is there.
