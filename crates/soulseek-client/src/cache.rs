@@ -50,6 +50,15 @@ impl<K: Eq + Hash + Clone, V> BoundedCache<K, V> {
     Some(&entry.value)
   }
 
+  /// the value under `key`, unless it has expired, without counting as a use: what the map
+  /// drops to make room stays as it was
+  pub(crate) fn peek(&self, key: &K) -> Option<&V> {
+    if self.expired(key, Instant::now()) {
+      return None;
+    }
+    self.entries.get(key).map(|entry| &entry.value)
+  }
+
   /// stores `value` under `key`, replacing what was there and making room if the map is full
   pub(crate) fn insert(&mut self, key: K, value: V) {
     let now = Instant::now();
@@ -148,6 +157,28 @@ mod tests {
     cache.insert("carol", 4);
     assert_eq!(cache.get(&"alice"), Some(&1));
     assert_eq!(cache.remove(&"carol"), Some(4));
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_peek_is_not_a_use() {
+    let mut cache = BoundedCache::new(2, Duration::from_secs(60));
+    cache.insert("alice", 1);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    cache.insert("bob", 2);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(cache.peek(&"alice"), Some(&1));
+    cache.insert("carol", 3);
+    assert_eq!(
+      cache.peek(&"alice"),
+      None,
+      "alice was still the least recently used"
+    );
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    assert_eq!(
+      cache.peek(&"bob"),
+      None,
+      "an expired entry is not handed out"
+    );
   }
 
   #[tokio::test(start_paused = true)]

@@ -44,6 +44,10 @@ impl Endpoints {
     lock(&self.cache).get(&username.to_owned()).copied()
   }
 
+  fn peek(&self, username: &str) -> Option<SocketAddr> {
+    lock(&self.cache).peek(&username.to_owned()).copied()
+  }
+
   /// follows a change of the cache bound
   pub(super) fn resize(&self, capacity: u32) {
     lock(&self.cache).set_capacity(capacity as usize);
@@ -139,6 +143,12 @@ impl Client {
     lock(&endpoints.cache).insert(username.to_owned(), endpoint);
     tracing::debug!(username, %endpoint, "EndPoint cache MISS");
     Ok(endpoint)
+  }
+
+  /// The address cached for `username`, without asking the server and without counting as a
+  /// use of the cache; `None` when none is cached or it expired.
+  pub fn cached_user_endpoint(&self, username: &str) -> Option<SocketAddr> {
+    self.inner.endpoints.peek(username)
   }
 
   /// Forgets the address cached for `username` when a connect to it, `endpoint`, failed with
