@@ -1,21 +1,23 @@
-//! The share index in SQLite: the scans, the directory and file rows a scan or a watched change
-//! writes, and the queries that read them back as the network sees them. Every function runs
-//! on a connection the caller holds, on a blocking thread.
+//! The share index in SQLite: the rows of the scans, directories and files, and the queries
+//! that read them back as the network sees them; what a scan or a watched change writes is in
+//! `writes`. Every function runs on a connection the caller holds, on a blocking thread.
 //!
 //! A "prefix" here is a remote directory name followed by `\`; rows under it are found with a
 //! range on the name, which is exact, case-sensitive and uses the index.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
-use std::time::Duration;
 
 use api_types::search::{FileAttribute, FileAttributeType};
-use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use soulseek_proto::RemoteFilename;
 use soulseek_proto::peer::{self, Directory};
-use tracing::{debug, warn};
 
 use crate::db::{self, Schema};
+
+mod writes;
+
+pub use writes::*;
 
 /// `shares.<host>.db`: the scans, directories, files and the filename index.
 pub static SCHEMA: Schema = db::schema!("shares", ["0001_initial"]);
@@ -105,47 +107,6 @@ pub fn bytes_path(bytes: Vec<u8>) -> PathBuf {
   }
 }
 
-/// Records the start of a scan.
-pub fn insert_scan(conn: &Connection, started_at: i64, options: &str) -> rusqlite::Result<()> {
-  conn
-    .execute(
-      "INSERT INTO scans (timestamp, options) VALUES (?1, ?2)",
-      params![started_at, options],
-    )
-    .map(drop)
-}
-
-/// Records the end of a scan.
-pub fn end_scan(conn: &Connection, started_at: i64, ended_at: i64) -> rusqlite::Result<()> {
-  conn
-    .execute(
-      "UPDATE scans SET \"end\" = ?1 WHERE timestamp = ?2",
-      params![ended_at, started_at],
-    )
-    .map(drop)
-}
-
-/// Marks one scan as suspect, so the next start scans again.
-pub fn mark_suspect(conn: &Connection, started_at: i64) -> rusqlite::Result<()> {
-  conn
-    .execute(
-      "UPDATE scans SET suspect = 1 WHERE timestamp = ?1",
-      [started_at],
-    )
-    .map(drop)
-}
-
-/// Marks the latest scan as suspect.
-pub fn mark_latest_suspect(conn: &Connection) -> rusqlite::Result<()> {
-  conn
-    .execute(
-      "UPDATE scans SET suspect = 1 WHERE timestamp = \
-       (SELECT timestamp FROM scans ORDER BY timestamp DESC LIMIT 1)",
-      [],
-    )
-    .map(drop)
-}
-
 fn scan(row: &rusqlite::Row) -> rusqlite::Result<Scan> {
   Ok(Scan {
     started_at: row.get(0)?,
@@ -212,98 +173,6 @@ pub fn known_files(conn: &Connection, name: &str) -> rusqlite::Result<HashMap<St
 /// taken as having none.
 fn attributes(json: &str) -> Vec<FileAttribute> {
   serde_json::from_str(json).unwrap_or_default()
-}
-
-/// Writes a directory's row and its files' rows, stamped `timestamp`; a file whose remote name
-/// is in the index already is replaced. Returns each file's row id, in order.
-pub fn write_directory(
-  tx: &Transaction,
-  timestamp: i64,
-  directory: &DirectoryRows,
-) -> rusqlite::Result<Vec<i64>> {
-  tx.prepare_cached(
-    "INSERT INTO directories (name, timestamp) VALUES (?1, ?2) \
-     ON CONFLICT DO UPDATE SET timestamp = excluded.timestamp",
-  )?
-  .execute(params![directory.name, timestamp])?;
-  let mut upsert = tx.prepare_cached(
-    "INSERT INTO files (maskedFilename, originalFilename, size, touchedAt, code, extension, \
-     attributeJson, timestamp) VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, ?7) \
-     ON CONFLICT (maskedFilename) DO UPDATE SET originalFilename = excluded.originalFilename, \
-     size = excluded.size, touchedAt = excluded.touchedAt, code = excluded.code, \
-     extension = excluded.extension, attributeJson = excluded.attributeJson, \
-     timestamp = excluded.timestamp RETURNING id",
-  )?;
-  let mut ids = Vec::with_capacity(directory.files.len());
-  for file in &directory.files {
-    let json = serde_json::to_string(&file.attributes)
-      .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?;
-    let id = upsert.query_row(
-      params![
-        file.masked,
-        file.original,
-        i64::try_from(file.size).unwrap_or(i64::MAX),
-        file.touched_at,
-        file.extension,
-        json,
-        timestamp
-      ],
-      |row| row.get(0),
-    )?;
-    ids.push(id);
-  }
-  Ok(ids)
-}
-
-/// What a scan removed when it finished.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Pruned {
-  /// file rows the scan did not see
-  pub files: usize,
-  /// directory rows the scan did not see
-  pub directories: usize,
-}
-
-/// Deletes every row the scan stamped `timestamp` did not see, then rebuilds the filename
-/// index from the files left, in one transaction so neither is ever seen half done.
-pub fn finish_scan(conn: &mut Connection, timestamp: i64) -> rusqlite::Result<Pruned> {
-  let tx = conn.transaction()?;
-  let files = tx.execute("DELETE FROM files WHERE timestamp < ?1", [timestamp])?;
-  let directories = tx.execute("DELETE FROM directories WHERE timestamp < ?1", [timestamp])?;
-  tx.execute_batch(
-    "DELETE FROM filenames; \
-     INSERT INTO filenames (rowid, maskedFilename) SELECT id, maskedFilename FROM files;",
-  )?;
-  tx.commit()?;
-  Ok(Pruned { files, directories })
-}
-
-/// Rebuilds the database file without its free pages and empties the write-ahead log into it.
-/// A reader holding a snapshot can keep the log from emptying; that is retried three times a
-/// second apart and then left, since nothing is lost by it.
-pub fn maintain(conn: &Connection) {
-  debug!("Vacuuming...");
-  if let Err(e) = conn.execute_batch("VACUUM;") {
-    warn!(error = %e, "shared file cache not vacuumed");
-  }
-  debug!("Checkpointing...");
-  for attempt in 1..=3 {
-    match conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
-      Ok((
-        row.get::<_, i64>(0)?,
-        row.get::<_, i64>(1)?,
-        row.get::<_, i64>(2)?,
-      ))
-    }) {
-      Ok((0, log, done)) if log == done => return,
-      Ok(_) if attempt < 3 => std::thread::sleep(Duration::from_secs(1)),
-      Ok(_) => warn!("Failed to fully checkpoint the shares database after 3 attempts"),
-      Err(e) => {
-        warn!(error = %e, "shares database not checkpointed");
-        return;
-      }
-    }
-  }
 }
 
 /// How many directories and files are in the index under the share `alias`, its own directory
@@ -469,61 +338,6 @@ pub fn find_file(conn: &Connection, masked: &str) -> rusqlite::Result<Option<(Pa
       },
     )
     .optional()
-}
-
-/// Puts the files written with the row ids `ids` in the filename index, in place of what it
-/// had for them.
-pub fn index_files(tx: &Transaction, ids: &[i64], files: &[FileRow]) -> rusqlite::Result<()> {
-  let mut delete = tx.prepare_cached("DELETE FROM filenames WHERE rowid = ?1")?;
-  let mut insert =
-    tx.prepare_cached("INSERT INTO filenames (rowid, maskedFilename) VALUES (?1, ?2)")?;
-  for (id, file) in ids.iter().zip(files) {
-    delete.execute([id])?;
-    insert.execute(params![id, file.masked])?;
-  }
-  Ok(())
-}
-
-/// Removes the file or the directory named `masked`, a directory with everything under it,
-/// from the index and the filename index. Returns how many file rows went.
-pub fn remove(tx: &Transaction, masked: &str) -> rusqlite::Result<usize> {
-  let prefix = format!("{masked}\\");
-  tx.execute(
-    "DELETE FROM filenames WHERE rowid IN (SELECT id FROM files WHERE maskedFilename = ?1 \
-     OR (maskedFilename >= ?2 AND maskedFilename < ?3))",
-    params![masked, prefix, upper(&prefix)],
-  )?;
-  let files = tx.execute(
-    "DELETE FROM files WHERE maskedFilename = ?1 OR (maskedFilename >= ?2 AND maskedFilename < ?3)",
-    params![masked, prefix, upper(&prefix)],
-  )?;
-  tx.execute(
-    "DELETE FROM directories WHERE name = ?1 OR (name >= ?2 AND name < ?3)",
-    params![masked, prefix, upper(&prefix)],
-  )?;
-  Ok(files)
-}
-
-/// Removes what is under the directory `masked`, the directory itself included, that was not
-/// written at or after `timestamp`: what a rescan of that directory did not see.
-pub fn prune_under(tx: &Transaction, masked: &str, timestamp: i64) -> rusqlite::Result<usize> {
-  let prefix = format!("{masked}\\");
-  let range = params![masked, prefix, upper(&prefix), timestamp];
-  tx.execute(
-    "DELETE FROM filenames WHERE rowid IN (SELECT id FROM files WHERE (maskedFilename = ?1 \
-     OR (maskedFilename >= ?2 AND maskedFilename < ?3)) AND timestamp < ?4)",
-    range,
-  )?;
-  let files = tx.execute(
-    "DELETE FROM files WHERE (maskedFilename = ?1 OR (maskedFilename >= ?2 AND \
-     maskedFilename < ?3)) AND timestamp < ?4",
-    range,
-  )?;
-  tx.execute(
-    "DELETE FROM directories WHERE (name = ?1 OR (name >= ?2 AND name < ?3)) AND timestamp < ?4",
-    range,
-  )?;
-  Ok(files)
 }
 
 /// Whether the index has the directory `masked`.

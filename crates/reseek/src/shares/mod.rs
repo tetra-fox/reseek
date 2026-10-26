@@ -16,6 +16,7 @@ mod search;
 mod service;
 pub mod share;
 mod storage;
+mod walk;
 mod watcher;
 
 use std::path::PathBuf;

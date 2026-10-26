@@ -21,6 +21,7 @@ use tracing::{Instrument, debug, info, warn};
 use super::repository::{self, DirectoryRows};
 use super::scanner::{self, Settings};
 use super::share::{self, Share};
+use super::walk;
 use super::{Shares, lock};
 use crate::db::DbError;
 
@@ -201,7 +202,7 @@ fn allowed<'a>(settings: &'a Settings, path: &Path) -> Option<&'a Share> {
     } else {
       None
     };
-    if scanner::hidden(&current, metadata.as_ref()) {
+    if walk::hidden(&current, metadata.as_ref()) {
       return None;
     }
     let text = current.to_string_lossy();
@@ -262,7 +263,7 @@ async fn apply(
         if let Some(parent) = path.parent()
           && read.insert(parent.to_path_buf())
           && let Some(rows) =
-            scanner::read_from_disk(&shares.db, settings, parent.to_path_buf(), false).await?
+            walk::read_from_disk(&shares.db, settings, parent.to_path_buf(), false).await?
         {
           writes.push(Write::Directory(rows.rows));
         }
@@ -280,7 +281,7 @@ async fn apply(
             let path = path.clone();
             tokio::task::spawn_blocking(move || {
               let mut seen = HashSet::new();
-              scanner::directories_under(&settings, &path, true, &cancel, &mut seen).0
+              walk::directories_under(&settings, &path, true, &cancel, &mut seen).0
             })
             .await
             .map_err(|e| scanner::ScanError::Task(e.to_string()))?
@@ -288,7 +289,7 @@ async fn apply(
           for directory in walk {
             if read.insert(directory.clone())
               && let Some(rows) =
-                scanner::read_from_disk(&shares.db, settings, directory, false).await?
+                walk::read_from_disk(&shares.db, settings, directory, false).await?
             {
               writes.push(Write::Directory(rows.rows));
             }
