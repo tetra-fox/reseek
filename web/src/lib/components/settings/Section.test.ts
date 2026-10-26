@@ -56,4 +56,29 @@ describe("a settings section", () => {
     expect(web.querySelector<HTMLInputElement>('[id="web.port"]')!.value).toBe("5130");
     expect(web.querySelector<HTMLButtonElement>('[id="web.ui"]')!.disabled).toBe(true);
   });
+
+  it("changes a secret only once something is typed, or it is cleared on purpose", () => {
+    const auth = render(sections.find((s) => s.id === "authentication")!);
+    const status = () => auth.querySelector('[aria-live="polite"]')!.textContent!.trim();
+    const key = "web.authentication.password";
+    auth.querySelector<HTMLButtonElement>(`[id="${key}"]`)!.click();
+    flushSync();
+    expect(status()).toBe("No changes");
+    const input = auth.querySelector<HTMLInputElement>(`input[id="${key}"]`)!;
+    const type = (text: string) => {
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      flushSync();
+    };
+    type("new password");
+    expect(status()).toBe("1 setting changed");
+    type("");
+    expect(status()).toBe("No changes");
+    const clear = [...auth.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim() === "Clear"
+    )!;
+    clear.click();
+    flushSync();
+    expect(status()).toBe("1 setting changed");
+  });
 });

@@ -19,8 +19,10 @@
 
   let { field, control, draft = $bindable(), disabled, described, invalid }: Props = $props();
 
-  // a secret's input shows only once the user chooses to change it
+  // a secret's input shows only once the user chooses to change it; `kept` is what it held then
   let changing = $state(false);
+  let kept = $state<Draft>(REDACTED);
+  const cleared = $derived(kept === REDACTED && draft === "");
 </script>
 
 {#if control === "bool"}
@@ -40,15 +42,23 @@
     {disabled} />
 {:else if control === "secret"}
   {#if changing}
-    <Input
-      id={field.key}
-      type="password"
-      autocomplete="new-password"
-      placeholder="empty clears it"
-      aria-describedby={described}
-      aria-invalid={invalid || undefined}
-      bind:value={draft}
-      {disabled} />
+    <!-- the value only changes once something is typed; clearing it is a choice of its own -->
+    <div class="flex items-center gap-inline">
+      <Input
+        id={field.key}
+        type="password"
+        autocomplete="new-password"
+        placeholder={cleared ? "cleared on save" : "the new value"}
+        aria-describedby={described}
+        aria-invalid={invalid || undefined}
+        value={draft === kept || cleared ? "" : String(draft)}
+        oninput={(e) => (draft = e.currentTarget.value || kept)}
+        {disabled} />
+      {#if kept === REDACTED}
+        <Button variant="outline" size="sm" {disabled} onclick={() => (draft = cleared ? kept : "")}
+          >{cleared ? "Keep" : "Clear"}</Button>
+      {/if}
+    </div>
   {:else}
     <div class="flex items-center gap-inline">
       <span class="text-sm text-fg-muted">{draft === REDACTED ? "set" : "not set"}</span>
@@ -58,8 +68,8 @@
         size="sm"
         {disabled}
         onclick={() => {
+          kept = draft;
           changing = true;
-          draft = "";
         }}>Change</Button>
     </div>
   {/if}
