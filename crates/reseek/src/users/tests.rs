@@ -276,6 +276,21 @@ async fn a_group_the_configuration_contradicts_is_refused() {
   assert_eq!(summary["known"], true);
 }
 
+/// Each listed block's user and source.
+fn sources(listed: &Value) -> Vec<(&str, &str)> {
+  listed["users"]
+    .as_array()
+    .unwrap()
+    .iter()
+    .map(|b| {
+      (
+        b["username"].as_str().unwrap(),
+        b["source"].as_str().unwrap(),
+      )
+    })
+    .collect()
+}
+
 #[tokio::test]
 async fn blocking_ourselves_or_a_configured_block_is_a_conflict() {
   let app = app(CONFIG, &[]).await;
@@ -302,20 +317,17 @@ async fn blocking_ourselves_or_a_configured_block_is_a_conflict() {
       .is_blocked("alice", None, BlockScope::Messages)
   );
   let (_, listed) = send(&app, "GET", "/api/v0/users/blocked", None).await;
-  let users: Vec<(&str, &str)> = listed["users"]
-    .as_array()
-    .unwrap()
-    .iter()
-    .map(|b| {
-      (
-        b["username"].as_str().unwrap(),
-        b["source"].as_str().unwrap(),
-      )
-    })
-    .collect();
-  assert_eq!(users, [("alice", "api"), ("mallory", "config")]);
+  assert_eq!(sources(&listed), [("alice", "api"), ("mallory", "config")]);
   let (_, summary) = send(&app, "GET", "/api/v0/users/mallory/summary", None).await;
   assert_eq!(summary["block"]["source"], "config");
+  let (status, _) = send(&app, "PUT", "/api/v0/users/mallory/block", Some(json!({}))).await;
+  assert_eq!(status, 200);
+  let (_, listed) = send(&app, "GET", "/api/v0/users/blocked", None).await;
+  assert_eq!(
+    sources(&listed),
+    [("alice", "api"), ("mallory", "api")],
+    "a member we also block is listed once"
+  );
   let (status, _) = send(&app, "DELETE", "/api/v0/users/alice/block", None).await;
   assert_eq!(status, 204);
   assert!(

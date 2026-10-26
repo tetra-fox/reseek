@@ -264,13 +264,16 @@ impl BlockingService for Directory {
         rules: Default::default(),
       });
     }
-    users.extend(
-      self
-        .blocks
-        .configured_members()
-        .iter()
-        .map(|name| blocking::configured(name)),
-    );
+    // a member we also block ourselves is listed once, as our block, which is the one that can
+    // be lifted here
+    let configured: Vec<Block> = self
+      .blocks
+      .configured_members()
+      .iter()
+      .filter(|name| !users.iter().any(|ours| &ours.username == *name))
+      .map(|name| blocking::configured(name))
+      .collect();
+    users.extend(configured);
     Ok(BlockedUsers {
       users,
       rules: self.blocks.rules(),
