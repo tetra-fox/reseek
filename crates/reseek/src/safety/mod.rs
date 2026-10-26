@@ -49,6 +49,12 @@ impl Os {
   }
 }
 
+/// Whether joining `segment` to a path would leave it under `os`'s rules: on Windows a segment
+/// with a drive's `:` or starting with a separator joins relative to a drive, not to the path.
+pub fn drive_relative(segment: &str, os: Os) -> bool {
+  os == Os::Windows && (segment.contains(':') || segment.starts_with(['/', '\\']))
+}
+
 /// Whether `path` is absolute under `os`'s rules. `C:music` is relative to the drive's current
 /// directory, so it is not, and `//server` is a UNC path only when written `\\server`.
 pub fn is_absolute(path: &str, os: Os) -> bool {
@@ -117,9 +123,7 @@ pub fn combine_safely(root: &str, segments: &[&str], os: Os) -> Result<String, S
   let root = trim_end_separators(root);
   let mut combined = root.to_string();
   for segment in segments {
-    if is_absolute(segment, os)
-      || (os == Os::Windows && (segment.contains(':') || segment.starts_with(['/', '\\'])))
-    {
+    if is_absolute(segment, os) || drive_relative(segment, os) {
       return Err("Absolute paths are not permitted in segments".to_string());
     }
     if traverses(segment) {

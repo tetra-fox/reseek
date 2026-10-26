@@ -52,8 +52,7 @@ pub(super) fn locate(root: &Path, relative: &str) -> Result<Located, Refused> {
   })?;
   let mut path = root.to_path_buf();
   for segment in relative.split('/').filter(|s| !s.is_empty()) {
-    // a drive in a segment would make the join drive-relative
-    if cfg!(windows) && segment.contains(':') {
+    if crate::safety::drive_relative(segment, crate::safety::Os::CURRENT) {
       return Err(Refused::Outside);
     }
     path.push(segment);

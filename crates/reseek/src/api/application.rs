@@ -300,11 +300,8 @@ fn log_file_name(name: &str) -> Result<(), ApiError> {
   if name.contains(['/', '\\']) {
     return Err(ApiError::bad_request("Filename must not contain a path"));
   }
-  let invalid = |c: char| {
-    c == '\0'
-      || (cfg!(windows) && (c.is_control() || matches!(c, '"' | '<' | '>' | '|' | ':' | '*' | '?')))
-  };
-  if name.chars().any(invalid) {
+  let invalid = crate::safety::Os::CURRENT.invalid_filename_chars();
+  if name.chars().any(|c| invalid.contains(&c)) {
     return Err(ApiError::bad_request(
       "Filename contains one or more invalid characters",
     ));
