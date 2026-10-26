@@ -127,7 +127,7 @@ pub(super) enum Need {
 }
 
 /// Collects notifications per path and applies each path once it has been quiet for the
-/// engine's quiet time; ends when the watches are dropped.
+/// engine's quiet time; ends when the watches are dropped, applying what was still waiting.
 async fn apply_changes(
   shares: Arc<Shares>,
   settings: Arc<Settings>,
@@ -141,7 +141,18 @@ async fn apply_changes(
     tokio::select! {
       () = shares.shutdown.cancelled() => return,
       message = receiver.recv() => {
-        let Some(message) = message else { return };
+        let Some(message) = message else {
+          // the watches were replaced or dropped: what was still waiting for quiet is applied
+          // now, since the watches after them saw none of it
+          let due: Vec<(PathBuf, Need)> =
+            pending.drain().map(|(path, (_, need))| (path, need)).collect();
+          if !due.is_empty()
+            && let Err(e) = apply(&shares, &settings, &roots, due).await
+          {
+            warn!(error = %e, "watched share changes not applied; they are seen by the next rescan");
+          }
+          return;
+        };
         let now = Instant::now();
         let (paths, need) = match message {
           Ok(event) if event.need_rescan() => (event.paths, Need::Rescan),

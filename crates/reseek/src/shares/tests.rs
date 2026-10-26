@@ -309,3 +309,32 @@ async fn the_retention_check_rescans_only_without_a_recent_trusted_scan() {
   );
   eventually(async || lock(&shares.running).is_none()).await;
 }
+
+#[tokio::test]
+async fn changes_waiting_for_quiet_are_applied_when_the_watches_are_replaced() {
+  let (files, app) = shared_app().await;
+  let mut paths = app.state.paths.clone();
+  paths.cache = files.path().join("cache");
+  std::fs::create_dir_all(&paths.cache).unwrap();
+  let shares = Shares::open_with(
+    app.state.config.clone(),
+    &paths,
+    app.state.state.clone(),
+    CancellationToken::new(),
+    Duration::from_secs(600),
+  )
+  .await
+  .unwrap();
+  shares.initialized().await;
+  eventually(async || lock(&shares.running).is_none() && lock(&shares.watches).is_some()).await;
+  std::fs::write(files.path().join("music/Album/05.mp3"), "five").unwrap();
+  // the notification needs a moment to reach the watcher before the watches are replaced
+  tokio::time::sleep(Duration::from_millis(300)).await;
+  let settings = Arc::new(scanner::Settings::new(
+    shares.listed(),
+    &app.state.config.current().values,
+  ));
+  shares.watch_shares(settings).await;
+  eventually(async || names(&shares, "05").await == ["Music\\Album\\05.mp3"]).await;
+  drop(files);
+}
