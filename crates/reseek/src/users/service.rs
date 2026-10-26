@@ -309,12 +309,6 @@ impl BlockingService for Directory {
       source: BlockSource::Api,
     };
     self.put_block(block.clone(), by).await?;
-    if request.cancel_transfers {
-      debug!(
-        username,
-        "no transfer engine runs, so no transfer of the user is cancelled"
-      );
-    }
     Ok(block)
   }
 

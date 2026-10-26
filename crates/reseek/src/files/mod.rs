@@ -124,7 +124,6 @@ async fn blocking<T: Send + 'static>(
     .map_err(|e| ApiError::internal(format!("a file task did not finish: {e}")))?
 }
 
-/// The answer for a call that needs a download's file, which the downloads engine gives.
 /// The answer to `error` met reading `path`, which a message calls `what`: 404 when it is not
 /// there, 403 when the system refuses it, else a 500 with the error logged.
 fn unreadable(what: &str, path: &Path, error: std::io::Error) -> ApiError {
@@ -143,6 +142,7 @@ fn unreadable(what: &str, path: &Path, error: std::io::Error) -> ApiError {
   }
 }
 
+/// The answer for a call that needs a download's file, which the downloads engine gives.
 fn download_files() -> ApiError {
   ApiError::unavailable(Some(
     "the files of downloads not implemented yet".to_string(),

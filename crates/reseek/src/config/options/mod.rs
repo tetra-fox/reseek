@@ -168,7 +168,8 @@ pub struct Blacklist {
     apply = "restart"
   )]
   pub enabled: bool,
-  /// The blocklist file, in CIDR, P2P or DAT format; reloaded when it changes.
+  /// The blocklist file, in CIDR, P2P or DAT format; read again when a `blacklist` option
+  /// changes.
   #[cascade(env = "RESEEK_BLACKLIST_FILE", cli = "--blacklist-file")]
   pub file: Option<std::path::PathBuf>,
 }

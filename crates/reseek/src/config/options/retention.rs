@@ -80,7 +80,7 @@ pub struct TransferRetention {
   pub failed: Option<Duration>,
 }
 
-/// Files in the download directories not opened for this long are deleted, each at least 30
+/// Files in the download directories last written this long ago are deleted, each at least 30
 /// minutes.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
