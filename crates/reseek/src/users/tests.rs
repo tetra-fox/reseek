@@ -412,6 +412,22 @@ async fn an_import_counts_what_it_added_and_skipped() {
   let exported = app.state.users.export().await.unwrap();
   let names: Vec<_> = exported.iter().map(|b| b.username.as_str()).collect();
   assert_eq!(names, ["alice", "bob", "carol"]);
+
+  let blocks = json!([
+    { "username": "dave", "reason": "x".repeat(501), "scopes": ["uploads"], "source": "api" },
+    { "username": "erin", "reason": "x".repeat(500), "scopes": ["uploads"], "source": "api" },
+  ]);
+  let mut import = request("POST", "/api/v0/users/blocked/import", Some(blocks));
+  import
+    .headers_mut()
+    .insert("content-type", "application/json".parse().unwrap());
+  let answer = app.send(import).await;
+  assert_eq!(answer.status, 200);
+  assert_eq!(
+    answer.json(),
+    json!({ "added": 1, "skipped": 1 }),
+    "a reason over 500 characters is skipped"
+  );
 }
 
 #[tokio::test]

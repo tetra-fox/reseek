@@ -364,7 +364,11 @@ impl BlockingService for Directory {
         blocks.len(),
         blocks
           .into_iter()
-          .filter(|b| b.source == BlockSource::Api && blocking::stands(b.expires_at, now))
+          .filter(|b| {
+            b.source == BlockSource::Api
+              && blocking::stands(b.expires_at, now)
+              && blocking::reason_fits(&b.reason)
+          })
           .map(|b| (b.username, b.reason, b.scopes, b.expires_at))
           .collect(),
       ),

@@ -18,6 +18,8 @@ mod tests;
 mod touch;
 mod transfers;
 
+pub use blocking::reason_fits;
+
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::path::PathBuf;

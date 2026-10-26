@@ -47,7 +47,8 @@ pub trait BlockingService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// Blocks every user of `import` not blocked yet, as `by`.
+  /// Blocks every user of `import` not blocked yet, as `by`; an expired block or one whose
+  /// reason is too long is skipped.
   async fn import(
     &self,
     by: &Principal,

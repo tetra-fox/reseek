@@ -21,9 +21,6 @@ use crate::app::AppState;
 use crate::auth::{Administrator, AnyRole, Authorized, ReadWrite};
 use crate::services::BlockImport;
 
-/// The most characters a block's reason has.
-const REASON_CHARS: usize = 500;
-
 /// The blocking routes.
 pub fn routes() -> OpenApiRouter<AppState> {
   OpenApiRouter::new()
@@ -85,7 +82,7 @@ async fn block(
 /// Refuses a reason over 500 characters, both `expiresIn` and `expiresAt`, and an `expiresIn`
 /// that is no duration; the duration `expiresIn` gives otherwise.
 fn block_request(request: &BlockRequest) -> Result<Option<Duration>, ApiError> {
-  if request.reason.chars().count() > REASON_CHARS {
+  if !crate::users::reason_fits(&request.reason) {
     return Err(ApiError::bad_request(
       "reason must be at most 500 characters",
     ));
