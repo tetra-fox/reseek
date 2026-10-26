@@ -66,6 +66,8 @@ pub(super) fn directories_under(
   }
   let walk = walkdir::WalkDir::new(root)
     .follow_links(settings.follow_symlinks)
+    // which of two ways to one directory wins should not depend on the order the system lists
+    .sort_by_file_name()
     .into_iter()
     .filter_entry(|entry| {
       if entry.depth() == 0 {
@@ -92,10 +94,9 @@ pub(super) fn directories_under(
         left_out += 1;
         return false;
       }
-      // a link followed to a directory already walked would be walked twice, or forever
-      if settings.follow_symlinks
-        && entry.path_is_symlink()
-        && !path.canonicalize().is_ok_and(|real| canonical.insert(real))
+      // a directory reached a second time, through a link or to one, would be indexed twice
+      // under two names, or walked forever
+      if settings.follow_symlinks && !path.canonicalize().is_ok_and(|real| canonical.insert(real))
       {
         return false;
       }
@@ -262,4 +263,34 @@ pub(super) async fn read_from_disk(
   })
   .await
   .map_err(|e| ScanError::Task(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::shares::scanner::tests::settings;
+
+  #[cfg(unix)]
+  #[test]
+  fn a_directory_reached_twice_through_links_is_walked_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let music = dir.path().join("music");
+    std::fs::create_dir_all(music.join("A")).unwrap();
+    std::fs::create_dir_all(music.join("B")).unwrap();
+    std::os::unix::fs::symlink(music.join("A"), music.join("B/link")).unwrap();
+    std::os::unix::fs::symlink(&music, music.join("A/loop")).unwrap();
+    let followed = settings(dir.path(), &[], &[], true);
+    let (found, _) = directories_under(
+      &followed,
+      &music,
+      true,
+      &CancellationToken::new(),
+      &mut HashSet::new(),
+    );
+    let names: Vec<_> = found
+      .iter()
+      .map(|p| p.strip_prefix(&music).unwrap().display().to_string())
+      .collect();
+    assert_eq!(names, ["", "A", "B"], "B/link is A again, A/loop the root");
+  }
 }
