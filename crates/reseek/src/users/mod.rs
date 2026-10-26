@@ -198,11 +198,12 @@ impl Directory {
     let options = self.config.current().values.clone();
     let user = profile::known(&options, username, row.as_ref(), block);
     let summary = profile::summary(user, row.as_ref(), &figures);
-    self
+    let mut summaries = self
       .summaries
       .lock()
-      .unwrap_or_else(PoisonError::into_inner)
-      .insert(username.to_string(), (Instant::now(), summary.clone()));
+      .unwrap_or_else(PoisonError::into_inner);
+    summaries.retain(|_, (at, _)| at.elapsed() < SUMMARY_FOR);
+    summaries.insert(username.to_string(), (Instant::now(), summary.clone()));
     Ok(summary)
   }
 
