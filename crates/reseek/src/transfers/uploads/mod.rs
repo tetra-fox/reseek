@@ -1,8 +1,8 @@
 //! The upload engine: what we do when another user asks for one of our files. A request is
 //! checked at the network's edge, then decided here, one at a time per user: the file must be
 //! shared and on disk, and the user's group and limits must allow it. An accepted request is
-//! recorded, put in the [`queue`], and handed to a task that runs the client's upload once the
-//! queue gives it a slot, its bytes paced by its group's speed limit in the [`governor`].
+//! recorded, put in the queue, and handed to a task that runs the client's upload once the
+//! queue gives it a slot, its bytes paced by its group's speed limit.
 //!
 //! [`Uploads`] keeps every running upload's cancel handle, keyed by its id, from the moment its
 //! record is written until its task has written how it ended. Every record written is pushed
@@ -10,10 +10,10 @@
 //! queued or running, and their users ask again.
 
 mod enqueue;
-pub mod governor;
+mod governor;
 mod intake;
-pub mod limits;
-pub mod queue;
+mod limits;
+mod queue;
 mod service;
 mod task;
 #[cfg(test)]
@@ -46,7 +46,8 @@ use crate::users::Directory;
 use governor::Governor;
 use intake::Intake;
 pub use intake::{NOT_SHARED, OVERWHELMED};
-pub use queue::{Forecast, UploadQueue};
+pub use queue::Forecast;
+use queue::UploadQueue;
 
 /// How long the tasks of running uploads get to end at shutdown.
 const STOPPING: Duration = Duration::from_secs(5);

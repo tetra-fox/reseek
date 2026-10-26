@@ -91,15 +91,6 @@ impl UploadQueue {
     u32::try_from(place).unwrap_or(u32::MAX)
   }
 
-  /// The place of the upload `id` in its group, `None` when the queue does not hold it.
-  pub fn estimate(&self, id: Uuid) -> Option<u32> {
-    let mut state = self.lock();
-    let (u, i) = state.find(id)?;
-    let username = state.users[u].username.clone();
-    let group = self.queued_group(&mut state, &username);
-    Some(self.estimate_at(&mut state, &group, u, i))
-  }
-
   /// The place of the latest upload of `filename` to `username`, `None` when the queue holds
   /// none.
   pub fn place(&self, username: &str, filename: &str) -> Option<u32> {
@@ -224,10 +215,9 @@ mod tests {
     files(&queue, "b", 2);
     files(&queue, "c", 12);
     let d = files(&queue, "d", 7);
-    assert_eq!(queue.estimate(d[4]), Some(16));
     assert_eq!(queue.place("d", "d4"), Some(16));
+    assert_eq!(queue.standing(d[4]).unwrap().position, Some(16));
     assert_eq!(queue.place("d", "nothing"), None);
-    assert_eq!(queue.estimate(Uuid::new_v4()), None);
   }
 
   #[test]
@@ -239,12 +229,12 @@ mod tests {
     groups.set("x", "other");
     let a = files(&queue, "a", 2);
     files(&queue, "x", 3);
-    let b = files(&queue, "b", 2);
+    files(&queue, "b", 2);
     // running uploads count as ahead
     let mut start = queue.await_start(a[0]).unwrap();
     assert!(started(&mut start));
-    assert_eq!(queue.estimate(b[1]), Some(3), "a's two and b's first");
-    assert_eq!(queue.estimate(a[1]), Some(1));
+    assert_eq!(queue.place("b", "b1"), Some(3), "a's two and b's first");
+    assert_eq!(queue.place("a", "a1"), Some(1));
   }
 
   #[test]

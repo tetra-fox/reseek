@@ -93,7 +93,7 @@ impl Uploads {
         return self.fail(&mut record, &gone, None).await;
       }
       Err(e) => {
-        debug!(error = %e, "file not found again; the one found when accepted is sent");
+        warn!(error = %e, "share index not read; the file found when the request was accepted is sent");
         located
       }
     };

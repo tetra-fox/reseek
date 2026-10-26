@@ -23,11 +23,11 @@ use tokio::sync::oneshot;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-pub use position::{Forecast, Standing};
+pub use position::Forecast;
 
 use crate::config::enums::QueueStrategy;
 use crate::config::{GroupUpload, Groups, Options};
-use crate::users::{DEFAULT_GROUP, PRIVILEGED};
+use crate::users::{DEFAULT_GROUP, LEECHERS, PRIVILEGED};
 
 /// Looks up the group a user is in, without waiting.
 pub type GroupOf = Box<dyn Fn(&str) -> String + Send + Sync>;
@@ -146,7 +146,7 @@ fn groups(options: &Options) -> Vec<Group> {
       used: BTreeSet::new(),
     },
     group(DEFAULT_GROUP, &configured.default.upload, global),
-    group(crate::users::LEECHERS, &configured.leechers.upload, global),
+    group(LEECHERS, &configured.leechers.upload, global),
   ];
   groups.extend(
     configured
