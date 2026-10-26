@@ -20,6 +20,7 @@ mod storage;
 mod walk;
 mod watcher;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
@@ -363,35 +364,35 @@ impl Shares {
     lock(&self.shares).clone()
   }
 
-  /// Counts what each configured share holds in the index and returns the totals.
+  /// Counts what each configured share holds in the index and returns the totals. The counts
+  /// are written back to the shares by entry, so a list replaced while the index was read
+  /// keeps its own counts.
   async fn count_shares(&self) -> Result<SharedCounts, DbError> {
-    let aliases: Vec<Option<String>> = self
+    let counting: Vec<(String, String)> = self
       .listed()
-      .iter()
-      .map(|s| (!s.excluded).then(|| s.alias.clone()))
+      .into_iter()
+      .filter(|s| !s.excluded)
+      .map(|s| (s.raw, s.alias))
       .collect();
     let counted = self
       .db
       .read(move |conn| {
-        aliases
-          .iter()
-          .map(|alias| {
-            alias
-              .as_deref()
-              .map(|alias| repository::count(conn, Some(alias)))
-              .transpose()
-          })
-          .collect::<rusqlite::Result<Vec<_>>>()
+        counting
+          .into_iter()
+          .map(|(raw, alias)| Ok((raw, repository::count(conn, Some(&alias))?)))
+          .collect::<rusqlite::Result<HashMap<_, _>>>()
       })
       .await?;
-    let mut shares = lock(&self.shares);
     let mut totals = SharedCounts::default();
-    for (share, count) in shares.iter_mut().zip(counted) {
-      share.directories = count.map(|c| c.0);
-      share.files = count.map(|c| c.1);
-      if let Some((directories, files)) = count {
-        totals.directories = totals.directories.saturating_add(directories);
-        totals.files = totals.files.saturating_add(files);
+    for (directories, files) in counted.values() {
+      totals.directories = totals.directories.saturating_add(*directories);
+      totals.files = totals.files.saturating_add(*files);
+    }
+    let mut shares = lock(&self.shares);
+    for share in shares.iter_mut() {
+      if let Some((directories, files)) = counted.get(&share.raw) {
+        share.directories = Some(*directories);
+        share.files = Some(*files);
       }
     }
     let api: Vec<_> = shares.iter().map(Share::to_api).collect();
