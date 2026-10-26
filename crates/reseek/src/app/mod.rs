@@ -40,6 +40,8 @@ use crate::shares::Shares;
 use crate::state::StateOwner;
 use crate::telemetry::Telemetry;
 use crate::transfers::downloads::Downloads;
+use crate::transfers::service::Transfers;
+use crate::transfers::uploads::Uploads;
 use crate::ui::{Bundle, Ui};
 use crate::users::Directory;
 use crate::version::{self, RELEASE_FEED, Releases};
@@ -114,6 +116,8 @@ pub struct AppState {
   pub network: Arc<Network>,
   /// the download engine
   pub downloads: Arc<Downloads>,
+  /// the upload engine
+  pub uploads: Arc<Uploads>,
   /// the jobs that run at fixed intervals
   pub clock: Clock,
   /// the release feed the version is checked against
@@ -205,12 +209,28 @@ impl AppState {
       files.clone(),
       events.clone(),
       live.clone(),
+      telemetry.clone(),
       &paths,
       shutdown.clone(),
     );
+    let uploads = Uploads::new(
+      transfers.clone(),
+      config.clone(),
+      &network,
+      users.clone(),
+      shares.clone(),
+      events.clone(),
+      live.clone(),
+      telemetry.clone(),
+      shutdown.clone(),
+    );
+    network.attach_uploads(uploads.clone());
     let clock = Clock::new(shutdown.clone());
     let mut services = Services::unavailable();
-    services.transfers = downloads.clone();
+    services.transfers = Arc::new(Transfers {
+      downloads: downloads.clone(),
+      uploads: uploads.clone(),
+    });
     services.shares = shares.clone();
     services.events = event_log;
     services.files = files.clone();
@@ -251,6 +271,7 @@ impl AppState {
       shares,
       network,
       downloads,
+      uploads,
       clock,
       releases,
       services,

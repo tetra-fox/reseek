@@ -78,6 +78,12 @@ async fn block(
     .await?;
   info!(by = caller.principal.subject, username, "user blocked");
   if cancel_transfers {
+    if block
+      .scopes
+      .contains(&api_types::blocking::BlockScope::Uploads)
+    {
+      app.uploads.blocked(&username);
+    }
     app.downloads.blocked(&username, &block.scopes).await;
   }
   Ok(Json(block))

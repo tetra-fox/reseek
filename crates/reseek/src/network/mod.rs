@@ -31,7 +31,7 @@ use crate::state::StateOwner;
 use crate::telemetry::Telemetry;
 use crate::users::Directory;
 pub use changes::follow_changes;
-pub use events::{follow_shared_counts, observe_client};
+pub use events::{follow_shared_counts, observe_client, observe_transfers};
 use resolvers::{Edges, IncomingSearches, resolvers};
 use watchdog::Watchdog;
 
@@ -162,6 +162,12 @@ impl Network {
         edges,
       }
     }))
+  }
+
+  /// Has the upload engine answer peers' upload requests and their questions about the
+  /// upload queue; done once, while the daemon is built.
+  pub fn attach_uploads(&self, uploads: Arc<crate::transfers::uploads::Uploads>) {
+    self.edges.attach(uploads);
   }
 
   /// The Soulseek client, for the operations the engines start.

@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use api_types::live::LiveFrame;
 use api_types::transfers::TransferStates;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use soulseek_client::{
   ClientError, DownloadOutput, DownloadRequest, DownloadSink, LogLimiter, OutputFactory,
   ProgressUpdated, SizeMismatchResolver, StateChanged, Transfer as Snapshot, TransferOptions,
@@ -203,19 +203,6 @@ fn output(path: PathBuf, mode: Option<u32>, offset: u64) -> OutputFactory {
   })
 }
 
-/// A time the client gives, as the records keep it.
-fn time(at: Option<std::time::SystemTime>) -> Option<DateTime<Utc>> {
-  at.map(DateTime::<Utc>::from)
-}
-
-/// Takes the times, bytes and speed of `snapshot` into `record`.
-fn take_figures(record: &mut Record, snapshot: &Snapshot) {
-  record.started_at = time(snapshot.start_time);
-  record.ended_at = time(snapshot.end_time);
-  record.bytes_transferred = snapshot.bytes_transferred;
-  record.average_speed = snapshot.average_speed;
-}
-
 impl Downloads {
   /// One try of the download `record` into `incomplete`, stopped by `cancel`, or by the
   /// request's hard limit while it holds `gate`.
@@ -330,13 +317,19 @@ impl Downloads {
     }
     match result {
       Ok(transfer) => {
-        take_figures(record, &transfer);
+        record.take_figures(&transfer);
         record.state = TransferStates::Completed | TransferStates::Succeeded;
         record.size = transfer.size;
         record.exception = None;
         record.place_in_queue = None;
         record.removed = self.removal_pending(record.id);
         self.save(record, true).await;
+        self
+          .telemetry
+          .metrics()
+          .transfers()
+          .downloads
+          .succeeded(record.bytes_transferred, record.average_speed);
         info!(
           bytes = record.bytes_transferred,
           speed = record.average_speed,
@@ -346,7 +339,7 @@ impl Downloads {
       }
       Err(error) => {
         if let Some(snapshot) = &ended {
-          take_figures(record, snapshot);
+          record.take_figures(snapshot);
         }
         debug!(%error, "download try ended");
         Attempted::Failed(if hard_limited {
@@ -388,7 +381,7 @@ impl Downloads {
       return;
     }
     let previous = record.state;
-    take_figures(record, &snapshot);
+    record.take_figures(&snapshot);
     record.state = state;
     record.exception = None;
     if snapshot.size != record.size {

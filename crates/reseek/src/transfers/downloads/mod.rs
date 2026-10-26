@@ -47,6 +47,7 @@ use crate::files::Files;
 use crate::live::Live;
 use crate::network::Network;
 use crate::paths::Paths;
+use crate::telemetry::Telemetry;
 use crate::users::Directory;
 pub use enqueue::{Batching, Enqueued, FileRequest, NewBatch};
 
@@ -80,6 +81,7 @@ pub struct Downloads {
   files: Arc<Files>,
   events: EventBus,
   live: Live,
+  telemetry: Arc<Telemetry>,
   incomplete: PathBuf,
   downloads: PathBuf,
   shutdown: CancellationToken,
@@ -126,8 +128,9 @@ impl Drop for Turn {
 
 impl Downloads {
   /// The engine over `transfers.db`, reaching peers through `network`, asking `users` who is
-  /// blocked, marking the files it writes in `files`, raising its events on `events` and
-  /// pushing its records to `live`. Its tasks end when `shutdown` is cancelled.
+  /// blocked, marking the files it writes in `files`, raising its events on `events`, pushing
+  /// its records to `live` and counting the downloads that end in `telemetry`. Its tasks end
+  /// when `shutdown` is cancelled.
   #[allow(
     clippy::too_many_arguments,
     reason = "the engine takes each part of the daemon it uses"
@@ -140,6 +143,7 @@ impl Downloads {
     files: Arc<Files>,
     events: EventBus,
     live: Live,
+    telemetry: Arc<Telemetry>,
     paths: &Paths,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
@@ -152,6 +156,7 @@ impl Downloads {
       files,
       events,
       live,
+      telemetry,
       incomplete: paths.incomplete.clone(),
       downloads: paths.downloads.clone(),
       shutdown,
@@ -342,9 +347,8 @@ impl Downloads {
     }
   }
 
-  /// Stops the engine at shutdown, once the client is stopped: the download tasks, which the
-  /// shutdown cancelled, are waited for, and every transfer left unfinished is ended as shut
-  /// down, so the next start resumes the downloads among them.
+  /// Waits, at shutdown and once the client is stopped, for the download tasks the shutdown
+  /// cancelled to end; what they leave unfinished the stop ends after.
   pub async fn stop(&self) {
     self.tasks.close();
     if tokio::time::timeout(STOPPING, self.tasks.wait())
@@ -355,10 +359,6 @@ impl Downloads {
         running = self.tasks.len(),
         "download tasks still running at shutdown"
       );
-    }
-    match cleanup::end_unfinished(&self.db).await {
-      Ok(ended) => debug!(ended, "unfinished transfers ended at shutdown"),
-      Err(e) => warn!(error = %e, "unfinished transfers not ended at shutdown"),
     }
   }
 }

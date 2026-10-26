@@ -1,5 +1,5 @@
-//! The download calls of the API, answered by the engine; the upload calls answer that they
-//! are not built yet.
+//! The download calls of the API, answered by the engine, and the client's own records of its
+//! transfers.
 
 use std::collections::BTreeMap;
 

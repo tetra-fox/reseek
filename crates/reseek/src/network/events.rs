@@ -151,13 +151,20 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
     Event::GlobalMessageReceived(message) => server_message(&message),
     Event::UserStatusChanged(status) => {
       trace!(username = status.username, "user status changed");
+      app
+        .users
+        .status_received(&status.username, status.is_privileged);
     }
+    Event::UserStatisticsChanged(statistics) => {
+      app
+        .users
+        .statistics_received(&statistics.username, &statistics.stats);
+    }
+    Event::PrivilegedUserListReceived(usernames) => app.users.privileged_listed(&usernames),
     // the transfer, search, room, user and distributed engines follow these themselves, and the
     // rest change nothing the daemon keeps
     Event::ServerInfoReceived(_)
     | Event::PrivilegeNotificationReceived { .. }
-    | Event::PrivilegedUserListReceived(_)
-    | Event::UserStatisticsChanged(_)
     | Event::UserCannotConnect { .. }
     | Event::RoomListReceived(_)
     | Event::RoomMessageReceived { .. }
@@ -214,9 +221,11 @@ fn server_state(app: &AppState, state: ClientState) {
 }
 
 /// The TCP connection to the server is up, before the login: the watchdog stops without
-/// cancelling the login, and what waited for a reconnect is in effect now.
+/// cancelling the login, what waited for a reconnect is in effect now, and the users the last
+/// session watched are watched no more.
 async fn connected(app: &AppState) {
   app.network.watchdog().stop(false);
+  app.users.session_ended();
   info!("Connected to the Soulseek server");
   app
     .events
@@ -236,7 +245,8 @@ fn logged_in(app: &AppState) {
 }
 
 /// Once the shares are initialized: the server is told what we share, our statistics are
-/// fetched, the configured rooms are joined, and, after the first login, the downloads a stop
+/// fetched, the configured rooms are joined, the users with queued uploads and the members of
+/// the user-defined groups are watched, and, after the first login, the downloads a stop
 /// interrupted are enqueued again.
 async fn after_login(app: AppState) {
   app.shares.initialized().await;
@@ -258,6 +268,8 @@ async fn after_login(app: AppState) {
       Err(e) => warn!(room, error = %e, "room not joined"),
     }
   }
+  let uploads = app.uploads.clone();
+  tokio::spawn(async move { uploads.logged_in().await }.in_current_span());
   app.downloads.resume().await;
 }
 
@@ -421,8 +433,9 @@ fn private_message(app: &AppState, message: PrivateMessage) {
   );
 }
 
-/// A transfer moved on: logged, and an upload that succeeded reports its speed to the server,
-/// which keeps our average speed from it.
+/// A transfer moved on: logged, its direction's queued and in-progress gauges counted again, and
+/// an upload that succeeded reports its speed to the server, which keeps our average speed from
+/// it.
 fn transfer_state(app: &AppState, previous: TransferState, transfer: &Transfer) {
   let name = transfer.filename.as_str();
   let basename = name.rsplit(['\\', '/']).next().unwrap_or(name);
@@ -441,13 +454,22 @@ fn transfer_state(app: &AppState, previous: TransferState, transfer: &Transfer) 
     speed = transfer.average_speed,
     "transfer state changed"
   );
+  let client = app.network.client();
+  {
+    let family = app.telemetry.metrics().transfers();
+    match transfer.direction {
+      soulseek_proto::TransferDirection::Download => family.downloads.count(&client.downloads()),
+      soulseek_proto::TransferDirection::Upload => family.uploads.count(&client.uploads()),
+    }
+  }
   let succeeded = TransferState::COMPLETED | TransferState::SUCCEEDED;
   if transfer.direction == soulseek_proto::TransferDirection::Upload
     && transfer.state == succeeded
     && transfer.average_speed > 0.0
   {
-    let speed = transfer.average_speed.ceil().min(f64::from(u32::MAX)) as u32;
-    let client = app.network.client().clone();
+    // servers read the speed as a signed 32-bit number
+    let speed = transfer.average_speed.ceil().min(f64::from(i32::MAX)) as u32;
+    let client = client.clone();
     tokio::spawn(
       async move {
         if let Err(e) = client.send_upload_speed(speed).await {
@@ -484,4 +506,16 @@ pub fn observe_client(app: &AppState) {
   let kept = client.undelivered_search_responses();
   metrics.search.response_cache_size.set(kept as f64);
   trace!(latency, kept, "client figures observed");
+}
+
+/// Counts both directions' queued and in-progress transfers again from the client's, and moves
+/// their speed averages; run every five seconds.
+pub fn observe_transfers(app: &AppState) {
+  let client = app.network.client();
+  let (uploads, downloads) = (client.uploads(), client.downloads());
+  let family = app.telemetry.metrics().transfers();
+  family.uploads.count(&uploads);
+  family.uploads.pace(&uploads);
+  family.downloads.count(&downloads);
+  family.downloads.pace(&downloads);
 }

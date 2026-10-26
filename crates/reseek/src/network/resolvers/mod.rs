@@ -2,21 +2,21 @@
 //! contents, a search, our user info and a file's place in our upload queue. Each answer passes
 //! the checks at the network's edge first: a name with a `.` or `..` part is refused, and a user
 //! blocked from what they ask for gets what a blocked user gets. Listings, folders and searches
-//! are answered from what we share. Until the upload queue is wired, uploads are refused, places
-//! in the queue go unanswered, and the queue figures say every slot is free.
+//! are answered from what we share; uploads, places in the upload queue and the queue figures
+//! from the upload engine.
 
 mod browse;
 mod search;
 
 use std::net::SocketAddr;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, OnceLock, Weak};
 
 use api_types::blocking::BlockScope;
 use cascade::Watcher;
 use soulseek_client::{ClientError, LogLimiter, Resolvers};
 use soulseek_proto::RemoteFilename;
 use soulseek_proto::peer::UserInfo;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, info, warn};
 
 pub use browse::{browse, directory_contents};
 pub use search::{IncomingSearches, search};
@@ -26,10 +26,9 @@ use crate::config::Options;
 use crate::safety::traverses;
 use crate::shares::Shares;
 use crate::telemetry::Telemetry;
-use crate::users::{DEFAULT_GROUP, Directory as Users};
-
-/// The refusal a peer gets for a file we do not share to them.
-pub const NOT_SHARED: &str = "File not shared.";
+use crate::transfers::uploads::Uploads;
+pub use crate::transfers::uploads::{Forecast, NOT_SHARED, OVERWHELMED};
+use crate::users::Directory as Users;
 
 /// Requests with a `.` or `..` part, which a peer could send at any rate.
 static TRAVERSING: LogLimiter = LogLimiter::new();
@@ -53,6 +52,8 @@ pub struct Edges {
   /// held while a missing browse cache is written, so browses that find it missing at once
   /// write it once
   rebuilding: tokio::sync::Mutex<()>,
+  /// the upload engine, attached once while the daemon is built
+  uploads: OnceLock<Arc<Uploads>>,
 }
 
 impl Edges {
@@ -74,7 +75,25 @@ impl Edges {
       network,
       searches,
       rebuilding: tokio::sync::Mutex::new(()),
+      uploads: OnceLock::new(),
     }
+  }
+
+  /// Answers upload requests, places in the queue and the queue figures with `uploads` from
+  /// now on; done once, while the daemon is built.
+  pub(super) fn attach(&self, uploads: Arc<Uploads>) {
+    assert!(
+      self.uploads.set(uploads).is_ok(),
+      "the upload engine is attached once"
+    );
+  }
+
+  /// The upload engine.
+  fn uploads(&self) -> &Uploads {
+    self
+      .uploads
+      .get()
+      .expect("the upload engine is attached while the daemon is built, before peers reach it")
   }
 }
 
@@ -144,65 +163,35 @@ fn blocked(edges: &Edges, username: &str, endpoint: Option<SocketAddr>, scope: B
   blocked
 }
 
-/// A peer asks us to queue an upload of `filename`.
+/// A peer asks us to queue an upload of `filename`: a name with a `.` or `..` part is refused,
+/// a request finding too many waiting to be decided is dropped, and a user blocked from uploads
+/// is told the file is not shared; the upload engine decides the rest.
 pub async fn enqueue_download(
   edges: &Edges,
   username: &str,
   endpoint: SocketAddr,
   filename: &RemoteFilename,
 ) -> Result<(), ClientError> {
+  let uploads = edges.uploads();
+  uploads.request_received();
   if traverses(filename.as_str()) {
     suspicious(username, "enqueue", filename.as_str());
+    uploads.request_refused();
     return Err(ClientError::DownloadEnqueue(NOT_SHARED.into()));
+  }
+  if uploads.overwhelmed(username) {
+    return Err(ClientError::DownloadEnqueue(OVERWHELMED.into()));
   }
   if blocked(edges, username, Some(endpoint), BlockScope::Uploads) {
+    uploads.request_refused();
     return Err(ClientError::DownloadEnqueue(NOT_SHARED.into()));
   }
-  queue_upload(username, filename)
+  uploads.request(username, filename.as_str()).await
 }
 
-/// Puts an upload a peer asked for in our queue. Until the upload queue is wired nothing is
-/// queued and the peer is told the file is not shared.
-fn queue_upload(username: &str, filename: &RemoteFilename) -> Result<(), ClientError> {
-  debug!(username, %filename, "upload refused; nothing is queued for upload yet");
-  Err(ClientError::DownloadEnqueue(NOT_SHARED.into()))
-}
-
-/// Where a new upload request from a user would land in our upload queue.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Forecast {
-  /// the group the request would be queued in
-  pub group: String,
-  /// the uploads that group runs at once
-  pub total_slots: u32,
-  /// how many of those are free
-  pub free_slots: u32,
-  /// the place the request would take in the queue, 0 when a slot is free
-  pub position: u32,
-}
-
-/// The forecast for a new upload request from `username`. Nothing is queued for upload yet, so
-/// every user is forecast in the default group, with all its slots free and no place to wait.
+/// The forecast for a new upload request from `username`, by the group known for them now.
 pub fn forecast(edges: &Edges, username: &str) -> Forecast {
-  let options = edges.config.current();
-  let transfers = &options.values.transfers;
-  let global = transfers.upload.slots;
-  let slots = transfers
-    .groups
-    .default
-    .upload
-    .slots
-    .map_or(global, |group| group.min(global));
-  trace!(
-    username,
-    slots, "upload forecast; nothing is queued for upload yet"
-  );
-  Forecast {
-    group: DEFAULT_GROUP.to_string(),
-    total_slots: slots,
-    free_slots: slots,
-    position: 0,
-  }
+  edges.uploads().forecast(username)
 }
 
 /// A peer asks for our user info: a blocked user is shown no free slot and the longest queue.
@@ -222,9 +211,17 @@ pub async fn user_info(edges: &Edges, username: &str, endpoint: SocketAddr) -> U
 }
 
 /// Our user info: our description and picture, with the slots of the group `username` would be
-/// queued in and the place they would take.
+/// queued in and the place they would take. Their group is asked of the server when nothing is
+/// known of them, so a leecher is known as one.
 async fn profile(edges: &Edges, username: &str) -> UserInfo {
   let local = edges.shares.user_info().await;
+  if let Some(network) = edges.network.upgrade() {
+    let group = edges
+      .users
+      .fetch_group(network.client(), username, false)
+      .await;
+    debug!(username, group, "user info asked for");
+  }
   let forecast = forecast(edges, username);
   UserInfo {
     description: local.description,
@@ -236,7 +233,8 @@ async fn profile(edges: &Edges, username: &str) -> UserInfo {
   }
 }
 
-/// A peer asks for its place in our upload queue: a blocked user is not answered.
+/// A peer asks for its place in our upload queue: a blocked user is not answered, nor a file
+/// the queue does not hold.
 pub fn place_in_queue(
   edges: &Edges,
   username: &str,
@@ -246,14 +244,7 @@ pub fn place_in_queue(
   if blocked(edges, username, Some(endpoint), BlockScope::Uploads) {
     return None;
   }
-  queue_place(username, filename)
-}
-
-/// The place of a queued upload. Until the upload queue is wired nothing is queued, so there is
-/// no place to tell.
-fn queue_place(username: &str, filename: &RemoteFilename) -> Option<u32> {
-  debug!(username, %filename, "place in queue not answered; nothing is queued for upload yet");
-  None
+  edges.uploads().place(username, filename.as_str())
 }
 
 /// The time since `started`, in milliseconds.

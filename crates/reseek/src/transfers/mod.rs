@@ -1,6 +1,7 @@
 //! Transfers: the database every download and upload is recorded in, reading a record back as
 //! the API shows it, and what both directions share: writing records, the listings, removal and
-//! retention. The download engine is [`downloads`].
+//! retention. The engines are [`downloads`] and [`uploads`]; [`service::Transfers`] answers
+//! the API with both.
 
 pub mod categories;
 pub mod cleanup;
@@ -11,7 +12,9 @@ pub mod listing;
 pub mod prune;
 pub mod record;
 pub mod removal;
+pub mod service;
 pub mod store;
+pub mod uploads;
 
 use api_types::transfers::TransferDirection;
 use rusqlite::Row;

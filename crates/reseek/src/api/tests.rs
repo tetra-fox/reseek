@@ -35,7 +35,7 @@ fn answered_here(operation: &Operation) -> bool {
     || (route == "/api/v0/relay" && operation.method == Method::GET)
     || under("/api/v0/events")
     || under("/api/v0/telemetry")
-    || under("/api/v0/transfers/downloads")
+    || under("/api/v0/transfers")
     || route == "/api/v0/debug/transfers"
     || DIRECTORY.contains(&route)
 }

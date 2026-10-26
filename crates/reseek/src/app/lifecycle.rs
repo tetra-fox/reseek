@@ -5,10 +5,10 @@
 //! release feed is read, the shares are initialized, the clock starts, and then the watchdog
 //! connects, unless this is a relay agent, connecting is turned off or there are no
 //! credentials. Stopping, once the HTTP host has stopped: the watchdog stops, the client
-//! disconnects and is disposed, the events this raised are handled, and the transfers still
-//! running are ended as shut down.
+//! disconnects and is disposed, the events this raised are handled, the transfer tasks end,
+//! and the transfers still unfinished are ended as shut down.
 
-use tracing::{Instrument, info, info_span, warn};
+use tracing::{Instrument, debug, info, info_span, warn};
 
 use super::AppState;
 use crate::clock::Every;
@@ -51,6 +51,18 @@ async fn run(app: AppState) {
     network::observe_client(&observed);
     async {}
   });
+  let intake = app.uploads.clone();
+  app.clock.every(Every::Minute, "enqueue turns", move |_| {
+    intake.collect_idle_turns();
+    async {}
+  });
+  let counted = app.clone();
+  app
+    .clock
+    .every(Every::FiveSeconds, "transfer figures", move |_| {
+      network::observe_transfers(&counted);
+      async {}
+    });
   let pruned = app.clone();
   app
     .clock
@@ -97,9 +109,16 @@ async fn check_versions(app: AppState) {
   }
 }
 
-/// Stops the daemon's work in order.
+/// Stops the daemon's work in order: once the client is stopped and the transfer tasks have
+/// ended, the transfers left unfinished are ended as shut down, so the next start resumes the
+/// downloads among them.
 pub(super) async fn stop(app: &AppState) {
   info!("Application is shutting down");
   app.network.stop().await;
   app.downloads.stop().await;
+  app.uploads.stop().await;
+  match cleanup::end_unfinished(&app.transfers).await {
+    Ok(ended) => debug!(ended, "unfinished transfers ended at shutdown"),
+    Err(e) => warn!(error = %e, "unfinished transfers not ended at shutdown"),
+  }
 }

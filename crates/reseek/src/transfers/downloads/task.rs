@@ -242,7 +242,7 @@ impl Downloads {
   }
 
   /// Writes a download that failed for good as completed with its outcome, unless it has ended
-  /// already, and, unless it was cancelled, raises `DownloadFileFailed`.
+  /// already, counts it as failed, and, unless it was cancelled, raises `DownloadFileFailed`.
   async fn fail(&self, failed: Failed) {
     let Failed {
       record,
@@ -269,6 +269,7 @@ impl Downloads {
     record.place_in_queue = None;
     record.removed = self.removal_pending(record.id);
     self.save(&record, true).await;
+    self.telemetry.metrics().transfers().downloads.failed();
     if cancelled {
       return info!(reason = record.exception, "download cancelled");
     }
