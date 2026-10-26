@@ -7,7 +7,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
@@ -253,6 +253,20 @@ fn sort_order<'de, D: Deserializer<'de>>(deserializer: D) -> Result<SortOrder, D
   }
 }
 
+/// Reads an RFC 3339 time and converts it to UTC; a time written without an offset is taken
+/// as UTC.
+fn report_time<'de, D: Deserializer<'de>>(
+  deserializer: D,
+) -> Result<Option<DateTime<Utc>>, D::Error> {
+  let text = <Cow<'de, str>>::deserialize(deserializer)?;
+  if let Ok(time) = DateTime::parse_from_rfc3339(&text) {
+    return Ok(Some(time.with_timezone(&Utc)));
+  }
+  NaiveDateTime::parse_from_str(&text, "%Y-%m-%dT%H:%M:%S%.f")
+    .map(|naive| Some(naive.and_utc()))
+    .map_err(|e| serde::de::Error::custom(format!("not an RFC 3339 time: {e}")))
+}
+
 fn descending() -> SortOrder {
   SortOrder::Desc
 }
@@ -267,10 +281,10 @@ fn default_limit() -> u32 {
 #[into_params(parameter_in = Query)]
 pub struct SummaryQuery {
   /// the start of the window, seven days ago when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub start: Option<DateTime<Utc>>,
   /// the end of the window, inclusive, now when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub end: Option<DateTime<Utc>>,
   /// only this direction, `Download` or `Upload` in any case; both when left out
   #[serde(default, deserialize_with = "optional_direction")]
@@ -289,10 +303,10 @@ pub struct SummaryQuery {
 pub struct HistogramQuery {
   /// the start of the window, seven days ago when left out; a start before the first release
   /// means the oldest transfer
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub start: Option<DateTime<Utc>>,
   /// the end of the window, exclusive, now when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub end: Option<DateTime<Utc>>,
   /// how many buckets to divide the window into, from 1 to 1000; 100 when neither this nor
   /// `interval` is given
@@ -321,10 +335,10 @@ pub struct LeaderboardQuery {
   #[serde(deserialize_with = "direction")]
   pub direction: TransferDirection,
   /// the start of the window, the first release when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub start: Option<DateTime<Utc>>,
   /// the end of the window, inclusive, now when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub end: Option<DateTime<Utc>>,
   /// the column to rank by, in any case; `Count` when left out
   #[serde(default)]
@@ -351,10 +365,10 @@ pub struct ExceptionsQuery {
   #[serde(deserialize_with = "direction")]
   pub direction: TransferDirection,
   /// the start of the window, unbounded when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub start: Option<DateTime<Utc>>,
   /// the end of the window, inclusive, unbounded when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub end: Option<DateTime<Utc>>,
   /// only transfers with this user
   #[serde(default)]
@@ -384,10 +398,10 @@ pub struct ParetoQuery {
   #[serde(deserialize_with = "direction")]
   pub direction: TransferDirection,
   /// the start of the window, unbounded when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub start: Option<DateTime<Utc>>,
   /// the end of the window, inclusive, unbounded when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub end: Option<DateTime<Utc>>,
   /// only transfers with this user
   #[serde(default)]
@@ -408,10 +422,10 @@ pub struct ParetoQuery {
 #[into_params(parameter_in = Query)]
 pub struct DirectoriesQuery {
   /// the start of the window, the first release when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub start: Option<DateTime<Utc>>,
   /// the end of the window, inclusive, unbounded when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub end: Option<DateTime<Utc>>,
   /// only uploads to this user
   #[serde(default)]
@@ -431,10 +445,10 @@ pub struct DirectoriesQuery {
 #[into_params(parameter_in = Query)]
 pub struct UserReportQuery {
   /// the start of the window, the first release when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub start: Option<DateTime<Utc>>,
   /// the end of the window, inclusive, now when left out
-  #[serde(default)]
+  #[serde(default, deserialize_with = "report_time")]
   pub end: Option<DateTime<Utc>>,
 }
 
@@ -456,6 +470,24 @@ mod tests {
     assert_eq!(defaults.sort_order, SortOrder::Desc);
     assert!(serde_json::from_str::<LeaderboardQuery>(r#"{"direction":"sideways"}"#).is_err());
     assert!(serde_json::from_str::<LeaderboardQuery>("{}").is_err());
+  }
+
+  #[test]
+  fn report_times_take_an_offset_or_none_as_utc() {
+    let read = |text: &str| -> Option<DateTime<Utc>> {
+      serde_json::from_value::<SummaryQuery>(serde_json::json!({ "start": text }))
+        .unwrap()
+        .start
+    };
+    let utc: DateTime<Utc> = "2026-01-01T00:00:00Z".parse().unwrap();
+    assert_eq!(read("2026-01-01T00:00:00Z"), Some(utc));
+    assert_eq!(read("2026-01-01T02:00:00+02:00"), Some(utc));
+    assert_eq!(read("2026-01-01T00:00:00"), Some(utc), "naive is UTC");
+    assert_eq!(
+      read("2026-01-01T00:00:00.5").map(|t| t.timestamp_subsec_millis()),
+      Some(500)
+    );
+    assert!(serde_json::from_value::<SummaryQuery>(serde_json::json!({ "start": "abc" })).is_err());
   }
 
   #[test]
