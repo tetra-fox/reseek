@@ -39,6 +39,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "logging", "std", "tls12"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_plain = "1"
 serde_path_to_error = "0.1"
 sha2 = "0.10"
 socket2 = { version = "0.6", features = ["all"] }

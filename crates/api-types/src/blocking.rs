@@ -45,33 +45,25 @@ impl BlockScope {
     BlockScope::Messages,
     BlockScope::Rooms,
   ];
+}
 
-  /// The scope's name as it is written, such as `uploads`.
-  pub fn name(self) -> &'static str {
-    match self {
-      BlockScope::Uploads => "uploads",
-      BlockScope::Searches => "searches",
-      BlockScope::Browse => "browse",
-      BlockScope::Messages => "messages",
-      BlockScope::Rooms => "rooms",
-      BlockScope::Downloads => "downloads",
-      BlockScope::Distributed => "distributed",
-    }
+/// The scope's name as JSON writes it, such as `uploads`.
+impl std::fmt::Display for BlockScope {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let name = serde_plain::to_string(self).expect("a scope is written as a plain name");
+    f.write_str(&name)
   }
 }
 
 impl std::str::FromStr for BlockScope {
   type Err = String;
 
-  /// Reads a scope by its name as written.
+  /// Reads a scope by its name as JSON writes it.
   fn from_str(text: &str) -> Result<Self, String> {
-    Self::ALL
-      .into_iter()
-      .find(|scope| scope.name() == text)
-      .ok_or_else(|| {
-        let names: Vec<_> = Self::ALL.iter().map(|s| s.name()).collect();
-        format!("Block scope '{text}' must be one of: {}", names.join(", "))
-      })
+    serde_plain::from_str(text).map_err(|_| {
+      let names: Vec<_> = Self::ALL.iter().map(ToString::to_string).collect();
+      format!("Block scope '{text}' must be one of: {}", names.join(", "))
+    })
   }
 }
 
@@ -198,11 +190,11 @@ mod tests {
   use super::*;
 
   #[test]
-  fn scope_names_are_the_ones_json_writes_and_read_back() {
+  fn scope_names_read_back() {
     for scope in BlockScope::ALL {
-      assert_eq!(serde_json::to_value(scope).unwrap(), scope.name());
-      assert_eq!(scope.name().parse::<BlockScope>().unwrap(), scope);
+      assert_eq!(scope.to_string().parse::<BlockScope>().unwrap(), scope);
     }
+    assert_eq!(BlockScope::Distributed.to_string(), "distributed");
     let refused = "everything".parse::<BlockScope>().unwrap_err();
     assert!(refused.ends_with("downloads, distributed"), "{refused}");
   }

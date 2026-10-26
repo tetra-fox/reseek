@@ -390,7 +390,7 @@ impl Default for Blocking {
     Self {
       default_scopes: api_types::blocking::BlockScope::DEFAULT
         .iter()
-        .map(|s| s.name().to_string())
+        .map(ToString::to_string)
         .collect(),
     }
   }
