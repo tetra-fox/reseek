@@ -20,15 +20,12 @@ use tracing::{Instrument, debug, error, info_span, warn};
 
 use super::{EventBus, samples};
 use crate::api::error::ApiError;
-use crate::config::Options;
+use crate::config::{Options, RETENTION_SWEEP};
 use crate::db::{self, Database, DbError, Location, Schema};
 use crate::services::EventService;
 
 /// `events.db`: one table of every event raised.
 pub static SCHEMA: Schema = db::schema!("events", ["0001_initial"]);
-
-/// How often events past their age or the row cap are deleted.
-const SWEEP: Duration = Duration::from_secs(300);
 
 static NOT_WRITTEN: LogLimiter = LogLimiter::new();
 static NOT_READ: LogLimiter = LogLimiter::new();
@@ -287,7 +284,10 @@ fn record(
 
 /// Every five minutes, deletes the events past the configured age and count.
 async fn sweep(log: Arc<EventLog>, config: Watcher<Options>, shutdown: CancellationToken) {
-  let mut every = tokio::time::interval_at(tokio::time::Instant::now() + SWEEP, SWEEP);
+  let mut every = tokio::time::interval_at(
+    tokio::time::Instant::now() + RETENTION_SWEEP,
+    RETENTION_SWEEP,
+  );
   loop {
     tokio::select! {
       () = shutdown.cancelled() => return,

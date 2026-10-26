@@ -28,7 +28,8 @@ pub use logging::{Logger, Logging, Metrics, MetricsAuthentication};
 pub use paths::{Directories, Paths};
 pub use relay::{Relay, RelayAgent, RelayController};
 pub use retention::{
-  FileRetention, MessageRetention, Retention, TransferRetention, TransfersRetention,
+  FileRetention, MessageRetention, RETENTION_SWEEP, Retention, TransferRetention,
+  TransfersRetention,
 };
 pub use shares::{MAX_SCAN_WORKERS, ShareCache, Shares};
 pub use soulseek::{

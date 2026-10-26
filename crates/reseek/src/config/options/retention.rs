@@ -6,6 +6,9 @@ use std::time::Duration;
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
 
+/// How often the retention job deletes what is past the retention options.
+pub const RETENTION_SWEEP: Duration = Duration::from_secs(300);
+
 /// How long finished things are kept.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]

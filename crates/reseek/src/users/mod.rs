@@ -38,7 +38,7 @@ use tracing::{Instrument, debug, error, info, info_span, warn};
 
 pub use touch::{PeerInfo, Touch};
 
-use crate::config::Options;
+use crate::config::{Options, RETENTION_SWEEP};
 use crate::db::{Database, DbError, Location};
 use crate::events::EventBus;
 use crate::live::Live;
@@ -52,8 +52,6 @@ use transfers::FigureCache;
 const SUMMARY_FOR: Duration = Duration::from_secs(60);
 /// How often expired blocks are removed.
 const EXPIRY_SWEEP: Duration = Duration::from_secs(60);
-/// How often users past `retention.users` are forgotten.
-const RETENTION_SWEEP: Duration = Duration::from_secs(300);
 
 /// The users directory and the blocks.
 pub struct Directory {
