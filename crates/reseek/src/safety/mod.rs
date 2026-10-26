@@ -6,8 +6,10 @@
 //! `\\` start an absolute path, and everything else, where `/` does. Each rule takes the system
 //! whose rules it applies, so both can be checked on any host.
 
+mod local;
 mod names;
 
+pub use local::{SEGMENT_BYTES, creatable, creatable_path, path_limit, too_long};
 pub use names::{
   directory_name_safely, file_name_safely, sanitize_filename, sanitize_path, sanitize_path_segment,
   strip_path_root,
