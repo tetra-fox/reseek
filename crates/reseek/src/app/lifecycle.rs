@@ -74,10 +74,7 @@ async fn run(app: AppState) {
   if options.flags.no_connect {
     warn!("Not connecting to the Soulseek server; 'no-connect' option is enabled");
   } else if network::credentials(soulseek).is_none() {
-    warn!(
-      "Not connecting to the Soulseek server; username and/or password invalid.  Specify \
-       valid credentials and manually connect, or update config and restart."
-    );
+    network::warn_no_credentials();
   } else {
     app.network.watchdog().start();
   }

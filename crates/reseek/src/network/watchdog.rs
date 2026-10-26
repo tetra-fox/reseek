@@ -292,10 +292,7 @@ impl Watchdog {
     let options = inner.config.current();
     let soulseek = &options.values.soulseek;
     let Some((username, password)) = super::credentials(soulseek) else {
-      warn!(
-        "Not connecting to the Soulseek server; username and/or password invalid.  Specify \
-         valid credentials and manually connect, or update config and restart."
-      );
+      super::warn_no_credentials();
       return Attempt::Stop;
     };
     match inner
