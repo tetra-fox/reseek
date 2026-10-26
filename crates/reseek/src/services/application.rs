@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use super::not_yet;
 use crate::api::error::ApiError;
 
-const DOMAIN: &str = "server";
+const DOMAIN: &str = "application";
 
 /// What asking to connect did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +37,6 @@ pub trait ApplicationService: Send + Sync {
 
   /// Reads the release feed now and returns the version state it leads to.
   async fn check_version(&self) -> Result<VersionInfo, ApiError> {
-    Err(not_yet("version check"))
+    Err(not_yet(DOMAIN))
   }
 }
