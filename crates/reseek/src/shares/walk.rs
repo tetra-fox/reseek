@@ -174,7 +174,6 @@ pub(super) fn read_directory(
       return Some(read);
     }
   };
-  let mut names = HashSet::new();
   for entry in entries {
     let entry = match entry {
       Ok(entry) => entry,
@@ -206,13 +205,6 @@ pub(super) fn read_directory(
       continue;
     };
     read.lossy += u32::from(file.lossy);
-    if !names.insert(file.name.clone()) {
-      warn!(
-        name = file.name,
-        file = %path.display(),
-        "two local files share one remote name; the later one is shared"
-      );
-    }
     let touched_at = metadata
       .modified()
       .ok()

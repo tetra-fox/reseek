@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use rusqlite::{Connection, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use tracing::{debug, warn};
 
 use super::{DirectoryRows, FileRow, upper};
@@ -69,8 +69,23 @@ pub fn write_directory(
      extension = excluded.extension, attributeJson = excluded.attributeJson, \
      timestamp = excluded.timestamp RETURNING id",
   )?;
+  // a row of the same name already written by this scan is another local file whose name
+  // reads the same once masked
+  let mut written = tx.prepare_cached(
+    "SELECT originalFilename FROM files WHERE maskedFilename = ?1 AND timestamp = ?2",
+  )?;
   let mut ids = Vec::with_capacity(directory.files.len());
   for file in &directory.files {
+    let earlier: Option<Vec<u8>> = written
+      .query_row(params![file.masked, timestamp], |row| row.get(0))
+      .optional()?;
+    if earlier.is_some_and(|earlier| earlier != file.original) {
+      warn!(
+        name = file.masked,
+        file = %super::bytes_path(file.original.clone()).display(),
+        "two local files share one remote name; the later one is shared"
+      );
+    }
     let json = serde_json::to_string(&file.attributes)
       .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?;
     let id = upsert.query_row(
