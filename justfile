@@ -48,9 +48,17 @@ api-check: web-install
     pnpm --dir web api-check
 
 # the built UI served by the daemon in a browser: it loads, logs in and moves between screens
-web-smoke: web-build
+web-smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    chromium="${CHROMIUM_BIN:-$(command -v chromium || true)}"
+    if [ -z "$chromium" ]; then
+      echo "web-smoke skipped: no chromium at CHROMIUM_BIN or on PATH"
+      exit 0
+    fi
+    {{ just_executable() }} --justfile {{ justfile() }} web-build
     cargo build -p reseek --bin reseek
-    pnpm --dir web smoke
+    CHROMIUM_BIN="$chromium" pnpm --dir web smoke
 
 # the web UI's packages as the lockfile pins them
 [private]
