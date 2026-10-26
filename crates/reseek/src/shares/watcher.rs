@@ -239,6 +239,44 @@ enum Write {
   Prune(String),
 }
 
+/// A due path as it is on disk: the share that owns it, its remote name, and its metadata,
+/// `None` when it is gone or is a link not followed.
+struct Looked {
+  path: PathBuf,
+  need: Need,
+  owner: Share,
+  masked: String,
+  metadata: Option<std::fs::Metadata>,
+}
+
+/// Looks at each due path on disk, leaving out those no share takes; it reads the disk, so it
+/// runs on a blocking thread.
+fn look(settings: &Settings, due: Vec<(PathBuf, Need)>) -> Vec<Looked> {
+  let mut looked = Vec::new();
+  for (path, need) in due {
+    let Some(owner) = allowed(settings, &path).cloned() else {
+      continue;
+    };
+    let Some(masked) = share::mask(&owner, &path) else {
+      continue;
+    };
+    let link = std::fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_symlink());
+    let metadata = if link && !settings.follow_symlinks {
+      None
+    } else {
+      std::fs::metadata(&path).ok()
+    };
+    looked.push(Looked {
+      path,
+      need,
+      owner,
+      masked: masked.name,
+      metadata,
+    });
+  }
+  looked
+}
+
 /// Applies the due paths in one transaction, then counts the shares again.
 pub(super) async fn apply(
   shares: &Arc<Shares>,
@@ -248,20 +286,20 @@ pub(super) async fn apply(
 ) -> Result<(), scanner::ScanError> {
   let mut writes = Vec::new();
   let mut read: HashSet<PathBuf> = HashSet::new();
-  for (path, need) in due {
-    let Some(owner) = allowed(settings, &path).cloned() else {
-      continue;
-    };
-    let Some(masked) = share::mask(&owner, &path) else {
-      continue;
-    };
-    let on_disk = std::fs::symlink_metadata(&path);
-    let link = on_disk.as_ref().is_ok_and(|m| m.file_type().is_symlink());
-    let metadata = if link && !settings.follow_symlinks {
-      None
-    } else {
-      std::fs::metadata(&path).ok()
-    };
+  let looked = {
+    let settings = settings.clone();
+    tokio::task::spawn_blocking(move || look(&settings, due))
+      .await
+      .map_err(|e| scanner::ScanError::Task(e.to_string()))?
+  };
+  for Looked {
+    path,
+    need,
+    owner,
+    masked,
+    metadata,
+  } in looked
+  {
     match metadata {
       None if roots.iter().any(|root| share::same_path(root, &path)) => {
         // a share directory that went away is most likely an unmounted drive, so what was
@@ -274,7 +312,7 @@ pub(super) async fn apply(
           watching.roots.retain(|r| !share::same_path(r, &path));
         }
       }
-      None => writes.push(Write::Remove(masked.name)),
+      None => writes.push(Write::Remove(masked)),
       Some(m) if m.is_file() => {
         if let Some(parent) = path.parent()
           && read.insert(parent.to_path_buf())
@@ -285,7 +323,7 @@ pub(super) async fn apply(
         }
       }
       Some(m) if m.is_dir() => {
-        let name = masked.name.clone();
+        let name = masked.clone();
         let known = shares
           .db
           .read(move |conn| repository::has_directory(conn, &name))
@@ -310,7 +348,7 @@ pub(super) async fn apply(
               writes.push(Write::Directory(rows.rows));
             }
           }
-          writes.push(Write::Prune(masked.name));
+          writes.push(Write::Prune(masked));
         }
       }
       Some(_) => {}
