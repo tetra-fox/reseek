@@ -7,6 +7,7 @@ pub mod cidr;
 pub mod enums;
 pub mod load;
 mod options;
+pub mod patterns;
 pub mod redact;
 pub mod template;
 pub mod validate;

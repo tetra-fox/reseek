@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use regex::{Regex, RegexBuilder};
+use regex::Regex;
 use serde_json::json;
 use tokio::sync::{Mutex, mpsc};
 use tokio_util::sync::CancellationToken;
@@ -16,7 +16,7 @@ use tracing::{Instrument, debug, info, warn};
 use super::repository;
 use super::share::Share;
 use super::walk::{Read, directories, read_from_disk};
-use crate::config::Options;
+use crate::config::{Options, patterns};
 use crate::db::{Database, DbError};
 
 /// How many directories wait for a worker at most.
@@ -39,24 +39,15 @@ pub struct Settings {
   pub snapshot: serde_json::Value,
 }
 
-/// The largest compiled form a filter may take.
-const FILTER_SIZE: usize = 10 << 20;
-
 impl Settings {
-  /// The settings of `options` for the share list `shares`. A filter that does not compile was
-  /// refused when the options were loaded, so one that fails here is left out.
+  /// The settings of `options` for the share list `shares`.
   pub fn new(shares: Vec<Share>, options: &Options) -> Self {
     let filters = options
       .shares
       .filters
       .iter()
-      .filter_map(|f| {
-        RegexBuilder::new(f)
-          .case_insensitive(!options.flags.case_sensitive_regex)
-          .size_limit(FILTER_SIZE)
-          .build()
-          .ok()
-      })
+      // the options are only loaded once every filter in them compiles this same way
+      .filter_map(|f| patterns::compile(f, options.flags.case_sensitive_regex).ok())
       .collect();
     let mut directories: Vec<&str> = shares.iter().map(|s| s.raw.as_str()).collect();
     directories.sort_unstable();

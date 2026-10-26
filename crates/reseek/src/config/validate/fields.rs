@@ -133,7 +133,7 @@ pub(crate) fn ip_addresses(name: &str, value: &str) -> Result<(), String> {
 
 /// Whether `pattern` is a usable regular expression: not blank, and it compiles.
 pub(crate) fn is_regex(pattern: &str) -> bool {
-  !pattern.trim().is_empty() && regex::Regex::new(pattern).is_ok()
+  crate::config::patterns::compile(pattern, true).is_ok()
 }
 
 /// One address range.

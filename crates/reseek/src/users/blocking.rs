@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use api_types::blocking::{BlacklistRules, Block, BlockScope, BlockSource, BlocklistFile};
 use chrono::{DateTime, Utc};
-use regex::{Regex, RegexBuilder};
+use regex::Regex;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use tracing::warn;
 
@@ -24,8 +24,6 @@ use crate::db::{read_timestamp, timestamp};
 const DECISION_FOR: Duration = Duration::from_secs(600);
 /// How many answers are remembered.
 const DECISIONS: usize = 1000;
-/// The size limit a blacklist pattern compiles within.
-const PATTERN_SIZE: usize = 10 * 1024 * 1024;
 
 /// The bit a scope is stored as.
 pub fn bit(scope: BlockScope) -> u32 {
@@ -161,10 +159,7 @@ impl Rules {
       .patterns
       .iter()
       .filter_map(|text| {
-        RegexBuilder::new(text)
-          .case_insensitive(!options.flags.case_sensitive_regex)
-          .size_limit(PATTERN_SIZE)
-          .build()
+        crate::config::patterns::compile(text, options.flags.case_sensitive_regex)
           .inspect_err(|e| warn!(pattern = text, error = %e, "blacklist pattern not used"))
           .ok()
       })

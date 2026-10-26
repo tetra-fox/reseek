@@ -205,8 +205,7 @@ fn allowed<'a>(settings: &'a Settings, path: &Path) -> Option<&'a Share> {
     if walk::hidden(&current, metadata.as_ref()) {
       return None;
     }
-    let text = current.to_string_lossy();
-    if settings.filters.iter().any(|f| f.is_match(&text)) {
+    if settings.filtered(&current) {
       return None;
     }
   }
