@@ -127,7 +127,7 @@ fn unreadable(what: &str, path: &Path, error: std::io::Error) -> ApiError {
     ApiError::not_found(format!("The {what} '{}' does not exist", path.display()))
   } else if error.kind() == std::io::ErrorKind::PermissionDenied {
     ApiError::forbidden(format!(
-      "Access to the {what} '{}' was denied: {error}",
+      "Access to {what} '{}' was denied: {error}",
       path.display()
     ))
   } else {
@@ -145,7 +145,7 @@ fn download_files() -> ApiError {
   ))
 }
 
-/// Finds the file `relative` under `root` to serve; `what` names it in the messages.
+/// Finds the file `relative` under `root` to serve.
 fn served_path(root: &Path, relative: &str) -> Result<PathBuf, ApiError> {
   let shown = root.join(relative);
   let missing = || ApiError::not_found(format!("The file '{}' does not exist", shown.display()));
@@ -159,11 +159,7 @@ fn served_path(root: &Path, relative: &str) -> Result<PathBuf, ApiError> {
           .logged(),
       )
     }
-    Err(Refused::Denied(e)) => Err(ApiError::forbidden(format!(
-      "Access to the file '{}' was denied: {e}",
-      shown.display()
-    ))),
-    Err(Refused::Io(e)) => Err(ApiError::internal(e)),
+    Err(Refused::Denied(e) | Refused::Io(e)) => Err(unreadable("file", &shown, e)),
   }
 }
 
