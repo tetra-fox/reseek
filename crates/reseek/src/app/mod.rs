@@ -183,7 +183,10 @@ impl AppState {
       shutdown.clone(),
     )
     .map_err(StartError::Config)?;
-    let releases = Arc::new(Releases::new(RELEASE_FEED).map_err(StartError::Open)?);
+    let releases = Arc::new(
+      Releases::new(RELEASE_FEED)
+        .map_err(|e| StartError::Open(format!("release feed HTTP client: {e}")))?,
+    );
     let clock = Clock::new(shutdown.clone());
     let mut services = Services::unavailable();
     services.shares = shares.clone();
