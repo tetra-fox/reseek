@@ -145,7 +145,8 @@ pub trait TransferService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// Moves a queued upload to the front of its group's queue.
+  /// Moves a queued upload to the front of its group's queue until the group next starts an
+  /// upload; one that started already or is not in the queue is a conflict.
   async fn bump(&self, username: &str, id: Uuid) -> Result<(), ApiError> {
     Err(not_yet(DOMAIN))
   }

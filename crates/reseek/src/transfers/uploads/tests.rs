@@ -127,6 +127,76 @@ async fn every_refusal_a_peer_can_be_told_and_what_triggers_it() {
 }
 
 #[tokio::test]
+async fn each_limit_tells_the_peer_its_own_reason() {
+  let now = chrono::Utc::now();
+  // a row of alice's: its state bits, when it started, and its size
+  let row = |state: u32, started: bool, size: i64| {
+    let mut row = Row::new("alice", TransferDirection::Upload, state);
+    row.filename = "Music\\Album\\02.mp3".to_string();
+    row.size = size;
+    row.started_at = started.then_some(now);
+    row.ended_at = (state & 16 != 0).then_some(now);
+    row
+  };
+  let cases = [
+    (
+      "queued = { files = 1 }",
+      row(2 | 2048, false, 1),
+      "Too many files",
+    ),
+    (
+      "queued = { megabytes = 1 }",
+      row(2 | 2048, false, 999_998),
+      "Too many megabytes",
+    ),
+    (
+      "weekly = { failures = 1 }",
+      row(16 | 256, true, 1),
+      "Too many failed transfers this week",
+    ),
+    (
+      "weekly = { files = 1 }",
+      row(16 | 32, true, 1),
+      "Too many files this week",
+    ),
+    (
+      "weekly = { megabytes = 1 }",
+      row(16 | 32, true, 999_998),
+      "Too many megabytes this week",
+    ),
+    (
+      "daily = { failures = 1 }",
+      row(16 | 512, true, 1),
+      "Too many failed transfers today",
+    ),
+    (
+      "daily = { files = 1 }",
+      row(16 | 32, true, 1),
+      "Too many files today",
+    ),
+    (
+      "daily = { megabytes = 1 }",
+      row(16 | 32, true, 999_998),
+      "Too many megabytes today",
+    ),
+  ];
+  for (limit, row, reason) in cases {
+    let (_files, app) = shared_app(&format!("[transfers.upload.limits]\n{limit}\n")).await;
+    insert(&app.state.transfers, vec![row]).await;
+    assert_eq!(
+      asked(&app, "alice", SHARED).await.as_deref(),
+      Some(reason),
+      "{limit}"
+    );
+    assert_eq!(
+      asked(&app, "bob", SHARED).await,
+      None,
+      "{limit}: bob has nothing yet"
+    );
+  }
+}
+
+#[tokio::test]
 async fn a_privileged_user_is_queued_past_the_limits() {
   let (_files, app) = shared_app("[transfers.upload.limits]\nqueued = { files = 1 }\n").await;
   let mut queued = Row::new("vip", TransferDirection::Upload, 2 | 2048);
