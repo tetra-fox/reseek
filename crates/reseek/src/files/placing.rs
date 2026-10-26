@@ -4,8 +4,9 @@
 //! A move never replaces a file unless told to: the file takes the first free name of
 //! `name`, `name (1)`, `name (2)` and so on, claimed by a rename that fails when the name is
 //! taken, so two downloads finishing into one directory at once do not overwrite each other.
-//! Across filesystems the file is copied to a hidden name beside its destination, flushed to
-//! disk and renamed into place, so a half-copied file never has the final name.
+//! Across filesystems the file is copied to a hidden name beside its destination, random for
+//! each copy so two files of one name copied at once never share it, flushed to disk and
+//! renamed into place, so a half-copied file never has the final name.
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, ErrorKind};
@@ -126,13 +127,16 @@ fn place_new(from: &Path, dir: &Path, name: &str) -> io::Result<PathBuf> {
   ))
 }
 
-/// Copies `source` to a hidden name in `dir`, flushed to disk, for a move across
-/// filesystems; the copy is deleted when it fails.
+/// Copies `source` to a hidden name of its own in `dir`, `.{name}.{random}.part`, flushed to
+/// disk, for a move across filesystems; the copy is deleted when it fails.
 fn copy_beside(source: &Path, dir: &Path, name: &str) -> io::Result<PathBuf> {
-  let part = dir.join(format!(".{name}.part"));
+  let part = dir.join(format!(".{name}.{:016x}.part", rand::random::<u64>()));
   let copied = (|| {
     let mut from = File::open(source)?;
-    let mut to = File::create(&part)?;
+    let mut to = OpenOptions::new()
+      .write(true)
+      .create_new(true)
+      .open(&part)?;
     io::copy(&mut from, &mut to)?;
     to.sync_all()
   })();
@@ -317,5 +321,25 @@ mod tests {
     assert_eq!(placed, dir.path().join("taken (1).flac"));
     assert_eq!(std::fs::read_to_string(&placed).unwrap(), "copied");
     assert!(!part.exists());
+  }
+
+  #[test]
+  fn two_copies_of_one_name_never_share_their_hidden_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let (one, two) = (dir.path().join("one"), dir.path().join("two"));
+    std::fs::write(&one, "first").unwrap();
+    std::fs::write(&two, "second").unwrap();
+    let first = copy_beside(&one, dir.path(), "cover.jpg").unwrap();
+    let second = copy_beside(&two, dir.path(), "cover.jpg").unwrap();
+    assert_ne!(first, second);
+    for part in [&first, &second] {
+      let name = part.file_name().unwrap().to_str().unwrap();
+      assert!(
+        name.starts_with(".cover.jpg.") && name.ends_with(".part"),
+        "{name}"
+      );
+    }
+    assert_eq!(std::fs::read_to_string(&first).unwrap(), "first");
+    assert_eq!(std::fs::read_to_string(&second).unwrap(), "second");
   }
 }
