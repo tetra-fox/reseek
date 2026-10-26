@@ -1,6 +1,7 @@
 //! Transfers: the database every download and upload is recorded in, and reading a record back
 //! as the API shows it.
 
+pub mod categories;
 #[cfg(test)]
 pub mod fixtures;
 
