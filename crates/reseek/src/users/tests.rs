@@ -169,6 +169,7 @@ async fn a_block_request_is_checked_before_it_is_made() {
     json!({ "expiresIn": "1h", "expiresAt": "2099-01-01T00:00:00Z" }),
     json!({ "expiresIn": "soon" }),
     json!({ "expiresAt": "2001-01-01T00:00:00Z" }),
+    json!({ "expiresIn": "0s" }),
     json!({ "scopes": ["everything"] }),
   ] {
     let (status, _) = send(&app, "PUT", "/api/v0/users/alice/block", Some(body.clone())).await;

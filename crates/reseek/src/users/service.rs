@@ -294,11 +294,11 @@ impl BlockingService for Directory {
         let length = chrono::Duration::from_std(length).unwrap_or(chrono::Duration::MAX);
         Some(shifted(now, length))
       }
-      (None, Some(at)) if at <= now => {
-        return Err(ApiError::bad_request("expiresAt is in the past"));
-      }
       (None, at) => at,
     };
+    if !blocking::stands(expires_at, now) {
+      return Err(ApiError::bad_request("a block must end after now"));
+    }
     let block = Block {
       username: username.to_string(),
       reason: request.reason,
