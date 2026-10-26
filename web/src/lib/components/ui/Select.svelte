@@ -23,16 +23,21 @@
     "class": className
   }: Props = $props();
 
-  // bits-ui values are strings, so items are keyed by index and callers keep their own value type
-  const items = $derived(options.map((o, i) => ({ value: String(i), label: o.label })));
+  // bits-ui values are strings, so an option goes by its label, unique within one select, and
+  // callers keep their own value type
+  const items = $derived(options.map((o) => ({ value: o.label, label: o.label })));
 </script>
 
 <Select.Root
   type="single"
   {items}
   {disabled}
-  value={String(options.findIndex((o) => o.value === value))}
-  onValueChange={(i) => (value = options[Number(i)].value)}>
+  value={options.find((o) => o.value === value)?.label ?? ""}
+  onValueChange={(label) => {
+    // bits-ui reports "" for no selection, which leaves the value as it was
+    const chosen = options.find((o) => o.label === label);
+    if (chosen) value = chosen.value;
+  }}>
   <Select.Trigger
     {id}
     aria-label={ariaLabel}
