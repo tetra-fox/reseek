@@ -166,6 +166,11 @@ impl Directory {
     });
   }
 
+  /// Whether the server watches `username` for us in this session.
+  pub fn is_watched(&self, username: &str) -> bool {
+    self.groups.watched().contains(username)
+  }
+
   /// The server session ended, and with it the server's watching of every user.
   pub fn session_ended(&self) {
     self.groups.watched().clear();
