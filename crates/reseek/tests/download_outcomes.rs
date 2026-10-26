@@ -204,7 +204,23 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
   let failed = PeerMessage::UploadFailed(UploadFailed {
     filename: file.into(),
   });
+  let place = |place| {
+    PeerMessage::PlaceInQueueResponse(PlaceInQueueResponse {
+      filename: file.into(),
+      place,
+    })
+    .encode()
+  };
   queued(&mut side, file).await;
+  download_when(&api, failing.name(), id, "queued", |t| {
+    t.state == TransferStates::Queued | TransferStates::Remotely
+  })
+  .await;
+  side.send(&place(5)).await;
+  download_when(&api, failing.name(), id, "placed", |t| {
+    t.place_in_queue == Some(5)
+  })
+  .await;
   side.send(&failed.encode()).await;
   let waiting = download_when(&api, failing.name(), id, "waiting to retry", |t| {
     t.attempts == 2
@@ -219,7 +235,11 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
     Some("Download reported as failed by remote client"),
     "the reason shows while it waits"
   );
-  assert_eq!(waiting.ended_at, None);
+  assert_eq!(
+    (waiting.started_at, waiting.ended_at, waiting.place_in_queue),
+    (None, None, None),
+    "the place and the times of the failed try are gone"
+  );
   let next = waiting.next_attempt_at.expect("the next try is due");
   let wait = (next - chrono::Utc::now()).num_milliseconds();
   assert!(
@@ -227,9 +247,22 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
     "a second's delay and up to a second's jitter: {wait}"
   );
   queued(&mut side, file).await;
+  download_when(&api, failing.name(), id, "queued", |t| {
+    t.state == TransferStates::Queued | TransferStates::Remotely
+  })
+  .await;
+  side.send(&place(4)).await;
+  download_when(&api, failing.name(), id, "placed", |t| {
+    t.place_in_queue == Some(4)
+  })
+  .await;
   side.send(&failed.encode()).await;
   let errored = download_when(&api, failing.name(), id, "errored", ended).await;
   assert_eq!(errored.state, completed(TransferStates::Errored));
+  assert_eq!(
+    errored.place_in_queue, None,
+    "no place once out of the peer's queue"
+  );
   assert_eq!((errored.attempts, errored.next_attempt_at), (2, None));
   let query: EventsQuery = serde_json::from_value(json!({ "type": "DownloadFileFailed" })).unwrap();
   let started = Instant::now();

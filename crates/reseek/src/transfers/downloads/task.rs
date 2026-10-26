@@ -167,12 +167,10 @@ impl Downloads {
     record.attempts = 1;
     self.save(&record, false).await;
     let mut attempt = 1;
+    // the wait before the try about to start, none before the first
+    let mut delay: Option<Duration> = None;
     loop {
-      if attempt > 1 {
-        let delay = backoff(attempt, retry.delay, retry.max_delay, jitter(retry.delay));
-        record.next_attempt_at =
-          Some(Utc::now() + chrono::Duration::from_std(delay).unwrap_or(chrono::Duration::MAX));
-        self.save(&record, false).await;
+      if let Some(delay) = delay.take() {
         info!(
           attempt,
           seconds = delay.as_secs_f64().ceil() as u64,
@@ -202,12 +200,19 @@ impl Downloads {
           if !failure.retryable || attempt >= retry.attempts {
             return Ended::failed(Some(record), failure, Some(incomplete));
           }
-          // waiting to retry: queued here again, with the reason it failed shown meanwhile
+          // waiting to retry: queued here again, with the reason it failed shown meanwhile and
+          // no start until the next try starts
           attempt += 1;
           record.state = TransferStates::Queued | TransferStates::Locally;
           record.attempts = attempt;
+          record.started_at = None;
           record.ended_at = None;
+          record.place_in_queue = None;
           record.exception = Some(failure.message);
+          let wait = backoff(attempt, retry.delay, retry.max_delay, jitter(retry.delay));
+          record.next_attempt_at =
+            Some(Utc::now() + chrono::Duration::from_std(wait).unwrap_or(chrono::Duration::MAX));
+          delay = Some(wait);
           self.save(&record, true).await;
         }
       }
@@ -261,6 +266,7 @@ impl Downloads {
       _ => failure.message,
     });
     record.next_attempt_at = None;
+    record.place_in_queue = None;
     record.removed = self.removal_pending(record.id);
     self.save(&record, true).await;
     if cancelled {
