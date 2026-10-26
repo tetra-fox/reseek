@@ -41,13 +41,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 /// The root a path parameter names; any other name is no route.
 pub(super) fn root(name: &str) -> Result<FileRoot, ApiError> {
-  match name {
-    "downloads" => Ok(FileRoot::Downloads),
-    "incomplete" => Ok(FileRoot::Incomplete),
-    _ => Err(ApiError::not_found(format!(
-      "no directory root named {name}"
-    ))),
-  }
+  name.parse().map_err(ApiError::not_found)
 }
 
 /// How a request asks for a file's bytes, from its method, headers, principal and query.

@@ -103,14 +103,6 @@ impl Files {
   }
 }
 
-/// A root's name as the routes write it.
-fn root_name(root: FileRoot) -> &'static str {
-  match root {
-    FileRoot::Downloads => "downloads",
-    FileRoot::Incomplete => "incomplete",
-  }
-}
-
 /// Runs blocking filesystem work off the runtime.
 async fn blocking<T: Send + 'static>(
   work: impl FnOnce() -> Result<T, ApiError> + Send + 'static,
@@ -233,7 +225,7 @@ impl FileService for Files {
         .link
         .as_deref()
         .ok_or_else(|| ApiError::unauthorized("authentication required"))?;
-      let claimed = link::claimed(root_name(root), &path);
+      let claimed = link::claimed(&root.to_string(), &path);
       match link::check(&self.auth.secret, token, &claimed, Utc::now()) {
         Ok(subject) => debug!(subject, "file served by its link token"),
         Err(reason) => {
@@ -405,7 +397,7 @@ impl FileService for Files {
     let (token, expires_at) = link::issue(
       &self.auth.secret,
       &principal.subject,
-      &link::claimed(root_name(root), &relative),
+      &link::claimed(&root.to_string(), &relative),
       Utc::now(),
     );
     debug!(

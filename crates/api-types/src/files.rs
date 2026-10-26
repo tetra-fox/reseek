@@ -20,6 +20,23 @@ pub enum FileRoot {
   Incomplete,
 }
 
+/// The root's name as a path writes it, such as `downloads`.
+impl std::fmt::Display for FileRoot {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let name = serde_plain::to_string(self).expect("a root is written as a plain name");
+    f.write_str(&name)
+  }
+}
+
+impl std::str::FromStr for FileRoot {
+  type Err = String;
+
+  /// Reads a root by its name as a path writes it.
+  fn from_str(text: &str) -> Result<Self, String> {
+    serde_plain::from_str(text).map_err(|_| format!("no directory root named {text}"))
+  }
+}
+
 bitflags::bitflags! {
   /// What kind of entry a file or directory is, written as the names of the set flags joined
   /// by `", "` such as `"Directory"` or `"Hidden, Directory"`. A plain file is `"Normal"`.
@@ -184,6 +201,16 @@ impl ToSchema for FileContent {}
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn root_names_are_the_json_names() {
+    assert_eq!(FileRoot::Downloads.to_string(), "downloads");
+    assert_eq!("incomplete".parse(), Ok(FileRoot::Incomplete));
+    assert_eq!(
+      "Downloads".parse::<FileRoot>(),
+      Err("no directory root named Downloads".to_string())
+    );
+  }
 
   #[test]
   fn filesystem_attributes_are_written_by_name_in_bit_order() {
