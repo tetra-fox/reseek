@@ -84,7 +84,7 @@ impl Reports {
     let mut result = BTreeMap::new();
     let key = |seconds: i64| {
       DateTime::<Utc>::from_timestamp(seconds, 0)
-        .unwrap_or(DateTime::<Utc>::MIN_UTC)
+        .expect("a bucket lies between the years the databases store")
         .to_rfc3339_opts(SecondsFormat::Secs, true)
     };
     for bucket in 0..count {

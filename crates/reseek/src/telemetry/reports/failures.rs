@@ -10,7 +10,7 @@ use rusqlite::{Connection, params_from_iter};
 use super::{Filter, Reports, Window};
 use crate::db::{self, DbError};
 use crate::transfers::categories::FAILED;
-use crate::transfers::direction_at;
+use crate::transfers::{direction_at, text_at};
 
 impl Reports {
   /// The failed transfers of one direction, by when they ended.
@@ -115,9 +115,9 @@ fn detail(row: &rusqlite::Row) -> rusqlite::Result<TransferExceptionDetail> {
   let direction = direction_at(row, 2)?;
   Ok(TransferExceptionDetail {
     id,
-    username: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+    username: text_at(row, 1)?,
     direction,
-    filename: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+    filename: text_at(row, 3)?,
     size: row.get::<_, i64>(4)?.max(0).unsigned_abs(),
     state: TransferStates::from_bits_retain(row.get(5)?),
     requested_at: required(6, "RequestedAt")?,

@@ -13,6 +13,7 @@ use rusqlite::types::Value;
 use super::{Filter, Reports, SUMMARY, Window, summary_at};
 use crate::db::DbError;
 use crate::transfers::categories::SUCCESSFUL;
+use crate::transfers::text_at;
 
 impl Reports {
   /// Users ranked by their successful transfers in one direction, ties broken by username
@@ -52,7 +53,7 @@ impl Reports {
             let mut summary = summary_at(row, 1)?;
             summary.distinct_users = 1;
             Ok(LeaderboardEntry {
-              username: row.get::<_, Option<String>>(0)?.unwrap_or_default(),
+              username: text_at(row, 0)?,
               summary,
             })
           })?
@@ -77,13 +78,13 @@ impl Reports {
       "SELECT Filename, Username FROM Transfers{}",
       filter.clause()
     );
-    let rows: Vec<(Option<String>, Option<String>)> = self
+    let rows: Vec<(String, String)> = self
       .db
       .read(move |conn| {
         let mut statement = conn.prepare(&sql)?;
         statement
           .query_map(params_from_iter(&filter.values), |row| {
-            Ok((row.get(0)?, row.get(1)?))
+            Ok((text_at(row, 0)?, text_at(row, 1)?))
           })?
           .collect()
       })
@@ -91,10 +92,10 @@ impl Reports {
     let mut by_directory: HashMap<String, (u64, HashSet<String>)> = HashMap::new();
     for (filename, username) in rows {
       let entry = by_directory
-        .entry(directory_of(filename.as_deref().unwrap_or_default()).to_string())
+        .entry(directory_of(&filename).to_string())
         .or_default();
       entry.0 += 1;
-      entry.1.insert(username.unwrap_or_default());
+      entry.1.insert(username);
     }
     let mut counts: Vec<DirectoryCount> = by_directory
       .into_iter()

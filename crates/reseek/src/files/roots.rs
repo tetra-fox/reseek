@@ -33,7 +33,8 @@ pub(super) enum Refused {
 }
 
 impl Located {
-  /// The path's name, the root's own name for the root.
+  /// The path's name, the root's own name for the root; empty for a filesystem root, which
+  /// has none.
   pub fn name(&self) -> String {
     self
       .path

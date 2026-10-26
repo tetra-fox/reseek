@@ -73,6 +73,7 @@ impl Served {
       .path
       .file_name()
       .map(|name| name.to_string_lossy().into_owned())
+      // a served file is never a filesystem root, the one path without a name
       .unwrap_or_default()
   }
 

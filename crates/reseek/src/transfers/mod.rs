@@ -33,6 +33,13 @@ pub fn direction_text(direction: TransferDirection) -> &'static str {
   }
 }
 
+/// The text in the nullable column `i` of `row`, such as `Username` or `Filename`, empty for
+/// NULL: the transfer engines always write them, so a NULL is a row from elsewhere and reads
+/// as no name.
+pub fn text_at(row: &Row, i: usize) -> rusqlite::Result<String> {
+  Ok(row.get::<_, Option<String>>(i)?.unwrap_or_default())
+}
+
 /// The direction in the column `i` of `row`, as [`direction_text`] wrote it.
 pub fn direction_at(row: &Row, i: usize) -> rusqlite::Result<TransferDirection> {
   match row.get_ref(i)?.as_str()? {
@@ -87,9 +94,9 @@ pub fn transfer(row: &Row) -> rusqlite::Result<Transfer> {
   Ok(Transfer {
     id,
     batch_id,
-    username: text(2)?.unwrap_or_default(),
+    username: text_at(row, 2)?,
     direction,
-    filename: text(4)?.unwrap_or_default(),
+    filename: text_at(row, 4)?,
     size,
     state,
     requested_at,

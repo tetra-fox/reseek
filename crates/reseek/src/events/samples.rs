@@ -170,8 +170,8 @@ pub fn sample(kind: EventType, d: &str, now: DateTime<Utc>) -> Option<Event> {
 fn blank_transfer() -> Transfer {
   let year_one = NaiveDate::from_ymd_opt(1, 1, 1)
     .and_then(|day| day.and_hms_opt(0, 0, 0))
-    .map(|time| time.and_utc())
-    .unwrap_or(DateTime::<Utc>::MIN_UTC);
+    .expect("the start of year 1 is a time")
+    .and_utc();
   Transfer {
     id: Uuid::nil(),
     batch_id: None,
