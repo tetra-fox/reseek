@@ -240,6 +240,42 @@ mod tests {
     )));
   }
 
+  #[tokio::test]
+  async fn a_proxy_whose_destination_refused_makes_the_address_unreachable() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let proxy = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = proxy.local_addr().unwrap().port();
+    let refusing = tokio::spawn(async move {
+      let (mut stream, _) = proxy.accept().await.unwrap();
+      let mut methods = [0; 3];
+      stream.read_exact(&mut methods).await.unwrap();
+      stream.write_all(&[5, 0]).await.unwrap();
+      let mut request = [0; 10];
+      stream.read_exact(&mut request).await.unwrap();
+      // reply 5: the destination refused the connection
+      stream.write_all(&[5, 5, 0, 1]).await.unwrap();
+    });
+    let options = ConnectionOptions {
+      proxy: Some(crate::options::ProxyOptions {
+        address: "127.0.0.1".into(),
+        port,
+        credentials: None,
+      }),
+      ..ConnectionOptions::default()
+    };
+    let refused = Conn::connect(
+      "198.51.100.7:2234".parse().unwrap(),
+      Some("alice".into()),
+      ConnKind::OUTBOUND | ConnKind::DIRECT,
+      options,
+      &CancellationToken::new(),
+    )
+    .await
+    .unwrap_err();
+    refusing.await.unwrap();
+    assert!(unreachable(&refused), "{refused:?}");
+  }
+
   #[test]
   fn only_the_address_that_failed_is_forgotten() {
     let endpoints = Endpoints::new(10);

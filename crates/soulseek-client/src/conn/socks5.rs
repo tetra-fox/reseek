@@ -19,7 +19,12 @@ const IPV4: u8 = 1;
 const DOMAIN: u8 = 3;
 const IPV6: u8 = 4;
 
-/// Asks the proxy on `stream` to connect to `destination`. Failures are proxy errors.
+/// The reply of a proxy whose destination refused the connection.
+const CONNECTION_REFUSED: u8 = 5;
+
+/// Asks the proxy on `stream` to connect to `destination`. Failures are proxy errors; one whose
+/// destination refused the connection carries a refused connect as its cause, as a direct
+/// connect would.
 pub(crate) async fn handshake<S: AsyncRead + AsyncWrite + Unpin>(
   stream: &mut S,
   destination: SocketAddrV4,
@@ -29,6 +34,11 @@ pub(crate) async fn handshake<S: AsyncRead + AsyncWrite + Unpin>(
     .await
     .map_err(|error| match error {
       Failure::Proxy(message) => proxy_error(message),
+      Failure::Refused(message) => ClientError::connection_from(
+        ConnectionErrorKind::Proxy,
+        message,
+        std::io::Error::from(std::io::ErrorKind::ConnectionRefused),
+      ),
       Failure::Io(error) => ClientError::connection_from(
         ConnectionErrorKind::Proxy,
         format!("Failed to connect to proxy: {error}"),
@@ -39,6 +49,8 @@ pub(crate) async fn handshake<S: AsyncRead + AsyncWrite + Unpin>(
 
 enum Failure {
   Proxy(String),
+  /// the destination refused the proxy's connection
+  Refused(String),
   Io(std::io::Error),
 }
 
@@ -95,10 +107,12 @@ async fn negotiate<S: AsyncRead + AsyncWrite + Unpin>(
   let [version, reply, _reserved, address_type] = read_array(stream).await?;
   check_version(version)?;
   if reply != 0 {
-    return Err(Failure::Proxy(format!(
-      "SOCKS connection failed: {}",
-      reply_text(reply)
-    )));
+    let message = format!("SOCKS connection failed: {}", reply_text(reply));
+    return Err(if reply == CONNECTION_REFUSED {
+      Failure::Refused(message)
+    } else {
+      Failure::Proxy(message)
+    });
   }
   // the address the proxy bound for us is read off the stream and not used
   let address_len = match address_type {
@@ -169,7 +183,7 @@ fn reply_text(reply: u8) -> String {
     2 => "Connection not allowed by ruleset".into(),
     3 => "Network unreachable".into(),
     4 => "Host unreachable".into(),
-    5 => "Connection refused".into(),
+    CONNECTION_REFUSED => "Connection refused".into(),
     6 => "TTL expired".into(),
     7 => "Command not supported".into(),
     8 => "Address type not supported".into(),
