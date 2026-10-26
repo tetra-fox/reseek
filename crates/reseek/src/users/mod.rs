@@ -19,6 +19,7 @@ mod touch;
 mod transfers;
 
 pub use blocking::reason_fits;
+pub use groups::DEFAULT as DEFAULT_GROUP;
 
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -161,6 +162,12 @@ impl Directory {
   /// block or the configuration's blacklist.
   pub fn is_blocked(&self, username: &str, ip: Option<IpAddr>, scope: BlockScope) -> bool {
     self.blocks.is_blocked(username, ip, scope)
+  }
+
+  /// Whether a remembered answer says `username` is blocked from `scope`; a user without one is
+  /// taken as not blocked, and nothing is worked out.
+  pub fn remembers_blocked(&self, username: &str, scope: BlockScope) -> bool {
+    self.blocks.remembers_blocked(username, scope)
   }
 
   /// The row of `username` and the block that applies to them.

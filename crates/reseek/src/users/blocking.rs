@@ -378,6 +378,20 @@ impl Blocks {
     }
   }
 
+  /// Whether a remembered answer says `username` is blocked from `scope`, at whatever address
+  /// it was worked out for; nothing is worked out, so a user without one is taken as not
+  /// blocked. For a check that must stay cheap and is followed by the full one.
+  pub fn remembers_blocked(&self, username: &str, scope: BlockScope) -> bool {
+    self
+      .decisions
+      .lock()
+      .unwrap_or_else(PoisonError::into_inner)
+      .iter()
+      .any(|((name, _, remembered), decision)| {
+        name == username && *remembered == scope && decision.blocked && decision.fresh()
+      })
+  }
+
   /// Whether `username`, connecting from `ip` when known, is blocked from `scope`: by our
   /// block with that scope, or by the configuration's blacklist, which blocks from every
   /// scope. A user blocked without an address is blocked from every address.
@@ -539,5 +553,28 @@ mod tests {
     options.transfers.groups.blacklisted.members.clear();
     blocks.configure(&options);
     assert!(!blocks.is_blocked("Mallory", None, BlockScope::Distributed));
+  }
+
+  #[test]
+  fn the_cheap_check_only_reads_what_is_remembered() {
+    let mut options = Options::default();
+    options.transfers.groups.blacklisted.members = vec!["mallory".to_string()];
+    options.transfers.groups.blacklisted.cidrs = vec!["203.0.113.0/24".to_string()];
+    let blocks = Blocks::new(&options, &[]);
+    assert!(
+      !blocks.remembers_blocked("mallory", BlockScope::Searches),
+      "nothing remembered yet, so not blocked"
+    );
+    assert!(blocks.is_blocked("mallory", None, BlockScope::Searches));
+    assert!(blocks.remembers_blocked("mallory", BlockScope::Searches));
+    assert!(!blocks.remembers_blocked("mallory", BlockScope::Browse));
+    let ip = Some("203.0.113.7".parse().unwrap());
+    assert!(blocks.is_blocked("carol", ip, BlockScope::Searches));
+    assert!(
+      blocks.remembers_blocked("carol", BlockScope::Searches),
+      "an answer worked out with an address stands for the name"
+    );
+    blocks.configure(&options);
+    assert!(!blocks.remembers_blocked("carol", BlockScope::Searches));
   }
 }
