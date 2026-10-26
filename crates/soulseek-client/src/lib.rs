@@ -35,6 +35,7 @@ mod waiter;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 pub use browse::{BrowseOptions, BrowseProgress, BrowseProgressUpdated};
+pub use bucket::TokenBucket;
 pub use client::{Client, DEFAULT_SERVER_ADDRESS, DEFAULT_SERVER_PORT};
 pub use conn::{
   Conn, ConnHandle, ConnKey, ConnKind, ConnReadHalf, ConnState, ConnWriteHalf, Disconnect,

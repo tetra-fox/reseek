@@ -1,5 +1,6 @@
-//! The speed limit shared by every transfer in one direction: a bucket of bytes refilled to its
-//! capacity at each 100 ms boundary. A transfer asks for what its next chunk needs and gets what
+//! A speed limit: a bucket of bytes refilled to its capacity at each 100 ms boundary. The client
+//! keeps one for each direction, shared by every transfer going that way; an application can
+//! keep its own, such as one per group of users, and govern transfers with it. A transfer asks for what its next chunk needs and gets what
 //! is left, at most one interval's worth; when the bucket is empty it waits for the next boundary.
 //! Requesters are served one at a time in arrival order. Bytes granted but not moved are given
 //! back, which lets an interval spend up to twice its capacity; the refill drops any surplus.
@@ -28,7 +29,8 @@ struct State {
   interval: u64,
 }
 
-pub(crate) struct TokenBucket {
+/// A speed limit shared by whoever asks it for bytes.
+pub struct TokenBucket {
   start: Instant,
   state: std::sync::Mutex<State>,
   /// held by the requester being served, so the others wait in arrival order
@@ -48,6 +50,16 @@ pub(crate) fn capacity(kib_per_second: u32) -> u64 {
 }
 
 impl TokenBucket {
+  /// A full bucket for a limit of `kib_per_second`; 0 is no limit.
+  pub fn for_speed(kib_per_second: u32) -> Self {
+    Self::new(capacity(kib_per_second))
+  }
+
+  /// Changes the limit to `kib_per_second` from the next interval on; 0 is no limit.
+  pub fn set_speed(&self, kib_per_second: u32) {
+    self.set_capacity(capacity(kib_per_second));
+  }
+
   /// a full bucket of `capacity` bytes per interval
   pub(crate) fn new(capacity: u64) -> Self {
     let capacity = capacity.max(1);
@@ -87,11 +99,7 @@ impl TokenBucket {
   /// Grants up to `requested` bytes, never more than one interval's capacity: what is left in
   /// the bucket, or what the next interval brings when it is empty. Asking for 0 returns 0 at
   /// once. Fails with `Cancelled`, taking nothing, when `cancel` fires first.
-  pub(crate) async fn get(
-    &self,
-    requested: u32,
-    cancel: &CancellationToken,
-  ) -> Result<u32, ClientError> {
+  pub async fn get(&self, requested: u32, cancel: &CancellationToken) -> Result<u32, ClientError> {
     if requested == 0 {
       return Ok(0);
     }
@@ -123,7 +131,7 @@ impl TokenBucket {
   }
 
   /// Gives back bytes granted but not moved; the bucket holds at most twice its capacity
-  pub(crate) fn give_back(&self, unused: u32) {
+  pub fn give_back(&self, unused: u32) {
     if unused == 0 {
       return;
     }
