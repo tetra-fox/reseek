@@ -50,7 +50,7 @@ impl Entry<'_> {
 
 /// Checks the shared directories, with the share of the downloads directory `downloads` when
 /// `shares.share_downloads` adds it, and the filters and cache options.
-pub(super) fn check(shares: &Shares, downloads: &Path, report: &mut Report) {
+pub(super) fn check(shares: &Shares, downloads: &Path, case_sensitive: bool, report: &mut Report) {
   let mut entries: Vec<Entry> = Vec::new();
   for written in &shares.directories {
     match entry(written) {
@@ -114,7 +114,7 @@ pub(super) fn check(shares: &Shares, downloads: &Path, report: &mut Report) {
     }
   }
   for filter in &shares.filters {
-    if !is_regex(filter) {
+    if !is_regex(filter, case_sensitive) {
       report.add(
         "shares.filters",
         format!("Share filter '{filter}' is not a valid regular expression"),
@@ -205,7 +205,7 @@ mod tests {
       ..Shares::default()
     };
     let mut report = Report::default();
-    check(&shares, Path::new("/srv/downloads"), &mut report);
+    check(&shares, Path::new("/srv/downloads"), false, &mut report);
     report.messages()
   }
 

@@ -17,7 +17,7 @@ const RESERVED_GROUPS: &[&str] = &["privileged", "default", "leechers", "blackli
 /// A chmod mode in octal.
 static MODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[0-7]{3,4}$").unwrap());
 
-pub(super) fn check(transfers: &Transfers, report: &mut Report) {
+pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Report) {
   let upload = &transfers.upload;
   report.check(
     "transfers.upload.slots",
@@ -84,7 +84,7 @@ pub(super) fn check(transfers: &Transfers, report: &mut Report) {
     report.check(key, at_least(key, value, 1));
   }
   for pattern in &groups.blacklisted.patterns {
-    if !is_regex(pattern) {
+    if !is_regex(pattern, case_sensitive) {
       report.add(
         "transfers.groups.blacklisted.patterns",
         format!("Pattern '{pattern}' is not a valid regular expression"),
@@ -182,7 +182,7 @@ mod tests {
 
   fn problems(transfers: &Transfers) -> Vec<(String, String)> {
     let mut report = Report::default();
-    check(transfers, &mut report);
+    check(transfers, false, &mut report);
     report.0.into_iter().map(|i| (i.key, i.message)).collect()
   }
 

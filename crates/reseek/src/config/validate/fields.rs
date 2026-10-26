@@ -131,9 +131,10 @@ pub(crate) fn ip_addresses(name: &str, value: &str) -> Result<(), String> {
   })
 }
 
-/// Whether `pattern` is a usable regular expression: not blank, and it compiles.
-pub(crate) fn is_regex(pattern: &str) -> bool {
-  crate::config::patterns::compile(pattern, true).is_ok()
+/// Whether `pattern` is a usable regular expression: not blank, and it compiles as the engines
+/// compile it, matching ignoring case unless `case_sensitive`.
+pub(crate) fn is_regex(pattern: &str, case_sensitive: bool) -> bool {
+  crate::config::patterns::compile(pattern, case_sensitive).is_ok()
 }
 
 /// One address range.
@@ -216,10 +217,10 @@ mod tests {
 
   #[test]
   fn regexes_and_cidrs_report_the_value() {
-    assert!(is_regex("^.*\\.flac$"));
-    assert!(!is_regex("("));
-    assert!(!is_regex("  "));
-    assert!(!is_regex("(?=x)"), "look-around is not supported");
+    assert!(is_regex("^.*\\.flac$", false));
+    assert!(!is_regex("(", false));
+    assert!(!is_regex("  ", false));
+    assert!(!is_regex("(?=x)", false), "look-around is not supported");
     assert_eq!(
       cidr("192.168.1.0/33").unwrap_err(),
       "CIDR 192.168.1.0/33 is invalid: prefix length 33 is out of range"

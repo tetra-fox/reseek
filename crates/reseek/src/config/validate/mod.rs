@@ -38,8 +38,9 @@ pub fn validate(options: &Options, context: &Context) -> Result<(), Vec<Invalid>
     .downloads
     .clone()
     .unwrap_or_else(|| context.default_downloads.clone());
-  shares::check(&options.shares, &downloads, &mut report);
-  transfers::check(&options.transfers, &mut report);
+  let case_sensitive = options.flags.case_sensitive_regex;
+  shares::check(&options.shares, &downloads, case_sensitive, &mut report);
+  transfers::check(&options.transfers, case_sensitive, &mut report);
   web::check(&options.web, context, &mut report);
   soulseek::check(&options.soulseek, &mut report);
   scripts::check(&options.integrations, &mut report);

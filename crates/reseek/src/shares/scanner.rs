@@ -46,8 +46,11 @@ impl Settings {
       .shares
       .filters
       .iter()
-      // the options are only loaded once every filter in them compiles this same way
-      .filter_map(|f| patterns::compile(f, options.flags.case_sensitive_regex).ok())
+      .filter_map(|f| {
+        patterns::compile(f, options.flags.case_sensitive_regex)
+          .inspect_err(|e| warn!(filter = f, error = e, "share filter not used"))
+          .ok()
+      })
       .collect();
     let mut directories: Vec<&str> = shares.iter().map(|s| s.raw.as_str()).collect();
     directories.sort_unstable();

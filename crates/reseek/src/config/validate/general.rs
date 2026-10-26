@@ -60,7 +60,7 @@ pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
   }
   check_blacklist(&options.blacklist, report);
   for filter in &options.filters.search.request {
-    if !is_regex(filter) {
+    if !is_regex(filter, options.flags.case_sensitive_regex) {
       report.add(
         "filters.search.request",
         format!("Search request filter '{filter}' is not a valid regular expression"),
