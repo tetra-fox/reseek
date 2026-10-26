@@ -39,6 +39,8 @@ pub struct GroupCache {
   watched: Mutex<HashSet<String>>,
   /// one watch of a user at a time
   watching: Turns,
+  /// how many watches of each user completed, so a caller that waited for another's knows
+  watches: Mutex<HashMap<String, u64>>,
   /// how many replies to our own status requests are still to come, by user
   asked: Mutex<HashMap<String, u32>>,
   /// the users whose statistics are being asked for again
@@ -231,16 +233,19 @@ impl Directory {
     self.watch_once(client, username, true).await
   }
 
-  /// The watch itself, one per user at a time: a caller that waited for another's finds the
-  /// user watched and is done, unless `again`.
+  /// The watch itself, one per user at a time: a caller that waited while another watched the
+  /// user takes that watch for its own, and one that finds the user watched already is done
+  /// unless `again`.
   async fn watch_once(
     &self,
     client: &Client,
     username: &str,
     again: bool,
   ) -> Result<(), ClientError> {
+    let completed = |groups: &GroupCache| locked(&groups.watches).get(username).copied();
+    let before = completed(&self.groups);
     let _turn = self.groups.watching.take(username).await;
-    if !again && self.is_watched(username) {
+    if completed(&self.groups) != before || (!again && self.is_watched(username)) {
       return Ok(());
     }
     let watched = client.watch_user(username).await?;
@@ -249,6 +254,9 @@ impl Directory {
       warn!(username, error = %e, "status of a watched user not fetched");
     }
     self.groups.watched().insert(username.to_string());
+    *locked(&self.groups.watches)
+      .entry(username.to_string())
+      .or_default() += 1;
     info!(username, "Added user to watch list");
     Ok(())
   }

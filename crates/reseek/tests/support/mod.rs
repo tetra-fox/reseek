@@ -15,17 +15,13 @@ use soulfind::{PASSWORD, Soulfind};
 use soulseek_client::{ClientOptions, Event};
 use tokio::sync::broadcast;
 
-/// The Soulseek server the network tests run against, from the client's test harness.
-#[path = "../../../soulseek-client/tests/support/soulfind.rs"]
-pub mod soulfind;
+/// The client's test harness: the Soulseek server the network tests run against, a scripted
+/// server and scripted peers for what a real one never does, and files to send.
+#[path = "../../../soulseek-client/tests/support/mod.rs"]
+pub mod client;
 
-/// A scripted peer, from the client's test harness, for what a real client never does.
-#[path = "../../../soulseek-client/tests/support/peer.rs"]
-pub mod peer;
-
-/// Files to send and an uploader that queues every request, from the client's test harness.
-#[path = "../../../soulseek-client/tests/support/transfers.rs"]
-pub mod transfers;
+#[allow(unused_imports, reason = "each test binary uses a part of it")]
+pub use client::{peer, soulfind, transfers};
 
 /// How long a test waits for something that should happen promptly.
 pub const PATIENCE: Duration = Duration::from_secs(20);
