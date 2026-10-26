@@ -17,7 +17,7 @@ use soulseek_client::{
 use tokio::sync::{mpsc, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use super::Downloads;
 use super::task::Gate;
@@ -258,7 +258,7 @@ impl Downloads {
     let (states_sent, mut states) = mpsc::channel(STATES);
     let state_changed: StateChanged = Arc::new(move |_, snapshot: &Snapshot| {
       if let Err(e) = states_sent.try_send(snapshot.clone()) {
-        error!(error = %e, "download state not recorded");
+        warn!(error = %e, "download state not recorded");
       }
     });
     let (progress_sent, mut progress) = watch::channel((start, 0.0));
@@ -301,7 +301,12 @@ impl Downloads {
         Some(snapshot) = states.recv() => self.state_changed(record, snapshot, gate, &mut ended).await,
         result = &mut running => break result,
         () = &mut deadline, if gate.is_some() => {
-          warn!(state = %record.state, "download not queued by the peer within the time limit");
+          let history = self.history(record.id).await;
+          warn!(
+            state = %record.state,
+            history,
+            "download not queued by the peer within the time limit"
+          );
           hard_limited = true;
           gate.take();
           stop.cancel();
@@ -407,6 +412,18 @@ impl Downloads {
       );
     }
     self.save(record, previous != state).await;
+  }
+
+  /// The states the download `id` entered, oldest first with when, as one line for a log.
+  async fn history(&self, id: uuid::Uuid) -> String {
+    match self.db.read(move |conn| store::history(conn, id)).await {
+      Ok(states) => states
+        .iter()
+        .map(|change| format!("{} at {}", change.state, change.at.to_rfc3339()))
+        .collect::<Vec<_>>()
+        .join("; "),
+      Err(e) => format!("not read: {e}"),
+    }
   }
 
   /// Writes and pushes the bytes moved and the speed of a download in progress.
