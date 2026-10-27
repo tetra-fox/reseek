@@ -1,4 +1,5 @@
 import ChartColumnIcon from "@lucide/svelte/icons/chart-column";
+import CircleUserIcon from "@lucide/svelte/icons/circle-user";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
 import MessageSquareIcon from "@lucide/svelte/icons/message-square";
@@ -50,6 +51,13 @@ export const navItems: NavItem[] = [
 
 export const systemItem: NavItem = { title: "System", path: "/system", icon: SettingsIcon };
 
+/** Our own profile, reached from the account menu rather than the navigation */
+export const profileItem: NavItem = {
+  title: "Your profile",
+  path: "/profile",
+  icon: CircleUserIcon
+};
+
 /** The tabs of the System area, in order */
 export const systemTabs = [
   { tab: "info", title: "Info" },
@@ -64,7 +72,9 @@ export const systemTabs = [
 
 /** The navigation item a route is under: `/searches/<id>` is under Search */
 export const navCurrent = (path: string): NavItem | undefined =>
-  [...navItems, systemItem].find((item) => path === item.path || path.startsWith(`${item.path}/`));
+  [...navItems, systemItem, profileItem].find(
+    (item) => path === item.path || path.startsWith(`${item.path}/`)
+  );
 
 /** The document title for a route, innermost first: "Settings - System - reseek" */
 export const title = (path: string): string => {

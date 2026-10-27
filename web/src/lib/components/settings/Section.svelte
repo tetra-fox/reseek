@@ -25,6 +25,7 @@
   import { type Field, type Section, valueAt } from "#lib/config/sections.js";
   import { plural } from "#lib/format.js";
   import { same } from "#lib/keyed.svelte.js";
+  import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { toast } from "#lib/toast.svelte.js";
 
@@ -276,6 +277,9 @@
         {#snippet extra()}
           {#if field.key === "web.authentication.oidc"}
             <OidcTest names={Object.keys(valueAt(view.values, field.key) ?? {})} />
+          {:else if field.key === "soulseek.description" || field.key === "soulseek.picture"}
+            <a href={href("/profile")} class="text-xs text-accent hover:underline"
+              >Edit on your profile page</a>
           {/if}
         {/snippet}
       </FieldRow>

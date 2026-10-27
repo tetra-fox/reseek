@@ -26,9 +26,11 @@
     /** what the directory holds, undefined until it arrived */
     user: UserSummary | undefined;
     onblock: () => void;
+    /** a profile not saved yet, which the card shows as it would show for us */
+    draft?: { description: string; src: string | null; pictureUrl: string | null };
   };
 
-  let { name, user, onblock }: Props = $props();
+  let { name, user, onblock, draft }: Props = $props();
 
   const to = $derived(links(name));
   const presence = $derived.by(() => {
@@ -51,21 +53,20 @@
   $effect(() => {
     if (own) ownProfile.need();
   });
-  const pictureUrl = $derived(own ? ownProfile.data?.pictureUrl : user?.info?.pictureUrl);
-  const description = $derived(
-    own
-      ? ownProfile.data?.description
-        ? firstLines(ownProfile.data.description, 3)
-        : null
-      : user?.description
+  const pictureUrl = $derived(
+    draft ? draft.pictureUrl : own ? ownProfile.data?.pictureUrl : user?.info?.pictureUrl
   );
+  const description = $derived.by(() => {
+    const text = draft ? draft.description : own ? ownProfile.data?.description : null;
+    return text === null || text === undefined ? user?.description : firstLines(text, 3) || null;
+  });
   const country = $derived(flag(user?.countryCode));
   const readWrite = $derived(session.can("ReadWrite"));
 </script>
 
 <div class="flex flex-col gap-3 text-sm">
   <div class="flex items-center gap-3">
-    <Avatar {name} {pictureUrl} class="size-12" />
+    <Avatar {name} {pictureUrl} src={draft?.src} class="size-12" />
     <div class="flex min-w-0 flex-col">
       <span class="truncate font-mono font-medium">{name}</span>
       <span class="flex items-center gap-1.5 text-xs text-fg-muted">
@@ -153,7 +154,7 @@
         </Button>
       {/snippet}
     </Tooltip>
-    {#if readWrite}
+    {#if readWrite && !own}
       <Tooltip text={user?.block ? "Unblock" : "Block"}>
         {#snippet child({ props })}
           <Button

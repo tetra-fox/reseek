@@ -7,7 +7,8 @@ export type Answer = unknown | { status: number; body?: unknown };
 
 /**
  * Stands in for the daemon in a test: the event stream is held open and fed by `frame`, and
- * every other request is answered by `answer`, 404 when it gives undefined. Undone by
+ * every other request is answered by `answer`, 404 when it gives undefined. A JSON body is
+ * handed over parsed, any other as its text. Undone by
  * `vi.unstubAllGlobals()`
  */
 export const fakeNetwork = (
@@ -31,7 +32,8 @@ export const fakeNetwork = (
         return new Response(body);
       }
       const text = await request.text();
-      const body = text ? JSON.parse(text) : undefined;
+      const json = request.headers.get("content-type")?.includes("json") ?? false;
+      const body = !text ? undefined : json ? JSON.parse(text) : text;
       requests.push({ method: request.method, url, body });
       const reply = await answer(url, request.method, body);
       if (reply === undefined) return new Response(null, { status: 404 });
