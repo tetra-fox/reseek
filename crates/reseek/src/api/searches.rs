@@ -1,6 +1,8 @@
 //! The searches routes: starting a search, listing searches, reading one with its responses,
 //! and stopping and deleting it. Reading takes the ReadOnly role, the rest ReadWrite.
 
+use std::time::Duration;
+
 use api_types::search::{
   Search, SearchGetQuery, SearchListQuery, SearchRequest, SearchResponse, SearchScopeType,
   SearchTimeout,
@@ -21,8 +23,8 @@ use crate::auth::{AnyRole, Authorized, ReadWrite};
 use crate::searches;
 use crate::services::Cancelled;
 
-/// The shortest wait for another response, in milliseconds.
-const SHORTEST_TIMEOUT: u64 = 1000;
+/// The shortest wait for another response.
+const SHORTEST_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// The searches routes.
 pub fn routes() -> OpenApiRouter<AppState> {
@@ -46,11 +48,11 @@ pub fn routes() -> OpenApiRouter<AppState> {
 async fn start(
   State(app): State<AppState>,
   caller: Authorized<ReadWrite>,
-  Json(mut request): Json<SearchRequest>,
+  Json(request): Json<SearchRequest>,
 ) -> Result<Json<Search>, ApiError> {
-  request.search_timeout = SearchTimeout::Milliseconds(timeout(&request.search_timeout)?);
+  let search_timeout = timeout(&request.search_timeout)?;
   search_request(&request)?;
-  let search = app.services.searches.start(request).await?;
+  let search = app.services.searches.start(request, search_timeout).await?;
   info!(
     by = caller.principal.subject,
     id = %search.id,
@@ -60,20 +62,16 @@ async fn start(
   Ok(Json(search))
 }
 
-/// The timeout in milliseconds, at least a second.
-fn timeout(timeout: &SearchTimeout) -> Result<u64, ApiError> {
-  let millis = match timeout {
-    SearchTimeout::Milliseconds(millis) => *millis,
-    SearchTimeout::Text(text) => {
-      let duration = validate::duration("searchTimeout", text)?;
-      // a duration past u64::MAX milliseconds waits as long as one of u64::MAX does
-      u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
-    }
+/// How long the search waits for another response, at least a second.
+fn timeout(timeout: &SearchTimeout) -> Result<Duration, ApiError> {
+  let duration = match timeout {
+    SearchTimeout::Milliseconds(millis) => Duration::from_millis(*millis),
+    SearchTimeout::Text(text) => validate::duration("searchTimeout", text)?,
   };
-  if millis < SHORTEST_TIMEOUT {
+  if duration < SHORTEST_TIMEOUT {
     return Err(ApiError::bad_request("searchTimeout must be at least 1s"));
   }
-  Ok(millis)
+  Ok(duration)
 }
 
 /// Refuses a search with no text, with only excluded terms, with only terms of one character,
@@ -223,14 +221,18 @@ mod tests {
 
   #[test]
   fn timeouts_are_milliseconds_or_durations_of_a_second_or_more() {
+    let seconds = Duration::from_secs;
     assert_eq!(
       timeout(&SearchTimeout::Milliseconds(15_000)).unwrap(),
-      15_000
+      seconds(15)
     );
-    assert_eq!(timeout(&SearchTimeout::Text("15s".into())).unwrap(), 15_000);
+    assert_eq!(
+      timeout(&SearchTimeout::Text("15s".into())).unwrap(),
+      seconds(15)
+    );
     assert_eq!(
       timeout(&SearchTimeout::Text("1m 30s".into())).unwrap(),
-      90_000
+      seconds(90)
     );
     assert!(
       timeout(&SearchTimeout::Milliseconds(15)).is_err(),

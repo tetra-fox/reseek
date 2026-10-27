@@ -1,5 +1,7 @@
 //! Searches we start on the network.
 
+use std::time::Duration;
+
 use api_types::search::{Search, SearchListQuery, SearchRequest, SearchResponse};
 use async_trait::async_trait;
 use uuid::Uuid;
@@ -23,10 +25,15 @@ pub enum Cancelled {
 // the default bodies answer 503 without looking at their arguments
 #[allow(unused_variables)]
 pub trait SearchService: Send + Sync {
-  /// Records a search and starts it in the background. `request` has passed the API's checks;
-  /// its `searchTimeout` is in milliseconds. A search with the request's id already existing
-  /// is a conflict, as is not being logged in.
-  async fn start(&self, request: SearchRequest) -> Result<Search, ApiError> {
+  /// Records a search and starts it in the background. `request` has passed the API's checks,
+  /// which read its `searchTimeout` as `search_timeout`, how long the search waits for another
+  /// response. A search with the request's id already existing is a conflict, as is not being
+  /// logged in.
+  async fn start(
+    &self,
+    request: SearchRequest,
+    search_timeout: Duration,
+  ) -> Result<Search, ApiError> {
     Err(not_yet(DOMAIN))
   }
 

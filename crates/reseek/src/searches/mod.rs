@@ -18,7 +18,7 @@ use std::time::Duration;
 use api_types::live::LiveFrame;
 use api_types::search::{
   Search, SearchListQuery, SearchRequest, SearchResponse, SearchScope, SearchScopeType,
-  SearchStates, SearchTimeout,
+  SearchStates,
 };
 use async_trait::async_trait;
 use cascade::Watcher;
@@ -97,15 +97,6 @@ fn client_scope(scope: &SearchScope) -> soulseek_client::SearchScope {
         .cloned()
         .expect("the API takes a room search only with its one room"),
     ),
-  }
-}
-
-/// How long a search with `timeout` waits for another response.
-fn timeout(timeout: &SearchTimeout) -> Result<Duration, ApiError> {
-  match timeout {
-    SearchTimeout::Milliseconds(millis) => Ok(Duration::from_millis(*millis)),
-    SearchTimeout::Text(text) => humantime::parse_duration(text)
-      .map_err(|e| ApiError::bad_request(format!("searchTimeout: {e}"))),
   }
 }
 
@@ -279,12 +270,14 @@ impl Searches {
 
 #[async_trait]
 impl SearchService for Searches {
-  async fn start(&self, request: SearchRequest) -> Result<Search, ApiError> {
+  async fn start(
+    &self,
+    request: SearchRequest,
+    search_timeout: Duration,
+  ) -> Result<Search, ApiError> {
     let Ok(_starting) = self.starting.try_lock() else {
       return Err(ApiError::too_many(ONE_AT_A_TIME));
     };
-    // checked before anything is written, so a bad timeout leaves no record
-    let search_timeout = timeout(&request.search_timeout)?;
     let client = self.network.client().clone();
     let id = request.id.unwrap_or_else(Uuid::new_v4);
     let record = Search {
