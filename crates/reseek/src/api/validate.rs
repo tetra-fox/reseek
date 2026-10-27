@@ -47,31 +47,11 @@ pub fn duration(name: &str, text: &str) -> Result<Duration, ApiError> {
     .map_err(|e| ApiError::invalid(format!("{name} is not a duration"), e.to_string()))
 }
 
-/// The most characters a room name has.
-const ROOM_NAME_CHARS: usize = 24;
-
 /// Refuses a room name the server would not take: empty, longer than 24 characters, anything
 /// but printable ASCII, a space at either end or two in a row.
 pub fn room_name(name: &str) -> Result<(), ApiError> {
-  let reason = if name.is_empty() {
-    Some("it is empty")
-  } else if !name.bytes().all(|b| (0x20..=0x7e).contains(&b)) {
-    Some("only printable ASCII characters are allowed")
-  } else if name.len() > ROOM_NAME_CHARS {
-    Some("it is longer than 24 characters")
-  } else if name.starts_with(' ') || name.ends_with(' ') {
-    Some("it starts or ends with a space")
-  } else if name.contains("  ") {
-    Some("it has two spaces in a row")
-  } else {
-    None
-  };
-  match reason {
-    Some(reason) => Err(ApiError::bad_request(format!(
-      "Invalid room name: {reason}"
-    ))),
-    None => Ok(()),
-  }
+  soulseek_proto::validate_room_name(name)
+    .map_err(|reason| ApiError::bad_request(format!("Invalid room name: {reason}")))
 }
 
 /// The path a files route names in base64 of its UTF-8 text, standard or URL-safe, padded or
