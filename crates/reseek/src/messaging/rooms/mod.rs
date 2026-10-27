@@ -1,10 +1,11 @@
 //! Rooms: joining and leaving, at login and when the configuration adds a room, what is said
-//! and who is there, the tickers, the private rooms we belong to, the server's room list, and
-//! each room's stored history with the gaps in it.
+//! and who is there, the tickers, the private rooms we belong to and the server's room list.
+//! Each room's stored history is read in `stored`.
 
 mod events;
 pub mod history;
 mod private;
+mod stored;
 pub mod tracker;
 
 pub use events::room_of;
@@ -12,21 +13,19 @@ pub use events::room_of;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
-use api_types::chat::{ExportFormat, NotifyLevel};
+use api_types::chat::NotifyLevel;
 use api_types::live::LiveFrame;
 use api_types::rooms::{
-  JoinRoom, JoinedRoom, Room, RoomHistory, RoomHistoryList, RoomInfo, RoomMessagesQuery,
-  RoomTicker, RoomUser,
+  JoinRoom, JoinedRoom, Room, RoomInfo, RoomMessagesQuery, RoomTicker, RoomUser,
 };
-use axum::response::Response;
 use chrono::Utc;
 use soulseek_client::{ClientError, RoomErrorKind};
 use soulseek_proto::RoomType;
 use soulseek_proto::server::RoomList;
 use tracing::{Instrument, debug, info, info_span, warn};
 
+use super::Messaging;
 use super::conversations::unsent;
-use super::{Messaging, export, sessions};
 use crate::api::error::ApiError;
 use crate::db::DbError;
 use crate::services::Joined;
@@ -314,62 +313,6 @@ impl Messaging {
       .ok_or_else(|| not_in(room))
   }
 
-  /// A page of `room`'s stored history, with the gaps between its first message and its last,
-  /// or now on the newest page.
-  async fn history_page(
-    &self,
-    room: &str,
-    query: RoomMessagesQuery,
-  ) -> Result<RoomHistory, ApiError> {
-    let room_name = room.to_string();
-    let (messages, has_more, oldest) = self
-      .db
-      .read(move |conn| {
-        let (messages, has_more) = history::page(conn, &room_name, &query)?;
-        Ok((messages, has_more, history::oldest(conn, &room_name)?))
-      })
-      .await
-      .map_err(internal)?;
-    let gaps = match (oldest, messages.first()) {
-      (Some(oldest), Some(first)) => {
-        let to = match query.before {
-          Some(_) => messages.last().map_or(first.timestamp, |m| m.timestamp),
-          None => Utc::now(),
-        };
-        sessions::within(&self.history_gaps().await, oldest, first.timestamp, to)
-      }
-      _ => Vec::new(),
-    };
-    Ok(RoomHistory {
-      messages,
-      has_more,
-      gaps,
-    })
-  }
-
-  pub(super) async fn room_messages(
-    &self,
-    room: &str,
-    query: RoomMessagesQuery,
-  ) -> Result<RoomHistory, ApiError> {
-    self.tracks(room)?;
-    self.history_page(room, query).await
-  }
-
-  pub(super) async fn stored_messages(
-    &self,
-    room: &str,
-    query: RoomMessagesQuery,
-  ) -> Result<RoomHistory, ApiError> {
-    let page = self.history_page(room, query).await?;
-    if page.messages.is_empty() && query.before.is_none() && self.tracks(room).is_err() {
-      return Err(ApiError::not_found(format!(
-        "no messages of the room {room} are stored"
-      )));
-    }
-    Ok(page)
-  }
-
   pub(super) async fn joined_rooms(&self) -> Result<Vec<JoinedRoom>, ApiError> {
     let rooms: Vec<(String, u32)> = self
       .rooms
@@ -464,58 +407,5 @@ impl Messaging {
       .map_err(internal)?;
     self.push_rooms().await;
     Ok(())
-  }
-
-  pub(super) async fn room_history(
-    &self,
-    room: Option<String>,
-  ) -> Result<RoomHistoryList, ApiError> {
-    let joined = self.rooms.tracker().joined_names();
-    let rooms = self
-      .db
-      .read(move |conn| {
-        history::stored(conn, room.as_deref(), |name| {
-          joined.iter().any(|joined| joined == name)
-        })
-      })
-      .await
-      .map_err(internal)?;
-    Ok(RoomHistoryList { rooms })
-  }
-
-  pub(super) async fn delete_history(&self, room: &str) -> Result<(), ApiError> {
-    let name = room.to_string();
-    let deleted = self
-      .db
-      .write(move |conn| history::delete(conn, &name))
-      .await
-      .map_err(internal)?;
-    if deleted == 0 {
-      return Err(ApiError::not_found(format!(
-        "no messages of the room {room} are stored"
-      )));
-    }
-    debug!(room, deleted, "room history deleted");
-    self.unread.changed();
-    Ok(())
-  }
-
-  pub(super) async fn export_room(
-    &self,
-    room: &str,
-    format: ExportFormat,
-  ) -> Result<Response, ApiError> {
-    let name = room.to_string();
-    let messages = self
-      .db
-      .read(move |conn| history::all(conn, &name))
-      .await
-      .map_err(internal)?;
-    if messages.is_empty() {
-      return Err(ApiError::not_found(format!(
-        "no messages of the room {room} are stored"
-      )));
-    }
-    export::room(room, &messages, format)
   }
 }
