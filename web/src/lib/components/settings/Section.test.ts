@@ -43,6 +43,7 @@ describe("a settings section", () => {
 
   it("shows where each value comes from and when a change applies", () => {
     const v = structuredClone(view);
+    v.fields["web.port"].source = { layer: "file", file: "config.toml" };
     v.fields["web.ui"].source = { layer: "env", var: "RESEEK_WEB_UI" };
     const web = render(
       sections.find((s) => s.id === "web")!,
@@ -53,7 +54,7 @@ describe("a settings section", () => {
     expect(row("web.port").textContent).toContain("restart");
     expect(row("web.ui").textContent).toContain("RESEEK_WEB_UI");
     expect(row("web.external_url").textContent).not.toContain("config.toml");
-    expect(web.querySelector<HTMLInputElement>('[id="web.port"]')!.value).toBe("5130");
+    expect(web.querySelector<HTMLInputElement>('[id="web.port"]')!.value).toBe("5030");
     expect(web.querySelector<HTMLButtonElement>('[id="web.ui"]')!.disabled).toBe(true);
   });
 

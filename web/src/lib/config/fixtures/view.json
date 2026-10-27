@@ -5,7 +5,13 @@
       "file": null
     },
     "blocking": {
-      "default_scopes": ["uploads", "searches", "browse", "messages", "rooms"]
+      "default_scopes": [
+        "uploads",
+        "searches",
+        "browse",
+        "messages",
+        "rooms"
+      ]
     },
     "chat": {
       "max_message_length": 2000,
@@ -41,11 +47,11 @@
       "log_sql": false,
       "log_unobserved_exceptions": false,
       "no_config_watch": false,
-      "no_connect": true,
-      "no_logo": true,
+      "no_connect": false,
+      "no_logo": false,
       "no_share_scan": false,
       "no_start": false,
-      "no_version_check": true,
+      "no_version_check": false,
       "optimistic_relay_file_info": false,
       "volatile": false
     },
@@ -140,6 +146,9 @@
     "shutdown_timeout": "10s",
     "soulseek": {
       "address": "vps.slsknet.org",
+      "browse": {
+        "response_timeout": "1m"
+      },
       "connection": {
         "buffer": {
           "read": 16384,
@@ -184,6 +193,9 @@
       "password": null,
       "picture": null,
       "port": 2271,
+      "search": {
+        "max_concurrent": 2
+      },
       "server_keepalive": {
         "enabled": true,
         "idle": "10s",
@@ -339,7 +351,7 @@
         },
         "session_idle": "30days",
         "session_ttl": "7days",
-        "trusted_networks": ["127.0.0.0/8"],
+        "trusted_networks": [],
         "trusted_role": "administrator",
         "username": "reseek"
       },
@@ -361,7 +373,7 @@
           "password": null,
           "pfx": null
         },
-        "disabled": true,
+        "disabled": false,
         "force": false,
         "ip_address": null,
         "port": 5031
@@ -371,7 +383,7 @@
         "max_streams_per_principal": 16
       },
       "logging": false,
-      "port": 5130,
+      "port": 5030,
       "socket": null,
       "trusted_proxies": [],
       "ui": true,
@@ -388,6 +400,8 @@
       "cliFlag": "--enable-blacklist",
       "kind": "bool",
       "doc": "Loads the blocklist file and refuses peers whose address it lists.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -401,6 +415,8 @@
       "cliFlag": "--blacklist-file",
       "kind": "string",
       "doc": "The blocklist file, in CIDR, P2P or DAT format; read again when a `blacklist` option changes.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -416,6 +432,14 @@
         "list": "string"
       },
       "doc": "What a new block stops unless it says otherwise: any of `uploads`, `searches`, `browse`, `messages`, `rooms`, `downloads`, `distributed`.",
+      "choices": null,
+      "default": [
+        "uploads",
+        "searches",
+        "browse",
+        "messages",
+        "rooms"
+      ],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -429,6 +453,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The longest message that may be sent, in characters.",
+      "choices": null,
+      "default": 2000,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -442,6 +468,8 @@
       "cliFlag": null,
       "kind": "bool",
       "doc": "The UI may show notifications, once the browser allows it.",
+      "choices": null,
+      "default": true,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -455,6 +483,8 @@
       "cliFlag": null,
       "kind": "bool",
       "doc": "Notifies of room messages that mention us.",
+      "choices": null,
+      "default": true,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -468,6 +498,8 @@
       "cliFlag": null,
       "kind": "bool",
       "doc": "No notification while the tab is visible with the message's chat open.",
+      "choices": null,
+      "default": true,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -481,6 +513,8 @@
       "cliFlag": null,
       "kind": "bool",
       "doc": "Notifies of private messages.",
+      "choices": null,
+      "default": true,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -494,6 +528,8 @@
       "cliFlag": null,
       "kind": "bool",
       "doc": "Notifies of every message in rooms set to notify of all messages.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -507,6 +543,8 @@
       "cliFlag": null,
       "kind": "bool",
       "doc": "Plays a short sound with each notification.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -520,6 +558,8 @@
       "cliFlag": "--debug",
       "kind": "bool",
       "doc": "Debug mode: logs at debug level and names the module on every log line.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -533,6 +573,8 @@
       "cliFlag": "--downloads",
       "kind": "string",
       "doc": "Where finished downloads are moved; `downloads` in the data directory when not set. A directory given here must exist and be writable.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -546,6 +588,8 @@
       "cliFlag": "--incomplete",
       "kind": "string",
       "doc": "Where downloads in progress are written; `incomplete` in the data directory when not set. A directory given here must exist and be writable.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -559,6 +603,8 @@
       "cliFlag": "--swagger",
       "kind": "bool",
       "doc": "Serves the OpenAPI document at `/swagger/v0/swagger.json` and its browser at `/swagger`.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -574,6 +620,8 @@
         "list": "string"
       },
       "doc": "Regular expressions; an incoming search whose text matches one is not answered.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -587,6 +635,8 @@
       "cliFlag": "--case-sensitive-regex",
       "kind": "bool",
       "doc": "Makes user-defined regular expressions case-sensitive.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -600,6 +650,8 @@
       "cliFlag": "--config-watch-poll",
       "kind": "bool",
       "doc": "Watches the configuration files by reading them every few seconds, for mounts where file notifications do not arrive.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -613,6 +665,8 @@
       "cliFlag": "--experimental",
       "kind": "bool",
       "doc": "Turns on features still being tried out.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -626,6 +680,8 @@
       "cliFlag": "--force-migrations",
       "kind": "bool",
       "doc": "Applies every database migration whether or not it looks applied.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -639,6 +695,8 @@
       "cliFlag": "--force-share-scan",
       "kind": "bool",
       "doc": "Scans the shares in full at startup even when the share cache is current.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -652,6 +710,8 @@
       "cliFlag": "--legacy-windows-tcp-keepalive",
       "kind": "bool",
       "doc": "Uses the older socket keepalive control on Windows versions before 10 1709.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -665,6 +725,8 @@
       "cliFlag": "--log-sql",
       "kind": "bool",
       "doc": "Logs every SQL statement with its values; the log then holds usernames, filenames and messages.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -678,6 +740,8 @@
       "cliFlag": "--log-unobserved-exceptions",
       "kind": "bool",
       "doc": "Logs the failure of background work nothing waits for.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -691,34 +755,38 @@
       "cliFlag": "--no-config-watch",
       "kind": "bool",
       "doc": "Does not watch the configuration files; changes then need a reload signal or a restart.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
     },
     "flags.no_connect": {
       "source": {
-        "layer": "file",
-        "file": "config.toml"
+        "layer": "default"
       },
       "file": "config.toml",
       "envVar": "RESEEK_NO_CONNECT",
       "cliFlag": "--no-connect",
       "kind": "bool",
       "doc": "Does not connect to the Soulseek server at startup.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
     },
     "flags.no_logo": {
       "source": {
-        "layer": "cli",
-        "flag": "--no-logo"
+        "layer": "default"
       },
       "file": "config.toml",
       "envVar": "RESEEK_NO_LOGO",
       "cliFlag": "--no-logo",
       "kind": "bool",
       "doc": "Leaves out the startup banner.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -732,6 +800,8 @@
       "cliFlag": "--no-share-scan",
       "kind": "bool",
       "doc": "Does not scan the shares at startup.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -745,20 +815,23 @@
       "cliFlag": "--no-start",
       "kind": "bool",
       "doc": "Sets everything up, then exits instead of serving; for checking a configuration.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
     },
     "flags.no_version_check": {
       "source": {
-        "layer": "file",
-        "file": "config.toml"
+        "layer": "default"
       },
       "file": "config.toml",
       "envVar": "RESEEK_NO_VERSION_CHECK",
       "cliFlag": "--no-version-check",
       "kind": "bool",
       "doc": "Does not check for a newer release.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -772,6 +845,8 @@
       "cliFlag": "--optimistic-relay-file-info",
       "kind": "bool",
       "doc": "A relay controller trusts an agent's share listing for whether a file exists, instead of asking the agent first.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -785,6 +860,8 @@
       "cliFlag": "--volatile",
       "kind": "bool",
       "doc": "Keeps every database in memory: nothing is saved and nothing survives a restart.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -798,6 +875,8 @@
       "cliFlag": "--headless",
       "kind": "bool",
       "doc": "Serves the API only, no web UI.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -811,6 +890,8 @@
       "cliFlag": "--instance-name",
       "kind": "string",
       "doc": "Names this instance in logs and to a relay controller.",
+      "choices": null,
+      "default": "default",
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -824,6 +905,8 @@
       "cliFlag": null,
       "kind": "map",
       "doc": "Scripts by name, each run when one of its events is raised.",
+      "choices": null,
+      "default": {},
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -837,6 +920,8 @@
       "cliFlag": "--loki",
       "kind": "string",
       "doc": "The base URL of a Grafana Loki instance to push logs to.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -850,6 +935,8 @@
       "cliFlag": "--no-color",
       "kind": "bool",
       "doc": "Writes the console log without colour; `NO_COLOR` set to anything does the same.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -863,6 +950,8 @@
       "cliFlag": "--no-disk-logger",
       "kind": "bool",
       "doc": "Writes no log files.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -876,6 +965,14 @@
       "cliFlag": "--log-level",
       "kind": "string",
       "doc": "The least severe level logged: `error`, `warn`, `info`, `debug` or `trace`; `debug` mode lowers it to `debug`.",
+      "choices": [
+        "error",
+        "warn",
+        "info",
+        "debug",
+        "trace"
+      ],
+      "default": "info",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -891,6 +988,8 @@
         "list": "string"
       },
       "doc": "Levels for single modules, such as `soulseek_client::distributed=trace`.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -904,6 +1003,8 @@
       "cliFlag": "--metrics-no-auth",
       "kind": "bool",
       "doc": "Serves the metrics without credentials.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -917,6 +1018,8 @@
       "cliFlag": "--metrics-password",
       "kind": "string",
       "doc": "The password.",
+      "choices": null,
+      "default": "*****",
       "apply": "restart",
       "secret": true,
       "notApplied": null
@@ -930,6 +1033,8 @@
       "cliFlag": "--metrics-username",
       "kind": "string",
       "doc": "The username.",
+      "choices": null,
+      "default": "reseek",
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -943,6 +1048,8 @@
       "cliFlag": "--metrics",
       "kind": "bool",
       "doc": "Serves Prometheus metrics.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -956,6 +1063,8 @@
       "cliFlag": "--metrics-url",
       "kind": "string",
       "doc": "The path the metrics are served at.",
+      "choices": null,
+      "default": "/metrics",
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -969,6 +1078,8 @@
       "cliFlag": "--cache-dir",
       "kind": "string",
       "doc": "The cache directory, which holds what can be rebuilt, such as the share index.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -982,6 +1093,8 @@
       "cliFlag": "--config-dir",
       "kind": "string",
       "doc": "The configuration directory, which holds the configuration files and the scripts directory; set by the environment or the command line only, since the files are in it.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -995,6 +1108,8 @@
       "cliFlag": "--data-dir",
       "kind": "string",
       "doc": "The data directory, which holds the databases, runtime overrides and the instance lock.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -1008,6 +1123,8 @@
       "cliFlag": "--log-dir",
       "kind": "string",
       "doc": "The directory of the daily log files.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -1021,6 +1138,8 @@
       "cliFlag": null,
       "kind": "map",
       "doc": "The agents allowed to connect to this controller, by name.",
+      "choices": null,
+      "default": {},
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1034,6 +1153,8 @@
       "cliFlag": "--controller-address",
       "kind": "string",
       "doc": "The controller's base URL, such as `https://host:5031`.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1047,6 +1168,8 @@
       "cliFlag": "--controller-api-key",
       "kind": "string",
       "doc": "One of the controller's API keys, with the read-write or administrator role.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": true,
       "notApplied": null
@@ -1060,6 +1183,8 @@
       "cliFlag": "--controller-downloads",
       "kind": "bool",
       "doc": "Fetches finished downloads from the controller.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1073,6 +1198,8 @@
       "cliFlag": "--controller-ignore-certificate-errors",
       "kind": "bool",
       "doc": "Accepts any TLS certificate from the controller.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1086,6 +1213,8 @@
       "cliFlag": "--controller-secret",
       "kind": "string",
       "doc": "The secret the controller has for this agent.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": true,
       "notApplied": null
@@ -1099,6 +1228,8 @@
       "cliFlag": "--relay",
       "kind": "bool",
       "doc": "Turns relay mode on.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -1112,6 +1243,12 @@
       "cliFlag": "--relay-mode",
       "kind": "string",
       "doc": "`controller`, `agent`, or `debug` for a controller that is also its own agent.",
+      "choices": [
+        "controller",
+        "agent",
+        "debug"
+      ],
+      "default": "controller",
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -1125,6 +1262,8 @@
       "cliFlag": "--remote-configuration",
       "kind": "bool",
       "doc": "Lets administrators change the configuration files and runtime overrides through the API.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1138,6 +1277,8 @@
       "cliFlag": "--remote-file-management",
       "kind": "bool",
       "doc": "Lets the files API delete files in the download and incomplete directories.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1151,6 +1292,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Logged events older than this are deleted; `0` keeps them.",
+      "choices": null,
+      "default": "30days",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1164,6 +1307,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most logged events kept; the oldest beyond it are deleted, `0` keeps them all.",
+      "choices": null,
+      "default": 100000,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1177,6 +1322,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Files in the downloads directory.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1190,6 +1337,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Files in the incomplete directory.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1203,6 +1352,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Daily log files older than this are deleted, at least two days.",
+      "choices": null,
+      "default": "14days",
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -1216,6 +1367,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most read private messages kept per conversation, at least 250.",
+      "choices": null,
+      "default": 100000,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1229,6 +1382,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most messages kept per room, at least 250.",
+      "choices": null,
+      "default": 100000,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1242,6 +1397,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Room messages that mention us older than this are deleted.",
+      "choices": null,
+      "default": "5months 27days 19h 12m",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1255,6 +1412,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Read private messages older than this are deleted.",
+      "choices": null,
+      "default": "2months 29days 2h 52m 48s",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1268,6 +1427,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Room messages older than this are deleted, except those that mention us; at least an hour.",
+      "choices": null,
+      "default": "2months 29days 2h 52m 48s",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1281,6 +1442,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Finished searches older than this are deleted, at least five minutes.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1294,6 +1457,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Transfers that were cancelled.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1307,6 +1472,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Transfers that failed with an error, a timeout, a refusal or a size mismatch.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1320,6 +1487,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Transfers that errored or were cancelled.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1333,6 +1502,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Transfers that succeeded.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1346,6 +1517,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Transfers removed from the listings longer ago than this are deleted for good, at least five minutes; removed transfers are kept for the history when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1359,6 +1532,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Transfers that were cancelled.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1372,6 +1547,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Transfers that failed with an error, a timeout, a refusal or a size mismatch.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1385,6 +1562,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Transfers that errored or were cancelled.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1398,6 +1577,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Transfers that succeeded.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1411,6 +1592,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "Users not seen for this long leave the users directory, unless pinned, noted, tagged, blocked or in a group.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1426,6 +1609,8 @@
         "list": "string"
       },
       "doc": "Chat rooms to join after logging in. Rooms taken off the list are not left.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1439,6 +1624,8 @@
       "cliFlag": "--share-cache-retention",
       "kind": "duration",
       "doc": "How often the shares are scanned again on their own, at least an hour; never when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1452,6 +1639,11 @@
       "cliFlag": "--share-cache-storage-mode",
       "kind": "string",
       "doc": "`memory`, rebuilt at every start, or `disk`, kept in the cache directory.",
+      "choices": [
+        "memory",
+        "disk"
+      ],
+      "default": "memory",
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -1465,6 +1657,8 @@
       "cliFlag": "--share-cache-workers",
       "kind": "integer",
       "doc": "How many files are read at the same time during a scan.",
+      "choices": null,
+      "default": 32,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -1480,6 +1674,8 @@
         "list": "string"
       },
       "doc": "Shared directories, each an absolute path, optionally with `[alias]` before it and `!` in front to exclude it instead.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1495,6 +1691,8 @@
         "list": "string"
       },
       "doc": "Regular expressions; a file whose full path matches one is not shared.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1508,6 +1706,8 @@
       "cliFlag": null,
       "kind": "bool",
       "doc": "Follows links to directories and files inside the shares; share roots are always opened through a link.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1521,6 +1721,8 @@
       "cliFlag": "--share-downloads",
       "kind": "bool",
       "doc": "Also shares the downloads directory.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1534,6 +1736,8 @@
       "cliFlag": "--shutdown-timeout",
       "kind": "duration",
       "doc": "How long a shutdown waits for work in progress before the process exits anyway.",
+      "choices": null,
+      "default": "10s",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1547,7 +1751,24 @@
       "cliFlag": "--slsk-address",
       "kind": "string",
       "doc": "The server's host name.",
+      "choices": null,
+      "default": "vps.slsknet.org",
       "apply": "reconnect",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.browse.response_timeout": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "How long a user has to start sending their share listing, at least a second; a large share takes a while to put together.",
+      "choices": null,
+      "default": "1m",
+      "apply": "live",
       "secret": false,
       "notApplied": null
     },
@@ -1560,6 +1781,8 @@
       "cliFlag": "--slsk-read-buffer",
       "kind": "integer",
       "doc": "The read buffer of a connection, at least 1024.",
+      "choices": null,
+      "default": 16384,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1573,6 +1796,8 @@
       "cliFlag": "--slsk-transfer-buffer",
       "kind": "integer",
       "doc": "The buffer of a transfer connection, at least 81920; a change applies to the transfers that start after it.",
+      "choices": null,
+      "default": 262144,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1586,6 +1811,8 @@
       "cliFlag": "--slsk-write-buffer",
       "kind": "integer",
       "doc": "The write buffer of a connection, at least 1024.",
+      "choices": null,
+      "default": 16384,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1599,6 +1826,8 @@
       "cliFlag": "--slsk-write-queue",
       "kind": "integer",
       "doc": "How many writes may wait per connection, from 5 to 5000.",
+      "choices": null,
+      "default": 50,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1612,6 +1841,8 @@
       "cliFlag": "--slsk-server-mtu",
       "kind": "integer",
       "doc": "The MTU of the server connection, from 576 to 65535; the system's when not set.",
+      "choices": null,
+      "default": null,
       "apply": "reconnect",
       "secret": false,
       "notApplied": null
@@ -1625,6 +1856,8 @@
       "cliFlag": "--slsk-proxy-address",
       "kind": "string",
       "doc": "The proxy's host.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1638,6 +1871,8 @@
       "cliFlag": "--slsk-proxy",
       "kind": "bool",
       "doc": "Connects through the proxy.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1651,6 +1886,8 @@
       "cliFlag": "--slsk-proxy-password",
       "kind": "string",
       "doc": "The password for the proxy.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": true,
       "notApplied": null
@@ -1664,6 +1901,8 @@
       "cliFlag": "--slsk-proxy-port",
       "kind": "integer",
       "doc": "The proxy's port.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1677,6 +1916,8 @@
       "cliFlag": "--slsk-proxy-username",
       "kind": "string",
       "doc": "The username for the proxy.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1690,6 +1931,8 @@
       "cliFlag": "--slsk-connection-timeout",
       "kind": "duration",
       "doc": "How long a connection may take to open, at least a second.",
+      "choices": null,
+      "default": "10s",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1703,6 +1946,8 @@
       "cliFlag": "--slsk-inactivity-timeout",
       "kind": "duration",
       "doc": "How long a peer connection may be idle before it is closed, at least a second.",
+      "choices": null,
+      "default": "15s",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1716,6 +1961,8 @@
       "cliFlag": "--slsk-transfer-timeout",
       "kind": "duration",
       "doc": "How long a transfer may stall before it fails, at least 30 seconds.",
+      "choices": null,
+      "default": "1m",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1729,6 +1976,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "How long an upload, or a download asked for with a transfer request, waits for the peer to answer the request, at least a second.",
+      "choices": null,
+      "default": "15s",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1742,6 +1991,8 @@
       "cliFlag": "--slsk-description",
       "kind": "string",
       "doc": "The profile text other users see.",
+      "choices": null,
+      "default": "A reseek user.",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1755,6 +2006,13 @@
       "cliFlag": "--slsk-diag-level",
       "kind": "string",
       "doc": "The least severe protocol diagnostic logged: `none`, `warning`, `info` or `debug`.",
+      "choices": [
+        "none",
+        "warning",
+        "info",
+        "debug"
+      ],
+      "default": "info",
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -1768,6 +2026,8 @@
       "cliFlag": "--slsk-dnet-children",
       "kind": "integer",
       "doc": "The most children we take.",
+      "choices": null,
+      "default": 25,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1781,6 +2041,8 @@
       "cliFlag": "--slsk-dnet-no-children",
       "kind": "bool",
       "doc": "Refuses children in the distributed network.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1794,6 +2056,8 @@
       "cliFlag": "--slsk-no-dnet",
       "kind": "bool",
       "doc": "Takes no part in the distributed search network.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1807,6 +2071,8 @@
       "cliFlag": "--slsk-dnet-logging",
       "kind": "bool",
       "doc": "Logs the distributed network's diagnostics.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1820,6 +2086,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "How long a would-be distributed parent has to send its branch level, root and a search.",
+      "choices": null,
+      "default": "5s",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1833,6 +2101,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "How many message connections to other users are kept open.",
+      "choices": null,
+      "default": 1000,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1846,6 +2116,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "How many connections to other users are being opened at once.",
+      "choices": null,
+      "default": 50,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1859,6 +2131,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "How many searches from the distributed network are answered at once.",
+      "choices": null,
+      "default": 20,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1872,6 +2146,8 @@
       "cliFlag": null,
       "kind": "size",
       "doc": "The largest message accepted from another user; a large share's browse listing is the only message that is legitimately big.",
+      "choices": null,
+      "default": "256.0 MiB",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1885,6 +2161,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "How many search responses are kept for a searcher we could not reach yet.",
+      "choices": null,
+      "default": 1000,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1898,6 +2176,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "How many users' addresses are remembered between connections.",
+      "choices": null,
+      "default": 10000,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1911,6 +2191,8 @@
       "cliFlag": "--slsk-listen-ip-address",
       "kind": "string",
       "doc": "The address the peer listener binds.",
+      "choices": null,
+      "default": "0.0.0.0",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1924,6 +2206,8 @@
       "cliFlag": "--slsk-listen-port",
       "kind": "integer",
       "doc": "The port other users connect to us on.",
+      "choices": null,
+      "default": 50300,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1937,6 +2221,8 @@
       "cliFlag": "--slsk-password",
       "kind": "string",
       "doc": "The account's password.",
+      "choices": null,
+      "default": null,
       "apply": "reconnect",
       "secret": true,
       "notApplied": null
@@ -1950,6 +2236,8 @@
       "cliFlag": "--slsk-picture",
       "kind": "string",
       "doc": "The profile picture other users see, a JPEG, GIF or BMP file.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -1963,7 +2251,24 @@
       "cliFlag": "--slsk-port",
       "kind": "integer",
       "doc": "The server's port.",
+      "choices": null,
+      "default": 2271,
       "apply": "reconnect",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.search.max_concurrent": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many of our searches run at once, at least 1; the others wait their turn.",
+      "choices": null,
+      "default": 2,
+      "apply": "restart",
       "secret": false,
       "notApplied": null
     },
@@ -1976,6 +2281,8 @@
       "cliFlag": null,
       "kind": "bool",
       "doc": "Sends keep-alive probes on the server connection.",
+      "choices": null,
+      "default": true,
       "apply": "reconnect",
       "secret": false,
       "notApplied": null
@@ -1989,6 +2296,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "How long the connection is silent before the first probe, at least a second.",
+      "choices": null,
+      "default": "10s",
       "apply": "reconnect",
       "secret": false,
       "notApplied": null
@@ -2002,6 +2311,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "The time between probes, at least a second.",
+      "choices": null,
+      "default": "2s",
       "apply": "reconnect",
       "secret": false,
       "notApplied": null
@@ -2015,6 +2326,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "How many probes go unanswered before the connection is dropped, at least 1.",
+      "choices": null,
+      "default": 3,
       "apply": "reconnect",
       "secret": false,
       "notApplied": null
@@ -2028,6 +2341,8 @@
       "cliFlag": "--slsk-username",
       "kind": "string",
       "doc": "The account to log in as; without it reseek does not connect.",
+      "choices": null,
+      "default": null,
       "apply": "reconnect",
       "secret": false,
       "notApplied": null
@@ -2041,6 +2356,8 @@
       "cliFlag": "--throttling-search-incoming-circuit-breaker",
       "kind": "integer",
       "doc": "How many incoming searches may wait before new ones are dropped.",
+      "choices": null,
+      "default": 500,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2054,6 +2371,8 @@
       "cliFlag": "--throttling-search-incoming-concurrency",
       "kind": "integer",
       "doc": "How many incoming searches are answered at the same time.",
+      "choices": null,
+      "default": 10,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -2067,6 +2386,8 @@
       "cliFlag": "--throttling-search-incoming-response-file-limit",
       "kind": "integer",
       "doc": "The most files one search response carries.",
+      "choices": null,
+      "default": 500,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2080,6 +2401,11 @@
       "cliFlag": null,
       "kind": "string",
       "doc": "What happens when the file already exists: `rename` or `overwrite`.",
+      "choices": [
+        "rename",
+        "overwrite"
+      ],
+      "default": "rename",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2093,6 +2419,8 @@
       "cliFlag": null,
       "kind": "string",
       "doc": "The mode in chmod's octal form, such as `644`; the system's default when not set. No effect on Windows.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2106,6 +2434,8 @@
       "cliFlag": null,
       "kind": "string",
       "doc": "The relative directory under the downloads directory a file is moved to, with `${SOURCE_USERNAME}`, `${SOURCE_PATH}`, `${SOURCE_DIRECTORY}`, `${BATCH_ID}`, `${BATCH_EXTERNAL_ID}`, `${SEARCH_ID}` and `${SEARCH_TEXT}` filled in.",
+      "choices": null,
+      "default": "${SOURCE_DIRECTORY}",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2119,6 +2449,11 @@
       "cliFlag": null,
       "kind": "string",
       "doc": "How a file is asked for: `queue`, the queue request every current client sends, or `transfer_request`, the older transfer request the peer answers.",
+      "choices": [
+        "queue",
+        "transfer_request"
+      ],
+      "default": "queue",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2132,6 +2467,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "How many times a download is tried, the first try included; 1 never tries again.",
+      "choices": null,
+      "default": 3,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2145,6 +2482,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "How long to wait before the first retry; each later wait doubles, at least a second.",
+      "choices": null,
+      "default": "5s",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2158,6 +2497,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "The longest wait between retries, at least 30 seconds.",
+      "choices": null,
+      "default": "1m",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2171,6 +2512,11 @@
       "cliFlag": null,
       "kind": "string",
       "doc": "What a retry does with the part already downloaded: `resume` or `overwrite`.",
+      "choices": [
+        "overwrite",
+        "resume"
+      ],
+      "default": "resume",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2184,6 +2530,8 @@
       "cliFlag": "--download-slots",
       "kind": "integer",
       "doc": "How many downloads run at the same time; no limit when not set. A lower number lets the downloads that run finish and starts no new one until fewer run.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2197,6 +2545,8 @@
       "cliFlag": "--download-speed-limit",
       "kind": "integer",
       "doc": "The total download speed in KiB/s; no limit when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2212,6 +2562,8 @@
         "list": "string"
       },
       "doc": "Networks whose addresses are refused.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2227,6 +2579,8 @@
         "list": "string"
       },
       "doc": "Usernames.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2242,6 +2596,8 @@
         "list": "string"
       },
       "doc": "Regular expressions matched against usernames.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2255,6 +2611,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most failed transfers.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2268,6 +2626,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most files.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2281,6 +2641,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most megabytes.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2294,6 +2656,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most failed transfers.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2307,6 +2671,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most files.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2320,6 +2686,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most megabytes.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2333,6 +2701,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most failed transfers.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2346,6 +2716,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most files.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2359,6 +2731,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most megabytes.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2372,6 +2746,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The group's priority; a lower number is served first.",
+      "choices": null,
+      "default": 1,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2385,6 +2761,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "How many of the group's uploads run at once; no limit beyond the global one when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2398,6 +2776,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The group's total upload speed in KiB/s; no limit when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2411,6 +2791,11 @@
       "cliFlag": null,
       "kind": "string",
       "doc": "The order the group's queue is served in: `roundrobin` or `firstinfirstout`.",
+      "choices": [
+        "roundrobin",
+        "firstinfirstout"
+      ],
+      "default": "roundrobin",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2424,6 +2809,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The fewest shared directories.",
+      "choices": null,
+      "default": 1,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2437,6 +2824,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The fewest shared files.",
+      "choices": null,
+      "default": 1,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2450,6 +2839,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most failed transfers.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2463,6 +2854,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most files.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2476,6 +2869,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most megabytes.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2489,6 +2884,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most failed transfers.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2502,6 +2899,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most files.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2515,6 +2914,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most megabytes.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2528,6 +2929,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most failed transfers.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2541,6 +2944,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most files.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2554,6 +2959,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most megabytes.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2567,6 +2974,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The group's priority; a lower number is served first.",
+      "choices": null,
+      "default": 1,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2580,6 +2989,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "How many of the group's uploads run at once; no limit beyond the global one when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2593,6 +3004,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The group's total upload speed in KiB/s; no limit when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2606,6 +3019,11 @@
       "cliFlag": null,
       "kind": "string",
       "doc": "The order the group's queue is served in: `roundrobin` or `firstinfirstout`.",
+      "choices": [
+        "roundrobin",
+        "firstinfirstout"
+      ],
+      "default": "roundrobin",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2619,6 +3037,8 @@
       "cliFlag": null,
       "kind": "map",
       "doc": "Groups of the user's own, by name.",
+      "choices": null,
+      "default": {},
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2632,6 +3052,8 @@
       "cliFlag": null,
       "kind": "duration",
       "doc": "How often the page asks for the queue place of visible remotely queued downloads, at least 30 seconds.",
+      "choices": null,
+      "default": "2m",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2645,6 +3067,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most failed transfers.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2658,6 +3082,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most files.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2671,6 +3097,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most megabytes.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2684,6 +3112,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most failed transfers.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2697,6 +3127,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most files.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2710,6 +3142,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most megabytes.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2723,6 +3157,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most failed transfers.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2736,6 +3172,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most files.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2749,6 +3187,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The most megabytes.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2762,6 +3202,8 @@
       "cliFlag": "--upload-slots",
       "kind": "integer",
       "doc": "How many uploads run at the same time over every group. A lower number lets the uploads that run finish and starts no new one until fewer run.",
+      "choices": null,
+      "default": 10,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2775,6 +3217,8 @@
       "cliFlag": "--upload-speed-limit",
       "kind": "integer",
       "doc": "The total upload speed in KiB/s; no limit when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2788,6 +3232,8 @@
       "cliFlag": null,
       "kind": "bool",
       "doc": "Keeps users' profile pictures.",
+      "choices": null,
+      "default": true,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2801,6 +3247,8 @@
       "cliFlag": null,
       "kind": "size",
       "doc": "The largest profile picture kept.",
+      "choices": null,
+      "default": "1.9 MiB",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2814,6 +3262,8 @@
       "cliFlag": "--api-key",
       "kind": "string",
       "doc": "One API key given outside the files: the key alone, or `;`-separated parts of `role=<role>`, `cidr=<networks>` and the key, such as `role=readonly;cidr=192.168.1.0/24;<key>`. An administrator key from anywhere by default.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": true,
       "notApplied": null
@@ -2827,6 +3277,8 @@
       "cliFlag": null,
       "kind": "map",
       "doc": "API keys by name.",
+      "choices": null,
+      "default": {},
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2840,6 +3292,8 @@
       "cliFlag": "--no-auth",
       "kind": "bool",
       "doc": "Lets every request in without a credential, as an administrator; the same as trusting every network.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -2853,6 +3307,8 @@
       "cliFlag": "--local-login",
       "kind": "bool",
       "doc": "Offers the password login.",
+      "choices": null,
+      "default": true,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2868,6 +3324,8 @@
         "list": "string"
       },
       "doc": "The networks password login is allowed from; anywhere when empty.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2881,6 +3339,8 @@
       "cliFlag": null,
       "kind": "map",
       "doc": "More local accounts by username.",
+      "choices": null,
+      "default": {},
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2894,6 +3354,8 @@
       "cliFlag": null,
       "kind": "map",
       "doc": "OpenID Connect providers by name.",
+      "choices": null,
+      "default": {},
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2907,6 +3369,8 @@
       "cliFlag": "--password",
       "kind": "string",
       "doc": "The administrator account's password.",
+      "choices": null,
+      "default": "*****",
       "apply": "live",
       "secret": true,
       "notApplied": null
@@ -2920,6 +3384,8 @@
       "cliFlag": "--password-hash",
       "kind": "string",
       "doc": "The administrator account's password as an argon2id hash, used instead of `password` when set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": true,
       "notApplied": null
@@ -2933,6 +3399,8 @@
       "cliFlag": null,
       "kind": "string",
       "doc": "The header with the user's email address.",
+      "choices": null,
+      "default": "X-Authentik-Email",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2946,6 +3414,8 @@
       "cliFlag": "--proxy-auth",
       "kind": "bool",
       "doc": "Takes the identity the proxy forwards.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2959,6 +3429,8 @@
       "cliFlag": null,
       "kind": "string",
       "doc": "The header with the user's groups, separated by `|` or `,`.",
+      "choices": null,
+      "default": "X-Authentik-Groups",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2974,6 +3446,8 @@
         "list": "string"
       },
       "doc": "Groups whose users are administrators.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -2987,6 +3461,13 @@
       "cliFlag": null,
       "kind": "string",
       "doc": "The role of a user in none of the groups, or `deny` to refuse them.",
+      "choices": [
+        "deny",
+        "readonly",
+        "readwrite",
+        "administrator"
+      ],
+      "default": "deny",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3002,6 +3483,8 @@
         "list": "string"
       },
       "doc": "Groups whose users may only read.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3017,6 +3500,8 @@
         "list": "string"
       },
       "doc": "Groups whose users may read and write.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3030,6 +3515,8 @@
       "cliFlag": null,
       "kind": "bool",
       "doc": "Starts a session when the web UI's page is served to a user the proxy names and the browser has no session yet, so the page's later requests work without the proxy's headers; API requests act on the headers alone. Off, the headers are read on every request.",
+      "choices": null,
+      "default": true,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3043,6 +3530,8 @@
       "cliFlag": null,
       "kind": "string",
       "doc": "The header with the username.",
+      "choices": null,
+      "default": "X-Authentik-Username",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3056,6 +3545,8 @@
       "cliFlag": "--session-idle",
       "kind": "duration",
       "doc": "How long a session lasts without being used.",
+      "choices": null,
+      "default": "30days",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3069,14 +3560,15 @@
       "cliFlag": "--session-ttl",
       "kind": "duration",
       "doc": "How long a session from a local login lasts.",
+      "choices": null,
+      "default": "7days",
       "apply": "live",
       "secret": false,
       "notApplied": null
     },
     "web.authentication.trusted_networks": {
       "source": {
-        "layer": "file",
-        "file": "config.toml"
+        "layer": "default"
       },
       "file": "config.toml",
       "envVar": "RESEEK_TRUSTED_NETWORKS",
@@ -3085,6 +3577,8 @@
         "list": "string"
       },
       "doc": "Networks whose requests need no credential.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3098,6 +3592,12 @@
       "cliFlag": "--trusted-role",
       "kind": "string",
       "doc": "The role of a request from a trusted network.",
+      "choices": [
+        "readonly",
+        "readwrite",
+        "administrator"
+      ],
+      "default": "administrator",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3111,6 +3611,8 @@
       "cliFlag": "--username",
       "kind": "string",
       "doc": "The administrator account's username.",
+      "choices": null,
+      "default": "reseek",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3124,6 +3626,8 @@
       "cliFlag": "--content-path",
       "kind": "string",
       "doc": "Serves the UI from this directory, relative to the program's directory, instead of the one built into the program.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3139,6 +3643,8 @@
         "list": "string"
       },
       "doc": "Origins such as `http://localhost:5173` that may call the API with credentials; `*` lets any origin call it without credentials. None when empty.",
+      "choices": null,
+      "default": [],
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3152,6 +3658,8 @@
       "cliFlag": "--external-url",
       "kind": "string",
       "doc": "The public base URL, such as `https://reseek.example.net/reseek`, for login redirects; worked out from each request when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3165,6 +3673,8 @@
       "cliFlag": null,
       "kind": "size",
       "doc": "The largest folder that may be downloaded as one zip.",
+      "choices": null,
+      "default": "18.6 GiB",
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3178,6 +3688,8 @@
       "cliFlag": null,
       "kind": "bool",
       "doc": "Lets the browser open and download files from the download directories.",
+      "choices": null,
+      "default": true,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3191,6 +3703,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "The speed files and folders are served to the browser at, in KiB/s, over every one sent at once; no limit when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3206,6 +3720,8 @@
         "list": "string"
       },
       "doc": "The host names the daemon is reached by; a trusted network is only trusted on these, on IP addresses and on `localhost`.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3219,6 +3735,8 @@
       "cliFlag": "--https-cert",
       "kind": "string",
       "doc": "A PEM file with the certificate chain, used with `key`.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3232,6 +3750,8 @@
       "cliFlag": "--https-key",
       "kind": "string",
       "doc": "A PEM file with the private key of `cert`.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3245,6 +3765,8 @@
       "cliFlag": "--https-cert-password",
       "kind": "string",
       "doc": "The password of the PKCS#12 file.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": true,
       "notApplied": null
@@ -3258,20 +3780,23 @@
       "cliFlag": "--https-cert-pfx",
       "kind": "string",
       "doc": "A PKCS#12 file with the certificate and its key, used when `cert` is not set.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
     },
     "web.https.disabled": {
       "source": {
-        "layer": "file",
-        "file": "config.toml"
+        "layer": "default"
       },
       "file": "config.toml",
       "envVar": "RESEEK_NO_HTTPS",
       "cliFlag": "--no-https",
       "kind": "bool",
       "doc": "Does not listen for HTTPS.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3285,6 +3810,8 @@
       "cliFlag": "--force-https",
       "kind": "bool",
       "doc": "Redirects HTTP requests to HTTPS and sends HSTS.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3298,6 +3825,8 @@
       "cliFlag": "--https-ip-address",
       "kind": "string",
       "doc": "The addresses to listen on, comma-separated; every address when not set.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3311,6 +3840,8 @@
       "cliFlag": "--https-port",
       "kind": "integer",
       "doc": "The HTTPS port.",
+      "choices": null,
+      "default": 5031,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3324,6 +3855,8 @@
       "cliFlag": "--http-ip-address",
       "kind": "string",
       "doc": "The addresses to listen on, comma-separated; every address, IPv6 and IPv4, when not set.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3337,6 +3870,8 @@
       "cliFlag": null,
       "kind": "integer",
       "doc": "How many event streams one principal may hold open.",
+      "choices": null,
+      "default": 16,
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3350,20 +3885,23 @@
       "cliFlag": "--http-logging",
       "kind": "bool",
       "doc": "Logs one line per HTTP request.",
+      "choices": null,
+      "default": false,
       "apply": "restart",
       "secret": false,
       "notApplied": null
     },
     "web.port": {
       "source": {
-        "layer": "file",
-        "file": "config.toml"
+        "layer": "default"
       },
       "file": "config.toml",
       "envVar": "RESEEK_HTTP_PORT",
       "cliFlag": "--http-port",
       "kind": "integer",
-      "doc": "The HTTP port.",
+      "doc": "The HTTP port; `0` takes a free port the system picks, which the log names.",
+      "choices": null,
+      "default": 5030,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3377,6 +3915,8 @@
       "cliFlag": "--http-socket",
       "kind": "string",
       "doc": "Also listens on a unix domain socket at this absolute path.",
+      "choices": null,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3392,6 +3932,8 @@
         "list": "string"
       },
       "doc": "Reverse proxies, as networks, whose `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host` headers are believed.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
@@ -3405,6 +3947,8 @@
       "cliFlag": "--web-ui",
       "kind": "bool",
       "doc": "Serves the web UI.",
+      "choices": null,
+      "default": true,
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3418,6 +3962,8 @@
       "cliFlag": "--url-base",
       "kind": "string",
       "doc": "The path the daemon is served under behind a reverse proxy, such as `/reseek`.",
+      "choices": null,
+      "default": "/",
       "apply": "restart",
       "secret": false,
       "notApplied": null
@@ -3427,7 +3973,7 @@
     {
       "name": "config.toml",
       "path": "/var/lib/reseek/config.toml",
-      "revision": "sha256:5e32f29840bff9e4b377729699314790a56d262078b7d0f4dd49a9fd5094ae30",
+      "revision": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "writable": true,
       "readOnlyReason": null
     }

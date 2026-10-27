@@ -42,10 +42,24 @@ api-spec:
 api: web-install
     pnpm --dir web api
 
-# fail if api/openapi.json no longer matches the handlers, or the UI's types no longer match it
+# regenerate web/src/lib/config/fixtures/view.json, the settings view of the default configuration
+config-fixture:
+    {{ just_executable() }} --justfile {{ justfile() }} config-view > web/src/lib/config/fixtures/view.json
+
+# prints the settings view of the default configuration
+[private]
+config-view:
+    @cargo run -q -p reseek --example config_view
+
+# fail if api/openapi.json no longer matches the handlers, the UI's types no longer match it, or
+# the settings fixture no longer matches the daemon's options
 api-check: web-install
     cargo nextest run -p reseek -E "test(the_committed_openapi_document_is_current)"
     pnpm --dir web api-check
+    @view="$({{ just_executable() }} --justfile {{ justfile() }} config-view)" \
+      || { echo "the settings fixture could not be generated" >&2; exit 1; }; \
+      printf '%s\n' "$view" | diff -q web/src/lib/config/fixtures/view.json - > /dev/null \
+      || { echo "web/src/lib/config/fixtures/view.json is stale, run \`just config-fixture\`" >&2; exit 1; }
 
 # the built UI served by the daemon in a browser: it loads, logs in and moves between screens
 web-smoke:
