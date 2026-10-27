@@ -50,7 +50,7 @@ let lists = 0;
  * The focused line is named by its key and looked up in the lines whenever it is used, so
  * filters, regrouping and new data never leave it pointing at a stale copy. When it leaves the
  * lines, the row now in its place takes over: the first row at or after its index, else the
- * nearest row before it. ↑ and ↓ move by position to the previous and next row, skipping group
+ * nearest row before it. Up and Down move by position to the previous and next row, skipping group
  * headers; `activeId` names the focused line for `aria-activedescendant` while it is rendered.
  *
  * A click on a row outside its controls selects that row alone; with Ctrl or Cmd it toggles
