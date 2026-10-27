@@ -261,25 +261,24 @@
   {/if}
   <div class="-mx-5 divide-y border-y">
     {#each fields as field (field.key)}
-      {#key written[field.key]}
-        <FieldRow
-          {field}
-          info={view.fields[field.key]}
-          control={controls[field.key]}
-          edit={edits[field.key]}
-          values={view.values}
-          bind:draft={draft[field.key]}
-          changed={changed.includes(field)}
-          moved={moved.includes(field.key)}
-          unused={!enabled(field)}
-          error={errors[field.key]}>
-          {#snippet extra()}
-            {#if field.key === "web.authentication.oidc"}
-              <OidcTest names={Object.keys(valueAt(view.values, field.key) ?? {})} />
-            {/if}
-          {/snippet}
-        </FieldRow>
-      {/key}
+      <FieldRow
+        {field}
+        generation={written[field.key] ?? 0}
+        info={view.fields[field.key]}
+        control={controls[field.key]}
+        edit={edits[field.key]}
+        values={view.values}
+        bind:draft={draft[field.key]}
+        changed={changed.includes(field)}
+        moved={moved.includes(field.key)}
+        unused={!enabled(field)}
+        error={errors[field.key]}>
+        {#snippet extra()}
+          {#if field.key === "web.authentication.oidc"}
+            <OidcTest names={Object.keys(valueAt(view.values, field.key) ?? {})} />
+          {/if}
+        {/snippet}
+      </FieldRow>
     {/each}
   </div>
   {#if saveable || runtimeable}

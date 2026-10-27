@@ -26,6 +26,8 @@
     error: string | undefined;
     /** shown under the control, such as a check that goes with the option */
     extra?: Snippet;
+    /** counts the saves of this option; the control starts over from the saved value on each */
+    generation: number;
   };
 
   let {
@@ -39,7 +41,8 @@
     moved,
     unused,
     error,
-    extra
+    extra,
+    generation
   }: Props = $props();
 
   const help = $derived(`${field.key}-help`);
@@ -73,14 +76,16 @@
     </p>
   </div>
   <div class="flex min-w-0 flex-col gap-1">
-    <FieldControl
-      {field}
-      {control}
-      choices={info.choices ?? []}
-      bind:draft
-      disabled={edit.mode === "locked" || unused}
-      described={help}
-      invalid={!!error} />
+    {#key generation}
+      <FieldControl
+        {field}
+        {control}
+        choices={info.choices ?? []}
+        bind:draft
+        disabled={edit.mode === "locked" || unused}
+        described={help}
+        invalid={!!error} />
+    {/key}
     {#if entry}
       <p class="font-mono text-xs text-fg-subtle">{entry}</p>
       <p class="text-xs text-fg-subtle">{field.derived?.note}</p>
