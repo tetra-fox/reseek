@@ -23,7 +23,10 @@ const LOSSLESS: &[&str] = &["flac", "ape", "wv", "alac"];
 /// The file's format: its extension, else the last `.` segment of its name, in lower case.
 fn format(file: &File) -> String {
   let extension = if file.extension.is_empty() {
-    let name = file.filename.rsplit(['\\', '/']).next().unwrap_or_default();
+    let name = file
+      .filename
+      .rsplit_once(['\\', '/'])
+      .map_or(file.filename.as_str(), |(_, name)| name);
     name.rsplit_once('.').map_or("", |(_, ext)| ext)
   } else {
     &file.extension
