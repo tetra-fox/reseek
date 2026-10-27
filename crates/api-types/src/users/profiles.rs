@@ -34,6 +34,9 @@ pub struct UserGroup {
   pub source: GroupSource,
   /// the group's upload priority, a lower number served first
   pub priority: u32,
+  /// the colour the group is shown in, a CSS colour name such as `violet`; null for none
+  #[schema(example = "violet")]
+  pub color: Option<String>,
 }
 
 /// The statistics stored for a user, with when they were fetched.
@@ -206,6 +209,11 @@ pub struct UserSummary {
   pub user: KnownUser,
   /// the last info fetched without the description, null when never
   pub info: Option<StoredInfoSummary>,
+  /// the first three lines of the description in the last info fetched, null when never
+  /// fetched
+  pub description: Option<String>,
+  /// the first two lines of our private notes about the user, null when there are none
+  pub notes: Option<String>,
   /// what we did with the user
   pub figures: SummaryFigures,
   /// private messages from the user not acknowledged

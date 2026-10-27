@@ -6626,6 +6626,11 @@ export interface components {
         /** @description The upload group a user is in. */
         UserGroup: {
             /**
+             * @description the colour the group is shown in, a CSS colour name such as `violet`; null for none
+             * @example violet
+             */
+            color?: string | null;
+            /**
              * @description the group's name
              * @example default
              */
@@ -6779,9 +6784,16 @@ export interface components {
              * @description transfers with the user that are queued or moving
              */
             activeTransfers: number;
+            /**
+             * @description the first three lines of the description in the last info fetched, null when never
+             *     fetched
+             */
+            description?: string | null;
             /** @description what we did with the user */
             figures: components["schemas"]["SummaryFigures"];
             info?: null | components["schemas"]["StoredInfoSummary"];
+            /** @description the first two lines of our private notes about the user, null when there are none */
+            notes?: string | null;
             /**
              * Format: int32
              * @description private messages from the user not acknowledged

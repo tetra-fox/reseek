@@ -21853,6 +21853,14 @@
           "priority"
         ],
         "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the colour the group is shown in, a CSS colour name such as `violet`; null for none",
+            "example": "violet"
+          },
           "name": {
             "type": "string",
             "description": "the group's name",
@@ -22185,6 +22193,13 @@
                 "description": "transfers with the user that are queued or moving",
                 "minimum": 0
               },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "the first three lines of the description in the last info fetched, null when never\nfetched"
+              },
               "figures": {
                 "$ref": "#/components/schemas/SummaryFigures",
                 "description": "what we did with the user"
@@ -22199,6 +22214,13 @@
                     "description": "the last info fetched without the description, null when never"
                   }
                 ]
+              },
+              "notes": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "the first two lines of our private notes about the user, null when there are none"
               },
               "unreadMessages": {
                 "type": "integer",

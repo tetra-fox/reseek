@@ -14,6 +14,18 @@ pub const LEECHERS: &str = "leechers";
 /// The group of everyone else.
 pub const DEFAULT: &str = "default";
 
+/// The colour a group is shown in: the built-in groups each their own, every user-defined group
+/// the same, the default group none.
+fn color(name: &str, source: GroupSource) -> Option<String> {
+  let color = match (source, name) {
+    (GroupSource::Builtin, PRIVILEGED) => "violet",
+    (GroupSource::Builtin, LEECHERS) => "orange",
+    (GroupSource::Builtin, _) => return None,
+    (GroupSource::Config | GroupSource::Override, _) => "blue",
+  };
+  Some(color.to_string())
+}
+
 /// The user-defined group the configuration lists `username` in, with its priority: of
 /// several, the lowest priority number, then the first name.
 pub fn configured(options: &Options, username: &str) -> Option<(String, u32)> {
@@ -76,12 +88,14 @@ pub fn resolve(options: &Options, username: &str, facts: &Facts) -> UserGroup {
     name: name.to_string(),
     source: GroupSource::Builtin,
     priority,
+    color: color(name, GroupSource::Builtin),
   };
   if facts.privileged {
     return builtin(PRIVILEGED, 0);
   }
   if let Some((name, priority)) = configured(options, username) {
     return UserGroup {
+      color: color(&name, GroupSource::Config),
       name,
       source: GroupSource::Config,
       priority,
@@ -94,6 +108,7 @@ pub fn resolve(options: &Options, username: &str, facts: &Facts) -> UserGroup {
       name: name.clone(),
       source: GroupSource::Override,
       priority: group.upload.priority,
+      color: color(name, GroupSource::Override),
     };
   }
   let thresholds = &groups.leechers.thresholds;
@@ -156,8 +171,11 @@ mod tests {
       ("crew", GroupSource::Config),
       "the lowest priority number, ties by name, and over the override"
     );
+    assert_eq!(picked.color.as_deref(), Some("blue"));
     alice.is_privileged = true;
-    assert_eq!(name(&options, &alice).name, PRIVILEGED);
+    let privileged = name(&options, &alice);
+    assert_eq!(privileged.name, PRIVILEGED);
+    assert_eq!(privileged.color.as_deref(), Some("violet"));
     alice.is_privileged = false;
     for g in options.transfers.groups.user_defined.values_mut() {
       g.members.clear();
@@ -184,6 +202,7 @@ mod tests {
       DEFAULT,
       "unknown is no leecher"
     );
+    assert_eq!(name(&options, &alice).color, None);
     assert_eq!(effective(&options, "nobody", None).name, DEFAULT);
   }
 }

@@ -201,12 +201,21 @@ async fn writes_push_the_users_summary_and_forgetting_pushes_the_removal() {
     &app,
     "PUT",
     "/api/v0/users/alice/notes",
-    Some(json!({ "notes": "kind" })),
+    Some(json!({ "notes": "kind\r\nhelpful\nslow at night" })),
   )
   .await;
   assert_eq!(status, 204);
   let updated = stream.until("users.updated").await.pop().unwrap();
   assert_eq!(updated.data["username"], "alice");
+  assert_eq!(
+    updated.data["notes"], "kind\nhelpful",
+    "the first two lines"
+  );
+  assert_eq!(
+    updated.data["description"],
+    json!(null),
+    "no info was ever fetched"
+  );
   let (status, _) = send(&app, "DELETE", "/api/v0/users/alice", None).await;
   assert_eq!(status, 204);
   let removed = stream.until("users.removed").await.pop().unwrap();
@@ -272,7 +281,7 @@ async fn a_group_the_configuration_contradicts_is_refused() {
   let (_, summary) = send(&app, "GET", "/api/v0/users/alice/summary", None).await;
   assert_eq!(
     summary["group"],
-    json!({ "name": "vip", "source": "override", "priority": 1 })
+    json!({ "name": "vip", "source": "override", "priority": 1, "color": "blue" })
   );
   assert_eq!(summary["groupOverride"], "vip");
   assert_eq!(summary["known"], true);
