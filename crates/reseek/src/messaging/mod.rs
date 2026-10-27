@@ -31,9 +31,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{Instrument, debug, info_span, warn};
 
-pub use conversations::store::{
-  SERVER, figures as message_figures, summary as conversation_summary,
-};
+pub use conversations::store::{figures as message_figures, summary as conversation_summary};
 
 use crate::config::Options;
 use crate::db::{self, Database, DbError, Location, Schema};

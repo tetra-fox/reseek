@@ -10,13 +10,29 @@ use api_types::conversations::{
 use api_types::users::MessageCounts;
 use chrono::{DateTime, Utc};
 use rusqlite::types::Value;
-use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
+use rusqlite::{Connection, OptionalExtension, Row, named_params, params, params_from_iter};
+pub use soulseek_proto::SERVER_USERNAME as SERVER;
 
 use crate::db::{read_timestamp, timestamp};
 use crate::messaging::{notify_level, notify_text};
 
-/// The name the server's own notices come from: never a user, never unread, never answered.
-pub const SERVER: &str = "server";
+/// The condition, on a `username` column, that leaves out the conversation holding the
+/// server's own notices, which are never unread; the name is bound as `:server`.
+macro_rules! not_server {
+  () => {
+    "username <> :server"
+  };
+}
+
+/// An inbound message not acknowledged, which counts as unread unless it is a server notice;
+/// it binds `:server`.
+macro_rules! unread {
+  () => {
+    concat!("direction = 1 AND is_acknowledged = 0 AND ", not_server!())
+  };
+}
+
+const UNREAD: &str = unread!();
 
 /// The columns [`message`] reads, in its order.
 const MESSAGE: &str =
@@ -177,13 +193,14 @@ pub fn exists(conn: &Connection, username: &str) -> rusqlite::Result<bool> {
 }
 
 /// The conversation columns [`conversation`] reads, joined with their state and their count of
-/// unacknowledged messages; the server's notices never count.
-const CONVERSATION: &str = "SELECT c.username, c.is_active, \
-   COALESCE(s.notify, 'all'), COALESCE(s.draft, ''), \
-   CASE WHEN c.username = 'server' THEN 0 ELSE \
-     (SELECT COUNT(*) FROM private_messages m WHERE m.username = c.username \
-      AND m.direction = 1 AND m.is_acknowledged = 0) END AS unacknowledged \
-   FROM conversations c LEFT JOIN conversation_state s ON s.username = c.username";
+/// unread messages; it binds `:server`.
+const CONVERSATION: &str = concat!(
+  "SELECT c.username, c.is_active, COALESCE(s.notify, 'all'), COALESCE(s.draft, ''), \
+   (SELECT COUNT(*) FROM private_messages m WHERE m.username = c.username AND ",
+  unread!(),
+  ") AS unacknowledged \
+   FROM conversations c LEFT JOIN conversation_state s ON s.username = c.username"
+);
 
 /// The conversation in `row`, read with [`CONVERSATION`], without its messages.
 fn conversation_of(row: &Row) -> rusqlite::Result<Conversation> {
@@ -204,8 +221,11 @@ fn conversation_of(row: &Row) -> rusqlite::Result<Conversation> {
 /// The conversation with `username`, without its messages.
 pub fn conversation(conn: &Connection, username: &str) -> rusqlite::Result<Option<Conversation>> {
   conn
-    .prepare_cached(&format!("{CONVERSATION} WHERE c.username = ?1"))?
-    .query_row([username], conversation_of)
+    .prepare_cached(&format!("{CONVERSATION} WHERE c.username = :username"))?
+    .query_row(
+      named_params! { ":username": username, ":server": SERVER },
+      conversation_of,
+    )
     .optional()
 }
 
@@ -219,7 +239,7 @@ pub fn list(
     filter.push("c.is_active = 1");
   }
   if !query.include_server {
-    filter.push("c.username <> 'server'");
+    filter.push(concat!("c.", not_server!()));
   }
   let having = if query.un_acknowledged_only {
     "WHERE unacknowledged > 0"
@@ -231,7 +251,7 @@ pub fn list(
       "SELECT * FROM ({CONVERSATION} WHERE {}) {having} ORDER BY username",
       filter.join(" AND ")
     ))?
-    .query_map([], conversation_of)?
+    .query_map(named_params! { ":server": SERVER }, conversation_of)?
     .collect()
 }
 
@@ -322,25 +342,28 @@ pub fn figures(
   username: &str,
 ) -> rusqlite::Result<(MessageCounts, Option<DateTime<Utc>>)> {
   conn
-    .prepare_cached(
+    .prepare_cached(&format!(
       "SELECT COALESCE(SUM(direction = 1), 0), COALESCE(SUM(direction = 0), 0), \
-       COALESCE(SUM(direction = 1 AND is_acknowledged = 0), 0), MAX(timestamp) \
-       FROM private_messages WHERE username = ?1",
-    )?
-    .query_row([username], |row| {
-      let count = |i| -> rusqlite::Result<u32> {
-        Ok(u32::try_from(row.get::<_, i64>(i)?).unwrap_or(u32::MAX))
-      };
-      let latest: Option<String> = row.get(3)?;
-      Ok((
-        MessageCounts {
-          inbound: count(0)?,
-          outbound: count(1)?,
-          unread: if username == SERVER { 0 } else { count(2)? },
-        },
-        latest.as_deref().map(read_timestamp).transpose()?,
-      ))
-    })
+       COALESCE(SUM({UNREAD}), 0), MAX(timestamp) \
+       FROM private_messages WHERE username = :username"
+    ))?
+    .query_row(
+      named_params! { ":username": username, ":server": SERVER },
+      |row| {
+        let count = |i| -> rusqlite::Result<u32> {
+          Ok(u32::try_from(row.get::<_, i64>(i)?).unwrap_or(u32::MAX))
+        };
+        let latest: Option<String> = row.get(3)?;
+        Ok((
+          MessageCounts {
+            inbound: count(0)?,
+            outbound: count(1)?,
+            unread: count(2)?,
+          },
+          latest.as_deref().map(read_timestamp).transpose()?,
+        ))
+      },
+    )
 }
 
 /// The state of the conversation with `username`, when there is one.
@@ -354,11 +377,10 @@ pub fn summary(conn: &Connection, username: &str) -> rusqlite::Result<Option<Con
 /// The unacknowledged messages of every conversation that has any, by peer.
 pub fn unread(conn: &Connection) -> rusqlite::Result<BTreeMap<String, u32>> {
   conn
-    .prepare_cached(
-      "SELECT username, COUNT(*) FROM private_messages WHERE direction = 1 \
-       AND is_acknowledged = 0 AND username <> 'server' GROUP BY username",
-    )?
-    .query_map([], |row| {
+    .prepare_cached(&format!(
+      "SELECT username, COUNT(*) FROM private_messages WHERE {UNREAD} GROUP BY username"
+    ))?
+    .query_map(named_params! { ":server": SERVER }, |row| {
       Ok((
         row.get::<_, String>(0)?,
         u32::try_from(row.get::<_, i64>(1)?).unwrap_or(u32::MAX),
@@ -370,7 +392,74 @@ pub fn unread(conn: &Connection) -> rusqlite::Result<BTreeMap<String, u32>> {
 /// The peers of the open conversations.
 pub fn active(conn: &Connection) -> rusqlite::Result<Vec<String>> {
   conn
-    .prepare("SELECT username FROM conversations WHERE is_active = 1 AND username <> 'server'")?
-    .query_map([], |row| row.get(0))?
+    .prepare(concat!(
+      "SELECT username FROM conversations WHERE is_active = 1 AND ",
+      not_server!()
+    ))?
+    .query_map(named_params! { ":server": SERVER }, |row| row.get(0))?
     .collect()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::db::{Database, Location};
+
+  #[tokio::test]
+  async fn the_servers_notices_are_never_unread() {
+    let location = Location {
+      data: std::env::temp_dir(),
+      backups: std::env::temp_dir(),
+      volatile: true,
+      log_sql: false,
+    };
+    let db = Database::open(&crate::messaging::SCHEMA, &location)
+      .await
+      .unwrap();
+    let now: DateTime<Utc> = "2026-10-26T10:00:00Z".parse().unwrap();
+    db.write(move |conn| {
+      for (id, username) in [(1, SERVER), (2, "alice")] {
+        activate(conn, username, now)?;
+        receive(
+          conn,
+          &Inbound {
+            id,
+            timestamp: now,
+            username: username.into(),
+            message: "hello".into(),
+            replayed: false,
+          },
+        )?;
+      }
+      Ok(())
+    })
+    .await
+    .unwrap();
+    let (unread_now, notices, figures, listed, everything, open) = db
+      .read(|conn| {
+        let all = ConversationListQuery {
+          include_inactive: true,
+          un_acknowledged_only: false,
+          include_server: true,
+        };
+        Ok((
+          unread(conn)?,
+          conversation(conn, SERVER)?.unwrap(),
+          figures(conn, SERVER)?.0,
+          list(conn, &ConversationListQuery::default())?,
+          list(conn, &all)?,
+          active(conn)?,
+        ))
+      })
+      .await
+      .unwrap();
+    assert_eq!(everything.len(), 2, "listed when asked for");
+    assert_eq!(unread_now, BTreeMap::from([("alice".to_string(), 1)]));
+    assert!(notices.is_server_notice);
+    assert_eq!(notices.un_acknowledged_message_count, 0);
+    assert_eq!((figures.inbound, figures.unread), (1, 0));
+    assert_eq!(listed.len(), 1, "left out unless asked for");
+    assert_eq!(listed[0].un_acknowledged_message_count, 1);
+    assert_eq!(open, ["alice"]);
+  }
 }

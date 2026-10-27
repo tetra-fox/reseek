@@ -21,8 +21,6 @@ use crate::api::validate;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized, ReadWrite};
 
-/// The name the server's own notices come from, which cannot be answered.
-const SERVER: &str = "server";
 /// The most messages a page holds.
 const PAGE_MAX: u32 = 1000;
 /// The most bytes a draft holds.
@@ -126,7 +124,7 @@ async fn send(
   NamedUser(username): NamedUser,
   Json(MessageText(text)): Json<MessageText>,
 ) -> Result<StatusCode, ApiError> {
-  if username == SERVER {
+  if username == soulseek_proto::SERVER_USERNAME {
     return Err(ApiError::bad_request("\"server\" is a reserved name"));
   }
   message(&app, &text)?;
