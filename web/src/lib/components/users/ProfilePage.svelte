@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, byUser, type Schemas } from "#lib/api/client.js";
   import BrowsePage from "#lib/components/browse/BrowsePage.svelte";
+  import Pane from "#lib/components/chat/Pane.svelte";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -68,6 +69,7 @@
     { id: "overview", title: "Overview" },
     { id: "shares", title: "Shares" },
     { id: "transfers", title: "Transfers" },
+    { id: "messages", title: "Messages" },
     { id: "activity", title: "Activity" }
   ];
 </script>
@@ -92,6 +94,11 @@
     <BrowsePage user={username} {path} flat={false} />
   {:else if tab === "transfers"}
     <ProfileTransfers {username} />
+  {:else if tab === "messages"}
+    <div
+      class="flex h-[calc(100svh-22rem)] min-h-80 overflow-hidden rounded-card border bg-surface shadow-card">
+      <Pane target={{ kind: "user", name: username }} />
+    </div>
   {:else if tab === "activity"}
     <ProfileActivity {username} />
   {:else}

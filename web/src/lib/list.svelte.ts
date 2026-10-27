@@ -18,6 +18,8 @@ export type ListSpec<L> = {
   group?: (line: L) => string[] | null;
   /** Enter on a row */
   onopen?: (line: L) => void;
+  /** a plain click on a row opens it too, for lists whose rows are what a pane shows */
+  openOnClick?: boolean;
   /** a key of the list's own for the focused row, such as Delete; true when it acted */
   onkey?: (e: KeyboardEvent, line: L) => boolean;
   /** a layer of the list's own is open, such as a drawer, which Escape closes before the selection */
@@ -272,6 +274,7 @@ export class ListControl<L> {
     if (e.shiftKey && this.#range(id, toggle)) return;
     if (toggle) return this.toggle(id);
     this.only(id);
+    if (this.#spec.openOnClick && line) this.#spec.onopen?.(line);
   };
 
   #keydown = (e: KeyboardEvent) => {

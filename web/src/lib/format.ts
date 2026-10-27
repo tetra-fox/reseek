@@ -135,6 +135,19 @@ export const dateTime = (iso: string): string =>
 export const shortTime = (iso: string): string =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+/** The day of an instant, written out, for the line between two days of chat */
+export const formatDay = (iso: string): string =>
+  new Date(iso).toLocaleDateString([], {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+
+/** A chat message's time: the time of day for today, with the date before today */
+export const chatTime = (iso: string, now = Date.now()): string =>
+  new Date(iso).toDateString() === new Date(now).toDateString() ? shortTime(iso) : dateTime(iso);
+
 /** What a file's attributes say about its quality: "16/44.1kHz", "320 Kbps", "245 Kbps, VBR" */
 export const formatAttributes = (file: {
   bitRate?: number | null;

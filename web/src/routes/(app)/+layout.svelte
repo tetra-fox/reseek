@@ -4,6 +4,8 @@
   import { onMount, untrack } from "svelte";
 
   import { app } from "#lib/app.svelte.js";
+  import { chat } from "#lib/chat/chat.svelte.js";
+  import ConfirmHost from "#lib/components/ConfirmHost.svelte";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import PlayerBar from "#lib/components/player/PlayerBar.svelte";
   import Footer from "#lib/components/shell/Footer.svelte";
@@ -44,6 +46,14 @@
   });
   $effect(() => () => untrack(() => live.stop()));
 
+  // conversations and rooms are followed on every screen, for the unread badge and notifications;
+  // a relay agent has no chat
+  $effect(() => {
+    if (app.phase !== "app" || app.mode === "agent") return;
+    untrack(() => chat.start());
+    return () => untrack(() => chat.stop());
+  });
+
   // the state document by polling while frames don't keep it current
   $effect(() => {
     if (app.phase !== "app") return;
@@ -55,7 +65,7 @@
 </script>
 
 <svelte:head>
-  <title>{title(at.path)}</title>
+  <title>{chat.total ? `(${chat.total}) ` : ""}{title(at.path)}</title>
 </svelte:head>
 
 <svelte:document onvisibilitychange={() => session.visibility(document.hidden)} />
@@ -83,6 +93,7 @@
   <PlayerBar />
   <Footer />
   <BlockDialog />
+  <ConfirmHost />
 {:else if app.phase === "lost"}
   <div class="flex min-h-svh items-center justify-center p-6">
     <ErrorSegment

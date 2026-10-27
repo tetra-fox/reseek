@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { linkify } from "./text";
+import { linkify, snippetParts } from "./text";
 
 describe("links in text", () => {
   it("makes http and https runs links and keeps the rest as text", () => {
@@ -26,6 +26,23 @@ describe("links in text", () => {
       ') "',
       "https://y.example",
       '"'
+    ]);
+  });
+});
+
+describe("search snippets", () => {
+  it("reads the marked matches and unescapes the rest as text", () => {
+    expect(
+      snippetParts("a &lt;b&gt; <mark>pink</mark> &amp; <mark>floyd</mark>&quot;").map((p) => [
+        p.text,
+        p.hit
+      ])
+    ).toEqual([
+      ["a <b> ", false],
+      ["pink", true],
+      [" & ", false],
+      ["floyd", true],
+      ['"', false]
     ]);
   });
 });

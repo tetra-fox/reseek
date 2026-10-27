@@ -8,6 +8,8 @@
   import { toggleMode } from "mode-watcher";
 
   import { app } from "#lib/app.svelte.js";
+  import { chat } from "#lib/chat/chat.svelte.js";
+  import Badge from "#lib/components/ui/Badge.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { href, navCurrent, navItems, type NavItem, route, systemItem } from "#lib/nav.js";
@@ -38,8 +40,23 @@
           aria-label={sidebar.collapsed ? item.title : undefined}
           aria-current={current === item.path ? "page" : undefined}
           class={itemClass}>
-          <item.icon class={["size-4 shrink-0", current === item.path && "text-accent"]} />
+          <span class="relative shrink-0">
+            <item.icon class={["size-4", current === item.path && "text-accent"]} />
+            {#if item.path === "/chat" && chat.total && sidebar.collapsed}
+              <span
+                class={[
+                  "absolute -top-1 -right-1 size-2 rounded-full",
+                  chat.totalMentions ? "bg-accent" : "bg-danger"
+                ]}></span>
+            {/if}
+          </span>
           <span class={["truncate", sidebar.collapsed && "hidden"]}>{item.title}</span>
+          {#if item.path === "/chat" && chat.total && !sidebar.collapsed}
+            <Badge
+              tone={chat.totalMentions ? "accent" : "danger"}
+              class="ml-auto"
+              aria-label={`${chat.total} unread`}>{chat.total}</Badge>
+          {/if}
         </a>
       {/snippet}
     </Tooltip>
