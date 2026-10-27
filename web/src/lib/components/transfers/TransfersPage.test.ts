@@ -158,4 +158,26 @@ describe("the transfers table", () => {
     expect(bulk().map((r) => r.body)).toEqual([{ action: "cancel", ids: [a.id] }]);
     session.principal = null;
   });
+
+  it("leaves Enter and Space on a username link to the link", async () => {
+    const a = transfer();
+    listing = [a];
+    await start();
+    const link = row(a.id)!.querySelector<HTMLAnchorElement>('a[href^="#/users/"]')!;
+    link.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    flushSync();
+    const press = (key: string) => {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+      link.dispatchEvent(event);
+      return event;
+    };
+
+    expect(press("Enter").defaultPrevented).toBe(false);
+    await flush();
+    expect(document.querySelector('aside[aria-label="Transfer details"]')).toBeNull();
+
+    press(" ");
+    await flush();
+    expect(document.querySelector('[aria-label="Selected transfers"]')).toBeNull();
+  });
 });

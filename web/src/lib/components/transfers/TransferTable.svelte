@@ -135,8 +135,9 @@
   };
 
   const keydown = (e: KeyboardEvent) => {
-    if ((e.target as HTMLElement).closest("input,button,[role=menuitem]") && e.key !== "Escape")
-      return;
+    // keys aimed at a control or a link in a row are that control's: a username opens its page
+    const target = e.target as HTMLElement;
+    if (target.closest("input,button,a[href],[role=menuitem]") && e.key !== "Escape") return;
     const at = rows.findIndex((t) => t.id === focused);
     const current = rows[at];
     const move = (to: number) => {
