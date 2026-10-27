@@ -1,26 +1,12 @@
+import { audioType } from "#lib/components/files/links.js";
 import { getFileName } from "#lib/format.js";
 import { toast } from "#lib/toast.svelte.js";
 import { contentUrl } from "#lib/transfers/content.js";
 import type { Transfer } from "#lib/transfers/states.js";
 
-/** What the browser is asked to play a file as, by its extension */
-const MIME: Record<string, string> = {
-  mp3: "audio/mpeg",
-  flac: "audio/flac",
-  ogg: "audio/ogg",
-  oga: "audio/ogg",
-  opus: "audio/ogg; codecs=opus",
-  m4a: "audio/mp4",
-  aac: "audio/aac",
-  wav: "audio/wav",
-  webm: "audio/webm"
-};
-
-const mimeOf = (filename: string) => MIME[filename.split(".").pop()?.toLowerCase() ?? ""] ?? "";
-
 /** Whether this browser says it can play `filename` in the page */
 export const playable = (filename: string, probe = document.createElement("audio")) => {
-  const mime = mimeOf(filename);
+  const mime = audioType(filename);
   return !!mime && probe.canPlayType(mime) !== "";
 };
 
