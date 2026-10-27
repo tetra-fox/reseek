@@ -131,7 +131,7 @@
 
 <Card>
   {#if tab === "users"}
-    <Leaderboard {span} />
+    <Leaderboard {span} range={dashboardPrefs.range} />
   {:else if tab === "content"}
     {#if directoriesError}<p class="text-sm text-danger">Couldn't load: {directoriesError}</p>{/if}
     <TopDirectories rows={directories} />

@@ -76,4 +76,33 @@ describe("the dashboard", () => {
     await flush();
     expect(text()).toContain("Remote file not found");
   });
+
+  it("keeps the leaderboard's column through a reload and starts a new range at Count", async () => {
+    app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
+    const net = fakeNetwork((url) => {
+      if (url.pathname.endsWith("/summary")) return { Download: {}, Upload: {}, distinctUsers: 0 };
+      return url.pathname.endsWith("/histogram") ? {} : [];
+    });
+    component = mount(Dashboard, { target: document.body });
+    await flush();
+    const sorts = () =>
+      net.requests
+        .filter((r) => r.url.pathname.endsWith("/leaderboard"))
+        .map((r) => r.url.searchParams.get("sortBy"));
+    const button = (label: string) =>
+      [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === label)!;
+    button("Total Size").click();
+    await flush();
+    expect(sorts().slice(-2)).toEqual(["TotalBytes", "TotalBytes"]);
+    // a background reload a moment later reads the same range again
+    const asked = sorts().length;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flush();
+    expect(sorts().length).toBe(asked + 2);
+    expect(sorts().slice(-2)).toEqual(["TotalBytes", "TotalBytes"]);
+    button("7d").click();
+    await flush();
+    expect(sorts().slice(-2)).toEqual(["Count", "Count"]);
+  });
 });

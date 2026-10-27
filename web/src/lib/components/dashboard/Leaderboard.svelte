@@ -10,16 +10,19 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { links } from "#lib/components/users/actions.js";
   import Username from "#lib/components/users/Username.svelte";
-  import { reports, type Window } from "#lib/dashboard/reports.js";
+  import { type RangeLabel, reports, type Window } from "#lib/dashboard/reports.js";
   import { formatBytes, formatSpeed } from "#lib/format.js";
 
   // who moved the most with us each way, by count, bytes or speed
-  let { span }: { span: Window } = $props();
+  let { span, range }: { span: Window; range: RangeLabel } = $props();
 
   type Entry = Schemas["LeaderboardEntry"];
   type Sort = Schemas["LeaderboardSort"];
 
-  let sortBy = $state<Sort>("Count");
+  /** the column last clicked, for the range it was clicked in */
+  let picked = $state<{ range: RangeLabel; by: Sort } | null>(null);
+  // a new range starts over at Count; a background reload of the same range keeps the column
+  const sortBy = $derived(picked?.range === range ? picked.by : "Count");
   let rows = $state.raw<{ Download: Entry[]; Upload: Entry[] }>({ Download: [], Upload: [] });
   let loading = $state(true);
   let error = $state("");
@@ -75,7 +78,7 @@
                 <button
                   type="button"
                   class="inline-flex items-center gap-1"
-                  onclick={() => (sortBy = c.by)}>
+                  onclick={() => (picked = { range, by: c.by })}>
                   {c.label}
                   {#if sortBy === c.by}<ArrowDownIcon class="size-3" />{/if}
                 </button>
