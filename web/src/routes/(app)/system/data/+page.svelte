@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Placeholder from "#lib/components/Placeholder.svelte";
+  import Data from "#lib/components/system/Data.svelte";
 </script>
 
-<Placeholder screen="Data" />
+<Data />
