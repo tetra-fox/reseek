@@ -7,6 +7,7 @@ use api_types::search::{
 };
 use axum::extract::State;
 use axum::http::StatusCode;
+use soulseek_proto::SearchQuery;
 use tracing::info;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -17,6 +18,7 @@ use super::extract::{Json, Path, Query};
 use super::validate;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized, ReadWrite};
+use crate::searches;
 use crate::services::Cancelled;
 
 /// The shortest wait for another response, in milliseconds.
@@ -82,19 +84,13 @@ fn search_request(request: &SearchRequest) -> Result<(), ApiError> {
       "The field SearchText can not be null, empty, or consist of only whitespace",
     ));
   }
-  let excluded = |term: &str| term.len() > 1 && term.starts_with('-');
-  let mut terms = request
-    .search_text
-    .split_whitespace()
-    .filter(|term| !excluded(term))
-    .peekable();
-  if terms.peek().is_none() {
+  let query = SearchQuery::parse(&request.search_text);
+  if query.terms.is_empty() {
     return Err(ApiError::bad_request(
       "Search query must contain at least one non-exclusion term",
     ));
   }
-  // a one-character term matches too much to be sent, so it is dropped
-  if terms.all(|term| term.chars().count() <= 1) {
+  if searches::sendable(query).terms.is_empty() {
     return Err(ApiError::bad_request(
       "Search query must contain at least one non-exclusion term with length greater than 1",
     ));

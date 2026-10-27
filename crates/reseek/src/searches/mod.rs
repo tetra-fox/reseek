@@ -70,12 +70,16 @@ fn not_found(id: Uuid) -> ApiError {
   ApiError::not_found(format!("no search has the id {id}"))
 }
 
-/// The text a search sends: the terms in order, then the exclusions. A term of one character
-/// matches too much to be sent, so it is left out.
-fn normalised(text: &str) -> String {
-  let mut query = SearchQuery::parse(text);
+/// `query` as it is sent: a term of one character matches too much to be sent, so it is left
+/// out.
+pub fn sendable(mut query: SearchQuery) -> SearchQuery {
   query.terms.retain(|term| term.chars().count() > 1);
-  query.search_text()
+  query
+}
+
+/// The text a search for `text` sends: the terms in order, then the exclusions.
+fn normalised(text: &str) -> String {
+  sendable(SearchQuery::parse(text)).search_text()
 }
 
 /// Where the client sends a search with `scope`.
