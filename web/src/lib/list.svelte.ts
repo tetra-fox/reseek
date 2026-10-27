@@ -263,7 +263,7 @@ export class ListControl<L> {
   }
 
   #click = (e: MouseEvent) => {
-    if (e.defaultPrevented || inControl(e.target)) return;
+    if (e.defaultPrevented || inControl(e)) return;
     const selection = document.getSelection();
     if (selection && !selection.isCollapsed) return;
     const key = (e.target as Element).closest<HTMLElement>("[data-line]")?.dataset.line;

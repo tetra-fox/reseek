@@ -44,4 +44,20 @@ describe("which keys a focused element keeps", () => {
     );
     expect(kept).toBe(true);
   });
+
+  it("doesn't take a dialog or menu around the list itself for a control in it", () => {
+    document.body.innerHTML = `
+      <div role="dialog"><div role="grid" id="list"><div id="row"></div><button id="act"></button></div></div>`;
+    const list = document.getElementById("list")!;
+    let kept: boolean | null = null;
+    list.addEventListener("keydown", (e) => (kept = keepsKey(e)));
+    document
+      .getElementById("row")!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(kept).toBe(false);
+    document
+      .getElementById("act")!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    expect(kept).toBe(true);
+  });
 });
