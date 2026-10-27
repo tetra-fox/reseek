@@ -180,8 +180,12 @@
       return { ok: true as const, data: null };
     });
 
-  /** How long a runtime change lasts: an expiry for `expiresIn`, null for until removed */
+  /**
+   * How long a runtime change lasts: an expiry for `expiresIn`, "restart" for until reseek stops,
+   * null for until removed. Until restart comes first, as the change the read-only notices describe
+   */
   const EXPIRIES = [
+    { label: "Until restart", value: "restart", words: "until restart" },
     { label: "For an hour", value: "1h", words: "for an hour" },
     { label: "For a day", value: "1d", words: "for a day" },
     { label: "Until removed", value: null, words: "until removed" }

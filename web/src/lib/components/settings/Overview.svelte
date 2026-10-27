@@ -111,9 +111,11 @@
           <code class="font-medium">{key}</code>
           <code class="text-fg-muted">{JSON.stringify(override.value)}</code>
           <span class="text-xs text-fg-subtle">
-            by {override.setBy}, {override.expiresAt
-              ? `until ${dateTime(override.expiresAt)}`
-              : "until removed"}
+            by {override.setBy}, {override.untilRestart
+              ? "until restart"
+              : override.expiresAt
+                ? `until ${dateTime(override.expiresAt)}`
+                : "until removed"}
           </span>
           <Button
             variant="ghost"

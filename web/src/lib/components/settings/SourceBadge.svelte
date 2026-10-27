@@ -24,7 +24,11 @@
   <Tooltip text={`Applied at runtime by ${source.setBy}`} hint>
     {#snippet child({ props })}
       <Badge {...props} tone="accent">
-        runtime{source.expiresAt ? ` until ${dateTime(source.expiresAt)}` : ""}
+        runtime{source.untilRestart
+          ? " until restart"
+          : source.expiresAt
+            ? ` until ${dateTime(source.expiresAt)}`
+            : ""}
       </Badge>
     {/snippet}
   </Tooltip>
