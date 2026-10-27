@@ -2,8 +2,11 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { login } from "./login";
 
-/** Answers the chat calls with two conversations, `alpha` with `messages` unread ones */
-const fakeChat = async (page: Page, messages: number) => {
+/**
+ * Answers the chat calls with two conversations, `alpha` with `messages` unread ones, a page at
+ * a time; an older page takes `slow` milliseconds
+ */
+const fakeChat = async (page: Page, messages: number, slow = 0) => {
   const message = (n: number) => ({
     localId: n,
     id: n,
@@ -36,10 +39,14 @@ const fakeChat = async (page: Page, messages: number) => {
       return route.fulfill({ json: [conversation("alpha", 2), conversation("beta", 1)] });
     }
     if (url.pathname.endsWith("/messages")) {
-      const all = url.pathname.includes("/alpha/")
-        ? Array.from({ length: messages }, (_, n) => message(n + 1))
-        : [];
-      return route.fulfill({ json: all });
+      if (!url.pathname.includes("/alpha/")) return route.fulfill({ json: [] });
+      const before = Number(url.searchParams.get("before") ?? messages + 1);
+      const limit = Number(url.searchParams.get("limit") ?? 100);
+      const first = Math.max(1, before - limit);
+      if (url.searchParams.has("before")) await new Promise((done) => setTimeout(done, slow));
+      return route.fulfill({
+        json: Array.from({ length: before - first }, (_, n) => message(before - 1 - n))
+      });
     }
     return route.fulfill({ status: 404, json: { error: "not found" } });
   });
@@ -82,4 +89,39 @@ test("doesn't acknowledge a conversation opened at an old message", async ({ pag
   // at the bottom, it is read
   await page.getByRole("button", { name: /Jump to latest|new/ }).click();
   await expect.poll(() => acknowledged).toContain("/api/v0/conversations/alpha");
+});
+
+test("keeps the message in view still while an older page loads above it", async ({ page }) => {
+  await fakeChat(page, 250, 400);
+  await login(page, "/chat/alpha");
+  const log = page.getByRole("log");
+  await expect(page.locator('[data-message="250"]')).toBeVisible();
+  // scroll up a step at a time, as a wheel would, until the older page is asked for
+  for (let i = 0; i < 40; i++) {
+    await log.evaluate((box) => box.scrollBy(0, -400));
+    await page.waitForTimeout(30);
+    if (await log.evaluate((box) => box.scrollTop < 96)) break;
+  }
+  // while the page loads, note in every frame where the first message in view is drawn
+  await log.evaluate((box) => {
+    const view = box.getBoundingClientRect().top;
+    const first = [...box.querySelectorAll<HTMLElement>("[data-message]")].find(
+      (node) => node.getBoundingClientRect().bottom > view
+    )!;
+    const id = first.dataset.message!;
+    const frames: number[] = [];
+    Object.assign(window, { anchored: { id, frames } });
+    const note = () => {
+      const node = box.querySelector(`[data-message="${id}"]`);
+      frames.push(node ? Math.round(node.getBoundingClientRect().top - view) : NaN);
+      if (frames.length < 90) requestAnimationFrame(note);
+    };
+    note();
+  });
+  await expect(page.locator('[data-message="150"]')).toBeAttached();
+  await page.waitForTimeout(1000);
+  const { frames } = await page.evaluate(
+    () => (window as unknown as { anchored: { frames: number[] } }).anchored
+  );
+  expect(new Set(frames).size, `drawn at ${frames.join(", ")}`).toBe(1);
 });

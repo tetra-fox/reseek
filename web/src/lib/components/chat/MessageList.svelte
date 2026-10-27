@@ -1,6 +1,7 @@
 <script lang="ts">
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import { tick, untrack } from "svelte";
+  import { on } from "svelte/events";
   import { SvelteMap } from "svelte/reactivity";
 
   import { type Line, layout } from "#lib/chat/messages.js";
@@ -29,6 +30,8 @@
   const OVERSCAN = 800;
 
   let box = $state<HTMLDivElement | null>(null);
+  /** the spacer above the drawn lines, where `tops` starts in the box */
+  let head = $state<HTMLDivElement | null>(null);
   let atBottom = $state(true);
   /** messages that arrived while scrolled up, for the pill */
   let fresh = $state(0);
@@ -86,14 +89,16 @@
   });
 
   const observer = new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      const node = entry.target as HTMLElement;
-      if (node.dataset.key) heights.set(node.dataset.key, node.offsetHeight);
-    }
-    // the newest lines got their real heights: a view kept at the bottom stays there
+    for (const entry of entries) remember(entry.target as HTMLElement);
+    // the lines got their real heights: a view kept at the bottom stays there, one kept on a
+    // line stays on it
     if (stick && !interaction.frozen) void tick().then(toBottom);
+    else if (anchor && !loadingOlder) void tick().then(toAnchor);
   });
   $effect(() => () => observer.disconnect());
+  const remember = (node: HTMLElement) => {
+    if (node.dataset.key) heights.set(node.dataset.key, node.offsetHeight);
+  };
   const measure = (node: HTMLElement) => {
     observer.observe(node);
     return () => observer.unobserve(node);
@@ -113,8 +118,50 @@
   let stick = false;
   /** where the list last scrolled the view to */
   let setTop = 0;
+  /**
+   * the line the view is kept on while older messages load above it and the lines drawn after
+   * get their real heights, with how far below the view's top it was. A scroll while the page
+   * loads moves it; one after the page is placed lets it go
+   */
+  let anchor: { key: string; offset: number } | null = null;
+  /**
+   * The first message at least partly in view, and where it is. Only a message: a day line
+   * takes the key of the day's first message, which changes as older ones arrive
+   */
+  const anchorOf = () => {
+    if (!box) return null;
+    for (const node of box.querySelectorAll<HTMLElement>('[data-key^="m:"]')) {
+      if (node.offsetTop + node.offsetHeight > box.scrollTop) {
+        return { key: node.dataset.key!, offset: node.offsetTop - box.scrollTop };
+      }
+    }
+    return null;
+  };
+  const toAnchor = () => {
+    if (!box || !head || !anchor) return;
+    const key = anchor.key;
+    const index = lines.findIndex((l) => l.key === key);
+    if (index === -1) return;
+    box.scrollTop = head.offsetTop + tops[index] - anchor.offset;
+    setTop = box.scrollTop;
+    seen();
+  };
+  /**
+   * Lets go of the line the view was kept on once the page is placed, when the user scrolls by
+   * wheel, touch, key or scrollbar
+   */
+  const releasesOnUse = (node: HTMLElement) => {
+    const release = () => {
+      if (!loadingOlder) anchor = null;
+    };
+    const off = ["wheel", "touchmove", "keydown", "pointerdown"].map((type) =>
+      on(node, type, release, { passive: true })
+    );
+    return () => off.forEach((stop) => stop());
+  };
   const toBottom = () => {
     if (!box) return;
+    anchor = null;
     stick = true;
     box.scrollTop = box.scrollHeight;
     setTop = box.scrollTop;
@@ -138,6 +185,7 @@
       if (index === -1 || !box) toBottom();
       else {
         stick = false;
+        anchor = null;
         box.scrollTop = Math.max(0, tops[index] - box.clientHeight / 2);
         seen();
         await tick();
@@ -171,19 +219,24 @@
       if (box.scrollHeight - box.scrollTop - box.clientHeight >= NEAR) return toBottom();
     } else stick = false;
     seen();
+    if (loadingOlder) return void (anchor = anchorOf());
     if (atBottom) {
       fresh = 0;
       readIfSeen();
     }
     if (box.scrollTop < NEAR * 2 && pane.hasMore && !loadingOlder && placed) {
-      // older messages go above; the view stays on the message it showed
+      // older messages go above; the view stays on the line it showed
       loadingOlder = true;
-      const before = box.scrollHeight;
+      anchor = anchorOf();
       await pane.older();
-      await tick();
-      box.scrollTop += box.scrollHeight - before;
-      seen();
       loadingOlder = false;
+      await tick();
+      toAnchor();
+      // the lines drawn at the new place are measured now rather than when the observer runs, so
+      // the view never shows them placed by their guessed heights
+      await tick();
+      for (const node of box.querySelectorAll<HTMLElement>("[data-key]")) remember(node);
+      toAnchor();
     }
   };
 </script>
@@ -193,17 +246,16 @@
 <div class="relative flex min-h-0 flex-1 flex-col">
   <div
     bind:this={box}
-    class="min-h-0 flex-1 overflow-y-auto pb-2 [overflow-anchor:auto]"
+    class="relative min-h-0 flex-1 overflow-y-auto pb-2 [overflow-anchor:auto]"
     role="log"
     aria-live="polite"
     onscroll={scrolled}
+    {@attach releasesOnUse}
     {@attach freezesWhileUsed}>
-    {#if loadingOlder}
-      <div class="flex justify-center py-2"><Spinner class="size-4" /></div>
-    {:else if !pane.hasMore && pane.loaded && pane.ordered.length}
+    {#if !pane.hasMore && pane.loaded && pane.ordered.length}
       <p class="py-2 text-center text-xs text-fg-subtle">The start of the stored history</p>
     {/if}
-    <div style:height={`${tops[range.start]}px`} aria-hidden="true"></div>
+    <div bind:this={head} style:height={`${tops[range.start]}px`} aria-hidden="true"></div>
     {#each shown as line (line.key)}
       <div data-key={line.key} {@attach measure}>
         {#if line.kind === "day"}
@@ -230,6 +282,12 @@
     {/each}
     <div style:height={`${tops[lines.length] - tops[range.end]}px`} aria-hidden="true"></div>
   </div>
+  {#if loadingOlder}
+    <!-- over the list, not in it: a line in the list would move the messages under the view -->
+    <div class="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
+      <Spinner class="size-4" />
+    </div>
+  {/if}
   {#if !atBottom}
     <Button
       size="sm"
