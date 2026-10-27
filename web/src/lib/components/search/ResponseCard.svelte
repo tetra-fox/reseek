@@ -120,6 +120,18 @@
       class={["size-2.5 rounded-full", response.hasFreeUploadSlot ? "bg-success" : "bg-warning"]}
       title={response.hasFreeUploadSlot ? "Has a free upload slot" : "No free upload slot"}></span>
     <Username {name} />
+    {#if user}
+      <span
+        class={[
+          "size-2 rounded-full",
+          user.presence === "Online"
+            ? "bg-success"
+            : user.presence === "Away"
+              ? "bg-warning"
+              : "bg-fg-subtle/50"
+        ]}
+        title={user.presence ?? "Unknown"}></span>
+    {/if}
     {#if user?.group.color}
       <span
         class="size-2 rounded-full"
