@@ -38,10 +38,10 @@ export type Column = {
 /** The table's columns in order, with their defaults */
 export const COLUMNS: Column[] = [
   { id: "select", label: "Select", visible: true, width: 40, fixed: true },
-  { id: "file", label: "File", visible: true, width: 280, sort: "file", fixed: true },
+  { id: "file", label: "File", visible: true, width: 240, sort: "file", fixed: true },
   { id: "user", label: "User", visible: true, width: 150, sort: "user" },
   { id: "size", label: "Size", visible: true, width: 90, sort: "size" },
-  { id: "progress", label: "Progress", visible: true, width: 200, sort: "progress" },
+  { id: "progress", label: "Progress", visible: true, width: 180, sort: "progress" },
   { id: "speed", label: "Speed", visible: true, width: 130, sort: "speed" },
   { id: "eta", label: "ETA", visible: true, width: 80, sort: "eta" },
   { id: "transferred", label: "Transferred", visible: false, width: 120, sort: "size" },
@@ -53,7 +53,7 @@ export const COLUMNS: Column[] = [
   { id: "attempts", label: "Attempts", visible: false, width: 80, sort: "attempts" },
   { id: "batch", label: "Batch", visible: false, width: 100, only: "download" },
   { id: "group", label: "Group", visible: false, width: 110, only: "upload" },
-  { id: "actions", label: "Actions", visible: true, width: 150, fixed: true }
+  { id: "actions", label: "Actions", visible: true, width: 160, fixed: true }
 ];
 
 /** The columns a direction offers */
