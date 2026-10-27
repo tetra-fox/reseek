@@ -9,6 +9,7 @@ use super::{State, UploadQueue};
 /// Why a group a user is queued in is in the table.
 const KNOWN: &str = "users are queued in a group of the table, else in the default group";
 use crate::config::enums::QueueStrategy;
+use crate::users::DEFAULT_GROUP;
 
 /// Where a new upload request from a user would land in the queue.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -108,13 +109,25 @@ impl UploadQueue {
   pub fn forecast(&self, username: &str) -> Forecast {
     let mut state = self.lock();
     let group = self.queued_group(&mut state, username);
+    self.forecast_in(&mut state, group)
+  }
+
+  /// Where a new request from a user of the default group would land, such as a user we know
+  /// nothing about.
+  pub fn default_forecast(&self) -> Forecast {
+    let mut state = self.lock();
+    self.forecast_in(&mut state, DEFAULT_GROUP.to_string())
+  }
+
+  /// Where a new request queued in `group` would land.
+  fn forecast_in(&self, state: &mut State, group: String) -> Forecast {
     let known = state.group(&group).expect(KNOWN);
     let (strategy, total, used) = (known.strategy, known.slots, known.used.len() as u32);
     let free = total.saturating_sub(used);
     let position = if free > 0 {
       0
     } else {
-      let users = self.group_users(&mut state, &group);
+      let users = self.group_users(state, &group);
       let waiting = match strategy {
         QueueStrategy::RoundRobin => users.len(),
         QueueStrategy::FirstInFirstOut => users.iter().map(|(_, n)| n).sum(),

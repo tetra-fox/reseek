@@ -130,6 +130,9 @@ pub struct AppState {
   pub releases: Arc<Releases>,
   /// the engine of every domain
   pub services: Services,
+  /// held while our profile is changed, so one change reads the configuration file and the
+  /// picture the one before it left
+  pub profile_writes: Arc<tokio::sync::Mutex<()>>,
   /// set when the daemon is to start again once it has stopped
   restart: Arc<AtomicBool>,
 }
@@ -315,6 +318,7 @@ impl AppState {
       clock,
       releases,
       services,
+      profile_writes: Arc::new(tokio::sync::Mutex::new(())),
       restart: Arc::new(AtomicBool::new(false)),
     })
   }

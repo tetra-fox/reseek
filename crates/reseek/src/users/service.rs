@@ -42,6 +42,25 @@ fn picture_type(bytes: &[u8]) -> &'static str {
   }
 }
 
+/// `picture` as the whole response: its type from its first bytes, `cache_control`, and the
+/// SHA-256 of its bytes as its ETag.
+pub(crate) fn picture_response(picture: Vec<u8>, cache_control: &'static str) -> Response {
+  let digest = Sha256::digest(&picture);
+  let tag: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+  let content_type = picture_type(&picture);
+  let mut response = picture.into_response();
+  let headers = response.headers_mut();
+  headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
+  headers.insert(
+    header::CACHE_CONTROL,
+    HeaderValue::from_static(cache_control),
+  );
+  let etag = HeaderValue::from_str(&format!("\"{tag}\""))
+    .expect("hex digits in quotes are a valid header value");
+  headers.insert(header::ETAG, etag);
+  response
+}
+
 impl Directory {
   /// Applies `change` to `username`'s row and pushes the new summary.
   pub(super) async fn change(&self, username: &str, change: Change) -> Result<(), ApiError> {
@@ -147,21 +166,7 @@ impl Directory {
       .await
       .map_err(internal)?
       .ok_or_else(|| ApiError::not_found(format!("no picture of {username} is kept")))?;
-    let digest = Sha256::digest(&picture);
-    let tag: String = digest.iter().map(|b| format!("{b:02x}")).collect();
-    let content_type = picture_type(&picture);
-    let mut response = picture.into_response();
-    let headers = response.headers_mut();
-    headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
-    headers.insert(
-      header::CACHE_CONTROL,
-      HeaderValue::from_static("private, max-age=3600"),
-    );
-    headers.insert(
-      header::ETAG,
-      HeaderValue::from_str(&format!("\"{tag}\"")).map_err(internal)?,
-    );
-    Ok(response)
+    Ok(picture_response(picture, "private, max-age=3600"))
   }
 
   /// Replaces our notes on `username`.

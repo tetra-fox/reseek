@@ -12,6 +12,7 @@ mod live;
 mod messaging;
 mod oidc;
 mod options;
+mod profile;
 mod relay;
 mod searches;
 mod session;
@@ -59,6 +60,7 @@ use crate::auth;
     (name = "server", description = "The connection to the Soulseek server"),
     (name = "logs", description = "The daemon's log"),
     (name = "options", description = "The configuration and its files"),
+    (name = "profile", description = "Our own profile, as other users see it"),
     (name = "session", description = "Signing in and out, and browser sessions"),
     (name = "auth", description = "Signing in with an OpenID Connect provider"),
     (name = "tokens", description = "API tokens for scripts"),
@@ -95,6 +97,7 @@ fn routes() -> OpenApiRouter<AppState> {
     .merge(events::routes())
     .merge(telemetry::routes())
     .merge(options::routes())
+    .merge(profile::routes())
     .merge(session::routes())
     .merge(oidc::routes())
     .merge(tokens::routes())

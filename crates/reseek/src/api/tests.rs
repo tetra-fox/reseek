@@ -96,6 +96,7 @@ fn answered_here(operation: &Operation) -> bool {
     || under("/api/v0/files")
     || under("/api/v0/shares")
     || under("/api/v0/options")
+    || under("/api/v0/profile")
     || under("/api/v0/session")
     || under("/api/v0/sessions")
     || under("/api/v0/tokens")
@@ -182,6 +183,7 @@ async fn each_route_takes_its_least_role() {
     (Method::POST, "/api/v0/rooms/joined", write),
     (Method::GET, "/api/v0/messages/search", read),
     (Method::GET, "/api/v0/shares", read),
+    (Method::GET, "/api/v0/profile", read),
     (Method::PUT, "/api/v0/shares", write),
     (Method::GET, "/api/v0/files/{root}/directories", read),
     (Method::DELETE, "/api/v0/files/{root}/files/{path}", write),

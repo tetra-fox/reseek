@@ -99,6 +99,11 @@ pub fn probe(operation: &Operation) -> Request<Body> {
       *r.body_mut() = Body::from(text);
       with(r, "content-type", "text/plain")
     }
+    Some(Payload::Picture) => {
+      let mut r = request(method, &uri, None);
+      *r.body_mut() = Body::from(picture());
+      with(r, "content-type", "image/png")
+    }
     Some(Payload::Form) => {
       let form = "--x\r\nContent-Disposition: form-data; name=\"shares\"\r\n\r\n[]\r\n--x--\r\n";
       let mut r = request(method, &uri, None);
@@ -121,6 +126,18 @@ enum Payload {
   Json(Value),
   Text(&'static str),
   Form,
+  /// a small PNG
+  Picture,
+}
+
+/// A one-pixel PNG.
+fn picture() -> Vec<u8> {
+  use image::ImageEncoder;
+  let mut bytes = Vec::new();
+  image::codecs::png::PngEncoder::new(&mut bytes)
+    .write_image(&[0, 0, 0, 255], 1, 1, image::ExtendedColorType::Rgba8)
+    .unwrap();
+  bytes
 }
 
 /// The query a route needs to be let through.
@@ -166,6 +183,8 @@ fn body(method: &Method, route: &str) -> Option<Payload> {
     ("POST", "/api/v0/session/file-token") => json(json!({ "transferId": ID })),
     ("POST", r) if r.starts_with("/api/v0/relay/controller/") => Some(Payload::Form),
     ("PATCH", "/api/v0/options") => json(json!({})),
+    ("PUT", "/api/v0/profile") => json(json!({ "description": "hello" })),
+    ("PUT", "/api/v0/profile/picture") => Some(Payload::Picture),
     ("POST", "/api/v0/options/file/validate") => json(json!({ "text": "" })),
     ("POST", "/api/v0/session") => json(json!({ "username": "admin", "password": "x" })),
     ("POST", "/api/v0/tokens") => json(json!({ "name": "script", "role": "ReadOnly" })),

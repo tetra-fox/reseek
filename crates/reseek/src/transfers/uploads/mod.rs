@@ -163,6 +163,11 @@ impl Uploads {
     self.queue.forecast(username)
   }
 
+  /// Where a new upload request from a user we know nothing about would land in the queue.
+  pub fn default_forecast(&self) -> Forecast {
+    self.queue.default_forecast()
+  }
+
   /// The place a peer is told of the latest upload of `filename` to `username`, `None` when
   /// the queue holds none. Peers count from 1, so it is the queue's own place plus one.
   pub fn place(&self, username: &str, filename: &str) -> Option<u32> {

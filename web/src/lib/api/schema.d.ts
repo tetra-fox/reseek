@@ -772,6 +772,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Our profile as a user asking for our user info is sent it now: the text, whether a picture
+         *     goes with it, and the slots and queue a user we know nothing about is told of, with where
+         *     the text and the picture come from.
+         */
+        get: operations["get_profile"];
+        /** Changes the profile text other users read. */
+        put: operations["put_profile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/profile/picture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The picture other users are sent with our profile. */
+        get: operations["get_picture"];
+        /**
+         * Sets the picture other users are sent: a JPEG, PNG, GIF or WebP image of at most 1 MiB,
+         *     kept as a JPEG at most 512 pixels on its longest side.
+         */
+        put: operations["put_picture"];
+        post?: never;
+        /** Stops sending a picture with our profile and removes the one kept. */
+        delete: operations["delete_picture"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/relay": {
         parameters: {
             query?: never;
@@ -4840,6 +4884,35 @@ export interface components {
             /** @description its value, `*****` for a secret */
             value: Record<string, unknown>;
         };
+        /**
+         * @description Our profile as a user asking for our user info is sent it now, with where the text and the
+         *     picture come from. The reply of `GET /profile`.
+         */
+        OwnProfile: {
+            /** @description the profile text */
+            description: string;
+            /** @description whether one of those slots is free */
+            freeUploadSlot: boolean;
+            /** @description a picture is sent with it */
+            hasPicture: boolean;
+            /**
+             * @description where the picture is fetched, null without one
+             * @example /api/v0/profile/picture
+             */
+            pictureUrl?: string | null;
+            /**
+             * Format: int32
+             * @description the place in the queue such a user is told a new request would take
+             */
+            queueLength: number;
+            /** @description the layer each value comes from */
+            sources: components["schemas"]["ProfileSources"];
+            /**
+             * Format: int32
+             * @description the upload slots a user we know nothing about is told of, those of the default group
+             */
+            uploadSlots: number;
+        };
         /** @description One page of a list, with how many items the whole list has. */
         Page_Transfer: {
             /** @description the items on this page, in the order asked for */
@@ -5046,6 +5119,18 @@ export interface components {
              * @description seconds of privilege left
              */
             privilegesRemaining: number;
+        };
+        /** @description Where the text and the picture of our profile come from. */
+        ProfileSources: {
+            /** @description the layer that sets `soulseek.description` */
+            description: components["schemas"]["OptionSource"];
+            /** @description the layer that sets `soulseek.picture` */
+            picture: components["schemas"]["OptionSource"];
+        };
+        /** @description The new text of our profile, the body of `PUT /profile`. */
+        ProfileText: {
+            /** @description the text other users read, newlines kept */
+            description: string;
         };
         /**
          * @description One metric family of the registry, an entry of the object `GET /telemetry/metrics` returns
@@ -9760,6 +9845,238 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_profile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnProfile"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_profile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileText"];
+            };
+        };
+        responses: {
+            /** @description changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_picture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": components["schemas"]["FileContent"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_picture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description the image */
+        requestBody: {
+            content: {
+                "image/gif": components["schemas"]["FileContent"];
+                "image/jpeg": components["schemas"]["FileContent"];
+                "image/png": components["schemas"]["FileContent"];
+                "image/webp": components["schemas"]["FileContent"];
+            };
+        };
+        responses: {
+            /** @description changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_picture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
             };
         };
     };

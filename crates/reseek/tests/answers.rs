@@ -1,6 +1,6 @@
 //! What other users get from the daemon over soulfind: a search of its shares answered with the
 //! files that match and its upload figures, its share listing, a folder's contents and its user
-//! info.
+//! info, with the profile set through the API.
 
 mod support;
 
@@ -112,6 +112,26 @@ async fn another_user_searches_browses_and_asks_the_daemon() {
     ),
     (3, 0, true)
   );
+
+  api.set_profile_text("Jazz, mostly.").await.unwrap();
+  let mut png = Vec::new();
+  let square = image::RgbaImage::from_pixel(900, 900, image::Rgba([10, 200, 90, 255]));
+  image::ImageEncoder::write_image(
+    image::codecs::png::PngEncoder::new(&mut png),
+    &square,
+    900,
+    900,
+    image::ExtendedColorType::Rgba8,
+  )
+  .unwrap();
+  api.set_profile_picture(png, "image/png").await.unwrap();
+  let sent = api.profile_picture().await.unwrap();
+  let info = other.client.get_user_info(&name, &cancel).await.unwrap();
+  assert_eq!(info.description, "Jazz, mostly.");
+  let picture = info.picture.expect("the new picture is sent");
+  assert_eq!(picture, sent);
+  let decoded = image::load_from_memory(&picture).unwrap();
+  assert_eq!((decoded.width(), decoded.height()), (512, 512));
 
   let metrics = api.metrics().await.unwrap();
   let value = |name: &str| metrics[name].samples.as_ref().unwrap()[0].value;

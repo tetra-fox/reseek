@@ -182,8 +182,8 @@ pub struct FileToken {
   pub expires_at: DateTime<Utc>,
 }
 
-/// A response body that is a file's bytes as they are, such as a downloaded file, an image or a
-/// zip archive. It is never JSON.
+/// A body that is a file's bytes as they are, such as a downloaded file, an image or a zip
+/// archive. It is never JSON.
 pub struct FileContent;
 
 impl utoipa::PartialSchema for FileContent {

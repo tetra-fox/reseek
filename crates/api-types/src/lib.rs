@@ -25,6 +25,7 @@ pub mod live;
 pub mod logs;
 pub mod options;
 pub mod paging;
+pub mod profile;
 pub mod relay;
 pub mod reports;
 pub mod rooms;

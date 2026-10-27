@@ -45,6 +45,8 @@ humantime = "2"
 humantime-serde.workspace = true
 hyper = { version = "1", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["server-auto", "server-graceful", "service", "tokio"] }
+# decodes uploaded profile pictures and encodes them as JPEG, in pure Rust
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 lofty = "0.25"
 mime_guess = "2"
 notify.workspace = true

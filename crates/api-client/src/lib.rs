@@ -25,6 +25,7 @@ mod files;
 mod live;
 mod messaging;
 mod options;
+mod profile;
 mod relay;
 mod searches;
 mod session;

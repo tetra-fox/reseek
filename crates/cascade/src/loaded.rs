@@ -66,12 +66,16 @@ impl<T> Loaded<T> {
     self.schema.redact(&self.tree)
   }
 
+  /// The last file that sets `key`, `None` when no file does; a runtime override on top does
+  /// not change it.
+  pub fn file_setting(&self, key: &str) -> Option<&str> {
+    self.file_of.get(key).map(String::as_str)
+  }
+
   /// The file a write of `key` goes to: the last file that sets it, else the first file.
   pub fn file_for(&self, key: &str) -> Option<&str> {
     self
-      .file_of
-      .get(key)
-      .map(String::as_str)
+      .file_setting(key)
       .or_else(|| self.files.first().map(|f| f.name.as_str()))
   }
 }

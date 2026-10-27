@@ -366,7 +366,7 @@ async fn validate_file(
 }
 
 /// Refuses the call unless `remote_configuration` is on, logging `blocked` when it is not.
-fn remote(current: &Loaded<Options>, blocked: &str) -> Result<(), ApiError> {
+pub(super) fn remote(current: &Loaded<Options>, blocked: &str) -> Result<(), ApiError> {
   if current.values.remote_configuration {
     return Ok(());
   }

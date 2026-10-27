@@ -47,6 +47,7 @@ use tokio_util::task::TaskTracker;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
 pub use network::Users;
+pub(crate) use service::picture_response;
 pub use touch::{PeerInfo, Touch};
 
 use crate::config::{Options, RETENTION_SWEEP};

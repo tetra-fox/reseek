@@ -3906,6 +3906,280 @@
         }
       }
     },
+    "/api/v0/profile": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Our profile as a user asking for our user info is sent it now: the text, whether a picture\ngoes with it, and the slots and queue a user we know nothing about is told of, with where\nthe text and the picture come from.",
+        "operationId": "get_profile",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Changes the profile text other users read.",
+        "operationId": "put_profile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileText"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "changed"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/profile/picture": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "The picture other users are sent with our profile.",
+        "operationId": "get_picture",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "image/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Sets the picture other users are sent: a JPEG, PNG, GIF or WebP image of at most 1 MiB,\nkept as a JPEG at most 512 pixels on its longest side.",
+        "operationId": "put_picture",
+        "requestBody": {
+          "description": "the image",
+          "content": {
+            "image/gif": {
+              "schema": {
+                "$ref": "#/components/schemas/FileContent"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "$ref": "#/components/schemas/FileContent"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "$ref": "#/components/schemas/FileContent"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "$ref": "#/components/schemas/FileContent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "changed"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Stops sending a picture with our profile and removes the one kept.",
+        "operationId": "delete_picture",
+        "responses": {
+          "204": {
+            "description": "removed"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/relay": {
       "get": {
         "tags": [
@@ -18553,6 +18827,56 @@
           }
         }
       },
+      "OwnProfile": {
+        "type": "object",
+        "description": "Our profile as a user asking for our user info is sent it now, with where the text and the\npicture come from. The reply of `GET /profile`.",
+        "required": [
+          "description",
+          "hasPicture",
+          "uploadSlots",
+          "freeUploadSlot",
+          "queueLength",
+          "sources"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "the profile text"
+          },
+          "freeUploadSlot": {
+            "type": "boolean",
+            "description": "whether one of those slots is free"
+          },
+          "hasPicture": {
+            "type": "boolean",
+            "description": "a picture is sent with it"
+          },
+          "pictureUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "where the picture is fetched, null without one",
+            "example": "/api/v0/profile/picture"
+          },
+          "queueLength": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the place in the queue such a user is told a new request would take",
+            "minimum": 0
+          },
+          "sources": {
+            "$ref": "#/components/schemas/ProfileSources",
+            "description": "the layer each value comes from"
+          },
+          "uploadSlots": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the upload slots a user we know nothing about is told of, those of the default group",
+            "minimum": 0
+          }
+        }
+      },
       "Page_Transfer": {
         "type": "object",
         "description": "One page of a list, with how many items the whole list has.",
@@ -18899,6 +19223,37 @@
             "format": "int32",
             "description": "seconds of privilege left",
             "minimum": 0
+          }
+        }
+      },
+      "ProfileSources": {
+        "type": "object",
+        "description": "Where the text and the picture of our profile come from.",
+        "required": [
+          "description",
+          "picture"
+        ],
+        "properties": {
+          "description": {
+            "$ref": "#/components/schemas/OptionSource",
+            "description": "the layer that sets `soulseek.description`"
+          },
+          "picture": {
+            "$ref": "#/components/schemas/OptionSource",
+            "description": "the layer that sets `soulseek.picture`"
+          }
+        }
+      },
+      "ProfileText": {
+        "type": "object",
+        "description": "The new text of our profile, the body of `PUT /profile`.",
+        "required": [
+          "description"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "the text other users read, newlines kept"
           }
         }
       },
@@ -22561,6 +22916,10 @@
     {
       "name": "options",
       "description": "The configuration and its files"
+    },
+    {
+      "name": "profile",
+      "description": "Our own profile, as other users see it"
     },
     {
       "name": "session",
