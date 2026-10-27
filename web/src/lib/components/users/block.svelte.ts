@@ -34,7 +34,7 @@ export const defaultScopes = (): BlockScope[] => {
 };
 
 type Ask = {
-  username: string;
+  usernames: string[];
   /** scopes ticked besides the defaults, such as `uploads` for Deny and block */
   add?: BlockScope[];
 };
@@ -44,9 +44,9 @@ class Blocking {
   asked = $state.raw<Ask | null>(null);
   open = $state(false);
 
-  /** Opens the dialog for `username` */
-  ask(username: string, add?: BlockScope[]) {
-    this.asked = { username, add };
+  /** Opens the dialog for one user or several */
+  ask(who: string | string[], add?: BlockScope[]) {
+    this.asked = { usernames: typeof who === "string" ? [who] : who, add };
     this.open = true;
   }
 }

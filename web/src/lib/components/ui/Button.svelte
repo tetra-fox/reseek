@@ -8,6 +8,8 @@
     size?: "default" | "sm" | "icon" | "icon-sm";
     /** renders a link that looks like the button, for navigation */
     href?: string;
+    /** with `href`, saves what the link points at under this name */
+    download?: string;
   };
 
   let {

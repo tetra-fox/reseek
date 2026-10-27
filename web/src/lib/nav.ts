@@ -20,11 +20,18 @@ export const route = (url: { hash: string }): { path: string; query: URLSearchPa
   return { path, query: new URLSearchParams(cut === -1 ? "" : hash.slice(cut + 1)) };
 };
 
-/** The link to a user's profile; a name of dots alone is encoded so the path keeps it */
-export const userHref = (username: string) =>
-  href(
-    `/users/${/^\.+$/.test(username) ? username.replaceAll(".", "%2E") : encodeURIComponent(username)}`
-  );
+/** A name as one path segment; a name of dots alone is encoded so the path keeps it */
+export const segment = (name: string) =>
+  /^\.+$/.test(name) ? name.replaceAll(".", "%2E") : encodeURIComponent(name);
+
+/** The link to a user's profile */
+export const userHref = (username: string) => href(`/users/${segment(username)}`);
+
+/** The link to the conversation with a user */
+export const chatHref = (username: string) => href(`/chat/${segment(username)}`);
+
+/** The link to a room's pane */
+export const roomHref = (room: string) => href(`/chat/rooms/${segment(room)}`);
 
 export type NavItem = { title: string; path: string; icon: Component };
 

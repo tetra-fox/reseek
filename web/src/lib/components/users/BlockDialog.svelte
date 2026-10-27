@@ -35,7 +35,8 @@
   let error = $state("");
   let sending = $state(false);
 
-  const name = $derived(blocking.asked?.username ?? "");
+  const names = $derived(blocking.asked?.usernames ?? []);
+  const title = $derived(names.length === 1 ? names[0] : `${names.length} users`);
 
   // each opening starts from the defaults, with what the caller adds ticked
   $effect(() => {
@@ -59,19 +60,24 @@
     e.preventDefault();
     if (!valid || sending) return;
     sending = true;
-    const outcome = await block(name, {
-      reason: reason.trim(),
-      scopes,
-      expiresIn: expiresIn || null,
-      cancelTransfers: true
-    });
+    const failed: string[] = [];
+    for (const name of names) {
+      const outcome = await block(name, {
+        reason: reason.trim(),
+        scopes,
+        expiresIn: expiresIn || null,
+        cancelTransfers: true
+      });
+      if (!outcome.ok)
+        failed.push(names.length === 1 ? outcome.error : `${name}: ${outcome.error}`);
+    }
     sending = false;
-    if (!outcome.ok) {
-      error = outcome.error;
+    if (failed.length) {
+      error = failed.join("; ");
       return;
     }
     blocking.open = false;
-    toast(`${name} is blocked`);
+    toast(`${title} ${names.length === 1 ? "is" : "are"} blocked`);
   };
 </script>
 
@@ -82,7 +88,7 @@
   </label>
 {/snippet}
 
-<Dialog bind:open={blocking.open} title={`Block ${name}`}>
+<Dialog bind:open={blocking.open} title={`Block ${title}`}>
   <Form id="block-form" layout="stacked" class="flex flex-col gap-group" onsubmit={submit}>
     <Field label="Reason" for="block-reason" hint="Only you see it">
       <Input id="block-reason" maxlength={500} bind:value={reason} autocomplete="off" />
@@ -115,7 +121,7 @@
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (blocking.open = false)}>Cancel</Button>
     <Button type="submit" form="block-form" variant="danger" disabled={!valid || sending}>
-      Block {name}
+      Block {title}
     </Button>
   {/snippet}
 </Dialog>

@@ -5,7 +5,6 @@
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
   import UserIcon from "@lucide/svelte/icons/user";
 
-  import { root } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -18,6 +17,7 @@
   import type { UserSummary } from "#lib/users.svelte.js";
 
   import { links } from "./actions";
+  import Avatar from "./Avatar.svelte";
   import GroupBadge from "./GroupBadge.svelte";
   import { flag } from "./hover.svelte";
 
@@ -52,7 +52,6 @@
     if (own) ownProfile.need();
   });
   const pictureUrl = $derived(own ? ownProfile.data?.pictureUrl : user?.info?.pictureUrl);
-  const picture = $derived(pictureUrl ? `${root()}${pictureUrl}` : null);
   const description = $derived(
     own
       ? ownProfile.data?.description
@@ -66,14 +65,7 @@
 
 <div class="flex flex-col gap-3 text-sm">
   <div class="flex items-center gap-3">
-    {#if picture}
-      <img src={picture} alt="" class="size-12 shrink-0 rounded-full object-cover" />
-    {:else}
-      <span
-        class="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent-soft font-semibold text-accent-soft-fg">
-        {name.slice(0, 1).toUpperCase()}
-      </span>
-    {/if}
+    <Avatar {name} {pictureUrl} class="size-12" />
     <div class="flex min-w-0 flex-col">
       <span class="truncate font-mono font-medium">{name}</span>
       <span class="flex items-center gap-1.5 text-xs text-fg-muted">
