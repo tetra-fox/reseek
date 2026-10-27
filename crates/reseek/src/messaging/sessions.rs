@@ -80,7 +80,8 @@ pub fn gaps(sessions: &[Session]) -> Vec<HistoryGap> {
   gaps
 }
 
-/// The gaps that lie after `oldest` and start within `from..=to`, oldest first.
+/// The gaps that lie after `oldest` and start within `from..to`, oldest first. Ranges that meet
+/// at their ends list each gap once.
 pub fn within(
   gaps: &[HistoryGap],
   oldest: DateTime<Utc>,
@@ -89,7 +90,7 @@ pub fn within(
 ) -> Vec<HistoryGap> {
   gaps
     .iter()
-    .filter(|gap| gap.from >= oldest && gap.from >= from && gap.from <= to)
+    .filter(|gap| gap.from >= oldest && gap.from >= from && gap.from < to)
     .copied()
     .collect()
 }

@@ -131,6 +131,21 @@ pub fn newest(conn: &Connection, room: &str) -> rusqlite::Result<Option<DateTime
   last.as_deref().map(read_timestamp).transpose()
 }
 
+/// When the message with `local_id` in `room` arrived, or the first after it when it is gone;
+/// `None` when there is neither.
+pub fn arrived_from(
+  conn: &Connection,
+  room: &str,
+  local_id: i64,
+) -> rusqlite::Result<Option<DateTime<Utc>>> {
+  let first: Option<String> = conn
+    .prepare_cached(
+      "SELECT MIN(timestamp) FROM room_messages WHERE room_name = ?1 AND local_id >= ?2",
+    )?
+    .query_row(params![room, local_id], |row| row.get(0))?;
+  first.as_deref().map(read_timestamp).transpose()
+}
+
 /// Every room with stored messages, or only `room`, by name; `joined` says which we are in.
 pub fn stored(
   conn: &Connection,
