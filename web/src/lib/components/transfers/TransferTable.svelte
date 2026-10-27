@@ -143,27 +143,31 @@
   };
 
   /*
-   * The focus model. The grid element keeps DOM focus; rows are not focusable, and a control
-   * that had focus hands it back to the grid when the table scrolls. The focused line, a row or
-   * a group header, is named by its key in `items` and looked up there whenever it is used, so
-   * filters, regrouping and new frames never leave it pointing at a stale copy. When that line
-   * leaves `items`, the line now at its last index takes over. Moving is by position in `items`:
-   * down to the next row, up to the previous one, skipping headers. `aria-activedescendant`
-   * names the focused line only while it is rendered.
+   * The focus model. The grid takes DOM focus on a click outside a control and on arrow moves;
+   * rows are not focusable. A control inside a row keeps focus while its row is rendered, and
+   * focus returns to the grid only when that row scrolls out of the rendered range. The focused
+   * line, a row or a group header, is named by its key in `items` and looked up there whenever
+   * it is used, so filters, regrouping and new frames never leave it pointing at a stale copy.
+   * When that line leaves `items`, the row now in its place takes over: the first row at or
+   * after its index, else the nearest row before it. Moving is by position in `items`: down to
+   * the next row, up to the previous one, skipping headers. `aria-activedescendant` names the
+   * focused line only while it is rendered.
    */
   let focusedKey = $state<string | null>(null);
-  /** where the focused line was last seen, for when it leaves */
+  /** the focused line's index the last time it was in `items`, for when it leaves */
   let lastIndex = 0;
+  const found = $derived(focusedKey === null ? -1 : items.findIndex((i) => i.key === focusedKey));
   const focusIndex = $derived.by(() => {
     if (focusedKey === null || !items.length) return -1;
-    const at = items.findIndex((i) => i.key === focusedKey);
-    if (at !== -1) lastIndex = at;
-    return at !== -1 ? at : Math.min(lastIndex, items.length - 1);
+    if (found !== -1) return found;
+    const after = nextRow(lastIndex - 1, 1);
+    return after !== -1 ? after : nextRow(Math.min(lastIndex, items.length), -1);
   });
   const focusedItem = $derived(focusIndex === -1 ? null : items[focusIndex]);
-  // a line that left hands the focus to the one now in its place
+  // remembers where the focused line is, and hands the focus to the row in a lost line's place
   $effect(() => {
-    if (focusedItem && focusedItem.key !== focusedKey) focusedKey = focusedItem.key;
+    if (found !== -1) lastIndex = found;
+    else if (focusedItem) focusedKey = focusedItem.key;
   });
   const activeId = $derived(
     focusIndex >= start && focusIndex < end ? `${uid}-${focusIndex}` : undefined

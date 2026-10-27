@@ -303,6 +303,55 @@ describe("the transfers table", () => {
       expect(ticked().toSorted()).toEqual([a.id, c.id].toSorted());
     });
 
+    it("pass a removed row's place to the next row, past group headers", async () => {
+      signIn();
+      Object.assign(views.download, { groupBy: "user" });
+      const a1 = transfer({
+        username: "alice",
+        filename: "x\\a1.flac",
+        state: "Completed, Succeeded"
+      });
+      const a2 = transfer({
+        username: "alice",
+        filename: "x\\a2.flac",
+        state: "Completed, Succeeded"
+      });
+      const b1 = transfer({
+        username: "bob",
+        filename: "y\\b1.flac",
+        state: "Completed, Succeeded"
+      });
+      listing = [a1, a2, b1];
+      const net = await start();
+      press(grid(), "ArrowDown");
+      press(grid(), "ArrowDown");
+      press(grid(), "Delete");
+      net.frame("transfers.removed", { id: a2.id, username: "alice", direction: "Download" });
+      await flush();
+      // b1 is the first row after a2's place, beyond bob's headers
+      press(grid(), "Delete");
+      await flush();
+      expect(bulk(net).map((r) => r.body)).toEqual([
+        { action: "remove", ids: [a2.id] },
+        { action: "remove", ids: [b1.id] }
+      ]);
+      press(grid(), " ");
+      expect(ticked()).toEqual([b1.id]);
+    });
+
+    it("pass the last row's place to the row before it", async () => {
+      const a = transfer({ filename: "x\\a.flac" });
+      const b = transfer({ filename: "x\\b.flac" });
+      listing = [a, b];
+      const net = await start();
+      press(grid(), "ArrowDown");
+      press(grid(), "ArrowDown");
+      net.frame("transfers.removed", { id: b.id, username: b.username, direction: "Download" });
+      await flush();
+      press(grid(), " ");
+      expect(ticked()).toEqual([a.id]);
+    });
+
     it("keep focus on the table when a focused row control scrolls away", async () => {
       listing = Array.from({ length: 80 }, (_, n) =>
         transfer({ filename: `x\\${String(n).padStart(2, "0")}.flac` })
