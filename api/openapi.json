@@ -15387,6 +15387,26 @@
           }
         }
       },
+      "DirectoriesState": {
+        "type": "object",
+        "description": "The directories downloads are kept in, as absolute paths on the daemon's machine, so a\ndownload's `localPath` can be told relative to its root.",
+        "required": [
+          "downloads",
+          "incomplete"
+        ],
+        "properties": {
+          "downloads": {
+            "type": "string",
+            "description": "finished downloads, the `downloads` root of the files endpoints",
+            "example": "/var/lib/reseek/downloads"
+          },
+          "incomplete": {
+            "type": "string",
+            "description": "downloads in progress, the `incomplete` root",
+            "example": "/var/lib/reseek/incomplete"
+          }
+        }
+      },
       "Directory": {
         "type": "object",
         "description": "A shared directory and the files directly in it.",
@@ -20926,7 +20946,8 @@
           "distributedNetwork",
           "shares",
           "rooms",
-          "configuration"
+          "configuration",
+          "directories"
         ],
         "properties": {
           "configuration": {
@@ -20936,6 +20957,10 @@
           "connectionWatchdog": {
             "$ref": "#/components/schemas/ConnectionWatchdogState",
             "description": "the loop that reconnects to the server"
+          },
+          "directories": {
+            "$ref": "#/components/schemas/DirectoriesState",
+            "description": "where finished and unfinished downloads are kept on this machine"
           },
           "distributedNetwork": {
             "$ref": "#/components/schemas/DistributedNetworkState",

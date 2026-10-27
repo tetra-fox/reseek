@@ -158,7 +158,7 @@ impl AppState {
     };
     let url_base = pipeline::url_base(&startup.values.web.url_base).into();
     let live = Live::new(shutdown.clone());
-    let state = StateOwner::new(&startup, live.clone());
+    let state = StateOwner::new(&startup, &paths, live.clone());
     let events = EventBus::new(shutdown.clone());
     let pushed = live.clone();
     events.subscribe("live", None, move |record| {

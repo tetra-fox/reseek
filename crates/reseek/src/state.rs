@@ -7,15 +7,16 @@ use std::sync::Arc;
 use api_types::live::LiveFrame;
 use api_types::relay::{RelayConnectionState, RelayControllerState, RelayMode, RelayState};
 use api_types::state::{
-  ConfigurationState, ConnectionWatchdogState, DistributedNetworkState, HealthState,
-  IncomingSearchHealth, Privileges, SearchHealth, ServerConnectionState, ServerState, SharesState,
-  State, UserState, UserStatistics,
+  ConfigurationState, ConnectionWatchdogState, DirectoriesState, DistributedNetworkState,
+  HealthState, IncomingSearchHealth, Privileges, SearchHealth, ServerConnectionState, ServerState,
+  SharesState, State, UserState, UserStatistics,
 };
 use cascade::Loaded;
 use tokio::sync::watch;
 
 use crate::config::{Options, enums};
 use crate::live::Live;
+use crate::paths::Paths;
 use crate::version;
 
 /// The current state and the stream its changes are pushed to. Cloning gives another handle to
@@ -27,10 +28,11 @@ pub struct StateOwner {
 }
 
 impl StateOwner {
-  /// The state of a daemon that just started with `loaded`, pushed to `live` on every change.
-  pub fn new(loaded: &Loaded<Options>, live: Live) -> Self {
+  /// The state of a daemon that just started with `loaded` and `paths`, pushed to `live` on
+  /// every change.
+  pub fn new(loaded: &Loaded<Options>, paths: &Paths, live: Live) -> Self {
     Self {
-      current: Arc::new(watch::Sender::new(Arc::new(initial(loaded)))),
+      current: Arc::new(watch::Sender::new(Arc::new(initial(loaded, paths)))),
       live,
     }
   }
@@ -78,7 +80,7 @@ pub fn configuration(loaded: &Loaded<Options>) -> ConfigurationState {
 }
 
 /// The state before anything has happened: not connected, no shares, nobody in the relay.
-fn initial(loaded: &Loaded<Options>) -> State {
+fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
   let relay = &loaded.values.relay;
   let mode = match relay.mode {
     enums::RelayMode::Controller => RelayMode::Controller,
@@ -167,5 +169,9 @@ fn initial(loaded: &Loaded<Options>) -> State {
     },
     rooms: Vec::new(),
     configuration: configuration(loaded),
+    directories: DirectoriesState {
+      downloads: paths.downloads.display().to_string(),
+      incomplete: paths.incomplete.display().to_string(),
+    },
   }
 }

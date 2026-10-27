@@ -37,6 +37,8 @@ pub struct State {
   pub rooms: Vec<String>,
   /// the outcome of the last configuration reload
   pub configuration: ConfigurationState,
+  /// where finished and unfinished downloads are kept on this machine
+  pub directories: DirectoriesState,
 }
 
 /// The running version and whether a newer one exists.
@@ -233,6 +235,19 @@ pub struct SharesState {
   pub directories: u32,
   /// shared files over every host
   pub files: u32,
+}
+
+/// The directories downloads are kept in, as absolute paths on the daemon's machine, so a
+/// download's `localPath` can be told relative to its root.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoriesState {
+  /// finished downloads, the `downloads` root of the files endpoints
+  #[schema(example = "/var/lib/reseek/downloads")]
+  pub downloads: String,
+  /// downloads in progress, the `incomplete` root
+  #[schema(example = "/var/lib/reseek/incomplete")]
+  pub incomplete: String,
 }
 
 /// The outcome of the last configuration reload.

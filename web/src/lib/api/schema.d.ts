@@ -3502,6 +3502,22 @@ export interface components {
                 [key: string]: components["schemas"]["TransferSummary"];
             };
         };
+        /**
+         * @description The directories downloads are kept in, as absolute paths on the daemon's machine, so a
+         *     download's `localPath` can be told relative to its root.
+         */
+        DirectoriesState: {
+            /**
+             * @description finished downloads, the `downloads` root of the files endpoints
+             * @example /var/lib/reseek/downloads
+             */
+            downloads: string;
+            /**
+             * @description downloads in progress, the `incomplete` root
+             * @example /var/lib/reseek/incomplete
+             */
+            incomplete: string;
+        };
         /** @description A shared directory and the files directly in it. */
         Directory: {
             /**
@@ -6010,6 +6026,8 @@ export interface components {
             configuration: components["schemas"]["ConfigurationState"];
             /** @description the loop that reconnects to the server */
             connectionWatchdog: components["schemas"]["ConnectionWatchdogState"];
+            /** @description where finished and unfinished downloads are kept on this machine */
+            directories: components["schemas"]["DirectoriesState"];
             /** @description our place in the distributed search network */
             distributedNetwork: components["schemas"]["DistributedNetworkState"];
             /** @description sampled health figures */
