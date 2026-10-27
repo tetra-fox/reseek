@@ -82,14 +82,21 @@ fn normalised(text: &str) -> String {
   sendable(SearchQuery::parse(text)).search_text()
 }
 
-/// Where the client sends a search with `scope`.
+/// Where the client sends a search with `scope`, which the API checked: a room search names
+/// one room.
 fn client_scope(scope: &SearchScope) -> soulseek_client::SearchScope {
   use soulseek_client::SearchScope as To;
   match scope.scope_type {
     SearchScopeType::Network => To::Network,
     SearchScopeType::Wishlist => To::Wishlist,
     SearchScopeType::User => To::User(scope.subjects.clone()),
-    SearchScopeType::Room => To::Room(scope.subjects.first().cloned().unwrap_or_default()),
+    SearchScopeType::Room => To::Room(
+      scope
+        .subjects
+        .first()
+        .cloned()
+        .expect("the API takes a room search only with its one room"),
+    ),
   }
 }
 
