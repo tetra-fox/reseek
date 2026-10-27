@@ -150,14 +150,15 @@
       else if ((index + 1) * row > scroller.scrollTop + height)
         scroller.scrollTop = (index + 1) * row - height;
     };
-    if (e.key === "ArrowDown" && !withModifier(e)) move(at + 1);
-    else if (e.key === "ArrowUp" && !withModifier(e)) move(at === -1 ? 0 : at - 1);
-    else if (e.key === "Escape") selected.clear();
-    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "a") {
       const group = items.find((i) => i.type === "row" && i.transfer.id === focused);
       const within = group?.type === "row" && group.group ? group.group.transfers : rows;
       for (const t of within) selected.add(t.id);
-    } else if (!current || withModifier(e)) return;
+    } else if (withModifier(e)) return;
+    else if (e.key === "ArrowDown") move(at + 1);
+    else if (e.key === "ArrowUp") move(at === -1 ? 0 : at - 1);
+    else if (e.key === "Escape") selected.clear();
+    else if (!current) return;
     else if (e.key === " ") onselect(current, false);
     else if (e.key === "Enter") ondetails(current);
     else if (!session.can("ReadWrite") && ["Delete", "r", "R", "c", "C"].includes(e.key)) return;
