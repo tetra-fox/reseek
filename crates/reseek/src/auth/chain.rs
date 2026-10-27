@@ -538,9 +538,7 @@ mod tests {
     );
     assert_eq!(rows().await, 0);
 
-    let page = app
-      .send(groups(proxied(request("GET", "/transfers", None))))
-      .await;
+    let page = app.send(groups(proxied(request("GET", "/", None)))).await;
     assert_eq!(page.status, 200);
     assert_eq!(page.body, "<html>app</html>");
     let cookie = set_cookie(&page.headers, "reseek_session").expect("the page starts a session");

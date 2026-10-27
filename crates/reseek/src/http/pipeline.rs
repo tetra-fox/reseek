@@ -96,6 +96,11 @@ pub fn url_base(configured: &str) -> String {
   }
 }
 
+/// Marks a request for the URL base without its trailing `/`, whose path is `/` once the base
+/// is taken off.
+#[derive(Clone, Copy)]
+struct BareBase;
+
 /// `request` with the URL base taken off its path. A path outside the base is left as it is.
 fn without_base(base: &str, mut request: Request) -> Request {
   if base.is_empty() {
@@ -103,7 +108,10 @@ fn without_base(base: &str, mut request: Request) -> Request {
   }
   let path = request.uri().path();
   let rest = match path.strip_prefix(base) {
-    Some("") => "/",
+    Some("") => {
+      request.extensions_mut().insert(BareBase);
+      "/"
+    }
     Some(rest) if rest.starts_with('/') => rest,
     _ => return request,
   };
@@ -261,7 +269,10 @@ async fn fallback(app: &AppState, ui: &Ui, request: Request) -> Response {
     return StatusCode::NOT_FOUND.into_response();
   }
   let page = ui.is_page(request.method(), path);
-  let mut response = ui.respond(request.method(), path).await;
+  let bare_base = request.extensions().get::<BareBase>().is_some();
+  let mut response = ui
+    .respond(request.method(), request.uri(), &app.url_base, bare_base)
+    .await;
   if !page || response.status() != StatusCode::OK {
     return response;
   }
@@ -385,6 +396,42 @@ mod app_tests {
       app.send(request("GET", "/app/page", None)).await.status,
       404,
       "no UI"
+    );
+  }
+
+  #[tokio::test]
+  async fn old_app_paths_under_the_base_are_sent_into_the_app() {
+    let app = app("[web]\nurl_base = \"/reseek\"\n", &[])
+      .await
+      .with_page();
+    let moved = app
+      .send(request("GET", "/reseek/searches/x?q=a%20b", None))
+      .await;
+    assert_eq!(moved.status, 301);
+    assert_eq!(moved.headers["location"], "/reseek/#/searches/x?q=a%20b");
+    let bare = app.send(request("GET", "/reseek", None)).await;
+    assert_eq!(bare.status, 301);
+    assert_eq!(bare.headers["location"], "/reseek/");
+    let page = app.send(request("GET", "/reseek/", None)).await;
+    assert_eq!(page.status, 200);
+    assert_eq!(page.body, "<html>app</html>");
+    let api = app
+      .send(request("GET", "/reseek/api/v0/nothing", None))
+      .await;
+    assert_eq!(api.status, 404, "a mistyped API path is no app path");
+    assert_eq!(
+      app
+        .send(request("GET", "/reseek/health", None))
+        .await
+        .status,
+      200
+    );
+    assert_eq!(
+      app
+        .send(request("GET", "/reseek/_app/missing.js", None))
+        .await
+        .status,
+      404
     );
   }
 

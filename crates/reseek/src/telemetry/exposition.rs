@@ -155,6 +155,10 @@ mod tests {
       404,
       "the configured path is no UI page while the endpoint is off"
     );
-    assert_eq!(moved.send(request("GET", "/other", None)).await.status, 200);
+    assert_eq!(
+      moved.send(request("GET", "/other", None)).await.status,
+      301,
+      "an app path is sent into the app"
+    );
   }
 }
