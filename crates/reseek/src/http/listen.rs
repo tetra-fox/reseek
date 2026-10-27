@@ -41,7 +41,7 @@ pub async fn bind(web: &Web) -> Result<Listeners, String> {
   let mut http = Vec::new();
   for ip in addresses(web.ip_address.as_deref())? {
     let listener = tcp(ip, web.port).await?;
-    info!(url = %url("http", ip, web.port), "Listening for HTTP requests");
+    info!(url = %url("http", &listener), "Listening for HTTP requests");
     http.push(listener);
   }
   let https = if web.https.disabled {
@@ -52,7 +52,7 @@ pub async fn bind(web: &Web) -> Result<Listeners, String> {
     let mut listeners = Vec::new();
     for ip in ips {
       let listener = tcp(ip, web.https.port).await?;
-      info!(url = %url("https", ip, web.https.port), "Listening for HTTPS requests");
+      info!(url = %url("https", &listener), "Listening for HTTPS requests");
       listeners.push(listener);
     }
     Some((listeners, acceptor))
@@ -149,8 +149,13 @@ fn addresses(list: Option<&str>) -> Result<Vec<IpAddr>, String> {
   crate::config::addresses::list(list).map_err(|item| format!("`{item}` is not an IP address"))
 }
 
-fn url(scheme: &str, ip: IpAddr, port: u16) -> String {
-  format!("{scheme}://{}/", SocketAddr::new(ip, port))
+/// The URL `listener` is reached at, with the port it is bound to, which the system picked
+/// when the configuration asked for port 0.
+fn url(scheme: &str, listener: &TcpListener) -> String {
+  match listener.local_addr() {
+    Ok(address) => format!("{scheme}://{address}/"),
+    Err(e) => format!("{scheme}://(address unknown: {e})/"),
+  }
 }
 
 async fn tcp(ip: IpAddr, port: u16) -> Result<TcpListener, String> {

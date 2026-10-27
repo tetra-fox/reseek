@@ -564,7 +564,7 @@ mod tests {
     assert_eq!(stale.json()["error"], "config file changed on disk");
     let invalid = app
       .send(patch(
-        json!({ "set": { "web.port": 0 }, "revision": revision }),
+        json!({ "set": { "web.https.port": 0 }, "revision": revision }),
       ))
       .await;
     assert_eq!(invalid.status, 400);
@@ -572,7 +572,7 @@ mod tests {
       invalid.json()["detail"]
         .as_str()
         .unwrap()
-        .contains("web.port")
+        .contains("web.https.port")
     );
     let shadowed = app
       .send(patch(
@@ -657,9 +657,12 @@ mod tests {
         Some(json!({ "text": text })),
       )
     };
-    let answer = app.send(check("[web]\nport = 0\nprot = 1\n")).await.json();
+    let answer = app
+      .send(check("[web]\nprot = 1\n[web.https]\nport = 0\n"))
+      .await
+      .json();
     assert_eq!(answer["valid"], false);
-    assert_eq!(answer["errors"][0]["key"], "web.port");
+    assert_eq!(answer["errors"][0]["key"], "web.https.port");
     assert_eq!(
       answer["warnings"],
       json!(["config.toml: unknown key `web.prot`"])

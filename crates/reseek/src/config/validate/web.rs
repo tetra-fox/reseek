@@ -17,9 +17,8 @@ use crate::config::api_key::PrimaryApiKey;
 use crate::config::{Authentication, Certificate, Web};
 
 pub(super) fn check(web: &Web, context: &Context, report: &mut Report) {
-  for (key, port) in [("web.port", web.port), ("web.https.port", web.https.port)] {
-    report.check(key, range(key, port, 1, 65535));
-  }
+  let key = "web.https.port";
+  report.check(key, range(key, web.https.port, 1, 65535));
   for (key, addresses) in [
     ("web.ip_address", &web.ip_address),
     ("web.https.ip_address", &web.https.ip_address),

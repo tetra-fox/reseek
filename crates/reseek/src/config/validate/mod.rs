@@ -100,19 +100,19 @@ mod tests {
   fn every_problem_is_reported_under_its_key() {
     let dir = tempfile::tempdir().unwrap();
     let mut options = Options::default();
-    options.web.port = 0;
+    options.web.https.port = 0;
     options.soulseek.listen_port = 80;
     options.shares.filters = vec!["(".into()];
     let invalid = validate(&options, &context(dir.path())).unwrap_err();
     let keys: Vec<&str> = invalid.iter().map(|i| i.key.as_str()).collect();
     assert_eq!(
       keys,
-      ["shares.filters", "web.port", "soulseek.listen_port"],
+      ["shares.filters", "web.https.port", "soulseek.listen_port"],
       "{invalid:?}"
     );
     assert_eq!(
       invalid[1].message,
-      "The field web.port must be between 1 and 65535."
+      "The field web.https.port must be between 1 and 65535."
     );
   }
 }

@@ -11,7 +11,7 @@ use super::Authentication;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Web {
-  /// The HTTP port.
+  /// The HTTP port; `0` takes a free port the system picks, which the log names.
   #[cascade(env = "RESEEK_HTTP_PORT", cli = "-l|--http-port", apply = "restart")]
   pub port: u16,
   /// The addresses to listen on, comma-separated; every address, IPv6 and IPv4, when not set.
