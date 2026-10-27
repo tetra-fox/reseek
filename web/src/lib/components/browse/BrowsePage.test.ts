@@ -78,7 +78,7 @@ describe("browse progress", () => {
     expect(document.querySelectorAll("[role=treeitem]")).toHaveLength(2);
   });
 
-  it("leaves Escape to an open card, and Enter on a folder's toggle to the toggle", async () => {
+  it("leaves Escape to an open card and the filter field, and Enter on a folder's toggle to the toggle", async () => {
     fakeNetwork((url) =>
       url.pathname.endsWith("/users/alice/browse")
         ? {
@@ -111,6 +111,12 @@ describe("browse progress", () => {
     flushSync();
     expect(browser.phase).toBe("complete");
     card.remove();
+    // Escape in the filter field is the field's
+    document
+      .querySelector("input[aria-label=Filter]")!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    flushSync();
+    expect(browser.phase).toBe("complete");
     region.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     flushSync();
     expect(browser.phase).toBe("idle");
