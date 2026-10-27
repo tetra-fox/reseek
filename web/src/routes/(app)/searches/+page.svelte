@@ -1,5 +1,23 @@
 <script lang="ts">
-  import Placeholder from "#lib/components/Placeholder.svelte";
+  import { goto } from "$app/navigation";
+  import { page } from "$app/state";
+
+  import SearchBar from "#lib/components/search/SearchBar.svelte";
+  import SearchList from "#lib/components/search/SearchList.svelte";
+  import { href, route } from "#lib/nav.js";
+  import { session } from "#lib/session.svelte.js";
+
+  // a link can open the page with a user to search and the text to search for
+  const query = $derived(route(page.url).query);
+  const user = $derived(query.get("user"));
 </script>
 
-<Placeholder screen="Search" />
+{#if session.can("ReadWrite")}
+  {#key query.toString()}
+    <SearchBar
+      text={query.get("text") ?? ""}
+      scope={user ? { type: "user", subjects: [user] } : undefined}
+      onclearscope={() => void goto(href("/searches"), { replaceState: true })} />
+  {/key}
+{/if}
+<SearchList />

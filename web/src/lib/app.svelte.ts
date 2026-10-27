@@ -1,6 +1,7 @@
 import { api, onUnauthorized, type Schemas } from "#lib/api/client.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
+import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { toast } from "#lib/toast.svelte.js";
 import { users } from "#lib/users.svelte.js";
@@ -81,6 +82,7 @@ class App {
     live.stop();
     session.clear();
     users.clear();
+    searches.clear();
     this.state = null;
     this.options = null;
     this.metrics = null;

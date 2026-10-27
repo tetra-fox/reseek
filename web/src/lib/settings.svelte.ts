@@ -1,28 +1,22 @@
-type Settings = { sidebar: "expanded" | "collapsed" };
+import { fields, stored } from "./stored.svelte";
 
-/** The one localStorage key the UI's own preferences live under */
-const KEY = "reseek.ui.settings";
+/** The UI's own preferences in this browser */
+export const settings = stored("reseek.ui.settings", (saved) => ({
+  sidebar: fields(saved).sidebar === "collapsed" ? ("collapsed" as const) : ("expanded" as const)
+}));
 
-// per browser. Storage can be blocked (private windows, some policies), then the defaults are
-// used and nothing is saved
-const load = (): Settings => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<Settings>;
-    return { sidebar: saved.sidebar === "collapsed" ? "collapsed" : "expanded" };
-  } catch {
-    return { sidebar: "expanded" };
-  }
-};
+/** How a search's results are sorted */
+export type ResultSort = "uploadSpeed" | "queueLength";
 
-export const settings = $state<Settings>(load());
-
-$effect.root(() => {
-  $effect(() => {
-    const json = JSON.stringify(settings);
-    try {
-      localStorage.setItem(KEY, json);
-    } catch {
-      // not saved, the setting still holds until the page reloads
-    }
-  });
+/** The search results' sort and toggles, kept between searches; the filter text is not */
+export const searchOptions = stored("reseek.search.options", (saved) => {
+  const s = fields(saved);
+  const flag = (value: unknown, otherwise: boolean) =>
+    typeof value === "boolean" ? value : otherwise;
+  return {
+    sort: (s.sort === "queueLength" ? "queueLength" : "uploadSpeed") as ResultSort,
+    hideLocked: flag(s.hideLocked, true),
+    hideNoFreeSlots: flag(s.hideNoFreeSlots, false),
+    fold: flag(s.fold, false)
+  };
 });
