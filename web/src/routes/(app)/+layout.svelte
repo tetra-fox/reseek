@@ -11,6 +11,7 @@
   import LostBanner from "#lib/components/shell/LostBanner.svelte";
   import Sidebar from "#lib/components/shell/Sidebar.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import BlockDialog from "#lib/components/users/BlockDialog.svelte";
   import { live } from "#lib/live/live.svelte.js";
   import { href, redirectFor, route, title } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
@@ -81,6 +82,7 @@
   </div>
   <PlayerBar />
   <Footer />
+  <BlockDialog />
 {:else if app.phase === "lost"}
   <div class="flex min-h-svh items-center justify-center p-6">
     <ErrorSegment

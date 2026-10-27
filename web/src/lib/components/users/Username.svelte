@@ -14,7 +14,6 @@
 
   import { Busy } from "#lib/busy.svelte.js";
   import { copyText } from "#lib/clipboard.svelte.js";
-  import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { interaction } from "#lib/interaction.svelte.js";
   import { userHref } from "#lib/nav.js";
@@ -22,7 +21,8 @@
   import { users } from "#lib/users.svelte.js";
   import { cn } from "#lib/utils.js";
 
-  import { block, links, pin } from "./actions";
+  import { links, pin } from "./actions";
+  import { blocking, unblock } from "./block.svelte";
   import { CLOSE_DELAY_MS, groupTone, LONG_PRESS_MS, OPEN_DELAY_MS, open } from "./hover.svelte";
   import UserCard from "./UserCard.svelte";
 
@@ -41,7 +41,6 @@
   let shown = $state<"card" | "menu" | null>(null);
   /** the card was opened from the keyboard, so focus goes into it and back to the link after */
   let keyboard = $state(false);
-  let confirming = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pressed = false;
 
@@ -120,20 +119,11 @@
       if (outcome.ok) await users.load(name, { fresh: true });
       return outcome;
     });
-  const toggleBlock = () =>
-    busy.run(
-      async () => {
-        const outcome = await block(name, !user?.block);
-        if (outcome.ok) await users.load(name, { fresh: true });
-        return outcome;
-      },
-      user?.block ? `${name} is unblocked` : `${name} is blocked`
-    );
-  /** Blocking asks first; unblocking doesn't */
+  /** Blocking opens the block dialog; unblocking is one click, with an undo */
   const blockOrAsk = () => {
     shown = null;
-    if (user?.block) void toggleBlock();
-    else confirming = true;
+    if (user?.block) void unblock(name);
+    else blocking.ask(name);
   };
 </script>
 
@@ -240,11 +230,3 @@
     </Menu.Content>
   </DropdownMenu.Root>
 {/if}
-
-<ConfirmDialog
-  bind:open={confirming}
-  title={`Block ${name}?`}
-  body="The block stops what your default block scopes name, and their queued uploads are cancelled. Unblock them from the same menu."
-  confirm="Block"
-  danger
-  onconfirm={toggleBlock} />

@@ -8,7 +8,7 @@
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
-  import { block } from "#lib/components/users/actions.js";
+  import { blocking } from "#lib/components/users/block.svelte.js";
   import { formatBytes, getDirectoryName, plural } from "#lib/format.js";
   import { interaction } from "#lib/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -189,21 +189,9 @@
     );
   };
 
+  /** Opens the block dialog; Deny and block cancels the user's unfinished uploads first */
   const blockUser = (username: string, deny: boolean) =>
-    ask(
-      true,
-      deny ? `Deny and block ${username}?` : `Block ${username}?`,
-      deny
-        ? "Their unfinished uploads are cancelled, then they are blocked with your default block scopes."
-        : "They are blocked with your default block scopes and their queued uploads are cancelled.",
-      "Block",
-      () =>
-        void (deny
-          ? denyAndBlock(username)
-          : block(username, true).then((o) =>
-              toast(o.ok ? `${username} is blocked` : o.error, o.ok ? "info" : "error")
-            ))
-    );
+    deny ? void denyAndBlock(username) : blocking.ask(username);
 
   /** A row key, only where the row's own buttons and menu offer the same */
   const onkey = (key: "retry" | "cancel" | "open", t: Transfer) => {

@@ -2,7 +2,7 @@ import { goto } from "$app/navigation";
 
 import { app } from "#lib/app.svelte.js";
 import { copyText } from "#lib/clipboard.svelte.js";
-import { block } from "#lib/components/users/actions.js";
+import { blocking } from "#lib/components/users/block.svelte.js";
 import { enqueue } from "#lib/downloads.js";
 import { downloadFile } from "#lib/format.js";
 import { href } from "#lib/nav.js";
@@ -87,14 +87,13 @@ export const bumpUpload = async (t: Transfer) => {
   );
 };
 
-/** Cancels every upload to a user that hasn't finished, then blocks them */
+/** Cancels every upload to a user that hasn't finished, then asks to block them from uploads */
 export const denyAndBlock = async (username: string) => {
   const ids = uploads.list.rows
     .filter((t) => t.username === username && isCancellable(t.state))
     .map((t) => t.id);
   await act(uploads, "cancel", ids);
-  const blocked = await block(username, true);
-  toast(blocked.ok ? `${username} is blocked` : blocked.error, blocked.ok ? "info" : "error");
+  blocking.ask(username, ["uploads"]);
 };
 
 /** The selected transfers as a JSON file to save */

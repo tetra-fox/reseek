@@ -17,14 +17,3 @@ export const pin = (username: string, on: boolean) =>
       ? api.PUT("/api/v0/users/{username}/pin", { params: byUser(username) })
       : api.DELETE("/api/v0/users/{username}/pin", { params: byUser(username) })
   );
-
-/** Blocks with the configured default scopes, for good, until unblocked */
-export const block = (username: string, on: boolean) =>
-  call(() =>
-    on
-      ? api.PUT("/api/v0/users/{username}/block", {
-          params: byUser(username),
-          body: { cancelTransfers: true }
-        })
-      : api.DELETE("/api/v0/users/{username}/block", { params: byUser(username) })
-  );
