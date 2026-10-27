@@ -45,6 +45,7 @@ pub use error::{ClientError, ConnectionErrorKind, ErrorSource, MessageErrorKind,
 pub use events::{
   DistributedParent, EVENT_CAPACITY, Event, PrivateMessage, RoomMembers, SearchDelivery,
 };
+pub use inbound::InboundConnections;
 pub use log::LogLimiter;
 pub use options::{
   ClientLimits, ClientOptions, ConnectionOptions, KeepAlive, ProxyCredentials, ProxyOptions,

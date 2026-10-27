@@ -82,6 +82,8 @@ struct Inner {
   endpoints: endpoint::Endpoints,
   transfers: Arc<Transfers>,
   searches: Searches,
+  /// the connections peers opened to our listener so far
+  inbound: watch::Sender<crate::inbound::InboundConnections>,
   /// cancelled when the client is disposed or dropped
   lifetime: CancellationToken,
 }
@@ -130,6 +132,7 @@ impl Client {
       server_info: Mutex::new(ServerInfo::default()),
       events,
       distributed,
+      inbound: watch::Sender::default(),
       lifetime: CancellationToken::new(),
     };
     let client = Self {
@@ -144,6 +147,12 @@ impl Client {
   /// where the client is in its server session
   pub fn state(&self) -> ClientState {
     *self.inner.state.borrow()
+  }
+
+  /// The connections peers opened to our listener since the client was made, followed as
+  /// they come.
+  pub fn inbound_connections(&self) -> watch::Receiver<crate::inbound::InboundConnections> {
+    self.inner.inbound.subscribe()
   }
 
   /// the server address as given to `connect`, while connected

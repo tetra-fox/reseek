@@ -1,6 +1,7 @@
-//! Accepted connections, once their first message says what they are for, go to the part of the
-//! client that owns that kind: a message connection, a transfer a download waits for, a child
-//! for the distributed tree, or the answer to a connection request we had the server relay.
+//! Accepted connections, once their first message says what they are for, are counted and go to
+//! the part of the client that owns that kind: a message connection, a transfer a download
+//! waits for, a child for the distributed tree, or the answer to a connection request we had
+//! the server relay.
 
 use super::Client;
 use crate::conn::Conn;
@@ -12,6 +13,14 @@ impl Client {
   /// Hands a classified connection to its owner. A connection nothing takes is closed with the
   /// reason, which it logs once.
   pub(super) async fn route_inbound(&self, inbound: InboundConnection) {
+    let answer = matches!(inbound, InboundConnection::PierceFirewall { .. });
+    self.inner.inbound.send_modify(|counted| {
+      if answer {
+        counted.answers += 1;
+      } else {
+        counted.direct += 1;
+      }
+    });
     let routed = match inbound {
       InboundConnection::Peer { username, conn } => {
         self.add_or_update_message_connection(&username, conn)

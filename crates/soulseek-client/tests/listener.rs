@@ -1,13 +1,14 @@
 //! The listener a client logged in to soulfind runs: an accepted connection is read until its
 //! first message says what it is for, then taken by what owns that kind, or closed with the
-//! reason when nothing does. The listener stops with the session.
+//! reason when nothing does, and counted as a peer reaching us or answering us. The listener
+//! stops with the session.
 
 mod support;
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
-use soulseek_client::ClientOptions;
+use soulseek_client::{ClientOptions, InboundConnections};
 use soulseek_proto::init::{FileTransferInit, PeerInit, PierceFirewall};
 use soulseek_proto::{InitMessage, PeerConnectionType, PeerMessage};
 use support::peer::PeerSide;
@@ -138,6 +139,34 @@ async fn a_pierce_answering_nothing_we_asked_for_is_closed() {
       .len(),
     1
   );
+}
+
+#[tokio::test]
+async fn peers_reaching_the_listener_are_counted_apart_from_answers() {
+  let Some((user, address)) = listening().await else {
+    return;
+  };
+  let mut counted = user.client.inbound_connections();
+  assert_eq!(*counted.borrow(), InboundConnections::default());
+  let mut answer = TcpStream::connect(address).await.unwrap();
+  answer
+    .write_all(&InitMessage::PierceFirewall(PierceFirewall { token: 4242 }).encode())
+    .await
+    .unwrap();
+  closed(&mut answer).await;
+  let mut transfer = TcpStream::connect(address).await.unwrap();
+  let mut bytes = peer_init(PeerConnectionType::Transfer).encode();
+  bytes.extend(FileTransferInit { token: 7 }.encode());
+  transfer.write_all(&bytes).await.unwrap();
+  closed(&mut transfer).await;
+  let both = InboundConnections {
+    direct: 1,
+    answers: 1,
+  };
+  tokio::time::timeout(Duration::from_secs(10), counted.wait_for(|c| *c == both))
+    .await
+    .expect("both are counted")
+    .unwrap();
 }
 
 #[tokio::test]
