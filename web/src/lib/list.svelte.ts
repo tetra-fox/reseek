@@ -208,6 +208,7 @@ export class ListControl<L> {
     this.#element = node;
     const stops = [
       on(node, "pointerdown", (e) => this.#take(e.target)),
+      on(node, "mousedown", this.#mousedown),
       on(node, "focusin", (e) => {
         this.#held = e.target === node ? null : (e.target as Element);
         this.#take(e.target);
@@ -262,15 +263,29 @@ export class ListControl<L> {
     else document.getElementById(this.lineId(index))?.scrollIntoView({ block: "nearest" });
   }
 
+  /**
+   * A press with Shift, Ctrl or Cmd on a row is a selection gesture: the browser would extend
+   * the page's text selection with it (and that click would then select nothing), so it is kept
+   * from doing so and the container takes focus as a press would give it
+   */
+  #mousedown = (e: MouseEvent) => {
+    if (e.button !== 0 || !(e.shiftKey || e.ctrlKey || e.metaKey) || inControl(e)) return;
+    if (!(e.target as Element).closest("[data-line]")) return;
+    e.preventDefault();
+    this.#element?.focus({ preventScroll: true });
+  };
+
   #click = (e: MouseEvent) => {
     if (e.defaultPrevented || inControl(e)) return;
+    const toggle = e.ctrlKey || e.metaKey;
+    // a plain click that ends a drag across text selects nothing; a modified one never selects
+    // text, its press was kept from it
     const selection = document.getSelection();
-    if (selection && !selection.isCollapsed) return;
+    if (!toggle && !e.shiftKey && selection && !selection.isCollapsed) return;
     const key = (e.target as Element).closest<HTMLElement>("[data-line]")?.dataset.line;
     const line = this.lines.find((l) => this.#spec.key(l) === key);
     const id = line === undefined ? null : this.#spec.id(line);
     if (id === null) return;
-    const toggle = e.ctrlKey || e.metaKey;
     if (e.shiftKey && this.#range(id, toggle)) return;
     if (toggle) return this.toggle(id);
     this.only(id);
