@@ -70,7 +70,7 @@ class Notifier {
   };
 
   /** A private message arrived; `level` is its conversation's, `open` the pane on screen */
-  privateMessage(
+  async privateMessage(
     username: string,
     message: Schemas["PrivateMessage"],
     level: Schemas["NotifyLevel"],
@@ -79,16 +79,20 @@ class Notifier {
     if (message.direction !== "In" || message.wasReplayed) return;
     const key = `user:${username}`;
     const seen = this.#seen(key, open);
+    // the toast is the in-page form of the same notification: the same level, mute and options
+    // decide it, whether the tab is visible or not
+    const toasts = (a: Arrival) =>
+      !seen.paneOpen && shouldNotify(a, { ...notifyOptions(), onlyWhenHidden: false });
     const arrival: Arrival = {
       kind: "private",
       level,
       mention: false,
-      muted: users.get(username)?.muted ?? false,
+      muted: false,
       seen: seen.visible && seen.paneOpen
     };
-    // the toast is the in-page form of the same notification: the same level, mute and options
-    // decide it, whether the tab is visible or not
-    if (!seen.paneOpen && shouldNotify(arrival, { ...notifyOptions(), onlyWhenHidden: false })) {
+    if (!toasts(arrival) && !shouldNotify(arrival, notifyOptions())) return;
+    arrival.muted = await this.#muted(username);
+    if (toasts(arrival)) {
       toast(`New message from ${username}`, "info", {
         action: { label: "Open", run: () => void this.#go(chatHref(username)) }
       });
@@ -97,7 +101,7 @@ class Notifier {
   }
 
   /** A room message arrived; `level` is the room's, `open` the pane on screen */
-  roomMessage(
+  async roomMessage(
     room: string,
     message: Schemas["RoomMessage"],
     level: Schemas["NotifyLevel"],
@@ -106,19 +110,26 @@ class Notifier {
     if (message.self || message.hidden) return;
     const key = `room:${room}`;
     const seen = this.#seen(key, open);
-    this.#maybe(
-      {
-        kind: "room",
-        level,
-        mention: message.isMention,
-        muted: users.get(message.username)?.muted ?? false,
-        seen: seen.visible && seen.paneOpen
-      },
-      `${message.username} in ${room}`,
-      message.message,
-      key,
-      roomHref(room)
-    );
+    const arrival: Arrival = {
+      kind: "room",
+      level,
+      mention: message.isMention,
+      muted: false,
+      seen: seen.visible && seen.paneOpen
+    };
+    if (!shouldNotify(arrival, notifyOptions())) return;
+    arrival.muted = await this.#muted(message.username);
+    this.#maybe(arrival, `${message.username} in ${room}`, message.message, key, roomHref(room));
+  }
+
+  /**
+   * Whether `author` is muted, from their summary, fetched first when none is held so a muted
+   * user stays quiet on a screen that never listed them. Asked only for a message that would
+   * otherwise notify
+   */
+  async #muted(author: string): Promise<boolean> {
+    if (!users.get(author)) await users.load(author);
+    return users.get(author)?.muted ?? false;
   }
 
   #seen(key: string, open: string | null) {

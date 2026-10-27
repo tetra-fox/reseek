@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
+import { fakeNetwork } from "#lib/testing/network.js";
 import { toasts } from "#lib/toast.svelte.js";
+import { users } from "#lib/users.svelte.js";
 
 import { type Arrival, notifier, type NotifyOptions, shouldNotify } from "./notify.svelte";
 
@@ -57,6 +59,8 @@ describe("the new message toast", () => {
   afterEach(() => {
     app.options = null;
     toasts.splice(0);
+    users.clear();
+    vi.unstubAllGlobals();
   });
 
   const message = {
@@ -69,19 +73,37 @@ describe("the new message toast", () => {
     isAcknowledged: false,
     wasReplayed: false
   } as Schemas["PrivateMessage"];
-  const toasted = (level: Schemas["NotifyLevel"], open: string | null = null) => {
+  const toasted = async (level: Schemas["NotifyLevel"], open: string | null = null) => {
     toasts.splice(0);
-    notifier.privateMessage("alice", message, level, open);
+    await notifier.privateMessage("alice", message, level, open);
     return toasts.length;
   };
+  /** the directory's summary of alice, muted or not */
+  const directory = (muted: boolean) => {
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/users/alice/summary") ? { username: "alice", muted } : undefined
+    );
+    return () => net.requests.filter((r) => r.url.pathname.endsWith("/summary")).length;
+  };
 
-  it("follows the notification rules, with the tab's visibility set aside", () => {
-    expect(toasted("all")).toBe(1);
-    expect(toasted("all", "user:alice")).toBe(0);
-    expect(toasted("none")).toBe(0);
+  it("follows the notification rules, with the tab's visibility set aside", async () => {
+    directory(false);
+    expect(await toasted("all")).toBe(1);
+    expect(await toasted("all", "user:alice")).toBe(0);
+    expect(await toasted("none")).toBe(0);
     app.options = { chat: { notifications: { enabled: false } } } as never;
-    expect(toasted("all")).toBe(0);
+    expect(await toasted("all")).toBe(0);
     app.options = { chat: { notifications: { private_messages: false } } } as never;
-    expect(toasted("all")).toBe(0);
+    expect(await toasted("all")).toBe(0);
+  });
+
+  it("reads the sender's summary first when none is held, and stays quiet for a muted one", async () => {
+    const asked = directory(true);
+    expect(users.get("alice")).toBeUndefined();
+    expect(await toasted("all")).toBe(0);
+    expect(asked()).toBe(1);
+    // held now: not read again
+    expect(await toasted("all")).toBe(0);
+    expect(asked()).toBe(1);
   });
 });

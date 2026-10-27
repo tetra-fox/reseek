@@ -4,12 +4,16 @@ import { api, byRoom, byUser, type Schemas } from "#lib/api/client.js";
 import { Keyed } from "#lib/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
+import { users } from "#lib/users.svelte.js";
 
 import { notifier } from "./notify.svelte";
 
 export type Conversation = Schemas["Conversation"];
 export type JoinedRoom = Schemas["JoinedRoom"];
 export type ChatUnread = Schemas["ChatUnread"];
+
+/** How many conversation peers have their summaries read at once, the newest conversations first */
+const PEERS = 200;
 
 /** What the sidebar shows under a room: its latest message seen in this page */
 export type Preview = { author: string; text: string; at: string };
@@ -44,14 +48,17 @@ class Chat {
   #release: (() => void)[] = [];
 
   constructor() {
-    live.on("conversations.list", (list) => this.conversations.reconcile(list));
+    live.on("conversations.list", (list) => {
+      this.conversations.reconcile(list);
+      this.#peers();
+    });
     live.on("conversations.update", ({ conversation }) => this.#upsertConversation(conversation));
     live.on("conversations.message", ({ username, message }) => {
       const conversation = this.conversations.get(username);
       if (conversation && (conversation.lastMessage?.localId ?? 0) <= message.localId) {
         conversation.lastMessage = message;
       }
-      notifier.privateMessage(
+      void notifier.privateMessage(
         username,
         message,
         this.conversations.get(username)?.notify ?? "all",
@@ -67,7 +74,7 @@ class Chat {
       });
       const room = this.rooms.get(roomName);
       if (room) room.lastMessageAt = message.timestamp;
-      notifier.roomMessage(roomName, message, room?.notify ?? "mentions", this.openPane);
+      void notifier.roomMessage(roomName, message, room?.notify ?? "mentions", this.openPane);
     });
     live.on("chat.unread", (counts) => (this.unread = counts));
   }
@@ -130,7 +137,10 @@ class Chat {
       call(() => api.GET("/api/v0/conversations")),
       call(() => api.GET("/api/v0/rooms/joined"))
     ]);
-    if (conversations.ok) this.conversations.reconcile(conversations.data);
+    if (conversations.ok) {
+      this.conversations.reconcile(conversations.data);
+      this.#peers();
+    }
     if (rooms.ok) this.rooms.reconcile(rooms.data);
     const failed = !conversations.ok ? conversations : !rooms.ok ? rooms : null;
     this.error = failed ? failed.error : "";
@@ -239,6 +249,18 @@ class Chat {
     if (!conversation.isActive) return this.conversations.remove(conversation.username);
     // a frame carries no messages; the list never holds them either
     this.conversations.upsert({ ...conversation, messages: null });
+    void users.load(conversation.username);
+  }
+
+  /**
+   * Reads the summaries of the conversation peers, for their pin, presence, block and mute on
+   * any screen. A summary already held and less than a minute old is not read again
+   */
+  #peers() {
+    const newest = this.conversations.rows.toSorted(
+      (a, b) => (b.lastMessage?.localId ?? 0) - (a.lastMessage?.localId ?? 0)
+    );
+    for (const c of newest.slice(0, PEERS)) void users.load(c.username);
   }
 }
 

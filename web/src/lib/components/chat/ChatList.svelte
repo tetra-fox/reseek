@@ -73,11 +73,6 @@
       )
   );
 
-  // the users listed are looked up for their pin, presence and block
-  $effect(() => {
-    for (const c of chat.conversations.rows.slice(0, 200)) void users.load(c.username);
-  });
-
   // the list holds still while the pointer is on it, a text is selected in it or a row's menu
   // is open, so a row never moves away from a click
   const hold = heldOrder<Line>((l) => l.key);
