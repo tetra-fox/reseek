@@ -11,14 +11,16 @@ const KEEPS_ALL =
 const KEEPS_PRESS = "button,a[href],[role=checkbox],[role=switch],summary";
 
 /**
- * Whether the focused element `target` handles `key` itself, so a list's own keys leave it
- * alone: every key in a text field, a menu or a dialog, and Enter and Space on a button,
- * checkbox or link
+ * Whether a key belongs to the element it was pressed on, so a list's own keys leave it
+ * alone: one something already handled, every key in a text field, a menu or a dialog, and
+ * Enter and Space on a button, checkbox or link
  */
-export const keepsKey = (target: EventTarget | null, key: string): boolean => {
+export const keepsKey = (e: KeyboardEvent): boolean => {
+  if (e.defaultPrevented) return true;
+  const target = e.target;
   if (!(target instanceof Element)) return false;
   if (target.closest(KEEPS_ALL)) return true;
-  return !!target.closest(KEEPS_PRESS) && (key === "Enter" || key === " ");
+  return !!target.closest(KEEPS_PRESS) && (e.key === "Enter" || e.key === " ");
 };
 
 /**

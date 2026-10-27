@@ -147,74 +147,58 @@ describe("the transfers table", () => {
   });
 
   describe("keys", () => {
-    it("leaves Ctrl, Cmd and Alt shortcuts to the browser on a focused row", async () => {
-      session.principal = {
-        name: "a",
-        role: "Administrator",
-        session: null
-      } as unknown as typeof session.principal;
+    const bulk = (net: Awaited<ReturnType<typeof start>>) =>
+      net.requests.filter((r) => r.url.pathname.endsWith("/bulk"));
+    const focusIn = (target: Element) =>
+      target.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+
+    it("leave Ctrl, Cmd and Alt shortcuts to the browser on a focused row", async () => {
+      signIn();
       const a = transfer({ state: "InProgress", percentComplete: 10 });
       listing = [a];
       const net = await start();
-      const grid = document.querySelector("[role=grid]")!;
-      row(a.id)!.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-      flushSync();
-      const press = (key: string, mods: KeyboardEventInit = {}) => {
-        const event = new KeyboardEvent("keydown", {
-          key,
-          bubbles: true,
-          cancelable: true,
-          ...mods
-        });
-        grid.dispatchEvent(event);
-        return event;
-      };
-      const bulk = () => net.requests.filter((r) => r.url.pathname.endsWith("/bulk"));
-
+      press(grid(), "ArrowDown");
       for (const mods of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
-        expect(press("c", mods).defaultPrevented).toBe(false);
-        expect(press("r", mods).defaultPrevented).toBe(false);
-        expect(press("o", mods).defaultPrevented).toBe(false);
+        for (const key of ["c", "r", "o"])
+          expect(press(grid(), key, mods).defaultPrevented).toBe(false);
       }
       await flush();
-      expect(bulk()).toEqual([]);
+      expect(bulk(net)).toEqual([]);
 
       // the plain key still cancels
-      expect(press("c").defaultPrevented).toBe(true);
+      expect(press(grid(), "c").defaultPrevented).toBe(true);
       await flush();
-      expect(bulk().map((r) => r.body)).toEqual([{ action: "cancel", ids: [a.id] }]);
+      expect(bulk(net).map((r) => r.body)).toEqual([{ action: "cancel", ids: [a.id] }]);
     });
 
-    it("leaves Enter and Space on a username link to the link", async () => {
+    it("leave Enter and Space on a username link to the link", async () => {
       const a = transfer();
       listing = [a];
       await start();
-      const link = row(a.id)!.querySelector<HTMLAnchorElement>('a[href^="#/users/"]')!;
-      link.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-      flushSync();
-      const press = (key: string) => {
-        const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
-        link.dispatchEvent(event);
-        return event;
-      };
-
-      expect(press("Enter").defaultPrevented).toBe(false);
+      const link = row(a.id)!.querySelector('a[href^="#/users/"]')!;
+      focusIn(link);
+      expect(press(link, "Enter").defaultPrevented).toBe(false);
       await flush();
-      expect(document.querySelector('aside[aria-label="Transfer details"]')).toBeNull();
-
-      press(" ");
-      await flush();
-      expect(document.querySelector('[aria-label="Selected transfers"]')).toBeNull();
+      expect(drawer()).toBeNull();
+      press(link, " ");
+      expect(ticked()).toEqual([]);
     });
 
-    it("act on the row of a focused checkbox, except Enter and Space", async () => {
+    it("leave Enter and Space to a focused checkbox and act on its row with the rest", async () => {
       signIn();
       const a = transfer({ filename: "x\\a.flac", state: "Completed, Succeeded" });
       const b = transfer({ filename: "x\\b.flac", state: "Completed, Succeeded" });
       listing = [a, b];
       await start();
       const box = row(a.id)!.querySelector('[role="checkbox"]')!;
-      box.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      focusIn(box);
+      // the checkbox takes both: Enter does nothing, Space ticks its row
+      press(box, "Enter");
+      await flush();
+      expect(drawer()).toBeNull();
+      press(box, " ");
+      expect(ticked()).toEqual([a.id]);
+
       expect(press(box, "a", { ctrlKey: true }).defaultPrevented).toBe(true);
       expect(ticked()).toEqual([a.id, b.id]);
       expect(press(box, "Delete").defaultPrevented).toBe(true);
@@ -222,16 +206,45 @@ describe("the transfers table", () => {
       expect(document.body.textContent).toContain("Remove 2 transfers?");
     });
 
-    it("select a focused group header's transfers with Ctrl+A", async () => {
+    it("select a group from its header with Ctrl+A and Space, and nothing else", async () => {
+      signIn();
       Object.assign(views.download, { groupBy: "user" });
       const a = transfer({ username: "alice" });
       const b = transfer({ username: "bob" });
       listing = [a, b];
-      await start();
+      const net = await start();
       const header = row("user:bob")!.querySelector('[role="checkbox"]')!;
-      header.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      focusIn(header);
       expect(press(header, "a", { metaKey: true }).defaultPrevented).toBe(true);
       expect(ticked()).toEqual([b.id]);
+      press(grid(), " ");
+      expect(ticked()).toEqual([]);
+      press(grid(), " ");
+      expect(ticked()).toEqual([b.id]);
+      for (const key of ["Delete", "r", "c", "o", "Enter"]) {
+        expect(press(grid(), key).defaultPrevented).toBe(false);
+      }
+      await flush();
+      expect(bulk(net)).toEqual([]);
+      expect(drawer()).toBeNull();
+    });
+
+    it("select only the group's transfers still listed", async () => {
+      const a = transfer({ filename: "x\\a.flac" });
+      const b = transfer({ filename: "x\\b.mp3" });
+      listing = [a, b];
+      Object.assign(views.download, { groupBy: "user" });
+      await start();
+      row(a.id)!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      const filter = document.querySelector<HTMLInputElement>('input[aria-label="Filter"]')!;
+      filter.value = "ext:flac";
+      filter.dispatchEvent(new Event("input", { bubbles: true }));
+      await vi.advanceTimersByTimeAsync(200);
+      flushSync();
+      expect(row(b.id)).toBeNull();
+      press(grid(), "a", { ctrlKey: true });
+      expect(ticked()).toEqual([a.id]);
+      expect(document.body.textContent).toContain("1 selected");
     });
 
     it("act on the row last clicked", async () => {
@@ -243,7 +256,86 @@ describe("the transfers table", () => {
       row(b.id)!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       press(grid(), " ");
       expect(ticked()).toEqual([b.id]);
-      expect(grid().getAttribute("aria-activedescendant")).toBe(`transfer-${b.id}`);
+      const active = grid().getAttribute("aria-activedescendant")!;
+      expect(document.getElementById(active)?.getAttribute("data-id")).toBe(b.id);
+    });
+
+    it("move past a folded group to the next row", async () => {
+      Object.assign(views.download, { groupBy: "user" });
+      const a = transfer({ username: "alice" });
+      const b = transfer({ username: "bob" });
+      const c = transfer({ username: "carol" });
+      listing = [a, b, c];
+      await start();
+      const fold = row("user:bob")!.querySelector('button[aria-label="Fold"]')!;
+      fold.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      (fold as HTMLButtonElement).click();
+      flushSync();
+      expect(row(b.id)).toBeNull();
+      press(grid(), "ArrowDown");
+      press(grid(), " ");
+      expect(ticked()).toEqual([c.id]);
+      press(grid(), "ArrowUp");
+      press(grid(), " ");
+      expect(ticked().toSorted()).toEqual([a.id, c.id].toSorted());
+    });
+
+    it("go on from the row that took a removed row's place", async () => {
+      signIn();
+      const a = transfer({ filename: "x\\a.flac", state: "Completed, Succeeded" });
+      const b = transfer({ filename: "x\\b.flac", state: "Completed, Succeeded" });
+      const c = transfer({ filename: "x\\c.flac", state: "Completed, Succeeded" });
+      listing = [a, b, c];
+      const net = await start();
+      press(grid(), "ArrowDown");
+      press(grid(), "ArrowDown");
+      press(grid(), "Delete");
+      await flush();
+      expect(bulk(net).map((r) => r.body)).toEqual([{ action: "remove", ids: [b.id] }]);
+      net.frame("transfers.removed", { id: b.id, username: b.username, direction: "Download" });
+      await flush();
+      expect(row(b.id)).toBeNull();
+      // c took b's place, so ↓ has nowhere further to go and ↑ reaches a
+      press(grid(), " ");
+      expect(ticked()).toEqual([c.id]);
+      press(grid(), "ArrowUp");
+      press(grid(), " ");
+      expect(ticked().toSorted()).toEqual([a.id, c.id].toSorted());
+    });
+
+    it("keep focus on the table when a focused row control scrolls away", async () => {
+      listing = Array.from({ length: 80 }, (_, n) =>
+        transfer({ filename: `x\\${String(n).padStart(2, "0")}.flac` })
+      );
+      await start();
+      const box = row(listing[0].id)!.querySelector<HTMLElement>('[role="checkbox"]')!;
+      box.focus();
+      Object.defineProperty(grid(), "scrollTop", { value: 2000, configurable: true });
+      grid().dispatchEvent(new Event("scroll"));
+      flushSync();
+      expect(document.activeElement).toBe(grid());
+      expect(grid().getAttribute("aria-activedescendant")).toBeNull();
+    });
+
+    it("select a group from the pinned header after scrolling", async () => {
+      Object.assign(views.download, { groupBy: "user" });
+      listing = Array.from({ length: 30 }, (_, n) =>
+        transfer({
+          username: n < 25 ? "alice" : "bob",
+          filename: `x\\${String(n).padStart(2, "0")}.flac`
+        })
+      );
+      await start();
+      Object.defineProperty(grid(), "scrollTop", { value: 36 * 5, configurable: true });
+      grid().dispatchEvent(new Event("scroll"));
+      flushSync();
+      const pinned = document.querySelector(
+        '[data-line="user:alice"]:not([role=row]) [role="checkbox"]'
+      )!;
+      pinned.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      press(pinned, "a", { ctrlKey: true });
+      expect(ticked().length).toBeGreaterThan(0);
+      expect(document.body.textContent).toContain("25 selected");
     });
 
     it("do nothing on a row whose buttons don't offer it", async () => {
@@ -256,7 +348,7 @@ describe("the transfers table", () => {
       press(grid(), "r");
       press(grid(), "o");
       await flush();
-      expect(net.requests.filter((r) => r.url.pathname.endsWith("/bulk"))).toEqual([]);
+      expect(bulk(net)).toEqual([]);
       expect(open).not.toHaveBeenCalled();
     });
 

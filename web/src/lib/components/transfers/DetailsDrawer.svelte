@@ -105,7 +105,7 @@
   onkeydown={(e) => {
     // a key another layer took (a menu, a dialog, a card) or one a field or control keeps
     // isn't the drawer's
-    if (e.defaultPrevented || withModifier(e) || layerOpen() || keepsKey(e.target, e.key)) return;
+    if (keepsKey(e) || withModifier(e) || layerOpen()) return;
     if (e.key === "Escape") onclose();
     else if (e.key === "ArrowLeft") onstep(-1);
     else if (e.key === "ArrowRight") onstep(1);

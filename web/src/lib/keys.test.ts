@@ -13,17 +13,35 @@ describe("which keys a focused element keeps", () => {
       <button role="checkbox" id="box"></button>
       <a href="#/users/a" id="link">a</a>
       <div id="cell"></div>`;
-    const at = (id: string) => document.getElementById(id);
+    const keeps = (id: string, key: string) => {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true });
+      let kept = false;
+      document.body.addEventListener("keydown", (e) => (kept = keepsKey(e)), { once: true });
+      document.getElementById(id)!.dispatchEvent(event);
+      return kept;
+    };
     for (const key of ["Delete", "a", "ArrowDown", "Enter"]) {
-      expect(keepsKey(at("field"), key)).toBe(true);
-      expect(keepsKey(at("item"), key)).toBe(true);
-      expect(keepsKey(at("cell"), key)).toBe(false);
+      expect(keeps("field", key)).toBe(true);
+      expect(keeps("item", key)).toBe(true);
+      expect(keeps("cell", key)).toBe(false);
     }
     for (const id of ["button", "inside", "box", "link"]) {
-      expect(keepsKey(at(id), "Enter")).toBe(true);
-      expect(keepsKey(at(id), " ")).toBe(true);
-      expect(keepsKey(at(id), "Delete")).toBe(false);
-      expect(keepsKey(at(id), "ArrowDown")).toBe(false);
+      expect(keeps(id, "Enter")).toBe(true);
+      expect(keeps(id, " ")).toBe(true);
+      expect(keeps(id, "Delete")).toBe(false);
+      expect(keeps(id, "ArrowDown")).toBe(false);
     }
+  });
+
+  it("leaves a key something already handled", () => {
+    document.body.innerHTML = `<div id="cell"></div>`;
+    let kept = false;
+    document.body.addEventListener("keydown", (e) => (kept = keepsKey(e)), { once: true });
+    const cell = document.getElementById("cell")!;
+    cell.addEventListener("keydown", (e) => e.preventDefault(), { once: true });
+    cell.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })
+    );
+    expect(kept).toBe(true);
   });
 });

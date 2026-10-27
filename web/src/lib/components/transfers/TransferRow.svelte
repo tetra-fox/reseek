@@ -90,9 +90,12 @@
         aria-label={`Select ${getFileName(t.filename)}`}
         checked={selected}
         onclick={(e) => {
+          // a click is handled here, with Shift for a range, and the checkbox's own toggle is
+          // skipped; Space on it toggles through onCheckedChange
           e.preventDefault();
           onselect(e.shiftKey);
-        }} />
+        }}
+        onCheckedChange={(on) => on !== selected && onselect(false)} />
     {:else if column === "file"}
       <Icon class="size-4 shrink-0 text-fg-muted" />
       <button
