@@ -10,9 +10,13 @@ export type RoomUser = Schemas["RoomUser"];
  * joining or leaving patching the list in place
  */
 export class RoomMembers {
+  /** the room */
   readonly name: string;
+  /** who is in it now, by username */
   readonly users = new Keyed<RoomUser>((u) => u.username);
+  /** the room as last read or pushed: owner, operators, tickers */
   room = $state.raw<Schemas["Room"] | null>(null);
+  /** why the last read failed, empty when it didn't */
   error = $state("");
 
   constructor(name: string) {
@@ -40,6 +44,7 @@ export class RoomMembers {
     );
   }
 
+  /** Reads the room and its users */
   load = async () => {
     const outcome = await call(() =>
       api.GET("/api/v0/rooms/joined/{roomName}", { params: byRoom(this.name) })

@@ -20,15 +20,21 @@ const sending = (m: Message) => (m.localId < 0 ? 1 : 0);
 /**
  * The messages of one conversation or room, oldest first: the newest page on open, older pages
  * as the list scrolls up, and new ones as frames arrive. Messages are kept by their id and never
- * change once shown, so the list keeps its nodes. A message we send shows at once and is
- * replaced by the stored one when the daemon has it
+ * change once shown, so the list keeps its nodes. A message we send shows at once and stays
+ * until the stored one with its text arrives, which for a room is when the server echoes it
  */
 export class MessagePane {
+  /** whose conversation or which room */
   readonly target: Target;
+  /** the messages held, by id; those being sent have negative ids */
   readonly messages = new Keyed<Message>((m) => String(m.localId));
+  /** the stretches of room history reseek missed */
   gaps = $state.raw<Gap[]>([]);
+  /** older messages are stored than the pane holds */
   hasMore = $state(false);
+  /** the first page is here */
   loaded = $state(false);
+  /** why the last read failed, empty when it didn't */
   error = $state("");
   /** where the unread messages started when the pane opened, null when none were unread */
   unreadFrom = $state<number | null>(null);
@@ -54,14 +60,14 @@ export class MessagePane {
     if (kind === "user") {
       $effect(() =>
         live.on("conversations.message", ({ username, message }) => {
-          if (username === name) this.messages.upsert(fromPrivate(message, this.#self()));
+          if (username === name) this.#store(fromPrivate(message, this.#self()));
         })
       );
       return;
     }
     $effect(() =>
       live.on("rooms.message", ({ roomName, message }) => {
-        if (roomName === name) this.messages.upsert(fromRoom(message));
+        if (roomName === name) this.#store(fromRoom(message));
       })
     );
     // a session that began after a gap says so; an open gap is replaced by its end
@@ -81,7 +87,7 @@ export class MessagePane {
       return;
     }
     this.error = "";
-    for (const m of page.data.messages) this.messages.upsert(m);
+    for (const m of page.data.messages) this.#store(m);
     this.#gapsFrom(page.data.gaps);
     if (!this.loaded) {
       this.hasMore = page.data.hasMore;
@@ -97,7 +103,7 @@ export class MessagePane {
     if (oldest === undefined || !this.hasMore) return;
     const page = await this.#page(oldest);
     if (!page.ok) return void (this.error = page.error);
-    for (const m of page.data.messages) this.messages.upsert(m);
+    for (const m of page.data.messages) this.#store(m);
     this.#gapsFrom(page.data.gaps);
     this.hasMore = page.data.hasMore;
   };
@@ -127,8 +133,8 @@ export class MessagePane {
       unread: false,
       sending: "sending"
     };
-    this.messages.upsert(pending);
-    return this.#deliver(pending);
+    // the row the list keeps, which `#deliver` marks as the request ends
+    return this.#deliver(this.messages.upsert(pending));
   };
 
   /** Tries a failed message again */
@@ -180,10 +186,23 @@ export class MessagePane {
               body: row.text
             })
           );
-    // the stored message comes by frame, a room's once the server echoes it
-    if (outcome.ok) this.messages.remove(String(row.localId));
+    // sent: the row stays, unmarked, until the stored message replaces it
+    if (outcome.ok) row.sending = undefined;
     else row.sending = "failed";
     return outcome;
+  }
+
+  /**
+   * Keeps a stored message; one of ours takes the place of the oldest row still waiting for
+   * it, the one sent with the same text
+   */
+  #store(m: Message) {
+    this.messages.upsert(m);
+    if (!m.self) return;
+    const waiting = this.ordered.find(
+      (r) => r.localId < 0 && r.sending !== "failed" && r.text === m.text
+    );
+    if (waiting) this.messages.remove(String(waiting.localId));
   }
 
   async #readConversation() {
@@ -199,16 +218,13 @@ export class MessagePane {
     if (outcome.ok) this.conversation = outcome.data;
   }
 
+  /** The first unread message: unacknowledged in a conversation, after a room's read marker */
   #firstUnread(): number | null {
     const rows = this.ordered;
     if (this.target.kind === "user") return rows.find((m) => m.unread)?.localId ?? null;
-    let left = chat.roomUnread(this.target.name).unread;
-    for (let i = rows.length - 1; i >= 0 && left > 0; i--) {
-      if (rows[i].self || rows[i].hidden) continue;
-      left -= 1;
-      if (!left) return rows[i].localId;
-    }
-    return null;
+    const marker = chat.rooms.get(this.target.name)?.lastReadId;
+    if (marker === undefined) return null;
+    return rows.find((m) => m.localId > marker && !m.self && !m.hidden)?.localId ?? null;
   }
 
   #gapsFrom(gaps: Gap[]) {
