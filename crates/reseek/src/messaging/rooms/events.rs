@@ -224,9 +224,11 @@ impl Messaging {
       return debug!(room, "a room message before any login was noted dropped");
     };
     let is_self = username == us;
+    let options = self.config.current();
+    let watched = &options.values.chat.highlight_words;
     let arrived = Arrived {
       hidden: !is_self && self.users.is_blocked(&username, None, BlockScope::Rooms),
-      is_mention: !is_self && mentions::mentions(&message, &us),
+      is_mention: !is_self && mentions::mentions(&message, &us, watched),
       is_self,
       room: room.clone(),
       timestamp: Utc::now(),
@@ -317,5 +319,37 @@ mod tests {
         .collect::<Vec<_>>(),
       [(true, false), (false, true)]
     );
+  }
+
+  #[tokio::test]
+  async fn a_room_message_with_a_watched_word_is_stored_as_a_mention() {
+    let app = app("[chat]\nhighlight_words = [\"Floyd\"]\n", &[]).await;
+    let messaging = &app.state.messaging;
+    messaging
+      .handle(Event::LoggedIn {
+        username: "me".into(),
+      })
+      .await;
+    let data = RoomData {
+      name: "indie".into(),
+      users: Vec::new(),
+      private: None,
+    };
+    messaging.rooms.tracker().joined(&data, "me");
+    for message in ["pink floyd tonight", "floydian slip"] {
+      let said = Event::RoomMessageReceived {
+        room_name: "indie".into(),
+        username: "bob".into(),
+        message: message.into(),
+      };
+      messaging.room_event(said).await;
+    }
+    let stored = messaging
+      .database()
+      .read(|conn| history::all(conn, "indie"))
+      .await
+      .unwrap();
+    let mentions: Vec<_> = stored.iter().map(|m| m.is_mention).collect();
+    assert_eq!(mentions, [true, false]);
   }
 }

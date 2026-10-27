@@ -328,6 +328,10 @@ pub struct Chat {
   /// The longest message that may be sent, in characters.
   #[cascade(env = "RESEEK_CHAT_MAX_MESSAGE_LENGTH")]
   pub max_message_length: u32,
+  /// Words and phrases that make a room message count as mentioning us, matched in any case
+  /// as whole words.
+  #[cascade(env = "RESEEK_CHAT_HIGHLIGHT_WORDS")]
+  pub highlight_words: Vec<String>,
 }
 
 impl Default for Chat {
@@ -335,6 +339,7 @@ impl Default for Chat {
     Self {
       notifications: ChatNotifications::default(),
       max_message_length: 2000,
+      highlight_words: Vec::new(),
     }
   }
 }
@@ -393,6 +398,29 @@ impl Default for Blocking {
         .iter()
         .map(ToString::to_string)
         .collect(),
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use cascade::{Apply, Schema};
+  use serde_json::json;
+
+  use super::Options;
+
+  #[test]
+  fn the_chat_options_apply_live_with_their_defaults() {
+    let schema = Schema::of::<Options>();
+    for (key, default, env) in [(
+      "chat.highlight_words",
+      json!([]),
+      "RESEEK_CHAT_HIGHLIGHT_WORDS",
+    )] {
+      let field = schema.field(key).unwrap();
+      assert_eq!(field.default, default, "{key}");
+      assert_eq!(field.apply, Apply::Live, "{key}");
+      assert_eq!(field.env.as_deref(), Some(env), "{key}");
     }
   }
 }

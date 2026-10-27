@@ -14,6 +14,7 @@
       ]
     },
     "chat": {
+      "highlight_words": [],
       "max_message_length": 2000,
       "notifications": {
         "enabled": true,
@@ -440,6 +441,23 @@
         "messages",
         "rooms"
       ],
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "chat.highlight_words": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CHAT_HIGHLIGHT_WORDS",
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Words and phrases that make a room message count as mentioning us, matched in any case as whole words.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null
