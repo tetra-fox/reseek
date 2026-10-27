@@ -219,9 +219,13 @@ impl Searches {
     self.db.read(move |conn| store::text(conn, id)).await
   }
 
-  /// Waits, at shutdown and once the client is stopped, for the searches the disconnect ended
-  /// to write how they ended.
+  /// Ends every running search as cancelled at shutdown, before the client is stopped, and
+  /// waits for each to write how it ended.
   pub async fn stop(&self) {
+    for running in self.running().values() {
+      running.cancelled.store(true, Ordering::Relaxed);
+      running.cancel.cancel();
+    }
     self.tasks.close();
     if tokio::time::timeout(STOPPING, self.tasks.wait())
       .await

@@ -5,9 +5,9 @@
 //! searches it left running are ended, the release feed is read, the shares are initialized,
 //! the clock starts, and then the watchdog connects, unless this is a relay agent, connecting
 //! is turned off or there are no credentials. Stopping, once the HTTP host has stopped: the
-//! watchdog stops, the client disconnects and is disposed, the events this raised are
-//! handled, the session is closed, the searches, the statistics fetched again and the transfer
-//! tasks end, and the transfers still unfinished are ended as shut down.
+//! running searches end as cancelled, the watchdog stops, the client disconnects and is
+//! disposed, the events this raised are handled, the session is closed, the statistics fetched
+//! again and the transfer tasks end, and the transfers still unfinished are ended as shut down.
 
 use tracing::{Instrument, debug, info, info_span, warn};
 
@@ -144,10 +144,10 @@ async fn check_versions(app: AppState) {
 /// downloads among them.
 pub(super) async fn stop(app: &AppState) {
   info!("Application is shutting down");
+  app.searches.stop().await;
   app.network.stop().await;
   app.messaging.stop().await;
   app.users.stop().await;
-  app.searches.stop().await;
   app.downloads.stop().await;
   app.uploads.stop().await;
   match cleanup::end_unfinished(&app.transfers).await {

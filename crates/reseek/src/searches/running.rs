@@ -363,4 +363,37 @@ mod tests {
     assert!(stored.is_complete);
     assert_eq!(stored.responses, Some(Vec::new()));
   }
+
+  #[tokio::test]
+  async fn a_search_running_at_shutdown_ends_cancelled() {
+    let app = app("", &[]).await;
+    let searches = app.state.searches.clone();
+    let record = record();
+    let (id, written) = (record.id, record.clone());
+    searches
+      .db
+      .write(move |conn| store::insert(conn, &written))
+      .await
+      .unwrap();
+    let (accepted, _acceptance) = oneshot::channel();
+    let running = Arc::new(Running::new(record, accepted));
+    running.state_changed(SearchState::IN_PROGRESS);
+    searches.running().insert(id, running.clone());
+    let cancel = running.cancel.clone();
+    let following = searches.clone();
+    searches.tasks.spawn(async move {
+      let search = async move {
+        cancel.cancelled().await;
+        Err(ClientError::Cancelled)
+      };
+      following.follow(running, search).await;
+    });
+
+    searches.stop().await;
+    let stored = searches.get(id, false).await.unwrap();
+    assert_eq!(
+      stored.state,
+      SearchStates::Completed | SearchStates::Cancelled
+    );
+  }
 }
