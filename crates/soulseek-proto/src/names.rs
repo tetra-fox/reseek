@@ -40,29 +40,31 @@ pub fn validate_login_username(username: &str) -> Result<(), LoginUsernameError>
   Ok(())
 }
 
-/// Why the server would reject a room name in `JoinRoom`
+/// Why the server would reject a room name in `JoinRoom`, written as the reason that follows
+/// "Invalid room name: "
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RoomNameError {
-  #[error("room name is empty")]
+  #[error("it is empty")]
   Empty,
-  #[error("room name is longer than 24 characters")]
+  #[error("it is longer than 24 characters")]
   TooLong,
-  #[error("room name has non-ascii characters")]
-  NonAscii,
-  #[error("room name starts or ends with a space")]
+  #[error("only printable ASCII characters are allowed")]
+  NotPrintableAscii,
+  #[error("it starts or ends with a space")]
   EdgeSpaces,
-  #[error("room name has consecutive spaces")]
+  #[error("it has two spaces in a row")]
   ConsecutiveSpaces,
 }
 
-/// The server's rules for a room name in `JoinRoom`. A name that breaks them gets a private
-/// message from `server` and no reply at all, so it is checked before sending.
+/// The server's rules for a room name in `JoinRoom`: 1 to 24 printable ascii characters, no
+/// space at either end and no two in a row. A name that breaks them gets a private message from
+/// `server` and no reply at all, so it is checked before sending.
 pub fn validate_room_name(room: &str) -> Result<(), RoomNameError> {
   if room.is_empty() {
     return Err(RoomNameError::Empty);
   }
-  if !room.is_ascii() {
-    return Err(RoomNameError::NonAscii);
+  if !room.bytes().all(|b| (0x20..=0x7e).contains(&b)) {
+    return Err(RoomNameError::NotPrintableAscii);
   }
   if room.len() > 24 {
     return Err(RoomNameError::TooLong);
@@ -132,7 +134,11 @@ mod tests {
     );
     assert_eq!(
       validate_room_name("caf\u{e9}"),
-      Err(RoomNameError::NonAscii)
+      Err(RoomNameError::NotPrintableAscii)
+    );
+    assert_eq!(
+      validate_room_name("tab\there"),
+      Err(RoomNameError::NotPrintableAscii)
     );
     assert_eq!(validate_room_name(" r"), Err(RoomNameError::EdgeSpaces));
     assert_eq!(
