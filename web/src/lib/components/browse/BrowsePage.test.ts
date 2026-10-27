@@ -8,6 +8,10 @@ import { fakeNetwork } from "#lib/testing/network.js";
 
 import BrowsePage from "./BrowsePage.svelte";
 
+// clearing a browse opened from a link takes the user parameter out of the URL; there is no
+// router in these tests
+vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
+
 const flush = async () => {
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
@@ -72,5 +76,43 @@ describe("browse progress", () => {
     });
     await flush();
     expect(document.querySelectorAll("[role=treeitem]")).toHaveLength(2);
+  });
+
+  it("leaves Escape to an open card, and Enter on a folder's toggle to the toggle", async () => {
+    fakeNetwork((url) =>
+      url.pathname.endsWith("/users/alice/browse")
+        ? {
+            directories: [
+              { name: "Music", fileCount: 0, files: [] },
+              { name: "Music\\Album", fileCount: 0, files: [] }
+            ],
+            directoryCount: 2,
+            lockedDirectories: [],
+            lockedDirectoryCount: 0
+          }
+        : undefined
+    );
+    component = mount(BrowsePage, {
+      target: document.body,
+      props: { user: "alice", path: null, flat: false }
+    });
+    await flush();
+    await flush();
+    const toggle = document.querySelector("[role=treeitem] button")!;
+    toggle.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    flushSync();
+    expect(browser.directory).toBeNull();
+
+    const region = document.querySelector("[role=region][aria-label=Browse]")!;
+    const card = document.createElement("div");
+    card.setAttribute("role", "dialog");
+    document.body.append(card);
+    region.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    flushSync();
+    expect(browser.phase).toBe("complete");
+    card.remove();
+    region.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    flushSync();
+    expect(browser.phase).toBe("idle");
   });
 });

@@ -36,7 +36,7 @@
   import { ancestors, flatten, leaf, type Separator, type Tree } from "#lib/browse/tree.js";
   import { formatBytes } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
-  import { withModifier } from "#lib/keys.js";
+  import { keepsKey, withModifier } from "#lib/keys.js";
 
   import { LOCKED_HINT } from "./locked";
 
@@ -128,7 +128,10 @@
         style:height={`${ROW}px`}
         style:padding-left={`calc(${depth * 2}em + 0.75rem)`}
         onclick={() => onselect(node.name)}
-        onkeydown={(e) => e.key === "Enter" && !withModifier(e) && onselect(node.name)}>
+        onkeydown={(e) => {
+          // Enter on the folder's toggle is the toggle's
+          if (e.key === "Enter" && !withModifier(e) && !keepsKey(e)) onselect(node.name);
+        }}>
         <button
           type="button"
           class="shrink-0"

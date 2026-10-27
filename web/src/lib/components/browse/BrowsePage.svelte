@@ -18,7 +18,7 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { formatBytes } from "#lib/format.js";
-  import { withModifier } from "#lib/keys.js";
+  import { layerOpen, withModifier } from "#lib/keys.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
@@ -105,7 +105,8 @@
     const keydown = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || withModifier(e)) return;
       if (browser.phase === "idle" || browser.phase === "pending") return;
-      if ((e.target as HTMLElement).closest("[role=dialog],[role=alertdialog],[role=menu]")) return;
+      // a card, menu or dialog open over the screen closes first
+      if (layerOpen()) return;
       void clear();
     };
     node.addEventListener("keydown", keydown);
