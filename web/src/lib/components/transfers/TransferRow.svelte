@@ -28,7 +28,7 @@
     getFileName
   } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
-  import { act, open, queuePosition, storeOf } from "#lib/transfers/actions.js";
+  import { act, open, queueFailure, queuePosition, storeOf } from "#lib/transfers/actions.js";
   import type { ColumnId } from "#lib/transfers/columns.js";
   import { type Direction, rowActions, stateChip, type Transfer } from "#lib/transfers/states.js";
   import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
@@ -156,13 +156,19 @@
       {#if direction === "download"}
         {#if t.placeInQueue}<span class="tabular-nums">#{t.placeInQueue}</span>{/if}
         {#if can.queuePosition}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Ask for the place in the queue"
-            onclick={() => void queuePosition(t)}>
-            <RefreshCwIcon />
-          </Button>
+          {@const failed = storeOf(t).queueErrors.get(t.id)}
+          <Tooltip text={failed === undefined ? undefined : queueFailure(failed)}>
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Ask for the place in the queue"
+                onclick={() => void queuePosition(t)}>
+                <RefreshCwIcon />
+              </Button>
+            {/snippet}
+          </Tooltip>
         {/if}
       {:else if t.state.includes("Queued")}
         <Tooltip text={wait ? whyText(wait) : undefined}>

@@ -26,6 +26,8 @@ export class Transfers {
   /** why the last load failed, empty once one succeeds */
   error = $state("");
   speeds = new SvelteMap<string, number[]>();
+  /** why the last ask for a download's place in the queue failed, by transfer id */
+  queueErrors = new SvelteMap<string, string>();
 
   constructor(direction: Direction) {
     this.direction = direction;
@@ -45,6 +47,7 @@ export class Transfers {
       if (!mine(t)) return;
       this.list.remove(t.id);
       this.speeds.delete(t.id);
+      this.queueErrors.delete(t.id);
     });
   }
 
@@ -89,6 +92,8 @@ export class Transfers {
     );
     const row = this.list.get(t.id);
     if (outcome.ok && row) row.placeInQueue = outcome.data;
+    if (outcome.ok) this.queueErrors.delete(t.id);
+    else this.queueErrors.set(t.id, outcome.error);
     return outcome;
   };
 
@@ -109,6 +114,7 @@ export class Transfers {
   clear() {
     this.list.clear();
     this.speeds.clear();
+    this.queueErrors.clear();
     this.loaded = false;
   }
 }
