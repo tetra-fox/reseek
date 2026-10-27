@@ -6,6 +6,7 @@
   import { app } from "#lib/app.svelte.js";
   import { parseDuration } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
+  import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
   import { COLUMNS, type ColumnId } from "#lib/transfers/columns.js";
   import type { ViewSettings } from "#lib/transfers/settings.svelte.js";
@@ -157,6 +158,7 @@
     } else if (!current) return;
     else if (e.key === " ") onselect(current, false);
     else if (e.key === "Enter") ondetails(current);
+    else if (!session.can("ReadWrite") && ["Delete", "r", "R", "c", "C"].includes(e.key)) return;
     else if (e.key === "Delete")
       ondelete(selected.size > 1 ? rows.filter((t) => selected.has(t.id)) : [current]);
     else if (e.key === "r" || e.key === "R") onkey("retry", current);
