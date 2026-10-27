@@ -12,7 +12,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 use uuid::Uuid;
 
-use super::enqueue::offline;
 use super::{Downloads, lock};
 use crate::api::error::ApiError;
 use crate::transfers::store;
@@ -147,7 +146,7 @@ fn asked_failed(username: &str, error: ClientError) -> ApiError {
       ApiError::conflict("Transfer is not queued remotely", Some(error.to_string()))
     }
     ClientError::Timeout(message) => ApiError::gateway_timeout(message),
-    ClientError::UserOffline(_) | ClientError::UserNotFound(_) => offline(username),
+    ClientError::UserOffline(_) | ClientError::UserNotFound(_) => ApiError::offline(username),
     ClientError::InvalidOperation(message) => ApiError::unavailable(Some(message)),
     other => ApiError::upstream(
       format!("{username} did not say the place in its queue"),

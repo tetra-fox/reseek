@@ -83,6 +83,12 @@ impl ApiError {
     Self::new(StatusCode::NOT_FOUND, error, None)
   }
 
+  /// The 404 for a user who is offline, or whom the configuration blocks: the two look the same
+  /// from outside, and scripts match on its wording.
+  pub fn offline(username: &str) -> Self {
+    Self::not_found(format!("User {username} appears to be offline"))
+  }
+
   /// A 413: what was asked for is larger than a configured limit.
   pub fn too_large(error: impl Into<String>) -> Self {
     Self::new(StatusCode::PAYLOAD_TOO_LARGE, error, None)

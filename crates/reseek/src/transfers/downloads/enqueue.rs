@@ -106,19 +106,13 @@ fn check(username: &str, files: &[FileRequest]) -> Result<(), ApiError> {
 /// The answer to a failure reaching `username`.
 fn unreachable(username: &str, error: ClientError) -> ApiError {
   match error {
-    ClientError::UserOffline(_) | ClientError::UserNotFound(_) => offline(username),
+    ClientError::UserOffline(_) | ClientError::UserNotFound(_) => ApiError::offline(username),
     ClientError::InvalidOperation(message) => ApiError::unavailable(Some(message)),
     other => ApiError::upstream(
       format!("{username} could not be reached"),
       Some(other.to_string()),
     ),
   }
-}
-
-/// The answer for a user who is offline, or whom the configuration blocks: the two look the
-/// same from outside, and scripts match on its wording.
-pub(super) fn offline(username: &str) -> ApiError {
-  ApiError::not_found(format!("User {username} appears to be offline"))
 }
 
 impl Downloads {
@@ -253,7 +247,7 @@ impl Downloads {
         username,
         "enqueue from a blacklisted user refused as offline"
       );
-      return Err(offline(username));
+      return Err(ApiError::offline(username));
     }
     client
       .connect_to_user(username, false)

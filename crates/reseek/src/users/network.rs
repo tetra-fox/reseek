@@ -46,16 +46,10 @@ pub struct Users {
   agent: bool,
 }
 
-/// The answer for a user who is offline, or whom the configuration blocks: the two look the
-/// same from outside.
-fn offline(username: &str) -> ApiError {
-  ApiError::not_found(format!("User {username} appears to be offline"))
-}
-
 /// The answer to asking the network about `username` that failed with `error`.
 fn unanswered(username: &str, error: ClientError) -> ApiError {
   match error {
-    ClientError::UserOffline(_) => offline(username),
+    ClientError::UserOffline(_) => ApiError::offline(username),
     ClientError::UserNotFound(message) => ApiError::not_found(message),
     ClientError::InvalidOperation(detail) => ApiError::unavailable(Some(detail)),
     other => ApiError::upstream(
@@ -136,7 +130,7 @@ impl Users {
         username,
         "user the configuration blocks answered as offline"
       );
-      return Err(offline(username));
+      return Err(ApiError::offline(username));
     }
     Ok(())
   }
