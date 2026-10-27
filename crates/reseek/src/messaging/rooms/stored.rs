@@ -15,8 +15,8 @@ use crate::messaging::{Messaging, export, sessions};
 impl Messaging {
   /// A page of `room`'s stored history, with the gaps from its first message to the message
   /// its `before` cursor names, which starts the next newer page, so a gap between two pages is
-  /// on the older one. The newest page's gaps run to now while we are in the room, and to its
-  /// last message once we left it.
+  /// on the older one. The newest page's gaps run to now while we are in the room, and once we
+  /// left it to when we left, or to its last message when that is not noted.
   async fn history_page(
     &self,
     room: &str,
@@ -31,7 +31,10 @@ impl Messaging {
         let end = match query.before {
           Some(before) => history::arrived_from(conn, &room_name, before)?,
           None if present => None,
-          None => history::newest(conn, &room_name)?,
+          None => match history::left_at(conn, &room_name)? {
+            Some(left) => Some(left),
+            None => history::newest(conn, &room_name)?,
+          },
         };
         Ok((messages, has_more, history::oldest(conn, &room_name)?, end))
       })
@@ -254,6 +257,32 @@ mod tests {
       "2026-10-26T13:00:00Z"
         .parse::<chrono::DateTime<chrono::Utc>>()
         .unwrap()
+    );
+  }
+
+  #[tokio::test]
+  async fn a_room_we_left_shows_the_gaps_until_we_left() {
+    let app = app("", &[]).await;
+    let messaging = &app.state.messaging;
+    // the last message at 18:00, offline from 20:00 to 21:00, and left at 22:00
+    stored(
+      messaging,
+      &["2026-10-26T17:00:00Z", "2026-10-26T18:00:00Z"],
+      "2026-10-26T20:00:00.000000Z",
+      "2026-10-26T21:00:00.000000Z",
+    )
+    .await;
+    let left = "2026-10-26T22:00:00Z".parse().unwrap();
+    messaging
+      .database()
+      .write(move |conn| history::left(conn, "indie", left))
+      .await
+      .unwrap();
+    let newest = page(messaging, None).await;
+    assert_eq!(newest.gaps.len(), 1, "{:?}", newest.gaps);
+    assert_eq!(
+      newest.gaps[0].to,
+      Some("2026-10-26T21:00:00Z".parse().unwrap())
     );
   }
 }

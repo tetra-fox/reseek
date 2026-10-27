@@ -218,6 +218,15 @@ pub fn joined(conn: &Connection, room: &str, now: DateTime<Utc>) -> rusqlite::Re
   Ok(())
 }
 
+/// When we left `room`, `None` when that is not noted or we joined it again since.
+pub fn left_at(conn: &Connection, room: &str) -> rusqlite::Result<Option<DateTime<Utc>>> {
+  let left: Option<Option<String>> = conn
+    .prepare_cached("SELECT left_at FROM room_state WHERE room_name = ?1")?
+    .query_row([room], |row| row.get(0))
+    .optional()?;
+  left.flatten().as_deref().map(read_timestamp).transpose()
+}
+
 /// Notes that we left `room` at `now`.
 pub fn left(conn: &Connection, room: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
   conn.execute(
