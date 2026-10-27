@@ -23,6 +23,8 @@ describe("redirects", () => {
     expect(redirectFor("/searches/42", false)).toBeNull();
     expect(redirectFor("/searches/42", true)).toBe("/system");
     expect(redirectFor("/system/logs", true)).toBeNull();
+    expect(redirectFor("/rooms", false)).toBe("/chat");
+    expect(redirectFor("/profile", false)).toBeNull();
   });
 
   it("only return to a route of this app after login", () => {

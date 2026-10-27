@@ -1,4 +1,5 @@
 import { api, onUnauthorized, type Schemas } from "#lib/api/client.js";
+import { chat } from "#lib/chat/chat.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { player } from "#lib/player.svelte.js";
 import { call } from "#lib/request.js";
@@ -84,6 +85,7 @@ class App {
     live.stop();
     session.clear();
     users.clear();
+    chat.clear();
     searches.clear();
     downloads.clear();
     uploads.clear();

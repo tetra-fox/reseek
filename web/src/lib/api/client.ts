@@ -43,3 +43,9 @@ export const byUser = (username: string) => ({
   path: { username },
   query: { username }
 });
+
+/** A room's name in a path, plus the query parameter that carries names a path can't */
+export const byRoom = (roomName: string) => ({
+  path: { roomName },
+  query: { roomName }
+});

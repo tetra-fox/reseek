@@ -3,7 +3,6 @@ import CircleUserIcon from "@lucide/svelte/icons/circle-user";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
 import MessageSquareIcon from "@lucide/svelte/icons/message-square";
-import MessagesSquareIcon from "@lucide/svelte/icons/messages-square";
 import SearchIcon from "@lucide/svelte/icons/search";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import UploadIcon from "@lucide/svelte/icons/upload";
@@ -29,8 +28,15 @@ export const segment = (name: string) =>
 export const userHref = (username: string, tab?: string) =>
   href(`/users/${segment(username)}${tab ? `/${tab}` : ""}`);
 
-/** The link to the conversation with a user */
-export const chatHref = (username: string) => href(`/chat/${segment(username)}`);
+/** The link to the conversation with a user; names the chat routes use are written encoded */
+export const chatHref = (username: string) =>
+  href(
+    `/chat/${
+      username === "search" || username === "rooms"
+        ? `%${username.charCodeAt(0).toString(16)}${username.slice(1)}`
+        : segment(username)
+    }`
+  );
 
 /** The link to a room's pane */
 export const roomHref = (room: string) => href(`/chat/rooms/${segment(room)}`);
@@ -43,7 +49,6 @@ export const navItems: NavItem[] = [
   { title: "Search", path: "/searches", icon: SearchIcon },
   { title: "Downloads", path: "/downloads", icon: DownloadIcon },
   { title: "Uploads", path: "/uploads", icon: UploadIcon },
-  { title: "Rooms", path: "/rooms", icon: MessagesSquareIcon },
   { title: "Chat", path: "/chat", icon: MessageSquareIcon },
   { title: "Users", path: "/users", icon: UsersIcon },
   { title: "Browse", path: "/browse", icon: FolderOpenIcon }
@@ -95,6 +100,8 @@ export const title = (path: string): string => {
  */
 export const redirectFor = (path: string, agent: boolean): string | null => {
   if (agent) return path.startsWith("/system") ? null : "/system";
+  // rooms are a section of the chat page
+  if (path === "/rooms" || path.startsWith("/rooms/")) return "/chat";
   if (path === "/" || !navCurrent(path)) return "/dashboard";
   return null;
 };
