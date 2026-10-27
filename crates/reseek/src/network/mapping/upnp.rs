@@ -61,7 +61,7 @@ impl Upnp {
 
   /// Asks `router` to forward `local`'s port to it, for `lease` seconds, or for good when it
   /// takes only that; returns the lease taken.
-  async fn add(router: &Router<Tokio>, local: SocketAddr, lease: u32) -> Result<u32, String> {
+  async fn add(router: &Router<Tokio>, local: SocketAddr, lease: u32) -> Result<u32, AddPortError> {
     let tcp = PortMappingProtocol::TCP;
     match router
       .add_port(tcp, local.port(), local, lease, DESCRIPTION)
@@ -71,11 +71,14 @@ impl Upnp {
       Err(AddPortError::OnlyPermanentLeasesSupported) => router
         .add_port(tcp, local.port(), local, 0, DESCRIPTION)
         .await
-        .map(|()| 0)
-        .map_err(|e| format!("the UPnP router refused: {e}")),
-      Err(e) => Err(format!("the UPnP router refused: {e}")),
+        .map(|()| 0),
+      Err(e) => Err(e),
     }
   }
+}
+
+fn refused(error: AddPortError) -> String {
+  format!("the UPnP router refused: {error}")
 }
 
 fn lifetime(lease: u32) -> Option<Duration> {
@@ -92,7 +95,7 @@ impl Gateway for Upnp {
       .await
       .map_err(|e| format!("no UPnP router found: {e}"))?;
     let local = SocketAddr::new(local_toward(router.addr.ip(), ip)?, port);
-    let lease = Self::add(&router, local, LEASE).await?;
+    let lease = Self::add(&router, local, LEASE).await.map_err(refused)?;
     let external_address = match router.get_external_ip().await {
       Ok(address) => Some(address),
       Err(e) => {
@@ -117,7 +120,23 @@ impl Gateway for Upnp {
 
   async fn renew(&self) -> Result<Mapped, String> {
     let held = self.held().clone().ok_or("nothing is mapped")?;
-    let lease = Self::add(&held.router, held.local, held.lease).await?;
+    let lease = match Self::add(&held.router, held.local, held.lease).await {
+      // some routers will not extend a mapping they hold and call it a conflict; the port holds
+      // our own mapping, made less than a lease ago, so it is removed and made again
+      Err(AddPortError::PortInUse) => {
+        debug!("the UPnP router would not extend the mapping; made again");
+        let removed = held
+          .router
+          .remove_port(PortMappingProtocol::TCP, held.local.port())
+          .await;
+        if let Err(e) = removed {
+          debug!(error = %e, "the UPnP router did not remove the mapping before it was made again");
+        }
+        Self::add(&held.router, held.local, held.lease).await
+      }
+      added => added,
+    }
+    .map_err(refused)?;
     let mapped = Mapped {
       lifetime: lifetime(lease),
       ..held.mapped.clone()
