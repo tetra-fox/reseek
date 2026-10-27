@@ -47,7 +47,7 @@
     lines: () => entries,
     key: (b) => b.username,
     // a block the configuration makes can't be lifted here, so it isn't selectable
-    id: (b) => b.username
+    id: (b) => (b.source === "config" ? null : b.username)
   });
   const chosen = $derived(entries.filter((b) => list.selected.has(b.username)));
   const write = $derived(session.can("ReadWrite"));
@@ -58,7 +58,7 @@
   let importError = $state("");
 
   const unblockChosen = async () => {
-    for (const b of chosen) if (b.source === "api") await unblock(b.username);
+    for (const b of chosen) await unblock(b.username);
     list.clear();
     void blocked.load();
   };
@@ -159,15 +159,17 @@
           ]}
           style:grid-template-columns={COLUMNS}>
           <span role="gridcell">
-            <Checkbox
-              aria-label={`Select ${b.username}`}
-              checked={list.selected.has(b.username)}
-              onclick={(e) => {
-                e.preventDefault();
-                list.tick(b.username, e.shiftKey);
-              }}
-              onCheckedChange={(on) =>
-                on !== list.selected.has(b.username) && list.toggle(b.username)} />
+            {#if b.source !== "config"}
+              <Checkbox
+                aria-label={`Select ${b.username}`}
+                checked={list.selected.has(b.username)}
+                onclick={(e) => {
+                  e.preventDefault();
+                  list.tick(b.username, e.shiftKey);
+                }}
+                onCheckedChange={(on) =>
+                  on !== list.selected.has(b.username) && list.toggle(b.username)} />
+            {/if}
           </span>
           <span role="gridcell" class="flex min-w-0 items-center gap-1.5">
             <Username name={b.username} />
