@@ -120,6 +120,7 @@ fn reaches_differently(previous: &Options, current: &Options) -> bool {
 mod tests {
   use std::time::Duration;
 
+  use api_types::state::Reachable;
   use serde_json::json;
 
   use crate::testing::{app, request};
@@ -150,5 +151,39 @@ mod tests {
     assert_eq!(client.options().maximum_concurrent_uploads, 3);
     assert!(!client.options().accept_private_room_invitations);
     assert!(!app.state.state.current().pending_reconnect);
+  }
+
+  #[tokio::test]
+  async fn a_new_listening_port_is_shown_and_judged_anew() {
+    let app = app(
+      "remote_configuration = true\n[web.authentication]\n\
+       trusted_networks = [\"127.0.0.0/8\"]\n",
+      &[],
+    )
+    .await;
+    let network = &app.state.network;
+    let state = &app.state.state;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    let waiting = |what: &str, ready: &dyn Fn(&api_types::state::ListenState) -> bool| {
+      assert!(tokio::time::Instant::now() < deadline, "never {what}");
+      !ready(&state.current().server.listen)
+    };
+    network.reachability.logged_in();
+    for token in 0..5 {
+      network.reachability.search_answered(token);
+    }
+    while waiting("unreachable", &|listen| listen.reachable == Reachable::No) {
+      tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let change = json!({ "set": { "soulseek.listen_port": 50311 } });
+    let answer = app
+      .send(request("PATCH", "/api/v0/options", Some(change)))
+      .await;
+    assert_eq!(answer.status, 200, "{:?}", answer.body);
+    while waiting("judged anew on the new port", &|listen| {
+      listen.port == 50311 && listen.reachable == Reachable::Unknown
+    }) {
+      tokio::time::sleep(Duration::from_millis(20)).await;
+    }
   }
 }
