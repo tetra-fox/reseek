@@ -54,6 +54,7 @@ export const navItems: NavItem[] = [
   { title: "Browse", path: "/browse", icon: FolderOpenIcon }
 ];
 
+/** The System screen, kept apart from the screens above to sit at the navigation's foot */
 export const systemItem: NavItem = { title: "System", path: "/system", icon: SettingsIcon };
 
 /** Our own profile, reached from the account menu rather than the navigation */

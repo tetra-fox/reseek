@@ -94,10 +94,13 @@ export const reports = {
 /** Every outcome but success counts as an error */
 const FAILED = ["Cancelled", "TimedOut", "Errored", "Rejected", "Aborted"];
 
+/** How many transfers a direction's summaries hold, whatever their outcome */
 export const sumCounts = (d: Summaries | undefined) =>
   Object.values(d ?? {}).reduce((n, s) => n + s.count, 0);
+/** How many bytes a direction's summaries hold, whatever their outcome */
 export const sumBytes = (d: Summaries | undefined) =>
   Object.values(d ?? {}).reduce((n, s) => n + s.totalBytes, 0);
+/** How many of a direction's transfers ended in anything but success */
 export const errorCount = (d: Summaries | undefined) =>
   FAILED.reduce((n, outcome) => n + (d?.[outcome]?.count ?? 0), 0);
 

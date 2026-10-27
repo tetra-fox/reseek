@@ -13,6 +13,7 @@ export const links = (username: string, folder?: string) => ({
   )
 });
 
+/** Pins `username` to the top of the directory, or unpins them when `on` is false */
 export const pin = (username: string, on: boolean) =>
   call(() =>
     on
