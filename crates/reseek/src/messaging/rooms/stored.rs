@@ -132,6 +132,7 @@ impl Messaging {
 mod tests {
   use api_types::rooms::{RoomHistory, RoomMessagesQuery};
   use rusqlite::params;
+  use soulseek_proto::server::RoomData;
 
   use super::history::{self, Arrived};
   use crate::messaging::Messaging;
@@ -225,5 +226,34 @@ mod tests {
     .await;
     let newest = page(messaging, None).await;
     assert!(newest.gaps.is_empty(), "{:?}", newest.gaps);
+  }
+
+  #[tokio::test]
+  async fn a_room_we_are_still_in_shows_the_gap_to_now() {
+    let app = app("", &[]).await;
+    let messaging = &app.state.messaging;
+    stored(
+      messaging,
+      &["2026-10-26T10:00:00Z", "2026-10-26T12:00:00Z"],
+      "2026-10-26T13:00:00.000000Z",
+      "2026-10-26T14:00:00.000000Z",
+    )
+    .await;
+    // in the room, then the connection lost: the room is kept to be joined again
+    let data = RoomData {
+      name: "indie".into(),
+      users: Vec::new(),
+      private: None,
+    };
+    messaging.rooms.tracker().joined(&data, "me");
+    messaging.rooms.tracker().disconnected();
+    let newest = page(messaging, None).await;
+    assert_eq!(newest.gaps.len(), 1, "{:?}", newest.gaps);
+    assert_eq!(
+      newest.gaps[0].from,
+      "2026-10-26T13:00:00Z"
+        .parse::<chrono::DateTime<chrono::Utc>>()
+        .unwrap()
+    );
   }
 }
