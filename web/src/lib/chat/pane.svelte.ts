@@ -14,6 +14,9 @@ export const PAGE = 100;
 
 let sent = 0;
 
+/** How long a room message the daemon took waits for the server's echo before it shows as not sent */
+export const ECHO_WAIT = 30_000;
+
 /** 1 for a message still being sent, which goes after the stored ones */
 const sending = (m: Message) => (m.localId < 0 ? 1 : 0);
 
@@ -21,7 +24,8 @@ const sending = (m: Message) => (m.localId < 0 ? 1 : 0);
  * The messages of one conversation or room, oldest first: the newest page on open, older pages
  * as the list scrolls up, and new ones as frames arrive. Messages are kept by their id and never
  * change once shown, so the list keeps its nodes. A message we send shows at once and stays
- * until the stored one with its text arrives, which for a room is when the server echoes it
+ * until the stored one with its text arrives, which for a room is when the server echoes it; a
+ * room message with no echo in time shows as not sent
  */
 export class MessagePane {
   /** whose conversation or which room */
@@ -141,6 +145,7 @@ export class MessagePane {
   retry = (message: Message) => {
     const row = this.messages.get(String(message.localId));
     if (!row) return;
+    this.#unechoed.delete(row.localId);
     row.sending = "sending";
     return this.#deliver(row);
   };
@@ -158,6 +163,8 @@ export class MessagePane {
 
   /** a read is being told to the daemon; another asked for meanwhile is the same */
   #reading = false;
+  /** room messages the daemon took that the server never echoed, shown as not sent */
+  #unechoed = new Set<number>();
 
   async #markRead() {
     const { kind, name } = this.target;
@@ -186,23 +193,37 @@ export class MessagePane {
               body: row.text
             })
           );
-    // sent: the row stays, unmarked, until the stored message replaces it
-    if (outcome.ok) row.sending = undefined;
-    else row.sending = "failed";
+    if (!outcome.ok) {
+      row.sending = "failed";
+      return outcome;
+    }
+    // sent: the row stays, unmarked, until the stored message replaces it. A room's is stored
+    // only when the server echoes it, and one that doesn't come in time shows as not sent
+    row.sending = undefined;
+    if (kind === "room") {
+      setTimeout(() => {
+        if (row.sending !== undefined || !this.messages.get(String(row.localId))) return;
+        this.#unechoed.add(row.localId);
+        row.sending = "failed";
+      }, ECHO_WAIT);
+    }
     return outcome;
   }
 
   /**
    * Keeps a stored message; one of ours takes the place of the oldest row still waiting for
-   * it, the one sent with the same text
+   * it, the one sent with the same text, or else of one whose echo was given up on
    */
   #store(m: Message) {
     this.messages.upsert(m);
     if (!m.self) return;
-    const waiting = this.ordered.find(
-      (r) => r.localId < 0 && r.sending !== "failed" && r.text === m.text
-    );
-    if (waiting) this.messages.remove(String(waiting.localId));
+    const mine = (r: Message) => r.localId < 0 && r.text === m.text;
+    const waiting =
+      this.ordered.find((r) => mine(r) && r.sending !== "failed") ??
+      this.ordered.find((r) => mine(r) && this.#unechoed.has(r.localId));
+    if (!waiting) return;
+    this.#unechoed.delete(waiting.localId);
+    this.messages.remove(String(waiting.localId));
   }
 
   async #readConversation() {

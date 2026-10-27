@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { chat } from "#lib/chat/chat.svelte.js";
+import { ECHO_WAIT } from "#lib/chat/pane.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
@@ -259,6 +260,62 @@ describe("a chat pane", () => {
     });
     await flush();
     expect(ids()).toEqual(["1", "2"]);
+  });
+
+  it("shows a room message the server never echoed as not sent, and takes a late echo", async () => {
+    vi.useFakeTimers();
+    const step = async () => {
+      for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(0);
+      flushSync();
+    };
+    try {
+      const net = fakeNetwork((url, method) => {
+        if (url.pathname.endsWith("/rooms/joined/indie/messages") && method === "GET") {
+          return { messages: [roomMessage(1)], hasMore: false, gaps: [] };
+        }
+        if (url.pathname.endsWith("/rooms/joined/indie")) {
+          return { name: "indie", isPrivate: false, users: [], tickers: [], messages: null };
+        }
+        if (method === "POST") return { status: 201 };
+        return undefined;
+      });
+      chat.rooms.upsert({
+        name: "indie",
+        unread: 0,
+        mentions: 0,
+        notify: "mentions",
+        userCount: 2,
+        lastReadId: 0
+      });
+      live.start();
+      component = mount(Pane, {
+        target: document.body,
+        props: { target: { kind: "room", name: "indie" } }
+      });
+      await step();
+      const box = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')!;
+      box.value = "anyone here";
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+      box.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
+      );
+      await step();
+      expect(document.body.textContent).not.toContain("not sent");
+      await vi.advanceTimersByTimeAsync(ECHO_WAIT);
+      flushSync();
+      expect(document.body.textContent).toContain("not sent");
+      expect(ids()).toHaveLength(2);
+      // the echo came after all: it takes the row's place
+      net.frame("rooms.message", {
+        roomName: "indie",
+        message: roomMessage(2, { username: "me", self: true, message: "anyone here" })
+      });
+      await step();
+      expect(ids()).toEqual(["1", "2"]);
+      expect(document.body.textContent).not.toContain("not sent");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("puts the unread line after the room's read marker", async () => {
