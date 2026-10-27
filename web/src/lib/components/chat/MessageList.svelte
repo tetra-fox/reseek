@@ -93,7 +93,9 @@
     // the lines got their real heights: a view kept at the bottom stays there, one kept on a
     // line stays on it
     if (stick && !interaction.frozen) void tick().then(toBottom);
-    else if (anchor && !loadingOlder) void tick().then(toAnchor);
+    // while the page loads, the line in view is read again from the real heights
+    else if (loadingOlder) void tick().then(() => (anchor = anchorOf()));
+    else if (anchor) void tick().then(toAnchor);
   });
   $effect(() => () => observer.disconnect());
   const remember = (node: HTMLElement) => {
@@ -125,14 +127,18 @@
    */
   let anchor: { key: string; offset: number } | null = null;
   /**
-   * The first message at least partly in view, and where it is. Only a message: a day line
-   * takes the key of the day's first message, which changes as older ones arrive
+   * The first message the list puts at least partly in view, and how far below the view's top
+   * it starts, both from the list's own line positions rather than the drawn lines, which can
+   * still be those from before a long scroll. Only a message: a day line takes the key of the
+   * day's first message, which changes as older ones arrive
    */
   const anchorOf = () => {
-    if (!box) return null;
-    for (const node of box.querySelectorAll<HTMLElement>('[data-key^="m:"]')) {
-      if (node.offsetTop + node.offsetHeight > box.scrollTop) {
-        return { key: node.dataset.key!, offset: node.offsetTop - box.scrollTop };
+    if (!box || !head) return null;
+    const top = box.scrollTop;
+    for (let index = indexAt(top - head.offsetTop); index < lines.length; index++) {
+      const line = lines[index];
+      if (line.kind === "message") {
+        return { key: line.key, offset: head.offsetTop + tops[index] - top };
       }
     }
     return null;

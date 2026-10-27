@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { login } from "./login";
 
@@ -91,6 +91,40 @@ test("doesn't acknowledge a conversation opened at an old message", async ({ pag
   await expect.poll(() => acknowledged).toContain("/api/v0/conversations/alpha");
 });
 
+/**
+ * From the next frame on, notes in every frame where the first message in view then is drawn,
+ * relative to the log's top
+ */
+const watchTop = (log: Locator) =>
+  log.evaluate(
+    (box) =>
+      new Promise<void>((started) =>
+        requestAnimationFrame(() => {
+          const view = box.getBoundingClientRect().top;
+          const first = [...box.querySelectorAll<HTMLElement>("[data-message]")].find(
+            (node) => node.getBoundingClientRect().bottom > view
+          )!;
+          const id = first.dataset.message!;
+          const frames: number[] = [];
+          Object.assign(window, { anchored: frames });
+          const note = () => {
+            const node = box.querySelector(`[data-message="${id}"]`);
+            frames.push(node ? Math.round(node.getBoundingClientRect().top - view) : NaN);
+            if (frames.length < 90) requestAnimationFrame(note);
+          };
+          note();
+          started();
+        })
+      )
+  );
+
+/** The places `watchTop` noted, once the older page is in and settled */
+const watched = async (page: Page, older: string) => {
+  await expect(page.locator(`[data-message="${older}"]`)).toBeAttached();
+  await page.waitForTimeout(1000);
+  return page.evaluate(() => (window as unknown as { anchored: number[] }).anchored);
+};
+
 test("keeps the message in view still while an older page loads above it", async ({ page }) => {
   await fakeChat(page, 250, 400);
   await login(page, "/chat/alpha");
@@ -102,26 +136,25 @@ test("keeps the message in view still while an older page loads above it", async
     await page.waitForTimeout(30);
     if (await log.evaluate((box) => box.scrollTop < 96)) break;
   }
-  // while the page loads, note in every frame where the first message in view is drawn
-  await log.evaluate((box) => {
-    const view = box.getBoundingClientRect().top;
-    const first = [...box.querySelectorAll<HTMLElement>("[data-message]")].find(
-      (node) => node.getBoundingClientRect().bottom > view
-    )!;
-    const id = first.dataset.message!;
-    const frames: number[] = [];
-    Object.assign(window, { anchored: { id, frames } });
-    const note = () => {
-      const node = box.querySelector(`[data-message="${id}"]`);
-      frames.push(node ? Math.round(node.getBoundingClientRect().top - view) : NaN);
-      if (frames.length < 90) requestAnimationFrame(note);
-    };
-    note();
-  });
-  await expect(page.locator('[data-message="150"]')).toBeAttached();
-  await page.waitForTimeout(1000);
-  const { frames } = await page.evaluate(
-    () => (window as unknown as { anchored: { frames: number[] } }).anchored
-  );
+  await watchTop(log);
+  const frames = await watched(page, "150");
   expect(new Set(frames).size, `drawn at ${frames.join(", ")}`).toBe(1);
+});
+
+test("keeps the message in view still after a jump to the top loads older ones", async ({
+  page
+}) => {
+  await fakeChat(page, 250, 400);
+  await login(page, "/chat/alpha");
+  const log = page.getByRole("log");
+  await expect(page.locator('[data-message="250"]')).toBeVisible();
+  // one step past everything drawn, as dragging the scrollbar to the top would
+  await log.evaluate((box) => (box.scrollTop = 0));
+  await watchTop(log);
+  const first = await watched(page, "150");
+  expect(new Set(first).size, `first page drawn at ${first.join(", ")}`).toBe(1);
+  await log.evaluate((box) => (box.scrollTop = 0));
+  await watchTop(log);
+  const second = await watched(page, "50");
+  expect(new Set(second).size, `second page drawn at ${second.join(", ")}`).toBe(1);
 });
