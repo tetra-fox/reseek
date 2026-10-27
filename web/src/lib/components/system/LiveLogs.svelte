@@ -9,7 +9,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
+  import { freezesWhileUsed, interaction } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
@@ -53,7 +53,8 @@
     live.on("logs.record", (record) => {
       const line = logLine(record);
       if (paused) waiting = [line, ...waiting].slice(0, MAX);
-      else lines = [line, ...lines].slice(0, MAX);
+      // the oldest rows go only once nobody is selecting in or pressing on the list
+      else lines = [line, ...lines].slice(0, interaction.frozen ? undefined : MAX);
     })
   );
 
@@ -79,7 +80,8 @@
     key: (l) => String(l.seq),
     id: (l) => String(l.seq)
   });
-  const chosen = $derived(shown.filter((l) => list.selected.has(String(l.seq))));
+  // the selection counts the rows the filters hide too, as the transfers grid does
+  const chosen = $derived(lines.filter((l) => list.selected.has(String(l.seq))));
   const copyChosen = () =>
     void copyText(
       chosen
