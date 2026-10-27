@@ -2,6 +2,7 @@ import { api, type Schemas } from "#lib/api/client.js";
 import { Keyed } from "#lib/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
+import { toast } from "#lib/toast.svelte.js";
 
 export type Search = Schemas["Search"];
 export type SearchScope = Schemas["SearchScope"];
@@ -21,6 +22,7 @@ class Searches {
   list = new Keyed<Search>((s) => s.id);
   /** a snapshot or a load has filled the list */
   loaded = $state(false);
+  /** why the last load failed, empty once one succeeds */
   error = $state("");
 
   constructor() {
@@ -32,8 +34,10 @@ class Searches {
 
   load = async () => {
     const outcome = await call(() => api.GET("/api/v0/searches"));
-    if (outcome.ok) this.#set(outcome.data);
-    else this.error = outcome.error;
+    if (outcome.ok) return this.#set(outcome.data);
+    // a failed first load is the page's to show; a failed reload says so once per outage
+    if (this.loaded && !this.error) toast(outcome.error, "error");
+    this.error = outcome.error;
   };
 
   /** Starts a search with a fresh id, so its page can open before any frame arrives */

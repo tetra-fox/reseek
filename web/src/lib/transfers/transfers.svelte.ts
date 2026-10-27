@@ -4,6 +4,7 @@ import { api, byUser, type Schemas } from "#lib/api/client.js";
 import { Keyed } from "#lib/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
+import { toast } from "#lib/toast.svelte.js";
 
 import { type BulkAction, summary } from "./bulk";
 import type { Direction, Transfer } from "./states";
@@ -22,6 +23,7 @@ export class Transfers {
   readonly direction: Direction;
   list = new Keyed<Transfer>((t) => t.id);
   loaded = $state(false);
+  /** why the last load failed, empty once one succeeds */
   error = $state("");
   speeds = new SvelteMap<string, number[]>();
 
@@ -52,6 +54,8 @@ export class Transfers {
         ? await call(() => api.GET("/api/v0/transfers/downloads"))
         : await call(() => api.GET("/api/v0/transfers/uploads"));
     if (!outcome.ok) {
+      // a failed first load is the page's to show; a failed reload says so once per outage
+      if (this.loaded && !this.error) toast(outcome.error, "error");
       this.error = outcome.error;
       return;
     }
