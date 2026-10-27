@@ -7,12 +7,10 @@
   import Volume2Icon from "@lucide/svelte/icons/volume-2";
   import XIcon from "@lucide/svelte/icons/x";
 
-  import { app } from "#lib/app.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import { formatSeconds, getFileName } from "#lib/format.js";
   import { href } from "#lib/nav.js";
   import { player } from "#lib/player.svelte.js";
-  import { localFolder } from "#lib/transfers/content.js";
 
   // the preview player; it lives in the shell, so it keeps playing while the user moves around
   let audio = $state<HTMLAudioElement | null>(null);
@@ -20,9 +18,6 @@
   let duration = $state(0);
 
   const track = $derived(player.current);
-  const folder = $derived(
-    track ? localFolder([track], app.state?.directories.downloads ?? null) : null
-  );
 
   $effect(() => {
     if (!audio || !player.src) return;
@@ -96,11 +91,13 @@
         bind:value={player.volume}
         class="w-20 accent-(--color-accent)" />
     </span>
-    {#if folder !== null}
+    {#if track.folder}
       <Button
         variant="ghost"
         size="sm"
-        href={href(`/system/files?root=downloads&path=${encodeURIComponent(folder)}`)}>
+        href={href(
+          `/system/files?root=${track.folder.root}&path=${encodeURIComponent(track.folder.path)}`
+        )}>
         <FolderOpenIcon />Open folder
       </Button>
     {/if}

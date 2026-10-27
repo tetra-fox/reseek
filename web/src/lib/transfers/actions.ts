@@ -6,7 +6,7 @@ import { blocking } from "#lib/components/users/block.svelte.js";
 import { enqueue } from "#lib/downloads.js";
 import { downloadFile } from "#lib/format.js";
 import { href } from "#lib/nav.js";
-import { player } from "#lib/player.svelte.js";
+import { player, type Track } from "#lib/player.svelte.js";
 import { toast } from "#lib/toast.svelte.js";
 
 import type { BulkAction } from "./bulk";
@@ -44,12 +44,20 @@ export const saveToDevice = async (t: Transfer) => {
   else toast(url.error, "error");
 };
 
+/** A finished download as a track of the player */
+const track = (t: Transfer): Track => {
+  const folder = folderOf([t]);
+  return {
+    key: t.id,
+    filename: t.filename,
+    url: (disposition) => contentUrl(t, disposition),
+    folder: folder === null ? null : { root: "downloads", path: folder }
+  };
+};
+
 /** Plays a finished download in the player, its folder's other finished files around it */
 export const preview = (t: Transfer, around: Transfer[]) =>
-  void player.play(
-    t,
-    around.filter((o) => isSucceeded(o.state) && o.localPath)
-  );
+  void player.play(track(t), around.filter((o) => isSucceeded(o.state) && o.localPath).map(track));
 
 /** The folder a finished download is in under the downloads directory, null when it isn't */
 export const folderOf = (transfers: Transfer[]) =>
