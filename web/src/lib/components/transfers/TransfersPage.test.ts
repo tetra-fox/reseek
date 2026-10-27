@@ -366,6 +366,51 @@ describe("the transfers table", () => {
       expect(document.activeElement).toBe(box);
     });
 
+    it("take focus back when the row holding it leaves the list", async () => {
+      signIn();
+      const a = transfer({ filename: "x\\a.flac", state: "Completed, Succeeded" });
+      const b = transfer({ filename: "x\\b.flac", state: "Completed, Succeeded" });
+      listing = [a, b];
+      const net = await start();
+      const box = row(a.id)!.querySelector<HTMLElement>('[role="checkbox"]')!;
+      box.focus();
+      press(box, "Delete");
+      net.frame("transfers.removed", { id: a.id, username: a.username, direction: "Download" });
+      await flush();
+      expect(row(a.id)).toBeNull();
+      expect(document.activeElement).toBe(grid());
+
+      press(document.activeElement!, "Delete");
+      await flush();
+      expect(bulk(net).map((r) => r.body)).toEqual([
+        { action: "remove", ids: [a.id] },
+        { action: "remove", ids: [b.id] }
+      ]);
+    });
+
+    it("give focus to the table when a confirm closes onto a row that left", async () => {
+      signIn();
+      const a = transfer({ filename: "x\\a.flac", state: "InProgress", percentComplete: 5 });
+      const b = transfer({ filename: "x\\b.flac", state: "InProgress", percentComplete: 5 });
+      listing = [a, b];
+      const net = await start();
+      const box = row(a.id)!.querySelector<HTMLElement>('[role="checkbox"]')!;
+      box.focus();
+      // a running row asks before it is removed
+      press(box, "Delete");
+      await flush();
+      const cancel = [...document.querySelectorAll("button")].find(
+        (x) => x.textContent === "Cancel"
+      )!;
+      expect(cancel).toBeDefined();
+      net.frame("transfers.removed", { id: a.id, username: a.username, direction: "Download" });
+      await flush();
+      cancel.click();
+      await vi.advanceTimersByTimeAsync(500);
+      flushSync();
+      expect(document.activeElement).toBe(grid());
+    });
+
     it("keep focus on the table when a focused row control scrolls away", async () => {
       listing = Array.from({ length: 80 }, (_, n) =>
         transfer({ filename: `x\\${String(n).padStart(2, "0")}.flac` })

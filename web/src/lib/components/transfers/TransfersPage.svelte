@@ -66,6 +66,7 @@
     null
   );
   let confirmOpen = $state(false);
+  let table = $state<TransferTable | null>(null);
 
   $effect(() => {
     const value = typed;
@@ -117,11 +118,24 @@
     for (const name of new Set(rows.slice(0, 200).map((t) => t.username))) void users.load(name);
   });
 
+  /** the control in the table a confirm was opened from, which its close returns focus to */
+  let opener: Element | null = null;
+
   /** Asks first when `when` holds, then runs */
   const ask = (when: boolean, title: string, body: string, label: string, run: () => void) => {
     if (!when) return run();
+    opener = table?.has(document.activeElement) ? document.activeElement : null;
     confirm = { title, body, label, run };
     confirmOpen = true;
+  };
+
+  /** A confirm closing onto a control whose row left the list gives focus to the table */
+  const closeFocus = (e: Event) => {
+    if (opener && !opener.isConnected) {
+      e.preventDefault();
+      table?.focus();
+    }
+    opener = null;
   };
 
   const runBulk = async (action: BulkAction, transfers: Transfer[]) => {
@@ -259,6 +273,7 @@
     title={direction === "download" ? "No downloads to display" : "No uploads to display"} />
 {:else}
   <TransferTable
+    bind:this={table}
     {items}
     {store}
     {direction}
@@ -331,5 +346,6 @@
     body={confirm.body}
     confirm={confirm.label}
     danger
-    onconfirm={confirm.run} />
+    onconfirm={confirm.run}
+    onclosefocus={closeFocus} />
 {/if}

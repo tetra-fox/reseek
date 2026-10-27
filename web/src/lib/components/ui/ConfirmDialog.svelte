@@ -11,9 +11,19 @@
     confirm: string;
     danger?: boolean;
     onconfirm: () => void;
+    /** where focus goes once it closes; the default returns it to what opened the dialog */
+    onclosefocus?: (e: Event) => void;
   };
 
-  let { open = $bindable(), title, body, confirm, danger = false, onconfirm }: Props = $props();
+  let {
+    open = $bindable(),
+    title,
+    body,
+    confirm,
+    danger = false,
+    onconfirm,
+    onclosefocus
+  }: Props = $props();
 </script>
 
 <!-- an alert dialog, so Esc and the overlay cancel and never confirm -->
@@ -22,6 +32,7 @@
     <AlertDialog.Overlay
       class="fixed inset-0 z-50 bg-scrim data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in" />
     <AlertDialog.Content
+      onCloseAutoFocus={onclosefocus}
       class="fixed top-1/2 left-1/2 z-50 flex w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-card border bg-surface p-5 shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
       <div class="flex flex-col gap-1">
         <AlertDialog.Title class="text-base font-semibold">{title}</AlertDialog.Title>

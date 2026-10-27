@@ -151,7 +151,8 @@
    * When that line leaves `items`, the row now in its place takes over: the first row at or
    * after its index, else the nearest row before it. Moving is by position in `items`: down to
    * the next row, up to the previous one, skipping headers. `aria-activedescendant` names the
-   * focused line only while it is rendered.
+   * focused line only while it is rendered. Focus also returns to the grid when the line
+   * holding it leaves the list: its control is gone, and the browser would drop focus to the page.
    */
   let focusedKey = $state<string | null>(null);
   /** the focused line's index the last time it was in `items`, for when it leaves */
@@ -169,6 +170,24 @@
     if (found !== -1) lastIndex = found;
     else if (focusedItem) focusedKey = focusedItem.key;
   });
+  /** the control in the grid that last took DOM focus, null while the grid itself has it */
+  let held: Element | null = null;
+  // a frame that removed the line holding focus left the page focused; the grid takes it back
+  $effect(() => {
+    void items;
+    const active = document.activeElement;
+    if (held && !held.isConnected && (!active || active === document.body)) focus();
+  });
+
+  /** Gives the grid DOM focus, without scrolling */
+  export const focus = () => {
+    held = null;
+    grid?.focus({ preventScroll: true });
+  };
+
+  /** Whether `element` is inside the table */
+  export const has = (element: Element | null) => !!element && !!grid?.contains(element);
+
   const activeId = $derived(
     sticky && focusedItem?.key === sticky.key
       ? `${uid}-pinned`
@@ -277,7 +296,10 @@
   bind:clientHeight={height}
   onscroll={scrolled}
   onpointerdown={(e) => takeLine(e.target)}
-  onfocusin={(e) => takeLine(e.target)}
+  onfocusin={(e) => {
+    held = e.target === grid ? null : (e.target as Element);
+    takeLine(e.target);
+  }}
   onkeydown={keydown}>
   <div class="sticky top-0 z-10" style:min-width={`${width}px`} bind:offsetHeight={rowsTop}>
     <div
