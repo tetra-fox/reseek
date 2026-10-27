@@ -49,14 +49,22 @@
   let history = $state.raw<Schemas["TransferStateChange"][] | null>(null);
   let address = $state<string | null>(null);
 
-  // the history and the peer's address are asked for each transfer the drawer shows
+  /** the last history asked for, so an answer to an earlier ask is dropped */
+  let asked = 0;
+  let historyOf: string | null = null;
+  // the history is asked for each transfer the drawer shows and again at each of its new states;
+  // the one shown stays until the new one arrives, unless it is another transfer's
   $effect(() => {
     const shown = t;
-    history = null;
+    void shown.state;
+    const ask = ++asked;
+    if (historyOf !== shown.id) history = null;
+    historyOf = shown.id;
     void store.history(shown).then((o) => {
-      if (o.ok && shown.id === t.id) history = o.data.stateHistory ?? [];
+      if (o.ok && ask === asked) history = o.data.stateHistory ?? [];
     });
   });
+  // the peer's address is asked for each user the drawer shows
   $effect(() => {
     const name = t.username;
     address = null;

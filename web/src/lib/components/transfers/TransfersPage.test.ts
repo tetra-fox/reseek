@@ -507,4 +507,22 @@ describe("the transfers table", () => {
       expect(ticked()).toEqual([]);
     });
   });
+
+  it("asks for the drawer's timeline again when its transfer moves to a new state", async () => {
+    const a = transfer({ state: "Queued, Remotely" });
+    listing = [a];
+    const net = await start();
+    press(grid(), "ArrowDown");
+    press(grid(), "Enter");
+    await flush();
+    const asks = () =>
+      net.requests.filter((r) => r.url.searchParams.get("includeHistory") === "true").length;
+    expect(asks()).toBe(1);
+    net.frame("transfers.updated", { ...a, percentComplete: 0 });
+    await flush();
+    expect(asks()).toBe(1);
+    net.frame("transfers.updated", { ...a, state: "InProgress" });
+    await flush();
+    expect(asks()).toBe(2);
+  });
 });
