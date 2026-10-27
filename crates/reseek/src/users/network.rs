@@ -263,12 +263,7 @@ impl UserService for Users {
       .get_user_endpoint(username)
       .await
       .map_err(|e| unanswered(username, e))?;
-    Ok(UserEndpoint {
-      address: endpoint.ip().to_string(),
-      port: endpoint.port(),
-      obfuscation_type: None,
-      obfuscated_port: None,
-    })
+    Ok(endpoint.into())
   }
 
   async fn browse(&self, username: &str) -> Result<BrowseResponse, ApiError> {

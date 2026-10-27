@@ -94,6 +94,18 @@ pub struct UserEndpoint {
   pub obfuscated_port: Option<u16>,
 }
 
+/// An address and port, with no obfuscation known: the client keeps only those of a user.
+impl From<std::net::SocketAddr> for UserEndpoint {
+  fn from(endpoint: std::net::SocketAddr) -> Self {
+    Self {
+      address: endpoint.ip().to_string(),
+      port: endpoint.port(),
+      obfuscation_type: None,
+      obfuscated_port: None,
+    }
+  }
+}
+
 /// How far the running browse of a user has received its reply.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

@@ -227,12 +227,7 @@ impl Directory {
   /// `username`'s address from the client's cache, never a round trip.
   fn endpoint_of(&self, username: &str) -> Option<UserEndpoint> {
     let endpoint = self.client.get()?.cached_user_endpoint(username)?;
-    Some(UserEndpoint {
-      address: endpoint.ip().to_string(),
-      port: endpoint.port(),
-      obfuscation_type: None,
-      obfuscated_port: None,
-    })
+    Some(endpoint.into())
   }
 
   /// Adds to `user` what is not in `users.db`: their cached address and our conversation with
