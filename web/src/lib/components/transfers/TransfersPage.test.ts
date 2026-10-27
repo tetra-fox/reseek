@@ -43,6 +43,7 @@ describe("the transfers table", () => {
     Object.assign(views.download, defaults("download"), { groupBy: "flat" });
   });
   afterEach(() => {
+    session.principal = null;
     if (component) unmount(component);
     live.stop();
     downloads.clear();
@@ -125,7 +126,7 @@ describe("the transfers table", () => {
     expect(row(a.id)).toBe(first);
   });
 
-  it("leaves Ctrl and Cmd shortcuts to the browser on a focused row", async () => {
+  it("leaves Ctrl, Cmd and Alt shortcuts to the browser on a focused row", async () => {
     session.principal = {
       name: "a",
       role: "Administrator",
@@ -156,7 +157,6 @@ describe("the transfers table", () => {
     expect(press("c").defaultPrevented).toBe(true);
     await flush();
     expect(bulk().map((r) => r.body)).toEqual([{ action: "cancel", ids: [a.id] }]);
-    session.principal = null;
   });
 
   it("leaves Enter and Space on a username link to the link", async () => {
