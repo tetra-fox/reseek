@@ -282,3 +282,85 @@ impl Searches {
     }
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use api_types::search::{SearchScope, SearchScopeType};
+  use soulseek_client::SearchScope as ClientScope;
+  use soulseek_proto::SearchQuery;
+  use uuid::Uuid;
+
+  use super::*;
+  use crate::services::SearchService;
+  use crate::testing::app;
+
+  fn record() -> Search {
+    Search {
+      id: Uuid::new_v4(),
+      search_text: "animals".into(),
+      token: 7,
+      scope: SearchScope {
+        scope_type: SearchScopeType::Network,
+        subjects: Vec::new(),
+      },
+      state: SearchStates::Requested,
+      is_complete: false,
+      started_at: Utc::now(),
+      ended_at: None,
+      response_count: 0,
+      file_count: 0,
+      locked_file_count: 0,
+      response_bytes: 0,
+      responses: None,
+    }
+  }
+
+  #[tokio::test]
+  async fn a_completed_report_changes_nothing_until_the_end_is_written() {
+    let app = app("", &[]).await;
+    let searches = app.state.searches.clone();
+    let record = record();
+    let (id, written) = (record.id, record.clone());
+    searches
+      .db
+      .write(move |conn| store::insert(conn, &written))
+      .await
+      .unwrap();
+    let (accepted, acceptance) = oneshot::channel();
+    let running = Arc::new(Running::new(record, accepted));
+    running.state_changed(SearchState::IN_PROGRESS);
+    acceptance.await.unwrap().unwrap();
+    lock(&running.progress).moved = false;
+
+    let ended = SearchState::COMPLETED | SearchState::TIMED_OUT;
+    running.state_changed(ended);
+    {
+      let progress = lock(&running.progress);
+      assert_eq!(progress.record.state, SearchStates::InProgress);
+      assert!(!progress.record.is_complete);
+      assert!(!progress.moved, "nothing is staged to be written");
+    }
+    assert!(!*running.done.borrow());
+    let stored = searches.get(id, false).await.unwrap();
+    assert!(!stored.is_complete, "the end is not written yet");
+
+    let search = soulseek_client::Search {
+      query: SearchQuery::parse("animals"),
+      scope: ClientScope::Network,
+      token: 7,
+      state: ended,
+      response_count: 0,
+      file_count: 0,
+      locked_file_count: 0,
+    };
+    searches.follow(running.clone(), async { Ok(search) }).await;
+    assert!(*running.done.borrow());
+    let stored = searches.get(id, true).await.unwrap();
+    assert_eq!(
+      stored.state,
+      SearchStates::Completed | SearchStates::TimedOut
+    );
+    assert!(stored.is_complete);
+    assert_eq!(stored.responses, Some(Vec::new()));
+  }
+}
