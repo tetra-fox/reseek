@@ -6,7 +6,7 @@
   import { app } from "#lib/app.svelte.js";
   import { parseDuration } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
-  import { withModifier } from "#lib/keys.js";
+  import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
   import { COLUMNS, type ColumnId } from "#lib/transfers/columns.js";
@@ -36,6 +36,8 @@
     onblock: (username: string, deny: boolean) => void;
     /** a key the row with focus acts on: retry, cancel, open */
     onkey: (key: "retry" | "cancel" | "open", t: Transfer) => void;
+    /** the details drawer is open, so Escape is the drawer's */
+    drawerOpen: boolean;
   };
 
   let {
@@ -52,7 +54,8 @@
     ondelete,
     oncancel,
     onblock,
-    onkey
+    onkey,
+    drawerOpen
   }: Props = $props();
 
   /** lines drawn beyond the visible ones, above and below */
@@ -60,7 +63,12 @@
 
   let scrollTop = $state(0);
   let height = $state(600);
+  /** the row the keys act on, and the group Ctrl/Cmd+A selects in */
   let focused = $state<string | null>(null);
+  let scope = $state.raw<Group | null>(null);
+  let grid = $state<HTMLDivElement | null>(null);
+  /** where the rows start in the scrolled content, under the column header */
+  let rowsTop = $state(0);
   let resizing: { id: ColumnId; x: number; width: number } | null = null;
 
   const row = $derived(view.density === "compact" ? 28 : 36);
@@ -80,12 +88,13 @@
   );
   const start = $derived(Math.max(0, Math.floor(scrollTop / row) - OVERSCAN));
   const end = $derived(Math.min(items.length, Math.ceil((scrollTop + height) / row) + OVERSCAN));
-  // the header of the group the top line belongs to stays at the top while its rows scroll
+  // the header of the group the top line belongs to stays at the top while its rows scroll:
+  // from when its own header starts to go under the column header
   const sticky = $derived.by(() => {
-    const top = Math.floor(scrollTop / row);
-    for (let i = Math.min(top, items.length - 1); i >= 0; i--) {
+    const top = Math.min(Math.floor(scrollTop / row), items.length - 1);
+    for (let i = top; i >= 0; i--) {
       const item = items[i];
-      if (item.type === "group" && item.group.depth === 0) return i < top ? item : null;
+      if (item.type === "group" && item.group.depth === 0) return i * row < scrollTop ? item : null;
     }
     return null;
   });
@@ -134,31 +143,55 @@
     view.sort = { id: key, dir: view.sort.id === key && view.sort.dir === "asc" ? "desc" : "asc" };
   };
 
+  /** Makes the line with `key` the one the keys act on: a row, or a group header's first row */
+  const focusLine = (key: string) => {
+    const item = items.find((i) => i.key === key);
+    if (item?.type === "row") {
+      focused = item.transfer.id;
+      scope = item.group;
+    } else if (item?.type === "group") {
+      focused = item.group.transfers[0]?.id ?? focused;
+      scope = item.group;
+    }
+  };
+
+  const lineOf = (target: EventTarget | null) =>
+    target instanceof Element
+      ? target.closest<HTMLElement>("[data-line]")?.dataset.line
+      : undefined;
+
+  /** Moves the keys to row `to`, back on the table itself, scrolled into view below the headers */
+  const move = (to: number) => {
+    const next = rows[Math.max(0, Math.min(rows.length - 1, to))];
+    if (!next || !grid) return;
+    focusLine(next.id);
+    if (document.activeElement !== grid) grid.focus({ preventScroll: true });
+    const top = rowsTop + items.findIndex((i) => i.key === next.id) * row;
+    const pinned = view.groupBy === "flat" ? 0 : row;
+    if (top < grid.scrollTop + rowsTop + pinned) grid.scrollTop = top - rowsTop - pinned;
+    else if (top + row > grid.scrollTop + height) grid.scrollTop = top + row - height;
+  };
+
+  /**
+   * The table's keys. A focused control keeps the keys it handles (`keepsKey`); the rest act on
+   * the line the control is in, or on the focused row
+   */
   const keydown = (e: KeyboardEvent) => {
-    // keys aimed at a control or a link in a row are that control's: a username opens its page
-    const target = e.target as HTMLElement;
-    if (target.closest("input,button,a[href],[role=menuitem]") && e.key !== "Escape") return;
+    if (keepsKey(e.target, e.key)) return;
+    const line = lineOf(e.target);
+    if (line) focusLine(line);
     const at = rows.findIndex((t) => t.id === focused);
     const current = rows[at];
-    const move = (to: number) => {
-      const next = rows[Math.max(0, Math.min(rows.length - 1, to))];
-      if (!next) return;
-      focused = next.id;
-      const index = items.findIndex((i) => i.key === next.id);
-      const scroller = e.currentTarget as HTMLElement;
-      if (index * row < scroller.scrollTop) scroller.scrollTop = index * row;
-      else if ((index + 1) * row > scroller.scrollTop + height)
-        scroller.scrollTop = (index + 1) * row - height;
-    };
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "a") {
-      const group = items.find((i) => i.type === "row" && i.transfer.id === focused);
-      const within = group?.type === "row" && group.group ? group.group.transfers : rows;
-      for (const t of within) selected.add(t.id);
+      for (const t of scope?.transfers ?? rows) selected.add(t.id);
     } else if (withModifier(e)) return;
     else if (e.key === "ArrowDown") move(at + 1);
     else if (e.key === "ArrowUp") move(at === -1 ? 0 : at - 1);
-    else if (e.key === "Escape") selected.clear();
-    else if (!current) return;
+    else if (e.key === "Escape") {
+      // the drawer, a menu, a dialog or a card closes first; an Escape that closes nothing clears
+      if (drawerOpen || layerOpen()) return;
+      selected.clear();
+    } else if (!current) return;
     else if (e.key === " ") onselect(current, false);
     else if (e.key === "Enter") ondetails(current);
     else if (!session.can("ReadWrite") && ["Delete", "r", "R", "c", "C"].includes(e.key)) return;
@@ -178,11 +211,13 @@
   role="grid"
   aria-label={direction === "download" ? "Downloads" : "Uploads"}
   aria-rowcount={items.length}
+  aria-activedescendant={focused ? `transfer-${focused}` : undefined}
   tabindex="0"
+  bind:this={grid}
   bind:clientHeight={height}
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
   onkeydown={keydown}>
-  <div class="sticky top-0 z-10" style:min-width={`${width}px`}>
+  <div class="sticky top-0 z-10" style:min-width={`${width}px`} bind:offsetHeight={rowsTop}>
     <div
       role="row"
       class="grid h-9 items-center border-b bg-surface-muted text-xs font-medium text-fg-muted"
@@ -228,7 +263,7 @@
       {/each}
     </div>
     {#if sticky?.type === "group"}
-      <div class="absolute inset-x-0 top-full" style:height={`${row}px`}>
+      <div class="absolute inset-x-0 top-full" style:height={`${row}px`} data-line={sticky.key}>
         <GroupHeader
           group={sticky.group}
           {store}
@@ -269,8 +304,13 @@
         style:height={`${row}px`}
         style:grid-template-columns={item.type === "row" ? template : undefined}
         role="row"
+        tabindex="-1"
+        id={item.type === "row" ? `transfer-${item.key}` : undefined}
+        aria-selected={item.type === "row" ? selected.has(item.transfer.id) : undefined}
         data-id={item.key}
-        onfocusin={() => item.type === "row" && (focused = item.transfer.id)}>
+        data-line={item.key}
+        onpointerdown={() => focusLine(item.key)}
+        onfocusin={() => focusLine(item.key)}>
         {#if item.type === "group"}
           <GroupHeader
             group={item.group}

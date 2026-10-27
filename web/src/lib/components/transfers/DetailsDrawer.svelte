@@ -16,7 +16,7 @@
     formatSpeed,
     getFileName
   } from "#lib/format.js";
-  import { withModifier } from "#lib/keys.js";
+  import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
   import { stateChip, type Direction, type Transfer } from "#lib/transfers/states.js";
   import { endpoint, type Transfers } from "#lib/transfers/transfers.svelte.js";
   import { users } from "#lib/users.svelte.js";
@@ -103,7 +103,9 @@
 
 <svelte:window
   onkeydown={(e) => {
-    if ((e.target as HTMLElement).closest("input,textarea") || withModifier(e)) return;
+    // a key another layer took (a menu, a dialog, a card) or one a field or control keeps
+    // isn't the drawer's
+    if (e.defaultPrevented || withModifier(e) || layerOpen() || keepsKey(e.target, e.key)) return;
     if (e.key === "Escape") onclose();
     else if (e.key === "ArrowLeft") onstep(-1);
     else if (e.key === "ArrowRight") onstep(1);

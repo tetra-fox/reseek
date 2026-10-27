@@ -20,6 +20,7 @@
   import {
     type ChipId,
     type Direction,
+    rowActions,
     STATE_CHIPS,
     type Transfer
   } from "#lib/transfers/states.js";
@@ -219,7 +220,9 @@
     }
   };
 
+  /** A row key, only where the row's own buttons and menu offer the same */
   const onkey = (key: "retry" | "cancel" | "open", t: Transfer) => {
+    if (!rowActions(t, direction)[key]) return;
     if (key === "open") return void open(t);
     void runBulk(key, [t]);
   };
@@ -269,7 +272,8 @@
     ondelete={(transfers) => remove(transfers, 1)}
     oncancel={cancel}
     onblock={blockUser}
-    {onkey} />
+    {onkey}
+    drawerOpen={!!detail} />
 {/if}
 
 {#if selected.size}
