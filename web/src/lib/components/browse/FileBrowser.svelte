@@ -97,7 +97,7 @@
         files: group.files.map((f) => asItem(f)),
         destination: group.destination ?? undefined
       });
-      if (last.kind === "failed") break;
+      if (last.kind !== "done") break;
     }
     status = last;
     downloading = false;
