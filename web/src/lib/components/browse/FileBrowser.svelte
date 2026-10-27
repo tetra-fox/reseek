@@ -85,7 +85,8 @@
 
   /**
    * Downloads the ticked files: those in the folder itself with the usual pattern, and each
-   * subfolder's as a batch of its own that keeps the subfolder. The first failure stops the rest
+   * subfolder's as a batch of its own that keeps the subfolder. The first answer that is not a
+   * full success stops the rest
    */
   const download = async (files: Schemas["File"][]) => {
     downloading = true;
