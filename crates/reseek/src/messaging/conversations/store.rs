@@ -34,9 +34,33 @@ macro_rules! unread {
 
 const UNREAD: &str = unread!();
 
+/// The columns [`message_from`] reads, in its order, each behind `$table` (such as `"l."`) when
+/// the query joins more than one table.
+macro_rules! message_columns {
+  ($table:literal) => {
+    concat!(
+      $table,
+      "local_id, ",
+      $table,
+      "remote_id, ",
+      $table,
+      "timestamp, ",
+      $table,
+      "username, ",
+      $table,
+      "direction, ",
+      $table,
+      "message, ",
+      $table,
+      "is_acknowledged, ",
+      $table,
+      "was_replayed"
+    )
+  };
+}
+
 /// The columns [`message`] reads, in its order.
-const MESSAGE: &str =
-  "local_id, remote_id, timestamp, username, direction, message, is_acknowledged, was_replayed";
+const MESSAGE: &str = message_columns!("");
 
 /// A private message as it arrived.
 pub struct Inbound {
@@ -203,10 +227,9 @@ const CONVERSATION: &str = concat!(
   "SELECT c.username, c.is_active, COALESCE(s.notify, 'all'), COALESCE(s.draft, ''), \
    (SELECT COUNT(*) FROM private_messages m WHERE m.username = c.username AND ",
   unread!(),
-  ") AS unacknowledged, \
-   l.local_id, l.remote_id, l.timestamp, l.username, l.direction, l.message, \
-   l.is_acknowledged, l.was_replayed \
-   FROM conversations c LEFT JOIN conversation_state s ON s.username = c.username \
+  ") AS unacknowledged, ",
+  message_columns!("l."),
+  " FROM conversations c LEFT JOIN conversation_state s ON s.username = c.username \
    LEFT JOIN private_messages l ON l.local_id = \
    (SELECT MAX(local_id) FROM private_messages n WHERE n.username = c.username)"
 );
