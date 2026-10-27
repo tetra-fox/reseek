@@ -221,10 +221,10 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn a_room_we_left_shows_no_gap_after_its_last_message() {
+  async fn a_room_we_are_not_in_with_no_leave_noted_ends_at_its_last_message() {
     let app = app("", &[]).await;
     let messaging = &app.state.messaging;
-    // the room is not one we are in; we were offline from 13:00 to 14:00, after its messages
+    // no leave of the room is noted; we were offline from 13:00 to 14:00, after its messages
     stored(
       messaging,
       &["2026-10-26T10:00:00Z", "2026-10-26T12:00:00Z"],
