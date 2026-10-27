@@ -4,12 +4,14 @@ import {
   formatAttributes,
   formatBytes,
   formatBytesAsUnit,
+  formatBytesTransferred,
   formatDuration,
   formatPercent,
   formatSeconds,
   formatSpeed,
   formatSpeedPadded,
   formatWait,
+  parseDuration,
   getDirectoryName,
   getFileName,
   truncate
@@ -25,6 +27,13 @@ describe("sizes and speeds", () => {
     expect(formatBytes(1536)).toBe("1.5 KB");
     expect(formatBytes(1234567)).toBe("1.18 MB");
     expect(formatBytes(1024 ** 3)).toBe("1 GB");
+  });
+
+  it("formats bytes moved of a size in the size's unit", () => {
+    expect(formatBytesTransferred(10.5 * 1024 ** 2, 3.2 * 1024 ** 2)).toBe("3.2/10.5 MB");
+    expect(formatBytesTransferred(0, 0)).toBe("0 B/0 B");
+    expect(formatBytesTransferred(500, 20)).toBe("20/500 B");
+    expect(formatBytesTransferred(2 * 1024 ** 3, 1024 ** 2)).toBe("0.0/2.0 GB");
   });
 
   it("formats what isn't a size as nothing", () => {
@@ -106,5 +115,15 @@ describe("files", () => {
     expect(truncate(null, 3)).toBe("");
     expect(truncate("abc", 3)).toBe("abc");
     expect(truncate("abcd", 3)).toBe("abc...");
+  });
+});
+
+describe("durations from options", () => {
+  it("reads the units options are written in", () => {
+    expect(parseDuration("2m")).toBe(120_000);
+    expect(parseDuration("1h 30m")).toBe(5_400_000);
+    expect(parseDuration("30s")).toBe(30_000);
+    expect(parseDuration("2 weeks")).toBeNull();
+    expect(parseDuration(5)).toBeNull();
   });
 });

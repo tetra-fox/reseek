@@ -21,6 +21,17 @@ export const formatBytesAsUnit = (
   return parseFloat((bytes / 1024 ** UNITS.indexOf(unit)).toFixed(decimals));
 };
 
+/**
+ * Bytes moved of a size in the size's unit, both to one decimal: "3.2/10.5 MB", "0 B/0 B"
+ * for an empty file
+ */
+export const formatBytesTransferred = (size: number, transferred: number): string => {
+  if (!Number.isFinite(size) || size < 1) return "0 B/0 B";
+  const i = Math.min(Math.floor(Math.log(size) / Math.log(1024)), UNITS.length - 1);
+  const one = (n: number) => (Math.max(n, 0) / 1024 ** i).toFixed(i === 0 ? 0 : 1);
+  return `${one(transferred)}/${one(size)} ${UNITS[i]}`;
+};
+
 /** A speed in bytes per second, "0 B/s" when there is none */
 export const formatSpeed = (bytesPerSecond: number | null | undefined, decimals = 1): string =>
   bytesPerSecond ? `${formatBytes(bytesPerSecond, decimals)}/s` : "0 B/s";
@@ -73,6 +84,26 @@ export const formatDuration = (seconds: number): string => {
     if (parts.length === 2) break;
   }
   return parts.join(" ");
+};
+
+const UNIT_MS: Record<string, number> = {
+  ms: 1,
+  s: 1_000,
+  m: 60_000,
+  h: 3_600_000,
+  d: 86_400_000
+};
+
+/**
+ * A duration the way options write them, "2m" or "1h 30m", in milliseconds; null for anything
+ * else
+ */
+export const parseDuration = (text: unknown): number | null => {
+  if (typeof text !== "string") return null;
+  const trimmed = text.trim();
+  const parts = [...trimmed.matchAll(/(\d+)\s*(ms|s|m|h|d)\s*/g)];
+  if (!parts.length || parts.map((p) => p[0]).join("") !== trimmed) return null;
+  return parts.reduce((sum, [, n, unit]) => sum + Number(n) * UNIT_MS[unit], 0);
 };
 
 /** A fraction as a percentage to one decimal, 0.256 as "25.6%" */
