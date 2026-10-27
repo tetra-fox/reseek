@@ -14,6 +14,7 @@
 
   import { api, type Schemas } from "#lib/api/client.js";
   import { copyText } from "#lib/clipboard.svelte.js";
+  import { clock } from "#lib/clock.svelte.js";
   import LoadError from "#lib/components/LoadError.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -33,7 +34,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
-  import type { UserSummary } from "#lib/users.svelte.js";
+  import { type UserSummary, users as usersStore } from "#lib/users.svelte.js";
 
   import { links, pin, userGroups } from "./actions";
   import Avatar from "./Avatar.svelte";
@@ -159,7 +160,10 @@
     onopen: (u) => void goto(userHref(u.username))
   });
 
+  /** the shown users selected, for the header's box */
   const chosen = $derived(shown.filter((u) => list.selected.has(u.username)));
+  /** every user selected, those a filter now hides too, as the transfers grid counts them */
+  const picked = $derived([...list.selected]);
   const write = $derived(session.can("ReadWrite"));
   const admin = $derived(session.can("Administrator"));
   const filtered = $derived(!!(q || blocked || pinned || hasTransfers || presence || group || tag));
@@ -181,8 +185,10 @@
     const outcome = await pin(u.username, !u.pinned);
     if (!outcome.ok) toast(outcome.error, "error");
   };
-  const unblockAll = async (users: UserSummary[]) => {
-    for (const u of users) if (u.block) await unblock(u.username);
+  const unblockAll = async (names: string[]) => {
+    for (const name of names) {
+      if ((rows.get(name) ?? usersStore.get(name))?.block) await unblock(name);
+    }
   };
 
   const COLUMNS = "2rem minmax(11rem,1fr) 5rem 8rem 9rem 7rem 6rem 6rem 4rem 7.5rem";
@@ -337,7 +343,7 @@
             {/each}
           </span>
           <span role="gridcell" class="text-xs" title={u.lastSeenAt ? dateTime(u.lastSeenAt) : ""}>
-            {u.lastSeenAt ? ago(u.lastSeenAt) : "never"}
+            {u.lastSeenAt ? ago(u.lastSeenAt, clock.now) : "never"}
           </span>
           <span role="gridcell" class="text-right tabular-nums">{u.figures.uploads.succeeded}</span>
           <span role="gridcell" class="text-right tabular-nums"
@@ -401,13 +407,10 @@
     class="sticky bottom-12 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised"
     role="toolbar"
     aria-label="Selected users">
-    <span class="text-sm">{chosen.length} selected</span>
+    <span class="text-sm">{picked.length} selected</span>
     {#if write}
-      <Button
-        size="sm"
-        variant="outline"
-        onclick={() => blocking.ask(chosen.map((u) => u.username))}>Block</Button>
-      <Button size="sm" variant="outline" onclick={() => void unblockAll(chosen)}>Unblock</Button>
+      <Button size="sm" variant="outline" onclick={() => blocking.ask(picked)}>Block</Button>
+      <Button size="sm" variant="outline" onclick={() => void unblockAll(picked)}>Unblock</Button>
     {/if}
     {#if admin}
       <Button size="sm" variant="outline" onclick={() => (assigning = true)}>Assign group</Button>
@@ -416,4 +419,4 @@
   </div>
 {/if}
 
-<GroupDialog bind:open={assigning} usernames={chosen.map((u) => u.username)} />
+<GroupDialog bind:open={assigning} usernames={picked} />
