@@ -383,6 +383,7 @@ impl Messaging {
       .read(move |conn| store::all(conn, &name))
       .await
       .map_err(internal)?;
+    // with no account configured, our own messages are written without an author
     let us = self.us().unwrap_or_default();
     export::conversation(username, &us, &messages, format)
   }
