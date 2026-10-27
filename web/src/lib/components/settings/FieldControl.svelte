@@ -10,6 +10,8 @@
   type Props = {
     field: Field;
     control: Control;
+    /** the names a select offers */
+    choices: string[];
     draft: Draft;
     disabled: boolean;
     /** an id the help and error lines carry, for aria-describedby */
@@ -17,7 +19,15 @@
     invalid: boolean;
   };
 
-  let { field, control, draft = $bindable(), disabled, described, invalid }: Props = $props();
+  let {
+    field,
+    control,
+    choices,
+    draft = $bindable(),
+    disabled,
+    described,
+    invalid
+  }: Props = $props();
 
   // a secret's input shows only once the user chooses to change it; `kept` is what it held then
   let changing = $state(false);
@@ -38,7 +48,7 @@
     id={field.key}
     class="w-full"
     bind:value={draft}
-    options={(field.choices ?? []).map((c) => ({ value: c as Draft, label: c }))}
+    options={choices.map((c) => ({ value: c as Draft, label: c }))}
     {disabled} />
 {:else if control === "secret"}
   {#if changing}

@@ -7,8 +7,8 @@ import { asNixSettings } from "./nix";
 import { sections } from "./sections";
 
 /**
- * The options view of a daemon started with a config.toml that sets web.port and the trusted
- * networks. Taken from `GET /api/v0/options/view`; when the daemon gains options, take it again
+ * The daemon's options view of the default configuration with an empty config.toml, written by
+ * `just config-fixture`; `just api-check` fails once the daemon's options differ from it
  */
 const view = fixture as unknown as ConfigView;
 const copy = (): ConfigView => structuredClone(view);
@@ -68,13 +68,17 @@ describe("controls and drafts", () => {
 
   it("parse what was typed, and take an emptied input as unset", () => {
     const port = field("web.port");
-    expect(fromDraft(port, "number", "8080", "integer")).toEqual({ set: 8080 });
-    expect(fromDraft(port, "number", "", "integer")).toEqual({ unset: true });
-    expect(fromDraft(port, "number", "0", "integer")).toEqual({ error: "must be at least 1" });
-    expect(fromDraft(port, "number", "1.5", "integer")).toEqual({
+    expect(fromDraft(port, "number", "8080", view.fields["web.port"])).toEqual({ set: 8080 });
+    expect(fromDraft(port, "number", "", view.fields["web.port"])).toEqual({ unset: true });
+    expect(fromDraft(port, "number", "0", view.fields["web.port"])).toEqual({
+      error: "must be at least 1"
+    });
+    expect(fromDraft(port, "number", "1.5", view.fields["web.port"])).toEqual({
       error: "must be a whole number"
     });
-    expect(fromDraft(port, "number", "x", "integer")).toEqual({ error: "must be a number" });
+    expect(fromDraft(port, "number", "x", view.fields["web.port"])).toEqual({
+      error: "must be a number"
+    });
     expect(fromDraft(field("rooms"), "list", " a \n\n b ")).toEqual({ set: ["a", "b"] });
     expect(fromDraft(field("shares.filters"), "regex-list", "(")).toMatchObject({
       error: expect.any(String)
@@ -92,8 +96,11 @@ describe("controls and drafts", () => {
       error: expect.any(String)
     });
     expect(fromDraft(field("soulseek.password"), "secret", "")).toEqual({ set: "" });
-    expect(fromDraft(field("relay.mode"), "select", "sideways")).toMatchObject({
-      error: expect.any(String)
+    expect(fromDraft(field("relay.mode"), "select", "sideways", view.fields["relay.mode"])).toEqual(
+      { error: "must be one of controller, agent, debug" }
+    );
+    expect(fromDraft(field("relay.mode"), "select", "agent", view.fields["relay.mode"])).toEqual({
+      set: "agent"
     });
   });
 

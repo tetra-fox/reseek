@@ -1,7 +1,8 @@
 /**
  * The control an option is edited with. Most follow from the kind the daemon reports for the key;
- * a description names one only where the kind alone can't say (a choice, a secret, a list of
- * patterns or networks)
+ * a description names one only where the kind alone can't say (a secret, a list of patterns or
+ * networks); an option that is one of a fixed set of names is a select of the names the daemon
+ * gives
  */
 export type Control =
   | "text"
@@ -24,8 +25,6 @@ export type Field = {
   key: string;
   label: string;
   control?: Control;
-  /** the values a select offers */
-  choices?: string[];
   /** bounds a number must keep */
   min?: number;
   max?: number;
@@ -40,7 +39,6 @@ export type Field = {
 /** A form on the settings page */
 export type Section = { id: string; title: string; fields: Field[] };
 
-const ROLES = ["readonly", "readwrite", "administrator"];
 const PORT = { min: 1, max: 65535 };
 const AT_LEAST_1 = { min: 1 };
 const NO_LIMIT = "no limit";
@@ -67,9 +65,7 @@ const groupUpload = (prefix: string, group: string): Field[] => [
   { key: `${prefix}.upload.priority`, label: `${group} priority`, ...AT_LEAST_1 },
   {
     key: `${prefix}.upload.strategy`,
-    label: `${group} queue order`,
-    control: "select",
-    choices: ["roundrobin", "firstinfirstout"]
+    label: `${group} queue order`
   },
   { key: `${prefix}.upload.slots`, label: `${group} upload slots`, ...AT_LEAST_1 },
   { key: `${prefix}.upload.speed_limit`, label: `${group} speed limit (KiB/s)`, ...AT_LEAST_1 },
@@ -101,9 +97,7 @@ export const sections: Section[] = [
       { key: "rooms", label: "Rooms to join" },
       {
         key: "soulseek.diagnostic_level",
-        label: "Protocol diagnostics",
-        control: "select",
-        choices: ["none", "warning", "info", "debug"]
+        label: "Protocol diagnostics"
       },
       { key: "soulseek.distributed_network.disabled", label: "Leave the distributed network" },
       { key: "soulseek.distributed_network.disable_children", label: "Refuse children" },
@@ -193,9 +187,7 @@ export const sections: Section[] = [
       { key: "shares.cache.retention", label: "Scan again every", placeholder: "never" },
       {
         key: "shares.cache.storage_mode",
-        label: "Share index",
-        control: "select",
-        choices: ["memory", "disk"]
+        label: "Share index"
       },
       { key: "shares.cache.workers", label: "Scan workers", min: 1, max: 128 }
     ]
@@ -226,18 +218,14 @@ export const sections: Section[] = [
       },
       {
         key: "transfers.download.request_style",
-        label: "Ask for files with",
-        control: "select",
-        choices: ["queue", "transfer_request"]
+        label: "Ask for files with"
       },
       { key: "transfers.download.retry.attempts", label: "Download attempts", ...AT_LEAST_1 },
       { key: "transfers.download.retry.delay", label: "First retry after" },
       { key: "transfers.download.retry.max_delay", label: "Longest retry wait" },
       {
         key: "transfers.download.retry.partial",
-        label: "A retry",
-        control: "select",
-        choices: ["resume", "overwrite"]
+        label: "A retry"
       },
       {
         key: "transfers.download.destination.subdirectory",
@@ -246,9 +234,7 @@ export const sections: Section[] = [
       },
       {
         key: "transfers.download.destination.exists",
-        label: "When the file exists",
-        control: "select",
-        choices: ["rename", "overwrite"]
+        label: "When the file exists"
       },
       {
         key: "transfers.download.destination.permissions.mode",
@@ -368,9 +354,7 @@ export const sections: Section[] = [
       },
       {
         key: "web.authentication.trusted_role",
-        label: "Trusted network role",
-        control: "select",
-        choices: ROLES
+        label: "Trusted network role"
       },
       { key: "web.authentication.disabled", label: "No authentication" },
       { key: "web.authentication.oidc", label: "OpenID Connect providers" },
@@ -393,8 +377,6 @@ export const sections: Section[] = [
       {
         key: "web.authentication.proxy.role_mapping.default",
         label: "Proxy users in no group",
-        control: "select",
-        choices: ["deny", ...ROLES],
         enabledWhen: { key: "web.authentication.proxy.enabled", values: [true] }
       },
       { key: "web.authentication.api_key", label: "API key", control: "secret" },
@@ -468,9 +450,7 @@ export const sections: Section[] = [
     fields: [
       {
         key: "logging.level",
-        label: "Level",
-        control: "select",
-        choices: ["error", "warn", "info", "debug", "trace"]
+        label: "Level"
       },
       { key: "logging.targets", label: "Levels by module" },
       { key: "logger.no_disk", label: "No log files" },
@@ -513,9 +493,7 @@ export const sections: Section[] = [
       { key: "relay.enabled", label: "Relay" },
       {
         key: "relay.mode",
-        label: "Mode",
-        control: "select",
-        choices: ["controller", "agent", "debug"]
+        label: "Mode"
       },
       { key: "instance_name", label: "Instance name" },
       { key: "relay.agents", label: "Agents" },

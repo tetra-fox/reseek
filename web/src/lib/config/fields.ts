@@ -14,10 +14,14 @@ export type Parsed = { set: unknown } | { unset: true } | { error: string };
 /** A secret the daemon holds, as it shows it */
 export const REDACTED = "*****";
 
-/** The control for an option: the description's, else what the daemon's kind for it calls for */
+/**
+ * The control for an option: the description's, else a select of the names the daemon gives for
+ * it, else what the daemon's kind for it calls for
+ */
 export const controlOf = (field: Field, view: FieldView | undefined): Control => {
   if (field.control) return field.control;
   if (view?.secret) return "secret";
+  if (view?.choices) return "select";
   const kind = view?.kind;
   if (kind === undefined) return "text";
   if (typeof kind === "object") return "list";
@@ -59,7 +63,7 @@ export const fromDraft = (
   field: Field,
   control: Control,
   draft: Draft,
-  kind?: FieldView["kind"]
+  view?: FieldView
 ): Parsed => {
   if (control === "bool") return { set: draft === true };
   const text = String(draft);
@@ -85,7 +89,8 @@ export const fromDraft = (
   if (control === "number") {
     const n = Number(text);
     if (!Number.isFinite(n)) return { error: "must be a number" };
-    if (kind === "integer" && !Number.isInteger(n)) return { error: "must be a whole number" };
+    if (view?.kind === "integer" && !Number.isInteger(n))
+      return { error: "must be a whole number" };
     if (field.min !== undefined && n < field.min) return { error: `must be at least ${field.min}` };
     if (field.max !== undefined && n > field.max) return { error: `must be at most ${field.max}` };
     return { set: n };
@@ -99,8 +104,9 @@ export const fromDraft = (
     }
     return { error: "must be a JSON object of entries by name" };
   }
-  if (control === "select" && field.choices && !field.choices.includes(text)) {
-    return { error: `must be one of ${field.choices.join(", ")}` };
+  const choices = view?.choices;
+  if (control === "select" && choices && !choices.includes(text)) {
+    return { error: `must be one of ${choices.join(", ")}` };
   }
   return { set: text };
 };

@@ -76,6 +76,7 @@
     <FieldControl
       {field}
       {control}
+      choices={info.choices ?? []}
       bind:draft
       disabled={edit.mode === "locked" || unused}
       described={help}

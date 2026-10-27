@@ -99,7 +99,7 @@
         field,
         controls[field.key],
         draft[field.key],
-        view.fields[field.key].kind
+        view.fields[field.key]
       );
       if ("error" in parsed) found[field.key] = parsed.error;
       else out.push({ field, ...parsed });
@@ -230,7 +230,7 @@
   let nix = $state<string | null>(null);
   const copyNix = async () => {
     const entries = fields.flatMap((f): [string, unknown][] => {
-      const parsed = fromDraft(f, controls[f.key], draft[f.key], view.fields[f.key].kind);
+      const parsed = fromDraft(f, controls[f.key], draft[f.key], view.fields[f.key]);
       if (!("set" in parsed) || parsed.set === REDACTED || parsed.set === null) return [];
       return [[f.key, parsed.set]];
     });
