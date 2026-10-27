@@ -287,3 +287,43 @@ async fn unread_bytes_are_reported_when_asked_for() {
     1
   );
 }
+
+/// soulfind drops a private message holding a line break without telling either side, so the
+/// line breaks are carried here, both ways, by a server that does not
+#[tokio::test]
+async fn a_private_message_keeps_its_line_breaks() {
+  let mut session = Session::with_options(ClientOptions {
+    auto_acknowledge_private_messages: false,
+    ..options()
+  })
+  .await;
+  session
+    .client
+    .send_private_message("bob", "one\ntwo\r\nthree")
+    .await
+    .unwrap();
+  assert_eq!(
+    session.server.request().await,
+    ServerRequest::PrivateMessage(PrivateMessageRequest {
+      username: "bob".into(),
+      message: "one\ntwo\r\nthree".into(),
+    })
+  );
+  session
+    .server
+    .send(&ServerResponse::PrivateMessage(PrivateMessageResponse {
+      id: 4,
+      timestamp: 1_700_000_000,
+      username: "bob".into(),
+      message: "four\nfive".into(),
+      is_new: true,
+    }))
+    .await;
+  let received = session
+    .event(|event| match event {
+      Event::PrivateMessageReceived(message) => Some(message),
+      _ => None,
+    })
+    .await;
+  assert_eq!(received.message, "four\nfive");
+}
