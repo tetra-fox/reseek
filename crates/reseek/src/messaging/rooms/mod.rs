@@ -110,12 +110,7 @@ impl Messaging {
     };
     let client = self.client();
     // the session's name marks us among the members; taken before the join is sent
-    let us = client.username().ok_or_else(|| {
-      ClientError::InvalidOperation(format!(
-        "The server connection must be logged in to join chat room {name} (currently: {})",
-        client.state()
-      ))
-    })?;
+    let us = client.own_username(&format!("join chat room {name}"))?;
     let data = match client.join_room(name, room_type).await {
       Err(ClientError::NoResponse(_)) => {
         debug!(

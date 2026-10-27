@@ -249,8 +249,9 @@ impl Client {
     self.inner.check_not_disposed()
   }
 
-  /// our username, which `verb` needs; fails while not logged in
-  pub(crate) fn own_username(&self, verb: &str) -> Result<String, ClientError> {
+  /// Our username, for the operation `verb` that needs it; fails with `InvalidOperation`
+  /// naming `verb` while not logged in.
+  pub fn own_username(&self, verb: &str) -> Result<String, ClientError> {
     self.username().ok_or_else(|| {
       ClientError::InvalidOperation(format!(
         "The server connection must be connected and logged in to {verb} (currently: {})",
