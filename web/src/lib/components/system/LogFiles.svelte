@@ -15,7 +15,6 @@
   import { ListControl } from "#lib/list.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
-  import { toast } from "#lib/toast.svelte.js";
 
   // the log files on disk, newest first, to read in a tab or save
   /** files larger than this are offered for saving only */
@@ -40,19 +39,16 @@
   const url = (f: Schemas["FilesystemFile"]) =>
     `${root()}/api/v0/logs/files/${encodeURIComponent(f.name)}`;
 
-  const view = (f: Schemas["FilesystemFile"]) => {
-    if (f.length > MAX_VIEW)
-      return void toast(`${f.name} is too big to show; save it instead`, "error");
-    const tab = window.open(url(f), "_blank", "noopener");
-    if (!tab)
-      toast("Unable to open a new window; allow pop-ups for this site to view logs", "error");
-  };
+  let grid = $state<HTMLElement | null>(null);
+  // Enter follows the row's own link: a view in a new tab, or the save of a file too big to show
+  const open = (f: Schemas["FilesystemFile"]) =>
+    grid?.querySelector<HTMLAnchorElement>(`a[data-open="${CSS.escape(f.name)}"]`)?.click();
 
   const list = new ListControl<Schemas["FilesystemFile"]>({
     lines: () => rows,
     key: (f) => f.name,
     id: (f) => f.name,
-    onopen: view
+    onopen: open
   });
   const sortBy = (by: "name" | "date") =>
     (sort = { by, dir: sort.by === by ? (sort.dir === "asc" ? "desc" : "asc") : "asc" });
@@ -83,6 +79,7 @@
     aria-multiselectable="true"
     aria-activedescendant={list.activeId}
     tabindex="0"
+    bind:this={grid}
     {@attach list.attach}>
     <div
       role="row"
@@ -106,17 +103,23 @@
         <span role="gridcell" class="text-xs text-fg-muted">{dateTime(f.modifiedAt)}</span>
         <span role="gridcell" class="text-right tabular-nums">{formatBytes(f.length)}</span>
         <span role="gridcell" class="flex justify-end">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`View ${f.name} in a new window`}
-            title={`View ${f.name} in a new window`}
-            onclick={() => view(f)}><ExternalLinkIcon /></Button>
+          {#if f.length <= MAX_VIEW}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              href={url(f)}
+              target="_blank"
+              rel="noopener"
+              data-open={f.name}
+              aria-label={`View ${f.name} in a new tab`}
+              title={`View ${f.name} in a new tab`}><ExternalLinkIcon /></Button>
+          {/if}
           <Button
             variant="ghost"
             size="icon-sm"
             href={url(f)}
             download={f.name}
+            data-open={f.length > MAX_VIEW ? f.name : undefined}
             aria-label={`Download ${f.name}`}
             title={`Download ${f.name}`}><DownloadIcon /></Button>
         </span>
