@@ -43,7 +43,7 @@ class Chat {
   readonly previews = new SvelteMap<string, Preview>();
   /** the pane on screen, by pane key, which gets no notification while the tab is visible */
   openPane = $state<string | null>(null);
-  /** why the last read of the conversations or the rooms failed, empty when neither did */
+  /** why the last read of the conversations, the rooms or both failed, empty when neither did */
   error = $state("");
   #release: (() => void)[] = [];
 
@@ -142,8 +142,10 @@ class Chat {
       this.#peers();
     }
     if (rooms.ok) this.rooms.reconcile(rooms.data);
-    const failed = !conversations.ok ? conversations : !rooms.ok ? rooms : null;
-    this.error = failed ? failed.error : "";
+    const reasons = [];
+    if (!conversations.ok) reasons.push(`Conversations: ${conversations.error}`);
+    if (!rooms.ok) reasons.push(`Rooms: ${rooms.error}`);
+    this.error = reasons.join(". ");
   };
 
   /**

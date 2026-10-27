@@ -35,4 +35,13 @@ describe("the chat store", () => {
     await vi.waitFor(() => expect(users.get("bob")?.muted).toBe(true));
     expect(users.get("alice")?.muted).toBe(false);
   });
+
+  it("says why each read failed when both did", async () => {
+    fakeNetwork((url) => ({
+      status: 500,
+      body: { error: url.pathname.endsWith("/conversations") ? "locked" : "not logged in" }
+    }));
+    await chat.load();
+    expect(chat.error).toBe("Conversations: locked. Rooms: not logged in");
+  });
 });
