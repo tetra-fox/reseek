@@ -1,0 +1,110 @@
+<script lang="ts">
+  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
+  import DownloadIcon from "@lucide/svelte/icons/download";
+  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
+  import UploadIcon from "@lucide/svelte/icons/upload";
+  import { untrack } from "svelte";
+
+  import type { Schemas } from "#lib/api/client.js";
+  import Button from "#lib/components/ui/Button.svelte";
+  import Spinner from "#lib/components/ui/Spinner.svelte";
+  import { links } from "#lib/components/users/actions.js";
+  import Username from "#lib/components/users/Username.svelte";
+  import { reports, type Window } from "#lib/dashboard/reports.js";
+  import { formatBytes, formatSpeed } from "#lib/format.js";
+
+  // who moved the most with us each way, by count, bytes or speed
+  let { span }: { span: Window } = $props();
+
+  type Entry = Schemas["LeaderboardEntry"];
+  type Sort = Schemas["LeaderboardSort"];
+
+  let sortBy = $state<Sort>("Count");
+  let rows = $state.raw<{ Download: Entry[]; Upload: Entry[] }>({ Download: [], Upload: [] });
+  let loading = $state(true);
+  let error = $state("");
+
+  // a newer sort or range makes an older answer moot
+  let asked = 0;
+  $effect(() => {
+    const w = span;
+    const by = sortBy;
+    const at = ++asked;
+    untrack(async () => {
+      loading = true;
+      const [down, up] = await Promise.all([
+        reports.leaderboard(w, "Download", by),
+        reports.leaderboard(w, "Upload", by)
+      ]);
+      if (at !== asked) return;
+      loading = false;
+      // a failed load keeps the rows shown before
+      if (!down.ok) error = down.error;
+      else if (!up.ok) error = up.error;
+      else {
+        rows = { Download: down.data, Upload: up.data };
+        error = "";
+      }
+    });
+  });
+
+  const COLUMNS: { by: Sort; label: string }[] = [
+    { by: "Count", label: "Count" },
+    { by: "TotalBytes", label: "Total Size" },
+    { by: "AverageSpeed", label: "Avg Speed" }
+  ];
+</script>
+
+{#if error}<p class="text-sm text-danger">{error}</p>{/if}
+<div class="grid gap-section lg:grid-cols-2">
+  {#each [{ direction: "Download" as const, title: "Downloads", Icon: DownloadIcon }, { direction: "Upload" as const, title: "Uploads", Icon: UploadIcon }] as table (table.direction)}
+    <section class="flex flex-col gap-2">
+      <h3 class="flex items-center gap-1.5 text-sm font-semibold">
+        <table.Icon class="size-4" />{table.title}
+        {#if loading}<Spinner class="size-3.5" />{/if}
+      </h3>
+      <table class="w-full text-sm">
+        <thead class="text-xs text-fg-muted">
+          <tr class="border-b">
+            <th class="w-8 py-1 text-right font-medium">#</th>
+            <th class="px-2 py-1 text-left font-medium">Username</th>
+            {#each COLUMNS as c (c.by)}
+              <th
+                class="px-2 py-1 text-right font-medium"
+                aria-sort={sortBy === c.by ? "descending" : "none"}>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1"
+                  onclick={() => (sortBy = c.by)}>
+                  {c.label}
+                  {#if sortBy === c.by}<ArrowDownIcon class="size-3" />{/if}
+                </button>
+              </th>
+            {/each}
+            <th class="w-8"><span class="sr-only">Browse</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each rows[table.direction] as entry, i (entry.username)}
+            <tr class="border-b last:border-b-0">
+              <td class="py-1 text-right text-fg-muted tabular-nums">{i + 1}</td>
+              <td class="px-2 py-1"><Username name={entry.username} /></td>
+              <td class="px-2 py-1 text-right tabular-nums">{entry.count.toLocaleString()}</td>
+              <td class="px-2 py-1 text-right tabular-nums">{formatBytes(entry.totalBytes)}</td>
+              <td class="px-2 py-1 text-right tabular-nums">{formatSpeed(entry.averageSpeed)}</td>
+              <td>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  href={links(entry.username).browse}
+                  aria-label={`Browse ${entry.username}`}><FolderOpenIcon /></Button>
+              </td>
+            </tr>
+          {:else}
+            <tr><td colspan="6" class="py-6 text-center text-fg-subtle">No data to display</td></tr>
+          {/each}
+        </tbody>
+      </table>
+    </section>
+  {/each}
+</div>

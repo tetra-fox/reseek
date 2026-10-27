@@ -112,6 +112,20 @@
     }
   }
 
+  /* the dashboard chart's series, readable on both themes */
+  --color-series-upload-bytes: #21ba45;
+  --color-series-download-bytes: #2185d0;
+  --color-series-upload-count: #6435c9;
+  --color-series-download-count: #e03997;
+  --color-series-upload-speed: #f2711c;
+  --color-series-download-speed: #fbbd08;
+  --color-series-upload-errors: #db2828;
+  --color-series-download-errors: #a333c8;
+  --color-series-upload-error-rate: #d4500a;
+  --color-series-download-error-rate: #1aa9b0;
+  --color-series-upload-wait: #8e44ad;
+  --color-series-share-ratio: #b5cc18;
+
   --font-sans: "Inter Variable", sans-serif;
   --font-mono:
     "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
