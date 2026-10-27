@@ -125,7 +125,7 @@ impl Messaging {
       }
       Event::PrivateRoomModerationAdded(room) => {
         info!(room, "Promoted to moderator in private room");
-        if let Some(us) = self.us() {
+        if let Some(us) = self.logged_in_as() {
           self.change_private(&room, |private| {
             private.operators.insert(us);
           });
@@ -133,7 +133,7 @@ impl Messaging {
       }
       Event::PrivateRoomModerationRemoved(room) => {
         info!(room, "Demoted from moderator in private room");
-        if let Some(us) = self.us() {
+        if let Some(us) = self.logged_in_as() {
           self.change_private(&room, |private| {
             private.operators.remove(&us);
           });
@@ -167,7 +167,10 @@ impl Messaging {
   /// `username` joined `room`: ourselves, which the server confirms after our join, or another
   /// user, who is added to the room's members.
   async fn user_joined(&self, room: String, username: String, user: &UserData) {
-    let us = self.us_logged_in();
+    // a session whose login ended before it was handled, the first one, leaves no name
+    let Some(us) = self.logged_in_as() else {
+      return debug!(room, "a join before any login was noted dropped");
+    };
     if username == us {
       if self.rooms.tracker().confirmed(&room) {
         debug!(room, "Joined room");
@@ -197,7 +200,7 @@ impl Messaging {
   /// `username` left `room`. Our own leave is the one we asked for, which has taken the room
   /// off already.
   fn user_left(&self, room: String, username: String) {
-    if self.us().as_deref() == Some(username.as_str()) {
+    if self.logged_in_as().as_deref() == Some(username.as_str()) {
       return debug!(room, "Left room");
     }
     if !self.rooms.tracker().user_left(&room, &username) {
@@ -216,7 +219,10 @@ impl Messaging {
     if self.rooms.tracker().get(&room).is_none() {
       return debug!(room, "message for a room we are not in dropped");
     }
-    let us = self.us_logged_in();
+    // a session whose login ended before it was handled, the first one, leaves no name
+    let Some(us) = self.logged_in_as() else {
+      return debug!(room, "a room message before any login was noted dropped");
+    };
     let is_self = username == us;
     let arrived = Arrived {
       hidden: !is_self && self.users.is_blocked(&username, None, BlockScope::Rooms),
@@ -261,5 +267,49 @@ impl Messaging {
     if !is_self {
       self.unread.changed();
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use soulseek_client::Event;
+  use soulseek_proto::server::RoomData;
+
+  use super::history;
+  use crate::messaging::lock;
+  use crate::testing::app;
+
+  #[tokio::test]
+  async fn a_message_after_the_session_ended_is_ours_by_the_logins_name() {
+    // no username configured and the client logged out: only the noted login names us
+    let app = app("", &[]).await;
+    let messaging = &app.state.messaging;
+    *lock(&messaging.session_user) = Some("me".into());
+    let data = RoomData {
+      name: "indie".into(),
+      users: Vec::new(),
+      private: None,
+    };
+    messaging.rooms.tracker().joined(&data, "me");
+    for (username, message) in [("me", "hello"), ("alice", "hi me")] {
+      let said = Event::RoomMessageReceived {
+        room_name: "indie".into(),
+        username: username.into(),
+        message: message.into(),
+      };
+      messaging.room_event(said).await;
+    }
+    let stored = messaging
+      .database()
+      .read(|conn| history::all(conn, "indie"))
+      .await
+      .unwrap();
+    assert_eq!(
+      stored
+        .iter()
+        .map(|m| (m.is_self, m.is_mention))
+        .collect::<Vec<_>>(),
+      [(true, false), (false, true)]
+    );
   }
 }

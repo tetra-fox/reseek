@@ -109,6 +109,13 @@ impl Messaging {
       RoomType::Public
     };
     let client = self.client();
+    // the session's name marks us among the members; taken before the join is sent
+    let us = client.username().ok_or_else(|| {
+      ClientError::InvalidOperation(format!(
+        "The server connection must be logged in to join chat room {name} (currently: {})",
+        client.state()
+      ))
+    })?;
     let data = match client.join_room(name, room_type).await {
       Err(ClientError::NoResponse(_)) => {
         debug!(
@@ -122,7 +129,6 @@ impl Messaging {
       }
       joined => joined?,
     };
-    let us = self.us_logged_in();
     let room = {
       let mut tracker = self.rooms.tracker();
       tracker.joined(&data, &us);

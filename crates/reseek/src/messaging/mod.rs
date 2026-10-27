@@ -108,6 +108,8 @@ pub struct Messaging {
   unread: unread::Unread,
   /// the running session's row in the session log
   session: Mutex<Option<i64>>,
+  /// the username the last login was made with, noted as the login is handled
+  session_user: Mutex<Option<String>>,
   /// the work started on the way, so the stop waits for it
   tasks: TaskTracker,
   /// cancelled when the daemon shuts down
@@ -151,6 +153,7 @@ impl Messaging {
       rooms: Rooms::default(),
       unread: unread::Unread::default(),
       session: Mutex::new(None),
+      session_user: Mutex::new(None),
       tasks: TaskTracker::new(),
       shutdown,
     });
@@ -194,12 +197,10 @@ impl Messaging {
       .or_else(|| self.config.current().values.soulseek.username.clone())
   }
 
-  /// Our username where a login came first, as it does for anything about a room: a login
-  /// needs a configured username.
-  fn us_logged_in(&self) -> String {
-    self
-      .us()
-      .expect("rooms are reached only after a login, which needs a configured username")
+  /// The username of the last login, which every room event of a session follows; `None`
+  /// before the first.
+  fn logged_in_as(&self) -> Option<String> {
+    lock(&self.session_user).clone()
   }
 
   fn logged_in_now(&self) -> bool {
