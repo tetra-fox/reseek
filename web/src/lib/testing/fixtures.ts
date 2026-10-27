@@ -17,3 +17,18 @@ export const transfer = (fields: Partial<Transfer> = {}): Transfer => ({
   removed: false,
   ...fields
 });
+
+/** The states a transfer can be seen in, the transient ones first */
+export const STATES = [
+  "Requested",
+  "Queued, Remotely",
+  "Queued, Locally",
+  "Initializing",
+  "InProgress",
+  "Completed, Succeeded",
+  "Completed, Cancelled",
+  "Completed, TimedOut",
+  "Completed, Errored",
+  "Completed, Rejected",
+  "Completed, Aborted"
+];
