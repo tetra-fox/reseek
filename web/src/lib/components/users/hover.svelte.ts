@@ -12,16 +12,6 @@ class Open {
 
 export const open = new Open();
 
-/** A colour for an upload group's chip: the built-in groups by meaning, the user's own alike */
-export const groupTone = (group: string) =>
-  group === "privileged"
-    ? ("warning" as const)
-    : group === "leechers" || group === "blacklisted"
-      ? ("danger" as const)
-      : group === "default"
-        ? ("neutral" as const)
-        : ("accent" as const);
-
 /** A country code as its flag, from the two regional indicator letters */
 export const flag = (code: string | null | undefined) =>
   code && /^[A-Za-z]{2}$/.test(code)

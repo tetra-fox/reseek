@@ -10,7 +10,10 @@ const summary = {
   username: "alice",
   known: true,
   isPrivileged: false,
-  group: { name: "default", source: "default", priority: 1 },
+  group: { name: "friends", source: "config", priority: 2, color: "blue" },
+  description: "plays bass\nlikes dub",
+  notes: "owes me a record",
+  info: { hasPicture: true, pictureUrl: "/api/v0/users/alice/picture" },
   tags: [],
   muted: false,
   pinned: false,
@@ -72,6 +75,14 @@ describe("a username", () => {
     expect(card()).not.toBeNull();
     expect(interaction.frozen).toBe(true);
     expect(card()!.textContent).toContain("2 uploads");
+    // a preview of the profile: the picture, the text's first lines, the note and the group
+    expect(card()!.querySelector("img")?.getAttribute("src")).toMatch(
+      /\/api\/v0\/users\/alice\/picture$/
+    );
+    expect(card()!.textContent).toContain("plays bass\nlikes dub");
+    expect(card()!.textContent).toContain("owes me a record");
+    const dot = card()!.querySelector<HTMLElement>('[title="Upload group friends"] span');
+    expect(dot?.style.backgroundColor).toBe("blue");
 
     link.dispatchEvent(pointer("pointerleave", "mouse"));
     await vi.advanceTimersByTimeAsync(CLOSE_DELAY_MS);

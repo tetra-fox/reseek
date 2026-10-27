@@ -6,17 +6,20 @@
   import UserIcon from "@lucide/svelte/icons/user";
 
   import { root } from "#lib/api/client.js";
+  import { app } from "#lib/app.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { ago, formatSpeed } from "#lib/format.js";
   import { userHref } from "#lib/nav.js";
+  import { firstLines, ownProfile } from "#lib/profile.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import type { UserSummary } from "#lib/users.svelte.js";
 
   import { links } from "./actions";
-  import { flag, groupTone } from "./hover.svelte";
+  import GroupBadge from "./GroupBadge.svelte";
+  import { flag } from "./hover.svelte";
 
   type Props = {
     name: string;
@@ -43,7 +46,20 @@
   const stats = $derived(user?.statistics);
   const figures = $derived(user?.figures);
   const tags = $derived(user?.tags ?? []);
-  const picture = $derived(user?.info?.pictureUrl ? `${root()}${user.info.pictureUrl}` : null);
+  // our own name shows what peers are sent now, from our profile
+  const own = $derived(!!app.state?.user.username && app.state.user.username === name);
+  $effect(() => {
+    if (own) ownProfile.need();
+  });
+  const pictureUrl = $derived(own ? ownProfile.data?.pictureUrl : user?.info?.pictureUrl);
+  const picture = $derived(pictureUrl ? `${root()}${pictureUrl}` : null);
+  const description = $derived(
+    own
+      ? ownProfile.data?.description
+        ? firstLines(ownProfile.data.description, 3)
+        : null
+      : user?.description
+  );
   const country = $derived(flag(user?.countryCode));
   const readWrite = $derived(session.can("ReadWrite"));
 </script>
@@ -51,10 +67,10 @@
 <div class="flex flex-col gap-3 text-sm">
   <div class="flex items-center gap-3">
     {#if picture}
-      <img src={picture} alt="" class="size-10 shrink-0 rounded-full object-cover" />
+      <img src={picture} alt="" class="size-12 shrink-0 rounded-full object-cover" />
     {:else}
       <span
-        class="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft font-semibold text-accent-soft-fg">
+        class="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent-soft font-semibold text-accent-soft-fg">
         {name.slice(0, 1).toUpperCase()}
       </span>
     {/if}
@@ -68,12 +84,16 @@
     </div>
   </div>
 
+  {#if description}
+    <p class="line-clamp-3 text-xs whitespace-pre-line text-fg">{description}</p>
+  {/if}
+
   {#if !user}
     <Skeleton class="h-4 w-3/4" />
     <Skeleton class="h-4 w-1/2" />
   {:else}
     <div class="flex flex-wrap gap-1">
-      <Badge tone={groupTone(user.group.name)}>{user.group.name}</Badge>
+      <GroupBadge group={user.group} />
       {#if user.block}
         {@const block = user.block}
         <Tooltip
@@ -108,6 +128,13 @@
         {figures.messages.in + figures.messages.out} messages
         {#if figures.messages.unread}({figures.messages.unread} unread){/if}
         {#if user.firstSeenAt}<br />first seen {ago(user.firstSeenAt)}{/if}
+      </p>
+    {/if}
+
+    {#if user.notes}
+      <p class="line-clamp-2 text-xs whitespace-pre-line text-fg-muted">
+        <span class="font-medium">Note:</span>
+        {user.notes}
       </p>
     {/if}
   {/if}

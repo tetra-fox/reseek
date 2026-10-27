@@ -23,7 +23,8 @@
 
   import { links, pin } from "./actions";
   import { blocking, unblock } from "./block.svelte";
-  import { CLOSE_DELAY_MS, groupTone, LONG_PRESS_MS, OPEN_DELAY_MS, open } from "./hover.svelte";
+  import GroupBadge from "./GroupBadge.svelte";
+  import { CLOSE_DELAY_MS, LONG_PRESS_MS, OPEN_DELAY_MS, open } from "./hover.svelte";
   import UserCard from "./UserCard.svelte";
 
   type Props = {
@@ -198,16 +199,7 @@
                 : "bg-fg-subtle/50"
           ]}></span>
         <span class="truncate font-mono font-medium">{name}</span>
-        {#if user}
-          <span
-            class={[
-              "ml-auto rounded-badge px-1",
-              groupTone(user.group.name) === "danger" && "bg-danger-soft text-danger-soft-fg",
-              groupTone(user.group.name) === "warning" && "bg-warning-soft text-warning-soft-fg",
-              groupTone(user.group.name) === "accent" && "bg-accent-soft text-accent-soft-fg",
-              groupTone(user.group.name) === "neutral" && "bg-surface-muted text-fg-muted"
-            ]}>{user.group.name}</span>
-        {/if}
+        {#if user}<span class="ml-auto"><GroupBadge group={user.group} /></span>{/if}
       </div>
       <Menu.Separator />
       <Menu.Item onSelect={() => goto(userHref(name))}><UserIcon />View profile</Menu.Item>
