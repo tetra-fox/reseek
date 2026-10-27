@@ -62,7 +62,9 @@ async fn search(
     return Err(ApiError::bad_request("q is required"));
   }
   if query.q.chars().count() > QUERY_CHARS {
-    return Err(ApiError::bad_request("q must be at most 200 characters"));
+    return Err(ApiError::bad_request(format!(
+      "q must be at most {QUERY_CHARS} characters"
+    )));
   }
   validate::positive("limit", query.limit)?;
   app.services.messaging.search(query).await.map(Json)
