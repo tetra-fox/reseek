@@ -202,6 +202,7 @@
       "password": null,
       "picture": null,
       "port": 2271,
+      "port_mapping": true,
       "search": {
         "max_concurrent": 2
       },
@@ -2340,6 +2341,21 @@
       "choices": null,
       "default": 2271,
       "apply": "reconnect",
+      "secret": false,
+      "notApplied": null
+    },
+    "soulseek.port_mapping": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SLSK_PORT_MAPPING",
+      "cliFlag": "--slsk-no-port-mapping",
+      "kind": "bool",
+      "doc": "Asks the router to forward `listen_port` to this computer, by UPnP, NAT-PMP or PCP, while connected to the server.",
+      "choices": null,
+      "default": true,
+      "apply": "live",
       "secret": false,
       "notApplied": null
     },

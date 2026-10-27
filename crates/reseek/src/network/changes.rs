@@ -1,9 +1,9 @@
 //! Following the options while running: a change to the search request filters compiles them
 //! again, a change to the Soulseek, upload or download options or to whether we take private
-//! room invitations patches the client, a new listening port starts the judgement of who can
-//! reach us over, a change that takes effect only on a new session is flagged while connected,
-//! a change to how we reach the server starts the watchdog over, and rooms added to the
-//! configuration are joined.
+//! room invitations patches the client, a change to the listener or to port mapping moves the
+//! mapping on the router, a change that takes effect only on a new session is flagged while
+//! connected, a change to how we reach the server starts the watchdog over, and rooms added to
+//! the configuration are joined.
 
 use std::sync::Arc;
 
@@ -88,8 +88,11 @@ async fn apply(app: &AppState, applied: &Options, current: &Arc<Loaded<Options>>
     }
   }
   let (was, now) = (&applied.soulseek, &values.soulseek);
-  if was.listen_ip_address != now.listen_ip_address || was.listen_port != now.listen_port {
-    network.listening_changed();
+  if was.listen_ip_address != now.listen_ip_address
+    || was.listen_port != now.listen_port
+    || was.port_mapping != now.port_mapping
+  {
+    network.listening_changed(now.port_mapping);
   }
   if network.watchdog().is_enabled() && reaches_differently(applied, values) {
     info!("Options changed, restarting (re)connection process...");

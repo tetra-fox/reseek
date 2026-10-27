@@ -45,6 +45,10 @@ humantime = "2"
 humantime-serde.workspace = true
 hyper = { version = "1", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["server-auto", "server-graceful", "service", "tokio"] }
+# asks the router to forward the peer port: UPnP, then NAT-PMP or PCP at the default gateway
+igd-next = { version = "0.18", default-features = false, features = ["aio_tokio"] }
+crab_nat = { version = "0.8", features = ["tracing"] }
+netdev = { version = "0.47", default-features = false, features = ["gateway"] }
 # decodes uploaded profile pictures and encodes them as JPEG, in pure Rust
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 lofty = "0.25"

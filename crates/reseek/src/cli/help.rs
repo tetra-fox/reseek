@@ -84,9 +84,13 @@ fn flag_item(short: Option<char>, long: &str) -> String {
   }
 }
 
-/// The option's help on one line, with its default unless it is a boolean.
+/// The option's help on one line, with its default unless it is a boolean, and what a flag
+/// that turns it off does.
 fn described(field: &Field) -> String {
   let doc = field.doc.split_whitespace().collect::<Vec<_>>().join(" ");
+  if field.negated {
+    return format!("{doc} (the flag turns it off)");
+  }
   if field.kind == Kind::Bool {
     return doc;
   }

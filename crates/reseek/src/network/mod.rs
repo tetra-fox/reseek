@@ -1,6 +1,7 @@
 //! The daemon's side of the Soulseek network: the client built from the options, the watchdog
-//! that keeps it connected, whether other users can connect to us, what the daemon does with
-//! each client event, how it answers other users, and the options it follows while running.
+//! that keeps it connected, the router forwarding our peer port and whether other users can
+//! connect to us, what the daemon does with each client event, how it answers other users, and
+//! the options it follows while running.
 //!
 //! [`Network`] owns the client. The engines reach the network through [`Network::client`]; the
 //! server connection is started and ended through [`Network::connect`],
@@ -8,6 +9,7 @@
 
 mod changes;
 mod events;
+mod mapping;
 pub mod options;
 mod reachability;
 pub mod resolvers;
@@ -33,6 +35,7 @@ use crate::telemetry::Telemetry;
 use crate::users::Directory;
 pub use changes::follow_changes;
 pub use events::{follow_shared_counts, observe_client, observe_transfers};
+use mapping::{NatPmp, PortMapper, Upnp};
 use reachability::Reachability;
 use resolvers::{Edges, IncomingSearches, resolvers};
 use watchdog::Watchdog;
@@ -109,6 +112,8 @@ pub struct Network {
   drained: CancellationToken,
   /// what other users are answered from
   edges: Arc<Edges>,
+  /// the router forwarding our peer port
+  mapper: PortMapper,
   /// whether other users can connect to us
   reachability: Arc<Reachability>,
 }
@@ -145,12 +150,19 @@ impl Network {
       ));
       client_options.resolvers = resolvers(edges.clone());
       // the options were validated above, which is all a new client can fail on
+      let listen = (client_options.listen_ip_address, client_options.listen_port);
       let client = Client::new(client_options).expect("the client options were validated");
       let events = client.subscribe();
       let reachability = Arc::new(Reachability::new(
         state.clone(),
         client.inbound_connections(),
       ));
+      let mapper = PortMapper::new(
+        vec![Box::new(Upnp::default()), Box::new(NatPmp::default())],
+        startup.values.soulseek.port_mapping,
+        listen.0,
+        listen.1,
+      );
       let watchdog = Watchdog::new(
         client.clone(),
         config.clone(),
@@ -168,6 +180,7 @@ impl Network {
         following: Mutex::new(None),
         drained: CancellationToken::new(),
         edges,
+        mapper,
         reachability,
       }
     }))
@@ -211,9 +224,12 @@ impl Network {
     *lock(&self.following) = Some(task);
   }
 
-  /// Starts judging whether other users can connect to us, until `shutdown`; called once,
-  /// before anything connects.
+  /// Starts asking the router to forward our peer port and judging whether other users can
+  /// connect to us, until `shutdown`; called once, before anything connects.
   pub fn follow_listening(&self, shutdown: CancellationToken) {
+    self
+      .mapper
+      .start(self.state.clone(), self.reachability.clone());
     tokio::spawn(
       self
         .reachability
@@ -223,11 +239,13 @@ impl Network {
     );
   }
 
-  /// The listener's options may have changed: a new port in the client's own, which a
-  /// listener that could not move keeps as they were, starts the judgement of who can reach us
-  /// over.
-  fn listening_changed(&self) {
-    let port = self.client.options().listen_port;
+  /// The listener's options may have changed: the client's own, which a listener that could
+  /// not move keeps as they were, are mapped on the router when `mapping` is on, and a new
+  /// port starts the judgement of who can reach us over.
+  fn listening_changed(&self, mapping: bool) {
+    let options = self.client.options();
+    let (ip, port) = (options.listen_ip_address, options.listen_port);
+    self.mapper.options(mapping, ip, port);
     if self.state.current().server.listen.port != port {
       self.state.update(|state| state.server.listen.port = port);
       self.reachability.start_over("the listening port changed");
@@ -256,10 +274,12 @@ impl Network {
     }
   }
 
-  /// Stops for good at shutdown: the watchdog is cancelled, the client disconnected and
-  /// disposed, and the events this raised are handled before this returns.
+  /// Stops for good at shutdown: the watchdog is cancelled, the port mapping removed, the
+  /// client disconnected and disposed, and the events this raised are handled before this
+  /// returns.
   pub async fn stop(&self) {
     self.watchdog.stop(true);
+    self.mapper.stop().await;
     self
       .client
       .disconnect(Some(SHUTTING_DOWN), Some(Intent::Shutdown.error()))

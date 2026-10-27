@@ -52,6 +52,14 @@ pub struct Soulseek {
   /// The port other users connect to us on.
   #[cascade(env = "RESEEK_SLSK_LISTEN_PORT", cli = "--slsk-listen-port")]
   pub listen_port: u16,
+  /// Asks the router to forward `listen_port` to this computer, by UPnP, NAT-PMP or PCP, while
+  /// connected to the server.
+  #[cascade(
+    env = "RESEEK_SLSK_PORT_MAPPING",
+    cli = "--slsk-no-port-mapping",
+    negated
+  )]
+  pub port_mapping: bool,
   /// The least severe protocol diagnostic logged: `none`, `warning`, `info` or `debug`.
   #[cascade(
     env = "RESEEK_SLSK_DIAG_LEVEL",
@@ -85,6 +93,7 @@ impl Default for Soulseek {
       picture: None,
       listen_ip_address: "0.0.0.0".to_string(),
       listen_port: 50300,
+      port_mapping: true,
       diagnostic_level: DiagnosticLevel::default(),
       distributed_network: DistributedNetwork::default(),
       connection: SoulseekConnection::default(),

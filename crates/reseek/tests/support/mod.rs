@@ -281,6 +281,8 @@ pub fn daemon_listening(
     "127.0.0.1",
     "--slsk-listen-port",
     &listen,
+    // never the router of the machine the tests run on
+    "--slsk-no-port-mapping",
     "--remote-configuration",
   ];
   args.extend_from_slice(extra);
@@ -344,6 +346,7 @@ pub async fn scripted(dir: &Path) -> (Daemon, Client, client::ServerSide) {
     "127.0.0.1",
     "--slsk-listen-port",
     &listen,
+    "--slsk-no-port-mapping",
   ];
   let running = Daemon::start(dir, &args, &ACCOUNT);
   let mut server = fake.accept().await;

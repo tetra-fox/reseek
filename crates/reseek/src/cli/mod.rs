@@ -358,13 +358,27 @@ fn takes_value(flag: &Flag<'_>) -> bool {
 
 /// The value of `flag`: the attached one, else the next token when the flag takes one. Returns
 /// whether the next token was used. `--generate-cert` takes the next token only when it is not
-/// a flag.
+/// a flag. A flag that turns a boolean off gives `false`, or the opposite of the value attached.
 fn value_for(
   flag: &Flag<'_>,
   shown: &str,
   attached: Option<String>,
   next: Option<&String>,
 ) -> Result<(String, bool), UsageError> {
+  if let Flag::Option(field) = flag
+    && field.negated
+  {
+    let off = match attached.as_deref() {
+      None | Some("true") => "false",
+      Some("false") => "true",
+      Some(other) => {
+        return Err(UsageError(format!(
+          "`{shown}` is true or false, not `{other}`"
+        )));
+      }
+    };
+    return Ok((off.to_string(), false));
+  }
   if let Some(value) = attached {
     return Ok((value, false));
   }
@@ -456,6 +470,19 @@ mod tests {
         ("--shared", "/b"),
       ])
     );
+  }
+
+  #[test]
+  fn a_flag_that_turns_an_option_off_sets_it_false() {
+    assert_eq!(
+      flags(&["--slsk-no-port-mapping"]),
+      pairs(&[("--slsk-no-port-mapping", "false")])
+    );
+    assert_eq!(
+      flags(&["--slsk-no-port-mapping=false"]),
+      pairs(&[("--slsk-no-port-mapping", "true")])
+    );
+    assert!(run(&["--slsk-no-port-mapping=no"]).is_err());
   }
 
   #[test]

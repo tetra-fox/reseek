@@ -20,8 +20,10 @@ use crate::app::AppState;
 use crate::auth::Auth;
 use crate::config::load::{self, ConfigFiles, Sources};
 use crate::http::{Peer, Transport, pipeline};
+use crate::live::Live;
 use crate::logging::LogBuffer;
 use crate::paths::Defaults;
+use crate::state::StateOwner;
 use crate::ui::Ui;
 
 /// A daemon serving from a temporary directory.
@@ -91,6 +93,23 @@ pub async fn app(config: &str, env: &[(&str, &str)]) -> TestApp {
     router: pipeline::app(state.clone(), Ui::Off),
     state,
   }
+}
+
+/// A state document of its own, for a daemon with the default options, for an engine tested
+/// without the rest of the daemon.
+pub fn state() -> StateOwner {
+  let dir = tempfile::tempdir().unwrap();
+  let defaults = Defaults::new(Some(dir.path()));
+  let sources = Sources {
+    env: Vec::new(),
+    files: ConfigFiles::new(&[], dir.path()),
+    cli: Vec::new(),
+  };
+  let loaded = Watcher::new(load::layers(&sources, &defaults, None))
+    .unwrap()
+    .current();
+  let paths = defaults.resolve(&loaded.values).unwrap();
+  StateOwner::new(&loaded, &paths, Live::new(CancellationToken::new()))
 }
 
 impl TestApp {

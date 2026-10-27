@@ -73,11 +73,13 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
     Event::Connected => connected(app).await,
     Event::LoggedIn { username } => {
       logged_in(app, &username);
+      app.network.mapper.logged_in(true);
       app.network.reachability.logged_in();
       app.messaging.take(Event::LoggedIn { username }).await;
     }
     Event::Disconnected { message, error } => {
       disconnected(app, &message, error.as_ref(), *reached);
+      app.network.mapper.logged_in(false);
       app.network.reachability.logged_out();
       *reached = false;
       app
