@@ -1,6 +1,6 @@
 //! The options outside the larger sections: the instance name, relay mode, the base and
 //! download directories, the blocklist, search filters, logging, metrics, throttling,
-//! retention and blocking.
+//! retention, blocking and the rooms to join.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -113,6 +113,11 @@ pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
   for scope in &options.blocking.default_scopes {
     if let Err(message) = scope.parse::<api_types::blocking::BlockScope>() {
       report.add("blocking.default_scopes", message);
+    }
+  }
+  for room in &options.rooms {
+    if let Err(reason) = soulseek_proto::validate_room_name(room) {
+      report.add("rooms", format!("Invalid room name '{room}': {reason}"));
     }
   }
   let refresh = "transfers.ui.queue_refresh";
@@ -336,6 +341,19 @@ mod tests {
     ] {
       assert!(metrics_url(taken).is_err(), "{taken:?}");
     }
+  }
+
+  #[test]
+  fn a_configured_room_the_server_would_refuse_is_refused_with_why() {
+    let mut options = Options::default();
+    options.rooms = vec!["indie".into(), "two  spaces".into()];
+    assert_eq!(
+      problems(&options),
+      [(
+        "rooms".to_string(),
+        "Invalid room name 'two  spaces': it has two spaces in a row".to_string()
+      )]
+    );
   }
 
   #[test]
