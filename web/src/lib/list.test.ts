@@ -159,4 +159,29 @@ describe("a list's selection and focus", () => {
     flushSync();
     expect(document.activeElement).toBe(grid());
   });
+
+  it("selects a clicked row alone, toggles with Ctrl or Cmd and extends with Shift", () => {
+    start(grouped());
+    const click = (key: string, mods: MouseEventInit = {}) => {
+      line(key).dispatchEvent(new MouseEvent("click", { bubbles: true, ...mods }));
+      flushSync();
+    };
+    click("a1");
+    click("a2");
+    expect(ticked()).toEqual(["a2"]);
+    click("b1", { ctrlKey: true });
+    expect(ticked()).toEqual(["a2", "b1"]);
+    click("b1", { metaKey: true });
+    expect(ticked()).toEqual(["a2"]);
+    // the anchor is the row last clicked on its own: b1, from the Cmd-click
+    click("a1", { shiftKey: true });
+    expect(ticked()).toEqual(["a1", "a2", "b1"]);
+    click("a1");
+    click("a2", { shiftKey: true, ctrlKey: true });
+    expect(ticked()).toEqual(["a1", "a2"]);
+    // a click on a control or a header leaves the selection as it is
+    line("b1").querySelector<HTMLElement>("button:not([role])")!.click();
+    click("h:b");
+    expect(ticked()).toEqual(["a1", "a2"]);
+  });
 });

@@ -260,6 +260,27 @@ describe("the transfers table", () => {
       expect(document.getElementById(active)?.getAttribute("data-id")).toBe(b.id);
     });
 
+    it("select a clicked row alone, and toggle one with Ctrl", async () => {
+      const a = transfer({ filename: "x\\a.flac" });
+      const b = transfer({ filename: "x\\b.flac" });
+      listing = [a, b];
+      await start();
+      const cell = (id: string) => row(id)!.querySelector('[role="gridcell"]:nth-child(4)')!;
+      const click = (id: string, mods: MouseEventInit = {}) => {
+        cell(id).dispatchEvent(new MouseEvent("click", { bubbles: true, ...mods }));
+        flushSync();
+      };
+      click(a.id);
+      click(b.id);
+      expect(ticked()).toEqual([b.id]);
+      click(a.id, { ctrlKey: true });
+      expect(ticked().toSorted()).toEqual([a.id, b.id].toSorted());
+      // the file name opens the details and leaves the selection alone
+      row(a.id)!.querySelector<HTMLButtonElement>("button[title]")!.click();
+      flushSync();
+      expect(ticked().toSorted()).toEqual([a.id, b.id].toSorted());
+    });
+
     it("move past a folded group to the next row", async () => {
       Object.assign(views.download, { groupBy: "user" });
       const a = transfer({ username: "alice" });

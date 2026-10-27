@@ -1,7 +1,7 @@
 import { on } from "svelte/events";
 import { SvelteSet } from "svelte/reactivity";
 
-import { keepsKey, layerOpen, withModifier } from "./keys";
+import { inControl, keepsKey, layerOpen, withModifier } from "./keys";
 
 /** What a list tells the controller about its lines */
 export type ListSpec<L> = {
@@ -50,6 +50,10 @@ let lists = 0;
  * lines, the row now in its place takes over: the first row at or after its index, else the
  * nearest row before it. ↑ and ↓ move by position to the previous and next row, skipping group
  * headers; `activeId` names the focused line for `aria-activedescendant` while it is rendered.
+ *
+ * A click on a row outside its controls selects that row alone; with Ctrl or Cmd it toggles
+ * the row, and with Shift it selects the rows from the anchor to it (adding them with Ctrl or
+ * Cmd as well). A click that ends a text selection selects nothing.
  *
  * Keys: a focused control keeps the keys it handles (`keepsKey`); the rest act on the line the
  * control is in. Ctrl/Cmd+A selects the focused line's group, or every row; any other key with
@@ -157,6 +161,12 @@ export class ListControl<L> {
     else this.selected.add(id);
   }
 
+  /** Selects one row and nothing else */
+  only(id: string) {
+    this.selected.clear();
+    this.toggle(id);
+  }
+
   /** A row's checkbox: Shift adds the rows from the anchor to it, otherwise it toggles */
   tick(id: string, range: boolean) {
     if (range && this.#range(id, true)) return;
@@ -200,7 +210,8 @@ export class ListControl<L> {
         this.#held = e.target === node ? null : (e.target as Element);
         this.#take(e.target);
       }),
-      on(node, "keydown", this.#keydown)
+      on(node, "keydown", this.#keydown),
+      on(node, "click", this.#click)
     ];
     return () => {
       for (const stop of stops) stop();
@@ -248,6 +259,20 @@ export class ListControl<L> {
     if (this.#spec.reveal) this.#spec.reveal(index);
     else document.getElementById(this.lineId(index))?.scrollIntoView({ block: "nearest" });
   }
+
+  #click = (e: MouseEvent) => {
+    if (e.defaultPrevented || inControl(e.target)) return;
+    const selection = document.getSelection();
+    if (selection && !selection.isCollapsed) return;
+    const key = (e.target as Element).closest<HTMLElement>("[data-line]")?.dataset.line;
+    const line = this.lines.find((l) => this.#spec.key(l) === key);
+    const id = line === undefined ? null : this.#spec.id(line);
+    if (id === null) return;
+    const toggle = e.ctrlKey || e.metaKey;
+    if (e.shiftKey && this.#range(id, toggle)) return;
+    if (toggle) return this.toggle(id);
+    this.only(id);
+  };
 
   #keydown = (e: KeyboardEvent) => {
     if (keepsKey(e)) return;

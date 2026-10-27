@@ -23,6 +23,10 @@ export const keepsKey = (e: KeyboardEvent): boolean => {
   return !!target.closest(KEEPS_PRESS) && (e.key === "Enter" || e.key === " ");
 };
 
+/** Whether a click on `target` belongs to a control: a field, a button, a link, a checkbox */
+export const inControl = (target: EventTarget | null) =>
+  target instanceof Element && !!target.closest(`${KEEPS_ALL},${KEEPS_PRESS},label`);
+
 /**
  * Whether a menu, a dialog or a hover card is open, which Escape closes before anything under
  * it. They are only in the page while open
