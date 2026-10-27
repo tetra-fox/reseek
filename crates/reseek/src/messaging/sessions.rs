@@ -248,4 +248,22 @@ mod tests {
       "a gap before the room's oldest message is not the room's"
     );
   }
+
+  #[test]
+  fn ranges_that_meet_at_a_gap_list_it_once() {
+    let gap = HistoryGap {
+      from: at("2026-10-26T11:00:00Z"),
+      to: Some(at("2026-10-26T12:00:00Z")),
+      reason: GapReason::Disconnected,
+    };
+    let oldest = at("2026-10-26T08:00:00Z");
+    let meeting = at("2026-10-26T11:00:00Z");
+    let older = within(&[gap], oldest, at("2026-10-26T09:00:00Z"), meeting);
+    let newer = within(&[gap], oldest, meeting, at("2026-10-26T13:00:00Z"));
+    assert_eq!(
+      (older.len(), newer.len()),
+      (0, 1),
+      "a gap starting where the ranges meet is the newer one's"
+    );
+  }
 }
