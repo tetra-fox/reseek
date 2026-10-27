@@ -1,6 +1,7 @@
-//! Rooms: joining and leaving, at login and when the configuration adds a room, what is said
-//! and who is there, the tickers, the private rooms we belong to and the server's room list.
-//! Each room's stored history is read in `stored`.
+//! Rooms: joining and leaving, at every login (the configured rooms, then every room we joined
+//! and did not leave, before a restart too) and when the configuration adds a room, what is
+//! said and who is there, the tickers, the private rooms we belong to and the server's room
+//! list. Each room's stored history is read in `stored`.
 
 mod events;
 pub mod history;
@@ -69,6 +70,18 @@ fn refused(error: ClientError) -> ApiError {
     ClientError::InvalidArgument(message) => ApiError::bad_request(message),
     other => unsent(other),
   }
+}
+
+/// Whether a join failed for a reason that holds at every later login too: a private room we
+/// are not in holds the name, or the name is not one the server takes.
+fn gone(error: &ClientError) -> bool {
+  matches!(
+    error,
+    ClientError::Room {
+      kind: RoomErrorKind::JoinForbidden,
+      ..
+    } | ClientError::InvalidArgument(_)
+  )
 }
 
 impl Messaging {
@@ -162,19 +175,46 @@ impl Messaging {
   }
 
   /// After a login: the configured rooms are joined, then the rooms we were in before the
-  /// connection was lost, and the gap since the last session is pushed.
+  /// connection was lost, then the rooms we joined before the last stop and never left, and
+  /// the gap since the last session is pushed. A room of ours, not of the configuration,
+  /// that refuses us or whose name the server takes no more is forgotten.
   pub(super) fn rejoin(&self) {
-    let mut rooms = self.config.current().values.rooms.clone();
-    for tracked in self.rooms.tracker().rooms() {
-      if !rooms.contains(&tracked.name) {
-        rooms.push(tracked.name.clone());
-      }
-    }
+    let configured = self.config.current().values.rooms.clone();
+    let tracked: Vec<String> = self
+      .rooms
+      .tracker()
+      .rooms()
+      .iter()
+      .map(|room| room.name.clone())
+      .collect();
     let this = self.this();
     self.tasks.spawn(async move {
-      for room in rooms {
+      let remembered = match this.db.read(history::remembered).await {
+        Ok(remembered) => remembered,
+        Err(e) => {
+          warn!(error = %e, "the rooms joined before the last stop not read; not joined again");
+          Vec::new()
+        }
+      };
+      let mut ours = Vec::new();
+      for room in tracked.into_iter().chain(remembered) {
+        if !configured.contains(&room) && !ours.contains(&room) {
+          ours.push(room);
+        }
+      }
+      for room in configured {
         match this.join_now(&room, false).await {
           Ok(_) => info!(room, "room joined"),
+          Err(e) => warn!(room, error = %e, "room not joined"),
+        }
+      }
+      for room in ours {
+        match this.join_now(&room, false).await {
+          Ok(_) => info!(room, "room joined"),
+          Err(e) if gone(&e) => {
+            warn!(room, error = %e, "room we were in can no longer be joined; forgotten");
+            this.forgotten(&room).await;
+          }
           Err(e) => warn!(room, error = %e, "room not joined"),
         }
       }
@@ -243,6 +283,12 @@ impl Messaging {
     if joined {
       self.client().leave_room(room).await.map_err(unsent)?;
     }
+    self.forgotten(room).await;
+    Ok(())
+  }
+
+  /// Takes `room` off the rooms we are in and the ones joined again after a start.
+  async fn forgotten(&self, room: &str) {
     self.rooms.tracker().left(room);
     self.rooms_changed();
     let room_name = room.to_string();
@@ -255,7 +301,6 @@ impl Messaging {
       warn!(room, error = %e, "room leave not noted");
     }
     self.push_rooms().await;
-    Ok(())
   }
 
   pub(super) async fn send_room(&self, room: &str, message: String) -> Result<(), ApiError> {

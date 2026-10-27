@@ -197,6 +197,35 @@ impl Daemon {
     format!("http://127.0.0.1:{}", self.port)
   }
 
+  /// What it printed so far.
+  pub fn printed(&self) -> String {
+    self
+      .printed
+      .text
+      .lock()
+      .unwrap_or_else(PoisonError::into_inner)
+      .clone()
+  }
+
+  /// Waits until it has printed a line holding every one of `parts`, and returns that line.
+  pub async fn printed_line(&self, parts: &[&str]) -> String {
+    let started = Instant::now();
+    loop {
+      let printed = self.printed();
+      if let Some(line) = printed
+        .lines()
+        .find(|line| parts.iter().all(|part| line.contains(part)))
+      {
+        return line.to_string();
+      }
+      assert!(
+        started.elapsed() < PATIENCE,
+        "never printed {parts:?}:\n{printed}"
+      );
+      tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+  }
+
   /// Everything it printed, once it has exited.
   pub fn output(&mut self) -> String {
     if let Some(reader) = self.reader.take() {

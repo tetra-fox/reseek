@@ -231,7 +231,8 @@ pub fn notify(conn: &Connection, room: &str) -> rusqlite::Result<NotifyLevel> {
     .map_or(Ok(NotifyLevel::Mentions), notify_level)
 }
 
-/// Notes that we joined `room` at `now`.
+/// Notes that we joined `room` at `now`; it is joined again after every start until we leave
+/// it.
 pub fn joined(conn: &Connection, room: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
   conn.execute(
     "INSERT INTO room_state (room_name, joined_at) VALUES (?1, ?2) \
@@ -250,7 +251,18 @@ pub fn left_at(conn: &Connection, room: &str) -> rusqlite::Result<Option<DateTim
   left.flatten().as_deref().map(read_timestamp).transpose()
 }
 
-/// Notes that we left `room` at `now`.
+/// The rooms we joined and never left, in the order of their latest join.
+pub fn remembered(conn: &Connection) -> rusqlite::Result<Vec<String>> {
+  conn
+    .prepare_cached(
+      "SELECT room_name FROM room_state WHERE joined_at IS NOT NULL AND left_at IS NULL \
+       ORDER BY joined_at, room_name",
+    )?
+    .query_map([], |row| row.get(0))?
+    .collect()
+}
+
+/// Notes that we left `room` at `now`, so it is not joined again at the next start.
 pub fn left(conn: &Connection, room: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
   conn.execute(
     "INSERT INTO room_state (room_name, left_at) VALUES (?1, ?2) \

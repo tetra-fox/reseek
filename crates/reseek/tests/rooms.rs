@@ -1,6 +1,8 @@
 //! Rooms over soulfind: a configured room is joined at login, what is said there is kept with
 //! the mentions of us marked and counted unread, the history survives a restart that joins it
-//! again with the gap the restart left in it; a room joined twice is joined once, left and
+//! again with the gap the restart left in it; the rooms we were in are joined again after a
+//! restart until we leave them, and one taken by a private room is forgotten; a room joined
+//! twice is joined once, left and
 //! joined again, and refused while logged out; and the server's room list is asked for once a
 //! minute at most.
 
@@ -139,6 +141,61 @@ async fn a_room_is_joined_once_left_and_joined_again_but_not_while_logged_out() 
   until(&api, "logged out", |s| !s.server.is_connected).await;
   let refused = api.join_room("elsewhere", false).await.unwrap_err();
   assert_eq!(refused.status().map(|s| s.as_u16()), Some(409));
+}
+
+#[tokio::test]
+async fn the_rooms_we_were_in_are_joined_again_after_a_restart_until_left() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let dir = tempfile::tempdir().unwrap();
+  let name = soulfind::username("daemon");
+  let [kept, left, taken, last] = ["kept", "left", "taken", "last"].map(soulfind::username);
+  let running = daemon(dir.path(), &server, &name, &[]);
+  let api = signed_in(&running).await;
+  until(&api, "logged in", logged_in).await;
+  for room in [&kept, &left, &taken] {
+    api.join_room(room, false).await.unwrap().expect("joined");
+  }
+  api.leave_room(&left).await.unwrap();
+  api.shut_down().await.unwrap();
+  let mut stopped = running;
+  stopped.child.wait().unwrap();
+  // with us gone the room is empty and its name free, and a private room takes it
+  let owner = server.login("owner", quiet()).await;
+  owner
+    .client
+    .join_room(&taken, RoomType::Private)
+    .await
+    .unwrap();
+
+  let running = daemon(dir.path(), &server, &name, &[]);
+  let api = signed_in(&running).await;
+  until(&api, "in the room again", |s| {
+    logged_in(s) && s.rooms.contains(&kept)
+  })
+  .await;
+  running
+    .printed_line(&["can no longer be joined; forgotten", &taken])
+    .await;
+  api.join_room(&last, false).await.unwrap().expect("joined");
+  api.shut_down().await.unwrap();
+  let mut stopped = running;
+  stopped.child.wait().unwrap();
+
+  // the rooms are joined again in the order they were joined, so the last one comes after
+  // any attempt at the forgotten one
+  let running = daemon(dir.path(), &server, &name, &[]);
+  let api = signed_in(&running).await;
+  let state = until(&api, "in both rooms again", |s| {
+    logged_in(s) && s.rooms.contains(&last)
+  })
+  .await;
+  assert_eq!(state.rooms, [kept, last], "the left room stays left");
+  assert!(
+    !running.printed().contains(&taken),
+    "the forgotten room is not tried again"
+  );
 }
 
 #[tokio::test]
