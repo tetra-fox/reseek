@@ -13,14 +13,7 @@ impl Client {
   /// Hands a classified connection to its owner. A connection nothing takes is closed with the
   /// reason, which it logs once.
   pub(super) async fn route_inbound(&self, inbound: InboundConnection) {
-    let answer = matches!(inbound, InboundConnection::PierceFirewall { .. });
-    self.inner.inbound.send_modify(|counted| {
-      if answer {
-        counted.answers += 1;
-      } else {
-        counted.direct += 1;
-      }
-    });
+    self.inner.inbound.send_modify(|counted| *counted += 1);
     let routed = match inbound {
       InboundConnection::Peer { username, conn } => {
         self.add_or_update_message_connection(&username, conn)

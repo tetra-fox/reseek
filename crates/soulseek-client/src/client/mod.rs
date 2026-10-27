@@ -82,8 +82,8 @@ struct Inner {
   endpoints: endpoint::Endpoints,
   transfers: Arc<Transfers>,
   searches: Searches,
-  /// the connections peers opened to our listener so far
-  inbound: watch::Sender<crate::inbound::InboundConnections>,
+  /// how many connections peers opened to our listener so far
+  inbound: watch::Sender<u64>,
   /// cancelled when the client is disposed or dropped
   lifetime: CancellationToken,
 }
@@ -149,9 +149,10 @@ impl Client {
     *self.inner.state.borrow()
   }
 
-  /// The connections peers opened to our listener since the client was made, followed as
-  /// they come.
-  pub fn inbound_connections(&self) -> watch::Receiver<crate::inbound::InboundConnections> {
+  /// How many connections peers opened to our listener since the client was made, followed as
+  /// they come. Every one, a peer answering a connection request we had the server relay
+  /// included, shows that other users can reach the listener.
+  pub fn inbound_connections(&self) -> watch::Receiver<u64> {
     self.inner.inbound.subscribe()
   }
 

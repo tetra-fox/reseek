@@ -16,17 +16,6 @@ const MAX_INIT_BYTES: u32 = 1024;
 /// how many leading bytes of an unrecognised first message an error shows
 const SHOWN_BYTES: usize = 16;
 
-/// How many connections other users opened to our listener, counted since the client was
-/// made. A peer that reaches the listener by itself shows that other users can connect to us; a
-/// peer answering a connection request we had the server relay is counted apart.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct InboundConnections {
-  /// connections a peer opened on its own, for messages, a transfer or the distributed tree
-  pub direct: u64,
-  /// connections a peer opened to answer a request of ours the server relayed
-  pub answers: u64,
-}
-
 /// An accepted connection and what its first message says it is for
 #[derive(Debug)]
 pub(crate) enum InboundConnection {

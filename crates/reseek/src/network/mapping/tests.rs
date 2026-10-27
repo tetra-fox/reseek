@@ -1,7 +1,6 @@
 use std::net::Ipv4Addr;
 
 use api_types::state::Reachable;
-use soulseek_client::InboundConnections;
 
 use super::*;
 use crate::testing;
@@ -58,7 +57,7 @@ struct Rig {
   reachability: Arc<Reachability>,
   requests: Arc<Mutex<Vec<String>>>,
   /// the count of peers reaching us, which the judgement follows while it is held
-  _inbound: watch::Sender<InboundConnections>,
+  _inbound: watch::Sender<u64>,
 }
 
 fn rig(routers: Vec<Fake>) -> Rig {
@@ -73,7 +72,7 @@ fn rig(routers: Vec<Fake>) -> Rig {
     })
     .collect();
   let state = testing::state();
-  let (inbound, counted) = watch::channel(InboundConnections::default());
+  let (inbound, counted) = watch::channel(0);
   let reachability = Arc::new(Reachability::new(state.clone(), counted));
   let mapper = PortMapper::new(gateways, true, Ipv4Addr::UNSPECIFIED.into(), 50300);
   mapper.start(state.clone(), reachability.clone());

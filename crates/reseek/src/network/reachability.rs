@@ -1,9 +1,9 @@
 //! Whether other users can connect to us, judged from what happens rather than asked of anyone:
-//! a peer that connects to our listener by itself shows they can; ten minutes logged in, or five
-//! of our searches drawing responses, with every peer connection one we opened ourselves, shows
-//! they cannot. A peer answering a connection request we had the server relay reached our
-//! listener too, so it holds the judgement at "unknown". The judgement starts over at every
-//! login and whenever the listening port or its mapping on the router changes; it is
+//! a peer that connects to our listener shows they can, whether it came by itself or to answer
+//! a connection request we had the server relay (nothing else gets a peer to our port); ten
+//! minutes logged in, or five of our searches drawing responses, with every peer connection one
+//! we opened ourselves, shows they cannot. The judgement starts over at every login and whenever
+//! the listening port or its mapping on the router changes; it is
 //! `State.server.listen.reachable`.
 
 use std::collections::HashSet;
@@ -11,7 +11,6 @@ use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
 use api_types::state::Reachable;
-use soulseek_client::InboundConnections;
 use tokio::sync::{Notify, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
@@ -29,8 +28,8 @@ pub const SEARCHES: usize = 5;
 struct Evidence {
   logged_in: bool,
   since: Instant,
-  /// the connections counted when it started over
-  base: InboundConnections,
+  /// the connections to our listener counted when it started over
+  base: u64,
   /// the tokens of our searches that took a response
   answered: HashSet<u32>,
 }
@@ -38,26 +37,27 @@ struct Evidence {
 /// The judgement of whether other users can connect to us.
 pub struct Reachability {
   state: StateOwner,
-  inbound: watch::Receiver<InboundConnections>,
+  inbound: watch::Receiver<u64>,
   evidence: Mutex<Evidence>,
   changed: Notify,
 }
 
-/// What `seen` connections, `searches` answered and whether we `waited` long enough say.
-pub fn judge(seen: InboundConnections, searches: usize, waited: bool) -> Reachable {
-  if seen.direct > 0 {
+/// What `reached` connections to our listener, `searches` answered and whether we `waited`
+/// long enough say.
+pub fn judge(reached: u64, searches: usize, waited: bool) -> Reachable {
+  if reached > 0 {
     Reachable::Yes
-  } else if seen.answers > 0 || (!waited && searches < SEARCHES) {
-    Reachable::Unknown
-  } else {
+  } else if waited || searches >= SEARCHES {
     Reachable::No
+  } else {
+    Reachable::Unknown
   }
 }
 
 impl Reachability {
   /// A judgement made from the connections `inbound` counts, written into `state`; it is
   /// "unknown" until we log in.
-  pub fn new(state: StateOwner, inbound: watch::Receiver<InboundConnections>) -> Self {
+  pub fn new(state: StateOwner, inbound: watch::Receiver<u64>) -> Self {
     let base = *inbound.borrow();
     Self {
       state,
@@ -113,14 +113,10 @@ impl Reachability {
     if !evidence.logged_in {
       return (Reachable::Unknown, None);
     }
-    let counted = *self.inbound.borrow();
-    let seen = InboundConnections {
-      direct: counted.direct.saturating_sub(evidence.base.direct),
-      answers: counted.answers.saturating_sub(evidence.base.answers),
-    };
+    let reached = self.inbound.borrow().saturating_sub(evidence.base);
     let deadline = evidence.since + WAITED;
     let waited = Instant::now() >= deadline;
-    let judged = judge(seen, evidence.answered.len(), waited);
+    let judged = judge(reached, evidence.answered.len(), waited);
     (judged, (!waited).then_some(deadline))
   }
 
@@ -164,27 +160,18 @@ impl Reachability {
 mod tests {
   use super::*;
 
-  fn seen(direct: u64, answers: u64) -> InboundConnections {
-    InboundConnections { direct, answers }
-  }
-
   #[test]
-  fn a_peer_reaching_us_by_itself_settles_it() {
-    assert_eq!(judge(seen(1, 0), 0, false), Reachable::Yes);
-    assert_eq!(judge(seen(1, 3), 9, true), Reachable::Yes);
+  fn a_peer_reaching_the_listener_settles_it() {
+    assert_eq!(judge(1, 0, false), Reachable::Yes);
+    assert_eq!(judge(1, 9, true), Reachable::Yes);
   }
 
   #[test]
   fn only_our_own_connections_after_long_enough_say_no() {
-    assert_eq!(judge(seen(0, 0), 0, false), Reachable::Unknown);
-    assert_eq!(judge(seen(0, 0), 4, false), Reachable::Unknown);
-    assert_eq!(judge(seen(0, 0), 5, false), Reachable::No);
-    assert_eq!(judge(seen(0, 0), 0, true), Reachable::No);
-    assert_eq!(
-      judge(seen(0, 1), 5, true),
-      Reachable::Unknown,
-      "an answer to our request reached the listener"
-    );
+    assert_eq!(judge(0, 0, false), Reachable::Unknown);
+    assert_eq!(judge(0, 4, false), Reachable::Unknown);
+    assert_eq!(judge(0, 5, false), Reachable::No);
+    assert_eq!(judge(0, 0, true), Reachable::No);
   }
 
   /// Lets the judgement's task run until it waits again.
@@ -197,7 +184,7 @@ mod tests {
   #[tokio::test(start_paused = true)]
   async fn ten_minutes_with_nobody_reaching_us_say_no_until_we_log_out() {
     let state = crate::testing::state();
-    let (_inbound, counted) = watch::channel(InboundConnections::default());
+    let (_inbound, counted) = watch::channel(0);
     let reachability = std::sync::Arc::new(Reachability::new(state.clone(), counted));
     tokio::spawn(reachability.clone().follow(CancellationToken::new()));
     let reachable = || state.current().server.listen.reachable;
