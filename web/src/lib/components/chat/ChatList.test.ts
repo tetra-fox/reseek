@@ -3,6 +3,7 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { chat } from "#lib/chat/chat.svelte.js";
+import { interaction } from "#lib/interaction.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
@@ -71,7 +72,7 @@ describe("the chat list", () => {
     press(grid(), "ArrowDown");
     expect(active(grid())).toBe("user:alice");
     press(grid(), "Enter");
-    expect(goto).toHaveBeenCalledWith("#/chat/alice");
+    expect(goto).toHaveBeenCalledWith("#/chat/alice", { reset: false });
   });
 
   it("selects with Space and Ctrl+A within a section, and clears with Escape", () => {
@@ -91,12 +92,39 @@ describe("the chat list", () => {
     const line = (key: string) => document.querySelector(`[data-line="${key}"]`)!;
     line("user:bob").dispatchEvent(new MouseEvent("click", { bubbles: true }));
     flushSync();
-    expect(goto).toHaveBeenCalledWith("#/chat/bob");
+    expect(goto).toHaveBeenCalledWith("#/chat/bob", { reset: false });
     expect(ticked()).toEqual(["user:bob"]);
     vi.mocked(goto).mockClear();
     line("room:indie").dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true }));
     flushSync();
     expect(goto).not.toHaveBeenCalled();
     expect(ticked()).toEqual(["room:indie", "user:bob"]);
+  });
+
+  it("orders conversations by their newest message and holds the order while held", () => {
+    start();
+    const keys = () =>
+      [...document.querySelectorAll("[data-line^='user:']")].map((l) =>
+        l.getAttribute("data-line")
+      );
+    expect(keys()).toEqual(["user:alice", "user:bob"]);
+    const release = interaction.hold();
+    chat.conversations.get("bob")!.lastMessage = {
+      localId: 9,
+      id: 9,
+      timestamp: "2026-10-26T12:00:00Z",
+      username: "bob",
+      direction: "In",
+      message: "hey",
+      isAcknowledged: false,
+      wasReplayed: false
+    };
+    flushSync();
+    // bob has the newest message now, but the list holds still under the pointer
+    expect(keys()).toEqual(["user:alice", "user:bob"]);
+    expect(document.querySelector("[data-line='user:bob']")!.textContent).toContain("hey");
+    release();
+    flushSync();
+    expect(keys()).toEqual(["user:bob", "user:alice"]);
   });
 });

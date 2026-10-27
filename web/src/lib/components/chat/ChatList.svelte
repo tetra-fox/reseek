@@ -10,7 +10,7 @@
   import UsersRoundIcon from "@lucide/svelte/icons/users-round";
   import { SvelteSet } from "svelte/reactivity";
 
-  import { chat, paneKey } from "#lib/chat/chat.svelte.js";
+  import { chat, paneKey, paneOf } from "#lib/chat/chat.svelte.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { clock } from "#lib/clock.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
@@ -19,7 +19,7 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Avatar from "#lib/components/users/Avatar.svelte";
   import { ago, plural } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
+  import { freezesWhileUsed, heldOrder, interaction } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { chatHref, roomHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
@@ -59,29 +59,28 @@
         (a, b) => time(b.lastMessageAt) - time(a.lastMessageAt) || a.name.localeCompare(b.name)
       )
   );
+  // pinned first, then the newest message first: local ids grow in the order messages were
+  // stored, so a replayed message dated long ago still counts as new
   const conversations = $derived(
     chat.conversations.rows
       .filter((c) => matches(c.username))
-      .toSorted((a, b) => {
-        const x = users.get(a.username);
-        const y = users.get(b.username);
-        return (
-          Number(!!y?.pinned) - Number(!!x?.pinned) ||
-          lastAt(b.username, y?.figures.lastMessageAt) -
-            lastAt(a.username, x?.figures.lastMessageAt) ||
+      .toSorted(
+        (a, b) =>
+          Number(!!users.get(b.username)?.pinned) - Number(!!users.get(a.username)?.pinned) ||
+          (b.lastMessage?.localId ?? 0) - (a.lastMessage?.localId ?? 0) ||
           a.username.localeCompare(b.username)
-        );
-      })
+      )
   );
-  /** when a conversation last moved: a message seen on the page, else what the directory says */
-  const lastAt = (name: string, stored: string | null | undefined) =>
-    Math.max(time(chat.previews.get(paneKey("user", name))?.at), time(stored));
 
   // the users listed are looked up for their pin, presence and block
   $effect(() => {
     for (const c of chat.conversations.rows.slice(0, 200)) void users.load(c.username);
   });
 
+  // the list holds still while the pointer is on it, a text is selected in it or a row's menu
+  // is open, so a row never moves away from a click
+  const hold = heldOrder<Line>((l) => l.key);
+  $effect(() => (menuFor ? interaction.hold() : undefined));
   const lines = $derived.by(() => {
     const section = (key: string, title: string, targets: Target[]): Line[] => {
       const ids = targets.map((t) => paneKey(t.kind, t.name));
@@ -98,7 +97,7 @@
             })))
       ];
     };
-    return [
+    return hold([
       ...section(
         "h:rooms",
         "Rooms",
@@ -109,13 +108,16 @@
         "Conversations",
         conversations.map((c) => ({ kind: "user", name: c.username }))
       )
-    ];
+    ]);
   });
   /** the panes in the order they are listed, for moving between them */
   export const order = () => lines.flatMap((l) => (l.kind === "row" ? [l.target] : []));
 
+  // focus stays on the list, so the arrows go on from the chat just opened
   const open = (target: Target) =>
-    void goto(target.kind === "user" ? chatHref(target.name) : roomHref(target.name));
+    void goto(target.kind === "user" ? chatHref(target.name) : roomHref(target.name), {
+      reset: false
+    });
 
   const list = new ListControl<Line>({
     lines: () => lines,
@@ -128,9 +130,8 @@
     openOnClick: true
   });
 
-  const chosen = $derived(
-    lines.flatMap((l) => (l.kind === "row" && list.selected.has(l.key) ? [l.target] : []))
-  );
+  // every chat selected, those the search or a folded section hides too
+  const chosen = $derived([...list.selected].map(paneOf));
   const write = $derived(session.can("ReadWrite"));
 
   const markChosen = async () => {
@@ -208,13 +209,17 @@
         </div>
       {:else}
         {@const t = line.target}
-        {@const preview = chat.previews.get(line.key)}
         {@const room = t.kind === "room" ? chat.rooms.get(t.name) : undefined}
+        {@const conversation = t.kind === "user" ? chat.conversations.get(t.name) : undefined}
+        {@const last = conversation?.lastMessage}
+        {@const preview = last
+          ? { author: "", text: last.message, at: last.timestamp }
+          : chat.previews.get(line.key)}
         {@const counts = t.kind === "room" ? chat.roomUnread(t.name) : null}
         {@const unread = t.kind === "user" ? chat.unreadOf(t.name) : 0}
-        {@const notify = (room ?? chat.conversations.get(t.name))?.notify}
+        {@const notify = (room ?? conversation)?.notify}
         {@const summary = t.kind === "user" ? users.get(t.name) : undefined}
-        {@const at = preview?.at ?? room?.lastMessageAt ?? summary?.figures.lastMessageAt}
+        {@const at = preview?.at ?? room?.lastMessageAt}
         <div
           role="row"
           {...list.line(line, i)}

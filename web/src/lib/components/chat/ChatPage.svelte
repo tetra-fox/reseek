@@ -49,7 +49,9 @@
   // a narrow screen shows the list in a sheet, which going to a chat closes
   afterNavigate(() => (sheet = false));
 
-  const go = (t: Target) => void goto(t.kind === "user" ? chatHref(t.name) : roomHref(t.name));
+  // focus stays where it was, so the keys go on working
+  const go = (t: Target) =>
+    void goto(t.kind === "user" ? chatHref(t.name) : roomHref(t.name), { reset: false });
 
   // Ctrl/Cmd+K finds a chat; Alt+Up and Alt+Down move to the chat above or below
   const keydown = (e: KeyboardEvent) => {

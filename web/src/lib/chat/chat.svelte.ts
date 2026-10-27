@@ -11,11 +11,17 @@ export type Conversation = Schemas["Conversation"];
 export type JoinedRoom = Schemas["JoinedRoom"];
 export type ChatUnread = Schemas["ChatUnread"];
 
-/** What the sidebar shows under a conversation or room: its latest message seen in this page */
+/** What the sidebar shows under a room: its latest message seen in this page */
 export type Preview = { author: string; text: string; at: string };
 
 /** The key of a conversation's or a room's pane */
 export const paneKey = (kind: "user" | "room", name: string) => `${kind}:${name}`;
+
+/** The pane a key names, the other way from `paneKey` */
+export const paneOf = (key: string): { kind: "user" | "room"; name: string } => {
+  const cut = key.indexOf(":");
+  return { kind: key.slice(0, cut) === "room" ? "room" : "user", name: key.slice(cut + 1) };
+};
 
 /**
  * Every conversation and joined room with their unread counts, kept while the app is open so the
@@ -23,11 +29,13 @@ export const paneKey = (kind: "user" | "room", name: string) => `${kind}:${name}
  * loaded, then patched by their frames; `chat.unread` frames carry the counts
  */
 class Chat {
+  /** the open conversations, by peer */
   readonly conversations = new Keyed<Conversation>((c) => c.username);
+  /** the joined rooms, by name */
   readonly rooms = new Keyed<JoinedRoom>((r) => r.name);
   /** the counts from the last `chat.unread` frame, null until one came */
   unread = $state.raw<ChatUnread | null>(null);
-  /** the latest message of each pane seen since the page loaded, by pane key */
+  /** the latest message of each room seen since the page loaded, by pane key */
   readonly previews = new SvelteMap<string, Preview>();
   /** the pane on screen, by pane key, which gets no notification while the tab is visible */
   openPane = $state<string | null>(null);
@@ -37,11 +45,10 @@ class Chat {
     live.on("conversations.list", (list) => this.conversations.reconcile(list));
     live.on("conversations.update", ({ conversation }) => this.#upsertConversation(conversation));
     live.on("conversations.message", ({ username, message }) => {
-      this.#preview(paneKey("user", username), {
-        author: message.direction === "Out" ? "" : username,
-        text: message.message,
-        at: message.timestamp
-      });
+      const conversation = this.conversations.get(username);
+      if (conversation && (conversation.lastMessage?.localId ?? 0) <= message.localId) {
+        conversation.lastMessage = message;
+      }
       notifier.privateMessage(
         username,
         message,
@@ -51,7 +58,7 @@ class Chat {
     });
     live.on("rooms.list", (list) => this.rooms.reconcile(list));
     live.on("rooms.message", ({ roomName, message }) => {
-      this.#preview(paneKey("room", roomName), {
+      this.previews.set(paneKey("room", roomName), {
         author: message.username,
         text: message.message,
         at: message.timestamp
@@ -73,6 +80,7 @@ class Chat {
     return n;
   }
 
+  /** The unread room mentions, which turn the badge to the accent colour */
   get totalMentions(): number {
     return this.unread?.totalMentions ?? this.rooms.rows.reduce((n, r) => n + r.mentions, 0);
   }
@@ -99,10 +107,12 @@ class Chat {
     void this.load();
   }
 
+  /** Stops following them, as the session ends */
   stop() {
     for (const release of this.#release.splice(0)) release();
   }
 
+  /** Forgets everything held for the session that ended */
   clear() {
     this.stop();
     this.conversations.clear();
@@ -121,15 +131,36 @@ class Chat {
     if (rooms.ok) this.rooms.reconcile(rooms.data);
   };
 
-  /** Tells the server we read a conversation; the counts follow by frame */
-  acknowledge = (username: string) =>
-    call(() => api.PUT("/api/v0/conversations/{username}", { params: byUser(username) }));
+  /**
+   * Tells the server we read a conversation. Its count drops here at once, so the pane does not
+   * tell it again before the counts' frame comes
+   */
+  acknowledge = async (username: string) => {
+    const outcome = await call(() =>
+      api.PUT("/api/v0/conversations/{username}", { params: byUser(username) })
+    );
+    if (!outcome.ok) return outcome;
+    const row = this.conversations.get(username);
+    if (row) {
+      row.unAcknowledgedMessageCount = 0;
+      row.hasUnAcknowledgedMessages = false;
+    }
+    if (this.unread && username in this.unread.conversations) {
+      const { [username]: _read, ...others } = this.unread.conversations;
+      this.unread = { ...this.unread, conversations: others };
+    }
+    return outcome;
+  };
 
-  /** Moves a room's read marker to `localId` */
-  markRoomRead = (name: string, localId: number) =>
-    call(() =>
+  /** Moves a room's read marker to `localId`, never back */
+  markRoomRead = async (name: string, localId: number) => {
+    const outcome = await call(() =>
       api.PUT("/api/v0/rooms/joined/{roomName}/read", { params: byRoom(name), body: { localId } })
     );
+    const room = this.rooms.get(name);
+    if (outcome.ok && room) room.lastReadId = Math.max(room.lastReadId, localId);
+    return outcome;
+  };
 
   /** Moves a room's read marker to its newest stored message */
   markRoomReadNewest = async (name: string) => {
@@ -203,10 +234,6 @@ class Chat {
     if (!conversation.isActive) return this.conversations.remove(conversation.username);
     // a frame carries no messages; the list never holds them either
     this.conversations.upsert({ ...conversation, messages: null });
-  }
-
-  #preview(key: string, preview: Preview) {
-    this.previews.set(key, preview);
   }
 }
 
