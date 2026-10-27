@@ -10,6 +10,7 @@
   import XIcon from "@lucide/svelte/icons/x";
 
   import { kindOf } from "#lib/browse/summary.js";
+  import { leaf } from "#lib/browse/tree.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
@@ -111,7 +112,7 @@
           style:background-color={user.group.color}
           title={`Group ${user.group.name}`}></span>
       {/if}
-      <Username name={t.username} folder={getDirectoryName(t.filename)} />
+      <Username name={t.username} folder={leaf(getDirectoryName(t.filename))} />
       {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
     {:else if column === "size"}
       <span title={`${t.size.toLocaleString()} bytes`}>{formatBytes(t.size)}</span>
