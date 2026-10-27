@@ -13,6 +13,7 @@ mod blocklist;
 mod browse;
 mod group_cache;
 mod groups;
+mod known;
 mod listing;
 mod network;
 mod profile;
@@ -57,6 +58,7 @@ use crate::live::Live;
 use blocking::Blocks;
 use blocklist::Blocklist;
 use group_cache::GroupCache;
+use known::Known;
 use store::Stored;
 use touch::Toucher;
 use transfers::FigureCache;
@@ -87,6 +89,8 @@ pub struct Directory {
   groups: GroupCache,
   figures: FigureCache,
   summaries: Mutex<HashMap<String, (Instant, UserSummary)>>,
+  /// who has a row, with their country
+  known: Known,
 }
 
 impl Directory {
@@ -106,8 +110,14 @@ impl Directory {
     let db = Database::open(&store::SCHEMA, location)
       .await
       .map_err(|e| format!("users.db: {e}"))?;
-    let (ours, overrides) = db
-      .read(|conn| Ok((blocking::stored(conn, Utc::now())?, store::overrides(conn)?)))
+    let (ours, overrides, known) = db
+      .read(|conn| {
+        Ok((
+          blocking::stored(conn, Utc::now())?,
+          store::overrides(conn)?,
+          Known::read(conn)?,
+        ))
+      })
       .await
       .map_err(|e| format!("users.db: {e}"))?;
     let options = config.current().values.clone();
@@ -136,6 +146,7 @@ impl Directory {
       groups: GroupCache::new(overrides),
       figures: FigureCache::default(),
       summaries: Mutex::new(HashMap::new()),
+      known,
     });
     tokio::spawn(
       directory
@@ -189,9 +200,10 @@ impl Directory {
     self.blocks.configuration_blocks(username)
   }
 
-  /// Takes the countries room member lists gave for users we know, as `(username, code)`; a
-  /// user without a row is not made one.
+  /// Takes the countries room member lists gave, as `(username, code)`; only a user with a row
+  /// whose country moved is written, and a user without a row is not made one.
   pub async fn countries_seen(&self, countries: Vec<(String, String)>) {
+    let countries = self.known.news(countries);
     if countries.is_empty() {
       return;
     }
@@ -207,7 +219,7 @@ impl Directory {
           )?;
           for (username, code) in countries {
             if statement.execute(params![username, code])? > 0 {
-              changed.push(username);
+              changed.push((username, code));
             }
           }
         }
@@ -217,7 +229,8 @@ impl Directory {
       .await;
     match written {
       Ok(changed) => {
-        for username in changed {
+        for (username, code) in changed {
+          self.known.set_country(&username, code);
           self.changed(&username).await;
         }
       }
@@ -332,8 +345,9 @@ impl Directory {
     Ok(summary)
   }
 
-  /// Pushes `username`'s summary after their row or block changed.
+  /// Pushes `username`'s summary after their row or block changed; they have a row now.
   async fn changed(&self, username: &str) {
+    self.known.added(username);
     self.forget(username);
     match self.summary_of(username).await {
       Ok(summary) => self
@@ -345,6 +359,7 @@ impl Directory {
 
   /// Pushes that `username` left the directory.
   fn removed(&self, username: &str) {
+    self.known.removed(username);
     self.forget(username);
     self.live.publish(LiveFrame::UsersRemoved(UserRemoved {
       username: username.to_string(),
