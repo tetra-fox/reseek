@@ -36,4 +36,36 @@ describe("the browse screen's state", () => {
     expect(browser.phase).toBe("complete");
     expect(browser.tree.roots.map((r) => r.name)).toEqual(["Music"]);
   });
+
+  it("starts a browse of another user while one is pending, and drops the first answer", async () => {
+    const answers = new Map<string, (listing: Schemas["BrowseResponse"]) => void>();
+    fakeNetwork((url) => {
+      const user = /\/users\/(\w+)\/browse$/.exec(url.pathname)?.[1];
+      return user
+        ? new Promise<Schemas["BrowseResponse"]>((resolve) => answers.set(user, resolve))
+        : undefined;
+    });
+    const listing = (name: string): Schemas["BrowseResponse"] => ({
+      directories: [{ name, fileCount: 0, files: [] }],
+      directoryCount: 1,
+      lockedDirectories: [],
+      lockedDirectoryCount: 0
+    });
+
+    const bob = browser.browse("bob");
+    await vi.waitFor(() => expect(answers.has("bob")).toBe(true));
+    const alice = browser.browse("alice");
+    await vi.waitFor(() => expect(answers.has("alice")).toBe(true));
+    expect(browser.username).toBe("alice");
+
+    answers.get("bob")!(listing("Bob's music"));
+    await bob;
+    expect(browser.phase).toBe("pending");
+    expect(browser.tree.roots).toEqual([]);
+
+    answers.get("alice")!(listing("Alice's music"));
+    await alice;
+    expect(browser.phase).toBe("complete");
+    expect(browser.tree.roots.map((r) => r.name)).toEqual(["Alice's music"]);
+  });
 });

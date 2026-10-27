@@ -68,7 +68,8 @@ class Browse {
   /** Asks `username` for everything they share */
   browse = async (username: string) => {
     const name = username.trim();
-    if (!name || this.phase === "pending") return;
+    // a browse of someone else under way is left to finish unseen: its answer is dropped
+    if (!name || (this.phase === "pending" && this.username === name)) return;
     this.username = name;
     this.phase = "pending";
     this.errorMessage = "";
