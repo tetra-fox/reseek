@@ -253,7 +253,9 @@
     else if (e.key === "Enter") ondetails(item.transfer);
     else if (!session.can("ReadWrite") && ["Delete", "r", "R", "c", "C"].includes(e.key)) return;
     else if (e.key === "Delete")
-      ondelete(selected.size > 1 ? rows.filter((t) => selected.has(t.id)) : [item.transfer]);
+      ondelete(
+        selected.size > 1 ? store.list.rows.filter((t) => selected.has(t.id)) : [item.transfer]
+      );
     else if (e.key === "r" || e.key === "R") onkey("retry", item.transfer);
     else if (e.key === "c" || e.key === "C") onkey("cancel", item.transfer);
     else if (e.key === "o" || e.key === "O") onkey("open", item.transfer);
