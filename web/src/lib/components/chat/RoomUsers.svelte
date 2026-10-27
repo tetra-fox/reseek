@@ -8,7 +8,7 @@
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { formatSpeed, plural } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
+  import { freezesWhileUsed, heldOrder } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { userHref } from "#lib/nav.js";
   import { users } from "#lib/users.svelte.js";
@@ -31,6 +31,8 @@
 
   const all = $derived(members.users.rows);
   const online = $derived(all.filter((u) => u.status === "Online").length);
+  // the list holds still while it is pressed, selected in or a name's card or menu is open from it
+  const hold = heldOrder<Line>((l) => l.key);
   const lines = $derived.by(() => {
     const filter = typed.trim().toLowerCase();
     const shown = all.filter((u) => !filter || u.username.toLowerCase().includes(filter));
@@ -39,15 +41,17 @@
       { key: "h:operators", title: "Operators", users: shown.filter((u) => ops.has(u.username)) },
       { key: "h:members", title: "Members", users: shown.filter((u) => !ops.has(u.username)) }
     ];
-    return sections.flatMap((s): Line[] => {
-      if (!s.users.length) return [];
-      const sorted = s.users.toSorted(order);
-      const names = sorted.map((u) => u.username);
-      return [
-        { kind: "header", key: s.key, title: s.title, names },
-        ...sorted.map((user): Line => ({ kind: "user", key: user.username, user, names }))
-      ];
-    });
+    return hold(
+      sections.flatMap((s): Line[] => {
+        if (!s.users.length) return [];
+        const sorted = s.users.toSorted(order);
+        const names = sorted.map((u) => u.username);
+        return [
+          { kind: "header", key: s.key, title: s.title, names },
+          ...sorted.map((user): Line => ({ kind: "user", key: user.username, user, names }))
+        ];
+      })
+    );
   });
 
   // the members' blocks come from the directory

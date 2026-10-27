@@ -10,7 +10,7 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { blocking } from "#lib/components/users/block.svelte.js";
   import { formatBytes, getDirectoryName, plural } from "#lib/format.js";
-  import { interaction } from "#lib/interaction.svelte.js";
+  import { heldOrder } from "#lib/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
@@ -79,19 +79,10 @@
   });
 
   // while the user holds the table still, rows keep their places and new ones go below
-  let shown: Item[] = [];
-  const items = $derived.by(() => {
-    const fresh = layout(
-      sortTransfers(filtered, view.sort.id, view.sort.dir),
-      view.groupBy,
-      folded
-    );
-    if (!interaction.frozen || !shown.length) return (shown = fresh);
-    const place = new Map(shown.map((item, i) => [item.key, i]));
-    return (shown = fresh.toSorted(
-      (a, b) => (place.get(a.key) ?? Infinity) - (place.get(b.key) ?? Infinity)
-    ));
-  });
+  const hold = heldOrder<Item>((item) => item.key);
+  const items = $derived(
+    hold(layout(sortTransfers(filtered, view.sort.id, view.sort.dir), view.groupBy, folded))
+  );
   const rows = $derived(items.flatMap((i) => (i.type === "row" ? [i.transfer] : [])));
   const chosen = $derived(all.filter((t) => selected.has(t.id)));
   const detail = $derived(detailId ? store.list.get(detailId) : undefined);

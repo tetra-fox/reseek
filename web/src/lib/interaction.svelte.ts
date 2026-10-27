@@ -36,6 +36,22 @@ class Interaction {
 export const interaction = new Interaction();
 
 /**
+ * Keeps a list's order while the user holds the list still: the lines keep the places they had
+ * and new ones go below; once nothing holds it, the order given is taken. Make one per list and
+ * give it each fresh order from a `$derived`
+ */
+export const heldOrder = <T>(key: (item: T) => string) => {
+  let shown: T[] = [];
+  return (fresh: T[]): T[] => {
+    if (!interaction.frozen || !shown.length) return (shown = fresh);
+    const place = new Map(shown.map((item, i) => [key(item), i]));
+    return (shown = fresh.toSorted(
+      (a, b) => (place.get(key(a)) ?? Infinity) - (place.get(key(b)) ?? Infinity)
+    ));
+  };
+};
+
+/**
  * Holds the freeze while the pointer is pressed in `node` or a selection that isn't collapsed
  * lies in it. For `{@attach}` on a list's element
  */
