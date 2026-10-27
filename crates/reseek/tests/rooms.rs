@@ -1,7 +1,8 @@
 //! Rooms over soulfind: a configured room is joined at login, what is said there is kept with
 //! the mentions of us marked and counted unread, the history survives a restart that joins it
 //! again with the gap the restart left in it; the rooms we were in are joined again after a
-//! restart until we leave them, and one taken by a private room is forgotten; a room joined
+//! restart until we leave them, and one taken by a private room is forgotten, while a room
+//! joined only because the configuration listed it is not; a room joined
 //! twice is joined once, left and
 //! joined again, and refused while logged out; and the server's room list is asked for once a
 //! minute at most.
@@ -196,6 +197,53 @@ async fn the_rooms_we_were_in_are_joined_again_after_a_restart_until_left() {
     !running.printed().contains(&taken),
     "the forgotten room is not tried again"
   );
+}
+
+#[tokio::test]
+async fn a_room_taken_out_of_the_configuration_is_not_joined_after_a_restart() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let dir = tempfile::tempdir().unwrap();
+  let name = soulfind::username("daemon");
+  let [configured, both, joined] = ["configured", "both", "joined"].map(soulfind::username);
+  let config = dir.path().join("config.toml");
+  std::fs::write(&config, format!("rooms = [\"{configured}\"]\n")).unwrap();
+  let running = daemon(dir.path(), &server, &name, &[]);
+  let api = signed_in(&running).await;
+  until(&api, "in the configured room", |s| {
+    logged_in(s) && s.rooms.contains(&configured)
+  })
+  .await;
+  for room in [&both, &joined] {
+    api.join_room(room, false).await.unwrap().expect("joined");
+  }
+  api.shut_down().await.unwrap();
+  let mut stopped = running;
+  stopped.child.wait().unwrap();
+
+  // the room joined by hand is listed too, and stays ours once the list drops it
+  std::fs::write(&config, format!("rooms = [\"{both}\"]\n")).unwrap();
+  let running = daemon(dir.path(), &server, &name, &[]);
+  let api = signed_in(&running).await;
+  until(&api, "in the rooms again", |s| {
+    logged_in(s) && s.rooms.contains(&joined)
+  })
+  .await;
+  api.shut_down().await.unwrap();
+  let mut stopped = running;
+  stopped.child.wait().unwrap();
+
+  std::fs::write(&config, "").unwrap();
+  let running = daemon(dir.path(), &server, &name, &[]);
+  let api = signed_in(&running).await;
+  // the remembered rooms are joined in the order they were joined, so a configured room that
+  // was wrongly remembered would come before the last one
+  let state = until(&api, "in the rooms joined by hand", |s| {
+    logged_in(s) && s.rooms.contains(&joined)
+  })
+  .await;
+  assert_eq!(state.rooms, [both, joined]);
 }
 
 #[tokio::test]

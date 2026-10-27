@@ -1,6 +1,6 @@
-//! Rooms: joining and leaving, at every login (the configured rooms, then every room we joined
-//! and did not leave, before a restart too) and when the configuration adds a room, what is
-//! said and who is there, the tickers, the private rooms we belong to and the server's room
+//! Rooms: joining and leaving, at every login (the configured rooms, then every room someone
+//! asked to join and nobody left, before a restart too) and when the configuration adds a room,
+//! what is said and who is there, the tickers, the private rooms we belong to and the server's room
 //! list. Each room's stored history is read in `stored`.
 
 mod events;
@@ -107,15 +107,16 @@ impl Messaging {
 
   /// Joins `name`, as a private room when it is created and `private`. A server that has us in
   /// the room already, which it says by not answering, is made to forget it by leaving, and the
-  /// room is joined again once.
-  async fn join_now(&self, name: &str, private: bool) -> Result<Room, ClientError> {
+  /// room is joined again once. A join someone `asked` for through the UI or the API is
+  /// remembered, so the room is joined again after a start until it is left.
+  async fn join_now(&self, name: &str, private: bool, asked: bool) -> Result<Room, ClientError> {
     self
-      .join_room(name, private)
+      .join_room(name, private, asked)
       .instrument(info_span!("room", room = name))
       .await
   }
 
-  async fn join_room(&self, name: &str, private: bool) -> Result<Room, ClientError> {
+  async fn join_room(&self, name: &str, private: bool, asked: bool) -> Result<Room, ClientError> {
     let room_type = if private {
       RoomType::Private
     } else {
@@ -153,7 +154,7 @@ impl Messaging {
     let now = Utc::now();
     if let Err(e) = self
       .db
-      .write(move |conn| history::joined(conn, &room_name, now))
+      .write(move |conn| history::joined(conn, &room_name, now, asked))
       .await
     {
       warn!(room = name, error = %e, "room join not noted");
@@ -175,9 +176,10 @@ impl Messaging {
   }
 
   /// After a login: the configured rooms are joined, then the rooms we were in before the
-  /// connection was lost, then the rooms we joined before the last stop and never left, and
-  /// the gap since the last session is pushed. A room of ours, not of the configuration,
-  /// that refuses us or whose name the server takes no more is forgotten.
+  /// connection was lost, then the rooms someone asked to join before the last stop and nobody
+  /// left, and the gap since the last session is pushed. None of these joins is remembered
+  /// anew. A room of ours, not of the configuration, that refuses us or whose name the server
+  /// takes no more is forgotten.
   pub(super) fn rejoin(&self) {
     let configured = self.config.current().values.rooms.clone();
     let tracked: Vec<String> = self
@@ -203,13 +205,13 @@ impl Messaging {
         }
       }
       for room in configured {
-        match this.join_now(&room, false).await {
+        match this.join_now(&room, false, false).await {
           Ok(_) => info!(room, "room joined"),
           Err(e) => warn!(room, error = %e, "room not joined"),
         }
       }
       for room in ours {
-        match this.join_now(&room, false).await {
+        match this.join_now(&room, false, false).await {
           Ok(_) => info!(room, "room joined"),
           Err(e) if gone(&e) => {
             warn!(room, error = %e, "room we were in can no longer be joined; forgotten");
@@ -243,7 +245,7 @@ impl Messaging {
     let this = self.this();
     self.tasks.spawn(async move {
       for room in added {
-        match this.join_now(&room, false).await {
+        match this.join_now(&room, false, false).await {
           Ok(_) => info!(room, "room joined"),
           Err(e) => warn!(room, error = %e, "room not joined"),
         }
@@ -261,7 +263,7 @@ impl Messaging {
       return Ok(Joined::Already);
     }
     let room = self
-      .join_now(&request.name, request.private)
+      .join_now(&request.name, request.private, true)
       .await
       .map_err(refused)?;
     Ok(Joined::New(room))

@@ -231,13 +231,20 @@ pub fn notify(conn: &Connection, room: &str) -> rusqlite::Result<NotifyLevel> {
     .map_or(Ok(NotifyLevel::Mentions), notify_level)
 }
 
-/// Notes that we joined `room` at `now`; it is joined again after every start until we leave
-/// it.
-pub fn joined(conn: &Connection, room: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
+/// Notes that we joined `room` at `now`. A room joined because someone asked, `remember`, is
+/// joined again after every start until we leave it; a room joined for any other reason keeps
+/// whether it was remembered.
+pub fn joined(
+  conn: &Connection,
+  room: &str,
+  now: DateTime<Utc>,
+  remember: bool,
+) -> rusqlite::Result<()> {
   conn.execute(
-    "INSERT INTO room_state (room_name, joined_at) VALUES (?1, ?2) \
-     ON CONFLICT (room_name) DO UPDATE SET joined_at = excluded.joined_at, left_at = NULL",
-    params![room, timestamp(now)],
+    "INSERT INTO room_state (room_name, joined_at, remembered) VALUES (?1, ?2, ?3) \
+     ON CONFLICT (room_name) DO UPDATE SET joined_at = excluded.joined_at, left_at = NULL, \
+     remembered = max(remembered, excluded.remembered)",
+    params![room, timestamp(now), remember],
   )?;
   Ok(())
 }
@@ -251,12 +258,11 @@ pub fn left_at(conn: &Connection, room: &str) -> rusqlite::Result<Option<DateTim
   left.flatten().as_deref().map(read_timestamp).transpose()
 }
 
-/// The rooms we joined and never left, in the order of their latest join.
+/// The rooms someone asked to join and nobody left since, in the order of their latest join.
 pub fn remembered(conn: &Connection) -> rusqlite::Result<Vec<String>> {
   conn
     .prepare_cached(
-      "SELECT room_name FROM room_state WHERE joined_at IS NOT NULL AND left_at IS NULL \
-       ORDER BY joined_at, room_name",
+      "SELECT room_name FROM room_state WHERE remembered = 1 ORDER BY joined_at, room_name",
     )?
     .query_map([], |row| row.get(0))?
     .collect()
@@ -266,7 +272,7 @@ pub fn remembered(conn: &Connection) -> rusqlite::Result<Vec<String>> {
 pub fn left(conn: &Connection, room: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
   conn.execute(
     "INSERT INTO room_state (room_name, left_at) VALUES (?1, ?2) \
-     ON CONFLICT (room_name) DO UPDATE SET left_at = excluded.left_at",
+     ON CONFLICT (room_name) DO UPDATE SET left_at = excluded.left_at, remembered = 0",
     params![room, timestamp(now)],
   )?;
   Ok(())
