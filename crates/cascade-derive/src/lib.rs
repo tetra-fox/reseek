@@ -93,6 +93,7 @@ fn push(ty: &syn::Type, attrs: &FieldAttrs) -> TokenStream {
     None => quote!(::std::option::Option::None),
   };
   let secret = attrs.secret;
+  let negated = attrs.negated;
   let doc = &attrs.doc;
   let fields = quote! {
     ::cascade::__private::Attrs {
@@ -101,6 +102,7 @@ fn push(ty: &syn::Type, attrs: &FieldAttrs) -> TokenStream {
       env_aliases: &[#(#aliases),*],
       long: #long,
       short: #short,
+      negated: #negated,
       apply: #apply,
       secret: #secret,
       doc: #doc,

@@ -31,6 +31,9 @@ pub struct Field {
   pub cli: Option<String>,
   /// the short form of the flag, e.g. `d` for `-d`
   pub short: Option<char>,
+  /// the flag turns the boolean off: given alone it sets `false`, given a value it sets the
+  /// opposite of that value
+  pub negated: bool,
   /// when a change to the value takes effect
   pub apply: Apply,
   /// shown as `*****`, never logged
@@ -57,6 +60,7 @@ impl Field {
       env_aliases: node.env_aliases,
       cli: node.long,
       short: node.short,
+      negated: node.negated,
       apply: node.apply.unwrap_or_default(),
       secret: node.secret,
       doc: node.doc,

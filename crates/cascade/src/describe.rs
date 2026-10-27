@@ -111,6 +111,7 @@ pub struct Node {
   pub(crate) env_aliases: Vec<String>,
   pub(crate) long: Option<String>,
   pub(crate) short: Option<char>,
+  pub(crate) negated: bool,
   pub(crate) apply: Option<Apply>,
   pub(crate) secret: bool,
   pub(crate) doc: String,
@@ -119,7 +120,15 @@ pub struct Node {
 }
 
 impl Node {
+  /// # Panics
+  ///
+  /// When the flag of a field that is not a boolean is `negated`.
   fn leaf(attrs: &private::Attrs, kind: Kind, entries: Vec<Node>) -> Self {
+    assert!(
+      !attrs.negated || kind == Kind::Bool,
+      "`{}` is not a boolean: only a boolean's flag can turn it off",
+      attrs.name
+    );
     Self {
       choices: None,
       key: attrs.name.to_string(),
@@ -128,6 +137,7 @@ impl Node {
       env_aliases: attrs.env_aliases.iter().map(|a| a.to_string()).collect(),
       long: attrs.long.map(str::to_string),
       short: attrs.short,
+      negated: attrs.negated,
       apply: attrs.apply,
       secret: attrs.secret,
       doc: attrs.doc.to_string(),
@@ -157,6 +167,8 @@ pub mod private {
     pub env_aliases: &'static [&'static str],
     pub long: Option<&'static str>,
     pub short: Option<char>,
+    /// the flag turns a boolean off
+    pub negated: bool,
     pub apply: Option<Apply>,
     pub secret: bool,
     pub doc: &'static str,
@@ -180,7 +192,8 @@ pub mod private {
   ///
   /// # Panics
   ///
-  /// When a section is given an env var or a flag; those go on its leaves.
+  /// When a section is given an env var or a flag; those go on its leaves. When the flag of a
+  /// leaf that is not a boolean is `negated`.
   pub fn push<F: Cascade>(nodes: &mut Vec<Node>, attrs: Attrs) {
     match F::shape().0 {
       Inner::Leaf {
@@ -203,6 +216,10 @@ pub mod private {
   }
 
   /// Adds a leaf whose kind the attributes name.
+  ///
+  /// # Panics
+  ///
+  /// When the flag of a leaf that is not a boolean is `negated`.
   pub fn push_kind(nodes: &mut Vec<Node>, kind: Kind, attrs: Attrs) {
     nodes.push(Node::leaf(&attrs, kind, Vec::new()));
   }

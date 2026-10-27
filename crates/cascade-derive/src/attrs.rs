@@ -36,6 +36,8 @@ pub(crate) struct FieldAttrs {
   pub(crate) env_aliases: Vec<String>,
   pub(crate) long: Option<String>,
   pub(crate) short: Option<char>,
+  /// the flag turns a boolean off rather than on
+  pub(crate) negated: bool,
   /// the `Apply` variant
   pub(crate) apply: Option<&'static str>,
   pub(crate) secret: bool,
@@ -128,6 +130,7 @@ pub(crate) fn field(field: &Field, errors: &mut Errors) -> FieldAttrs {
     env_aliases: Vec::new(),
     long: None,
     short: None,
+    negated: false,
     apply: None,
     secret: false,
     doc: doc_comment(&field.attrs),
@@ -161,6 +164,12 @@ pub(crate) fn field(field: &Field, errors: &mut Errors) -> FieldAttrs {
       "a user_keyed map can only be set in files, drop `env` and `cli`",
     ));
   }
+  if attrs.negated && attrs.long.is_none() {
+    errors.push(syn::Error::new_spanned(
+      ident,
+      "`negated` says what a `cli` flag does, give the flag",
+    ));
+  }
   if !attrs.env_aliases.is_empty() && attrs.env.is_none() {
     errors.push(syn::Error::new_spanned(
       ident,
@@ -191,6 +200,9 @@ fn cascade_meta(
     let (short, long) = parse_cli(&lit)?;
     attrs.short = short;
     attrs.long = Some(long);
+  } else if path.is_ident("negated") {
+    once(meta, attrs.negated)?;
+    attrs.negated = true;
   } else if path.is_ident("apply") {
     let lit: LitStr = meta.value()?.parse()?;
     once(meta, attrs.apply.is_some())?;
@@ -212,8 +224,8 @@ fn cascade_meta(
     attrs.user_keyed = true;
   } else {
     return Err(meta.error(
-      "unknown cascade attribute, expected one of env, env_alias, cli, apply, kind, doc, secret, \
-       user_keyed",
+      "unknown cascade attribute, expected one of env, env_alias, cli, negated, apply, kind, doc, \
+       secret, user_keyed",
     ));
   }
   Ok(())
@@ -408,7 +420,13 @@ mod tests {
     assert!(attrs.secret);
     assert_eq!(attrs.kind, Some("String"));
     assert_eq!(attrs.doc, "The user to log in as.\nSecond paragraph.");
-    assert!(!attrs.user_keyed && !attrs.skip);
+    assert!(!attrs.user_keyed && !attrs.skip && !attrs.negated);
+    let off = one_field(named(parse_quote!({
+      #[cascade(cli = "--no-mapping", negated)]
+      mapping: bool
+    })))
+    .unwrap();
+    assert!(off.negated);
   }
 
   #[test]
@@ -461,6 +479,10 @@ mod tests {
       (
         named(parse_quote!({ #[cascade(env_alias = "B")] a: u8 })),
         "`env_alias` needs an `env`",
+      ),
+      (
+        named(parse_quote!({ #[cascade(negated)] a: bool })),
+        "`negated` says what a `cli` flag does",
       ),
       (
         named(parse_quote!({ #[cascade(user_keyed, kind = "string")] a: Map })),
