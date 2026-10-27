@@ -15,6 +15,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
+  import { plural } from "#lib/format.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
@@ -99,7 +100,8 @@
     {:else}
       <HashIcon class="size-4 text-fg-muted" />
       <h2 class="truncate font-semibold">{target.name}</h2>
-      <span class="text-xs text-fg-muted">{members?.users.size ?? 0} users</span>
+      <span class="text-xs text-fg-muted"
+        >{plural(members?.users.size ?? 0, "1 user", `${members?.users.size ?? 0} users`)}</span>
     {/if}
     <div class="ml-auto flex items-center gap-1">
       {#if target.kind === "room" && !joined && write}

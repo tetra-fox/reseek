@@ -18,7 +18,7 @@
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Avatar from "#lib/components/users/Avatar.svelte";
-  import { ago } from "#lib/format.js";
+  import { ago, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { chatHref, roomHref } from "#lib/nav.js";
@@ -251,7 +251,11 @@
               <span class="truncate text-xs text-fg-muted">
                 {#if preview}{preview.author && t.kind === "room"
                     ? `${preview.author}: `
-                    : ""}{preview.text}{:else if t.kind === "room"}{room?.userCount ?? 0} users{/if}
+                    : ""}{preview.text}{:else if t.kind === "room"}{plural(
+                    room?.userCount ?? 0,
+                    "1 user",
+                    `${room?.userCount ?? 0} users`
+                  )}{/if}
               </span>
               {#if counts?.mentions}
                 <Badge tone="accent" class="ml-auto" title="mentions">@{counts.mentions}</Badge>

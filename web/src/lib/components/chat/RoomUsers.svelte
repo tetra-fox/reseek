@@ -7,7 +7,7 @@
   import { flag } from "#lib/components/users/hover.svelte.js";
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { formatSpeed } from "#lib/format.js";
+  import { formatSpeed, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { userHref } from "#lib/nav.js";
@@ -68,7 +68,9 @@
 </script>
 
 <aside class="flex min-h-0 flex-col gap-2 border-l p-2" aria-label="Room users">
-  <p class="px-1 text-xs text-fg-muted">{all.length} users · {online} online</p>
+  <p class="px-1 text-xs text-fg-muted">
+    {plural(all.length, "1 user", `${all.length} users`)} · {online} online
+  </p>
   <div class="relative">
     <SearchIcon class="pointer-events-none absolute top-2 left-2 size-3.5 text-fg-muted" />
     <Input
