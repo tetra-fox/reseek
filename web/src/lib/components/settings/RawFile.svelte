@@ -77,7 +77,13 @@
   };
   $effect(() => {
     const value = text;
-    if (!untrack(() => dirty)) return;
+    // the text back as the file has it: nothing to check, and an old answer goes with it
+    if (!untrack(() => dirty)) {
+      checks += 1;
+      validating = false;
+      validation = null;
+      return;
+    }
     const timer = setTimeout(() => void validate(value), VALIDATE_MS);
     return () => clearTimeout(timer);
   });
@@ -117,6 +123,13 @@
     if (dirty && type !== "leave" && !confirm("Discard the changes to the configuration file?")) {
       cancel();
     }
+  });
+  // closing or reloading the tab asks too
+  $effect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
   });
 
   const openDebug = async () => {
