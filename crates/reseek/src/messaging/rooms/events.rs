@@ -167,7 +167,7 @@ impl Messaging {
   /// `username` joined `room`: ourselves, which the server confirms after our join, or another
   /// user, who is added to the room's members.
   async fn user_joined(&self, room: String, username: String, user: &UserData) {
-    let us = self.us().unwrap_or_default();
+    let us = self.us_logged_in();
     if username == us {
       if self.rooms.tracker().confirmed(&room) {
         debug!(room, "Joined room");
@@ -216,7 +216,7 @@ impl Messaging {
     if self.rooms.tracker().get(&room).is_none() {
       return debug!(room, "message for a room we are not in dropped");
     }
-    let us = self.us().unwrap_or_default();
+    let us = self.us_logged_in();
     let is_self = username == us;
     let arrived = Arrived {
       hidden: !is_self && self.users.is_blocked(&username, None, BlockScope::Rooms),

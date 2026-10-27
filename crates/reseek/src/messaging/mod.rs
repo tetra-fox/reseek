@@ -194,6 +194,14 @@ impl Messaging {
       .or_else(|| self.config.current().values.soulseek.username.clone())
   }
 
+  /// Our username where a login came first, as it does for anything about a room: a login
+  /// needs a configured username.
+  fn us_logged_in(&self) -> String {
+    self
+      .us()
+      .expect("rooms are reached only after a login, which needs a configured username")
+  }
+
   fn logged_in_now(&self) -> bool {
     self.client().state().contains(ClientState::LOGGED_IN)
   }

@@ -122,7 +122,7 @@ impl Messaging {
       }
       joined => joined?,
     };
-    let us = self.us().unwrap_or_default();
+    let us = self.us_logged_in();
     let room = {
       let mut tracker = self.rooms.tracker();
       tracker.joined(&data, &us);
