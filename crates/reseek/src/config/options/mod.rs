@@ -120,6 +120,8 @@ pub struct Options {
   pub users: Users,
   /// Chat in rooms and private messages.
   pub chat: Chat,
+  /// Notifications the UI shows besides chat.
+  pub notifications: Notifications,
   /// Blocking users.
   pub blocking: Blocking,
 }
@@ -153,6 +155,7 @@ impl Default for Options {
       integrations: Integrations::default(),
       users: Users::default(),
       chat: Chat::default(),
+      notifications: Notifications::default(),
       blocking: Blocking::default(),
     }
   }
@@ -386,6 +389,40 @@ impl Default for ChatNotifications {
   }
 }
 
+/// Notifications the UI shows besides chat.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct Notifications {
+  /// Of transfers.
+  pub transfers: TransferNotifications,
+}
+
+/// The notifications the UI shows of transfers, under the same browser permission and tab
+/// visibility as chat's.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct TransferNotifications {
+  /// Notifies of each download that finished.
+  #[cascade(env = "RESEEK_NOTIFICATIONS_TRANSFERS_DOWNLOAD_FINISHED")]
+  pub download_finished: bool,
+  /// Notifies when every download of a batch, such as an album, has finished.
+  #[cascade(env = "RESEEK_NOTIFICATIONS_TRANSFERS_BATCH_FINISHED")]
+  pub batch_finished: bool,
+  /// Notifies when another user queues an upload from us.
+  #[cascade(env = "RESEEK_NOTIFICATIONS_TRANSFERS_UPLOAD_QUEUED")]
+  pub upload_queued: bool,
+}
+
+impl Default for TransferNotifications {
+  fn default() -> Self {
+    Self {
+      download_finished: true,
+      batch_finished: true,
+      upload_queued: false,
+    }
+  }
+}
+
 /// Blocking users.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
@@ -415,7 +452,7 @@ mod tests {
   use super::Options;
 
   #[test]
-  fn the_chat_options_apply_live_with_their_defaults() {
+  fn the_chat_and_notification_options_apply_live_with_their_defaults() {
     let schema = Schema::of::<Options>();
     for (key, default, env) in [
       (
@@ -427,6 +464,21 @@ mod tests {
         "chat.highlight_words",
         json!([]),
         "RESEEK_CHAT_HIGHLIGHT_WORDS",
+      ),
+      (
+        "notifications.transfers.download_finished",
+        json!(true),
+        "RESEEK_NOTIFICATIONS_TRANSFERS_DOWNLOAD_FINISHED",
+      ),
+      (
+        "notifications.transfers.batch_finished",
+        json!(true),
+        "RESEEK_NOTIFICATIONS_TRANSFERS_BATCH_FINISHED",
+      ),
+      (
+        "notifications.transfers.upload_queued",
+        json!(false),
+        "RESEEK_NOTIFICATIONS_TRANSFERS_UPLOAD_QUEUED",
       ),
     ] {
       let field = schema.field(key).unwrap();

@@ -80,6 +80,13 @@
       "enabled": false,
       "url": "/metrics"
     },
+    "notifications": {
+      "transfers": {
+        "batch_finished": true,
+        "download_finished": true,
+        "upload_queued": false
+      }
+    },
     "paths": {
       "cache": null,
       "config": null,
@@ -1100,6 +1107,51 @@
       "choices": null,
       "default": "/metrics",
       "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "notifications.transfers.batch_finished": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NOTIFICATIONS_TRANSFERS_BATCH_FINISHED",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Notifies when every download of a batch, such as an album, has finished.",
+      "choices": null,
+      "default": true,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "notifications.transfers.download_finished": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NOTIFICATIONS_TRANSFERS_DOWNLOAD_FINISHED",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Notifies of each download that finished.",
+      "choices": null,
+      "default": true,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "notifications.transfers.upload_queued": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NOTIFICATIONS_TRANSFERS_UPLOAD_QUEUED",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Notifies when another user queues an upload from us.",
+      "choices": null,
+      "default": false,
+      "apply": "live",
       "secret": false,
       "notApplied": null
     },
