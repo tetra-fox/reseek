@@ -3028,7 +3028,7 @@ export interface components {
              * @description cancel the user's queued uploads now, and with `downloads` our downloads from them
              * @default true
              */
-            cancelTransfers: boolean;
+            cancelTransfers?: boolean;
             /**
              * Format: date-time
              * @description when the block ends
@@ -5650,12 +5650,12 @@ export interface components {
              * @description the search completes once the accepted responses hold this many unlocked files
              * @default 25000
              */
-            fileLimit: number;
+            fileLimit?: number;
             /**
              * @description whether the three response filters below apply; when false every response is accepted
              * @default true
              */
-            filterResponses: boolean;
+            filterResponses?: boolean;
             /**
              * Format: uuid
              * @description the id to give the search, so the client can show it before the reply arrives; a new id
@@ -5678,13 +5678,13 @@ export interface components {
              * @description responses with fewer files, locked ones included, are dropped
              * @default 1
              */
-            minimumResponseFileCount: number;
+            minimumResponseFileCount?: number;
             /**
              * Format: int32
              * @description the search completes once this many responses were accepted
              * @default 250
              */
-            responseLimit: number;
+            responseLimit?: number;
             /** @description where to send the search, the whole network when left out */
             scope?: components["schemas"]["SearchScope"];
             /**

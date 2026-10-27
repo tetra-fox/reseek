@@ -14,8 +14,8 @@
     "lint": "oxfmt --check . && oxlint",
     "test": "vitest run",
     "smoke": "playwright test",
-    "api": "openapi-typescript ../api/openapi.json -o src/lib/api/schema.d.ts --empty-objects-unknown",
-    "api-check": "openapi-typescript ../api/openapi.json -o src/lib/api/schema.d.ts --empty-objects-unknown --check"
+    "api": "openapi-typescript ../api/openapi.json -o src/lib/api/schema.d.ts --empty-objects-unknown --default-non-nullable false",
+    "api-check": "pnpm api --check"
   },
   "imports": {
     "#lib/*": "./src/lib/*"
