@@ -47,7 +47,8 @@
     onremove: () => void;
     /** blocks the user, asking first; with `deny` their unfinished uploads are cancelled first */
     onblock: (deny: boolean) => void;
-    ondetails: () => void;
+    /** opens the details drawer; without it the menu has no Details */
+    ondetails?: () => void;
   };
 
   let { transfer: t, direction, around, onremove, onblock, ondetails }: Props = $props();
@@ -114,6 +115,8 @@
       <Menu.Item onSelect={() => onblock(true)}><BanIcon />Deny and block</Menu.Item>
     {/if}
   {/if}
-  <Menu.Separator />
-  <Menu.Item onSelect={ondetails}><InfoIcon />Details</Menu.Item>
+  {#if ondetails}
+    <Menu.Separator />
+    <Menu.Item onSelect={ondetails}><InfoIcon />Details</Menu.Item>
+  {/if}
 </Menu.Content>

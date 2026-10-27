@@ -24,8 +24,9 @@ export const route = (url: { hash: string }): { path: string; query: URLSearchPa
 export const segment = (name: string) =>
   /^\.+$/.test(name) ? name.replaceAll(".", "%2E") : encodeURIComponent(name);
 
-/** The link to a user's profile */
-export const userHref = (username: string) => href(`/users/${segment(username)}`);
+/** The link to a user's profile, or to one of its tabs */
+export const userHref = (username: string, tab?: string) =>
+  href(`/users/${segment(username)}${tab ? `/${tab}` : ""}`);
 
 /** The link to the conversation with a user */
 export const chatHref = (username: string) => href(`/chat/${segment(username)}`);

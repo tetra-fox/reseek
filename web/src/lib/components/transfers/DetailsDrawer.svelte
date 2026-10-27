@@ -125,7 +125,7 @@
             ><EllipsisIcon /></Button>
         {/snippet}
       </Menu.Trigger>
-      <RowMenu transfer={t} {direction} {around} {onremove} {onblock} ondetails={() => {}} />
+      <RowMenu transfer={t} {direction} {around} {onremove} {onblock} />
     </Menu.Root>
     <Button variant="ghost" size="icon-sm" aria-label="Close the details" onclick={onclose}
       ><XIcon /></Button>
