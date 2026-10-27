@@ -5,6 +5,7 @@
 
   import { app } from "#lib/app.svelte.js";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
+  import PlayerBar from "#lib/components/player/PlayerBar.svelte";
   import Footer from "#lib/components/shell/Footer.svelte";
   import Header from "#lib/components/shell/Header.svelte";
   import LostBanner from "#lib/components/shell/LostBanner.svelte";
@@ -78,6 +79,7 @@
       </main>
     </div>
   </div>
+  <PlayerBar />
   <Footer />
 {:else if app.phase === "lost"}
   <div class="flex min-h-svh items-center justify-center p-6">
