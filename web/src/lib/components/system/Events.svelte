@@ -4,6 +4,7 @@
   import CheckIcon from "@lucide/svelte/icons/check";
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import InfoIcon from "@lucide/svelte/icons/info";
+  import Maximize2Icon from "@lucide/svelte/icons/maximize-2";
   import { untrack } from "svelte";
 
   import { api, type Schemas } from "#lib/api/client.js";
@@ -185,11 +186,14 @@
         <span role="gridcell" class="truncate">{e.type}</span>
         <span role="gridcell" class="flex min-w-0 items-center gap-2">
           {#if user}<span class="font-sans"><Username name={user} /></span>{/if}
-          <button
-            type="button"
-            class="min-w-0 truncate text-left text-fg-muted hover:text-fg"
+          <span class="min-w-0 flex-1 truncate text-fg-muted">{JSON.stringify(e.data)}</span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="shrink-0"
+            aria-label="Show the whole payload"
             title="Show the whole payload"
-            onclick={() => (shown = e)}>{JSON.stringify(e.data)}</button>
+            onclick={() => (shown = e)}><Maximize2Icon /></Button>
         </span>
       </div>
     {/each}

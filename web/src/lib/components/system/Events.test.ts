@@ -58,4 +58,27 @@ describe("the event log", () => {
     await flush();
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("b at");
   });
+
+  it("selects a row clicked on its payload, and opens it from the payload's control", async () => {
+    fakeNetwork(() => [{ ...event("a", 1), data: { path: "Music" } }]);
+    component = mount(Events, {
+      target: document.body,
+      props: { page: 1, perPage: 25, types: [] }
+    });
+    await flush();
+    const payload = [...document.querySelectorAll('[data-line="a"] span')].find(
+      (s) => s.textContent === '{"path":"Music"}'
+    )!;
+    payload.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flush();
+    expect(ticked()).toEqual(["a"]);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-line="a"] button[aria-label="Show the whole payload"]'
+      )!
+      .click();
+    await flush();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("a at");
+  });
 });
