@@ -64,7 +64,9 @@ describe("the raw configuration file", () => {
       revision: "sha256:one",
       file: "config.toml"
     });
-    expect(document.body.textContent?.replace(/\s+/g, " ")).toContain("1 setting applied live.");
+    expect(document.body.textContent?.replace(/\s+/g, " ")).toContain(
+      "Saved. 1 setting applied live."
+    );
     expect(document.body.textContent).toContain("Restart to apply: web.port.");
   });
 

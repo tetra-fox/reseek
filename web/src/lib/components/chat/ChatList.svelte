@@ -253,8 +253,8 @@
                     ? `${preview.author}: `
                     : ""}{preview.text}{:else if t.kind === "room"}{plural(
                     room?.userCount ?? 0,
-                    "1 user",
-                    `${room?.userCount ?? 0} users`
+                    "user",
+                    "users"
                   )}{/if}
               </span>
               {#if counts?.mentions}

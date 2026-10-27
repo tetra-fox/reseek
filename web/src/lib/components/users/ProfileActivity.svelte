@@ -84,7 +84,7 @@
         }
       }
       for (const [day, { at, n }] of days) {
-        found.push({ key: `m:${day}`, at, text: plural(n, "1 message", `${n} messages`) });
+        found.push({ key: `m:${day}`, at, text: plural(n, "message", "messages") });
       }
     }
     if (events.ok) {

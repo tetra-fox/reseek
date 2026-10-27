@@ -215,8 +215,7 @@
     {@const s = saved}
     <Notice kind="info">
       Saved.
-      {#if s.applied.length}{plural(s.applied.length, "1 setting", `${s.applied.length} settings`)} applied
-        live.{/if}
+      {#if s.applied.length}{plural(s.applied.length, "setting", "settings")} applied live.{/if}
       {#if s.reconnectRequired.length}
         <Badge tone="warning">reconnect</Badge> Reconnect to the Soulseek server to apply: {s.reconnectRequired.join(
           ", "

@@ -69,7 +69,7 @@
 
 <aside class="flex min-h-0 flex-col gap-2 border-l p-2" aria-label="Room users">
   <p class="px-1 text-xs text-fg-muted">
-    {plural(all.length, "1 user", `${all.length} users`)} · {online} online
+    {plural(all.length, "user", "users")} · {online} online
   </p>
   <div class="relative">
     <SearchIcon class="pointer-events-none absolute top-2 left-2 size-3.5 text-fg-muted" />
