@@ -6,6 +6,7 @@
   import { app } from "#lib/app.svelte.js";
   import { parseDuration } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
+  import { withModifier } from "#lib/keys.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
   import { COLUMNS, type ColumnId } from "#lib/transfers/columns.js";
@@ -148,14 +149,14 @@
       else if ((index + 1) * row > scroller.scrollTop + height)
         scroller.scrollTop = (index + 1) * row - height;
     };
-    if (e.key === "ArrowDown") move(at + 1);
-    else if (e.key === "ArrowUp") move(at === -1 ? 0 : at - 1);
+    if (e.key === "ArrowDown" && !withModifier(e)) move(at + 1);
+    else if (e.key === "ArrowUp" && !withModifier(e)) move(at === -1 ? 0 : at - 1);
     else if (e.key === "Escape") selected.clear();
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
       const group = items.find((i) => i.type === "row" && i.transfer.id === focused);
       const within = group?.type === "row" && group.group ? group.group.transfers : rows;
       for (const t of within) selected.add(t.id);
-    } else if (!current) return;
+    } else if (!current || withModifier(e)) return;
     else if (e.key === " ") onselect(current, false);
     else if (e.key === "Enter") ondetails(current);
     else if (!session.can("ReadWrite") && ["Delete", "r", "R", "c", "C"].includes(e.key)) return;

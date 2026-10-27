@@ -16,6 +16,7 @@
     formatSpeed,
     getFileName
   } from "#lib/format.js";
+  import { withModifier } from "#lib/keys.js";
   import { stateChip, type Direction, type Transfer } from "#lib/transfers/states.js";
   import { endpoint, type Transfers } from "#lib/transfers/transfers.svelte.js";
   import { users } from "#lib/users.svelte.js";
@@ -102,7 +103,7 @@
 
 <svelte:window
   onkeydown={(e) => {
-    if ((e.target as HTMLElement).closest("input,textarea")) return;
+    if ((e.target as HTMLElement).closest("input,textarea") || withModifier(e)) return;
     if (e.key === "Escape") onclose();
     else if (e.key === "ArrowLeft") onstep(-1);
     else if (e.key === "ArrowRight") onstep(1);

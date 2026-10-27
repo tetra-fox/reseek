@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Schemas } from "#lib/api/client.js";
 import { interaction } from "#lib/interaction.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
+import { session } from "#lib/session.svelte.js";
 import { transfer } from "#lib/testing/fixtures.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { defaults, views } from "#lib/transfers/settings.svelte.js";
@@ -122,5 +123,39 @@ describe("the transfers table", () => {
     await flush();
     expect(order()).toEqual([early.id, a.id, b.id, c.id]);
     expect(row(a.id)).toBe(first);
+  });
+
+  it("leaves Ctrl and Cmd shortcuts to the browser on a focused row", async () => {
+    session.principal = {
+      name: "a",
+      role: "Administrator",
+      session: null
+    } as unknown as typeof session.principal;
+    const a = transfer({ state: "InProgress", percentComplete: 10 });
+    listing = [a];
+    const net = await start();
+    const grid = document.querySelector("[role=grid]")!;
+    row(a.id)!.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    flushSync();
+    const press = (key: string, mods: KeyboardEventInit = {}) => {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...mods });
+      grid.dispatchEvent(event);
+      return event;
+    };
+    const bulk = () => net.requests.filter((r) => r.url.pathname.endsWith("/bulk"));
+
+    for (const mods of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      expect(press("c", mods).defaultPrevented).toBe(false);
+      expect(press("r", mods).defaultPrevented).toBe(false);
+      expect(press("o", mods).defaultPrevented).toBe(false);
+    }
+    await flush();
+    expect(bulk()).toEqual([]);
+
+    // the plain key still cancels
+    expect(press("c").defaultPrevented).toBe(true);
+    await flush();
+    expect(bulk().map((r) => r.body)).toEqual([{ action: "cancel", ids: [a.id] }]);
+    session.principal = null;
   });
 });
