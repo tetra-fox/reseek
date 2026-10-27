@@ -174,12 +174,14 @@ class Browse {
     } catch {
       // nothing readable saved: the screen starts empty
     }
-    if (!meta?.username) return;
+    // a browse under way, as one a link started, wins over what was saved
+    if (!meta?.username || this.phase !== "idle") return;
     this.username = meta.username;
     this.restoring = true;
+    // an IndexedDB that can't be read (blocked, private window) leaves only the saved meta
     const listing = await readListing().catch(() => undefined);
     this.restoring = false;
-    // a browse started meanwhile wins over what was saved
+    // a browse started while the listing was read wins too
     if (this.phase !== "idle") return;
     this.phase = meta.phase;
     this.errorMessage = meta.errorMessage;
