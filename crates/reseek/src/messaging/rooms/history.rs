@@ -138,11 +138,14 @@ pub fn arrived_from(
   room: &str,
   local_id: i64,
 ) -> rusqlite::Result<Option<DateTime<Utc>>> {
+  // by local id, not by time, so a clock that stepped back cannot pick an earlier message
   let first: Option<String> = conn
     .prepare_cached(
-      "SELECT MIN(timestamp) FROM room_messages WHERE room_name = ?1 AND local_id >= ?2",
+      "SELECT timestamp FROM room_messages WHERE room_name = ?1 AND local_id >= ?2 \
+       ORDER BY local_id LIMIT 1",
     )?
-    .query_row(params![room, local_id], |row| row.get(0))?;
+    .query_row(params![room, local_id], |row| row.get(0))
+    .optional()?;
   first.as_deref().map(read_timestamp).transpose()
 }
 
