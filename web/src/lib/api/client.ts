@@ -18,7 +18,7 @@ export const api = createClient<paths>({
 });
 
 /** The routes that answer 401 as part of logging in, which never end the session */
-const SESSION_ROUTES = ["/api/v0/session", "/api/v0/session/enabled"];
+const SESSION_ROUTES = ["/api/v0/session"];
 
 let unauthorized: () => void = () => {};
 
