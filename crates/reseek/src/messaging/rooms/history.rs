@@ -115,11 +115,15 @@ pub fn all(conn: &Connection, room: &str) -> rusqlite::Result<Vec<RoomMessage>> 
     .collect()
 }
 
-/// When the oldest message stored for `room` arrived, `None` without one.
+/// When the message stored first for `room` arrived, `None` without one; by local id, as
+/// [`newest`] reads the last.
 pub fn oldest(conn: &Connection, room: &str) -> rusqlite::Result<Option<DateTime<Utc>>> {
   let first: Option<String> = conn
-    .prepare_cached("SELECT MIN(timestamp) FROM room_messages WHERE room_name = ?1")?
-    .query_row([room], |row| row.get(0))?;
+    .prepare_cached(
+      "SELECT timestamp FROM room_messages WHERE room_name = ?1 ORDER BY local_id LIMIT 1",
+    )?
+    .query_row([room], |row| row.get(0))
+    .optional()?;
   first.as_deref().map(read_timestamp).transpose()
 }
 
@@ -159,9 +163,15 @@ pub fn stored(
   room: Option<&str>,
   joined: impl Fn(&str) -> bool,
 ) -> rusqlite::Result<Vec<StoredRoom>> {
+  // the first and last by local id, as every read of a room's ends takes them
   let mut statement = conn.prepare(
-    "SELECT room_name, COUNT(*), MIN(timestamp), MAX(timestamp) FROM room_messages \
-     WHERE ?1 IS NULL OR room_name = ?1 GROUP BY room_name ORDER BY room_name",
+    "SELECT room_name, COUNT(*), \
+     (SELECT timestamp FROM room_messages f WHERE f.room_name = g.room_name \
+      ORDER BY local_id LIMIT 1), \
+     (SELECT timestamp FROM room_messages l WHERE l.room_name = g.room_name \
+      ORDER BY local_id DESC LIMIT 1) \
+     FROM room_messages g WHERE ?1 IS NULL OR room_name = ?1 GROUP BY room_name \
+     ORDER BY room_name",
   )?;
   let rows = statement.query_map([room], |row| {
     let name: String = row.get(0)?;
@@ -367,5 +377,32 @@ mod tests {
       .unwrap();
     assert!(!more);
     assert_eq!(rest.len(), 2);
+  }
+
+  #[tokio::test]
+  async fn a_rooms_ends_follow_arrival_when_the_clock_stepped_back() {
+    let db = db().await;
+    db.write(|conn| {
+      // the clock stepped back between the two
+      insert(conn, &said("indie", "alice", "2026-10-26T12:00:00Z"))?;
+      insert(conn, &said("indie", "bob", "2026-10-26T11:00:00Z"))?;
+      Ok(())
+    })
+    .await
+    .unwrap();
+    let (rooms, first, last) = db
+      .read(|conn| {
+        Ok((
+          stored(conn, None, |_| false)?,
+          oldest(conn, "indie")?,
+          newest(conn, "indie")?,
+        ))
+      })
+      .await
+      .unwrap();
+    let twelve = "2026-10-26T12:00:00Z".parse().unwrap();
+    let eleven = "2026-10-26T11:00:00Z".parse().unwrap();
+    assert_eq!((rooms[0].first_at, rooms[0].last_at), (twelve, eleven));
+    assert_eq!((first, last), (Some(twelve), Some(eleven)));
   }
 }
