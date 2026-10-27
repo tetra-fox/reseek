@@ -29,6 +29,9 @@ export type Line =
   | { kind: "unread"; key: "unread" }
   | { kind: "message"; key: string; message: Message; head: boolean };
 
+/** A message's text longer than this is folded until asked for */
+export const LONG = 1000;
+
 /** Messages from one author this close together share one header */
 export const GROUP_MS = 5 * 60_000;
 

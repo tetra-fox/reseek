@@ -4,7 +4,7 @@
   import { on } from "svelte/events";
   import { SvelteMap } from "svelte/reactivity";
 
-  import { type Line, layout } from "#lib/chat/messages.js";
+  import { type Line, layout, LONG } from "#lib/chat/messages.js";
   import type { MessagePane } from "#lib/chat/pane.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
@@ -53,8 +53,22 @@
    * leaves the page
    */
   const heights = new SvelteMap<string, number>();
-  const guess = (line: Line) =>
-    line.kind === "message" ? (line.head ? 52 : 24) : line.kind === "unread" ? 24 : 36;
+  /**
+   * A line's height before it is drawn. A message counts one 20 px line per 80 characters of
+   * each line of its text, plus 2 px of padding, or 32 px with the header of a group's first
+   */
+  const guess = (line: Line) => {
+    if (line.kind === "unread") return 24;
+    if (line.kind !== "message") return 36;
+    const { message: m, head } = line;
+    const rows = m.hidden
+      ? 1
+      : m.text
+          .slice(0, LONG)
+          .split("\n")
+          .reduce((n, text) => n + Math.max(1, Math.ceil(text.length / 80)), 0);
+    return (head ? 32 : 2) + 20 * rows;
+  };
   const tops = $derived.by(() => {
     const at = [0];
     for (const line of lines) at.push(at.at(-1)! + (heights.get(line.key) ?? guess(line)));

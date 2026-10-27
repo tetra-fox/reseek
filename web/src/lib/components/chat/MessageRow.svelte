@@ -1,7 +1,7 @@
 <script lang="ts">
   import ClockIcon from "@lucide/svelte/icons/clock";
 
-  import type { Message } from "#lib/chat/messages.js";
+  import { LONG, type Message } from "#lib/chat/messages.js";
   import { clock } from "#lib/clock.svelte.js";
   import Linked from "#lib/components/Linked.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -20,8 +20,6 @@
 
   let { message: m, head, highlight, onretry }: Props = $props();
 
-  /** text longer than this is folded until asked for */
-  const LONG = 1000;
   let unfolded = $state(false);
   let shownHidden = $state(false);
   const long = $derived(m.text.length > LONG && !unfolded);
