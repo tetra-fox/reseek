@@ -14,7 +14,7 @@ test("logs in, shows the connection live and moves between screens", async ({ pa
   await page.getByRole("button", { name: "Login" }).click();
   await expect(page).toHaveURL(/#\/downloads$/);
   await expect(page.getByText("Downloads isn't built yet")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Updates: Live/ })).toBeVisible();
+  await expect(page.getByRole("status", { name: "Updates: Live" })).toBeVisible();
   await expect(page.locator("footer")).toContainText("Disconnected");
 
   await page.getByRole("link", { name: "Search" }).click();

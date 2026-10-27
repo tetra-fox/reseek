@@ -1,34 +1,30 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
   import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
 
   import { app } from "#lib/app.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
-  import * as Menu from "#lib/components/ui/menu/menu.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { live } from "#lib/live/live.svelte.js";
   import { href, route, title } from "#lib/nav.js";
-  import { REFRESH_OPTIONS, settings } from "#lib/settings.svelte.js";
 
   import NewVersion from "./NewVersion.svelte";
   import { sidebar } from "./sidebar.svelte";
 
   const heading = $derived(title(route(page.url).path).split(" - ").slice(0, -1).reverse());
 
-  const every = $derived(REFRESH_OPTIONS.find((o) => o.value === settings.refresh)?.label);
-  // how the page keeps up right now, and the menu under it picks how it should
+  // the stream is always used; while it is down the screens poll until it is back
   const status = $derived(
-    {
-      connected: { dot: "bg-success shadow-[0_0_0_3px] shadow-success/20", label: "Live" },
-      connecting: { dot: "bg-fg-muted animate-pulse", label: "Connecting" },
-      polling: {
-        dot: "bg-warning",
-        label: settings.refresh === "live" ? "Polling, live unavailable" : `Every ${every}`
-      },
-      off: { dot: "bg-fg-muted/40", label: "Paused" }
-    }[live.status]
+    live.status === "connected"
+      ? { dot: "bg-success shadow-[0_0_0_3px] shadow-success/20", label: "Live", hint: undefined }
+      : live.status === "polling"
+        ? {
+            dot: "bg-warning",
+            label: "Polling",
+            hint: "The live connection is down: the page asks every few seconds until it is back"
+          }
+        : { dot: "bg-fg-muted animate-pulse", label: "Reconnecting", hint: undefined }
   );
 
   const pending = $derived.by(() => {
@@ -73,33 +69,17 @@
       </Tooltip>
     {/if}
     <NewVersion />
-    <Menu.Root>
-      <Menu.Trigger>
-        {#snippet child({ props })}
-          <Button
-            {...props}
-            variant="outline"
-            class="rounded-full pr-2 pl-3 font-normal text-fg-muted"
-            aria-label={`Updates: ${status.label}`}>
-            <span class={`size-2 rounded-full ${status.dot}`}></span>
-            <span class="hidden sm:inline">{status.label}</span>
-            <ChevronDownIcon class="text-fg-subtle" />
-          </Button>
-        {/snippet}
-      </Menu.Trigger>
-      <Menu.Content align="end" class="min-w-44">
-        <Menu.Label>Keep the page current</Menu.Label>
-        <!-- bits-ui values are strings, so options are keyed by index -->
-        <Menu.RadioGroup
-          value={String(REFRESH_OPTIONS.findIndex((o) => o.value === settings.refresh))}
-          onValueChange={(i) => (settings.refresh = REFRESH_OPTIONS[Number(i)].value)}>
-          {#each REFRESH_OPTIONS as option, i (option.label)}
-            <Menu.RadioItem value={String(i)}>
-              {typeof option.value === "number" ? `Every ${option.label}` : option.label}
-            </Menu.RadioItem>
-          {/each}
-        </Menu.RadioGroup>
-      </Menu.Content>
-    </Menu.Root>
+    <Tooltip text={status.hint} hint>
+      {#snippet child({ props })}
+        <span
+          {...props}
+          role="status"
+          aria-label={`Updates: ${status.label}`}
+          class="flex h-control items-center gap-2 rounded-full border px-3 text-sm text-fg-muted">
+          <span class={`size-2 rounded-full ${status.dot}`}></span>
+          <span class="hidden sm:inline">{status.label}</span>
+        </span>
+      {/snippet}
+    </Tooltip>
   </div>
 </header>

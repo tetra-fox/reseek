@@ -2,11 +2,10 @@
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
 
   import { live } from "#lib/live/live.svelte.js";
-  import { settings } from "#lib/settings.svelte.js";
 
   // a ticking clock for the countdown, only while the banner shows
   let now = $state(Date.now());
-  const shown = $derived(settings.refresh === "live" && live.status === "polling");
+  const shown = $derived(live.status === "polling");
   $effect(() => {
     if (!shown) return;
     const timer = setInterval(() => (now = Date.now()), 1000);

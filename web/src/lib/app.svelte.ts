@@ -2,7 +2,6 @@ import { api, onUnauthorized, type Schemas } from "#lib/api/client.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 import { session } from "#lib/session.svelte.js";
-import { settings } from "#lib/settings.svelte.js";
 import { toast } from "#lib/toast.svelte.js";
 import { users } from "#lib/users.svelte.js";
 
@@ -92,7 +91,7 @@ class App {
     if (!this.#release.length) {
       this.#release.push(live.retain("application"), live.retain("metrics"));
     }
-    live.follow(settings.refresh);
+    live.start();
   }
 
   /** Resolves true once a state document is here: from the stream, or fetched when it can't come */

@@ -13,7 +13,6 @@
   import { live } from "#lib/live/live.svelte.js";
   import { href, redirectFor, route, title } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
-  import { settings } from "#lib/settings.svelte.js";
 
   let { children } = $props();
 
@@ -35,12 +34,11 @@
     if (target) void goto(href(target), { replace: true });
   });
 
-  // the stream follows the refresh setting once the app is up. untracked, so the state that
-  // connecting touches doesn't re-run this
+  // the stream opens once the app is up. untracked, so the state that connecting touches
+  // doesn't re-run this
   $effect(() => {
     if (app.phase !== "app") return;
-    const refresh = settings.refresh;
-    untrack(() => live.follow(refresh));
+    untrack(() => live.start());
   });
   $effect(() => () => untrack(() => live.stop()));
 

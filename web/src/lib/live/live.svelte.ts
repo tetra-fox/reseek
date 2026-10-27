@@ -1,5 +1,4 @@
 import { root, sessionGone } from "#lib/api/client.js";
-import { type Refresh, settings } from "#lib/settings.svelte.js";
 import { toast } from "#lib/toast.svelte.js";
 
 import {
@@ -83,16 +82,7 @@ export class Live {
 
   /** How often pages should poll right now, `null` while frames keep them current */
   get pollMs(): number | null {
-    const refresh: Refresh = settings.refresh;
-    if (refresh === "off") return null;
-    if (typeof refresh === "number") return refresh;
     return this.status === "connected" ? null : FALLBACK_MS;
-  }
-
-  /** Follows the refresh setting: streams for live, closes the stream for everything else */
-  follow(refresh: Refresh) {
-    if (refresh === "live") this.start();
-    else this.#shut(refresh === "off" ? "off" : "polling");
   }
 
   /** Opens the stream for what is retained, if it isn't open */
@@ -104,7 +94,7 @@ export class Live {
 
   /** Closes everything and forgets the last frame, as at logout */
   stop() {
-    this.#shut("off");
+    this.#shut();
     this.#lastId = null;
     this.principal = null;
   }
@@ -244,7 +234,7 @@ export class Live {
     this.#retry = setTimeout(() => this.#open(), delay);
   }
 
-  #shut(status: "off" | "polling") {
+  #shut() {
     this.#running = false;
     clearTimeout(this.#retry);
     clearTimeout(this.#debounce);
@@ -256,7 +246,7 @@ export class Live {
     this.#failures = [];
     this.#streak = 0;
     this.#warned = false;
-    this.status = status;
+    this.status = "off";
   }
 }
 
