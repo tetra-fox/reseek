@@ -12,15 +12,12 @@ use super::fields::{
 };
 use super::paths::{absolute, download_directory, readable_file};
 use super::{Context, Report};
-use crate::config::enums::RelayMode;
+use crate::config::enums::{LogLevel, RelayMode};
 use crate::config::{Blacklist, Logging, Options, Relay, Retention, TransferRetention};
 
 const MINUTE: Duration = Duration::from_secs(60);
 const HOUR: Duration = Duration::from_secs(3600);
 const DAY: Duration = Duration::from_secs(24 * 3600);
-
-/// The levels `logging.level` and `logging.targets` may name.
-const LEVELS: &[&str] = &["error", "warn", "info", "debug", "trace"];
 
 pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
   if options.relay.mode == RelayMode::Agent && options.instance_name == "local" {
@@ -206,20 +203,11 @@ fn check_blacklist(blacklist: &Blacklist, report: &mut Report) {
 }
 
 fn check_logging(logging: &Logging, report: &mut Report) {
-  if !LEVELS.contains(&logging.level.to_ascii_lowercase().as_str()) {
-    report.add(
-      "logging.level",
-      format!(
-        "The field logging.level must be one of: {}.",
-        LEVELS.join(", ")
-      ),
-    );
-  }
   for directive in &logging.targets {
     let valid = directive.split_once('=').is_some_and(|(target, level)| {
       !target.is_empty()
         && !target.contains(char::is_whitespace)
-        && LEVELS.contains(&level.to_ascii_lowercase().as_str())
+        && LogLevel::parse(level).is_some()
     });
     if !valid {
       report.add(
@@ -444,13 +432,11 @@ mod tests {
   }
 
   #[test]
-  fn log_levels_and_targets_are_checked() {
+  fn log_targets_are_checked() {
     let mut options = Options::default();
-    options.logging.level = "DEBUG".into();
-    options.logging.targets = vec!["soulseek_client::distributed=trace".into()];
+    options.logging.targets = vec!["soulseek_client::distributed=TRACE".into()];
     assert!(problems(&options).is_empty());
-    options.logging.level = "verbose".into();
-    options.logging.targets = vec!["reseek".into(), "=debug".into()];
+    options.logging.targets = vec!["reseek".into(), "=debug".into(), "reseek=verbose".into()];
     assert_eq!(problems(&options).len(), 3);
   }
 

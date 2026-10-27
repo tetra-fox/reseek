@@ -3852,10 +3852,24 @@ export interface components {
             /** @description when a change to the value takes effect */
             apply: components["schemas"]["Apply"];
             /**
+             * @description the names an option that is one of a fixed set takes, such as the log levels; null for
+             *     any other option
+             * @example [
+             *       "error",
+             *       "warn",
+             *       "info",
+             *       "debug",
+             *       "trace"
+             *     ]
+             */
+            choices?: string[] | null;
+            /**
              * @description the long command-line flag that sets the key
              * @example --slsk-username
              */
             cliFlag?: string | null;
+            /** @description the value when nothing sets the key, null for none; `*****` for a secret that has one */
+            default: Record<string, unknown>;
             /** @description the key's help text */
             doc: string;
             /**

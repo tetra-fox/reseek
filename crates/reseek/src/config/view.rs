@@ -27,6 +27,8 @@ pub fn config_view(loaded: &Loaded<Options>) -> api::ConfigView {
           cli_flag: field.cli_flag,
           kind: option_kind(field.kind),
           doc: field.doc,
+          choices: field.choices,
+          default: hidden(field.default),
           apply: apply(field.apply),
           secret: field.secret,
           not_applied: field.not_applied.map(|n| api::NotApplied {

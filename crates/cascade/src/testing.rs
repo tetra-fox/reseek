@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::broadcast;
 
-use crate::{Cascade, Change, Invalid, Key, Kind, Layers, Overrides, Schema, Shape, Watcher};
+use crate::{Cascade, Change, Invalid, Key, Layers, Overrides, Schema, Shape, Watcher};
 
 /// The root of the example.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
@@ -131,7 +131,7 @@ pub(crate) enum Mode {
 
 impl Cascade for Mode {
   fn shape() -> Shape {
-    Shape::leaf(Kind::String)
+    Shape::choice(&["memory", "disk"])
   }
 }
 

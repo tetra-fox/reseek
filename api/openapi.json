@@ -16083,6 +16083,7 @@
           "source",
           "kind",
           "doc",
+          "default",
           "apply",
           "secret"
         ],
@@ -16091,6 +16092,23 @@
             "$ref": "#/components/schemas/Apply",
             "description": "when a change to the value takes effect"
           },
+          "choices": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "the names an option that is one of a fixed set takes, such as the log levels; null for\nany other option",
+            "example": [
+              "error",
+              "warn",
+              "info",
+              "debug",
+              "trace"
+            ]
+          },
           "cliFlag": {
             "type": [
               "string",
@@ -16098,6 +16116,10 @@
             ],
             "description": "the long command-line flag that sets the key",
             "example": "--slsk-username"
+          },
+          "default": {
+            "type": "object",
+            "description": "the value when nothing sets the key, null for none; `*****` for a secret that has one"
           },
           "doc": {
             "type": "string",

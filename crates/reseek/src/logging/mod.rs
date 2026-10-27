@@ -20,7 +20,7 @@ pub use buffer::{BufferLayer, CAPACITY, LogBuffer};
 pub use file::DailyFile;
 
 use crate::config::Options;
-use crate::config::enums::DiagnosticLevel;
+use crate::config::enums::{DiagnosticLevel, LogLevel};
 use format::{Clock, Line};
 
 /// The name of the span every event of the process is in, which carries the instance name,
@@ -143,7 +143,7 @@ impl Logging {
         if let Err(e) = self.filter.reload(filter) {
           tracing::error!(error = %e, "log filter not changed");
         } else {
-          tracing::debug!(level = options.logging.level, targets = ?options.logging.targets, "log filter changed");
+          tracing::debug!(level = options.logging.level.as_str(), targets = ?options.logging.targets, "log filter changed");
         }
       }
       Err(e) => tracing::warn!(error = %e, "log filter not changed"),
@@ -175,12 +175,9 @@ pub fn filter(options: &Options, diagnostics: DiagnosticLevel) -> Result<EnvFilt
 const CLIENT: &str = "soulseek_client";
 
 fn directives(options: &Options, diagnostics: DiagnosticLevel) -> String {
-  const VERBOSITY: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
-  let level = options.logging.level.to_ascii_lowercase();
-  let rank = |l: &str| VERBOSITY.iter().position(|v| *v == l);
-  let level = match (options.debug, rank(&level), rank("debug")) {
-    (true, Some(r), Some(debug)) if r < debug => "debug".to_string(),
-    _ => level,
+  let level = match (options.debug, options.logging.level) {
+    (true, LogLevel::Error | LogLevel::Warn | LogLevel::Info) => LogLevel::Debug,
+    (_, level) => level,
   };
   let client = match diagnostics {
     DiagnosticLevel::None => "off",
@@ -188,7 +185,7 @@ fn directives(options: &Options, diagnostics: DiagnosticLevel) -> String {
     DiagnosticLevel::Info => "info",
     DiagnosticLevel::Debug => "debug",
   };
-  let mut directives = vec![level, format!("{CLIENT}={client}")];
+  let mut directives = vec![level.as_str().to_string(), format!("{CLIENT}={client}")];
   if !options.soulseek.distributed_network.logging {
     directives.push(format!("{CLIENT}::distributed=off"));
   }
@@ -213,7 +210,7 @@ mod tests {
       directives(&options, DiagnosticLevel::Info),
       format!("debug,{quiet_tree}")
     );
-    options.logging.level = "TRACE".into();
+    options.logging.level = LogLevel::Trace;
     options.logging.targets = vec!["hyper=warn".into(), "reseek::http=trace".into()];
     options.soulseek.distributed_network.logging = true;
     assert_eq!(

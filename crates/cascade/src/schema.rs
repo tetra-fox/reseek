@@ -37,6 +37,8 @@ pub struct Field {
   pub secret: bool,
   /// the field's help text
   pub doc: String,
+  /// the names the value is one of, `None` when it is not one of a fixed set
+  pub choices: Option<Vec<String>>,
   /// the fields of each element of a list of tables or entry of a user-keyed map, with keys
   /// relative to the element
   pub entries: Vec<Field>,
@@ -58,6 +60,9 @@ impl Field {
       apply: node.apply.unwrap_or_default(),
       secret: node.secret,
       doc: node.doc,
+      choices: node
+        .choices
+        .map(|names| names.iter().map(|n| n.to_string()).collect()),
       entries: node
         .entries
         .into_iter()

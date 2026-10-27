@@ -56,6 +56,11 @@ pub struct FieldView {
   pub kind: Kind,
   /// the key's help text
   pub doc: String,
+  /// the names the value is one of, `None` when it is not one of a fixed set
+  pub choices: Option<Vec<String>>,
+  /// the value when no layer sets the key, null for none; `*****` for a secret that has one
+  #[cfg_attr(feature = "utoipa", schema(value_type = Object))]
+  pub default: Value,
   /// when a change to the value takes effect
   pub apply: Apply,
   /// whether the value is shown as `*****`
@@ -117,6 +122,8 @@ impl ConfigView {
           cli_flag: field.cli.clone(),
           kind: field.kind.clone(),
           doc: field.doc.clone(),
+          choices: field.choices.clone(),
+          default: schema.redact_value(&field.key, &field.default),
           apply: field.apply,
           secret: field.secret,
           not_applied: loaded.not_applied.get(&field.key).map(|n| NotApplied {
@@ -211,6 +218,8 @@ mod tests {
         "cliFlag": "--password",
         "kind": "string",
         "doc": "The password to log in with.",
+        "choices": null,
+        "default": null,
         "apply": "reconnect",
         "secret": true,
         "notApplied": null,
@@ -243,6 +252,16 @@ mod tests {
       json!({ "list": "table" })
     );
     assert_eq!(view["fields"]["server.buffer"]["kind"], json!("size"));
+    assert_eq!(
+      view["fields"]["shares.cache.mode"]["choices"],
+      json!(["memory", "disk"])
+    );
+    assert_eq!(
+      view["fields"]["shares.cache.mode"]["default"],
+      json!("memory")
+    );
+    assert_eq!(view["fields"]["server.timeout"]["choices"], json!(null));
+    assert_eq!(view["fields"]["server.timeout"]["default"], json!("5s"));
     assert_eq!(
       view["overrides"]["server.address"]["value"],
       json!("runtime")

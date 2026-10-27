@@ -114,6 +114,13 @@ pub struct FieldView {
   pub kind: OptionKind,
   /// the key's help text
   pub doc: String,
+  /// the names an option that is one of a fixed set takes, such as the log levels; null for
+  /// any other option
+  #[schema(example = json!(["error", "warn", "info", "debug", "trace"]))]
+  pub choices: Option<Vec<String>>,
+  /// the value when nothing sets the key, null for none; `*****` for a secret that has one
+  #[schema(value_type = Object)]
+  pub default: Value,
   /// when a change to the value takes effect
   pub apply: Apply,
   /// whether the value is shown as `*****`

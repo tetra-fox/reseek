@@ -3,6 +3,8 @@
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
 
+use crate::config::enums::LogLevel;
+
 /// The log sinks.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
@@ -25,7 +27,7 @@ pub struct Logging {
   /// The least severe level logged: `error`, `warn`, `info`, `debug` or `trace`; `debug` mode
   /// lowers it to `debug`.
   #[cascade(env = "RESEEK_LOG_LEVEL", cli = "--log-level")]
-  pub level: String,
+  pub level: LogLevel,
   /// Levels for single modules, such as `soulseek_client::distributed=trace`.
   #[cascade(env = "RESEEK_LOG_TARGETS", cli = "--log-target")]
   pub targets: Vec<String>,
@@ -34,7 +36,7 @@ pub struct Logging {
 impl Default for Logging {
   fn default() -> Self {
     Self {
-      level: "info".to_string(),
+      level: LogLevel::Info,
       targets: Vec::new(),
     }
   }

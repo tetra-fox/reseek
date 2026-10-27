@@ -56,7 +56,7 @@ macro_rules! option_enum {
 
     impl cascade::Cascade for $name {
       fn shape() -> cascade::Shape {
-        cascade::Shape::leaf(cascade::Kind::String)
+        cascade::Shape::choice(Self::NAMES)
       }
     }
   };
@@ -166,6 +166,23 @@ option_enum! {
     Queue = "queue",
     /// the older transfer request, which the peer answers with queued, start now or a refusal
     TransferRequest = "transfer_request",
+  }
+}
+
+option_enum! {
+  /// The least severe level logged, from the least to the most verbose.
+  pub enum LogLevel {
+    /// errors only
+    Error = "error",
+    /// warnings and errors
+    Warn = "warn",
+    /// what a user wants in a normal log
+    #[default]
+    Info = "info",
+    /// the narrative of why things happen
+    Debug = "debug",
+    /// every detail
+    Trace = "trace",
   }
 }
 

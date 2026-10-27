@@ -51,8 +51,9 @@ pub enum Apply {
 ///
 /// Implemented for `bool`, the integer and float types, `String`, `PathBuf`, the `std::net`
 /// address types, `std::time::Duration`, and `Vec` and `Option` of those. A leaf type of the
-/// application's own, such as an enum written as a string, either implements it with
-/// [`Shape::leaf`] or is given `#[cascade(kind = "...")]` where it is used.
+/// application's own either implements it with [`Shape::leaf`], or with [`Shape::choice`] for
+/// an enum written as one of a fixed set of names, or is given `#[cascade(kind = "...")]` where
+/// it is used.
 #[diagnostic::on_unimplemented(
   message = "`{Self}` is neither a section nor a known leaf of a configuration",
   note = "derive Cascade on a section, mark a map `#[cascade(user_keyed)]`, or name a leaf's kind \
@@ -70,10 +71,12 @@ pub struct Shape(pub(crate) Inner);
 #[derive(Clone, Debug)]
 pub(crate) enum Inner {
   /// `entries` are the fields of each element when the leaf is a list of tables or a
-  /// user-keyed map of tables
+  /// user-keyed map of tables; `choices` the names a value is one of, when it is one of a
+  /// fixed set
   Leaf {
     kind: Kind,
     entries: Vec<Node>,
+    choices: Option<&'static [&'static str]>,
   },
   Section(Vec<Node>),
 }
@@ -84,6 +87,16 @@ impl Shape {
     Self(Inner::Leaf {
       kind,
       entries: Vec::new(),
+      choices: None,
+    })
+  }
+
+  /// A string leaf whose value is one of `names`, such as an enum written by name.
+  pub fn choice(names: &'static [&'static str]) -> Self {
+    Self(Inner::Leaf {
+      kind: Kind::String,
+      entries: Vec::new(),
+      choices: Some(names),
     })
   }
 }
@@ -102,11 +115,13 @@ pub struct Node {
   pub(crate) secret: bool,
   pub(crate) doc: String,
   pub(crate) entries: Vec<Node>,
+  pub(crate) choices: Option<&'static [&'static str]>,
 }
 
 impl Node {
   fn leaf(attrs: &private::Attrs, kind: Kind, entries: Vec<Node>) -> Self {
     Self {
+      choices: None,
       key: attrs.name.to_string(),
       kind,
       env: attrs.env.map(str::to_string),
@@ -168,7 +183,14 @@ pub mod private {
   /// When a section is given an env var or a flag; those go on its leaves.
   pub fn push<F: Cascade>(nodes: &mut Vec<Node>, attrs: Attrs) {
     match F::shape().0 {
-      Inner::Leaf { kind, entries } => nodes.push(Node::leaf(&attrs, kind, entries)),
+      Inner::Leaf {
+        kind,
+        entries,
+        choices,
+      } => nodes.push(Node {
+        choices,
+        ..Node::leaf(&attrs, kind, entries)
+      }),
       Inner::Section(children) => {
         assert!(
           attrs.env.is_none() && attrs.long.is_none() && attrs.env_aliases.is_empty(),
@@ -233,12 +255,13 @@ leaves!(Duration: Duration);
 impl<T: Cascade> Cascade for Vec<T> {
   fn shape() -> Shape {
     let (item, entries) = match T::shape().0 {
-      Inner::Leaf { kind, entries } => (kind, entries),
+      Inner::Leaf { kind, entries, .. } => (kind, entries),
       Inner::Section(fields) => (Kind::Table, fields),
     };
     Shape(Inner::Leaf {
       kind: Kind::List(Box::new(item)),
       entries,
+      choices: None,
     })
   }
 }
