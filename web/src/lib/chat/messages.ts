@@ -83,7 +83,9 @@ export const layout = (messages: Message[], gaps: Gap[], unreadFrom: number | nu
     placeGaps(at);
     const today = day(message.timestamp);
     if (today !== lastDay) {
-      lines.push({ kind: "day", key: `day:${today}`, date: message.timestamp });
+      // keyed by the message that starts it: a replayed message dated earlier can start a day
+      // a second time, and two lines would then share a date
+      lines.push({ kind: "day", key: `day:${message.localId}`, date: message.timestamp });
       lastDay = today;
       previous = null;
     }
