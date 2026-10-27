@@ -29,6 +29,8 @@
     () => void searches.load(),
     () => "search"
   );
+  // a stream reopened for this topic resumes where it was and sends no list, so the page asks
+  void searches.load();
 
   let shown = $state(PAGE);
   let confirming = $state(false);
