@@ -1,0 +1,195 @@
+<script lang="ts">
+  import Columns3Icon from "@lucide/svelte/icons/columns-3";
+  import PlusIcon from "@lucide/svelte/icons/plus";
+  import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
+  import Trash2Icon from "@lucide/svelte/icons/trash-2";
+  import XIcon from "@lucide/svelte/icons/x";
+
+  import { app } from "#lib/app.svelte.js";
+  import Button from "#lib/components/ui/Button.svelte";
+  import * as Menu from "#lib/components/ui/menu/menu.js";
+  import SplitButton from "#lib/components/ui/SplitButton.svelte";
+  import { formatBytes, formatSpeed } from "#lib/format.js";
+  import { session } from "#lib/session.svelte.js";
+  import { type BulkAction, SCOPES } from "#lib/transfers/bulk.js";
+  import { COLUMNS } from "#lib/transfers/columns.js";
+  import { defaults, type ViewSettings } from "#lib/transfers/settings.svelte.js";
+  import { type ChipId, type Direction, STATE_CHIPS } from "#lib/transfers/states.js";
+  import type { GroupBy } from "#lib/transfers/view.js";
+
+  type Props = {
+    direction: Direction;
+    view: ViewSettings;
+    /** how many transfers each state chip stands for, and all of them */
+    counts: Record<ChipId | "all", number>;
+    text: string;
+    /** a bulk action is running, or there is nothing to act on */
+    disabled: boolean;
+    onbulk: (action: BulkAction, test: (state: string) => boolean, scope: string) => void;
+    onadd: () => void;
+  };
+
+  let { direction, view, counts, text = $bindable(), disabled, onbulk, onadd }: Props = $props();
+
+  let retry = $state<string>(SCOPES.retry[0].id);
+  let cancel = $state<string>(SCOPES.cancel[0].id);
+  let remove = $state<string>(SCOPES.remove[0].id);
+
+  const write = $derived(session.can("ReadWrite"));
+  const metrics = $derived(app.metrics?.[direction === "download" ? "downloads" : "uploads"]);
+  const GROUPINGS: { id: GroupBy; label: string }[] = $derived([
+    { id: "user", label: "User › folder" },
+    { id: "folder", label: "Folder" },
+    ...(direction === "download" ? [{ id: "batch" as const, label: "Batch" }] : []),
+    { id: "flat", label: "Flat" }
+  ]);
+
+  const toggleChip = (id: ChipId) => {
+    const states = view.filters.states;
+    view.filters.states = states.includes(id) ? states.filter((s) => s !== id) : [...states, id];
+  };
+
+  const scoped = (action: BulkAction, id: string) => {
+    const scope = SCOPES[action].find((s) => s.id === id)!;
+    onbulk(action, scope.test, scope.id);
+  };
+</script>
+
+<div class="flex flex-col gap-2">
+  <div class="flex flex-wrap items-center gap-inline">
+    <div class="flex flex-wrap gap-1" role="group" aria-label="States">
+      <Button
+        variant={view.filters.states.length ? "outline" : "secondary"}
+        size="sm"
+        aria-pressed={!view.filters.states.length}
+        onclick={() => (view.filters.states = [])}>
+        All <span class="text-fg-muted tabular-nums">{counts.all}</span>
+      </Button>
+      {#each STATE_CHIPS as chip (chip.id)}
+        {@const on = view.filters.states.includes(chip.id)}
+        <Button
+          variant={on ? "secondary" : "outline"}
+          size="sm"
+          aria-pressed={on}
+          onclick={() => toggleChip(chip.id)}>
+          {chip.label} <span class="text-fg-muted tabular-nums">{counts[chip.id]}</span>
+        </Button>
+      {/each}
+    </div>
+    <div class="relative min-w-48 flex-1">
+      <input
+        bind:value={text}
+        type="search"
+        aria-label="Filter"
+        placeholder="Filter: name, user:alice folder:album ext:flac"
+        class="h-control-sm w-full rounded-control border border-input bg-surface pr-8 pl-3 text-sm placeholder:text-fg-subtle focus-visible:border-accent" />
+      {#if text}
+        <button
+          type="button"
+          class="absolute top-1/2 right-2 -translate-y-1/2"
+          aria-label="Clear the filter"
+          onclick={() => (text = "")}>
+          <XIcon class="size-4 text-fg-muted" />
+        </button>
+      {/if}
+    </div>
+  </div>
+  <div class="flex flex-wrap items-center gap-inline">
+    <div class="inline-flex rounded-control border p-0.5" role="radiogroup" aria-label="Group by">
+      {#each GROUPINGS as g (g.id)}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={view.groupBy === g.id}
+          class={[
+            "rounded-badge px-2 py-0.5 text-sm",
+            view.groupBy === g.id ? "bg-surface-muted font-medium" : "text-fg-muted"
+          ]}
+          onclick={() => (view.groupBy = g.id)}>{g.label}</button>
+      {/each}
+    </div>
+    <div class="inline-flex rounded-control border p-0.5" role="radiogroup" aria-label="Density">
+      {#each [["comfortable", "Comfortable"], ["compact", "Compact"]] as const as [id, label] (id)}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={view.density === id}
+          class={[
+            "rounded-badge px-2 py-0.5 text-sm",
+            view.density === id ? "bg-surface-muted font-medium" : "text-fg-muted"
+          ]}
+          onclick={() => (view.density = id)}>{label}</button>
+      {/each}
+    </div>
+    <Menu.Root>
+      <Menu.Trigger>
+        {#snippet child({ props })}
+          <Button {...props} variant="outline" size="sm"><Columns3Icon />Columns</Button>
+        {/snippet}
+      </Menu.Trigger>
+      <Menu.Content align="start" class="min-w-48">
+        {#each view.columns as column (column.id)}
+          {@const known = COLUMNS.find((c) => c.id === column.id)}
+          {#if known && !known.fixed}
+            <Menu.Item
+              closeOnSelect={false}
+              onSelect={() => (column.visible = !column.visible)}
+              aria-checked={column.visible}
+              role="menuitemcheckbox">
+              <span
+                class={["rounded-sm size-3 border", column.visible && "border-accent bg-accent"]}
+              ></span>
+              {known.label}
+            </Menu.Item>
+          {/if}
+        {/each}
+        <Menu.Separator />
+        <Menu.Item onSelect={() => Object.assign(view, defaults(direction))}
+          >Reset the view</Menu.Item>
+      </Menu.Content>
+    </Menu.Root>
+    {#if write}
+      <div class="ml-auto flex flex-wrap items-center gap-inline">
+        {#if direction === "download"}
+          <SplitButton
+            options={SCOPES.retry}
+            bind:chosen={retry}
+            icon={RotateCwIcon}
+            disabled={disabled || !app.isServerConnected}
+            onclick={(id) => scoped("retry", id)} />
+        {/if}
+        <SplitButton
+          options={SCOPES.cancel}
+          bind:chosen={cancel}
+          icon={XIcon}
+          variant="danger"
+          {disabled}
+          onclick={(id) => scoped("cancel", id)} />
+        <SplitButton
+          options={SCOPES.remove}
+          bind:chosen={remove}
+          icon={Trash2Icon}
+          {disabled}
+          onclick={(id) => scoped("remove", id)} />
+        <Button
+          variant="outline"
+          size="sm"
+          {disabled}
+          onclick={() => scoped("remove", "succeeded")}>
+          Clear completed
+        </Button>
+        {#if direction === "download"}
+          <Button size="sm" onclick={onadd}><PlusIcon />Add</Button>
+        {/if}
+      </div>
+    {/if}
+  </div>
+  {#if metrics}
+    <p class="text-xs text-fg-muted tabular-nums">
+      {metrics.inProgress.files} active · {formatSpeed(metrics.inProgress.totalSpeed)} ·
+      {metrics.queued.files} queued · {metrics.completed.failed} errored · {formatBytes(
+        metrics.completed.bytes
+      )} since start
+    </p>
+  {/if}
+</div>

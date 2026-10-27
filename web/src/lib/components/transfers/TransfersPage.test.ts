@@ -1,0 +1,126 @@
+import { flushSync, mount, unmount } from "svelte";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { Schemas } from "#lib/api/client.js";
+import { interaction } from "#lib/interaction.svelte.js";
+import { live } from "#lib/live/live.svelte.js";
+import { transfer } from "#lib/testing/fixtures.js";
+import { fakeNetwork } from "#lib/testing/network.js";
+import { defaults, views } from "#lib/transfers/settings.svelte.js";
+import type { Transfer } from "#lib/transfers/states.js";
+import { downloads } from "#lib/transfers/transfers.svelte.js";
+
+import TransfersPage from "./TransfersPage.svelte";
+
+const flush = async () => {
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+};
+
+/** the grouped listing the daemon answers, one directory per transfer */
+const grouped = (rows: Transfer[]) =>
+  rows.map((t) => ({
+    username: t.username,
+    directories: [{ directory: "d", fileCount: 1, files: [t] }]
+  }));
+
+describe("the transfers table", () => {
+  let component: ReturnType<typeof mount> | null = null;
+  let listing: Transfer[] = [];
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // jsdom lays nothing out, so the table's measured height stays at its first guess
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    Object.assign(views.download, defaults("download"), { groupBy: "flat" });
+  });
+  afterEach(() => {
+    if (component) unmount(component);
+    live.stop();
+    downloads.clear();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  const start = async () => {
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/api/v0/transfers/downloads") ? grouped(listing) : undefined
+    );
+    live.start();
+    net.frame("hello", { principal: { name: "a", role: "ReadOnly" } } as Schemas["Hello"]);
+    component = mount(TransfersPage, { target: document.body, props: { direction: "download" } });
+    await flush();
+    await flush();
+    return net;
+  };
+  const row = (id: string) => document.querySelector(`[role=row][data-id="${id}"]`);
+  const order = () =>
+    [...document.querySelectorAll("[role=rowgroup] [role=row]")]
+      .toSorted(
+        (a, b) =>
+          parseFloat((a as HTMLElement).style.top) - parseFloat((b as HTMLElement).style.top)
+      )
+      .map((r) => r.getAttribute("data-id"));
+
+  it("patches a row in place by frame and by reconcile, and holds the order while frozen", async () => {
+    const a = transfer({ filename: "x\\b.flac" });
+    const b = transfer({ filename: "x\\c.flac" });
+    listing = [a, b];
+    const net = await start();
+    expect(order()).toEqual([a.id, b.id]);
+    const first = row(a.id)!;
+    const name = first.querySelector("button")!;
+
+    const selection = document.getSelection()!;
+    selection.setBaseAndExtent(row(a.id)!, 0, row(b.id)!, row(b.id)!.childNodes.length);
+    // the patched cells change their text, so what stays is where the selection starts and ends
+    const held = () => {
+      const now = document.getSelection()!;
+      expect(now.isCollapsed).toBe(false);
+      expect(now.anchorNode).toBe(row(a.id));
+      expect(now.focusNode).toBe(row(b.id));
+    };
+
+    // a frame patches one row
+    net.frame("transfers.updated", { ...a, state: "InProgress", percentComplete: 40 });
+    await flush();
+    expect(row(a.id)).toBe(first);
+    expect(first.querySelector("button")).toBe(name);
+    expect(first.textContent).toContain("40%");
+    held();
+
+    // a reconcile with a new row: the old rows keep their nodes
+    const c = transfer({ filename: "x\\d.flac" });
+    listing = [{ ...a, state: "InProgress", percentComplete: 55 }, b, c];
+    await downloads.load();
+    await flush();
+    expect(row(a.id)).toBe(first);
+    expect(first.textContent).toContain("55%");
+    expect(order()).toEqual([a.id, b.id, c.id]);
+    held();
+
+    // while the user holds the table, a row that sorts first waits at the end
+    const release = interaction.hold();
+    const early = transfer({ filename: "x\\a.flac" });
+    net.frame("transfers.added", early);
+    await flush();
+    expect(order()).toEqual([a.id, b.id, c.id, early.id]);
+    expect(row(a.id)).toBe(first);
+    release();
+    await flush();
+    // the selection inside the table holds it still too
+    expect(order()).toEqual([a.id, b.id, c.id, early.id]);
+    document.getSelection()!.removeAllRanges();
+    await flush();
+    expect(order()).toEqual([early.id, a.id, b.id, c.id]);
+    expect(row(a.id)).toBe(first);
+  });
+});

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Placeholder from "#lib/components/Placeholder.svelte";
+  import TransfersPage from "#lib/components/transfers/TransfersPage.svelte";
 </script>
 
-<Placeholder screen="Uploads" />
+<TransfersPage direction="upload" />

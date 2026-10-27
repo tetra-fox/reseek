@@ -1,0 +1,234 @@
+<script lang="ts">
+  import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
+  import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
+  import FileIcon from "@lucide/svelte/icons/file";
+  import FileAudioIcon from "@lucide/svelte/icons/file-audio";
+  import FileVideoIcon from "@lucide/svelte/icons/file-video";
+  import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
+  import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
+  import Trash2Icon from "@lucide/svelte/icons/trash-2";
+  import XIcon from "@lucide/svelte/icons/x";
+
+  import { kindOf } from "#lib/browse/summary.js";
+  import Badge from "#lib/components/ui/Badge.svelte";
+  import Button from "#lib/components/ui/Button.svelte";
+  import Checkbox from "#lib/components/ui/Checkbox.svelte";
+  import * as Menu from "#lib/components/ui/menu/menu.js";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import Username from "#lib/components/users/Username.svelte";
+  import {
+    ago,
+    dateTime,
+    formatBytes,
+    formatBytesTransferred,
+    formatDuration,
+    formatSpeed,
+    getDirectoryName,
+    getFileName
+  } from "#lib/format.js";
+  import { session } from "#lib/session.svelte.js";
+  import { act, open, queuePosition, storeOf } from "#lib/transfers/actions.js";
+  import type { ColumnId } from "#lib/transfers/columns.js";
+  import { type Direction, rowActions, stateChip, type Transfer } from "#lib/transfers/states.js";
+  import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
+  import { users } from "#lib/users.svelte.js";
+
+  import RowMenu from "./RowMenu.svelte";
+  import Sparkline from "./Sparkline.svelte";
+
+  type Props = {
+    transfer: Transfer;
+    direction: Direction;
+    columns: ColumnId[];
+    /** the folder is shown under the name, where no group header says it */
+    showFolder: boolean;
+    selected: boolean;
+    speeds: number[];
+    around: Transfer[];
+    /** ticks the row; `range` when shift was held */
+    onselect: (range: boolean) => void;
+    ondetails: () => void;
+    onremove: () => void;
+    onblock: (deny: boolean) => void;
+  };
+
+  let {
+    transfer: t,
+    direction,
+    columns,
+    showFolder,
+    selected,
+    speeds,
+    around,
+    onselect,
+    ondetails,
+    onremove,
+    onblock
+  }: Props = $props();
+
+  const icons = { audio: FileAudioIcon, video: FileVideoIcon, other: FileIcon };
+  const Icon = $derived(icons[kindOf(t.filename)]);
+  const chip = $derived(stateChip(t));
+  const can = $derived(rowActions(t, direction));
+  const write = $derived(session.can("ReadWrite"));
+  const user = $derived(users.get(t.username));
+  const wait = $derived(direction === "upload" ? waits.get(t.id) : undefined);
+  const retryIn = $derived(t.nextAttemptAt ? ago(t.nextAttemptAt) : null);
+</script>
+
+{#each columns as column (column)}
+  <div
+    role="gridcell"
+    class={[
+      "flex min-w-0 items-center gap-1.5 px-2",
+      ["size", "speed", "eta", "elapsed", "attempts", "transferred"].includes(column) &&
+        "justify-end tabular-nums"
+    ]}>
+    {#if column === "select"}
+      <Checkbox
+        aria-label={`Select ${getFileName(t.filename)}`}
+        checked={selected}
+        onclick={(e) => {
+          e.preventDefault();
+          onselect(e.shiftKey);
+        }} />
+    {:else if column === "file"}
+      <Icon class="size-4 shrink-0 text-fg-muted" />
+      <button
+        type="button"
+        class="min-w-0 truncate text-left hover:underline"
+        title={t.filename}
+        onclick={ondetails}>
+        {getFileName(t.filename)}
+        {#if showFolder}
+          <span class="text-fg-muted"> {getDirectoryName(t.filename)}</span>
+        {/if}
+      </button>
+    {:else if column === "user"}
+      {#if direction === "upload" && user?.group.color}
+        <span
+          class="size-2 shrink-0 rounded-full"
+          style:background-color={user.group.color}
+          title={`Group ${user.group.name}`}></span>
+      {/if}
+      <Username name={t.username} folder={getDirectoryName(t.filename)} />
+      {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
+    {:else if column === "size"}
+      <span title={`${t.size.toLocaleString()} bytes`}>{formatBytes(t.size)}</span>
+    {:else if column === "progress"}
+      {#if t.state === "InProgress"}
+        <div
+          class="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-muted"
+          role="progressbar"
+          aria-valuenow={Math.round(t.percentComplete)}
+          aria-valuemin={0}
+          aria-valuemax={100}>
+          <div class="h-full bg-accent transition-[width]" style:width={`${t.percentComplete}%`}>
+          </div>
+        </div>
+        <span class="text-xs tabular-nums">{chip.text}</span>
+      {:else}
+        <Tooltip text={chip.title ?? (retryIn ? `next attempt ${retryIn}` : undefined)}>
+          {#snippet child({ props })}
+            <span {...props} class="min-w-0">
+              <Badge tone={chip.tone} class="max-w-full truncate">{chip.text}</Badge>
+            </span>
+          {/snippet}
+        </Tooltip>
+        {#if retryIn}<span class="truncate text-xs text-fg-muted">retry {retryIn}</span>{/if}
+      {/if}
+    {:else if column === "speed"}
+      {#if t.state === "InProgress"}
+        <Sparkline points={speeds} />
+        <span>{formatSpeed(t.averageSpeed)}</span>
+      {/if}
+    {:else if column === "eta"}
+      {t.state === "InProgress" && t.remainingTime !== null && t.remainingTime !== undefined
+        ? formatDuration(t.remainingTime / 1000)
+        : "—"}
+    {:else if column === "transferred"}
+      {formatBytesTransferred(t.size, t.bytesTransferred)}
+    {:else if column === "queue"}
+      {#if direction === "download"}
+        {#if t.placeInQueue}<span class="tabular-nums">#{t.placeInQueue}</span>{/if}
+        {#if can.queuePosition}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Ask for the place in the queue"
+            onclick={() => void queuePosition(t)}>
+            <RefreshCwIcon />
+          </Button>
+        {/if}
+      {:else if t.state.includes("Queued")}
+        <Tooltip text={wait ? whyText(wait) : undefined}>
+          {#snippet child({ props })}
+            <span {...props} class="truncate" role="note" onpointerenter={() => void waits.load(t)}>
+              {wait ? placeText(wait) : "Queued"}
+            </span>
+          {/snippet}
+        </Tooltip>
+      {/if}
+    {:else if column === "requested" || column === "started" || column === "ended"}
+      {@const at =
+        column === "requested" ? t.requestedAt : column === "started" ? t.startedAt : t.endedAt}
+      {#if at}<span title={ago(at)}>{dateTime(at)}</span>{/if}
+    {:else if column === "elapsed"}
+      {t.elapsedTime !== null && t.elapsedTime !== undefined
+        ? formatDuration(t.elapsedTime / 1000)
+        : ""}
+    {:else if column === "attempts"}
+      {t.attempts}
+    {:else if column === "batch"}
+      {#if t.batchId}<span class="font-mono text-xs" title={t.batchId}>{t.batchId.slice(0, 8)}</span
+        >{/if}
+    {:else if column === "group"}
+      {user?.group.name ?? ""}
+    {:else if column === "actions"}
+      <div class="ml-auto flex items-center row-action">
+        {#if write && can.retry}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Retry"
+            onclick={() => void act(storeOf(t), "retry", [t.id])}>
+            <RotateCwIcon />
+          </Button>
+        {/if}
+        {#if write && can.cancel}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Cancel"
+            onclick={() => void act(storeOf(t), "cancel", [t.id])}>
+            <XIcon />
+          </Button>
+        {/if}
+        {#if write}
+          <Button variant="ghost" size="icon-sm" aria-label="Remove" onclick={onremove}>
+            <Trash2Icon />
+          </Button>
+        {/if}
+        {#if can.open}
+          <Button variant="ghost" size="icon-sm" aria-label="Open" onclick={() => void open(t)}>
+            <ExternalLinkIcon />
+          </Button>
+        {/if}
+        <Menu.Root>
+          <Menu.Trigger>
+            {#snippet child({ props })}
+              <Button
+                {...props}
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`More for ${getFileName(t.filename)}`}>
+                <EllipsisIcon />
+              </Button>
+            {/snippet}
+          </Menu.Trigger>
+          <RowMenu transfer={t} {direction} {around} {onremove} {onblock} {ondetails} />
+        </Menu.Root>
+      </div>
+    {/if}
+  </div>
+{/each}
