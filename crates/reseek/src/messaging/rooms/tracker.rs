@@ -40,6 +40,12 @@ pub struct Tracker {
   private: BTreeMap<String, PrivateRoom>,
 }
 
+/// A member's country as the server gave it, none when it sent a blank, as it does for a user
+/// who is offline.
+pub fn country_of(user: &UserData) -> Option<&str> {
+  Some(user.country_code.as_str()).filter(|code| !code.trim().is_empty())
+}
+
 /// A member as a room shows them; `us` marks ourselves.
 pub fn room_user(user: &UserData, us: &str) -> RoomUser {
   RoomUser {
@@ -52,7 +58,7 @@ pub fn room_user(user: &UserData, us: &str) -> RoomUser {
       upload_count: user.stats.upload_count.into(),
     },
     slots_full: Some(user.slots_full),
-    country_code: (!user.country_code.trim().is_empty()).then(|| user.country_code.clone()),
+    country_code: country_of(user).map(str::to_string),
     is_self: user.username == us,
   }
 }

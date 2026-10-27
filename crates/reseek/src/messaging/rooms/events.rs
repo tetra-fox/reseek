@@ -15,7 +15,7 @@ use soulseek_proto::server::UserData;
 use tracing::{debug, info, trace, warn};
 
 use super::history::{self, Arrived};
-use super::tracker::room_user;
+use super::tracker::{country_of, room_user};
 use crate::messaging::{Messaging, mentions};
 use crate::users::Touch;
 
@@ -180,10 +180,10 @@ impl Messaging {
       return debug!(room, "a join to a room we are not in dropped");
     }
     trace!(room, username, "user joined a room");
-    if !user.country_code.trim().is_empty() {
+    if let Some(country) = country_of(user) {
       self
         .users
-        .countries_seen(vec![(username, user.country_code.clone())])
+        .countries_seen(vec![(username, country.to_string())])
         .await;
     }
     self

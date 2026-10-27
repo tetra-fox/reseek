@@ -29,7 +29,7 @@ use super::conversations::unsent;
 use crate::api::error::ApiError;
 use crate::db::DbError;
 use crate::services::Joined;
-use tracker::Tracker;
+use tracker::{Tracker, country_of};
 
 /// How long the server's room list is served again before it is asked for anew.
 const LIST_FOR: Duration = Duration::from_secs(60);
@@ -132,8 +132,7 @@ impl Messaging {
     let countries = data
       .users
       .iter()
-      .filter(|user| !user.country_code.trim().is_empty())
-      .map(|user| (user.username.clone(), user.country_code.clone()))
+      .filter_map(|user| Some((user.username.clone(), country_of(user)?.to_string())))
       .collect();
     self.users.countries_seen(countries).await;
     let room_name = name.to_string();
