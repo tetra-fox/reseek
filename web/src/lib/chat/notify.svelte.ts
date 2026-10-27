@@ -79,24 +79,21 @@ class Notifier {
     if (message.direction !== "In" || message.wasReplayed) return;
     const key = `user:${username}`;
     const seen = this.#seen(key, open);
-    if (!seen.paneOpen) {
+    const arrival: Arrival = {
+      kind: "private",
+      level,
+      mention: false,
+      muted: users.get(username)?.muted ?? false,
+      seen: seen.visible && seen.paneOpen
+    };
+    // the toast is the in-page form of the same notification: the same level, mute and options
+    // decide it, whether the tab is visible or not
+    if (!seen.paneOpen && shouldNotify(arrival, { ...notifyOptions(), onlyWhenHidden: false })) {
       toast(`New message from ${username}`, "info", {
         action: { label: "Open", run: () => void this.#go(chatHref(username)) }
       });
     }
-    this.#maybe(
-      {
-        kind: "private",
-        level,
-        mention: false,
-        muted: users.get(username)?.muted ?? false,
-        seen: seen.visible && seen.paneOpen
-      },
-      username,
-      message.message,
-      key,
-      chatHref(username)
-    );
+    this.#maybe(arrival, username, message.message, key, chatHref(username));
   }
 
   /** A room message arrived; `level` is the room's, `open` the pane on screen */

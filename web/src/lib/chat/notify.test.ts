@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { type Arrival, type NotifyOptions, shouldNotify } from "./notify.svelte";
+import type { Schemas } from "#lib/api/client.js";
+import { app } from "#lib/app.svelte.js";
+import { toasts } from "#lib/toast.svelte.js";
+
+import { type Arrival, notifier, type NotifyOptions, shouldNotify } from "./notify.svelte";
+
+vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
 
 const options: NotifyOptions = {
   enabled: true,
@@ -44,5 +50,38 @@ describe("which messages notify", () => {
     expect(
       shouldNotify(arrival({ kind: "room", mention: true }), { ...options, mentions: false })
     ).toBe(false);
+  });
+});
+
+describe("the new message toast", () => {
+  afterEach(() => {
+    app.options = null;
+    toasts.splice(0);
+  });
+
+  const message = {
+    localId: 1,
+    id: 1,
+    timestamp: "2026-10-26T10:00:00Z",
+    username: "alice",
+    direction: "In",
+    message: "hi",
+    isAcknowledged: false,
+    wasReplayed: false
+  } as Schemas["PrivateMessage"];
+  const toasted = (level: Schemas["NotifyLevel"], open: string | null = null) => {
+    toasts.splice(0);
+    notifier.privateMessage("alice", message, level, open);
+    return toasts.length;
+  };
+
+  it("follows the notification rules, with the tab's visibility set aside", () => {
+    expect(toasted("all")).toBe(1);
+    expect(toasted("all", "user:alice")).toBe(0);
+    expect(toasted("none")).toBe(0);
+    app.options = { chat: { notifications: { enabled: false } } } as never;
+    expect(toasted("all")).toBe(0);
+    app.options = { chat: { notifications: { private_messages: false } } } as never;
+    expect(toasted("all")).toBe(0);
   });
 });
