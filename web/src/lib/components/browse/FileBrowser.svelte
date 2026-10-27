@@ -103,12 +103,12 @@
     downloading = false;
   };
 
-  /** Every file under the folder as one batch, kept in a folder named like it */
+  /** Every file under the folder, filtered or not, as one batch in a folder named like it */
   const downloadFolder = async () => {
     downloading = true;
     status = await enqueue({
       username,
-      files: candidates.map((f) => asItem(f)),
+      files: filesUnder(node, sep).map((f) => asItem(f)),
       destination: leaf(node.name)
     });
     downloading = false;
@@ -135,7 +135,7 @@
         <Button
           variant="ghost"
           size="sm"
-          disabled={!connected || downloading || !candidates.length}
+          disabled={!connected || downloading || !node.totalFileCount}
           onclick={() => void downloadFolder()}>
           <DownloadIcon />Download folder
         </Button>
