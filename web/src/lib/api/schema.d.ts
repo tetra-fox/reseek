@@ -5723,6 +5723,12 @@ export interface components {
         /** @description One peer's answer to a search. */
         SearchResponse: {
             /**
+             * @description the peer's country as ISO 3166-1 alpha-2, from the users directory; null when the
+             *     directory has none for them
+             * @example NL
+             */
+            country?: string | null;
+            /**
              * Format: int32
              * @description how many files are in `files`
              */

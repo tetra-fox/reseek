@@ -345,6 +345,12 @@ impl Directory {
     Ok(summary)
   }
 
+  /// The country last seen for `username`, when they have a row and one was seen; read from
+  /// memory.
+  pub fn country_of(&self, username: &str) -> Option<String> {
+    self.known.country(username)
+  }
+
   /// Pushes `username`'s summary after their row or block changed; they have a row now.
   async fn changed(&self, username: &str) {
     self.known.added(username);

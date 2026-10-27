@@ -1,6 +1,6 @@
 //! The users who have a row, each with the country last seen for them, held in memory so a
-//! room's member list is matched against the directory without a database read. The row
-//! writes keep it: a changed row is known, a removed one forgotten.
+//! room's member list and every search response are matched against the directory without a
+//! database read. The row writes keep it: a changed row is known, a removed one forgotten.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -24,6 +24,11 @@ impl Known {
   fn users(&self) -> MutexGuard<'_, HashMap<String, Option<String>>> {
     // every change under the lock is one insert or removal
     self.0.lock().unwrap_or_else(PoisonError::into_inner)
+  }
+
+  /// The country stored for `username`, when they have a row and one was seen.
+  pub fn country(&self, username: &str) -> Option<String> {
+    self.users().get(username).cloned().flatten()
   }
 
   /// `username` has a row now.
@@ -75,9 +80,12 @@ mod tests {
     ];
     assert_eq!(known.news(seen), [("alice".to_string(), "DE".to_string())]);
     known.added("bob");
-    let again = vec![("bob".to_string(), "NL".to_string())];
-    assert!(known.news(again.clone()).is_empty(), "kept on a change");
+    assert_eq!(
+      known.country("bob").as_deref(),
+      Some("NL"),
+      "kept on a change"
+    );
     known.removed("bob");
-    assert!(known.news(again).is_empty(), "no row any more");
+    assert_eq!(known.country("bob"), None);
   }
 }

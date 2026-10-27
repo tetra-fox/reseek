@@ -20384,6 +20384,14 @@
           "lockedFiles"
         ],
         "properties": {
+          "country": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the peer's country as ISO 3166-1 alpha-2, from the users directory; null when the\ndirectory has none for them",
+            "example": "NL"
+          },
           "fileCount": {
             "type": "integer",
             "format": "int32",

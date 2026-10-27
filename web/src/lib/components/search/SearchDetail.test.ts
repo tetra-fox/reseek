@@ -22,6 +22,7 @@ const file = (filename: string): Schemas["File"] => ({
 
 const response = (username: string, speed: number): Schemas["SearchResponse"] => ({
   username,
+  country: null,
   token: 1,
   hasFreeUploadSlot: true,
   uploadSpeed: speed,

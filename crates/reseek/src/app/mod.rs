@@ -223,9 +223,15 @@ impl AppState {
     )
     .await
     .map_err(|e| StartError::Open(format!("messaging.db: {e}")))?;
-    let searches = Searches::open(&location, network.clone(), live.clone(), config.clone())
-      .await
-      .map_err(|e| StartError::Open(format!("search.db: {e}")))?;
+    let searches = Searches::open(
+      &location,
+      network.clone(),
+      users.clone(),
+      live.clone(),
+      config.clone(),
+    )
+    .await
+    .map_err(|e| StartError::Open(format!("search.db: {e}")))?;
     let releases = Arc::new(
       Releases::new(RELEASE_FEED)
         .map_err(|e| StartError::Open(format!("release feed HTTP client: {e}")))?,

@@ -19,6 +19,7 @@ use tracing::{debug, error, trace, warn};
 
 use super::{Searches, store, suspect};
 use crate::live::{Live, Topic};
+use crate::users::Directory;
 
 /// How often the counts of a running search are written and pushed at most.
 const COUNTS_EVERY: Duration = Duration::from_millis(250);
@@ -63,8 +64,8 @@ fn file(file: peer::File, locked: bool) -> api_types::search::File {
   shown
 }
 
-/// A peer's response as a search result shows it.
-fn response(response: peer::SearchResponse) -> SearchResponse {
+/// A peer's response as a search result shows it, with the peer's `country`.
+fn response(response: peer::SearchResponse, country: Option<String>) -> SearchResponse {
   let files: Vec<_> = response.files.into_iter().map(|f| file(f, false)).collect();
   let locked_files: Vec<_> = response
     .locked_files
@@ -73,6 +74,7 @@ fn response(response: peer::SearchResponse) -> SearchResponse {
     .collect();
   SearchResponse {
     username: response.username,
+    country,
     token: response.token,
     has_free_upload_slot: response.has_free_upload_slot,
     upload_speed: response.upload_speed,
@@ -123,10 +125,11 @@ impl Running {
     self.changed.notify_one();
   }
 
-  /// The client took `taken` into the search: it is kept, counted, and pushed when a stream
-  /// follows the search.
-  pub fn response_taken(&self, taken: peer::SearchResponse, live: &Live) {
-    let taken = response(taken);
+  /// The client took `taken` into the search: it is kept with the responder's country from
+  /// `users`, counted, and pushed when a stream follows the search.
+  pub fn response_taken(&self, taken: peer::SearchResponse, live: &Live, users: &Directory) {
+    let country = users.country_of(&taken.username);
+    let taken = response(taken, country);
     trace!(
       username = taken.username,
       files = taken.file_count,
@@ -395,5 +398,47 @@ mod tests {
       stored.state,
       SearchStates::Completed | SearchStates::Cancelled
     );
+  }
+
+  #[tokio::test]
+  async fn a_response_carries_the_country_the_directory_has_for_its_peer() {
+    let app = app(
+      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
+      &[],
+    )
+    .await;
+    let notes = crate::testing::request(
+      "PUT",
+      "/api/v0/users/alice/notes",
+      Some(serde_json::json!({ "notes": "has a row" })),
+    );
+    assert_eq!(app.send(notes).await.status, 204);
+    let users = &app.state.users;
+    users
+      .countries_seen(vec![
+        ("alice".into(), "NL".into()),
+        ("bob".into(), "DE".into()),
+      ])
+      .await;
+    let (accepted, _acceptance) = oneshot::channel();
+    let running = Running::new(record(), accepted);
+    for username in ["alice", "bob"] {
+      let taken = peer::SearchResponse {
+        username: username.into(),
+        token: 7,
+        files: Vec::new(),
+        has_free_upload_slot: true,
+        upload_speed: 0,
+        queue_length: 0,
+        locked_files: Vec::new(),
+      };
+      running.response_taken(taken, &app.state.live, users);
+    }
+    let countries: Vec<_> = lock(&running.progress)
+      .responses
+      .iter()
+      .map(|response| response.country.clone())
+      .collect();
+    assert_eq!(countries, [Some("NL".to_string()), None], "bob has no row");
   }
 }

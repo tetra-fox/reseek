@@ -36,6 +36,7 @@ use crate::db::{Database, DbError, Location, shifted};
 use crate::live::Live;
 use crate::network::Network;
 use crate::services::{Cancelled, SearchService};
+use crate::users::Directory;
 use running::Running;
 
 /// How long deleting a running search waits for it to end.
@@ -53,6 +54,8 @@ pub struct Searches {
   this: Weak<Searches>,
   db: Database,
   network: Arc<Network>,
+  /// where a responder's country is found
+  users: Arc<Directory>,
   live: Live,
   config: Watcher<Options>,
   /// held while a search starts; a second start meanwhile is refused
@@ -126,11 +129,12 @@ fn unreadable(error: std::io::Error) -> rusqlite::Error {
 }
 
 impl Searches {
-  /// Opens `search.db` in `location`; searches go out through `network` and are pushed to
-  /// `live`.
+  /// Opens `search.db` in `location`; searches go out through `network`, their responders'
+  /// countries are found in `users`, and they are pushed to `live`.
   pub async fn open(
     location: &Location,
     network: Arc<Network>,
+    users: Arc<Directory>,
     live: Live,
     config: Watcher<Options>,
   ) -> Result<Arc<Self>, DbError> {
@@ -139,6 +143,7 @@ impl Searches {
       this: this.clone(),
       db,
       network,
+      users,
       live,
       config,
       starting: tokio::sync::Mutex::new(()),
@@ -327,13 +332,13 @@ impl SearchService for Searches {
     self.tasks.spawn(
       async move {
         let taker = running.clone();
-        let live = this.live.clone();
+        let (live, users) = (this.live.clone(), this.users.clone());
         let search = client.search_with(
           &text,
           scope,
           Some(token),
           options,
-          move |response| taker.response_taken(response, &live),
+          move |response| taker.response_taken(response, &live, &users),
           &running.cancel,
         );
         this.follow(running.clone(), search).await;

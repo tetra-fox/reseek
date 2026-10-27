@@ -187,6 +187,10 @@ pub struct SearchRequest {
 pub struct SearchResponse {
   /// the peer that answered
   pub username: String,
+  /// the peer's country as ISO 3166-1 alpha-2, from the users directory; null when the
+  /// directory has none for them
+  #[schema(example = "NL")]
+  pub country: Option<String>,
   /// the search's token, as the peer echoed it
   pub token: u32,
   /// the peer has an upload slot free
