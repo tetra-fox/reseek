@@ -328,6 +328,10 @@ pub struct Chat {
   /// The longest message that may be sent, in characters.
   #[cascade(env = "RESEEK_CHAT_MAX_MESSAGE_LENGTH")]
   pub max_message_length: u32,
+  /// Takes invitations to other users' private rooms; when off the server is told we take
+  /// none.
+  #[cascade(env = "RESEEK_CHAT_ACCEPT_PRIVATE_ROOM_INVITATIONS")]
+  pub accept_private_room_invitations: bool,
   /// Words and phrases that make a room message count as mentioning us, matched in any case
   /// as whole words.
   #[cascade(env = "RESEEK_CHAT_HIGHLIGHT_WORDS")]
@@ -339,6 +343,7 @@ impl Default for Chat {
     Self {
       notifications: ChatNotifications::default(),
       max_message_length: 2000,
+      accept_private_room_invitations: true,
       highlight_words: Vec::new(),
     }
   }
@@ -412,11 +417,18 @@ mod tests {
   #[test]
   fn the_chat_options_apply_live_with_their_defaults() {
     let schema = Schema::of::<Options>();
-    for (key, default, env) in [(
-      "chat.highlight_words",
-      json!([]),
-      "RESEEK_CHAT_HIGHLIGHT_WORDS",
-    )] {
+    for (key, default, env) in [
+      (
+        "chat.accept_private_room_invitations",
+        json!(true),
+        "RESEEK_CHAT_ACCEPT_PRIVATE_ROOM_INVITATIONS",
+      ),
+      (
+        "chat.highlight_words",
+        json!([]),
+        "RESEEK_CHAT_HIGHLIGHT_WORDS",
+      ),
+    ] {
       let field = schema.field(key).unwrap();
       assert_eq!(field.default, default, "{key}");
       assert_eq!(field.apply, Apply::Live, "{key}");

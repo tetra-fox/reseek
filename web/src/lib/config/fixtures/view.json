@@ -14,6 +14,7 @@
       ]
     },
     "chat": {
+      "accept_private_room_invitations": true,
       "highlight_words": [],
       "max_message_length": 2000,
       "notifications": {
@@ -441,6 +442,21 @@
         "messages",
         "rooms"
       ],
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "chat.accept_private_room_invitations": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CHAT_ACCEPT_PRIVATE_ROOM_INVITATIONS",
+      "cliFlag": null,
+      "kind": "bool",
+      "doc": "Takes invitations to other users' private rooms; when off the server is told we take none.",
+      "choices": null,
+      "default": true,
       "apply": "live",
       "secret": false,
       "notApplied": null

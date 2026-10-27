@@ -1,7 +1,8 @@
 //! Following the options while running: a change to the search request filters compiles them
-//! again, a change to the Soulseek, upload or download options patches the client, a change
-//! that takes effect only on a new session is flagged while connected, a change to how we
-//! reach the server starts the watchdog over, and rooms added to the configuration are joined.
+//! again, a change to the Soulseek, upload or download options or to whether we take private
+//! room invitations patches the client, a change that takes effect only on a new session is
+//! flagged while connected, a change to how we reach the server starts the watchdog over, and
+//! rooms added to the configuration are joined.
 
 use std::sync::Arc;
 
@@ -53,6 +54,7 @@ async fn apply(app: &AppState, applied: &Options, current: &Arc<Loaded<Options>>
   if applied.soulseek != values.soulseek
     || applied.transfers.upload != values.transfers.upload
     || applied.transfers.download != values.transfers.download
+    || applied.chat.accept_private_room_invitations != values.chat.accept_private_room_invitations
   {
     let patch = match options::patch(applied, values) {
       Ok(patch) => patch,
@@ -122,8 +124,11 @@ mod tests {
       &[],
     )
     .await;
-    let change =
-      json!({ "set": { "transfers.upload.speed_limit": 64, "transfers.upload.slots": 3 } });
+    let change = json!({ "set": {
+      "transfers.upload.speed_limit": 64,
+      "transfers.upload.slots": 3,
+      "chat.accept_private_room_invitations": false,
+    } });
     let answer = app
       .send(request("PATCH", "/api/v0/options", Some(change)))
       .await;
@@ -135,6 +140,7 @@ mod tests {
       tokio::time::sleep(Duration::from_millis(20)).await;
     }
     assert_eq!(client.options().maximum_concurrent_uploads, 3);
+    assert!(!client.options().accept_private_room_invitations);
     assert!(!app.state.state.current().pending_reconnect);
   }
 }

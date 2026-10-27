@@ -62,7 +62,7 @@ pub fn client_options(options: &Options) -> Result<ClientOptions, String> {
     // the conversations engine acknowledges a message once it is stored
     auto_acknowledge_private_messages: false,
     auto_acknowledge_privilege_notifications: true,
-    accept_private_room_invitations: true,
+    accept_private_room_invitations: options.chat.accept_private_room_invitations,
     starting_token: None,
     server_connection_options: sets.server,
     peer_connection_options: sets.peer.clone(),
@@ -353,6 +353,7 @@ mod tests {
       "[transfers.upload]\nslots = 2\nspeed_limit = 50\n[transfers.download]\nslots = 7\n",
       "[soulseek.server_keepalive]\nprobes = 9\n[soulseek.limits]\nmax_cached_peer_connections = 7\n",
       "[soulseek]\nlisten_port = 50301\n",
+      "[chat]\naccept_private_room_invitations = false\n",
     ] {
       patched_like_started(&previous, &options(current)).await;
       patched_like_started(&options(current), &previous).await;
