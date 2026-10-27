@@ -355,6 +355,22 @@ impl Shares {
     }
   }
 
+  /// Whether `soulseek.picture` names a file, found without reading it.
+  pub async fn has_picture(&self) -> bool {
+    let Some(path) = self.config.current().values.soulseek.picture.clone() else {
+      return false;
+    };
+    match tokio::fs::metadata(&path).await {
+      Ok(metadata) => metadata.is_file(),
+      Err(e) => {
+        if let Some(suppressed) = PICTURE_UNREAD.allow() {
+          warn!(path = %path.display(), error = %e, suppressed, "profile picture not found");
+        }
+        false
+      }
+    }
+  }
+
   /// Changes the share state and mirrors it into `State.shares`.
   fn publish(&self, change: impl FnOnce(&mut Status)) {
     let mut status = lock(&self.status);

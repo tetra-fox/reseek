@@ -57,12 +57,11 @@ async fn get_profile(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
 ) -> Json<OwnProfile> {
-  let local = app.shares.user_info().await;
+  let has_picture = app.shares.has_picture().await;
   let forecast = app.uploads.default_forecast();
   let current = app.config.current();
-  let has_picture = local.picture.is_some();
   Json(OwnProfile {
-    description: local.description,
+    description: current.values.soulseek.description.clone(),
     has_picture,
     picture_url: has_picture.then(|| PICTURE_URL.to_string()),
     upload_slots: forecast.total_slots,
