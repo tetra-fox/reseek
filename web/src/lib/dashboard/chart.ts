@@ -18,6 +18,7 @@ const STEPS = [
   12 * HOUR,
   DAY,
   2 * DAY,
+  3 * DAY,
   7 * DAY,
   14 * DAY,
   30 * DAY,
