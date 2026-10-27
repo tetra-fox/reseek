@@ -217,3 +217,31 @@ pub fn quiet() -> ClientOptions {
 pub fn logged_in(state: &State) -> bool {
   state.server.is_logged_in
 }
+
+/// The daemon in `dir` logged in to the client harness's scripted server as its user, with the
+/// server's end of the connection for the test to read and answer.
+pub async fn scripted(dir: &Path) -> (Daemon, Client, client::ServerSide) {
+  let fake = client::FakeServer::start().await;
+  let port = fake.address().port().to_string();
+  let listen = free_port().to_string();
+  let args = [
+    "--slsk-address",
+    "127.0.0.1",
+    "--slsk-port",
+    &port,
+    "--slsk-username",
+    client::USERNAME,
+    "--slsk-password",
+    client::PASSWORD,
+    "--slsk-listen-ip-address",
+    "127.0.0.1",
+    "--slsk-listen-port",
+    &listen,
+  ];
+  let running = Daemon::start(dir, &args, &ACCOUNT);
+  let mut server = fake.accept().await;
+  server.accept_login().await;
+  let api = signed_in(&running).await;
+  until(&api, "logged in", logged_in).await;
+  (running, api, server)
+}

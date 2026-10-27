@@ -8,34 +8,12 @@ use std::time::Duration;
 
 use soulseek_proto::server::{UserStats, UserStatus, WatchUserResponse, WatchedUser};
 use soulseek_proto::{ServerRequest, ServerResponse, UserPresence};
-use support::client::{FakeServer, PASSWORD, USERNAME};
-use support::{ACCOUNT, Daemon, free_port, logged_in, signed_in, until};
+use support::scripted;
 
 #[tokio::test]
 async fn two_watches_of_one_user_at_once_ask_the_server_once() {
-  let fake = FakeServer::start().await;
-  let port = fake.address().port().to_string();
-  let listen = free_port().to_string();
   let dir = tempfile::tempdir().unwrap();
-  let args = [
-    "--slsk-address",
-    "127.0.0.1",
-    "--slsk-port",
-    &port,
-    "--slsk-username",
-    USERNAME,
-    "--slsk-password",
-    PASSWORD,
-    "--slsk-listen-ip-address",
-    "127.0.0.1",
-    "--slsk-listen-port",
-    &listen,
-  ];
-  let running = Daemon::start(dir.path(), &args, &ACCOUNT);
-  let mut server = fake.accept().await;
-  server.accept_login().await;
-  let api = signed_in(&running).await;
-  until(&api, "logged in", logged_in).await;
+  let (_running, api, mut server) = scripted(dir.path()).await;
 
   let first = tokio::spawn({
     let api = api.clone();
