@@ -8,8 +8,9 @@ use api_types::live::LiveFrame;
 use api_types::relay::{RelayConnectionState, RelayControllerState, RelayMode, RelayState};
 use api_types::state::{
   ConfigurationState, ConnectionWatchdogState, DirectoriesState, DistributedNetworkState,
-  HealthState, IncomingSearchHealth, Privileges, SearchHealth, ServerConnectionState, ServerState,
-  SharesState, State, UserState, UserStatistics,
+  HealthState, IncomingSearchHealth, ListenState, PortMappingState, PortMappingStatus, Privileges,
+  Reachable, SearchHealth, ServerConnectionState, ServerState, SharesState, State, UserState,
+  UserStatistics,
 };
 use cascade::Loaded;
 use tokio::sync::watch;
@@ -108,6 +109,17 @@ fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
       is_logged_in: false,
       is_logging_in: false,
       is_transitioning: false,
+      listen: ListenState {
+        port: loaded.values.soulseek.listen_port,
+        port_mapping: PortMappingState {
+          state: PortMappingStatus::Off,
+          method: None,
+          external_address: None,
+          external_port: None,
+          error: None,
+        },
+        reachable: Reachable::Unknown,
+      },
     },
     connection_watchdog: ConnectionWatchdogState {
       is_enabled: false,

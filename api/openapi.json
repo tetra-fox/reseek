@@ -17421,6 +17421,31 @@
         ],
         "description": "An entry of `GET /tokens`, told apart by `source`."
       },
+      "ListenState": {
+        "type": "object",
+        "description": "How other users reach our peer listener: its port, the router forwarding it and whether\npeers can connect to us.",
+        "required": [
+          "port",
+          "portMapping",
+          "reachable"
+        ],
+        "properties": {
+          "port": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the port the listener takes connections on, which the server tells other users",
+            "minimum": 0
+          },
+          "portMapping": {
+            "$ref": "#/components/schemas/PortMappingState",
+            "description": "the router forwarding that port to us"
+          },
+          "reachable": {
+            "$ref": "#/components/schemas/Reachable",
+            "description": "whether other users can connect to us, judged from who has connected so far"
+          }
+        }
+      },
       "LiveFrame": {
         "oneOf": [
           {
@@ -19112,6 +19137,73 @@
           }
         }
       },
+      "PortMappingMethod": {
+        "type": "string",
+        "description": "How the router was asked to forward our port.",
+        "enum": [
+          "upnp",
+          "natpmp",
+          "pcp"
+        ]
+      },
+      "PortMappingState": {
+        "type": "object",
+        "description": "The router forwarding our listening port to us.",
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "why the router did not forward the port, null unless `state` is `failed`"
+          },
+          "externalAddress": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "our address on the internet as the router reports it, null when unknown",
+            "example": "203.0.113.7"
+          },
+          "externalPort": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "the port the router forwards to us, null until a mapping holds",
+            "minimum": 0
+          },
+          "method": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PortMappingMethod",
+                "description": "how the router was asked, null until a mapping holds"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/PortMappingStatus",
+            "description": "where asking the router stands"
+          }
+        }
+      },
+      "PortMappingStatus": {
+        "type": "string",
+        "description": "Where asking the router to forward our port stands.",
+        "enum": [
+          "off",
+          "mapping",
+          "mapped",
+          "failed"
+        ]
+      },
       "Principal": {
         "type": "object",
         "description": "The identity a request acts as.",
@@ -19486,6 +19578,15 @@
             "minimum": 0
           }
         }
+      },
+      "Reachable": {
+        "type": "string",
+        "description": "Whether other users can connect to us.",
+        "enum": [
+          "yes",
+          "unknown",
+          "no"
+        ]
       },
       "ReadMarker": {
         "type": "object",
@@ -20552,7 +20653,8 @@
           "isConnecting",
           "isLoggedIn",
           "isLoggingIn",
-          "isTransitioning"
+          "isTransitioning",
+          "listen"
         ],
         "properties": {
           "address": {
@@ -20589,6 +20691,10 @@
           "isTransitioning": {
             "type": "boolean",
             "description": "`state` has `Connecting`, `Disconnecting` or `LoggingIn`"
+          },
+          "listen": {
+            "$ref": "#/components/schemas/ListenState",
+            "description": "how other users reach our peer listener"
           },
           "state": {
             "$ref": "#/components/schemas/ServerConnectionState",

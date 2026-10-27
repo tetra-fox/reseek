@@ -4393,6 +4393,21 @@ export interface components {
             source: "config";
         });
         /**
+         * @description How other users reach our peer listener: its port, the router forwarding it and whether
+         *     peers can connect to us.
+         */
+        ListenState: {
+            /**
+             * Format: int32
+             * @description the port the listener takes connections on, which the server tells other users
+             */
+            port: number;
+            /** @description the router forwarding that port to us */
+            portMapping: components["schemas"]["PortMappingState"];
+            /** @description whether other users can connect to us, judged from who has connected so far */
+            reachable: components["schemas"]["Reachable"];
+        };
+        /**
          * @description One frame of the event stream. Frames are named `<topic>.<event>`; the control frames
          *     `hello`, `lagged` and `bye` belong to no topic and are always sent.
          */
@@ -5055,6 +5070,34 @@ export interface components {
              */
             total: number;
         };
+        /**
+         * @description How the router was asked to forward our port.
+         * @enum {string}
+         */
+        PortMappingMethod: "upnp" | "natpmp" | "pcp";
+        /** @description The router forwarding our listening port to us. */
+        PortMappingState: {
+            /** @description why the router did not forward the port, null unless `state` is `failed` */
+            error?: string | null;
+            /**
+             * @description our address on the internet as the router reports it, null when unknown
+             * @example 203.0.113.7
+             */
+            externalAddress?: string | null;
+            /**
+             * Format: int32
+             * @description the port the router forwards to us, null until a mapping holds
+             */
+            externalPort?: number | null;
+            method?: null | components["schemas"]["PortMappingMethod"];
+            /** @description where asking the router stands */
+            state: components["schemas"]["PortMappingStatus"];
+        };
+        /**
+         * @description Where asking the router to forward our port stands.
+         * @enum {string}
+         */
+        PortMappingStatus: "off" | "mapping" | "mapped" | "failed";
         /** @description The identity a request acts as. */
         Principal: {
             /**
@@ -5255,6 +5298,11 @@ export interface components {
              */
             users: number;
         };
+        /**
+         * @description Whether other users can connect to us.
+         * @enum {string}
+         */
+        Reachable: "yes" | "unknown" | "no";
         /**
          * @description Moves a room's read marker, the body of `PUT /rooms/joined/{roomName}/read`. The marker
          *     never moves back.
@@ -5834,6 +5882,8 @@ export interface components {
             isLoggingIn: boolean;
             /** @description `state` has `Connecting`, `Disconnecting` or `LoggingIn` */
             isTransitioning: boolean;
+            /** @description how other users reach our peer listener */
+            listen: components["schemas"]["ListenState"];
             /** @description the client's state flags */
             state: components["schemas"]["ServerConnectionState"];
         };

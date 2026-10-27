@@ -1,6 +1,6 @@
 //! The daemon's side of the Soulseek network: the client built from the options, the watchdog
-//! that keeps it connected, what the daemon does with each client event, how it answers other
-//! users, and the options it follows while running.
+//! that keeps it connected, whether other users can connect to us, what the daemon does with
+//! each client event, how it answers other users, and the options it follows while running.
 //!
 //! [`Network`] owns the client. The engines reach the network through [`Network::client`]; the
 //! server connection is started and ended through [`Network::connect`],
@@ -9,6 +9,7 @@
 mod changes;
 mod events;
 pub mod options;
+mod reachability;
 pub mod resolvers;
 pub mod watchdog;
 
@@ -32,6 +33,7 @@ use crate::telemetry::Telemetry;
 use crate::users::Directory;
 pub use changes::follow_changes;
 pub use events::{follow_shared_counts, observe_client, observe_transfers};
+use reachability::Reachability;
 use resolvers::{Edges, IncomingSearches, resolvers};
 use watchdog::Watchdog;
 
@@ -107,6 +109,8 @@ pub struct Network {
   drained: CancellationToken,
   /// what other users are answered from
   edges: Arc<Edges>,
+  /// whether other users can connect to us
+  reachability: Arc<Reachability>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -143,6 +147,10 @@ impl Network {
       // the options were validated above, which is all a new client can fail on
       let client = Client::new(client_options).expect("the client options were validated");
       let events = client.subscribe();
+      let reachability = Arc::new(Reachability::new(
+        state.clone(),
+        client.inbound_connections(),
+      ));
       let watchdog = Watchdog::new(
         client.clone(),
         config.clone(),
@@ -160,6 +168,7 @@ impl Network {
         following: Mutex::new(None),
         drained: CancellationToken::new(),
         edges,
+        reachability,
       }
     }))
   }
@@ -200,6 +209,29 @@ impl Network {
         .instrument(info_span!("client_events")),
     );
     *lock(&self.following) = Some(task);
+  }
+
+  /// Starts judging whether other users can connect to us, until `shutdown`; called once,
+  /// before anything connects.
+  pub fn follow_listening(&self, shutdown: CancellationToken) {
+    tokio::spawn(
+      self
+        .reachability
+        .clone()
+        .follow(shutdown)
+        .instrument(info_span!("reachability")),
+    );
+  }
+
+  /// The listener's options may have changed: a new port in the client's own, which a
+  /// listener that could not move keeps as they were, starts the judgement of who can reach us
+  /// over.
+  fn listening_changed(&self) {
+    let port = self.client.options().listen_port;
+    if self.state.current().server.listen.port != port {
+      self.state.update(|state| state.server.listen.port = port);
+      self.reachability.start_over("the listening port changed");
+    }
   }
 
   /// Connects and keeps reconnecting: starts the watchdog, or, when it was trying already,

@@ -108,6 +108,77 @@ pub struct ServerState {
   pub is_logging_in: bool,
   /// `state` has `Connecting`, `Disconnecting` or `LoggingIn`
   pub is_transitioning: bool,
+  /// how other users reach our peer listener
+  pub listen: ListenState,
+}
+
+/// How other users reach our peer listener: its port, the router forwarding it and whether
+/// peers can connect to us.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListenState {
+  /// the port the listener takes connections on, which the server tells other users
+  pub port: u16,
+  /// the router forwarding that port to us
+  pub port_mapping: PortMappingState,
+  /// whether other users can connect to us, judged from who has connected so far
+  pub reachable: Reachable,
+}
+
+/// The router forwarding our listening port to us.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PortMappingState {
+  /// where asking the router stands
+  pub state: PortMappingStatus,
+  /// how the router was asked, null until a mapping holds
+  pub method: Option<PortMappingMethod>,
+  /// our address on the internet as the router reports it, null when unknown
+  #[schema(example = "203.0.113.7")]
+  pub external_address: Option<String>,
+  /// the port the router forwards to us, null until a mapping holds
+  pub external_port: Option<u16>,
+  /// why the router did not forward the port, null unless `state` is `failed`
+  pub error: Option<String>,
+}
+
+/// Where asking the router to forward our port stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum PortMappingStatus {
+  /// port mapping is turned off, or we are not connected to the server
+  Off,
+  /// the router is being asked
+  Mapping,
+  /// the router forwards the port
+  Mapped,
+  /// no router answered, or it refused
+  Failed,
+}
+
+/// How the router was asked to forward our port.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum PortMappingMethod {
+  /// UPnP Internet Gateway Device
+  Upnp,
+  /// NAT Port Mapping Protocol
+  Natpmp,
+  /// Port Control Protocol
+  Pcp,
+}
+
+/// Whether other users can connect to us.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Reachable {
+  /// a peer has connected to our listener by itself
+  Yes,
+  /// too little has happened to tell
+  Unknown,
+  /// for ten minutes, or over five searches that drew responses, every connection to a peer
+  /// was one we opened ourselves
+  No,
 }
 
 /// The loop that reconnects to the Soulseek server.

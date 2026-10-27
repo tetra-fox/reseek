@@ -9,7 +9,7 @@
 use api_types::chat::ServerMessage;
 use api_types::events::{Event as BusEvent, EventError, NoFields, SoulseekClientDisconnected};
 use api_types::live::LiveFrame;
-use api_types::state::{DistributedNetworkState, ServerConnectionState, ServerState};
+use api_types::state::{DistributedNetworkState, ServerConnectionState};
 use api_types::users::{UserPresence, UserStatus, UserStatusChanged};
 use chrono::Utc;
 use soulseek_client::{
@@ -73,10 +73,12 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
     Event::Connected => connected(app).await,
     Event::LoggedIn { username } => {
       logged_in(app, &username);
+      app.network.reachability.logged_in();
       app.messaging.take(Event::LoggedIn { username }).await;
     }
     Event::Disconnected { message, error } => {
       disconnected(app, &message, error.as_ref(), *reached);
+      app.network.reachability.logged_out();
       *reached = false;
       app
         .messaging
@@ -171,8 +173,10 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
     | Event::SearchResponseDelivered(_)
     | Event::SearchResponseDeliveryFailed(_)
     | Event::TransferProgressUpdated { .. }
-    | Event::SearchStateChanged { .. }
-    | Event::SearchResponseReceived { .. } => {}
+    | Event::SearchStateChanged { .. } => {}
+    Event::SearchResponseReceived { search, .. } => {
+      app.network.reachability.search_answered(search.token);
+    }
   }
 }
 
@@ -220,24 +224,24 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
 fn server_state(app: &AppState, state: ClientState) {
   let client = app.network.client();
   let disconnected = state.contains(ClientState::DISCONNECTED);
-  let server = ServerState {
-    address: if disconnected { None } else { client.address() },
-    ip_end_point: if disconnected {
-      None
-    } else {
-      client.ip_endpoint().map(|e| e.to_string())
-    },
-    state: ServerConnectionState::from_bits_retain(state.bits().into()),
-    is_connected: state.contains(ClientState::CONNECTED),
-    is_connecting: state.contains(ClientState::CONNECTING),
-    is_logged_in: state.contains(ClientState::LOGGED_IN),
-    is_logging_in: state.contains(ClientState::LOGGING_IN),
-    is_transitioning: state
-      .intersects(ClientState::CONNECTING | ClientState::DISCONNECTING | ClientState::LOGGING_IN),
+  let address = if disconnected { None } else { client.address() };
+  let ip_end_point = if disconnected {
+    None
+  } else {
+    client.ip_endpoint().map(|e| e.to_string())
   };
   let username = client.username();
   app.state.update(|current| {
-    current.server = server;
+    let server = &mut current.server;
+    server.address = address;
+    server.ip_end_point = ip_end_point;
+    server.state = ServerConnectionState::from_bits_retain(state.bits().into());
+    server.is_connected = state.contains(ClientState::CONNECTED);
+    server.is_connecting = state.contains(ClientState::CONNECTING);
+    server.is_logged_in = state.contains(ClientState::LOGGED_IN);
+    server.is_logging_in = state.contains(ClientState::LOGGING_IN);
+    server.is_transitioning = state
+      .intersects(ClientState::CONNECTING | ClientState::DISCONNECTING | ClientState::LOGGING_IN);
     current.user.username = username;
   });
 }

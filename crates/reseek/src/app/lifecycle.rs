@@ -1,14 +1,15 @@
 //! The order the daemon's work starts in once it is built, and the order it stops in.
 //!
 //! Starting: the transfers the last run left unfinished are ended and the downloads among them
-//! marked to resume after the login, and the searches it left running are ended, before anything
-//! can start new ones; then, in the background, the client's events and the options are
-//! followed, the release feed is read, the shares are initialized, the clock starts, and the
-//! watchdog connects, unless this is a relay agent, connecting is turned off or there are no
-//! credentials. Stopping, once the HTTP host has stopped: the
-//! running searches end as cancelled, the watchdog stops, the client disconnects and is
-//! disposed, the events this raised are handled, the session is closed, the statistics fetched
-//! again and the transfer tasks end, and the transfers still unfinished are ended as shut down.
+//! marked to resume after the login, and the searches it left running are ended, before
+//! anything can start new ones; then, in the background, the client's events and the options
+//! are followed, whether other users can reach us is judged while we are logged in, the
+//! release feed is read, the shares are initialized, the clock starts, and the watchdog
+//! connects, unless this is a relay agent, connecting is turned off or there are no
+//! credentials. Stopping, once the HTTP host has stopped: the running searches end as
+//! cancelled, the watchdog stops, the client disconnects and is disposed, the events this
+//! raised are handled, the session is closed, the statistics fetched again and the transfer
+//! tasks end, and the transfers still unfinished are ended as shut down.
 
 use tracing::{Instrument, debug, info, info_span, warn};
 
@@ -28,6 +29,7 @@ pub(super) async fn start(app: &AppState) {
   }
   app.searches.end_dangling().await;
   app.network.follow_events(app);
+  app.network.follow_listening(app.shutdown.clone());
   tokio::spawn(network::follow_changes(app.clone()).instrument(info_span!("client_options")));
   tokio::spawn(network::follow_shared_counts(app.clone()).instrument(info_span!("shared_counts")));
   tokio::spawn(run(app.clone()).instrument(info_span!("startup")));

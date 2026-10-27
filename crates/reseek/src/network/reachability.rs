@@ -1,0 +1,189 @@
+//! Whether other users can connect to us, judged from what happens rather than asked of anyone:
+//! a peer that connects to our listener by itself shows they can; ten minutes logged in, or five
+//! of our searches drawing responses, with every peer connection one we opened ourselves, shows
+//! they cannot. A peer answering a connection request we had the server relay reached our
+//! listener too, so it holds the judgement at "unknown". The judgement starts over at every
+//! login and whenever the listening port or its mapping on the router changes; it is
+//! `State.server.listen.reachable`.
+
+use std::collections::HashSet;
+use std::sync::{Mutex, PoisonError};
+use std::time::Duration;
+
+use api_types::state::Reachable;
+use soulseek_client::InboundConnections;
+use tokio::sync::{Notify, watch};
+use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, info, warn};
+
+use crate::state::StateOwner;
+
+/// How long we stay logged in before nobody connecting to us says they cannot.
+pub const WAITED: Duration = Duration::from_secs(600);
+
+/// How many of our searches draw responses before nobody connecting to us says they cannot.
+pub const SEARCHES: usize = 5;
+
+/// What the judgement is made from, since it last started over.
+struct Evidence {
+  logged_in: bool,
+  since: Instant,
+  /// the connections counted when it started over
+  base: InboundConnections,
+  /// the tokens of our searches that took a response
+  answered: HashSet<u32>,
+}
+
+/// The judgement of whether other users can connect to us.
+pub struct Reachability {
+  state: StateOwner,
+  inbound: watch::Receiver<InboundConnections>,
+  evidence: Mutex<Evidence>,
+  changed: Notify,
+}
+
+/// What `seen` connections, `searches` answered and whether we `waited` long enough say.
+pub fn judge(seen: InboundConnections, searches: usize, waited: bool) -> Reachable {
+  if seen.direct > 0 {
+    Reachable::Yes
+  } else if seen.answers > 0 || (!waited && searches < SEARCHES) {
+    Reachable::Unknown
+  } else {
+    Reachable::No
+  }
+}
+
+impl Reachability {
+  /// A judgement made from the connections `inbound` counts, written into `state`; it is
+  /// "unknown" until we log in.
+  pub fn new(state: StateOwner, inbound: watch::Receiver<InboundConnections>) -> Self {
+    let base = *inbound.borrow();
+    Self {
+      state,
+      inbound,
+      evidence: Mutex::new(Evidence {
+        logged_in: false,
+        since: Instant::now(),
+        base,
+        answered: HashSet::new(),
+      }),
+      changed: Notify::new(),
+    }
+  }
+
+  fn evidence(&self) -> std::sync::MutexGuard<'_, Evidence> {
+    // every change under the lock is made whole before it is let go
+    self.evidence.lock().unwrap_or_else(PoisonError::into_inner)
+  }
+
+  /// We logged in: the judgement starts over.
+  pub fn logged_in(&self) {
+    self.evidence().logged_in = true;
+    self.start_over("logged in");
+  }
+
+  /// The session ended: nothing is known until the next login.
+  pub fn logged_out(&self) {
+    self.evidence().logged_in = false;
+    self.changed.notify_one();
+  }
+
+  /// What other users could reach changed, for `why`: the judgement starts over.
+  pub fn start_over(&self, why: &str) {
+    let mut evidence = self.evidence();
+    evidence.since = Instant::now();
+    evidence.base = *self.inbound.borrow();
+    evidence.answered.clear();
+    drop(evidence);
+    debug!(why, "reachability judged anew");
+    self.changed.notify_one();
+  }
+
+  /// Our search `token` took a response.
+  pub fn search_answered(&self, token: u32) {
+    if self.evidence().answered.insert(token) {
+      self.changed.notify_one();
+    }
+  }
+
+  /// The judgement now, and when it next changes by time alone.
+  fn now(&self) -> (Reachable, Option<Instant>) {
+    let evidence = self.evidence();
+    if !evidence.logged_in {
+      return (Reachable::Unknown, None);
+    }
+    let counted = *self.inbound.borrow();
+    let seen = InboundConnections {
+      direct: counted.direct.saturating_sub(evidence.base.direct),
+      answers: counted.answers.saturating_sub(evidence.base.answers),
+    };
+    let deadline = evidence.since + WAITED;
+    let waited = Instant::now() >= deadline;
+    let judged = judge(seen, evidence.answered.len(), waited);
+    (judged, (!waited).then_some(deadline))
+  }
+
+  /// Keeps `State.server.listen.reachable` current until `shutdown`.
+  pub async fn follow(self: std::sync::Arc<Self>, shutdown: CancellationToken) {
+    let mut inbound = self.inbound.clone();
+    loop {
+      let (judged, deadline) = self.now();
+      self.publish(judged);
+      tokio::select! {
+        () = shutdown.cancelled() => return,
+        () = self.changed.notified() => {}
+        changed = inbound.changed() => if changed.is_err() { return },
+        () = tokio::time::sleep_until(deadline.unwrap_or_else(Instant::now)), if deadline.is_some() => {}
+      }
+    }
+  }
+
+  fn publish(&self, judged: Reachable) {
+    let current = self.state.current();
+    let listen = &current.server.listen;
+    if listen.reachable == judged {
+      return;
+    }
+    match judged {
+      Reachable::Yes => info!("Other users can connect to us"),
+      Reachable::No => warn!(
+        port = listen.port,
+        "Other users cannot connect to us; forward the port to this computer or turn on port \
+         mapping"
+      ),
+      Reachable::Unknown => debug!("whether other users can connect to us is not known yet"),
+    }
+    self
+      .state
+      .update(|state| state.server.listen.reachable = judged);
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn seen(direct: u64, answers: u64) -> InboundConnections {
+    InboundConnections { direct, answers }
+  }
+
+  #[test]
+  fn a_peer_reaching_us_by_itself_settles_it() {
+    assert_eq!(judge(seen(1, 0), 0, false), Reachable::Yes);
+    assert_eq!(judge(seen(1, 3), 9, true), Reachable::Yes);
+  }
+
+  #[test]
+  fn only_our_own_connections_after_long_enough_say_no() {
+    assert_eq!(judge(seen(0, 0), 0, false), Reachable::Unknown);
+    assert_eq!(judge(seen(0, 0), 4, false), Reachable::Unknown);
+    assert_eq!(judge(seen(0, 0), 5, false), Reachable::No);
+    assert_eq!(judge(seen(0, 0), 0, true), Reachable::No);
+    assert_eq!(
+      judge(seen(0, 1), 5, true),
+      Reachable::Unknown,
+      "an answer to our request reached the listener"
+    );
+  }
+}
