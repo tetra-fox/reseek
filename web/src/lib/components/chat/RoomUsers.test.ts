@@ -64,4 +64,13 @@ describe("a room's users", () => {
     press(grid, "Enter");
     expect(goto).toHaveBeenCalledWith("#/users/zed");
   });
+
+  it("says when the room can't be read", async () => {
+    fakeNetwork(() => ({ status: 500, body: { error: "not in the room" } }));
+    const members = new RoomMembers("indie");
+    component = mount(RoomUsers, { target: document.body, props: { members } });
+    await members.load();
+    flushSync();
+    expect(document.querySelector("[role=alert]")?.textContent).toContain("not in the room");
+  });
 });

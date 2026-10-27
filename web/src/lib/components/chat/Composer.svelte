@@ -59,6 +59,7 @@
       });
       return;
     }
+    // a failed save says nothing: the text stays in the box and its next change saves it again
     const timer = setTimeout(
       () =>
         void call(() =>

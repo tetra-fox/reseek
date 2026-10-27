@@ -17,6 +17,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import Notice from "#lib/components/ui/Notice.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
   import { ago, plural } from "#lib/format.js";
   import { freezesWhileUsed, heldOrder, interaction } from "#lib/interaction.svelte.js";
@@ -168,6 +169,14 @@
       bind:value={typed}
       onkeydown={offer} />
   </div>
+  {#if chat.error}
+    <Notice kind="error">
+      {chat.error}
+      {#snippet action()}
+        <Button variant="ghost" size="sm" onclick={() => void chat.load()}>Retry</Button>
+      {/snippet}
+    </Notice>
+  {/if}
   {#if filter && !lines.some((l) => l.kind === "row") && write}
     <div class="flex flex-col gap-1 text-sm">
       <Button variant="ghost" size="sm" class="justify-start" onclick={() => onnew(typed.trim())}>

@@ -3,7 +3,9 @@
   import SearchIcon from "@lucide/svelte/icons/search";
 
   import type { RoomMembers, RoomUser } from "#lib/chat/room.svelte.js";
+  import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import Notice from "#lib/components/ui/Notice.svelte";
   import { flag } from "#lib/components/users/hover.svelte.js";
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
@@ -75,6 +77,14 @@
   <p class="px-1 text-xs text-fg-muted">
     {plural(all.length, "user", "users")} · {online} online
   </p>
+  {#if members.error}
+    <Notice kind="error">
+      {members.error}
+      {#snippet action()}
+        <Button variant="ghost" size="sm" onclick={() => void members.load()}>Retry</Button>
+      {/snippet}
+    </Notice>
+  {/if}
   <div class="relative">
     <SearchIcon class="pointer-events-none absolute top-2 left-2 size-3.5 text-fg-muted" />
     <Input

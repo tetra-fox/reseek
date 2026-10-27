@@ -127,4 +127,24 @@ describe("the chat list", () => {
     flushSync();
     expect(keys()).toEqual(["user:bob", "user:alice"]);
   });
+
+  it("says when the chats can't be read, and reads them again on Retry", async () => {
+    session.principal = { name: "me", role: "ReadWrite" } as never;
+    let up = false;
+    fakeNetwork((url) => {
+      if (!up) return { status: 500, body: { error: "database is locked" } };
+      return url.pathname.endsWith("/conversations") ? [conversation("alice")] : [];
+    });
+    component = mount(ChatList, {
+      target: document.body,
+      props: { current: null, onjoin: () => {}, onnew: () => {} }
+    });
+    await chat.load();
+    flushSync();
+    expect(document.querySelector("[role=alert]")?.textContent).toContain("database is locked");
+    up = true;
+    [...document.querySelectorAll("button")].find((b) => b.textContent === "Retry")!.click();
+    await vi.waitFor(() => expect(document.querySelector("[role=alert]")).toBeNull());
+    expect(document.querySelector('[data-line="user:alice"]')).not.toBeNull();
+  });
 });
