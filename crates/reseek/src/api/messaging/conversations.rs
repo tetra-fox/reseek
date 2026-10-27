@@ -41,6 +41,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 /// The conversations, without their messages, by username; the server's notices only with
 /// `includeServer`.
 #[utoipa::path(
+  operation_id = "list_conversations",
   get, path = "/conversations", tag = "conversations", params(ConversationListQuery),
   responses(
     (status = 200, body = Vec<Conversation>), (status = 401, body = api_types::ErrorBody),
@@ -81,6 +82,7 @@ async fn conversation(
 
 /// A page of one conversation's messages, oldest first; `before` pages back from a message.
 #[utoipa::path(
+  operation_id = "conversation_messages",
   get, path = "/conversations/{username}/messages", tag = "conversations",
   params(
     ("username" = String, Path, description = "the other user"), UsernameQuery,
@@ -210,6 +212,7 @@ async fn close(
 
 /// The whole conversation as a file to save, JSON or text.
 #[utoipa::path(
+  operation_id = "export_conversation",
   get, path = "/conversations/{username}/export", tag = "conversations",
   params(("username" = String, Path, description = "the other user"), UsernameQuery, ExportQuery),
   responses(
@@ -235,6 +238,7 @@ async fn export(
 
 /// When a conversation notifies: every message, mentions only, or never.
 #[utoipa::path(
+  operation_id = "set_conversation_notify",
   put, path = "/conversations/{username}/notify", tag = "conversations", request_body = NotifySetting,
   params(("username" = String, Path, description = "the other user"), UsernameQuery),
   responses(

@@ -46,6 +46,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 /// A page of the users we know, filtered and sorted.
 #[utoipa::path(
+  operation_id = "list_users",
   get, path = "/users", tag = "users", params(UserListQuery),
   responses(
     (status = 200, body = UserList), (status = 400, body = api_types::ErrorBody),
@@ -64,6 +65,7 @@ async fn list(
 /// What we keep about a user, without asking the network; `known` is false for a user we have
 /// not dealt with.
 #[utoipa::path(
+  operation_id = "user_summary",
   get, path = "/users/{username}/summary", tag = "users",
   params(("username" = String, Path, description = "the user"), UsernameQuery),
   responses(

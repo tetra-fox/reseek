@@ -145,6 +145,7 @@ async fn users(
 /// A page of what was said in a room we are in, oldest first, with the gaps where we were not
 /// there to hear it; `before` pages back from a message.
 #[utoipa::path(
+  operation_id = "room_messages",
   get, path = "/rooms/joined/{roomName}/messages", tag = "rooms",
   params(("roomName" = String, Path, description = "the room"), RoomNameQuery, RoomMessagesQuery),
   responses(
@@ -423,6 +424,7 @@ async fn mark_read(
 
 /// When a room notifies: every message, mentions only, or never.
 #[utoipa::path(
+  operation_id = "set_room_notify",
   put, path = "/rooms/joined/{roomName}/notify", tag = "rooms", request_body = NotifySetting,
   params(("roomName" = String, Path, description = "the room"), RoomNameQuery),
   responses(

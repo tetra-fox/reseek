@@ -33,9 +33,9 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(list_root))
     .routes(routes!(list_directory, delete_directory))
     .routes(routes!(delete_file))
-    .routes(routes!(file_content))
+    .routes(routes!(file_content, file_content_head))
     .routes(routes!(archive))
-    .routes(routes!(download_content))
+    .routes(routes!(download_content, download_content_head))
     .routes(routes!(link_token))
 }
 
@@ -208,7 +208,7 @@ fn deleting(app: &AppState, by: &Principal, path: &str) -> Result<(), ApiError> 
 /// A file's bytes for the browser to show or save, a single range honoured. A link without a
 /// session loads it with the token `t`.
 #[utoipa::path(
-  method(get, head), path = "/files/{root}/files/{path}/content", tag = "files",
+  get, path = "/files/{root}/files/{path}/content", tag = "files",
   params(
     ("root" = FileRoot, Path, description = "the directory root"),
     ("path" = String, Path, description = "the file's path under the root, base64"),
@@ -243,9 +243,35 @@ async fn file_content(
     .await
 }
 
+/// The headers a file's bytes would be served with, without the bytes.
+#[utoipa::path(
+  head, path = "/files/{root}/files/{path}/content", tag = "files",
+  params(
+    ("root" = FileRoot, Path, description = "the directory root"),
+    ("path" = String, Path, description = "the file's path under the root, base64"),
+    ContentQuery
+  ),
+  responses(
+    (status = 200, description = "the headers of the whole file"),
+    (status = 206, description = "the headers of the range asked for"),
+    (status = 304, description = "unchanged"), (status = 400), (status = 401), (status = 403),
+    (status = 404), (status = 409), (status = 416), (status = 503)
+  )
+)]
+async fn file_content_head(
+  state: State<AppState>,
+  authentication: Extension<Authentication>,
+  path: Path<(String, String)>,
+  query: Query<ContentQuery>,
+  method: Method,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  file_content(state, authentication, path, query, method, headers).await
+}
+
 /// The file a succeeded download was moved to, served as a file is.
 #[utoipa::path(
-  method(get, head), path = "/transfers/downloads/{username}/{id}/content", tag = "files",
+  get, path = "/transfers/downloads/{username}/{id}/content", tag = "files",
   params(
     ("username" = String, Path, description = "the peer"),
     ("id" = Uuid, Path, description = "the download's id"),
@@ -276,6 +302,32 @@ async fn download_content(
     .files
     .content(FileTarget::Download { username, id }, request)
     .await
+}
+
+/// The headers a succeeded download's file would be served with, without the bytes.
+#[utoipa::path(
+  head, path = "/transfers/downloads/{username}/{id}/content", tag = "files",
+  params(
+    ("username" = String, Path, description = "the peer"),
+    ("id" = Uuid, Path, description = "the download's id"),
+    ContentQuery
+  ),
+  responses(
+    (status = 200, description = "the headers of the whole file"),
+    (status = 206, description = "the headers of the range asked for"),
+    (status = 304, description = "unchanged"), (status = 400), (status = 401), (status = 403),
+    (status = 404), (status = 416), (status = 503)
+  )
+)]
+async fn download_content_head(
+  state: State<AppState>,
+  authentication: Extension<Authentication>,
+  path: Path<(String, Uuid)>,
+  query: Query<ContentQuery>,
+  method: Method,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  download_content(state, authentication, path, query, method, headers).await
 }
 
 /// A directory under a root as a zip archive, streamed. One archive per principal at a time.

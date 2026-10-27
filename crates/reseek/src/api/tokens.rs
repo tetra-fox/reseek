@@ -37,6 +37,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 /// The caller's tokens, or everyone's for an administrator, who also sees the configuration's
 /// API keys. Revoked tokens are not listed.
 #[utoipa::path(
+  operation_id = "list_tokens",
   get, path = "/tokens", tag = "tokens",
   responses((status = 200, body = Vec<ListedToken>), (status = 401, body = api_types::ErrorBody))
 )]
@@ -182,6 +183,7 @@ async fn update(
 /// Revokes a token; the owner's or, for an administrator, anyone's. The record is kept a month
 /// for the audit view.
 #[utoipa::path(
+  operation_id = "revoke_token",
   delete, path = "/tokens/{id}", tag = "tokens",
   params(("id" = Uuid, Path, description = "the token's id")),
   responses(

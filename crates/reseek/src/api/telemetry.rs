@@ -147,6 +147,7 @@ async fn kpis(
 
 /// Completed transfers by direction and outcome. The window is the last 7 days unless given.
 #[utoipa::path(
+  operation_id = "transfer_summary_report",
   get, path = "/telemetry/reports/transfers/summary", tag = "telemetry", params(SummaryQuery),
   responses(
     (status = 200, body = SummaryReport), (status = 400, body = api_types::ErrorBody),

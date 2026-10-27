@@ -52,6 +52,7 @@ async fn rooms(
 /// A page of a room's stored messages, oldest first, with the gaps in it; for any room, one we
 /// left included.
 #[utoipa::path(
+  operation_id = "room_history_messages",
   get, path = "/rooms/history/{roomName}/messages", tag = "rooms",
   params(("roomName" = String, Path, description = "the room"), RoomNameQuery, RoomMessagesQuery),
   responses(
@@ -77,6 +78,7 @@ async fn messages(
 
 /// Deletes a room's stored messages.
 #[utoipa::path(
+  operation_id = "delete_room_history",
   delete, path = "/rooms/history/{roomName}", tag = "rooms",
   params(("roomName" = String, Path, description = "the room"), RoomNameQuery),
   responses(
@@ -97,6 +99,7 @@ async fn delete(
 
 /// A room's whole stored history as a file to save, JSON or text.
 #[utoipa::path(
+  operation_id = "export_room_history",
   get, path = "/rooms/history/{roomName}/export", tag = "rooms",
   params(("roomName" = String, Path, description = "the room"), RoomNameQuery, ExportQuery),
   responses(

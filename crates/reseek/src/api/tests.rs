@@ -9,11 +9,80 @@ use crate::testing::{app, request, with};
 #[test]
 fn the_committed_openapi_document_is_current() {
   let generated = crate::api::openapi().to_pretty_json().unwrap() + "\n";
+  let problems = invalid(&serde_json::from_str(&generated).unwrap());
+  assert!(problems.is_empty(), "{problems:#?}");
   let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../api/openapi.json");
   let committed = std::fs::read_to_string(path).unwrap_or_default();
   assert!(
     committed == generated,
     "api/openapi.json does not match the handlers; run `just api-spec`"
+  );
+}
+
+/// What makes `document` unusable to a type generator: a `$ref` to a schema it does not list,
+/// and an `operationId` two operations share.
+fn invalid(document: &Value) -> Vec<String> {
+  fn refs<'a>(value: &'a Value, found: &mut Vec<&'a str>) {
+    match value {
+      Value::Object(entries) => {
+        for (key, v) in entries {
+          match (key.as_str(), v) {
+            ("$ref", Value::String(target)) => found.push(target),
+            _ => refs(v, found),
+          }
+        }
+      }
+      Value::Array(items) => items.iter().for_each(|v| refs(v, found)),
+      _ => {}
+    }
+  }
+  let mut problems = Vec::new();
+  let mut found = Vec::new();
+  refs(document, &mut found);
+  let schemas = &document["components"]["schemas"];
+  for target in found {
+    let listed = target
+      .strip_prefix("#/components/schemas/")
+      .is_some_and(|name| schemas.get(name).is_some());
+    if !listed {
+      problems.push(format!("{target} is not in the document"));
+    }
+  }
+  let mut ids = std::collections::BTreeMap::<&str, Vec<String>>::new();
+  let paths = document["paths"].as_object().into_iter().flatten();
+  for (path, item) in paths {
+    for (method, operation) in item.as_object().into_iter().flatten() {
+      if let Some(id) = operation["operationId"].as_str() {
+        ids.entry(id).or_default().push(format!("{method} {path}"));
+      }
+    }
+  }
+  for (id, operations) in ids {
+    if operations.len() > 1 {
+      problems.push(format!("operationId {id} names {}", operations.join(", ")));
+    }
+  }
+  problems
+}
+
+#[test]
+fn a_dangling_ref_and_a_repeated_operation_id_make_a_document_invalid() {
+  let document = json!({
+    "paths": {
+      "/a": {
+        "get": { "operationId": "list", "parameters": [{ "schema": { "$ref": "#/components/schemas/Sort" } }] },
+        "head": { "operationId": "list" }
+      },
+      "/b": { "get": { "operationId": "list_b", "responses": { "200": { "$ref": "#/components/schemas/B" } } } }
+    },
+    "components": { "schemas": { "B": { "type": "string" } } }
+  });
+  assert_eq!(
+    invalid(&document),
+    [
+      "#/components/schemas/Sort is not in the document",
+      "operationId list names get /a, head /a"
+    ]
   );
 }
 

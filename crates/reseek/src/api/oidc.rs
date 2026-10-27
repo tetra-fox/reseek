@@ -43,6 +43,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 /// Sends the browser to the provider's login, remembering the login in a sealed cookie.
 #[utoipa::path(
+  operation_id = "oidc_login",
   get, path = "/auth/oidc/{name}/login", tag = "auth", params(
     ("name" = String, Path, description = "the provider's name in the configuration"),
     OidcLoginQuery

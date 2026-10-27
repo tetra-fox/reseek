@@ -43,6 +43,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 /// Every download, grouped by user and remote directory.
 #[utoipa::path(
+  operation_id = "list_downloads",
   get, path = "/transfers/downloads", tag = "transfers", params(IncludeRemovedQuery),
   responses(
     (status = 200, body = Vec<UserResponse>), (status = 401, body = api_types::ErrorBody),
@@ -64,6 +65,7 @@ async fn list(
 
 /// A page of downloads, flat, filtered and sorted.
 #[utoipa::path(
+  operation_id = "page_downloads",
   get, path = "/transfers/downloads/list", tag = "transfers", params(TransferListQuery),
   responses(
     (status = 200, body = Page<Transfer>), (status = 400, body = api_types::ErrorBody),
@@ -346,6 +348,7 @@ async fn batch(
 
 /// Cancels a download; `remove` also removes it from the listings once it has completed.
 #[utoipa::path(
+  operation_id = "cancel_download",
   delete, path = "/transfers/downloads/{username}/{id}", tag = "transfers",
   params(
     ("username" = String, Path, description = "the peer"),
@@ -375,6 +378,7 @@ async fn cancel(
 
 /// Removes every completed download from the listings; the reports still count them.
 #[utoipa::path(
+  operation_id = "remove_completed_downloads",
   delete, path = "/transfers/downloads/all/completed", tag = "transfers",
   responses(
     (status = 204, description = "removed"), (status = 401, body = api_types::ErrorBody),
@@ -392,6 +396,7 @@ async fn remove_completed(
 
 /// Cancels, removes or retries several downloads in one call.
 #[utoipa::path(
+  operation_id = "bulk_downloads",
   post, path = "/transfers/downloads/bulk", tag = "transfers", request_body = BulkRequest,
   responses(
     (status = 200, body = BulkResult), (status = 400, body = api_types::ErrorBody),

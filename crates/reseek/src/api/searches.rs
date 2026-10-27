@@ -109,6 +109,7 @@ fn search_request(request: &SearchRequest) -> Result<(), ApiError> {
 
 /// The searches, without their responses, oldest first unless `order` says otherwise.
 #[utoipa::path(
+  operation_id = "list_searches",
   get, path = "/searches", tag = "searches", params(SearchListQuery),
   responses(
     (status = 200, body = Vec<Search>), (status = 400, body = api_types::ErrorBody),
@@ -170,6 +171,7 @@ async fn responses(
 
 /// Stops a running search. Answered 304 when it had completed already.
 #[utoipa::path(
+  operation_id = "cancel_search",
   put, path = "/searches/{id}", tag = "searches",
   params(("id" = Uuid, Path, description = "the search's id")),
   responses(
@@ -196,6 +198,7 @@ async fn cancel(
 
 /// Deletes a search, stopping it first when it runs.
 #[utoipa::path(
+  operation_id = "delete_search",
   delete, path = "/searches/{id}", tag = "searches",
   params(("id" = Uuid, Path, description = "the search's id")),
   responses(

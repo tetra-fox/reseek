@@ -65,6 +65,7 @@ async fn get_session(
 
 /// Signs in with a local account's username and password and sets the session cookie.
 #[utoipa::path(
+  operation_id = "session_login",
   post, path = "/session", tag = "session", request_body = LoginRequest,
   responses(
     (status = 204, description = "signed in; the session cookie is set"),
@@ -238,6 +239,7 @@ async fn logout(
 
 /// The active browser sessions: the caller's own, or everyone's for an administrator.
 #[utoipa::path(
+  operation_id = "list_sessions",
   get, path = "/sessions", tag = "session",
   responses((status = 200, body = Vec<Session>), (status = 401, body = api_types::ErrorBody))
 )]
@@ -261,6 +263,7 @@ async fn list(
 
 /// Revokes one browser session, the caller's own or, for an administrator, anyone's.
 #[utoipa::path(
+  operation_id = "revoke_session",
   delete, path = "/sessions/{id}", tag = "session",
   params(("id" = String, Path, description = "the session's id")),
   responses(

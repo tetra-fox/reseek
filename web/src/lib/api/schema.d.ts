@@ -2495,10 +2495,7 @@ export interface paths {
         post?: never;
         delete?: never;
         options?: never;
-        /**
-         * A file's bytes for the browser to show or save, a single range honoured. A link without a
-         *     session loads it with the token `t`.
-         */
+        /** The headers a file's bytes would be served with, without the bytes. */
         head: {
             parameters: {
                 query?: {
@@ -2520,21 +2517,19 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
+                /** @description the headers of the whole file */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/octet-stream": components["schemas"]["FileContent"];
-                    };
+                    content?: never;
                 };
+                /** @description the headers of the range asked for */
                 206: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/octet-stream": components["schemas"]["FileContent"];
-                    };
+                    content?: never;
                 };
                 /** @description unchanged */
                 304: {
@@ -2547,57 +2542,43 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
                 401: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
                 403: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
                 404: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
                 409: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
                 416: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
                 503: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
             };
         };
@@ -9137,7 +9118,7 @@ export interface paths {
         post?: never;
         delete?: never;
         options?: never;
-        /** The file a succeeded download was moved to, served as a file is. */
+        /** The headers a succeeded download's file would be served with, without the bytes. */
         head: {
             parameters: {
                 query?: {
@@ -9159,21 +9140,19 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
+                /** @description the headers of the whole file */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/octet-stream": components["schemas"]["FileContent"];
-                    };
+                    content?: never;
                 };
+                /** @description the headers of the range asked for */
                 206: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/octet-stream": components["schemas"]["FileContent"];
-                    };
+                    content?: never;
                 };
                 /** @description unchanged */
                 304: {
@@ -9186,49 +9165,37 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
                 401: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
                 403: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
                 404: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
                 416: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
                 503: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "application/json": components["schemas"]["ErrorBody"];
-                    };
+                    content?: never;
                 };
             };
         };
@@ -12633,6 +12600,11 @@ export interface components {
              */
             nextAttemptAt?: string | null;
         };
+        /**
+         * @description Whether the browser shows a served file or saves it.
+         * @enum {string}
+         */
+        ContentDisposition: "inline" | "attachment";
         /** @description A private conversation with one peer. */
         Conversation: {
             /** @description the unsent text the UI saved for the conversation, empty when none */
@@ -13186,6 +13158,11 @@ export interface components {
              */
             exception?: string | null;
         };
+        /**
+         * @description What form an export is written in.
+         * @enum {string}
+         */
+        ExportFormat: "json" | "text";
         /** @description One key: where its value came from and how it can be changed. */
         FieldView: {
             /** @description when a change to the value takes effect */
@@ -13313,6 +13290,11 @@ export interface components {
             /** @description the new text */
             text: string;
         };
+        /**
+         * @description A directory the files endpoints can reach, named in their path.
+         * @enum {string}
+         */
+        FileRoot: "downloads" | "incomplete";
         /** @description A short-lived token that lets one link load one file without a session. */
         FileToken: {
             /**
@@ -13632,6 +13614,11 @@ export interface components {
             /** @description the user */
             username: string;
         };
+        /**
+         * @description The column a leaderboard is ordered by.
+         * @enum {string}
+         */
+        LeaderboardSort: "Count" | "TotalBytes" | "AverageSpeed";
         /** @description An entry of `GET /tokens`, told apart by `source`. */
         ListedToken: (components["schemas"]["Token"] & {
             /** @enum {string} */
@@ -13937,6 +13924,11 @@ export interface components {
          * @enum {string}
          */
         MessageHitKind: "private" | "room";
+        /**
+         * @description Which stored messages a message search looks at.
+         * @enum {string}
+         */
+        MessageSearchKind: "all" | "private" | "rooms";
         /** @description One page of message search hits. */
         MessageSearchResults: {
             /** @description the hits on this page */
@@ -15201,6 +15193,11 @@ export interface components {
             /** @description a scan is running */
             scanning: boolean;
         };
+        /**
+         * @description Which way a listing is sorted.
+         * @enum {string}
+         */
+        SortOrder: "asc" | "desc";
         /** @description The data of `SoulseekClientDisconnected`. */
         SoulseekClientDisconnected: {
             exception?: null | components["schemas"]["EventError"];
@@ -15676,6 +15673,16 @@ export interface components {
             /** @description the peer */
             username: string;
         };
+        /**
+         * @description What the flat transfer listing is sorted by.
+         * @enum {string}
+         */
+        TransferSort: "requestedAt" | "endedAt" | "username" | "filename" | "size";
+        /**
+         * @description A named set of transfer states.
+         * @enum {string}
+         */
+        TransferStateCategory: "Queued" | "InProgress" | "Completed" | "Successful" | "Failed" | "Errored" | "Cancelled";
         /** @description One state a transfer entered, and when. */
         TransferStateChange: {
             /**
@@ -15686,6 +15693,11 @@ export interface components {
             /** @description the state entered */
             state: components["schemas"]["TransferStates"];
         };
+        /**
+         * @description A transfer state filter: a category name such as `"Failed"`, or an exact state such as
+         *     `"Queued, Remotely"`. A name that is both, such as `"InProgress"`, is the category.
+         */
+        TransferStateFilter: components["schemas"]["TransferStateCategory"] | components["schemas"]["TransferStates"];
         /**
          * @description the names of the set state flags joined by ", "
          * @example Completed, Succeeded
@@ -16005,6 +16017,11 @@ export interface components {
             /** @description the peer */
             username: string;
         };
+        /**
+         * @description What the user directory is sorted by.
+         * @enum {string}
+         */
+        UserSort: "lastSeen" | "username" | "firstSeen" | "uploads" | "downloads";
         /** @description Our own Soulseek account. */
         UserState: {
             /** @description our privileges as the server reports them */
@@ -16195,26 +16212,6 @@ export interface components {
             /** @enum {string} */
             kind: "trustedNetwork";
         };
-        /** @description not listed in the document, read as a string */
-        ContentDisposition: string;
-        /** @description not listed in the document, read as a string */
-        ExportFormat: string;
-        /** @description not listed in the document, read as a string */
-        FileRoot: string;
-        /** @description not listed in the document, read as a string */
-        LeaderboardSort: string;
-        /** @description not listed in the document, read as a string */
-        MessageSearchKind: string;
-        /** @description not listed in the document, read as a string */
-        SortOrder: string;
-        /** @description not listed in the document, read as a string */
-        TransferSort: string;
-        /** @description not listed in the document, read as a string */
-        TransferStateCategory: string;
-        /** @description not listed in the document, read as a string */
-        TransferStateFilter: string;
-        /** @description not listed in the document, read as a string */
-        UserSort: string;
     };
     responses: never;
     parameters: never;

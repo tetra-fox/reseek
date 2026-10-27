@@ -40,6 +40,20 @@ use crate::auth;
                    shares.",
     license(name = "AGPL-3.0-only", identifier = "AGPL-3.0-only")
   ),
+  // enums that only query parameters name, which the handlers' descriptions refer to without
+  // listing
+  components(schemas(
+    api_types::chat::ExportFormat,
+    api_types::chat::MessageSearchKind,
+    api_types::files::ContentDisposition,
+    api_types::files::FileRoot,
+    api_types::reports::LeaderboardSort,
+    api_types::transfers::SortOrder,
+    api_types::transfers::TransferSort,
+    api_types::transfers::TransferStateCategory,
+    api_types::transfers::TransferStateFilter,
+    api_types::users::UserSort
+  )),
   tags(
     (name = "application", description = "The daemon's state, version, restart and shutdown"),
     (name = "server", description = "The connection to the Soulseek server"),

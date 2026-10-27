@@ -29,6 +29,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 /// A page of the event log, newest first, or oldest first after `since`; `X-Total-Count` is
 /// how many match the type and username filters.
 #[utoipa::path(
+  operation_id = "list_events",
   get, path = "/events", tag = "events", params(EventsQuery),
   responses(
     (status = 200, body = Vec<EventRecord>, headers(("X-Total-Count" = u64, description = "how many events match"))),

@@ -16,7 +16,7 @@
           "analysis"
         ],
         "summary": "The analysis reports, newest first, without their windows.",
-        "operationId": "list",
+        "operationId": "list_analyses",
         "parameters": [
           {
             "name": "verdict",
@@ -576,7 +576,7 @@
           "auth"
         ],
         "summary": "Sends the browser to the provider's login, remembering the login in a sealed cookie.",
-        "operationId": "login",
+        "operationId": "oidc_login",
         "parameters": [
           {
             "name": "name",
@@ -703,7 +703,7 @@
           "conversations"
         ],
         "summary": "The conversations, without their messages, by username; the server's notices only with\n`includeServer`.",
-        "operationId": "list",
+        "operationId": "list_conversations",
         "parameters": [
           {
             "name": "includeInactive",
@@ -1196,7 +1196,7 @@
           "conversations"
         ],
         "summary": "The whole conversation as a file to save, JSON or text.",
-        "operationId": "export",
+        "operationId": "export_conversation",
         "parameters": [
           {
             "name": "username",
@@ -1294,7 +1294,7 @@
           "conversations"
         ],
         "summary": "A page of one conversation's messages, oldest first; `before` pages back from a message.",
-        "operationId": "messages",
+        "operationId": "conversation_messages",
         "parameters": [
           {
             "name": "username",
@@ -1410,7 +1410,7 @@
           "conversations"
         ],
         "summary": "When a conversation notifies: every message, mentions only, or never.",
-        "operationId": "set_notify",
+        "operationId": "set_conversation_notify",
         "parameters": [
           {
             "name": "username",
@@ -1599,7 +1599,7 @@
           "events"
         ],
         "summary": "A page of the event log, newest first, or oldest first after `since`; `X-Total-Count` is\nhow many match the type and username filters.",
-        "operationId": "list",
+        "operationId": "list_events",
         "parameters": [
           {
             "name": "offset",
@@ -2889,8 +2889,8 @@
         "tags": [
           "files"
         ],
-        "summary": "A file's bytes for the browser to show or save, a single range honoured. A link without a\nsession loads it with the token `t`.",
-        "operationId": "file_content",
+        "summary": "The headers a file's bytes would be served with, without the bytes.",
+        "operationId": "file_content_head",
         "parameters": [
           {
             "name": "root",
@@ -2940,97 +2940,34 @@
         ],
         "responses": {
           "200": {
-            "description": "",
-            "content": {
-              "application/octet-stream": {
-                "schema": {
-                  "$ref": "#/components/schemas/FileContent"
-                }
-              }
-            }
+            "description": "the headers of the whole file"
           },
           "206": {
-            "description": "",
-            "content": {
-              "application/octet-stream": {
-                "schema": {
-                  "$ref": "#/components/schemas/FileContent"
-                }
-              }
-            }
+            "description": "the headers of the range asked for"
           },
           "304": {
             "description": "unchanged"
           },
           "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           },
           "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           },
           "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           },
           "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           },
           "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           },
           "416": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           },
           "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           }
         }
       }
@@ -4810,7 +4747,7 @@
           "rooms"
         ],
         "summary": "Deletes a room's stored messages.",
-        "operationId": "delete",
+        "operationId": "delete_room_history",
         "parameters": [
           {
             "name": "roomName",
@@ -4884,7 +4821,7 @@
           "rooms"
         ],
         "summary": "A room's whole stored history as a file to save, JSON or text.",
-        "operationId": "export",
+        "operationId": "export_room_history",
         "parameters": [
           {
             "name": "roomName",
@@ -4982,7 +4919,7 @@
           "rooms"
         ],
         "summary": "A page of a room's stored messages, oldest first, with the gaps in it; for any room, one we\nleft included.",
-        "operationId": "messages",
+        "operationId": "room_history_messages",
         "parameters": [
           {
             "name": "roomName",
@@ -5550,7 +5487,7 @@
           "rooms"
         ],
         "summary": "A page of what was said in a room we are in, oldest first, with the gaps where we were not\nthere to hear it; `before` pages back from a message.",
-        "operationId": "messages",
+        "operationId": "room_messages",
         "parameters": [
           {
             "name": "roomName",
@@ -5765,7 +5702,7 @@
           "rooms"
         ],
         "summary": "When a room notifies: every message, mentions only, or never.",
-        "operationId": "set_notify",
+        "operationId": "set_room_notify",
         "parameters": [
           {
             "name": "roomName",
@@ -6539,7 +6476,7 @@
           "searches"
         ],
         "summary": "The searches, without their responses, oldest first unless `order` says otherwise.",
-        "operationId": "list",
+        "operationId": "list_searches",
         "parameters": [
           {
             "name": "limit",
@@ -6795,7 +6732,7 @@
           "searches"
         ],
         "summary": "Stops a running search. Answered 304 when it had completed already.",
-        "operationId": "cancel",
+        "operationId": "cancel_search",
         "parameters": [
           {
             "name": "id",
@@ -6872,7 +6809,7 @@
           "searches"
         ],
         "summary": "Deletes a search, stopping it first when it runs.",
-        "operationId": "delete",
+        "operationId": "delete_search",
         "parameters": [
           {
             "name": "id",
@@ -7177,7 +7114,7 @@
           "session"
         ],
         "summary": "Signs in with a local account's username and password and sets the session cookie.",
-        "operationId": "login",
+        "operationId": "session_login",
         "requestBody": {
           "content": {
             "application/json": {
@@ -7405,7 +7342,7 @@
           "session"
         ],
         "summary": "The active browser sessions: the caller's own, or everyone's for an administrator.",
-        "operationId": "list",
+        "operationId": "list_sessions",
         "responses": {
           "200": {
             "description": "",
@@ -7471,7 +7408,7 @@
           "session"
         ],
         "summary": "Revokes one browser session, the caller's own or, for an administrator, anyone's.",
-        "operationId": "revoke",
+        "operationId": "revoke_session",
         "parameters": [
           {
             "name": "id",
@@ -7516,7 +7453,7 @@
           "shares"
         ],
         "summary": "The shares of every host by host name, this one as `local`.",
-        "operationId": "list",
+        "operationId": "list_shares",
         "responses": {
           "200": {
             "description": "",
@@ -8544,7 +8481,7 @@
           "telemetry"
         ],
         "summary": "Completed transfers by direction and outcome. The window is the last 7 days unless given.",
-        "operationId": "summary",
+        "operationId": "transfer_summary_report",
         "parameters": [
           {
             "name": "start",
@@ -8717,7 +8654,7 @@
           "tokens"
         ],
         "summary": "The caller's tokens, or everyone's for an administrator, who also sees the configuration's\nAPI keys. Revoked tokens are not listed.",
-        "operationId": "list",
+        "operationId": "list_tokens",
         "responses": {
           "200": {
             "description": "",
@@ -8881,7 +8818,7 @@
           "tokens"
         ],
         "summary": "Revokes a token; the owner's or, for an administrator, anyone's. The record is kept a month\nfor the audit view.",
-        "operationId": "revoke",
+        "operationId": "revoke_token",
         "parameters": [
           {
             "name": "id",
@@ -8927,7 +8864,7 @@
           "transfers"
         ],
         "summary": "Every download, grouped by user and remote directory.",
-        "operationId": "list",
+        "operationId": "list_downloads",
         "parameters": [
           {
             "name": "includeRemoved",
@@ -8982,7 +8919,7 @@
           "transfers"
         ],
         "summary": "Removes every completed download from the listings; the reports still count them.",
-        "operationId": "remove_completed",
+        "operationId": "remove_completed_downloads",
         "responses": {
           "204": {
             "description": "removed"
@@ -9239,7 +9176,7 @@
           "transfers"
         ],
         "summary": "Cancels, removes or retries several downloads in one call.",
-        "operationId": "bulk",
+        "operationId": "bulk_downloads",
         "requestBody": {
           "content": {
             "application/json": {
@@ -9310,7 +9247,7 @@
           "transfers"
         ],
         "summary": "A page of downloads, flat, filtered and sorted.",
-        "operationId": "page",
+        "operationId": "page_downloads",
         "parameters": [
           {
             "name": "state",
@@ -9738,7 +9675,7 @@
           "transfers"
         ],
         "summary": "Cancels a download; `remove` also removes it from the listings once it has completed.",
-        "operationId": "cancel",
+        "operationId": "cancel_download",
         "parameters": [
           {
             "name": "username",
@@ -10262,8 +10199,8 @@
         "tags": [
           "files"
         ],
-        "summary": "The file a succeeded download was moved to, served as a file is.",
-        "operationId": "download_content",
+        "summary": "The headers a succeeded download's file would be served with, without the bytes.",
+        "operationId": "download_content_head",
         "parameters": [
           {
             "name": "username",
@@ -10314,87 +10251,31 @@
         ],
         "responses": {
           "200": {
-            "description": "",
-            "content": {
-              "application/octet-stream": {
-                "schema": {
-                  "$ref": "#/components/schemas/FileContent"
-                }
-              }
-            }
+            "description": "the headers of the whole file"
           },
           "206": {
-            "description": "",
-            "content": {
-              "application/octet-stream": {
-                "schema": {
-                  "$ref": "#/components/schemas/FileContent"
-                }
-              }
-            }
+            "description": "the headers of the range asked for"
           },
           "304": {
             "description": "unchanged"
           },
           "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           },
           "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           },
           "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           },
           "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           },
           "416": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           },
           "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
+            "description": ""
           }
         }
       }
@@ -10519,7 +10400,7 @@
           "transfers"
         ],
         "summary": "Every upload, grouped by user and remote directory; `since`, `until` and `limit` bound it.",
-        "operationId": "list",
+        "operationId": "list_uploads",
         "parameters": [
           {
             "name": "includeRemoved",
@@ -10615,7 +10496,7 @@
           "transfers"
         ],
         "summary": "Removes every completed upload from the listings; the reports still count them.",
-        "operationId": "remove_completed",
+        "operationId": "remove_completed_uploads",
         "responses": {
           "204": {
             "description": "removed"
@@ -10659,7 +10540,7 @@
           "transfers"
         ],
         "summary": "Cancels, removes or retries several uploads in one call.",
-        "operationId": "bulk",
+        "operationId": "bulk_uploads",
         "requestBody": {
           "content": {
             "application/json": {
@@ -10730,7 +10611,7 @@
           "transfers"
         ],
         "summary": "A page of uploads, flat, filtered and sorted.",
-        "operationId": "page",
+        "operationId": "page_uploads",
         "parameters": [
           {
             "name": "state",
@@ -11015,7 +10896,7 @@
           "transfers"
         ],
         "summary": "Cancels an upload; `remove` also removes it from the listings once it has completed.",
-        "operationId": "cancel",
+        "operationId": "cancel_upload",
         "parameters": [
           {
             "name": "username",
@@ -11286,7 +11167,7 @@
           "users"
         ],
         "summary": "A page of the users we know, filtered and sorted.",
-        "operationId": "list",
+        "operationId": "list_users",
         "parameters": [
           {
             "name": "q",
@@ -11497,7 +11378,7 @@
           "blocking"
         ],
         "summary": "The blocks made through the API, as JSON or as one username per line.",
-        "operationId": "export",
+        "operationId": "export_blocked",
         "parameters": [
           {
             "name": "format",
@@ -13161,7 +13042,7 @@
           "users"
         ],
         "summary": "What we keep about a user, without asking the network; `known` is false for a user we have\nnot dealt with.",
-        "operationId": "summary",
+        "operationId": "user_summary",
         "parameters": [
           {
             "name": "username",
@@ -14877,6 +14758,14 @@
           }
         }
       },
+      "ContentDisposition": {
+        "type": "string",
+        "description": "Whether the browser shows a served file or saves it.",
+        "enum": [
+          "inline",
+          "attachment"
+        ]
+      },
       "Conversation": {
         "type": "object",
         "description": "A private conversation with one peer.",
@@ -16179,6 +16068,14 @@
           }
         }
       },
+      "ExportFormat": {
+        "type": "string",
+        "description": "What form an export is written in.",
+        "enum": [
+          "json",
+          "text"
+        ]
+      },
       "FieldView": {
         "type": "object",
         "description": "One key: where its value came from and how it can be changed.",
@@ -16477,6 +16374,14 @@
             "description": "the new text"
           }
         }
+      },
+      "FileRoot": {
+        "type": "string",
+        "description": "A directory the files endpoints can reach, named in their path.",
+        "enum": [
+          "downloads",
+          "incomplete"
+        ]
       },
       "FileToken": {
         "type": "object",
@@ -17122,6 +17027,15 @@
           }
         ],
         "description": "A user's figures, a row of `GET /telemetry/reports/transfers/leaderboard`."
+      },
+      "LeaderboardSort": {
+        "type": "string",
+        "description": "The column a leaderboard is ordered by.",
+        "enum": [
+          "Count",
+          "TotalBytes",
+          "AverageSpeed"
+        ]
       },
       "ListedToken": {
         "oneOf": [
@@ -18067,6 +17981,15 @@
         "enum": [
           "private",
           "room"
+        ]
+      },
+      "MessageSearchKind": {
+        "type": "string",
+        "description": "Which stored messages a message search looks at.",
+        "enum": [
+          "all",
+          "private",
+          "rooms"
         ]
       },
       "MessageSearchResults": {
@@ -20561,6 +20484,14 @@
           }
         }
       },
+      "SortOrder": {
+        "type": "string",
+        "description": "Which way a listing is sorted.",
+        "enum": [
+          "asc",
+          "desc"
+        ]
+      },
       "SoulseekClientDisconnected": {
         "type": "object",
         "description": "The data of `SoulseekClientDisconnected`.",
@@ -21412,6 +21343,30 @@
           }
         }
       },
+      "TransferSort": {
+        "type": "string",
+        "description": "What the flat transfer listing is sorted by.",
+        "enum": [
+          "requestedAt",
+          "endedAt",
+          "username",
+          "filename",
+          "size"
+        ]
+      },
+      "TransferStateCategory": {
+        "type": "string",
+        "description": "A named set of transfer states.",
+        "enum": [
+          "Queued",
+          "InProgress",
+          "Completed",
+          "Successful",
+          "Failed",
+          "Errored",
+          "Cancelled"
+        ]
+      },
       "TransferStateChange": {
         "type": "object",
         "description": "One state a transfer entered, and when.",
@@ -21430,6 +21385,19 @@
             "description": "the state entered"
           }
         }
+      },
+      "TransferStateFilter": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TransferStateCategory",
+            "description": "every state in the category"
+          },
+          {
+            "$ref": "#/components/schemas/TransferStates",
+            "description": "exactly this state"
+          }
+        ],
+        "description": "A transfer state filter: a category name such as `\"Failed\"`, or an exact state such as\n`\"Queued, Remotely\"`. A name that is both, such as `\"InProgress\"`, is the category."
       },
       "TransferStates": {
         "type": "string",
@@ -22066,6 +22034,17 @@
             "description": "the peer"
           }
         }
+      },
+      "UserSort": {
+        "type": "string",
+        "description": "What the user directory is sorted by.",
+        "enum": [
+          "lastSeen",
+          "username",
+          "firstSeen",
+          "uploads",
+          "downloads"
+        ]
       },
       "UserState": {
         "type": "object",

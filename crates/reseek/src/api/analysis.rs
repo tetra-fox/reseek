@@ -264,6 +264,7 @@ async fn clear_override(
 
 /// The analysis reports, newest first, without their windows.
 #[utoipa::path(
+  operation_id = "list_analyses",
   get, path = "/analysis", tag = "analysis", params(AnalysisListQuery),
   responses(
     (status = 200, body = Vec<AudioAnalysis>), (status = 400, body = api_types::ErrorBody),

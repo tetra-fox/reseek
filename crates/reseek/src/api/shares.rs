@@ -24,6 +24,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 /// The shares of every host by host name, this one as `local`.
 #[utoipa::path(
+  operation_id = "list_shares",
   get, path = "/shares", tag = "shares",
   responses(
     (status = 200, body = SharesByHost), (status = 401, body = api_types::ErrorBody),

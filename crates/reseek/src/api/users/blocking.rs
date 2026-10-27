@@ -202,6 +202,7 @@ fn block_import(headers: &HeaderMap, body: &[u8]) -> Result<BlockImport, ApiErro
 
 /// The blocks made through the API, as JSON or as one username per line.
 #[utoipa::path(
+  operation_id = "export_blocked",
   get, path = "/users/blocked/export", tag = "blocking", params(ExportQuery),
   responses(
     (status = 200, content((Vec<Block> = "application/json"), (String = "text/plain"))),

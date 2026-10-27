@@ -35,6 +35,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 /// Every upload, grouped by user and remote directory; `since`, `until` and `limit` bound it.
 #[utoipa::path(
+  operation_id = "list_uploads",
   get, path = "/transfers/uploads", tag = "transfers", params(UploadsQuery),
   responses(
     (status = 200, body = Vec<UserResponse>), (status = 400, body = api_types::ErrorBody),
@@ -54,6 +55,7 @@ async fn list(
 
 /// A page of uploads, flat, filtered and sorted.
 #[utoipa::path(
+  operation_id = "page_uploads",
   get, path = "/transfers/uploads/list", tag = "transfers", params(TransferListQuery),
   responses(
     (status = 200, body = Page<Transfer>), (status = 400, body = api_types::ErrorBody),
@@ -172,6 +174,7 @@ async fn bump(
 
 /// Cancels an upload; `remove` also removes it from the listings once it has completed.
 #[utoipa::path(
+  operation_id = "cancel_upload",
   delete, path = "/transfers/uploads/{username}/{id}", tag = "transfers",
   params(
     ("username" = String, Path, description = "the peer"),
@@ -201,6 +204,7 @@ async fn cancel(
 
 /// Removes every completed upload from the listings; the reports still count them.
 #[utoipa::path(
+  operation_id = "remove_completed_uploads",
   delete, path = "/transfers/uploads/all/completed", tag = "transfers",
   responses(
     (status = 204, description = "removed"), (status = 401, body = api_types::ErrorBody),
@@ -218,6 +222,7 @@ async fn remove_completed(
 
 /// Cancels, removes or retries several uploads in one call.
 #[utoipa::path(
+  operation_id = "bulk_uploads",
   post, path = "/transfers/uploads/bulk", tag = "transfers", request_body = BulkRequest,
   responses(
     (status = 200, body = BulkResult), (status = 400, body = api_types::ErrorBody),
