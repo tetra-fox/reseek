@@ -27,18 +27,36 @@
   let text = $state("");
   let error = $state("");
 
-  // a buffer read again keeps the rows of the records already shown
+  /** lines Clear took away, still matched so a reload does not bring them back */
+  let cleared: Line[] = [];
+  /** how many lines the list keeps: all of them while the user holds it */
+  const cap = () => (interaction.frozen ? undefined : MAX);
+
+  // the snapshot a reopened stream sends replaces the list, keeping the rows of the records
+  // already shown
   const take = (records: Schemas["LogRecord"][]) => {
     lines = numbered(records, [...waiting, ...lines])
       .toReversed()
-      .slice(0, MAX);
+      .slice(0, cap());
     waiting = [];
+    cleared = [];
+  };
+  // a background read adds the records not shown yet, in time order, and removes nothing: the
+  // daemon keeps fewer records than the list does
+  const merge = (records: Schemas["LogRecord"][]) => {
+    const known = [...waiting, ...lines, ...cleared];
+    const seqs = new Set(known.map((l) => l.seq));
+    const fresh = numbered(records, known).filter((l) => !seqs.has(l.seq));
+    if (!fresh.length) return;
+    lines = [...fresh.toReversed(), ...lines]
+      .toSorted((a, b) => Date.parse(b.record.timestamp) - Date.parse(a.record.timestamp))
+      .slice(0, cap());
   };
   const reload = async () => {
     const outcome = await call(() => api.GET("/api/v0/logs/live"));
     if (outcome.ok) {
       error = "";
-      take(outcome.data);
+      merge(outcome.data);
     } else error = outcome.error;
   };
   keepCurrent(
@@ -54,7 +72,7 @@
       const line = logLine(record);
       if (paused) waiting = [line, ...waiting].slice(0, MAX);
       // the oldest rows go only once nobody is selecting in or pressing on the list
-      else lines = [line, ...lines].slice(0, interaction.frozen ? undefined : MAX);
+      else lines = [line, ...lines].slice(0, cap());
     })
   );
 
@@ -125,6 +143,7 @@
       size="sm"
       variant="ghost"
       onclick={() => {
+        cleared = [...waiting, ...lines, ...cleared].slice(0, MAX);
         lines = [];
         waiting = [];
         list.clear();
