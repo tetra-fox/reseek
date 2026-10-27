@@ -346,10 +346,11 @@ impl AppState {
     tasks::spawn(self);
   }
 
-  /// Starts the daemon's own work in the background: following the client and the options,
-  /// the startup tasks, the clock, and connecting to the Soulseek server.
-  pub fn start(&self) {
-    lifecycle::start(self);
+  /// Ends the transfers and searches the last run left unfinished, then starts the daemon's
+  /// own work in the background: following the client and the options, the startup tasks, the
+  /// clock, and connecting to the Soulseek server.
+  pub async fn start(&self) {
+    lifecycle::start(self).await;
   }
 
   /// Stops the daemon's own work once the HTTP host has stopped: the client disconnects and
@@ -620,7 +621,7 @@ async fn serve(
     }
   };
   state.spawn_tasks();
-  state.start();
+  state.start().await;
   info!(base = %state.url_base, "Using base url");
   info!("reseek started");
   http::serve(listeners, pipeline::app(state.clone(), ui), cancel, grace).await;

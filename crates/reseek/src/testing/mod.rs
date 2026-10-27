@@ -83,7 +83,7 @@ pub async fn app(config: &str, env: &[(&str, &str)]) -> TestApp {
   .await
   .unwrap();
   state.spawn_tasks();
-  state.start();
+  state.start().await;
   // the shares load or scan at startup changes the state; tests start once that is done
   state.shares.initialized().await;
   TestApp {
