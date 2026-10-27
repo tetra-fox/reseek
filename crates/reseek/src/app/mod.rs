@@ -528,6 +528,9 @@ async fn serve(
       return EXIT_CONFIG;
     }
   };
+  // before the files are read, so the configuration knows the template's revision and the
+  // first save to it is not taken for a change made on disk
+  write_template(&sources.files, sources.managed_by().as_deref());
   let watcher = match Watcher::new(load::layers(&sources, &defaults, Some(overrides))) {
     Ok(watcher) => watcher,
     Err(e) => {
@@ -544,7 +547,6 @@ async fn serve(
       "environment variable is no option of reseek (ignored)"
     );
   }
-  write_template(&sources.files, current.managed_by.as_deref());
   warn_about(options, &logging);
   debug!(options = %redact::values(&current), "effective options");
 
