@@ -71,9 +71,9 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
       server_state(app, state);
     }
     Event::Connected => connected(app).await,
-    Event::LoggedIn => {
-      logged_in(app);
-      app.messaging.take(Event::LoggedIn).await;
+    Event::LoggedIn { username } => {
+      logged_in(app, &username);
+      app.messaging.take(Event::LoggedIn { username }).await;
     }
     Event::Disconnected { message, error } => {
       disconnected(app, &message, error.as_ref(), *reached);
@@ -259,8 +259,7 @@ async fn connected(app: &AppState) {
 }
 
 /// The server accepted our login: what needs the session runs in the background.
-fn logged_in(app: &AppState) {
-  let username = app.network.client().username();
+fn logged_in(app: &AppState, username: &str) {
   info!(username, "Logged in to the Soulseek server");
   app.network.watchdog().logged_in();
   tokio::spawn(after_login(app.clone()).in_current_span());

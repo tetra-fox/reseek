@@ -96,14 +96,10 @@ pub fn within(
 }
 
 impl Messaging {
-  /// A login: its username is noted for the room events that follow it, and a session row is
-  /// opened. The client names the session before it raises the login, so the name is there
-  /// unless the session already ended, and then the name noted before stays.
-  pub(super) async fn session_started(&self) {
-    match self.client().username() {
-      Some(username) => *lock(&self.session_user) = Some(username),
-      None => debug!("the session ended before its login was handled"),
-    }
+  /// A login as `username`: the name is noted for the room events that follow it, and a
+  /// session row is opened.
+  pub(super) async fn session_started(&self, username: String) {
+    *lock(&self.session_user) = Some(username);
     let now = Utc::now();
     let opened = self
       .db

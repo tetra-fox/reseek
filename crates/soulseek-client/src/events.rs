@@ -33,8 +33,8 @@ pub enum Event {
   },
   /// the TCP connection to the server is up
   Connected,
-  /// the server accepted our login
-  LoggedIn,
+  /// the server accepted our login as `username`
+  LoggedIn { username: String },
   /// the server session ended; raised once per session, after the last `StateChanged`
   Disconnected {
     message: String,

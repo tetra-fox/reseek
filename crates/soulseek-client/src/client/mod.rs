@@ -359,7 +359,7 @@ impl Inner {
   /// transitions and their events in one order.
   fn transition(
     &self,
-    _session: &mut Session,
+    session: &mut Session,
     next: ClientState,
     message: String,
     error: Option<ClientError>,
@@ -375,7 +375,11 @@ impl Inner {
     if next == ClientState::CONNECTED {
       self.emit(Event::Connected);
     } else if next == ClientState::READY {
-      self.emit(Event::LoggedIn);
+      let username = session
+        .username
+        .clone()
+        .expect("a login names the session before it is ready");
+      self.emit(Event::LoggedIn { username });
     } else if next == ClientState::DISCONNECTED {
       self.emit(Event::Disconnected { message, error });
     }

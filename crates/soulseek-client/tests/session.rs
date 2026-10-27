@@ -46,7 +46,7 @@ async fn login_raises_its_transitions_before_anything_the_server_sends_after_it(
     .map(|event| match event {
       Event::StateChanged { .. } => "StateChanged",
       Event::Connected => "Connected",
-      Event::LoggedIn => "LoggedIn",
+      Event::LoggedIn { .. } => "LoggedIn",
       Event::ServerInfoReceived(_) => "ServerInfoReceived",
       Event::RoomListReceived(_) => "RoomListReceived",
       other => panic!("unexpected {other:?}"),

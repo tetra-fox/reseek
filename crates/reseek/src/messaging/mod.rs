@@ -243,7 +243,7 @@ impl Messaging {
   async fn handle(&self, event: Event) {
     match event {
       Event::PrivateMessageReceived(message) => self.received(message).await,
-      Event::LoggedIn => self.session_started().await,
+      Event::LoggedIn { username } => self.session_started(username).await,
       Event::Disconnected { error, .. } => {
         let shutdown = error
           .as_ref()

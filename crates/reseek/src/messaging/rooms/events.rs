@@ -167,7 +167,7 @@ impl Messaging {
   /// `username` joined `room`: ourselves, which the server confirms after our join, or another
   /// user, who is added to the room's members.
   async fn user_joined(&self, room: String, username: String, user: &UserData) {
-    // a session whose login ended before it was handled, the first one, leaves no name
+    // room events follow their session's login, unless the login was among events missed
     let Some(us) = self.logged_in_as() else {
       return debug!(room, "a join before any login was noted dropped");
     };
@@ -219,7 +219,7 @@ impl Messaging {
     if self.rooms.tracker().get(&room).is_none() {
       return debug!(room, "message for a room we are not in dropped");
     }
-    // a session whose login ended before it was handled, the first one, leaves no name
+    // room events follow their session's login, unless the login was among events missed
     let Some(us) = self.logged_in_as() else {
       return debug!(room, "a room message before any login was noted dropped");
     };
@@ -280,18 +280,24 @@ mod tests {
   use crate::testing::app;
 
   #[tokio::test]
-  async fn a_message_after_the_session_ended_is_ours_by_the_logins_name() {
-    // no username configured and the client logged out: only the noted login names us
+  async fn a_login_handled_after_its_session_ended_names_us() {
+    // no username configured and the client logged out: only the login's own name says who we
+    // are, not the earlier account's
     let app = app("", &[]).await;
     let messaging = &app.state.messaging;
-    *lock(&messaging.session_user) = Some("me".into());
+    *lock(&messaging.session_user) = Some("old".into());
+    messaging
+      .handle(Event::LoggedIn {
+        username: "me".into(),
+      })
+      .await;
     let data = RoomData {
       name: "indie".into(),
       users: Vec::new(),
       private: None,
     };
     messaging.rooms.tracker().joined(&data, "me");
-    for (username, message) in [("me", "hello"), ("alice", "hi me")] {
+    for (username, message) in [("me", "hello"), ("old", "hi me")] {
       let said = Event::RoomMessageReceived {
         room_name: "indie".into(),
         username: username.into(),
