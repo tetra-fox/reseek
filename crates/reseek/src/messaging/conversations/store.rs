@@ -552,4 +552,37 @@ mod tests {
     assert!(listed[1].last_message.is_none(), "bob has none");
     assert_eq!(listed[0].un_acknowledged_message_count, 1);
   }
+
+  #[tokio::test]
+  async fn the_newest_message_is_found_by_index() {
+    let location = Location {
+      data: std::env::temp_dir(),
+      backups: std::env::temp_dir(),
+      volatile: true,
+      log_sql: false,
+    };
+    let db = Database::open(&crate::messaging::SCHEMA, &location)
+      .await
+      .unwrap();
+    let plan = db
+      .read(|conn| {
+        conn
+          .prepare(&format!(
+            "EXPLAIN QUERY PLAN {CONVERSATION} WHERE c.username = :username"
+          ))?
+          .query_map(
+            named_params! { ":username": "alice", ":server": SERVER },
+            |row| row.get::<_, String>(3),
+          )?
+          .collect::<rusqlite::Result<Vec<_>>>()
+      })
+      .await
+      .unwrap();
+    assert!(
+      plan
+        .iter()
+        .any(|step| step.contains("COVERING INDEX pm_user_local")),
+      "{plan:#?}"
+    );
+  }
 }
