@@ -11,6 +11,7 @@
   import { api, type Schemas } from "#lib/api/client.js";
   import { chat } from "#lib/chat/chat.svelte.js";
   import Field from "#lib/components/Field.svelte";
+  import Form from "#lib/components/Form.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
@@ -163,16 +164,25 @@
       </p>
     {/if}
   {/if}
-  <Field label="Join or create by name" for="join-name">
-    <Input id="join-name" maxlength={24} bind:value={name} autocomplete="off" />
-  </Field>
-  <label class="flex items-center gap-2 text-sm">
-    <Checkbox checked={isPrivate} onCheckedChange={(on) => (isPrivate = on)} />
-    Private: create it as a private room if it doesn't exist
-  </label>
-  {#if error}<Notice kind="error">{error}</Notice>{/if}
+  <Form
+    id="join-room"
+    layout="stacked"
+    class="flex flex-col gap-group"
+    onsubmit={(e) => {
+      e.preventDefault();
+      void join(name);
+    }}>
+    <Field label="Join or create by name" for="join-name">
+      <Input id="join-name" maxlength={24} bind:value={name} autocomplete="off" />
+    </Field>
+    <label class="flex items-center gap-2 text-sm">
+      <Checkbox checked={isPrivate} onCheckedChange={(on) => (isPrivate = on)} />
+      Private: create it as a private room if it doesn't exist
+    </label>
+    {#if error}<Notice kind="error">{error}</Notice>{/if}
+  </Form>
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
-    <Button disabled={!name.trim() || joining} onclick={() => void join(name)}>Join</Button>
+    <Button type="submit" form="join-room" disabled={!name.trim() || joining}>Join</Button>
   {/snippet}
 </Dialog>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Field from "#lib/components/Field.svelte";
+  import Form from "#lib/components/Form.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
@@ -37,15 +38,17 @@
   bind:open
   title={usernames.length === 1 ? `Group of ${usernames[0]}` : `Group of ${usernames.length} users`}
   description="A group set in the configuration wins over one chosen here.">
-  <Field label="Upload group" for="assign-group">
-    <Select
-      id="assign-group"
-      bind:value={group}
-      options={[
-        { value: null, label: "None" },
-        ...userGroups().map((g) => ({ value: g as string | null, label: g }))
-      ]} />
-  </Field>
+  <Form layout="stacked">
+    <Field label="Upload group" for="assign-group">
+      <Select
+        id="assign-group"
+        bind:value={group}
+        options={[
+          { value: null, label: "None" },
+          ...userGroups().map((g) => ({ value: g as string | null, label: g }))
+        ]} />
+    </Field>
+  </Form>
   {#if error}<Notice kind="error">{error}</Notice>{/if}
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
