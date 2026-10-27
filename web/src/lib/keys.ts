@@ -38,7 +38,10 @@ export const inControl = (e: MouseEvent) => inside(e, `${KEEPS_ALL},${KEEPS_PRES
 
 /**
  * Whether a menu, a dialog or a hover card is open, which Escape closes before anything under
- * it. They are only in the page while open
+ * it. One closing stays in the page for its exit animation, marked `data-state="closed"`, and
+ * no longer counts
  */
 export const layerOpen = () =>
-  !!document.querySelector("[role=menu],[role=dialog],[role=alertdialog]");
+  !!document.querySelector(
+    ["menu", "dialog", "alertdialog"].map((r) => `[role=${r}]:not([data-state=closed])`).join(",")
+  );

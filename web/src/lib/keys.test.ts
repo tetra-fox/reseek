@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { keepsKey } from "./keys";
+import { keepsKey, layerOpen } from "./keys";
 
 describe("which keys a focused element keeps", () => {
   afterEach(() => (document.body.innerHTML = ""));
@@ -59,5 +59,19 @@ describe("which keys a focused element keeps", () => {
       .getElementById("act")!
       .dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
     expect(kept).toBe(true);
+  });
+});
+
+describe("an open layer", () => {
+  afterEach(() => (document.body.innerHTML = ""));
+
+  it("counts a menu or dialog over the page until it starts closing", () => {
+    document.body.innerHTML = `<div role="menu" data-state="open"></div>`;
+    expect(layerOpen()).toBe(true);
+    // still in the page for its exit animation
+    document.querySelector("[role=menu]")!.setAttribute("data-state", "closed");
+    expect(layerOpen()).toBe(false);
+    document.body.innerHTML = `<div role="dialog"></div>`;
+    expect(layerOpen()).toBe(true);
   });
 });
