@@ -170,7 +170,11 @@
     else if (focusedItem) focusedKey = focusedItem.key;
   });
   const activeId = $derived(
-    focusIndex >= start && focusIndex < end ? `${uid}-${focusIndex}` : undefined
+    sticky && focusedItem?.key === sticky.key
+      ? `${uid}-pinned`
+      : focusIndex >= start && focusIndex < end
+        ? `${uid}-${focusIndex}`
+        : undefined
   );
 
   /** Makes the line `target` is in the focused one: a click or a focus there moves the focus to it */
@@ -320,7 +324,11 @@
     </div>
     {#if sticky?.type === "group"}
       <div
-        class="absolute inset-x-0 top-full"
+        class={[
+          "absolute inset-x-0 top-full",
+          focusedKey === sticky.key && "ring-1 ring-accent ring-inset"
+        ]}
+        id={`${uid}-pinned`}
         style:height={`${row}px`}
         data-line={sticky.key}
         data-pinned="true">
