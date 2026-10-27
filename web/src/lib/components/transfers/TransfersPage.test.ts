@@ -352,6 +352,20 @@ describe("the transfers table", () => {
       expect(ticked()).toEqual([a.id]);
     });
 
+    it("leave focus on a control whose row stays rendered through a scroll", async () => {
+      listing = Array.from({ length: 80 }, (_, n) =>
+        transfer({ filename: `x\\${String(n).padStart(2, "0")}.flac` })
+      );
+      await start();
+      // jsdom measures the table as 0 px high, so ten rows past the top are rendered
+      const box = row(listing[5].id)!.querySelector<HTMLElement>('[role="checkbox"]')!;
+      box.focus();
+      Object.defineProperty(grid(), "scrollTop", { value: 36 * 3, configurable: true });
+      grid().dispatchEvent(new Event("scroll"));
+      flushSync();
+      expect(document.activeElement).toBe(box);
+    });
+
     it("keep focus on the table when a focused row control scrolls away", async () => {
       listing = Array.from({ length: 80 }, (_, n) =>
         transfer({ filename: `x\\${String(n).padStart(2, "0")}.flac` })

@@ -200,11 +200,21 @@
     return -1;
   };
 
-  /** A control in a row that kept focus gives it back to the grid before its row scrolls away */
+  /**
+   * Keeps the scroll position, and gives focus back to the grid when the control that has it is
+   * in a line about to stop being rendered: a row outside the rendered range, or a pinned header
+   * that is no longer the pinned one. A control the browser scrolled into view keeps it
+   */
   const scrolled = (e: Event & { currentTarget: HTMLDivElement }) => {
     scrollTop = e.currentTarget.scrollTop;
     const active = document.activeElement;
-    if (active && active !== grid && grid?.contains(active)) grid.focus({ preventScroll: true });
+    if (!active || active === grid || !grid?.contains(active)) return;
+    const line = active.closest<HTMLElement>("[data-line]");
+    if (!line) return;
+    const key = line.dataset.line;
+    const at = items.findIndex((i) => i.key === key);
+    const gone = line.dataset.pinned ? sticky?.key !== key : at < start || at >= end;
+    if (gone) grid.focus({ preventScroll: true });
   };
 
   /**
@@ -309,7 +319,11 @@
       {/each}
     </div>
     {#if sticky?.type === "group"}
-      <div class="absolute inset-x-0 top-full" style:height={`${row}px`} data-line={sticky.key}>
+      <div
+        class="absolute inset-x-0 top-full"
+        style:height={`${row}px`}
+        data-line={sticky.key}
+        data-pinned="true">
         <GroupHeader
           group={sticky.group}
           {store}
