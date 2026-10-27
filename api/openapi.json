@@ -15069,6 +15069,17 @@
             "type": "boolean",
             "description": "the conversation holds the server's own notices, which can not be answered and never\ncount as unread"
           },
+          "lastMessage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PrivateMessage",
+                "description": "the newest message either way, null when none is stored"
+              }
+            ]
+          },
           "messages": {
             "type": [
               "array",
@@ -17130,7 +17141,8 @@
           "unread",
           "mentions",
           "notify",
-          "userCount"
+          "userCount",
+          "lastReadId"
         ],
         "properties": {
           "lastMessageAt": {
@@ -17140,6 +17152,11 @@
             ],
             "format": "date-time",
             "description": "when the latest stored message arrived, null when none is stored"
+          },
+          "lastReadId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the `localId` of the newest message shown as read, 0 before any was"
           },
           "mentions": {
             "type": "integer",

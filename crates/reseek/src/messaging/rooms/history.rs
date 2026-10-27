@@ -211,6 +211,15 @@ pub fn unread(conn: &Connection, room: &str) -> rusqlite::Result<RoomUnread> {
     })
 }
 
+/// `room`'s read marker: the local id of the newest message shown as read, 0 before any was.
+pub fn read_marker(conn: &Connection, room: &str) -> rusqlite::Result<i64> {
+  let stored: Option<i64> = conn
+    .prepare_cached("SELECT last_read_id FROM room_state WHERE room_name = ?1")?
+    .query_row([room], |row| row.get(0))
+    .optional()?;
+  Ok(stored.unwrap_or(0))
+}
+
 /// What `room` notifies of.
 pub fn notify(conn: &Connection, room: &str) -> rusqlite::Result<NotifyLevel> {
   let stored: Option<String> = conn
@@ -332,9 +341,14 @@ mod tests {
       "ours and the hidden one do not count"
     );
     let marker = ids[2];
+    assert_eq!(db.read(|conn| read_marker(conn, "indie")).await.unwrap(), 0);
     db.write(move |conn| mark_read(conn, "indie", marker))
       .await
       .unwrap();
+    assert_eq!(
+      db.read(|conn| read_marker(conn, "indie")).await.unwrap(),
+      marker
+    );
     let back = ids[0];
     db.write(move |conn| mark_read(conn, "indie", back))
       .await

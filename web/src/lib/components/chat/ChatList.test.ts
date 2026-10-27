@@ -19,6 +19,7 @@ const conversation = (username: string) => ({
   hasUnAcknowledgedMessages: false,
   notify: "all" as const,
   draft: "",
+  lastMessage: null,
   messages: null
 });
 const room = (name: string, lastMessageAt: string) => ({
@@ -27,7 +28,8 @@ const room = (name: string, lastMessageAt: string) => ({
   mentions: 0,
   notify: "mentions" as const,
   userCount: 3,
-  lastMessageAt
+  lastMessageAt,
+  lastReadId: 0
 });
 
 describe("the chat list", () => {

@@ -3347,6 +3347,7 @@ export interface components {
              *     count as unread
              */
             isServerNotice: boolean;
+            lastMessage?: null | components["schemas"]["PrivateMessage"];
             /** @description the newest messages, oldest first; null in lists and frames and unless asked for */
             messages?: components["schemas"]["PrivateMessage"][] | null;
             /** @description which messages notify */
@@ -4285,6 +4286,11 @@ export interface components {
              * @description when the latest stored message arrived, null when none is stored
              */
             lastMessageAt?: string | null;
+            /**
+             * Format: int64
+             * @description the `localId` of the newest message shown as read, 0 before any was
+             */
+            lastReadId: number;
             /**
              * Format: int32
              * @description those of them that mention us

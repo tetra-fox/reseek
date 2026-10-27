@@ -149,7 +149,14 @@ describe("a chat pane", () => {
       }
       return undefined;
     });
-    chat.rooms.upsert({ name: "indie", unread: 0, mentions: 0, notify: "mentions", userCount: 2 });
+    chat.rooms.upsert({
+      name: "indie",
+      unread: 0,
+      mentions: 0,
+      notify: "mentions",
+      userCount: 2,
+      lastReadId: 0
+    });
     live.start();
     component = mount(Pane, {
       target: document.body,

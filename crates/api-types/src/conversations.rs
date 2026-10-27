@@ -61,6 +61,8 @@ pub struct Conversation {
   pub notify: NotifyLevel,
   /// the unsent text the UI saved for the conversation, empty when none
   pub draft: String,
+  /// the newest message either way, null when none is stored
+  pub last_message: Option<PrivateMessage>,
   /// the newest messages, oldest first; null in lists and frames and unless asked for
   pub messages: Option<Vec<PrivateMessage>>,
 }

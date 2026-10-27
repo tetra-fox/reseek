@@ -336,6 +336,7 @@ impl Messaging {
             Ok(JoinedRoom {
               notify: history::notify(conn, &name)?,
               last_message_at: history::newest(conn, &name)?,
+              last_read_id: history::read_marker(conn, &name)?,
               unread: unread.unread,
               mentions: unread.mentions,
               user_count,

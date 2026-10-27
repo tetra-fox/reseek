@@ -61,15 +61,20 @@ fn direction(row: &Row, i: usize) -> rusqlite::Result<MessageDirection> {
 
 /// The message in `row`, read with [`MESSAGE`].
 fn message(row: &Row) -> rusqlite::Result<PrivateMessage> {
+  message_from(row, 0)
+}
+
+/// The message in `row` whose [`MESSAGE`] columns start at `at`.
+fn message_from(row: &Row, at: usize) -> rusqlite::Result<PrivateMessage> {
   Ok(PrivateMessage {
-    local_id: row.get(0)?,
-    id: row.get(1)?,
-    timestamp: read_timestamp(&row.get::<_, String>(2)?)?,
-    username: row.get(3)?,
-    direction: direction(row, 4)?,
-    message: row.get(5)?,
-    is_acknowledged: row.get(6)?,
-    was_replayed: row.get(7)?,
+    local_id: row.get(at)?,
+    id: row.get(at + 1)?,
+    timestamp: read_timestamp(&row.get::<_, String>(at + 2)?)?,
+    username: row.get(at + 3)?,
+    direction: direction(row, at + 4)?,
+    message: row.get(at + 5)?,
+    is_acknowledged: row.get(at + 6)?,
+    was_replayed: row.get(at + 7)?,
   })
 }
 
@@ -192,14 +197,18 @@ pub fn exists(conn: &Connection, username: &str) -> rusqlite::Result<bool> {
     .query_row([username], |row| row.get(0))
 }
 
-/// The conversation columns [`conversation`] reads, joined with their state and their count of
-/// unread messages; it binds `:server`.
+/// The conversation columns [`conversation`] reads, joined with their state, their count of
+/// unread messages and their newest message's [`MESSAGE`] columns; it binds `:server`.
 const CONVERSATION: &str = concat!(
   "SELECT c.username, c.is_active, COALESCE(s.notify, 'all'), COALESCE(s.draft, ''), \
    (SELECT COUNT(*) FROM private_messages m WHERE m.username = c.username AND ",
   unread!(),
-  ") AS unacknowledged \
-   FROM conversations c LEFT JOIN conversation_state s ON s.username = c.username"
+  ") AS unacknowledged, \
+   l.local_id, l.remote_id, l.timestamp, l.username, l.direction, l.message, \
+   l.is_acknowledged, l.was_replayed \
+   FROM conversations c LEFT JOIN conversation_state s ON s.username = c.username \
+   LEFT JOIN private_messages l ON l.local_id = \
+   (SELECT MAX(local_id) FROM private_messages n WHERE n.username = c.username)"
 );
 
 /// The conversation in `row`, read with [`CONVERSATION`], without its messages.
@@ -214,6 +223,10 @@ fn conversation_of(row: &Row) -> rusqlite::Result<Conversation> {
     has_un_acknowledged_messages: unacknowledged > 0,
     notify: notify_level(&row.get::<_, String>(2)?)?,
     draft: row.get(3)?,
+    last_message: match row.get::<_, Option<i64>>(5)? {
+      Some(_) => Some(message_from(row, 5)?),
+      None => None,
+    },
     messages: None,
   })
 }
@@ -461,5 +474,59 @@ mod tests {
     assert_eq!(listed.len(), 1, "left out unless asked for");
     assert_eq!(listed[0].un_acknowledged_message_count, 1);
     assert_eq!(open, ["alice"]);
+  }
+
+  #[tokio::test]
+  async fn a_conversation_carries_its_newest_message_either_way() {
+    let location = Location {
+      data: std::env::temp_dir(),
+      backups: std::env::temp_dir(),
+      volatile: true,
+      log_sql: false,
+    };
+    let db = Database::open(&crate::messaging::SCHEMA, &location)
+      .await
+      .unwrap();
+    let at = |s: &str| s.parse::<DateTime<Utc>>().unwrap();
+    db.write(move |conn| {
+      activate(conn, "alice", at("2026-10-26T10:00:00Z"))?;
+      activate(conn, "bob", at("2026-10-26T10:00:00Z"))?;
+      receive(
+        conn,
+        &Inbound {
+          id: 7,
+          timestamp: at("2026-10-26T10:00:00Z"),
+          username: "alice".into(),
+          message: "hello".into(),
+          replayed: false,
+        },
+      )?;
+      sent(conn, "alice", "hi back", at("2026-10-26T10:01:00Z"))?;
+      Ok(())
+    })
+    .await
+    .unwrap();
+    let (listed, one) = db
+      .read(|conn| {
+        Ok((
+          list(conn, &ConversationListQuery::default())?,
+          conversation(conn, "alice")?.unwrap(),
+        ))
+      })
+      .await
+      .unwrap();
+    let last = one.last_message.unwrap();
+    assert_eq!(
+      (last.message.as_str(), last.direction),
+      ("hi back", MessageDirection::Out),
+      "the newest, ours"
+    );
+    assert_eq!(listed[0].username, "alice");
+    assert_eq!(
+      listed[0].last_message.as_ref().unwrap().local_id,
+      last.local_id
+    );
+    assert!(listed[1].last_message.is_none(), "bob has none");
+    assert_eq!(listed[0].un_acknowledged_message_count, 1);
   }
 }
