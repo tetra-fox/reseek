@@ -28,8 +28,13 @@ impl Messaging {
       .db
       .read(move |conn| {
         let (messages, has_more) = history::page(conn, &room_name, &query)?;
-        let end = match query.before {
+        let cursor = match query.before {
           Some(before) => history::arrived_from(conn, &room_name, before)?,
+          None => None,
+        };
+        // a cursor past every stored message ends the page as the newest page ends
+        let end = match cursor {
+          Some(at) => Some(at),
           None if present => None,
           None => match history::left_at(conn, &room_name)? {
             Some(left) => Some(left),
@@ -284,5 +289,21 @@ mod tests {
       newest.gaps[0].to,
       Some("2026-10-26T21:00:00Z".parse().unwrap())
     );
+  }
+
+  #[tokio::test]
+  async fn a_cursor_past_every_message_of_a_left_room_ends_at_its_last() {
+    let app = app("", &[]).await;
+    let messaging = &app.state.messaging;
+    let ids = stored(
+      messaging,
+      &["2026-10-26T10:00:00Z", "2026-10-26T12:00:00Z"],
+      "2026-10-26T13:00:00.000000Z",
+      "2026-10-26T14:00:00.000000Z",
+    )
+    .await;
+    let past = page(messaging, Some(ids[1] + 1000)).await;
+    assert_eq!(past.messages.len(), 1);
+    assert!(past.gaps.is_empty(), "{:?}", past.gaps);
   }
 }

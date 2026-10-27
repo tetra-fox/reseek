@@ -123,11 +123,15 @@ pub fn oldest(conn: &Connection, room: &str) -> rusqlite::Result<Option<DateTime
   first.as_deref().map(read_timestamp).transpose()
 }
 
-/// When the newest message stored for `room` arrived, `None` without one.
+/// When the message stored last for `room` arrived, `None` without one; by local id, as
+/// [`arrived_from`] reads them, so a clock that stepped back does not move it.
 pub fn newest(conn: &Connection, room: &str) -> rusqlite::Result<Option<DateTime<Utc>>> {
   let last: Option<String> = conn
-    .prepare_cached("SELECT MAX(timestamp) FROM room_messages WHERE room_name = ?1")?
-    .query_row([room], |row| row.get(0))?;
+    .prepare_cached(
+      "SELECT timestamp FROM room_messages WHERE room_name = ?1 ORDER BY local_id DESC LIMIT 1",
+    )?
+    .query_row([room], |row| row.get(0))
+    .optional()?;
   last.as_deref().map(read_timestamp).transpose()
 }
 
