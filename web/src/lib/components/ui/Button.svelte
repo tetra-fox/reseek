@@ -10,6 +10,9 @@
     href?: string;
     /** with `href`, saves what the link points at under this name */
     download?: string;
+    /** with `href`, where the link opens and how it relates, as on a link */
+    target?: string;
+    rel?: string;
   };
 
   let {
