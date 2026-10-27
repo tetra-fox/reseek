@@ -170,7 +170,9 @@ export const downloadGroups = (
       : file.filename;
     const parts = relative.split(separator).filter(Boolean);
     const group = parts.length > 1 ? parts[0] : "";
-    groups.set(group, [...(groups.get(group) ?? []), file]);
+    const grouped = groups.get(group);
+    if (grouped) grouped.push(file);
+    else groups.set(group, [file]);
   }
   return [...groups.entries()]
     .toSorted(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : 0))

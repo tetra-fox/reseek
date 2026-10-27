@@ -91,7 +91,9 @@ const bucket = <K>(rows: Transfer[], key: (t: Transfer) => K) => {
   const groups = new Map<K, Transfer[]>();
   for (const t of rows) {
     const k = key(t);
-    groups.set(k, [...(groups.get(k) ?? []), t]);
+    const group = groups.get(k);
+    if (group) group.push(t);
+    else groups.set(k, [t]);
   }
   return groups;
 };
