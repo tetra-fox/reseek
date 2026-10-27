@@ -53,7 +53,8 @@
       return;
     }
     if (announce) {
-      toast(`Search for '${phrase}' started`, "info", {
+      const label = phrase.length > 30 ? `${phrase.slice(0, 15)}...` : phrase;
+      toast(`Search for '${label}' started`, "info", {
         action: { label: "View results", run: () => void goto(to) }
       });
     }
