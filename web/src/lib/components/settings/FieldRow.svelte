@@ -68,6 +68,12 @@
     </div>
     <p id={help} class="text-xs text-pretty text-fg-muted">
       {info.doc}
+      {#if info.default !== null && info.default !== undefined && !(Array.isArray(info.default) && !info.default.length)}
+        <span class="text-fg-subtle"
+          >Default <code class="font-mono"
+            >{typeof info.default === "string" ? info.default : JSON.stringify(info.default)}</code
+          >.</span>
+      {/if}
       {#if info.envVar || info.cliFlag}
         <span class="font-mono text-fg-subtle">
           {[info.envVar, info.cliFlag].filter(Boolean).join(" · ")}
