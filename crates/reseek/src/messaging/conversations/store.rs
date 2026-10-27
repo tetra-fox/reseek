@@ -135,12 +135,24 @@ pub fn ensure(conn: &Connection, username: &str, now: DateTime<Utc>) -> rusqlite
 /// Stores an inbound message. A message the server delivers again is the one stored already: it
 /// is marked unacknowledged and replayed as the server now says, its text left as it is.
 pub fn receive(conn: &Connection, inbound: &Inbound) -> rusqlite::Result<PrivateMessage> {
-  let stored: Option<i64> = conn
-    .prepare_cached("SELECT local_id FROM private_messages WHERE username = ?1 AND remote_id = ?2")?
-    .query_row(params![inbound.username, inbound.id], |row| row.get(0))
+  let stored: Option<(i64, String)> = conn
+    .prepare_cached(
+      "SELECT local_id, message FROM private_messages WHERE username = ?1 AND remote_id = ?2",
+    )?
+    .query_row(params![inbound.username, inbound.id], |row| {
+      Ok((row.get(0)?, row.get(1)?))
+    })
     .optional()?;
   let local_id = match stored {
-    Some(local_id) => {
+    Some((local_id, text)) => {
+      if text != inbound.message {
+        // a server that started its ids over; one id holds one message here
+        tracing::warn!(
+          username = inbound.username,
+          id = inbound.id,
+          "private message dropped: its id is a stored message's with another text"
+        );
+      }
       conn.execute(
         "UPDATE private_messages SET is_acknowledged = 0, was_replayed = ?2 WHERE local_id = ?1",
         params![local_id, inbound.replayed],
