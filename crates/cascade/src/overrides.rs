@@ -3,7 +3,8 @@
 //!
 //! Each override remembers the value the layers below it had when it was set. When that value
 //! changes, because a file was edited or the defaults moved, the override is dropped: a new
-//! declaration wins over an older runtime change. An override also ends when it expires.
+//! declaration wins over an older runtime change. An override also ends when it expires, and
+//! one set until restart is never written to the file, so it ends with the process.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -31,6 +32,19 @@ pub struct Override {
   pub set_at: DateTime<Utc>,
   /// when the override ends on its own, `None` for never
   pub expires_at: Option<DateTime<Utc>>,
+  /// kept in memory only, never written to the file, so it ends with the process
+  pub until_restart: bool,
+}
+
+/// How long a runtime override lasts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Lasts {
+  /// until it is removed, across restarts
+  UntilRemoved,
+  /// until this time, across restarts
+  Until(DateTime<Utc>),
+  /// until the process ends; it is never written to the file
+  UntilRestart,
 }
 
 /// The runtime overrides, and the file they are kept in.
@@ -87,6 +101,7 @@ impl Overrides {
           set_by: s.set_by,
           set_at: s.set_at,
           expires_at: s.expires_at,
+          until_restart: false,
         };
         Ok((key, item))
       })
@@ -124,7 +139,7 @@ impl Overrides {
       return Ok(());
     };
     let mut stored = BTreeMap::new();
-    for (key, o) in items {
+    for (key, o) in items.iter().filter(|(_, o)| !o.until_restart) {
       let value = to_toml(&o.value).ok_or_else(|| Error::Value {
         key: key.clone(),
         by: "a runtime override".into(),
@@ -245,7 +260,30 @@ mod tests {
       set_by: "admin".into(),
       set_at: Utc::now(),
       expires_at,
+      until_restart: false,
     }
+  }
+
+  #[test]
+  fn an_override_until_restart_is_never_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("overrides.toml");
+    let mut overrides = Overrides::load(&path).unwrap();
+    let volatile = Override {
+      until_restart: true,
+      ..item(json!(5000), json!(2242), None)
+    };
+    overrides
+      .replace(BTreeMap::from([
+        ("server.port".to_string(), volatile),
+        ("debug".to_string(), item(json!(true), json!(false), None)),
+      ]))
+      .unwrap();
+    assert_eq!(overrides.items().len(), 2, "both are in effect");
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(!text.contains("server.port"), "{text}");
+    let reloaded = Overrides::load(&path).unwrap();
+    assert_eq!(reloaded.items().keys().collect::<Vec<_>>(), ["debug"]);
   }
 
   #[test]

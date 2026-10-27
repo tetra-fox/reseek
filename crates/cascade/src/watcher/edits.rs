@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde_json::Value;
 use tracing::{debug, info};
 
@@ -11,7 +11,7 @@ use super::{Change, FileEdit, Shared, State, Written};
 use crate::describe::Apply;
 use crate::edit::FileEditor;
 use crate::files::{read_optional_text, revision_of};
-use crate::overrides::Override;
+use crate::overrides::{Lasts, Override};
 use crate::schema::{REDACTED, Schema};
 use crate::source::Source;
 use crate::write::writability;
@@ -26,7 +26,7 @@ impl<T: Root> State<T> {
     set: BTreeMap<Key, Value>,
     unset: &[Key],
     set_by: &str,
-    expires_at: Option<DateTime<Utc>>,
+    lasts: Lasts,
   ) -> Result<Option<Arc<Change<T>>>, Error> {
     let declared = self.declared();
     let now = Utc::now();
@@ -69,7 +69,11 @@ impl<T: Root> State<T> {
         declared: declared_value,
         set_by: set_by.to_string(),
         set_at: now,
-        expires_at,
+        expires_at: match lasts {
+          Lasts::Until(at) => Some(at),
+          Lasts::UntilRemoved | Lasts::UntilRestart => None,
+        },
+        until_restart: lasts == Lasts::UntilRestart,
       };
       items.insert(key, item);
     }
@@ -194,7 +198,7 @@ mod tests {
         values(&[("server.port", json!(5000))]),
         vec![],
         "admin",
-        Some(soon),
+        Lasts::Until(soon),
       )
       .await
       .unwrap()
@@ -224,7 +228,12 @@ mod tests {
     let refused = |e: Result<_, Error>| e.unwrap_err();
     let e = refused(
       watcher
-        .set_overrides(values(&[("debug", json!(true))]), vec![], "a", None)
+        .set_overrides(
+          values(&[("debug", json!(true))]),
+          vec![],
+          "a",
+          Lasts::UntilRemoved,
+        )
         .await,
     );
     assert!(matches!(e, Error::NeedsRestart(k) if k == "debug"));
@@ -234,20 +243,30 @@ mod tests {
           values(&[("server.username", json!("x"))]),
           vec![],
           "a",
-          None,
+          Lasts::UntilRemoved,
         )
         .await,
     );
     assert!(matches!(e, Error::SetBy { by, .. } if by == "APP_USERNAME"));
     let e = refused(
       watcher
-        .set_overrides(values(&[("nope", json!(1))]), vec![], "a", None)
+        .set_overrides(
+          values(&[("nope", json!(1))]),
+          vec![],
+          "a",
+          Lasts::UntilRemoved,
+        )
         .await,
     );
     assert!(matches!(e, Error::UnknownKey(_)));
     let e = refused(
       watcher
-        .set_overrides(values(&[("server.port", json!("x"))]), vec![], "a", None)
+        .set_overrides(
+          values(&[("server.port", json!("x"))]),
+          vec![],
+          "a",
+          Lasts::UntilRemoved,
+        )
         .await,
     );
     assert!(
@@ -256,7 +275,12 @@ mod tests {
     );
     let e = refused(
       watcher
-        .set_overrides(values(&[("server.port", json!(80))]), vec![], "a", None)
+        .set_overrides(
+          values(&[("server.port", json!(80))]),
+          vec![],
+          "a",
+          Lasts::UntilRemoved,
+        )
         .await,
     );
     assert!(matches!(e, Error::Invalid(_)));
@@ -270,7 +294,12 @@ mod tests {
     ));
 
     watcher
-      .set_overrides(values(&[("server.address", json!("o"))]), vec![], "a", None)
+      .set_overrides(
+        values(&[("server.address", json!("o"))]),
+        vec![],
+        "a",
+        Lasts::UntilRemoved,
+      )
       .await
       .unwrap();
     let change = watcher
@@ -285,7 +314,7 @@ mod tests {
         values(&[("server.password", json!("pw"))]),
         vec![],
         "a",
-        None,
+        Lasts::UntilRemoved,
       )
       .await
       .unwrap();
@@ -294,7 +323,7 @@ mod tests {
         values(&[("server.password", json!(REDACTED))]),
         vec![],
         "a",
-        None,
+        Lasts::UntilRemoved,
       )
       .await
       .unwrap();
@@ -555,7 +584,7 @@ mod tests {
         values(&[("server.port", json!(3000))]),
         vec![],
         "admin",
-        None,
+        Lasts::UntilRemoved,
       )
       .await
       .expect("overrides still work, they are kept elsewhere");

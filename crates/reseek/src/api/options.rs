@@ -13,7 +13,7 @@ use api_types::options::{
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use cascade::Loaded;
+use cascade::{Lasts, Loaded};
 use chrono::Utc;
 use tracing::{info, warn};
 use utoipa_axum::router::OpenApiRouter;
@@ -28,6 +28,9 @@ use crate::db::shifted;
 
 /// The keys an API key or token may not change.
 const AUTHENTICATION: &str = "web.authentication";
+
+/// The `expiresIn` of overrides that end when the daemon stops.
+const UNTIL_RESTART: &str = "restart";
 
 /// The options routes.
 pub fn routes() -> OpenApiRouter<AppState> {
@@ -106,7 +109,8 @@ async fn get_debug(
 }
 
 /// Sets and removes runtime overrides. They last across restarts until they expire, are
-/// removed, or the files change the value under them.
+/// removed, or the files change the value under them; with `expiresIn` `restart` they are kept
+/// in memory only and end when the daemon stops.
 #[utoipa::path(
   patch, path = "/options", tag = "options", request_body = OptionsPatch,
   responses(
@@ -132,17 +136,18 @@ async fn patch_options(
   if keys.iter().any(|k| is_authentication(k)) {
     require_interactive(&admin.principal)?;
   }
-  let expires_at = match &patch.expires_in {
+  let lasts = match patch.expires_in.as_deref() {
+    Some(UNTIL_RESTART) => Lasts::UntilRestart,
     Some(text) => {
       let duration = humantime::parse_duration(text)
         .map_err(|e| ApiError::invalid("expiresIn is not a duration", e.to_string()))?;
-      Some(shifted(Utc::now(), lifetime(duration)))
+      Lasts::Until(shifted(Utc::now(), lifetime(duration)))
     }
-    None => None,
+    None => Lasts::UntilRemoved,
   };
   let change = app
     .config
-    .set_overrides(patch.set, patch.unset, &admin.principal.subject, expires_at)
+    .set_overrides(patch.set, patch.unset, &admin.principal.subject, lasts)
     .await
     .map_err(|e| match e {
       cascade::Error::Invalid(_) | cascade::Error::Value { .. } => {
@@ -507,6 +512,49 @@ mod tests {
       .send(request("DELETE", "/api/v0/options/overrides/rooms", None))
       .await;
     assert_eq!(again.status, 404);
+  }
+
+  #[tokio::test]
+  async fn an_override_until_restart_lasts_through_reloads_but_not_a_restart() {
+    let app = app(TRUSTED, &[]).await;
+    let set = |body| request("PATCH", "/api/v0/options", Some(body));
+    let answer = app
+      .send(set(
+        json!({ "set": { "rooms": ["indie"] }, "expiresIn": "restart" }),
+      ))
+      .await;
+    assert_eq!(answer.status, 200, "{:?}", answer.body);
+    let kept = app
+      .send(set(json!({ "set": { "soulseek.description": "kept" } })))
+      .await;
+    assert_eq!(kept.status, 200);
+    std::fs::write(
+      app.dir.path().join("config.toml"),
+      format!("{TRUSTED}[transfers.upload]\nslots = 3\n"),
+    )
+    .unwrap();
+    app.state.config.reload().await.unwrap();
+    let view = app
+      .send(request("GET", "/api/v0/options/view", None))
+      .await
+      .json();
+    assert_eq!(
+      view["values"]["rooms"],
+      json!(["indie"]),
+      "a reload keeps it"
+    );
+    assert_eq!(view["overrides"]["rooms"]["untilRestart"], true);
+    assert_eq!(view["overrides"]["rooms"]["expiresAt"], json!(null));
+    assert_eq!(view["fields"]["rooms"]["source"]["untilRestart"], true);
+    let stored = std::fs::read_to_string(app.dir.path().join("overrides.toml")).unwrap();
+    assert!(!stored.contains("rooms"), "{stored}");
+    assert!(stored.contains("soulseek.description"), "{stored}");
+    // the next start reads only what the file holds
+    let restarted = cascade::Overrides::load(app.dir.path().join("overrides.toml")).unwrap();
+    assert_eq!(
+      restarted.items().keys().collect::<Vec<_>>(),
+      ["soulseek.description"]
+    );
   }
 
   #[tokio::test]

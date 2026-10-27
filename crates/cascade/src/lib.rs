@@ -99,7 +99,7 @@ pub use error::{Error, Invalid};
 pub use files::LoadedFile;
 pub use layers::{Checked, Layers};
 pub use loaded::{Loaded, NotApplied};
-pub use overrides::{Override, Overrides};
+pub use overrides::{Lasts, Override, Overrides};
 pub use schema::{Field, REDACTED, Schema};
 pub use source::Source;
 pub use view::{ConfigView, FieldView, FileView, OverrideView};

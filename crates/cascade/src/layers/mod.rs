@@ -323,6 +323,7 @@ impl<T: Root> Layers<T> {
         key.clone(),
         Source::Runtime {
           expires_at: o.expires_at,
+          until_restart: o.until_restart,
           set_by: o.set_by.clone(),
           set_at: o.set_at,
         },
@@ -427,6 +428,7 @@ mod tests {
           set_by: "admin".into(),
           set_at: at,
           expires_at: None,
+          until_restart: false,
         },
       )]))
       .unwrap();
@@ -439,6 +441,7 @@ mod tests {
       loaded.sources["server.port"],
       Source::Runtime {
         expires_at: None,
+        until_restart: false,
         set_by: "admin".into(),
         set_at: at
       }
@@ -461,6 +464,7 @@ mod tests {
           set_by: "admin".into(),
           set_at: Utc::now(),
           expires_at: None,
+          until_restart: false,
         },
       )]))
       .unwrap();
@@ -490,6 +494,7 @@ mod tests {
           set_by: "an older version".into(),
           set_at: Utc::now(),
           expires_at: None,
+          until_restart: false,
         },
       )]))
       .unwrap();

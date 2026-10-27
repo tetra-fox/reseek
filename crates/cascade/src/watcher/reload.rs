@@ -199,7 +199,7 @@ fn pending(schema: &Schema, base: &Value, tree: &Value, apply: Apply) -> Vec<Key
 mod tests {
   use super::*;
   use crate::files::revision_of;
-  use crate::overrides::Overrides;
+  use crate::overrides::{Lasts, Overrides};
   use crate::testing::{Example, example_layers, values, watched};
   use crate::{Invalid, Watch, Watcher};
   use serde_json::json;
@@ -301,7 +301,7 @@ mod tests {
         values(&[("server.port", json!(100))]),
         vec![],
         "a",
-        Some(soon),
+        Lasts::Until(soon),
       )
       .await
       .unwrap();
@@ -391,7 +391,12 @@ mod tests {
     fs::write(&path, "[server]\naddress = \"a\"\n").unwrap();
     let watcher = watched(dir.path());
     watcher
-      .set_overrides(values(&[("server.address", json!("o"))]), vec![], "a", None)
+      .set_overrides(
+        values(&[("server.address", json!("o"))]),
+        vec![],
+        "a",
+        Lasts::UntilRemoved,
+      )
       .await
       .unwrap();
     fs::write(&path, "[server]\naddress = \"b\"\n").unwrap();

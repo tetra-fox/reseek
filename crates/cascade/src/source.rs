@@ -30,6 +30,8 @@ pub enum Source {
   Runtime {
     /// when the override ends on its own, `None` for never
     expires_at: Option<DateTime<Utc>>,
+    /// the override ends with the process
+    until_restart: bool,
     /// who set it
     set_by: String,
     /// when it was set
@@ -94,10 +96,11 @@ mod tests {
       (
         Source::Runtime {
           expires_at: None,
+          until_restart: false,
           set_by: "admin".into(),
           set_at: at,
         },
-        json!({ "layer": "runtime", "expiresAt": null, "setBy": "admin",
+        json!({ "layer": "runtime", "expiresAt": null, "untilRestart": false, "setBy": "admin",
                 "setAt": "2026-10-24T12:00:00Z" }),
       ),
     ];

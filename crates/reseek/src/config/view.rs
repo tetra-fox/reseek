@@ -62,6 +62,7 @@ pub fn config_view(loaded: &Loaded<Options>) -> api::ConfigView {
         let o = api::OverrideView {
           value: hidden(o.value),
           expires_at: o.expires_at,
+          until_restart: o.until_restart,
           set_by: o.set_by,
           set_at: o.set_at,
         };
@@ -102,10 +103,12 @@ pub fn source(source: cascade::Source) -> api::OptionSource {
     cascade::Source::Cli { flag } => api::OptionSource::Cli { flag },
     cascade::Source::Runtime {
       expires_at,
+      until_restart,
       set_by,
       set_at,
     } => api::OptionSource::Runtime {
       expires_at,
+      until_restart,
       set_by,
       set_at,
     },

@@ -97,6 +97,8 @@ pub struct OverrideView {
   pub value: Value,
   /// when it ends on its own, `None` for never
   pub expires_at: Option<DateTime<Utc>>,
+  /// it ends with the process
+  pub until_restart: bool,
   /// who set it
   pub set_by: String,
   /// when it was set
@@ -155,6 +157,7 @@ impl ConfigView {
         let view = OverrideView {
           value: schema.redact_value(key, &o.value),
           expires_at: o.expires_at,
+          until_restart: o.until_restart,
           set_by: o.set_by.clone(),
           set_at: o.set_at,
         };
@@ -178,6 +181,7 @@ impl ConfigView {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::Lasts;
   use crate::testing::{example_layers, pairs, values, watched, write};
   use serde_json::json;
 
@@ -196,7 +200,7 @@ mod tests {
         values(&[("server.address", json!("runtime"))]),
         vec![],
         "admin",
-        None,
+        Lasts::UntilRemoved,
       )
       .await
       .unwrap();
@@ -307,6 +311,7 @@ mod tests {
         set_by: "admin".into(),
         set_at: chrono::Utc::now(),
         expires_at: None,
+        until_restart: false,
       },
     );
     loaded.not_applied.insert(

@@ -642,7 +642,8 @@ export interface paths {
         head?: never;
         /**
          * Sets and removes runtime overrides. They last across restarts until they expire, are
-         *     removed, or the files change the value under them.
+         *     removed, or the files change the value under them; with `expiresIn` `restart` they are kept
+         *     in memory only and end when the daemon stops.
          */
         patch: operations["patch_options"];
         trace?: never;
@@ -4787,6 +4788,8 @@ export interface components {
             setAt: string;
             /** @description who set it */
             setBy: string;
+            /** @description the override ends when the daemon stops */
+            untilRestart: boolean;
         };
         /** @description What a change to the configuration did, by when each changed key takes effect. */
         OptionsChanged: {
@@ -4808,7 +4811,8 @@ export interface components {
          */
         OptionsPatch: {
             /**
-             * @description how long the overrides set last, such as `"2h"`; null for until removed
+             * @description how long the overrides set last, such as `"2h"`; `"restart"` for until the daemon stops,
+             *     never written to disk; null for until removed
              * @example 2h
              */
             expiresIn?: string | null;
@@ -4831,6 +4835,8 @@ export interface components {
             setAt: string;
             /** @description who set it */
             setBy: string;
+            /** @description it is kept in memory only and ends when the daemon stops */
+            untilRestart: boolean;
             /** @description its value, `*****` for a secret */
             value: Record<string, unknown>;
         };

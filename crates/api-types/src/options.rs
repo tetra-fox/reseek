@@ -40,6 +40,8 @@ pub enum OptionSource {
   Runtime {
     /// when the override ends on its own, null for never
     expires_at: Option<DateTime<Utc>>,
+    /// the override ends when the daemon stops
+    until_restart: bool,
     /// who set it
     set_by: String,
     /// when it was set
@@ -155,6 +157,8 @@ pub struct OverrideView {
   pub value: Value,
   /// when it ends on its own, null for never
   pub expires_at: Option<DateTime<Utc>>,
+  /// it is kept in memory only and ends when the daemon stops
+  pub until_restart: bool,
   /// who set it
   pub set_by: String,
   /// when it was set
@@ -200,7 +204,8 @@ pub struct OptionsPatch {
   /// the keys whose override ends
   #[serde(default)]
   pub unset: Vec<String>,
-  /// how long the overrides set last, such as `"2h"`; null for until removed
+  /// how long the overrides set last, such as `"2h"`; `"restart"` for until the daemon stops,
+  /// never written to disk; null for until removed
   #[schema(example = "2h")]
   pub expires_in: Option<String>,
 }

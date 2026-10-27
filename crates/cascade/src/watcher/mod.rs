@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde_json::Value;
 use tokio::sync::{Notify, broadcast, watch};
 use tokio_util::sync::CancellationToken;
@@ -19,6 +19,7 @@ use tracing::{Instrument, debug, info, info_span, warn};
 use crate::files::{Entry, LoadedFile};
 use crate::layers::{Checked, Failure, Layers};
 use crate::loaded::Loaded;
+use crate::overrides::Lasts;
 use crate::{Error, Key, Root, lock};
 use events::{DEBOUNCE, FileEvents, quiet};
 
@@ -244,21 +245,19 @@ impl<T: Root> Watcher<T> {
       .await
   }
 
-  /// Sets runtime overrides for the keys of `set` and removes those for `unset`, saving them
-  /// before they take effect. Refused for a key that only takes effect on restart, or whose
-  /// value comes from an env var or flag.
+  /// Sets runtime overrides for the keys of `set`, lasting as `lasts` says, and removes those
+  /// for `unset`, saving them before they take effect. Refused for a key that only takes effect
+  /// on restart, or whose value comes from an env var or flag.
   pub async fn set_overrides(
     &self,
     set: BTreeMap<Key, Value>,
     unset: Vec<Key>,
     set_by: &str,
-    expires_at: Option<DateTime<Utc>>,
+    lasts: Lasts,
   ) -> Result<Option<Arc<Change<T>>>, Error> {
     let set_by = set_by.to_string();
     self
-      .blocking(move |state, shared| {
-        state.change_overrides(shared, set, &unset, &set_by, expires_at)
-      })
+      .blocking(move |state, shared| state.change_overrides(shared, set, &unset, &set_by, lasts))
       .await?
   }
 
@@ -270,7 +269,7 @@ impl<T: Root> Watcher<T> {
         if !state.layers.overrides.items().contains_key(&key) {
           return Err(Error::NoOverride(key));
         }
-        state.change_overrides(shared, BTreeMap::new(), &[key], "", None)
+        state.change_overrides(shared, BTreeMap::new(), &[key], "", Lasts::UntilRemoved)
       })
       .await?
   }

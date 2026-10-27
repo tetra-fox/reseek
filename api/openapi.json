@@ -3407,7 +3407,7 @@
         "tags": [
           "options"
         ],
-        "summary": "Sets and removes runtime overrides. They last across restarts until they expire, are\nremoved, or the files change the value under them.",
+        "summary": "Sets and removes runtime overrides. They last across restarts until they expire, are\nremoved, or the files change the value under them; with `expiresIn` `restart` they are kept\nin memory only and end when the daemon stops.",
         "operationId": "patch_options",
         "requestBody": {
           "content": {
@@ -18417,6 +18417,7 @@
             "type": "object",
             "description": "a runtime override",
             "required": [
+              "untilRestart",
               "setBy",
               "setAt",
               "layer"
@@ -18444,6 +18445,10 @@
               "setBy": {
                 "type": "string",
                 "description": "who set it"
+              },
+              "untilRestart": {
+                "type": "boolean",
+                "description": "the override ends when the daemon stops"
               }
             }
           }
@@ -18495,7 +18500,7 @@
               "string",
               "null"
             ],
-            "description": "how long the overrides set last, such as `\"2h\"`; null for until removed",
+            "description": "how long the overrides set last, such as `\"2h\"`; `\"restart\"` for until the daemon stops,\nnever written to disk; null for until removed",
             "example": "2h"
           },
           "set": {
@@ -18516,6 +18521,7 @@
         "description": "A runtime override in effect.",
         "required": [
           "value",
+          "untilRestart",
           "setBy",
           "setAt"
         ],
@@ -18536,6 +18542,10 @@
           "setBy": {
             "type": "string",
             "description": "who set it"
+          },
+          "untilRestart": {
+            "type": "boolean",
+            "description": "it is kept in memory only and ends when the daemon stops"
           },
           "value": {
             "type": "object",
