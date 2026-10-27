@@ -4005,7 +4005,7 @@
           "profile"
         ],
         "summary": "The picture other users are sent with our profile.",
-        "operationId": "get_picture",
+        "operationId": "get_profile_picture",
         "responses": {
           "200": {
             "description": "",
@@ -4044,7 +4044,7 @@
           "profile"
         ],
         "summary": "Sets the picture other users are sent: a JPEG, PNG, GIF or WebP image of at most 1 MiB,\nkept as a JPEG at most 512 pixels on its longest side.",
-        "operationId": "put_picture",
+        "operationId": "put_profile_picture",
         "requestBody": {
           "description": "the image",
           "content": {
@@ -4142,7 +4142,7 @@
           "profile"
         ],
         "summary": "Stops sending a picture with our profile and removes the one kept.",
-        "operationId": "delete_picture",
+        "operationId": "delete_profile_picture",
         "responses": {
           "204": {
             "description": "removed"

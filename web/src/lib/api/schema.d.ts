@@ -802,15 +802,15 @@ export interface paths {
             cookie?: never;
         };
         /** The picture other users are sent with our profile. */
-        get: operations["get_picture"];
+        get: operations["get_profile_picture"];
         /**
          * Sets the picture other users are sent: a JPEG, PNG, GIF or WebP image of at most 1 MiB,
          *     kept as a JPEG at most 512 pixels on its longest side.
          */
-        put: operations["put_picture"];
+        put: operations["put_profile_picture"];
         post?: never;
         /** Stops sending a picture with our profile and removes the one kept. */
-        delete: operations["delete_picture"];
+        delete: operations["delete_profile_picture"];
         options?: never;
         head?: never;
         patch?: never;
@@ -9953,7 +9953,7 @@ export interface operations {
             };
         };
     };
-    get_picture: {
+    get_profile_picture: {
         parameters: {
             query?: never;
             header?: never;
@@ -9988,7 +9988,7 @@ export interface operations {
             };
         };
     };
-    put_picture: {
+    put_profile_picture: {
         parameters: {
             query?: never;
             header?: never;
@@ -10062,7 +10062,7 @@ export interface operations {
             };
         };
     };
-    delete_picture: {
+    delete_profile_picture: {
         parameters: {
             query?: never;
             header?: never;

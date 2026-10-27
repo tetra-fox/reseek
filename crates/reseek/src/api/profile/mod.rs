@@ -43,7 +43,11 @@ const PICTURE_URL: &str = "/api/v0/profile/picture";
 pub fn routes() -> OpenApiRouter<AppState> {
   OpenApiRouter::new()
     .routes(routes!(get_profile, put_profile))
-    .routes(routes!(get_picture, put_picture, delete_picture))
+    .routes(routes!(
+      get_profile_picture,
+      put_profile_picture,
+      delete_profile_picture
+    ))
 }
 
 /// Our profile as a user asking for our user info is sent it now: the text, whether a picture
@@ -115,7 +119,7 @@ async fn put_profile(
     (status = 401, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody)
   )
 )]
-async fn get_picture(
+async fn get_profile_picture(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
 ) -> Result<Response, ApiError> {
@@ -147,7 +151,7 @@ async fn get_picture(
     (status = 415, body = api_types::ErrorBody)
   )
 )]
-async fn put_picture(
+async fn put_profile_picture(
   State(app): State<AppState>,
   admin: Authorized<Administrator>,
   headers: HeaderMap,
@@ -247,7 +251,7 @@ async fn put_picture(
     (status = 403, body = api_types::ErrorBody), (status = 409, body = api_types::ErrorBody)
   )
 )]
-async fn delete_picture(
+async fn delete_profile_picture(
   State(app): State<AppState>,
   admin: Authorized<Administrator>,
 ) -> Result<StatusCode, ApiError> {
