@@ -28,6 +28,9 @@
     onselectgroup: (group: Group, on: boolean) => void;
     ondetails: (t: Transfer) => void;
     onremove: (transfers: Transfer[]) => void;
+    /** removes with the Delete key, which asks first for more than one */
+    ondelete: (transfers: Transfer[]) => void;
+    oncancel: (transfers: Transfer[]) => void;
     onblock: (username: string, deny: boolean) => void;
     /** a key the row with focus acts on: retry, cancel, open */
     onkey: (key: "retry" | "cancel" | "open", t: Transfer) => void;
@@ -44,6 +47,8 @@
     onselectgroup,
     ondetails,
     onremove,
+    ondelete,
+    oncancel,
     onblock,
     onkey
   }: Props = $props();
@@ -153,7 +158,7 @@
     else if (e.key === " ") onselect(current, false);
     else if (e.key === "Enter") ondetails(current);
     else if (e.key === "Delete")
-      onremove(selected.size > 1 ? rows.filter((t) => selected.has(t.id)) : [current]);
+      ondelete(selected.size > 1 ? rows.filter((t) => selected.has(t.id)) : [current]);
     else if (e.key === "r" || e.key === "R") onkey("retry", current);
     else if (e.key === "c" || e.key === "C") onkey("cancel", current);
     else if (e.key === "o" || e.key === "O") onkey("open", current);
@@ -229,6 +234,7 @@
             folded.has(sticky.key) ? folded.delete(sticky.key) : folded.add(sticky.key)}
           onselect={(on) => onselectgroup(sticky.group, on)}
           onremove={() => onremove(sticky.group.transfers)}
+          oncancel={() => oncancel(sticky.group.transfers)}
           onblock={(deny) => onblock(sticky.group.username, deny)} />
       </div>
     {/if}
@@ -270,6 +276,7 @@
             ontoggle={() => (folded.has(item.key) ? folded.delete(item.key) : folded.add(item.key))}
             onselect={(on) => onselectgroup(item.group, on)}
             onremove={() => onremove(item.group.transfers)}
+            oncancel={() => oncancel(item.group.transfers)}
             onblock={(deny) => onblock(item.group.username, deny)} />
         {:else}
           <TransferRow

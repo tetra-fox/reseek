@@ -168,11 +168,11 @@
     );
   };
 
-  /** Removes transfers, asking first for more than ten or any still running */
-  const remove = (transfers: Transfer[]) => {
+  /** Removes transfers, asking first for more than `many` or any still running */
+  const remove = (transfers: Transfer[], many = 10) => {
     const running = activeAmong(transfers);
     ask(
-      transfers.length > 10 || running > 0,
+      transfers.length > many || running > 0,
       `Remove ${plural(transfers.length, "transfer", "transfers")}?`,
       running
         ? `${running} still running ${running === 1 ? "is" : "are"} cancelled first.`
@@ -266,6 +266,8 @@
     onselectgroup={selectGroup}
     ondetails={(t) => (detailId = t.id)}
     onremove={remove}
+    ondelete={(transfers) => remove(transfers, 1)}
+    oncancel={cancel}
     onblock={blockUser}
     {onkey} />
 {/if}

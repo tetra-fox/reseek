@@ -42,12 +42,24 @@
     onselect: (on: boolean) => void;
     /** removes the group's transfers, asking first for many or running ones */
     onremove: () => void;
+    /** cancels the group's transfers, asking first when any is moving bytes */
+    oncancel: () => void;
     /** blocks the user, asking first; with `deny` their unfinished uploads are cancelled first */
     onblock: (deny: boolean) => void;
   };
 
-  let { group, store, direction, folded, ticked, ontoggle, onselect, onremove, onblock }: Props =
-    $props();
+  let {
+    group,
+    store,
+    direction,
+    folded,
+    ticked,
+    ontoggle,
+    onselect,
+    onremove,
+    oncancel,
+    onblock
+  }: Props = $props();
 
   const write = $derived(session.can("ReadWrite"));
   const list = $derived(group.transfers);
@@ -68,7 +80,7 @@
 
   /** Saves the group's local folder as a zip; only finished files are in it */
   const zip = () => {
-    if (local === null) return;
+    if (!local) return;
     if (list.some((t) => !isSucceeded(t.state))) toast("Only completed files are included");
     const name = local.split("/").pop() || "downloads";
     window.location.assign(
@@ -127,16 +139,7 @@
       </Button>
     {/if}
     {#if write && list.some((t) => isCancellable(t.state))}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Cancel the group"
-        onclick={() =>
-          void act(
-            store,
-            "cancel",
-            list.filter((t) => isCancellable(t.state)).map((t) => t.id)
-          )}>
+      <Button variant="ghost" size="icon-sm" aria-label="Cancel the group" onclick={oncancel}>
         <XIcon />
       </Button>
     {/if}
@@ -163,14 +166,17 @@
           onclick={() => openFolder(list)}>
           <FolderOpenIcon />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Download folder"
-          title="Download folder"
-          onclick={zip}>
-          <FileArchiveIcon />
-        </Button>
+        <!-- files directly in the downloads directory have no folder to zip -->
+        {#if local}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Download folder"
+            title="Download folder"
+            onclick={zip}>
+            <FileArchiveIcon />
+          </Button>
+        {/if}
       {/if}
     {/if}
     {#if write && direction === "upload" && group.kind === "user"}
