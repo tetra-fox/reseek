@@ -186,4 +186,30 @@ mod tests {
       "an answer to our request reached the listener"
     );
   }
+
+  /// Lets the judgement's task run until it waits again.
+  async fn settle() {
+    for _ in 0..10 {
+      tokio::task::yield_now().await;
+    }
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn ten_minutes_with_nobody_reaching_us_say_no_until_we_log_out() {
+    let state = crate::testing::state();
+    let (_inbound, counted) = watch::channel(InboundConnections::default());
+    let reachability = std::sync::Arc::new(Reachability::new(state.clone(), counted));
+    tokio::spawn(reachability.clone().follow(CancellationToken::new()));
+    let reachable = || state.current().server.listen.reachable;
+    reachability.logged_in();
+    tokio::time::sleep(WAITED - Duration::from_secs(1)).await;
+    settle().await;
+    assert_eq!(reachable(), Reachable::Unknown);
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    settle().await;
+    assert_eq!(reachable(), Reachable::No);
+    reachability.logged_out();
+    settle().await;
+    assert_eq!(reachable(), Reachable::Unknown);
+  }
 }
