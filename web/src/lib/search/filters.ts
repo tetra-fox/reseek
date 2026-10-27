@@ -27,12 +27,12 @@ const MINIMUMS: [RegExp, Minimum][] = [
   [/^(?:minfif|minfilesinfolder):(\d+)$/, "minFilesInFolder"]
 ];
 
-const FLAGS = {
-  iscbr: "isCBR",
-  isvbr: "isVBR",
-  islossless: "isLossless",
-  islossy: "isLossy"
-} as const;
+const FLAGS = new Map<string, "isCBR" | "isVBR" | "isLossless" | "isLossy">([
+  ["iscbr", "isCBR"],
+  ["isvbr", "isVBR"],
+  ["islossless", "isLossless"],
+  ["islossy", "isLossy"]
+]);
 
 /** What the help under the filter box shows, which is also its placeholder */
 export const FILTER_HELP =
@@ -60,8 +60,9 @@ export const parseFilters = (text: string): Filters => {
   const seen = new Set<Minimum>();
   for (const token of text.toLowerCase().split(/\s+/)) {
     if (!token) continue;
-    if (token in FLAGS) {
-      filters[FLAGS[token as keyof typeof FLAGS]] = true;
+    const flag = FLAGS.get(token);
+    if (flag) {
+      filters[flag] = true;
       continue;
     }
     const minimum = MINIMUMS.find(([pattern]) => pattern.test(token));

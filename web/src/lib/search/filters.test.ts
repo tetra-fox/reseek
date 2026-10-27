@@ -40,11 +40,11 @@ describe("parseFilters", () => {
   });
 
   it("takes flags and minimums only as whole tokens", () => {
-    const filters = parseFilters("-isvbr isvbrx minbr:1x MINBR:5 minbr:9");
+    const filters = parseFilters("-isvbr isvbrx minbr:1x MINBR:5 minbr:9 constructor __proto__");
     expect(filters).toMatchObject({
       isVBR: false,
       exclude: ["isvbr"],
-      include: ["isvbrx"],
+      include: ["isvbrx", "constructor", "__proto__"],
       minBitRate: 5
     });
   });
