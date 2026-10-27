@@ -1,12 +1,14 @@
-//! Running the daemon program for a test: on a free loopback port, with its directory, and
-//! stopped when the test is done with it.
+//! Running the daemon program for a test: on a loopback port the system picks, with its
+//! directory, and stopped when the test is done with it.
 
 #![allow(dead_code, reason = "each test binary uses a part of it")]
 
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, ChildStdout, Command, Stdio};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use api_client::Client;
@@ -21,7 +23,7 @@ use tokio::sync::broadcast;
 pub mod client;
 
 #[allow(unused_imports, reason = "each test binary uses a part of it")]
-pub use client::{peer, soulfind, transfers};
+pub use client::{free_port, peer, soulfind, transfers};
 
 /// How long a test waits for something that should happen promptly.
 pub const PATIENCE: Duration = Duration::from_secs(20);
@@ -45,15 +47,6 @@ pub async fn next_event<T>(
 /// The headless daemon program.
 pub const PROGRAM: &str = env!("CARGO_BIN_EXE_reseek-headless");
 
-/// A port nothing listens on, for a moment.
-pub fn free_port() -> u16 {
-  TcpListener::bind("127.0.0.1:0")
-    .unwrap()
-    .local_addr()
-    .unwrap()
-    .port()
-}
-
 /// The raw answer to a body-less request.
 pub fn send(port: u16, method: &str, path: &str) -> Option<String> {
   let mut stream = TcpStream::connect(("127.0.0.1", port)).ok()?;
@@ -73,18 +66,57 @@ pub struct Daemon {
   pub child: Child,
   /// the loopback port it serves HTTP on
   pub port: u16,
+  printed: Arc<Printed>,
+  reader: Option<JoinHandle<()>>,
+}
+
+/// What the daemon printed so far, read off its stdout as it is written so the pipe never
+/// fills up.
+#[derive(Default)]
+struct Printed {
+  text: Mutex<String>,
+  /// signalled at every line and when the output ends
+  more: Condvar,
+}
+
+impl Printed {
+  /// Appends every line of `stdout` until the daemon closes it.
+  fn read(&self, stdout: ChildStdout) {
+    for line in BufReader::new(stdout).lines() {
+      let Ok(line) = line else { break };
+      let mut text = self.text.lock().unwrap_or_else(PoisonError::into_inner);
+      text.push_str(&line);
+      text.push('\n');
+      self.more.notify_all();
+    }
+    self.more.notify_all();
+  }
+}
+
+/// How long the daemon may take to start listening and answer `/health`.
+const STARTUP: Duration = Duration::from_secs(20);
+
+/// The port in the log line the daemon writes once its HTTP listener is bound.
+fn listening_port(printed: &str) -> Option<u16> {
+  let line = printed
+    .lines()
+    .find(|line| line.contains("Listening for HTTP requests"))?;
+  let url = &line[line.find("url=http://")? + "url=http://".len()..];
+  let address = url.split('/').next()?;
+  address.rsplit_once(':')?.1.parse().ok()
 }
 
 impl Daemon {
-  /// Starts the daemon in `dir` on a free loopback port with `args` and only the variables in
-  /// `env`, and waits until it answers `/health`.
+  /// Starts the daemon in `dir` on a loopback port the system picks, with `args` and only the
+  /// variables in `env`, and waits until it answers `/health`.
   pub fn start(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Self {
-    Self::start_on(free_port(), dir, args, env)
+    Self::start_on(0, dir, args, env)
   }
 
-  /// Starts the daemon as [`Daemon::start`] does, on `port`.
+  /// Starts the daemon as [`Daemon::start`] does, on `port`. A daemon that exits before it
+  /// answers fails the test with what it printed.
   pub fn start_on(port: u16, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Self {
-    let child = Command::new(PROGRAM)
+    let mut child = Command::new(PROGRAM)
       // never the release feed, which a release build would read
       .args([
         "--app-dir",
@@ -92,6 +124,7 @@ impl Daemon {
         "-n",
         "--no-https",
         "--no-version-check",
+        "--no-color",
       ])
       .args([
         "--http-ip-address",
@@ -106,16 +139,57 @@ impl Daemon {
       .stderr(Stdio::piped())
       .spawn()
       .unwrap();
-    let daemon = Self { child, port };
+    let printed = Arc::new(Printed::default());
+    let stdout = child.stdout.take().unwrap();
+    let reader = std::thread::spawn({
+      let printed = printed.clone();
+      move || printed.read(stdout)
+    });
+    let mut daemon = Self {
+      child,
+      port,
+      printed,
+      reader: Some(reader),
+    };
     let started = Instant::now();
-    while send(port, "GET", "/health").is_none() {
-      assert!(
-        started.elapsed() < Duration::from_secs(20),
-        "never answered"
-      );
+    daemon.port = daemon.listening(started);
+    while send(daemon.port, "GET", "/health").is_none() {
+      daemon.still_running(started);
       std::thread::sleep(Duration::from_millis(50));
     }
     daemon
+  }
+
+  /// The port the daemon says it listens on, once it says so.
+  fn listening(&mut self, started: Instant) -> u16 {
+    loop {
+      let text = self
+        .printed
+        .text
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+      if let Some(port) = listening_port(&text) {
+        return port;
+      }
+      let (text, _) = self
+        .printed
+        .more
+        .wait_timeout(text, Duration::from_millis(50))
+        .unwrap_or_else(PoisonError::into_inner);
+      drop(text);
+      self.still_running(started);
+    }
+  }
+
+  /// Fails the test when the daemon exited, or took too long to start.
+  fn still_running(&mut self, started: Instant) {
+    if let Some(status) = self.child.try_wait().unwrap() {
+      panic!(
+        "the daemon exited with {status} before it answered:\n{}",
+        self.output()
+      );
+    }
+    assert!(started.elapsed() < STARTUP, "never answered");
   }
 
   /// The base URL to reach it at.
@@ -125,11 +199,15 @@ impl Daemon {
 
   /// Everything it printed, once it has exited.
   pub fn output(&mut self) -> String {
-    let mut log = String::new();
-    if let Some(mut stdout) = self.child.stdout.take() {
-      stdout.read_to_string(&mut log).unwrap();
+    if let Some(reader) = self.reader.take() {
+      reader.join().unwrap();
     }
-    log
+    self
+      .printed
+      .text
+      .lock()
+      .unwrap_or_else(PoisonError::into_inner)
+      .clone()
   }
 }
 
