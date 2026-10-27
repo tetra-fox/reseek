@@ -16,6 +16,7 @@
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
 
   import { api, byUser, type Schemas } from "#lib/api/client.js";
+  import { app } from "#lib/app.svelte.js";
   import { copyText } from "#lib/clipboard.svelte.js";
   import { clock } from "#lib/clock.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
@@ -50,6 +51,8 @@
   let { profile: p, refreshing, onrefresh, onchanged }: Props = $props();
 
   const name = $derived(p.username);
+  /** our own account, which can't be blocked */
+  const own = $derived(app.state?.user.username === name);
   const to = $derived(links(name));
   const write = $derived(session.can("ReadWrite"));
   const admin = $derived(session.can("Administrator"));
@@ -159,7 +162,9 @@
     <Button variant="outline" size="sm" disabled={refreshing} onclick={onrefresh}
       ><RefreshCwIcon />Refresh</Button>
     {#if write && p.known}
-      {#if p.block}
+      {#if own}
+        <!-- our own account is never blocked -->
+      {:else if p.block}
         <Button
           variant="outline"
           size="sm"
