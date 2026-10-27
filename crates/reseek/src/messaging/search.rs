@@ -10,7 +10,7 @@ use rusqlite::{Connection, params_from_iter};
 
 use super::Messaging;
 use crate::api::error::ApiError;
-use crate::db::{DbError, read_timestamp};
+use crate::db::read_timestamp;
 
 /// Where a snippet's match starts and ends before it is escaped; no message holds them.
 const OPEN: &str = "\u{1}";
@@ -119,16 +119,33 @@ fn search(conn: &Connection, query: &MessageSearchQuery) -> rusqlite::Result<Mes
   })
 }
 
-/// Runs `q` against an empty full-text index in memory, with the message tables' column and
-/// tokenizer, so a failure there is the query's own and never the database's.
-fn check_query(q: &str) -> rusqlite::Result<()> {
-  let conn = Connection::open_in_memory()?;
-  conn.execute_batch("CREATE VIRTUAL TABLE probe USING fts5(message, tokenize = 'unicode61')")?;
-  conn.query_row(
-    "SELECT COUNT(*) FROM probe WHERE probe MATCH ?1",
-    [q],
-    |_| Ok(()),
-  )
+/// The full-text indexes of the messages.
+const INDEXES: [&str; 2] = ["private_messages_fts", "room_messages_fts"];
+
+/// Runs `q` against empty copies, in memory, of the message indexes as `conn` defines them, so
+/// a failure there is the query's own and never the database's. The outer error is the
+/// database's: the indexes could not be read or copied.
+fn check_query(conn: &Connection, q: &str) -> rusqlite::Result<Result<(), rusqlite::Error>> {
+  let probe = Connection::open_in_memory()?;
+  for index in INDEXES {
+    let definition: String = conn.query_row(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",
+      [index],
+      |row| row.get(0),
+    )?;
+    probe.execute_batch(&definition)?;
+  }
+  for index in INDEXES {
+    let matched = probe.query_row(
+      &format!("SELECT COUNT(*) FROM {index} WHERE {index} MATCH ?1"),
+      [q],
+      |_| Ok(()),
+    );
+    if let Err(e) = matched {
+      return Ok(Err(e));
+    }
+  }
+  Ok(Ok(()))
 }
 
 impl Messaging {
@@ -136,20 +153,15 @@ impl Messaging {
     &self,
     query: MessageSearchQuery,
   ) -> Result<MessageSearchResults, ApiError> {
-    let q = query.q.clone();
-    let checked = tokio::task::spawn_blocking(move || check_query(&q))
-      .await
-      .map_err(|e| ApiError::internal(DbError::Task(e.to_string())))?;
-    if let Err(e) = checked {
-      return Err(ApiError::bad_request(format!(
-        "q is not a valid search: {e}"
-      )));
-    }
-    self
+    let found = self
       .db
-      .read(move |conn| search(conn, &query))
+      .read(move |conn| match check_query(conn, &query.q)? {
+        Ok(()) => search(conn, &query).map(Ok),
+        Err(refused) => Ok(Err(refused)),
+      })
       .await
-      .map_err(ApiError::internal)
+      .map_err(ApiError::internal)?;
+    found.map_err(|e| ApiError::bad_request(format!("q is not a valid search: {e}")))
   }
 }
 
@@ -231,12 +243,21 @@ mod tests {
       .await
       .unwrap();
     assert_eq!(rooms_only.total, 1);
-    assert!(check_query("\"pink floyd\" OR message:animals").is_ok());
-    assert!(
-      check_query("\"open").is_err(),
-      "an unclosed phrase is not a query"
+    let checked = db
+      .read(|conn| {
+        Ok([
+          check_query(conn, "\"pink floyd\" OR message:animals")?.is_ok(),
+          check_query(conn, "\"open")?.is_ok(),
+          check_query(conn, "nosuchcolumn:x")?.is_ok(),
+        ])
+      })
+      .await
+      .unwrap();
+    assert_eq!(
+      checked,
+      [true, false, false],
+      "a column the indexes have, an unclosed phrase, a column they lack"
     );
-    assert!(check_query("nosuchcolumn:x").is_err());
   }
 
   #[tokio::test]
