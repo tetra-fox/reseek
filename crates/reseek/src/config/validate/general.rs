@@ -345,8 +345,10 @@ mod tests {
 
   #[test]
   fn a_configured_room_the_server_would_refuse_is_refused_with_why() {
-    let mut options = Options::default();
-    options.rooms = vec!["indie".into(), "two  spaces".into()];
+    let options = Options {
+      rooms: vec!["indie".into(), "two  spaces".into()],
+      ..Options::default()
+    };
     assert_eq!(
       problems(&options),
       [(
