@@ -38,7 +38,13 @@ describe("your own profile page", () => {
 
   it("previews a picked picture and changed text, and saves both", async () => {
     session.principal = { name: "me", role: "Administrator" } as never;
-    app.state = { user: { username: "me" } } as never;
+    app.state = {
+      user: {
+        username: "me",
+        statistics: { averageSpeed: 0, directoryCount: 2, fileCount: 30, uploadCount: 0 }
+      },
+      server: { isLoggedIn: true }
+    } as never;
     const view = structuredClone(fixture) as typeof fixture;
     (view.values as Record<string, unknown>).remote_configuration = true;
     for (const file of view.files) file.writable = true;
@@ -70,6 +76,9 @@ describe("your own profile page", () => {
       "blob:picked"
     );
     expect(document.body.textContent).toContain("plays bass");
+    // the card shows our own presence and share counts, not the directory's unknowns
+    expect(document.body.textContent).toContain("Online");
+    expect(document.body.textContent).toContain("30 files");
     expect(net.requests.filter((r) => r.method === "PUT")).toEqual([]);
 
     [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Save")!.click();
