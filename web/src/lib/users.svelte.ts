@@ -49,6 +49,26 @@ class Users {
     return loading;
   }
 
+  /**
+   * The usernames blocked now, read a page at a time from the directory; their summaries are
+   * kept like any other. Null when the directory couldn't be read
+   */
+  blocked = async (): Promise<Set<string> | null> => {
+    const names = new Set<string>();
+    for (let offset = 0; ;) {
+      const outcome = await call(() =>
+        api.GET("/api/v0/users", { params: { query: { blocked: true, offset, limit: 500 } } })
+      );
+      if (!outcome.ok) return null;
+      for (const summary of outcome.data.users) {
+        this.#put(summary);
+        names.add(summary.username);
+      }
+      offset += outcome.data.users.length;
+      if (!outcome.data.users.length || offset >= outcome.data.total) return names;
+    }
+  };
+
   clear() {
     this.#entries.clear();
   }
