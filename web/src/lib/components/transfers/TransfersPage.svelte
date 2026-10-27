@@ -161,7 +161,7 @@
     const active = activeAmong(transfers);
     ask(
       active > 0,
-      `Cancel ${active} active transfers?`,
+      `Cancel ${plural(active, "active transfer", "active transfers")}?`,
       "They stop where they are.",
       "Cancel them",
       () => void runBulk("cancel", transfers)
