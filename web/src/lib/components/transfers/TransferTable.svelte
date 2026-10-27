@@ -6,7 +6,7 @@
   import { app } from "#lib/app.svelte.js";
   import { parseDuration } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
-  import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
+  import { ListControl } from "#lib/list.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
   import { COLUMNS, type ColumnId } from "#lib/transfers/columns.js";
@@ -24,10 +24,8 @@
     direction: Direction;
     view: ViewSettings;
     folded: SvelteSet<string>;
+    /** the selected transfers' ids, which the page acts on */
     selected: SvelteSet<string>;
-    /** ticks a row; with `range` every row from the last ticked one to it */
-    onselect: (t: Transfer, range: boolean) => void;
-    onselectgroup: (group: Group, on: boolean) => void;
     ondetails: (t: Transfer) => void;
     onremove: (transfers: Transfer[]) => void;
     /** removes with the Delete key, which asks first for more than one */
@@ -47,8 +45,6 @@
     view,
     folded,
     selected,
-    onselect,
-    onselectgroup,
     ondetails,
     onremove,
     ondelete,
@@ -57,8 +53,6 @@
     onkey,
     drawerOpen
   }: Props = $props();
-
-  const uid = $props.id();
 
   /** lines drawn beyond the visible ones, above and below */
   const OVERSCAN = 10;
@@ -97,8 +91,8 @@
     }
     return null;
   });
-  const rows = $derived(items.flatMap((i) => (i.type === "row" ? [i.transfer] : [])));
   const flat = $derived(view.groupBy === "flat" || view.groupBy === "batch");
+  const ids = (group: Group) => group.transfers.map((t) => t.id);
   const ticked = (group: Group) => group.transfers.filter((t) => selected.has(t.id)).length;
   const label = (id: ColumnId) => COLUMNS.find((c) => c.id === id)?.label ?? id;
 
@@ -142,145 +136,52 @@
     view.sort = { id: key, dir: view.sort.id === key && view.sort.dir === "asc" ? "desc" : "asc" };
   };
 
-  /*
-   * The focus model. The grid takes DOM focus on a click outside a control and on arrow moves;
-   * rows are not focusable. A control inside a row keeps focus while its row is rendered, and
-   * focus returns to the grid only when that row scrolls out of the rendered range. The focused
-   * line, a row or a group header, is named by its key in `items` and looked up there whenever
-   * it is used, so filters, regrouping and new frames never leave it pointing at a stale copy.
-   * When that line leaves `items`, the row now in its place takes over: the first row at or
-   * after its index, else the nearest row before it. Moving is by position in `items`: down to
-   * the next row, up to the previous one, skipping headers. `aria-activedescendant` names the
-   * focused line only while it is rendered. Focus also returns to the grid when the line
-   * holding it leaves the list: its control is gone, and the browser would drop focus to the page.
-   */
-  let focusedKey = $state<string | null>(null);
-  /** the focused line's index the last time it was in `items`, for when it leaves */
-  let lastIndex = 0;
-  const found = $derived(focusedKey === null ? -1 : items.findIndex((i) => i.key === focusedKey));
-  const focusIndex = $derived.by(() => {
-    if (focusedKey === null || !items.length) return -1;
-    if (found !== -1) return found;
-    const after = nextRow(lastIndex - 1, 1);
-    return after !== -1 ? after : nextRow(Math.min(lastIndex, items.length), -1);
-  });
-  const focusedItem = $derived(focusIndex === -1 ? null : items[focusIndex]);
-  // remembers where the focused line is, and hands the focus to the row in a lost line's place
-  $effect(() => {
-    if (found !== -1) lastIndex = found;
-    else if (focusedItem) focusedKey = focusedItem.key;
-  });
-  /** the control in the grid that last took DOM focus, null while the grid itself has it */
-  let held: Element | null = null;
-  // a frame that removed the line holding focus left the page focused; the grid takes it back
-  $effect(() => {
-    void items;
-    const active = document.activeElement;
-    if (held && !held.isConnected && (!active || active === document.body)) focus();
+  const list = new ListControl<Item>({
+    lines: () => items,
+    key: (item) => item.key,
+    id: (item) => (item.type === "row" ? item.transfer.id : null),
+    group: (item) => item.group?.transfers.map((t) => t.id) ?? null,
+    onopen: (item) => {
+      if (item.type === "row") ondetails(item.transfer);
+    },
+    onkey: (e, item) => {
+      if (item.type !== "row") return false;
+      const t = item.transfer;
+      const key = e.key.toLowerCase();
+      if (!session.can("ReadWrite") && ["delete", "r", "c"].includes(key)) return false;
+      if (key === "delete") {
+        ondelete(selected.size > 1 ? store.list.rows.filter((r) => selected.has(r.id)) : [t]);
+      } else if (key === "r") onkey("retry", t);
+      else if (key === "c") onkey("cancel", t);
+      else if (key === "o") onkey("open", t);
+      else return false;
+      return true;
+    },
+    layer: () => drawerOpen,
+    // the pinned copy of a group header is rendered only while its group is the pinned one
+    rendered: (index, element) =>
+      element?.dataset.pinned ? sticky?.key === items[index]?.key : index >= start && index < end,
+    // scrolled into view under the column header and the pinned group header
+    reveal: (index) => {
+      if (!grid) return;
+      const top = rowsTop + index * row;
+      const pinned = view.groupBy === "flat" ? 0 : row;
+      if (top < grid.scrollTop + rowsTop + pinned) grid.scrollTop = top - rowsTop - pinned;
+      else if (top + row > grid.scrollTop + height) grid.scrollTop = top + row - height;
+    },
+    // svelte-ignore state_referenced_locally
+    selected
   });
 
   /** Gives the grid DOM focus, without scrolling */
-  export const focus = () => {
-    held = null;
-    grid?.focus({ preventScroll: true });
-  };
+  export const focus = list.focus;
 
   /** Whether `element` is inside the table */
-  export const has = (element: Element | null) => !!element && !!grid?.contains(element);
+  export const has = list.has;
 
   const activeId = $derived(
-    sticky && focusedItem?.key === sticky.key
-      ? `${uid}-pinned`
-      : focusIndex >= start && focusIndex < end
-        ? `${uid}-${focusIndex}`
-        : undefined
+    sticky && list.focusedKey === sticky.key ? `${list.uid}-pinned` : list.activeId
   );
-
-  /** Makes the line `target` is in the focused one: a click or a focus there moves the focus to it */
-  const takeLine = (target: EventTarget | null) => {
-    const line =
-      target instanceof Element ? target.closest<HTMLElement>("[data-line]")?.dataset.line : null;
-    if (line) focusedKey = line;
-  };
-
-  /** Focuses the row at `index` in `items`, back on the grid, scrolled into view under the headers */
-  const moveTo = (index: number) => {
-    const item = items[index];
-    if (item?.type !== "row" || !grid) return;
-    focusedKey = item.key;
-    if (document.activeElement !== grid) grid.focus({ preventScroll: true });
-    const top = rowsTop + index * row;
-    const pinned = view.groupBy === "flat" ? 0 : row;
-    if (top < grid.scrollTop + rowsTop + pinned) grid.scrollTop = top - rowsTop - pinned;
-    else if (top + row > grid.scrollTop + height) grid.scrollTop = top + row - height;
-  };
-
-  /** The index of the nearest row after (`step` 1) or before (-1) `from`, -1 when none */
-  const nextRow = (from: number, step: 1 | -1) => {
-    for (let i = from + step; i >= 0 && i < items.length; i += step) {
-      if (items[i].type === "row") return i;
-    }
-    return -1;
-  };
-
-  /**
-   * Keeps the scroll position, and gives focus back to the grid when the control that has it is
-   * in a line about to stop being rendered: a row outside the rendered range, or a pinned header
-   * that is no longer the pinned one. A control the browser scrolled into view keeps it
-   */
-  const scrolled = (e: Event & { currentTarget: HTMLDivElement }) => {
-    scrollTop = e.currentTarget.scrollTop;
-    const active = document.activeElement;
-    if (!active || active === grid || !grid?.contains(active)) return;
-    const line = active.closest<HTMLElement>("[data-line]");
-    if (!line) return;
-    const key = line.dataset.line;
-    const at = items.findIndex((i) => i.key === key);
-    const gone = line.dataset.pinned ? sticky?.key !== key : at < start || at >= end;
-    if (gone) grid.focus({ preventScroll: true });
-  };
-
-  /**
-   * The table's keys. A focused control keeps the keys it handles (`keepsKey`); the rest act on
-   * the line the control is in, else on the focused line. On a row every key acts; on a group
-   * header only Ctrl/Cmd+A and Space, which select the group
-   */
-  const keydown = (e: KeyboardEvent) => {
-    if (keepsKey(e)) return;
-    takeLine(e.target);
-    const item = focusedItem;
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "a") {
-      const group = item?.type === "group" ? item.group : (item?.group ?? null);
-      for (const t of group?.transfers ?? rows) selected.add(t.id);
-    } else if (withModifier(e)) return;
-    else if (e.key === "ArrowDown") {
-      const to = nextRow(focusIndex, 1);
-      if (to !== -1) moveTo(to);
-    } else if (e.key === "ArrowUp") {
-      const to = focusIndex === -1 ? nextRow(-1, 1) : nextRow(focusIndex, -1);
-      if (to !== -1) moveTo(to);
-    } else if (e.key === "Escape") {
-      // the drawer, a menu, a dialog or a card closes first; an Escape that closes nothing clears
-      if (drawerOpen || layerOpen()) return;
-      selected.clear();
-    } else if (!item) return;
-    else if (item.type === "group") {
-      if (e.key !== " ") return;
-      const all = item.group.transfers.every((t) => selected.has(t.id));
-      onselectgroup(item.group, !all);
-    } else if (e.key === " ") onselect(item.transfer, false);
-    else if (e.key === "Enter") ondetails(item.transfer);
-    else if (!session.can("ReadWrite") && ["Delete", "r", "R", "c", "C"].includes(e.key)) return;
-    else if (e.key === "Delete")
-      ondelete(
-        selected.size > 1 ? store.list.rows.filter((t) => selected.has(t.id)) : [item.transfer]
-      );
-    else if (e.key === "r" || e.key === "R") onkey("retry", item.transfer);
-    else if (e.key === "c" || e.key === "C") onkey("cancel", item.transfer);
-    else if (e.key === "o" || e.key === "O") onkey("open", item.transfer);
-    else return;
-    e.preventDefault();
-  };
 </script>
 
 <div
@@ -294,13 +195,11 @@
   tabindex="0"
   bind:this={grid}
   bind:clientHeight={height}
-  onscroll={scrolled}
-  onpointerdown={(e) => takeLine(e.target)}
-  onfocusin={(e) => {
-    held = e.target === grid ? null : (e.target as Element);
-    takeLine(e.target);
+  onscroll={(e) => {
+    scrollTop = e.currentTarget.scrollTop;
+    list.scrolled();
   }}
-  onkeydown={keydown}>
+  {@attach list.attach}>
   <div class="sticky top-0 z-10" style:min-width={`${width}px`} bind:offsetHeight={rowsTop}>
     <div
       role="row"
@@ -350,9 +249,9 @@
       <div
         class={[
           "absolute inset-x-0 top-full",
-          focusedKey === sticky.key && "ring-1 ring-accent ring-inset"
+          list.focusedKey === sticky.key && "ring-1 ring-accent ring-inset"
         ]}
-        id={`${uid}-pinned`}
+        id={`${list.uid}-pinned`}
         style:height={`${row}px`}
         data-line={sticky.key}
         data-pinned="true">
@@ -364,7 +263,7 @@
           ticked={ticked(sticky.group)}
           ontoggle={() =>
             folded.has(sticky.key) ? folded.delete(sticky.key) : folded.add(sticky.key)}
-          onselect={(on) => onselectgroup(sticky.group, on)}
+          onselect={(on) => list.setAll(ids(sticky.group), on)}
           onremove={() => onremove(sticky.group.transfers)}
           oncancel={() => oncancel(sticky.group.transfers)}
           onblock={(deny) => onblock(sticky.group.username, deny)} />
@@ -381,7 +280,7 @@
       <div
         class={[
           "absolute inset-x-0",
-          focusedKey === item.key && "ring-1 ring-accent ring-inset",
+          list.isFocused(item) && "ring-1 ring-accent ring-inset",
           item.type === "row" && [
             "group grid items-center border-b hover:bg-hover",
             item.transfer.state.startsWith("Completed, ") &&
@@ -396,10 +295,8 @@
         style:height={`${row}px`}
         style:grid-template-columns={item.type === "row" ? template : undefined}
         role="row"
-        id={`${uid}-${start + i}`}
-        aria-selected={item.type === "row" ? selected.has(item.transfer.id) : undefined}
-        data-id={item.key}
-        data-line={item.key}>
+        {...list.line(item, start + i)}
+        data-id={item.key}>
         {#if item.type === "group"}
           <GroupHeader
             group={item.group}
@@ -408,7 +305,7 @@
             folded={folded.has(item.key)}
             ticked={ticked(item.group)}
             ontoggle={() => (folded.has(item.key) ? folded.delete(item.key) : folded.add(item.key))}
-            onselect={(on) => onselectgroup(item.group, on)}
+            onselect={(on) => list.setAll(ids(item.group), on)}
             onremove={() => onremove(item.group.transfers)}
             oncancel={() => oncancel(item.group.transfers)}
             onblock={(deny) => onblock(item.group.username, deny)} />
@@ -421,7 +318,7 @@
             selected={selected.has(item.transfer.id)}
             speeds={store.speeds.get(item.transfer.id) ?? []}
             around={item.group?.transfers ?? [item.transfer]}
-            onselect={(range) => onselect(item.transfer, range)}
+            onselect={(range) => list.tick(item.transfer.id, range)}
             ondetails={() => ondetails(item.transfer)}
             onremove={() => onremove([item.transfer])}
             onblock={(deny) => onblock(item.transfer.username, deny)} />

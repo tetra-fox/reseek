@@ -25,14 +25,7 @@
     type Transfer
   } from "#lib/transfers/states.js";
   import { downloads, uploads } from "#lib/transfers/transfers.svelte.js";
-  import {
-    type Group,
-    inStates,
-    type Item,
-    layout,
-    sortTransfers,
-    textFilter
-  } from "#lib/transfers/view.js";
+  import { inStates, type Item, layout, sortTransfers, textFilter } from "#lib/transfers/view.js";
   import { users } from "#lib/users.svelte.js";
 
   import AddDownload from "./AddDownload.svelte";
@@ -59,7 +52,6 @@
   let working = $state(false);
   let adding = $state(false);
   let detailId = $state<string | null>(null);
-  let anchor: string | null = null;
   const folded = new SvelteSet<string>();
   const selected = new SvelteSet<string>();
   let confirm = $state<{ title: string; body: string; label: string; run: () => void } | null>(
@@ -213,27 +205,6 @@
             ))
     );
 
-  const select = (t: Transfer, range: boolean) => {
-    if (range && anchor) {
-      const from = rows.findIndex((r) => r.id === anchor);
-      const to = rows.findIndex((r) => r.id === t.id);
-      if (from !== -1 && to !== -1) {
-        for (const r of rows.slice(Math.min(from, to), Math.max(from, to) + 1)) selected.add(r.id);
-        return;
-      }
-    }
-    anchor = t.id;
-    if (selected.has(t.id)) selected.delete(t.id);
-    else selected.add(t.id);
-  };
-
-  const selectGroup = (group: Group, on: boolean) => {
-    for (const t of group.transfers) {
-      if (on) selected.add(t.id);
-      else selected.delete(t.id);
-    }
-  };
-
   /** A row key, only where the row's own buttons and menu offer the same */
   const onkey = (key: "retry" | "cancel" | "open", t: Transfer) => {
     if (!rowActions(t, direction)[key]) return;
@@ -280,8 +251,6 @@
     {view}
     {folded}
     {selected}
-    onselect={select}
-    onselectgroup={selectGroup}
     ondetails={(t) => (detailId = t.id)}
     onremove={remove}
     ondelete={(transfers) => remove(transfers, 1)}

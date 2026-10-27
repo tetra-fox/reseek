@@ -17,7 +17,11 @@ export default defineConfig({
   ],
   // the svelte client build, which component tests mount into jsdom
   resolve: process.env.VITEST ? { conditions: ["browser"] } : undefined,
-  test: { include: ["src/**/*.test.ts"], environment: "jsdom" },
+  test: {
+    include: ["src/**/*.test.ts"],
+    environment: "jsdom",
+    setupFiles: ["src/lib/testing/setup.ts"]
+  },
   server: {
     // same origin as the dev UI, so the session cookie and the event stream work without CORS
     proxy: { "/api": { target: process.env.RESEEK_API ?? "http://localhost:5030" } }
