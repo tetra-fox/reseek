@@ -119,22 +119,37 @@ fn search(conn: &Connection, query: &MessageSearchQuery) -> rusqlite::Result<Mes
   })
 }
 
+/// Runs `q` against an empty full-text index in memory, with the message tables' column and
+/// tokenizer, so a failure there is the query's own and never the database's.
+fn check_query(q: &str) -> rusqlite::Result<()> {
+  let conn = Connection::open_in_memory()?;
+  conn.execute_batch("CREATE VIRTUAL TABLE probe USING fts5(message, tokenize = 'unicode61')")?;
+  conn.query_row(
+    "SELECT COUNT(*) FROM probe WHERE probe MATCH ?1",
+    [q],
+    |_| Ok(()),
+  )
+}
+
 impl Messaging {
   pub(super) async fn search(
     &self,
     query: MessageSearchQuery,
   ) -> Result<MessageSearchResults, ApiError> {
+    let q = query.q.clone();
+    let checked = tokio::task::spawn_blocking(move || check_query(&q))
+      .await
+      .map_err(|e| ApiError::internal(DbError::Task(e.to_string())))?;
+    if let Err(e) = checked {
+      return Err(ApiError::bad_request(format!(
+        "q is not a valid search: {e}"
+      )));
+    }
     self
       .db
       .read(move |conn| search(conn, &query))
       .await
-      .map_err(|e| match e {
-        // the query is the user's own full-text syntax, which SQLite judges
-        DbError::Sqlite(e) if e.to_string().contains("fts5") => {
-          ApiError::bad_request(format!("q is not a valid search: {e}"))
-        }
-        other => ApiError::internal(other),
-      })
+      .map_err(ApiError::internal)
   }
 }
 
@@ -216,9 +231,25 @@ mod tests {
       .await
       .unwrap();
     assert_eq!(rooms_only.total, 1);
-    let bad = db
-      .read(|conn| search(conn, &query("\"open", MessageSearchKind::All)))
-      .await;
-    assert!(bad.is_err(), "an unclosed phrase is not a query");
+    assert!(check_query("\"pink floyd\" OR message:animals").is_ok());
+    assert!(
+      check_query("\"open").is_err(),
+      "an unclosed phrase is not a query"
+    );
+    assert!(check_query("nosuchcolumn:x").is_err());
+  }
+
+  #[tokio::test]
+  async fn a_query_sqlite_cannot_read_is_the_callers_mistake() {
+    let app = crate::testing::app(
+      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
+      &[],
+    )
+    .await;
+    let get =
+      |q: &str| crate::testing::request("GET", &format!("/api/v0/messages/search?q={q}"), None);
+    let bad = app.send(get("%22open")).await;
+    assert_eq!(bad.status, 400, "{:?}", bad.body);
+    assert_eq!(app.send(get("floyd")).await.status, 200);
   }
 }
