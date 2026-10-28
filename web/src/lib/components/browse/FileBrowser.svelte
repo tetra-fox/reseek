@@ -143,7 +143,8 @@
           disabled={!connected || downloading || !node.totalFileCount}
           onclick={() => void downloadFolder()}>
           <DownloadIcon />Download this folder
-          <span class="font-normal text-fg-muted">
+          <!-- a phone leaves the count to the folder's line in the tree above -->
+          <span class="font-normal text-fg-muted max-md:hidden">
             {plural(node.totalFileCount, "file", "files")}, {formatBytes(node.totalBytes)}
           </span>
         </Button>
