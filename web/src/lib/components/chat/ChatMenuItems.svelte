@@ -6,8 +6,9 @@
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import HighlighterIcon from "@lucide/svelte/icons/highlighter";
   import LogOutIcon from "@lucide/svelte/icons/log-out";
-  import PinIcon from "@lucide/svelte/icons/pin";
   import UserIcon from "@lucide/svelte/icons/user";
+  import UserCheckIcon from "@lucide/svelte/icons/user-check";
+  import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import XIcon from "@lucide/svelte/icons/x";
 
   import { root, type Schemas } from "#lib/api/client.js";
@@ -21,6 +22,7 @@
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
+  import { BUDDY } from "#lib/wording.js";
 
   // what can be done to a conversation or a room, for its row's menu and its pane's
   let { target }: { target: Target } = $props();
@@ -98,7 +100,7 @@
     ><FolderOpenIcon />Browse shares</Menu.Item>
   {#if write}
     <Menu.Item onSelect={() => void pin(target.name, !summary?.pinned).then(report)}>
-      <PinIcon />{summary?.pinned ? "Unpin" : "Pin"}
+      {#if summary?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
     </Menu.Item>
   {/if}
 {/if}

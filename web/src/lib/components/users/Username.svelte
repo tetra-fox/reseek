@@ -4,11 +4,11 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
-  import PinIcon from "@lucide/svelte/icons/pin";
-  import PinOffIcon from "@lucide/svelte/icons/pin-off";
   import SearchIcon from "@lucide/svelte/icons/search";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
   import UserIcon from "@lucide/svelte/icons/user";
+  import UserCheckIcon from "@lucide/svelte/icons/user-check";
+  import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import { DropdownMenu, Popover } from "bits-ui";
 
   import { Busy } from "#lib/busy.svelte.js";
@@ -20,6 +20,7 @@
   import { session } from "#lib/session.svelte.js";
   import { users } from "#lib/users.svelte.js";
   import { cn } from "#lib/utils.js";
+  import { BUDDY } from "#lib/wording.js";
 
   import { links, pin } from "./actions";
   import { blocking, unblock } from "./block.svelte";
@@ -91,7 +92,8 @@
   };
 
   const enter = (e: PointerEvent) => {
-    // touch has no hover card: a tap follows the link and a long press opens the menu
+    // touch has no hover card: a tap is a click, which opens the card on a name with `card` and
+    // follows the link elsewhere, and a long press opens the menu
     if (e.pointerType === "touch") return;
     if (active === "card") clearTimeout(timer);
     else if (!active) later(() => show("card"), OPEN_DELAY_MS);
@@ -222,7 +224,7 @@
       {#if readWrite}
         <Menu.Separator />
         <Menu.Item onSelect={togglePin}>
-          {#if user?.pinned}<PinOffIcon />Unpin{:else}<PinIcon />Pin{/if}
+          {#if user?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
         </Menu.Item>
         <Menu.Item onSelect={blockOrAsk}>
           {#if user?.block}<ShieldCheckIcon />Unblock{:else}<BanIcon />Block{/if}
