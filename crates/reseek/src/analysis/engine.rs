@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
 use super::decode::{Claimed, Decoder, Filled};
-use super::measure::{Analyser, FFT_SIZE, Scale, Window};
+use super::measure::{Analyser, FFT_SIZE, Window};
 use super::totals::Totals;
 
 /// How one analysis runs.
@@ -24,8 +24,6 @@ pub(super) struct Settings {
   pub max_full_seconds: f64,
   /// how many windows a longer file is analysed at
   pub sampled_windows: usize,
-  /// how the spectrogram's columns are drawn
-  pub scale: Scale,
   /// when the analysis stops with what it has
   pub deadline: Instant,
   /// where the analysis reports how far it is, in thousandths of the file
@@ -120,7 +118,7 @@ pub(super) fn measure(
   let claimed = decoder.claimed.clone();
   let rate = claimed.sample_rate as usize;
   let stated = claimed.frames.map(|frames| frames as f64 / rate as f64);
-  let mut analyser = Analyser::new(claimed.sample_rate, settings.scale, claimed.bit_depth);
+  let mut analyser = Analyser::new(claimed.sample_rate, claimed.bit_depth);
   let mut buffer = vec![Vec::with_capacity(rate); decoder.channels];
   let mut measured = Measured {
     duration: stated.unwrap_or(0.0),

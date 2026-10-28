@@ -4,7 +4,7 @@
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
-  RunAnalysisQuery, SetAnalysisOverride, SpectrogramQuery, WindowSpectrum,
+  RunAnalysisQuery, SetAnalysisOverride, SpectrogramQuery, WindowSpectrum, WindowSpectrumQuery,
 };
 use api_types::files::FileRoot;
 use axum::extract::State;
@@ -129,12 +129,7 @@ async fn report_file(
   Query(query): Query<AnalysisReportQuery>,
 ) -> Result<Json<AudioAnalysis>, ApiError> {
   let target = file(&name, &path)?;
-  app
-    .services
-    .analysis
-    .report(target, query.windows)
-    .await
-    .map(Json)
+  app.services.analysis.report(target, query).await.map(Json)
 }
 
 /// A succeeded download's analysis report.
@@ -158,12 +153,7 @@ async fn report_download(
   Query(query): Query<AnalysisReportQuery>,
 ) -> Result<Json<AudioAnalysis>, ApiError> {
   let target = FileTarget::Download { username, id };
-  app
-    .services
-    .analysis
-    .report(target, query.windows)
-    .await
-    .map(Json)
+  app.services.analysis.report(target, query).await.map(Json)
 }
 
 /// A file's spectrogram as a PNG image. A link token does not load it; the session does.
@@ -377,7 +367,8 @@ async fn cancel_job(
   params(
     ("root" = FileRoot, Path, description = "the directory root"),
     ("path" = String, Path, description = "the file's path under the root, base64"),
-    ("index" = u32, Path, description = "the window's position in the report's windows")
+    ("index" = u32, Path, description = "the window's position in the report's windows"),
+    WindowSpectrumQuery
   ),
   responses(
     (status = 200, body = WindowSpectrum), (status = 400, body = api_types::ErrorBody),
@@ -389,9 +380,15 @@ async fn window_file(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
   Path((name, path, index)): Path<(String, String, u32)>,
+  Query(query): Query<WindowSpectrumQuery>,
 ) -> Result<Json<WindowSpectrum>, ApiError> {
   let target = file(&name, &path)?;
-  app.services.analysis.window(target, index).await.map(Json)
+  app
+    .services
+    .analysis
+    .window(target, index, query)
+    .await
+    .map(Json)
 }
 
 /// The spectrum of one window of a succeeded download's analysis.
@@ -400,7 +397,8 @@ async fn window_file(
   params(
     ("username" = String, Path, description = "the peer"),
     ("id" = Uuid, Path, description = "the download's id"),
-    ("index" = u32, Path, description = "the window's position in the report's windows")
+    ("index" = u32, Path, description = "the window's position in the report's windows"),
+    WindowSpectrumQuery
   ),
   responses(
     (status = 200, body = WindowSpectrum), (status = 400, body = api_types::ErrorBody),
@@ -412,7 +410,13 @@ async fn window_download(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
   Path((username, id, index)): Path<(String, Uuid, u32)>,
+  Query(query): Query<WindowSpectrumQuery>,
 ) -> Result<Json<WindowSpectrum>, ApiError> {
   let target = FileTarget::Download { username, id };
-  app.services.analysis.window(target, index).await.map(Json)
+  app
+    .services
+    .analysis
+    .window(target, index, query)
+    .await
+    .map(Json)
 }

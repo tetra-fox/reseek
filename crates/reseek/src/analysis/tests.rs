@@ -11,14 +11,12 @@ use tokio_util::sync::CancellationToken;
 
 use super::engine::{self, Settings};
 use super::fixtures::{self, Audio, lo_fi, music, music_for, pink, tone};
-use super::measure::Scale;
 use super::reading::{self, Reading};
 
 fn settings() -> Settings {
   Settings {
     max_full_seconds: 900.0,
     sampled_windows: 240,
-    scale: Scale::Log,
     deadline: Instant::now() + Duration::from_secs(600),
     progress: None,
   }

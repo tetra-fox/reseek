@@ -4,7 +4,7 @@
 //! by shutdown leaves nothing behind.
 
 use std::collections::VecDeque;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Instant;
@@ -20,11 +20,10 @@ use uuid::Uuid;
 
 use super::engine::{self, Settings};
 use super::measure::Scale;
-use super::render::{Picture, render};
+use super::render::{Picture, Shown, render};
 use super::report::{assemble, image_name, modified_text};
-use super::{Analysis, reading, store};
+use super::{Analysis, images, reading, store};
 use crate::config::Options;
-use crate::config::enums::SpectrogramScale;
 use crate::files::LocalFile;
 use crate::sync::lock;
 
@@ -85,20 +84,6 @@ impl Queue {
   }
 }
 
-/// The images of a report: with guide lines, and without.
-pub(super) fn image_paths(dir: &Path, name: &str) -> (PathBuf, PathBuf) {
-  (
-    dir.join(format!("{name}.png")),
-    dir.join(format!("{name}.plain.png")),
-  )
-}
-
-/// The spectrogram column of every window of a report, one after another, kept beside its
-/// images for showing one window's spectrum.
-pub(super) fn columns_path(dir: &Path, name: &str) -> PathBuf {
-  dir.join(format!("{name}.columns"))
-}
-
 /// Starts queued jobs whenever a worker is free, until the daemon stops.
 pub(super) async fn dispatch(analysis: Arc<Analysis>) {
   let mut changes = analysis.config.changes();
@@ -149,10 +134,6 @@ fn settings(options: &Options, progress: Arc<AtomicU32>) -> Settings {
   Settings {
     max_full_seconds: f64::from(analysis.max_full_minutes) * 60.0,
     sampled_windows: analysis.sampled_windows as usize,
-    scale: match analysis.spectrogram.scale {
-      SpectrogramScale::Log => Scale::Log,
-      SpectrogramScale::Linear => Scale::Linear,
-    },
     deadline: Instant::now() + analysis.timeout,
     progress: Some(progress),
   }
@@ -170,10 +151,12 @@ async fn run(analysis: Arc<Analysis>, job: Job) {
 }
 
 async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
-  let settings = settings(&analysis.config.current().values, job.progress.clone());
+  let current = analysis.config.current();
+  let settings = settings(&current.values, job.progress.clone());
+  let scale = Scale::from(current.values.analysis.spectrogram.scale);
   let cancel = job.cancel.clone();
   let file = job.file.clone();
-  let images = analysis.images.clone();
+  let dir = analysis.images.clone();
   let modified = modified_text(file.modified);
   let name = image_name(&file.path.to_string_lossy(), file.size, &modified);
   let image = name.clone();
@@ -186,21 +169,39 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
     let drawn = match &measured.claimed {
       Some(claimed) => {
         let picture = Picture {
-          windows: &measured.windows,
+          windows: measured
+            .windows
+            .iter()
+            .map(|w| Shown {
+              t: w.t,
+              seconds: w.seconds,
+              cells: w.column(scale),
+            })
+            .collect(),
+          duration: measured.duration,
           rate: claimed.sample_rate,
-          scale: settings.scale,
+          scale,
           sampled: measured.sampled,
           cutoff_hz: read.cutoff_hz,
         };
         let kept = render(&picture)
           .map_err(|e| e.to_string())
           .and_then(|rendered| {
-            let columns: Vec<u8> = measured
-              .windows
-              .iter()
-              .flat_map(|w| w.column.iter().copied())
-              .collect();
-            write_images(&images, &image, &rendered.guided, &rendered.plain, &columns)?;
+            let columns = images::columns_bytes(&measured.windows);
+            images::write(
+              &dir,
+              &[
+                (
+                  images::image_path(&dir, &image, scale, true),
+                  &rendered.guided,
+                ),
+                (
+                  images::image_path(&dir, &image, scale, false),
+                  &rendered.plain,
+                ),
+                (images::columns_path(&dir, &image), &columns),
+              ],
+            )?;
             Ok((rendered, columns.len()))
           });
         match kept {
@@ -285,29 +286,8 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
     }));
 }
 
-/// Writes a report's two images and its windows' columns under `dir`.
-fn write_images(
-  dir: &Path,
-  name: &str,
-  guided: &[u8],
-  plain: &[u8],
-  columns: &[u8],
-) -> Result<(), String> {
-  std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-  let (with, without) = image_paths(dir, name);
-  let all = [
-    (with, guided),
-    (without, plain),
-    (columns_path(dir, name), columns),
-  ];
-  for (path, bytes) in all {
-    std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
-  }
-  Ok(())
-}
-
 /// Records new images and removes the least recently viewed beyond `analysis.cache_max_bytes`.
-async fn keep_images(analysis: &Analysis, name: &str, bytes: u64) {
+pub(super) async fn keep_images(analysis: &Analysis, name: &str, bytes: u64) {
   if let Err(e) = store::used_image(&analysis.db, name, Some(bytes), Utc::now()).await {
     error!(error = %e, "spectrogram not recorded");
     return;
@@ -341,8 +321,7 @@ async fn evict(analysis: &Analysis) {
   let dir = analysis.images.clone();
   let removed = tokio::task::spawn_blocking(move || {
     for name in gone {
-      let (with, without) = image_paths(&dir, &name);
-      for path in [with, without, columns_path(&dir, &name)] {
+      for path in images::all_paths(&dir, &name) {
         if let Err(e) = std::fs::remove_file(&path)
           && e.kind() != std::io::ErrorKind::NotFound
         {

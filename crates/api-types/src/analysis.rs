@@ -182,6 +182,9 @@ pub enum SpectrogramScale {
   Log,
   /// every kilohertz takes the same height
   Linear,
+  /// equal steps of pitch as heard take the same height: the mel scale, by O'Shaughnessy's
+  /// formula 2595 log10(1 + f / 700)
+  Mel,
 }
 
 /// Where the plot sits in a spectrogram image and how its axes map to time and frequency, so
@@ -197,7 +200,7 @@ pub struct SpectrogramLayout {
   pub plot_x: u32,
   /// the plot's top edge, in pixels from the image's top
   pub plot_y: u32,
-  /// the plot's width in pixels: one column per window, or per run of windows for a long file
+  /// the plot's width in pixels, which spans the file's whole length in time
   pub plot_width: u32,
   /// the plot's height in pixels
   pub plot_height: u32,
@@ -207,8 +210,10 @@ pub struct SpectrogramLayout {
   pub min_hz: f64,
   /// the frequency at the plot's top edge, in Hz: half the sample rate
   pub max_hz: f64,
-  /// whether the columns are windows sampled from a long file, with gaps between them, rather
-  /// than every second of it
+  /// the time at the plot's right edge, in seconds: the file's length, the left edge being 0
+  pub duration_seconds: f64,
+  /// whether the windows are samples spread over a long file, the stretches between them drawn
+  /// as unread, rather than every second of it
   pub sampled: bool,
   /// the lines drawn across the plot in the image served with guides, lowest first
   pub guides: Vec<GuideLine>,
@@ -294,6 +299,9 @@ pub struct AnalysisReportQuery {
   /// include the per-window measures, true when left out
   #[serde(default = "yes")]
   pub windows: bool,
+  /// the frequency axis the report's spectrogram layout is given on, the option's when left out
+  #[serde(default)]
+  pub scale: Option<SpectrogramScale>,
 }
 
 /// The query of `GET .../analysis/spectrogram.png`.
@@ -304,6 +312,19 @@ pub struct SpectrogramQuery {
   /// draw the encoder cutoff guide lines into the image, true when left out
   #[serde(default = "yes")]
   pub guides: bool,
+  /// the frequency axis to draw the image on, the option's when left out
+  #[serde(default)]
+  pub scale: Option<SpectrogramScale>,
+}
+
+/// The query of `GET .../analysis/windows/{index}`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct WindowSpectrumQuery {
+  /// the frequency axis whose rows the spectrum is given at, the option's when left out
+  #[serde(default)]
+  pub scale: Option<SpectrogramScale>,
 }
 
 fn yes() -> bool {

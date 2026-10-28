@@ -209,6 +209,8 @@ option_enum! {
     Log = "log",
     /// every kilohertz takes the same height
     Linear = "linear",
+    /// equal steps of pitch as heard take the same height
+    Mel = "mel",
   }
 }
 

@@ -3,7 +3,7 @@
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
-  RunAnalysisQuery, SetAnalysisOverride, SpectrogramQuery, WindowSpectrum,
+  RunAnalysisQuery, SetAnalysisOverride, SpectrogramQuery, WindowSpectrum, WindowSpectrumQuery,
 };
 use api_types::files::{
   ArchiveQuery, ContentQuery, DirectoryListingQuery, FileRoot, FileToken, FileTokenRequest,
@@ -118,18 +118,22 @@ impl Client {
   }
 
   /// `GET .../analysis`: a file's analysis report.
-  pub async fn analysis(&self, target: LocalFile<'_>, windows: bool) -> Result<AudioAnalysis> {
-    let route = file(target)
-      .then("analysis")
-      .query(&AnalysisReportQuery { windows })?;
+  pub async fn analysis(
+    &self,
+    target: LocalFile<'_>,
+    query: &AnalysisReportQuery,
+  ) -> Result<AudioAnalysis> {
+    let route = file(target).then("analysis").query(query)?;
     json(self.get(route)).await
   }
 
   /// `GET .../analysis/spectrogram.png`: a file's spectrogram.
-  pub async fn spectrogram(&self, target: LocalFile<'_>, guides: bool) -> Result<Bytes> {
-    let route = file(target)
-      .then("analysis/spectrogram.png")
-      .query(&SpectrogramQuery { guides })?;
+  pub async fn spectrogram(
+    &self,
+    target: LocalFile<'_>,
+    query: &SpectrogramQuery,
+  ) -> Result<Bytes> {
+    let route = file(target).then("analysis/spectrogram.png").query(query)?;
     bytes(self.get(route)).await
   }
 
@@ -164,14 +168,16 @@ impl Client {
   }
 
   /// `GET .../analysis/windows/{index}`: the spectrum of one window of a file's analysis.
-  pub async fn analysis_window(&self, target: LocalFile<'_>, index: u32) -> Result<WindowSpectrum> {
-    json(
-      self.get(
-        file(target)
-          .then("analysis/windows")
-          .then(&index.to_string()),
-      ),
-    )
-    .await
+  pub async fn analysis_window(
+    &self,
+    target: LocalFile<'_>,
+    index: u32,
+    query: &WindowSpectrumQuery,
+  ) -> Result<WindowSpectrum> {
+    let route = file(target)
+      .then("analysis/windows")
+      .then(&index.to_string())
+      .query(query)?;
+    json(self.get(route)).await
   }
 }

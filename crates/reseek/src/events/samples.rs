@@ -254,6 +254,7 @@ fn blank_analysis(d: &str, now: DateTime<Utc>) -> AudioAnalysis {
       scale: SpectrogramScale::Log,
       min_hz: 0.0,
       max_hz: 0.0,
+      duration_seconds: 0.0,
       sampled: false,
       guides: Vec::new(),
     }),

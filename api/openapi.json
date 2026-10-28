@@ -2425,6 +2425,15 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "scale",
+            "in": "query",
+            "description": "the frequency axis the report's spectrogram layout is given on, the option's when left out",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SpectrogramScale"
+            }
           }
         ],
         "responses": {
@@ -2799,6 +2808,15 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "scale",
+            "in": "query",
+            "description": "the frequency axis to draw the image on, the option's when left out",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SpectrogramScale"
+            }
           }
         ],
         "responses": {
@@ -2890,6 +2908,15 @@
               "type": "integer",
               "format": "int32",
               "minimum": 0
+            }
+          },
+          {
+            "name": "scale",
+            "in": "query",
+            "description": "the frequency axis whose rows the spectrum is given at, the option's when left out",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SpectrogramScale"
             }
           }
         ],
@@ -10284,6 +10311,15 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "scale",
+            "in": "query",
+            "description": "the frequency axis the report's spectrogram layout is given on, the option's when left out",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SpectrogramScale"
+            }
           }
         ],
         "responses": {
@@ -10662,6 +10698,15 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "scale",
+            "in": "query",
+            "description": "the frequency axis to draw the image on, the option's when left out",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SpectrogramScale"
+            }
           }
         ],
         "responses": {
@@ -10754,6 +10799,15 @@
               "type": "integer",
               "format": "int32",
               "minimum": 0
+            }
+          },
+          {
+            "name": "scale",
+            "in": "query",
+            "description": "the frequency axis whose rows the spectrum is given at, the option's when left out",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SpectrogramScale"
             }
           }
         ],
@@ -21976,10 +22030,16 @@
           "scale",
           "minHz",
           "maxHz",
+          "durationSeconds",
           "sampled",
           "guides"
         ],
         "properties": {
+          "durationSeconds": {
+            "type": "number",
+            "format": "double",
+            "description": "the time at the plot's right edge, in seconds: the file's length, the left edge being 0"
+          },
           "guides": {
             "type": "array",
             "items": {
@@ -22012,7 +22072,7 @@
           "plotWidth": {
             "type": "integer",
             "format": "int32",
-            "description": "the plot's width in pixels: one column per window, or per run of windows for a long file",
+            "description": "the plot's width in pixels, which spans the file's whole length in time",
             "minimum": 0
           },
           "plotX": {
@@ -22029,7 +22089,7 @@
           },
           "sampled": {
             "type": "boolean",
-            "description": "whether the columns are windows sampled from a long file, with gaps between them, rather\nthan every second of it"
+            "description": "whether the windows are samples spread over a long file, the stretches between them drawn\nas unread, rather than every second of it"
           },
           "scale": {
             "$ref": "#/components/schemas/SpectrogramScale",
@@ -22048,7 +22108,8 @@
         "description": "How a spectrogram's frequency axis runs.",
         "enum": [
           "log",
-          "linear"
+          "linear",
+          "mel"
         ]
       },
       "State": {

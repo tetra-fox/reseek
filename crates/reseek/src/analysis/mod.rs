@@ -10,6 +10,7 @@ mod canvas;
 mod decode;
 mod engine;
 mod flags;
+mod images;
 mod jobs;
 mod measure;
 mod reading;
@@ -31,8 +32,8 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use api_types::analysis::{
-  AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AudioAnalysis, SetAnalysisOverride,
-  SpectrogramQuery, WindowSpectrum,
+  AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
+  SetAnalysisOverride, SpectrogramQuery, WindowSpectrum, WindowSpectrumQuery,
 };
 use api_types::auth::Principal;
 use async_trait::async_trait;
@@ -53,7 +54,7 @@ use crate::files::Files;
 use crate::live::Live;
 use crate::services::{AnalysisService, FileTarget};
 use crate::sync::lock;
-use jobs::{Job, QUEUE_LIMIT, Queue, image_paths};
+use jobs::{Job, QUEUE_LIMIT, Queue};
 use report::modified_text;
 pub use store::SCHEMA;
 
@@ -106,6 +107,21 @@ impl Analysis {
     &self.db
   }
 
+  /// The scale a viewer asked for, or the option's.
+  fn scale(&self, asked: Option<api_types::analysis::SpectrogramScale>) -> measure::Scale {
+    match asked {
+      Some(scale) => scale.into(),
+      None => self
+        .config
+        .current()
+        .values
+        .analysis
+        .spectrogram
+        .scale
+        .into(),
+    }
+  }
+
   /// The stored report of the file at `path`, 404 when it has none.
   async fn stored(&self, path: &std::path::Path) -> Result<store::Stored, ApiError> {
     let path = path.to_string_lossy();
@@ -125,7 +141,6 @@ pub fn verdict_of(bytes: Vec<u8>) -> api_types::analysis::AnalysisVerdict {
   let settings = engine::Settings {
     max_full_seconds: 900.0,
     sampled_windows: 240,
-    scale: measure::Scale::Log,
     deadline: std::time::Instant::now() + std::time::Duration::from_secs(10),
     progress: None,
   };
@@ -184,7 +199,11 @@ impl AnalysisService for Analysis {
     Ok(AnalysisJobCreated { job_id: id })
   }
 
-  async fn report(&self, target: FileTarget, windows: bool) -> Result<AudioAnalysis, ApiError> {
+  async fn report(
+    &self,
+    target: FileTarget,
+    query: AnalysisReportQuery,
+  ) -> Result<AudioAnalysis, ApiError> {
     let file = self.files.local_path(&target).await?;
     let stored = self.stored(&file.path).await?;
     let note = match file.found {
@@ -196,7 +215,11 @@ impl AnalysisService for Analysis {
     };
     let mut report = stored.report;
     report.limitations.extend(note.map(str::to_string));
-    if !windows {
+    let scale = self.scale(query.scale);
+    report.spectrogram = report
+      .spectrogram
+      .map(|layout| render::on_scale(&layout, scale));
+    if !query.windows {
       report.windows = None;
     }
     Ok(report)
@@ -214,14 +237,12 @@ impl AnalysisService for Analysis {
         "no spectrogram was drawn for the file; its report's limitations say why",
       ));
     }
-    let (with, without) = image_paths(&self.images, &stored.image);
-    let path = if query.guides { with } else { without };
+    let scale = self.scale(query.scale);
+    let path = images::image_path(&self.images, &stored.image, scale, query.guides);
     let bytes = match tokio::fs::read(&path).await {
       Ok(bytes) => bytes,
       Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-        return Err(ApiError::not_found(
-          "the spectrogram is no longer kept; analyse the file again to draw it",
-        ));
+        self.draw(&stored, scale, query.guides).await?
       }
       Err(e) => {
         return Err(ApiError::internal(format!(
@@ -317,41 +338,29 @@ impl AnalysisService for Analysis {
     }
   }
 
-  async fn window(&self, target: FileTarget, index: u32) -> Result<WindowSpectrum, ApiError> {
+  async fn window(
+    &self,
+    target: FileTarget,
+    index: u32,
+    query: WindowSpectrumQuery,
+  ) -> Result<WindowSpectrum, ApiError> {
     let file = self.files.local_path(&target).await?;
     let stored = self.stored(&file.path).await?;
     let missing = || ApiError::not_found(format!("the report has no window {index}"));
     let windows = stored.report.windows.as_deref().unwrap_or_default();
     let window = windows.get(index as usize).ok_or_else(missing)?;
     let layout = stored.report.spectrogram.as_ref().ok_or_else(missing)?;
-    let path = jobs::columns_path(&self.images, &stored.image);
-    let columns = match tokio::fs::read(&path).await {
-      Ok(columns) => columns,
-      Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-        return Err(ApiError::not_found(
-          "the window's spectrum is no longer kept; analyse the file again to measure it",
-        ));
-      }
-      Err(e) => {
-        return Err(ApiError::internal(format!(
-          "the spectra '{}' could not be read: {e}",
-          path.display()
-        )));
-      }
-    };
+    let scale = self.scale(query.scale);
+    let columns = self.columns(&stored, scale).await?;
     let start = index as usize * measure::ROWS;
     let column = columns
       .get(start..start + measure::ROWS)
       .ok_or_else(missing)?;
-    let scale = match layout.scale {
-      api_types::analysis::SpectrogramScale::Log => measure::Scale::Log,
-      api_types::analysis::SpectrogramScale::Linear => measure::Scale::Linear,
-    };
     let hz = (0..measure::ROWS)
       .map(|row| {
         let position = 1.0 - (row as f64 + 0.5) / measure::ROWS as f64;
         scale
-          .frequency(position, layout.min_hz, layout.max_hz)
+          .frequency(position, scale.min_hz(), layout.max_hz)
           .round()
       })
       .collect();

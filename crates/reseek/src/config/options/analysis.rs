@@ -54,6 +54,7 @@ impl Default for Analysis {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Spectrogram {
-  /// The frequency axis: `log` or `linear`.
+  /// The frequency axis the spectrogram is drawn on unless a viewer asks for another: `log`,
+  /// `linear` or `mel`.
   pub scale: SpectrogramScale,
 }

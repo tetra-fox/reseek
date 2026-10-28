@@ -426,4 +426,35 @@ async fn a_queued_analysis_can_be_cancelled_and_a_window_read() {
   )
   .await;
   assert_eq!(status, 404);
+  // a report read on another scale gives that scale's axis, and its image is drawn on demand and
+  // kept beside the one drawn when the file was analysed
+  let images = app.state.paths.data.join("analysis");
+  let kept = || std::fs::read_dir(&images).unwrap().count();
+  let before = kept();
+  let (_, report) = send(&app, "GET", &format!("{}?scale=mel", route("a.flac")), None).await;
+  assert_eq!(report["spectrogram"]["scale"], "mel");
+  assert_eq!(report["spectrogram"]["minHz"], 0.0);
+  assert_eq!(
+    report["spectrogram"]["durationSeconds"],
+    report["durationSeconds"]
+  );
+  let mel = format!("{}/spectrogram.png?scale=mel&guides=false", route("a.flac"));
+  let drawn = app.send(request("GET", &mel, None)).await;
+  assert_eq!(drawn.status, 200);
+  assert!(drawn.body.starts_with(b"\x89PNG"));
+  assert_eq!(kept(), before + 2, "both mel images kept");
+  let again = app.send(request("GET", &mel, None)).await;
+  assert_eq!(again.body, drawn.body);
+  let (status, window) = send(
+    &app,
+    "GET",
+    &format!("{}/windows/3?scale=mel", route("a.flac")),
+    None,
+  )
+  .await;
+  assert_eq!(status, 200, "{window}");
+  let rows = window["hz"].as_array().unwrap();
+  // mel rows are wider apart at the top than the bottom
+  let gap = |i: usize| rows[i].as_f64().unwrap() - rows[i + 1].as_f64().unwrap();
+  assert!(gap(0) > gap(500) * 10.0, "{} {}", gap(0), gap(500));
 }

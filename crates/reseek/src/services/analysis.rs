@@ -2,8 +2,8 @@
 //! judgement.
 
 use api_types::analysis::{
-  AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AudioAnalysis, SetAnalysisOverride,
-  SpectrogramQuery, WindowSpectrum,
+  AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
+  SetAnalysisOverride, SpectrogramQuery, WindowSpectrum, WindowSpectrumQuery,
 };
 use api_types::auth::Principal;
 use async_trait::async_trait;
@@ -26,9 +26,13 @@ pub trait AnalysisService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// A file's report, with its per-window readings when asked for; 404 before the first
-  /// analysis finishes.
-  async fn report(&self, target: FileTarget, windows: bool) -> Result<AudioAnalysis, ApiError> {
+  /// A file's report, with its per-window readings when asked for and its spectrogram layout
+  /// on the scale asked for; 404 before the first analysis finishes.
+  async fn report(
+    &self,
+    target: FileTarget,
+    query: AnalysisReportQuery,
+  ) -> Result<AudioAnalysis, ApiError> {
     Err(not_yet(DOMAIN))
   }
 
@@ -74,7 +78,12 @@ pub trait AnalysisService: Send + Sync {
 
   /// The spectrum of one window of a file's report; 404 when there is no such window or it is
   /// no longer kept.
-  async fn window(&self, target: FileTarget, index: u32) -> Result<WindowSpectrum, ApiError> {
+  async fn window(
+    &self,
+    target: FileTarget,
+    index: u32,
+    query: WindowSpectrumQuery,
+  ) -> Result<WindowSpectrum, ApiError> {
     Err(not_yet(DOMAIN))
   }
 }
