@@ -5,7 +5,7 @@
 //! file as it arrives, at most the configured size, and checked and loaded as the agent's
 //! host. Only then is the agent ready, and the agent's socket told so.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Instant as Clock;
 
 use api_types::events::{Event, RelayAgentSharesUpdated};
@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 use super::{Controller, Token};
 use crate::api::error::ApiError;
+use crate::db::remove_database;
 use crate::relay::credential::Purpose;
 use crate::relay::frames::{self, SHARE_TOKEN_LIFETIME, millis};
 use crate::services::AgentCredential;
@@ -153,7 +154,10 @@ impl Controller {
       Ok(shares) => self.load(&name, socket, shares, &file).await,
       Err(e) => Err(e),
     };
-    remove_upload(&file).await;
+    let removed = file.clone();
+    if let Err(e) = tokio::task::spawn_blocking(move || remove_database(&removed)).await {
+      warn!(file = %file.display(), error = %e, "uploaded share database not deleted");
+    }
     loaded
   }
 
@@ -310,19 +314,5 @@ impl Controller {
         directories: counted.directories,
       }));
     Ok(())
-  }
-}
-
-/// Deletes an uploaded database and the journal files SQLite may have left beside it.
-async fn remove_upload(file: &Path) {
-  for suffix in ["", "-wal", "-shm"] {
-    let mut path = file.as_os_str().to_owned();
-    path.push(suffix);
-    let path = PathBuf::from(path);
-    match tokio::fs::remove_file(&path).await {
-      Ok(()) => {}
-      Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-      Err(e) => warn!(file = %path.display(), error = %e, "uploaded share database not deleted"),
-    }
   }
 }

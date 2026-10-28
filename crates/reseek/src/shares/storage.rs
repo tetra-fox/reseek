@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 use super::repository::SCHEMA;
 use crate::config::enums::StorageMode;
-use crate::db::{Database, DbError, Location};
+use crate::db::{Database, DbError, Location, remove_database};
 
 /// The local host's share index and where its backup is.
 pub struct Storage {
@@ -104,21 +104,6 @@ fn replace_with_backup(primary: &Path, backup: Option<&Path>) {
       }
     }
     Err(e) => warn!(error = e, "share cache backup not used"),
-  }
-}
-
-/// Removes a database file and its journal files, each when it is there.
-pub(super) fn remove_database(path: &Path) {
-  for suffix in ["", "-wal", "-shm"] {
-    let mut file = path.as_os_str().to_owned();
-    file.push(suffix);
-    match std::fs::remove_file(&file) {
-      Ok(()) => {}
-      Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-      Err(e) => {
-        warn!(file = %Path::new(&file).display(), error = %e, "share cache file not removed")
-      }
-    }
   }
 }
 

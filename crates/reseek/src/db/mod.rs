@@ -246,6 +246,22 @@ impl Database {
   }
 }
 
+/// Removes the database file at `path` and the `-wal` and `-shm` files SQLite keeps beside it,
+/// each when it is there; one that is there and stays is logged. Runs on a blocking thread.
+pub fn remove_database(path: &std::path::Path) {
+  for suffix in ["", "-wal", "-shm"] {
+    let mut file = path.as_os_str().to_owned();
+    file.push(suffix);
+    match std::fs::remove_file(&file) {
+      Ok(()) => {}
+      Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+      Err(e) => {
+        warn!(file = %std::path::Path::new(&file).display(), error = %e, "database file not removed")
+      }
+    }
+  }
+}
+
 /// How many read-only connections a database keeps: half the processors, at least two.
 fn reader_count() -> usize {
   let processors = std::thread::available_parallelism().map_or(1, |n| n.get());
