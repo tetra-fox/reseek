@@ -24,8 +24,15 @@
     idOf: (item: T) => string;
     /** Enter on an item */
     onopen?: (item: T) => void;
-    /** a key of the screen's own on an item, such as Delete; true when it acted */
-    onkey?: (e: KeyboardEvent, item: T) => boolean;
+    /**
+     * A folder's id in the selection, for a tree whose folders are rows too, picked and walked
+     * with the keys like items; without it a folder line only heads its items
+     */
+    folderId?: (node: FolderNode<T>) => string;
+    /** Enter on a folder that is a row */
+    onopenfolder?: (node: FolderNode<T>) => void;
+    /** a key of the screen's own on a row, such as Delete; true when it acted */
+    onkey?: (e: KeyboardEvent, line: TreeLine<T>) => boolean;
     /** a middle click on an item, which acts without leaving the page, as a new tab would */
     onmiddleclick?: (item: T) => void;
     /** a folder opened or closed, for a tree that reads a folder when it opens */
@@ -49,6 +56,8 @@
     selected,
     idOf,
     onopen,
+    folderId,
+    onopenfolder,
     onkey,
     onmiddleclick,
     ontoggle,
@@ -70,15 +79,30 @@
     ...node.children.flatMap(under)
   ];
 
+  /** Opens or closes a folder from the keys, as its toggle would */
+  const show = (node: FolderNode<T>, open: boolean) => {
+    if (expansion.isOpen(node.path) === open) return;
+    expansion.set(node.path, open);
+    ontoggle?.(open, [node.path]);
+  };
+
   const list = new ListControl<TreeLine<T>>({
     lines: () => shown,
     key: (line) => line.key,
-    id: (line) => (line.kind === "item" ? idOf(line.item) : null),
+    id: (line) => (line.kind === "item" ? idOf(line.item) : (folderId?.(line.node) ?? null)),
     group: (line) => under(line.kind === "folder" ? line.node : line.folder),
     onopen: (line) => {
       if (line.kind === "item") onopen?.(line.item);
+      else onopenfolder?.(line.node);
     },
-    onkey: (e, line) => line.kind === "item" && !!onkey?.(e, line.item),
+    // Right opens a folder and Left closes it, as in a file manager's tree
+    onkey: (e, line) => {
+      if (line.kind === "folder" && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+        show(line.node, e.key === "ArrowRight");
+        return true;
+      }
+      return !!onkey?.(e, line);
+    },
     // the screen's selection, made once for the tree's life
     // svelte-ignore state_referenced_locally
     selected
@@ -104,7 +128,10 @@
         role="row"
         {...list.line(line, i)}
         class={[
-          "flex min-h-9 items-center gap-1.5 border-b bg-surface-muted/50 pr-3",
+          "group flex min-h-9 items-center gap-1.5 border-b pr-3",
+          folderId && selected.has(folderId(line.node))
+            ? "bg-accent-soft/60"
+            : "bg-surface-muted/50",
           list.isFocused(line) && "ring-1 ring-accent ring-inset"
         ]}
         style:padding-left={`calc(${line.depth} * 1.25rem + 0.5rem)`}>

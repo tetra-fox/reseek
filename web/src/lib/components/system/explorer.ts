@@ -3,6 +3,7 @@ import { joinPath } from "#lib/localfiles.js";
 
 /** A line of the file explorer: the way up, a directory or a file */
 export type Entry = {
+  /** the kind and the path, unique in the whole tree */
   key: string;
   kind: "up" | "directory" | "file";
   name: string;
@@ -33,7 +34,7 @@ export const entries = (
   const compare = sortBy === "name" ? byName : byDate;
   const sorted = (list: Entry[]) => list.toSorted((a, b) => sign * compare(a, b) || byName(a, b));
   const directories = (listing.directories ?? []).map((d): Entry => ({
-    key: `d:${d.name}`,
+    key: `d:${joinPath([...parts, d.name])}`,
     kind: "directory",
     name: d.name,
     path: joinPath([...parts, d.name]),
@@ -41,7 +42,7 @@ export const entries = (
     size: null
   }));
   const files = (listing.files ?? []).map((f): Entry => ({
-    key: `f:${f.name}`,
+    key: `f:${joinPath([...parts, f.name])}`,
     kind: "file",
     name: f.name,
     path: joinPath([...parts, f.name]),

@@ -56,8 +56,53 @@ describe("the file explorer", () => {
     press(grid, " ");
     press(grid, "ArrowDown");
     press(grid, " ");
-    expect(ticked()).toEqual(["f:a.flac", "f:b.flac"]);
+    expect(ticked()).toEqual(["f:Album/a.flac", "f:Album/b.flac"]);
     press(grid, "Delete");
     expect(confirmation.question?.body).toBe("Delete 2 items? This cannot be undone.");
+  });
+
+  it("opens a folder in place, reading it, and closes it with the keys", async () => {
+    const listings: Record<string, unknown> = {
+      "Album": {
+        name: "Album",
+        fullName: "",
+        directories: [{ name: "CD1", fullName: "CD1", modifiedAt: "2026-10-26T10:00:00Z" }],
+        files: []
+      },
+      "Album/CD1": {
+        name: "CD1",
+        fullName: "",
+        directories: [],
+        files: [
+          { name: "1.flac", fullName: "1.flac", length: 3, modifiedAt: "2026-10-26T10:00:00Z" }
+        ]
+      }
+    };
+    const net = fakeNetwork((url) => {
+      const encoded = url.pathname.split("/directories/")[1];
+      const path = new TextDecoder().decode(
+        Uint8Array.from(atob(encoded.replaceAll("-", "+").replaceAll("_", "/")), (c) =>
+          c.charCodeAt(0)
+        )
+      );
+      return listings[path];
+    });
+    component = mount(Files, {
+      target: document.body,
+      props: { root: "downloads", path: "Album" }
+    });
+    await flush();
+    const grid = document.querySelector("[role=grid]")!;
+    const rows = () =>
+      [...grid.querySelectorAll("[role=row][data-line]")].map((r) => r.getAttribute("data-line"));
+    expect(rows()).toEqual(["..", "folder:Album/CD1"]);
+    press(grid, "ArrowDown");
+    press(grid, "ArrowDown");
+    press(grid, "ArrowRight");
+    await flush();
+    expect(rows()).toEqual(["..", "folder:Album/CD1", "f:Album/CD1/1.flac"]);
+    expect(net.requests).toHaveLength(2);
+    press(grid, "ArrowLeft");
+    expect(rows()).toEqual(["..", "folder:Album/CD1"]);
   });
 });
