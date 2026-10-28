@@ -1,15 +1,13 @@
 <script lang="ts" module>
-  /** one row's height; the list draws only the rows in view and a margin around them */
-  const ROW = 33;
+  /** the rows drawn beyond the visible ones, above and below */
   const OVERSCAN = 15;
-  const MIN_HEIGHT = ROW;
   const HEIGHT_KEY = "reseek-browse-tree-height";
 
   /** The tree's height saved in this browser, 300 px when none or nothing usable is */
-  const savedHeight = () => {
+  const savedHeight = (min: number) => {
     try {
       const height = Number.parseInt(localStorage.getItem(HEIGHT_KEY) ?? "", 10);
-      return Number.isFinite(height) && height >= MIN_HEIGHT ? height : 300;
+      return Number.isFinite(height) && height >= min ? height : 300;
     } catch {
       return 300;
     }
@@ -47,6 +45,7 @@
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepsKey, withModifier } from "#lib/keys.js";
   import { Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
+  import { remPx } from "#lib/viewport.svelte.js";
 
   import { LOCKED_HINT } from "./locked";
 
@@ -64,7 +63,9 @@
   const expansion = new Expansion(false);
   let scroller = $state<HTMLDivElement | null>(null);
   let scrollTop = $state(0);
-  let height = $state(savedHeight());
+  /** one row's height, 2.0625rem in pixels; the tree is never shorter than a row */
+  const ROW = 2.0625 * remPx();
+  let height = $state(savedHeight(ROW));
 
   // a new listing starts with its first folder open, a hint that folders open
   $effect(() => {
@@ -194,7 +195,7 @@
 </div>
 <ResizeHandle
   bind:value={height}
-  min={MIN_HEIGHT}
+  min={ROW}
   edge="bottom"
   label="Height of the folder list"
   onchange={saveHeight}
