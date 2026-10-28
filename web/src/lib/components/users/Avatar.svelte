@@ -1,5 +1,6 @@
 <script lang="ts">
   import { root } from "#lib/api/client.js";
+  import { nameHue } from "#lib/colours.js";
   import { cn } from "#lib/utils.js";
 
   type Props = {
@@ -13,8 +14,8 @@
 
   let { name, pictureUrl, src, class: className = "size-8" }: Props = $props();
 
-  // the same name always gets the same hue
-  const hue = $derived([...name].reduce((h, c) => (h * 31 + c.codePointAt(0)!) % 360, 7));
+  // the hue of the name's colour, so a face and a name match
+  const hue = $derived(nameHue(name));
 </script>
 
 {#if src || pictureUrl}

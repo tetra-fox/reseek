@@ -14,6 +14,7 @@
   import { sortedConversations, sortedRooms } from "#lib/chat/order.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { clock } from "#lib/clock.svelte.js";
+  import { nameColour } from "#lib/colours.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
@@ -225,7 +226,9 @@
           {/if}
           <span role="gridcell" class="flex min-w-0 flex-1 flex-col">
             <span class="flex items-center gap-1">
-              <span class="truncate text-sm font-medium">{t.name}</span>
+              <span
+                class="truncate text-sm font-medium"
+                style:color={t.kind === "user" ? nameColour(t.name) : undefined}>{t.name}</span>
               {#if notify === "none" || summary?.muted}<BellOffIcon
                   class="size-3 shrink-0 text-fg-subtle"
                   aria-label="muted" />{/if}
