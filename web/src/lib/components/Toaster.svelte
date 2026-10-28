@@ -11,7 +11,7 @@
   const motion = () => ({ duration: motionFast(), easing: cubicOut });
 </script>
 
-<!-- bottom centre, newest on top, above the footer -->
+<!-- bottom centre, newest on top, above the footer and the docked activity log -->
 <div
   class="pointer-events-none fixed inset-x-4 bottom-[calc(var(--bottom-h)+1rem)] z-50 mx-auto flex max-w-md flex-col items-center gap-2"
   aria-live="polite">

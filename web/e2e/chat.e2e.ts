@@ -124,3 +124,26 @@ test("a private chat shows both sides with their actions", async ({ page }) => {
   await log.getByText("thanks!").hover();
   await expect(page.getByRole("button", { name: "Copy the text" }).last()).toBeVisible();
 });
+
+test("a toast sits above the docked activity log", async ({ page }) => {
+  // a copy the browser refuses is a toast that needs nothing from the daemon
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: () => Promise.reject(new Error("refused")) }
+    })
+  );
+  await fakeChat(page);
+  await login(page, "/chat");
+  await page.goto("./#/chat/rooms/indie");
+  const log = page.getByRole("log");
+  await expect(log.getByText("thanks bob, grabbing it now")).toBeVisible();
+  await page.keyboard.press("Control+j");
+  const dock = page.getByRole("region", { name: "Activity on the network" });
+  await expect.poll(async () => (await dock.boundingBox())?.height).toBe(288);
+  await log.getByText("thanks bob, grabbing it now").hover();
+  await page.getByRole("button", { name: "Copy the text" }).last().click();
+  const toast = page.getByRole("alert").filter({ hasText: "Couldn't copy" });
+  await expect(toast).toBeVisible();
+  const [above, top] = [(await toast.boundingBox())!, (await dock.boundingBox())!];
+  expect(above.y + above.height).toBeLessThanOrEqual(top.y);
+});
