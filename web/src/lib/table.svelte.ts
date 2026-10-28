@@ -19,6 +19,7 @@ import {
 import { flushSync } from "svelte";
 
 import { cssWidth, sumWidths } from "./format";
+import { fields, stored } from "./stored.svelte";
 
 const features = tableFeatures({
   rowSortingFeature,
@@ -75,8 +76,43 @@ type Spec<T extends object> = {
   ties?: string;
 };
 
-/** Strings in the user's language order, ignoring case as the lowered values already do */
-const collator = new Intl.Collator();
+/** A grid's sort and the widths its columns were dragged to, as a screen keeps them */
+export type GridView = { sort: GridSort; dragged: Record<string, number> };
+
+/**
+ * A grid's view kept in this browser under `key`: the sort, by one of the columns `sortable`
+ * names, `sort` until the user picks one, and the widths the user dragged columns to. Anything
+ * saved that no longer fits is dropped. Module-level only, as `stored` is
+ */
+export const gridView = (key: string, sortable: string[], sort: GridSort): GridView =>
+  stored(key, (saved) => {
+    const s = fields(saved);
+    const kept = fields(s.sort);
+    return {
+      sort:
+        typeof kept.id === "string" && sortable.includes(kept.id)
+          ? { id: kept.id, dir: kept.dir === "desc" ? "desc" : "asc" }
+          : s.sort === null
+            ? null
+            : sort,
+      dragged: Object.fromEntries(
+        Object.entries(fields(s.dragged)).filter(
+          (e): e is [string, number] => typeof e[1] === "number" && e[1] >= 40
+        )
+      )
+    };
+  });
+
+/** The parts of a grid's spec that keep its sort and widths in `view` */
+export const keptIn = (view: GridView) => ({
+  sort: () => view.sort,
+  setSort: (sort: GridSort) => (view.sort = sort),
+  dragged: () => view.dragged,
+  drag: (id: string, width: number) => (view.dragged[id] = width)
+});
+
+/** Strings in the user's language order, numbers in them by value: "2.flac" before "10.flac" */
+const collator = new Intl.Collator(undefined, { numeric: true });
 const compare = (a: unknown, b: unknown) =>
   typeof a === "string" && typeof b === "string"
     ? collator.compare(a, b)
