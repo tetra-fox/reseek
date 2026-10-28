@@ -187,6 +187,8 @@ const everyScreen = async (page: Page) => {
   await page.getByRole("button", { name: "More for 2.flac" }).click();
   await page.getByRole("menuitem", { name: "Analyse" }).click();
   await page.getByText("The analyser's reading", { exact: true }).click();
+  await page.getByRole("radio", { name: "Mel" }).click();
+  await expect(page.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
   await drawerHolds(page, "Transfer details");
   await page.keyboard.press("Escape");
   await fits(page, "/uploads", shows("No uploads yet"));

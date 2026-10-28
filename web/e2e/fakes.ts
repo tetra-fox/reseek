@@ -539,7 +539,8 @@ const PIXEL = Buffer.from(
 /** A report of a 128 kbps transcode, thirty seconds long, with the judgement `override` */
 const report = (
   override: unknown,
-  file = { relativePath: "alice/Two/2.flac", transferId: ANALYSED_DOWNLOAD as string | null }
+  file = { relativePath: "alice/Two/2.flac", transferId: ANALYSED_DOWNLOAD as string | null },
+  scale = "linear"
 ) => ({
   path: `/downloads/${file.relativePath}`,
   root: "downloads",
@@ -576,15 +577,16 @@ const report = (
   })),
   spectrogramUrl: "/api/v0/files/downloads/files/x/analysis/spectrogram.png",
   spectrogram: {
-    width: 300,
+    width: 1294,
     height: 556,
     plotX: 48,
     plotY: 14,
-    plotWidth: 30,
+    plotWidth: 1024,
     plotHeight: 512,
-    scale: "linear",
-    minHz: 0,
+    scale,
+    minHz: scale === "log" ? 20 : 0,
     maxHz: 22050,
+    durationSeconds: 30.5,
     sampled: false,
     guides: [
       { hz: 16000, label: "MP3 128k", kind: "encoder" },
@@ -651,7 +653,9 @@ export const fakeAnalysis = async (page: Page) => {
           json: { error: "the file has been analysed already" }
         });
       }
-      return route.fulfill({ json: report(override) });
+      // the layout on the scale asked for, the linear one when none is
+      const scale = new URL(route.request().url()).searchParams.get("scale") ?? "linear";
+      return route.fulfill({ json: report(override, undefined, scale) });
     }
   );
 };

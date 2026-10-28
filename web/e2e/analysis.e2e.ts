@@ -56,9 +56,35 @@ test("analyses a finished download from its row and keeps a judgement", async ({
   await expect(strip).toBeHidden();
   const plot = drawer.getByRole("img", { name: /^Spectrogram/ });
   const box = (await plot.boundingBox())!;
-  // the plot's columns start 48 of the image's 300 px in and run 30 px, one a window
-  await plot.click({ position: { x: ((48 + 10.5) / 300) * box.width, y: box.height / 2 } });
+  // the plot starts 48 of the image's 1294 px in and spans the file's 30.5 s over 1024 px
+  const atTime = (t: number) => ((48 + (t / 30.5) * 1024) / 1294) * box.width;
+  await plot.click({ position: { x: atTime(10.5), y: box.height / 2 } });
   await expect(drawer.getByText("Spectrum at 10s")).toBeInViewport();
+
+  // the frequency scale is the viewer's to choose, kept in this browser
+  const scales = drawer.getByRole("radiogroup", { name: "Frequency scale" });
+  await expect(scales.getByRole("radio", { name: "Linear" })).toHaveAttribute(
+    "aria-checked",
+    "true"
+  );
+  await scales.getByRole("radio", { name: "Mel" }).click();
+  await expect(scales.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
+  await expect(plot).toHaveAttribute("src", /scale=mel/);
+  // the picked window and the open reading stay as they were
+  await expect(drawer.getByText("Spectrum at 10s")).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "More for 2.flac" }).click();
+  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await expect(scales.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
+
+  // and the whole file can be seen across the screen
+  await drawer.getByRole("button", { name: "Open large" }).click();
+  const large = page.getByRole("dialog", { name: "2.flac" });
+  await expect(large.getByRole("img", { name: /^Spectrogram/ })).toBeVisible();
+  const wide = (await large.getByRole("img", { name: /^Spectrogram/ }).boundingBox())!;
+  expect(wide.width).toBeGreaterThan(1000);
+  await page.keyboard.press("Escape");
+  await expect(large).toBeHidden();
 });
 
 test("filters downloads by their analysis, by chip and by word", async ({ page }) => {
