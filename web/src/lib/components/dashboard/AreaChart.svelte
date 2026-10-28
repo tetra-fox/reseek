@@ -1,12 +1,15 @@
 <script lang="ts">
+  import { Axis, Chart, Grid, Highlight, Html, Legend, Svg, Tooltip } from "layerchart";
   import { SvelteSet } from "svelte/reactivity";
 
-  import { timeLabel, timeTicks, valueLabel, valueTicks } from "#lib/dashboard/chart.js";
+  import DitherFill, { type AreaFill } from "#lib/components/charts/DitherFill.svelte";
+  import { axisPadding, LABEL_REM, timeLabel, valueLabel } from "#lib/dashboard/chart.js";
   import type { Point } from "#lib/dashboard/reports.js";
   import type { Series } from "#lib/dashboard/series.js";
+  import { rem } from "#lib/viewport.svelte.js";
 
-  // transfer history as areas over time, a legend that shows and hides each series, and the
-  // bucket under the pointer
+  // transfer history as dithered areas over time on LayerChart, which lays out the axes, the
+  // legend that shows and hides each series, and the tooltip of the bucket under the pointer
   type Props = {
     data: Point[];
     series: Series[];
@@ -17,49 +20,30 @@
 
   let { data, series, visible, label }: Props = $props();
 
-  const HEIGHT = 200;
-  const PAD = { top: 8, right: 8, bottom: 22, left: 64 };
-
-  // the drawing's width follows its box, which the layout sizes; the chart never sizes the box
-  let width = $state(0);
-  let hover = $state<number | null>(null);
-
   const shown = $derived(series.filter((s) => visible.has(s.key)));
   const units = $derived(new Set(shown.map((s) => s.unit)));
   const format = $derived(valueLabel(units.size === 1 ? [...units][0] : null));
-  const min = $derived(data[0]?.timestamp ?? 0);
-  const max = $derived(data.at(-1)?.timestamp ?? 0);
+  const rows = $derived(data.map((p) => ({ ...p, at: new Date(p.timestamp) })));
+  const xLabel = $derived(timeLabel(data[0]?.timestamp ?? 0, data.at(-1)?.timestamp ?? 0));
   const top = $derived(Math.max(0, ...data.flatMap((p) => shown.map((s) => p[s.key]))));
-  const yTicks = $derived(valueTicks(top));
-  const yMax = $derived(yTicks.at(-1) || 1);
-  // as many time labels as fit the width, one for each 72 px: "05:00 PM" with room around it
-  const xTicks = $derived(
-    timeTicks(min, max, Math.max(2, Math.floor((width - PAD.left - PAD.right) / 72)))
-  );
-  const xLabel = $derived(timeLabel(min, max));
-
-  const x = (t: number) =>
-    PAD.left + (max > min ? ((t - min) / (max - min)) * (width - PAD.left - PAD.right) : 0);
-  const y = (v: number) => PAD.top + (1 - v / yMax) * (HEIGHT - PAD.top - PAD.bottom);
-  const area = (s: Series) => {
-    if (!data.length) return "";
-    const line = data.map((p) => `${x(p.timestamp)},${y(p[s.key])}`).join(" L");
-    return `M${line} L${x(max)},${y(0)} L${x(min)},${y(0)} Z`;
-  };
-  const edge = (s: Series) => `M${data.map((p) => `${x(p.timestamp)},${y(p[s.key])}`).join(" L")}`;
-
-  const point = (e: PointerEvent & { currentTarget: SVGSVGElement }) => {
-    if (!data.length) return;
-    const box = e.currentTarget.getBoundingClientRect();
-    const at =
-      min + ((e.clientX - box.left - PAD.left) / (width - PAD.left - PAD.right)) * (max - min);
-    let best = 0;
-    for (let i = 1; i < data.length; i++) {
-      if (Math.abs(data[i].timestamp - at) < Math.abs(data[best].timestamp - at)) best = i;
-    }
-    hover = best;
-  };
+  // the axis labels' room, from the longest one they can show at the text size in use
+  const padding = $derived(axisPadding([format(top), format(top * 1.25), format(0)], rem.px));
+  const tickLabel = { class: "fill-fg-muted tabular-nums", style: `font-size: ${LABEL_REM}rem` };
   const toggle = (key: string) => (visible.has(key) ? visible.delete(key) : visible.add(key));
+
+  /** What the chart says to a screen reader: each series' peak and when it was */
+  const summary = $derived(
+    `${label}: ${
+      shown
+        .map((s) => {
+          const peak = data.reduce((a, b) => (b[s.key] > a[s.key] ? b : a), data[0]);
+          return peak
+            ? `${s.name} peaks at ${valueLabel(s.unit)(peak[s.key])}, ${xLabel(peak.timestamp)}`
+            : s.name;
+        })
+        .join("; ") || "no series shown"
+    }`
+  );
 </script>
 
 <div class="flex flex-col gap-2">
@@ -77,60 +61,53 @@
       </button>
     {/each}
   </div>
-  <div class="relative" bind:clientWidth={width}>
-    <svg
-      role="img"
-      aria-label={label}
-      {width}
-      height={HEIGHT}
-      class="block w-full"
-      onpointermove={point}
-      onpointerleave={() => (hover = null)}>
-      {#each yTicks as t (t)}
-        <line
-          x1={PAD.left}
-          x2={width - PAD.right}
-          y1={y(t)}
-          y2={y(t)}
-          class="stroke-border"
-          stroke-dasharray="3 3" />
-        <text
-          x={PAD.left - 6}
-          y={y(t)}
-          dy="0.32em"
-          text-anchor="end"
-          class="fill-fg-muted text-[10px]">{format(t)}</text>
-      {/each}
-      {#each xTicks as t (t)}
-        <text x={x(t)} y={HEIGHT - 6} text-anchor="middle" class="fill-fg-muted text-[10px]"
-          >{xLabel(t)}</text>
-      {/each}
-      {#each shown as s (s.key)}
-        <path d={area(s)} fill={s.color} fill-opacity="0.15" />
-        <path d={edge(s)} fill="none" stroke={s.color} stroke-width="1.5" />
-      {/each}
-      {#if hover !== null && data[hover]}
-        <line
-          x1={x(data[hover].timestamp)}
-          x2={x(data[hover].timestamp)}
-          y1={PAD.top}
-          y2={HEIGHT - PAD.bottom}
-          class="stroke-fg-subtle" />
-      {/if}
-    </svg>
-    {#if hover !== null && data[hover] && shown.length}
-      {@const p = data[hover]}
-      <div
-        class="pointer-events-none absolute top-2 rounded-control border bg-overlay px-2 py-1 text-xs shadow-raised"
-        style:left={`${Math.min(x(p.timestamp) + 8, width - 180)}px`}>
-        <p class="font-medium">{xLabel(p.timestamp)}</p>
-        {#each shown as s (s.key)}
-          <p class="flex items-center gap-1.5">
-            <span class="rounded-sm size-2" style:background-color={s.color}></span>{s.name}:
-            {valueLabel(s.unit)(p[s.key])}
-          </p>
-        {/each}
-      </div>
-    {/if}
+  <div class="h-52" role="img" aria-label={summary}>
+    <Chart
+      data={rows}
+      x="at"
+      y={(d: (typeof rows)[number]) => shown.map((s) => d[s.key])}
+      yDomain={[0, null]}
+      yNice
+      {padding}
+      tooltipContext={{ mode: "bisect-x" }}>
+      {#snippet children({ context })}
+        {@const point = context.tooltipState.data}
+        <Html pointerEvents={false}>
+          <DitherFill
+            width={context.width}
+            height={context.height}
+            areas={shown.map((s): AreaFill => ({
+              key: s.key,
+              color: s.color,
+              x: rows.map((d) => context.xScale(d.at)),
+              top: rows.map((d) => context.yScale(d[s.key])),
+              floor: rows.map(() => context.yScale(0))
+            }))}
+            hovered={!!point}
+            marker={point ? context.xScale(point.at) : null} />
+        </Html>
+        <Svg>
+          <Grid y class="stroke-border" style="stroke-dasharray: 3 3" />
+          <Axis placement="left" {format} tickSpacing={rem.px * 3} tickLabelProps={tickLabel} />
+          <Axis
+            placement="bottom"
+            format={(t: Date) => xLabel(t.getTime())}
+            tickSpacing={rem.px * 6}
+            tickOcclusion
+            tickLabelProps={tickLabel} />
+          <Highlight lines={{ class: "stroke-fg-subtle" }} />
+        </Svg>
+        <Tooltip.Root>
+          {#snippet children({ data: p })}
+            <Tooltip.Header value={xLabel(p.timestamp)} />
+            <Tooltip.List>
+              {#each shown as s (s.key)}
+                <Tooltip.Item label={s.name} color={s.color} value={valueLabel(s.unit)(p[s.key])} />
+              {/each}
+            </Tooltip.List>
+          {/snippet}
+        </Tooltip.Root>
+      {/snippet}
+    </Chart>
   </div>
 </div>

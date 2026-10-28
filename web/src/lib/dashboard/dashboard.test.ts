@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { timeTicks, valueTicks } from "./chart";
+import { axisPadding } from "./chart";
 import {
   chartData,
   errorCount,
@@ -131,24 +131,9 @@ describe("the outcome bars", () => {
 });
 
 describe("chart axes", () => {
-  it("puts about eleven ticks on round times inside the span", () => {
-    const min = Date.parse("2026-10-26T00:07:00Z");
-    const max = min + 24 * 3_600_000;
-    const ticks = timeTicks(min, max);
-    expect(ticks.length).toBeGreaterThanOrEqual(5);
-    expect(ticks.length).toBeLessThanOrEqual(11);
-    expect(ticks.every((t) => t >= min && t <= max && t % 3_600_000 === 0)).toBe(true);
-    expect(timeTicks(min, min)).toEqual([]);
-  });
-
-  it("keeps at least two ticks when a narrow chart allows few", () => {
-    const min = Date.parse("2026-09-27T00:07:00Z");
-    const max = min + 30 * 86_400_000;
-    expect(timeTicks(min, max, 3).length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("rounds the value axis up to a whole step", () => {
-    expect(valueTicks(97)).toEqual([0, 25, 50, 75, 100]);
-    expect(valueTicks(0)).toEqual([0]);
+  it("leave the value labels room that grows with the longest and with the text size", () => {
+    const at16 = axisPadding(["0 B", "953.7 MB"], 16);
+    expect(at16.left).toBeGreaterThan(axisPadding(["0 B", "9 MB"], 16).left);
+    expect(axisPadding(["0 B", "953.7 MB"], 24).left).toBeGreaterThan(at16.left);
   });
 });
