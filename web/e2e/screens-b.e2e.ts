@@ -18,6 +18,10 @@ test("opens the dashboard, chat, rooms, users, a profile and your profile", asyn
   await expect(page).toHaveURL(/#\/chat$/);
   await page.goto("./#/nowhere");
   await expect(page).toHaveURL(/#\/dashboard$/);
+  // a path under a screen that renders nothing goes to that screen rather than a blank page
+  await page.goto("./#/browse/carol");
+  await expect(page).toHaveURL(/#\/browse$/);
+  await expect(page.getByLabel("Username")).toBeVisible();
 
   await page.getByRole("link", { name: "Users", exact: true }).click();
   await expect(page).toHaveURL(/#\/users$/);

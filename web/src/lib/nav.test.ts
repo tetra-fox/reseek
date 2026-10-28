@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { changesScreen, redirectFor, route, safeReturn, title, userHref } from "./nav";
+import {
+  changesScreen,
+  redirectFor,
+  route,
+  safeReturn,
+  title,
+  unknownTarget,
+  userHref
+} from "./nav";
 
 describe("routes after the hash", () => {
   it("read the path and the query from the hash", () => {
@@ -17,14 +25,21 @@ describe("routes after the hash", () => {
 });
 
 describe("redirects", () => {
-  it("send unknown routes to the dashboard and an agent to System", () => {
+  it("send the root to the dashboard and an agent to System", () => {
     expect(redirectFor("/", false)).toBe("/dashboard");
-    expect(redirectFor("/nowhere", false)).toBe("/dashboard");
     expect(redirectFor("/searches/42", false)).toBeNull();
     expect(redirectFor("/searches/42", true)).toBe("/system");
     expect(redirectFor("/system/logs", true)).toBeNull();
-    expect(redirectFor("/rooms", false)).toBe("/chat");
     expect(redirectFor("/profile", false)).toBeNull();
+  });
+
+  it("send a path no screen renders to the screen it belongs to, else the dashboard", () => {
+    expect(unknownTarget("/nowhere")).toBe("/dashboard");
+    expect(unknownTarget("/browse/carol")).toBe("/browse");
+    expect(unknownTarget("/downloads/x/y")).toBe("/downloads");
+    expect(unknownTarget("/system/nothing")).toBe("/system");
+    expect(unknownTarget("/rooms")).toBe("/chat");
+    expect(unknownTarget("/rooms/indie")).toBe("/chat");
   });
 
   it("only return to a route of this app after login", () => {
