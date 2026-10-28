@@ -27,6 +27,7 @@ mod messaging;
 mod options;
 mod profile;
 mod relay;
+mod relay_socket;
 mod searches;
 mod session;
 mod shares;
@@ -46,6 +47,7 @@ use serde::de::DeserializeOwned;
 pub use files::LocalFile;
 pub use live::{Live, LiveEvent, LiveStream};
 pub use relay::AgentCall;
+pub use relay_socket::{RelayReceived, RelaySocket};
 
 /// What a call that failed failed with.
 #[derive(Debug, thiserror::Error)]
@@ -79,6 +81,9 @@ pub enum Error {
   /// the base URL is not one
   #[error("not a base URL: {0}")]
   Base(String),
+  /// the relay socket could not be opened, written or read
+  #[error("relay socket: {0}")]
+  Socket(String),
 }
 
 impl Error {
@@ -108,6 +113,8 @@ pub enum Credential {
 #[derive(Clone)]
 pub struct Client {
   http: reqwest::Client,
+  /// the TLS settings of `http`, for the relay socket
+  tls: Arc<rustls::ClientConfig>,
   /// the daemon's base URL with its URL base, without a trailing `/`
   base: Arc<str>,
   credential: Option<Credential>,
@@ -142,14 +149,16 @@ impl Client {
         .parse()
         .map_err(|_| Error::Base(format!("{base}: no origin")))?,
     );
+    let tls = Arc::new(tls);
     let http = reqwest::Client::builder()
-      .use_preconfigured_tls(tls)
+      .use_preconfigured_tls((*tls).clone())
       .default_headers(headers)
       .cookie_store(true)
       .redirect(reqwest::redirect::Policy::none())
       .build()?;
     Ok(Self {
       http,
+      tls,
       base: base.trim_end_matches('/').into(),
       credential: None,
     })
