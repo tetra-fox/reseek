@@ -19,7 +19,7 @@ use base64::Engine;
 use cascade::Watcher;
 use soulseek_client::{BrowseOptions, ClientError, TransferState};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, trace};
+use tracing::debug;
 
 use super::browse::Browses;
 use super::{Directory, PeerInfo, Touch};
@@ -173,9 +173,9 @@ impl Users {
         tokio::time::timeout(REFRESH_TIMEOUT, self.fetch_info(username)),
       );
       (
-        status.ok().and_then(Result::ok),
-        statistics.ok().and_then(Result::ok),
-        fetched.ok().and_then(Result::ok),
+        refreshed("status", username, status),
+        refreshed("statistics", username, statistics),
+        refreshed("info", username, fetched),
       )
     };
     if !profile.user.known && !self.agent && !self.exists(username).await {
@@ -184,18 +184,15 @@ impl Users {
       )));
     }
     let now = chrono::Utc::now();
-    match status {
-      Some(status) => {
-        profile.user.presence = Some(status.presence);
-        profile.user.presence_at = Some(now);
-        profile.user.is_privileged = status.is_privileged;
-        let touch = Touch::Status {
-          presence: status.presence,
-          is_privileged: status.is_privileged,
-        };
-        self.directory.touch(username, touch).await;
-      }
-      None => trace!(username, "status not refreshed"),
+    if let Some(status) = status {
+      profile.user.presence = Some(status.presence);
+      profile.user.presence_at = Some(now);
+      profile.user.is_privileged = status.is_privileged;
+      let touch = Touch::Status {
+        presence: status.presence,
+        is_privileged: status.is_privileged,
+      };
+      self.directory.touch(username, touch).await;
     }
     match (statistics, profile.user.statistics.as_mut()) {
       (Some(fresh), _) => {
@@ -447,5 +444,25 @@ impl UserService for Users {
       self.messaging.purge(username).await?;
     }
     Ok(())
+  }
+}
+
+/// What asking for `what` of `username` within the refresh's time gave; `None`, with the
+/// reason logged, when it failed or took too long, and the stored value is shown instead.
+fn refreshed<T>(
+  what: &str,
+  username: &str,
+  asked: Result<Result<T, ClientError>, tokio::time::error::Elapsed>,
+) -> Option<T> {
+  match asked {
+    Ok(Ok(value)) => Some(value),
+    Ok(Err(e)) => {
+      debug!(username, what, error = %e, "profile part not refreshed");
+      None
+    }
+    Err(_) => {
+      debug!(username, what, "profile part not refreshed in time");
+      None
+    }
   }
 }
