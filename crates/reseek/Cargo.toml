@@ -6,19 +6,9 @@ edition.workspace = true
 publish.workspace = true
 license = "AGPL-3.0-only"
 
-[features]
-default = ["webui"]
-# embeds web/build (or a one-line page when it was not built) into the `reseek` binary
-webui = ["dep:rust-embed"]
-
 [[bin]]
 name = "reseek"
 path = "src/bin/reseek.rs"
-required-features = ["webui"]
-
-[[bin]]
-name = "reseek-headless"
-path = "src/bin/reseek-headless.rs"
 
 [dependencies]
 api-types.workspace = true
@@ -67,7 +57,8 @@ regex = "1"
 reqwest = { workspace = true, features = ["multipart", "stream"] }
 rpassword = "7"
 rusqlite = { version = "0.39", features = ["backup", "bundled", "trace"] }
-rust-embed = { version = "8", features = ["interpolate-folder-path", "mime-guess"], optional = true }
+# embeds the UI build at `WEBUI_DIR`, or a one-line page when it was not built
+rust-embed = { version = "8", features = ["interpolate-folder-path", "mime-guess"] }
 rustls.workspace = true
 serde.workspace = true
 serde_html_form = "0.2"

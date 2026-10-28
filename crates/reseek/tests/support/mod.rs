@@ -64,8 +64,9 @@ pub async fn events(api: &Client, kind: &str, count: usize) -> Vec<serde_json::V
   }
 }
 
-/// The headless daemon program.
-pub const PROGRAM: &str = env!("CARGO_BIN_EXE_reseek-headless");
+/// The daemon program. Tests run it with its UI: the API's password login, which every test
+/// signs in with, is refused under `--headless`.
+pub const PROGRAM: &str = env!("CARGO_BIN_EXE_reseek");
 
 /// The raw answer to a body-less request.
 pub fn send(port: u16, method: &str, path: &str) -> Option<String> {

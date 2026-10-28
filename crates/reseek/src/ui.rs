@@ -16,16 +16,6 @@ use tracing::{info, warn};
 
 use crate::config::Options;
 
-/// What the program carries of the UI.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Bundle {
-  /// the UI built into the program, or a page saying it was not built
-  #[cfg(feature = "webui")]
-  Embedded,
-  /// no UI
-  None,
-}
-
 /// The page served when the program was built without a UI build.
 const NOT_BUILT: &str = "<!doctype html><title>reseek</title><p>UI not built, run `just \
                          web-build`.</p>\n";
@@ -36,26 +26,23 @@ const IMMUTABLE: &str = "public, max-age=31536000, immutable";
 /// Where the UI is served from.
 #[derive(Clone, Debug)]
 pub enum Ui {
-  /// not served: headless, turned off, or a build without one
+  /// not served: headless or turned off
   Off,
-  /// the bundle built into the program
-  #[cfg(feature = "webui")]
+  /// the bundle built into the program, or a page saying it was not built
   Embedded,
   /// a directory of the user's
   Directory(PathBuf),
 }
 
-#[cfg(feature = "webui")]
 #[derive(rust_embed::RustEmbed)]
 #[folder = "$WEBUI_DIR"]
 #[allow_missing = true]
 struct Assets;
 
 impl Ui {
-  /// The UI `options` ask for from what `bundle` carries. `program_dir` is where
-  /// `web.content_path` is relative to.
-  pub fn new(bundle: Bundle, options: &Options, program_dir: &Path) -> Self {
-    if options.headless || !options.web.ui || bundle == Bundle::None {
+  /// The UI `options` ask for. `program_dir` is where `web.content_path` is relative to.
+  pub fn new(options: &Options, program_dir: &Path) -> Self {
+    if options.headless || !options.web.ui {
       warn!("Running in headless mode; web UI is DISABLED");
       return Self::Off;
     }
@@ -64,17 +51,12 @@ impl Ui {
       info!(path = %dir.display(), "Serving static content from directory");
       return Self::Directory(dir);
     }
-    #[cfg(feature = "webui")]
-    {
-      if Assets::get("index.html").is_none() {
-        warn!("the web UI was not built into this program; it serves a page saying so");
-      } else {
-        info!("Serving the built-in web UI");
-      }
-      Self::Embedded
+    if Assets::get("index.html").is_none() {
+      warn!("the web UI was not built into this program; it serves a page saying so");
+    } else {
+      info!("Serving the built-in web UI");
     }
-    #[cfg(not(feature = "webui"))]
-    Self::Off
+    Self::Embedded
   }
 
   /// Whether a request for `path`, with the URL base taken off, is answered with the app's
@@ -147,7 +129,6 @@ impl Ui {
     };
     match self {
       Self::Off => None,
-      #[cfg(feature = "webui")]
       Self::Embedded => Assets::get(relative).map(|file| (file.data.into_owned(), mime())),
       Self::Directory(dir) => {
         let path = inside(dir, relative)?;
@@ -261,12 +242,9 @@ mod tests {
       answer(&Ui::Off, Method::GET, "/searches").await.status(),
       StatusCode::NOT_FOUND
     );
-    #[cfg(feature = "webui")]
-    {
-      let embedded = answer(&Ui::Embedded, Method::GET, "/browse?user=a").await;
-      assert_eq!(location(&embedded), "/reseek/#/browse?user=a");
-      let page = answer(&Ui::Embedded, Method::GET, "/").await;
-      assert_eq!(page.status(), StatusCode::OK);
-    }
+    let embedded = answer(&Ui::Embedded, Method::GET, "/browse?user=a").await;
+    assert_eq!(location(&embedded), "/reseek/#/browse?user=a");
+    let page = answer(&Ui::Embedded, Method::GET, "/").await;
+    assert_eq!(page.status(), StatusCode::OK);
   }
 }

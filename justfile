@@ -3,12 +3,12 @@
 default:
     @just --list
 
-# headless daemon with restart-on-change plus the vite ui with proxy
+# the daemon without its built-in ui, restarted on change, plus the vite ui with proxy
 dev: web-install
     #!/usr/bin/env bash
     set -euo pipefail
     trap 'kill 0' EXIT
-    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek --bin reseek-headless &
+    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek -- --web-ui=false &
     pnpm --dir web dev
 
 # pnpm build, then cargo build --release (cargo never runs pnpm)
@@ -71,7 +71,7 @@ web-smoke:
       exit 0
     fi
     {{ just_executable() }} --justfile {{ justfile() }} web-build
-    cargo build -p reseek --bin reseek
+    cargo build -p reseek
     CHROMIUM_BIN="$chromium" pnpm --dir web smoke
 
 # the web UI's packages as the lockfile pins them
