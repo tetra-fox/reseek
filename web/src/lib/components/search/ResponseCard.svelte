@@ -23,11 +23,13 @@
   import { asItem, type Enqueued, enqueue } from "#lib/downloads.js";
   import { fetchFolder } from "#lib/folders.js";
   import {
+    columnWidth,
     formatAttributes,
     formatBytes,
     formatSeconds,
     getFileName,
-    plural
+    plural,
+    WIDEST
   } from "#lib/format.js";
   import { href } from "#lib/nav.js";
   import { type Result, type ResultFile, resultFiles } from "#lib/search/results.js";
@@ -55,9 +57,10 @@
   let { result, searchId, cards, siblings, connected, canWrite, ondismiss }: Props = $props();
 
   /** the file table's columns: tick, name, size, attributes, length, menu */
-  // a phone's rows have no room for a file's quality and length, so they are left out there
-  const COLUMNS = "2.25rem minmax(12rem, 1fr) 6rem 9rem 4.5rem 2.5rem";
-  const PHONE_COLUMNS = "2.25rem minmax(0, 1fr) 5rem 2.5rem";
+  // the figures hold their widest value in the rows' own font, which the cells share. A phone's
+  // rows show the tick, the name with its size under it, and the menu
+  const COLUMNS = `2.25rem minmax(12rem, 1fr) ${columnWidth(WIDEST.size)} 9rem ${columnWidth(WIDEST.length)} 2.5rem`;
+  const PHONE_COLUMNS = "2.25rem minmax(0, 1fr) 2.5rem";
 
   const response = $derived(result.response);
   const name = $derived(response.username);
@@ -205,13 +208,17 @@
               inside.map((f) => f.filename),
               on
             )} />
-        {#if locked}<LockIcon class="size-3.5 text-fg-muted" />{/if}
-        <span
-          class={["min-w-0 truncate font-mono text-xs", depth === 0 ? "text-fg" : "text-fg-muted"]}
-          title={node.path}>{node.label}</span>
-        <span class="shrink-0 text-xs text-fg-subtle tabular-nums">
-          {plural(node.count, "file", "files")} · {formatBytes(node.bytes)}
-        </span>
+        {#if locked}<LockIcon class="size-3.5 shrink-0 text-fg-muted" />{/if}
+        <!-- the name's track fills before the count's, so the count gives way first -->
+        <div
+          class="grid min-w-0 grid-cols-[minmax(0,max-content)_minmax(0,1fr)] items-center gap-1.5">
+          <span
+            class={["truncate font-mono text-xs", depth === 0 ? "text-fg" : "text-fg-muted"]}
+            title={node.path}>{node.label}</span>
+          <span class="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-fg-subtle">
+            {plural(node.count, "file", "files")} · {formatBytes(node.bytes)}
+          </span>
+        </div>
         <div class="ml-auto flex shrink-0 items-center gap-0.5 row-action">
           {#if canWrite}
             <Button
@@ -222,8 +229,8 @@
               aria-label={`Download folder, ${plural(node.count, "file", "files")}, ${formatBytes(node.bytes)}`}
               onclick={() => void download(inside)}>
               <!-- a phone shows the icon alone, the row having no room for the words -->
-              <DownloadIcon /><span class="max-sm:hidden">Download folder</span>
-              <span class="font-normal text-fg-muted max-sm:hidden">
+              <DownloadIcon /><span class="max-md:hidden">Download folder</span>
+              <span class="font-normal text-fg-muted max-md:hidden">
                 {node.count}, {formatBytes(node.bytes)}
               </span>
             </Button>
@@ -252,16 +259,30 @@
           style:padding-left="calc((var(--depth) - 1) * 1.25rem + 0.25rem)"
           title={file.filename}>
           {#if file.locked}<LockIcon class="size-3.5 shrink-0 text-fg-muted" />{/if}
-          <span class="truncate">{getFileName(file.filename)}</span>
+          {#if viewport.phone}
+            <!-- a phone gives the name the row's width, with the size under it -->
+            <span class="flex min-w-0 flex-col py-1">
+              <span class="truncate">{getFileName(file.filename)}</span>
+              <span class="text-xs whitespace-nowrap text-fg-muted tabular-nums"
+                >{formatBytes(file.size)}</span>
+            </span>
+          {:else}
+            <span class="truncate">{getFileName(file.filename)}</span>
+          {/if}
         </span>
-        <span role="gridcell" class="pr-3 text-right tabular-nums">{formatBytes(file.size)}</span>
+        {#if !viewport.phone}
+          <span role="gridcell" class="pr-3 text-right whitespace-nowrap tabular-nums"
+            >{formatBytes(file.size)}</span>
+        {/if}
         <span
           role="gridcell"
           class="flex min-w-0 items-center gap-1 truncate text-fg-muted max-md:hidden">
           {#if file.suspect}<Suspect suspect={file.suspect} />{/if}
           {formatAttributes(file)}
         </span>
-        <span role="gridcell" class="pr-3 text-right text-fg-muted tabular-nums max-md:hidden"
+        <span
+          role="gridcell"
+          class="pr-3 text-right whitespace-nowrap text-fg-muted tabular-nums max-md:hidden"
           >{formatSeconds(file.length)}</span>
         <span role="gridcell" class="flex justify-end pr-1">
           <FileMenu
