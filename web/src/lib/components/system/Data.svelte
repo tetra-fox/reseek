@@ -107,15 +107,18 @@
           role="row"
           {...list.line(d, i)}
           class={[
-            "grid grid-cols-[10rem_1fr_6rem_6rem_6rem] items-center gap-2 border-b px-5 py-1.5 last:border-b-0 hover:bg-hover",
+            // a phone puts the path on a line of its own and leaves out the log's size
+            "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-0.5 border-b px-5 py-1.5 last:border-b-0 hover:bg-hover md:grid-cols-[10rem_minmax(0,1fr)_6rem_6rem_6rem]",
             list.selected.has(d.name) && "bg-accent-soft/60",
             list.isFocused(d) && "ring-1 ring-accent ring-inset"
           ]}>
-          <span role="gridcell" class="font-medium">{d.name}</span>
-          <span role="gridcell" class="truncate font-mono text-xs text-fg-muted" title={d.path}
-            >{d.path}</span>
+          <span role="gridcell" class="truncate font-medium">{d.name}</span>
+          <span
+            role="gridcell"
+            class="truncate font-mono text-xs text-fg-muted max-md:col-span-3 max-md:row-start-2"
+            title={d.path}>{d.path}</span>
           <span role="gridcell" class="text-right tabular-nums">{formatBytes(d.sizeBytes)}</span>
-          <span role="gridcell" class="text-right text-xs text-fg-muted tabular-nums"
+          <span role="gridcell" class="text-right text-xs text-fg-muted tabular-nums max-md:hidden"
             >{d.walSizeBytes ? `+${formatBytes(d.walSizeBytes)} log` : ""}</span>
           <span role="gridcell" class="flex justify-end">
             {#if admin}
@@ -133,10 +136,13 @@
 </Card>
 
 <Card title="Retention">
-  <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
+  <dl
+    class="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-1 text-sm md:grid-cols-[auto_minmax(0,1fr)]">
     {#each retention as [key, value] (key)}
-      <dt class="font-mono text-xs text-fg-muted">{key}</dt>
-      <dd>{value === null || value === undefined ? "Kept forever" : String(value)}</dd>
+      <dt class="font-mono text-xs wrap-anywhere text-fg-muted">{key}</dt>
+      <dd class="max-md:mb-1">
+        {value === null || value === undefined ? "Kept forever" : String(value)}
+      </dd>
     {/each}
   </dl>
   <a href={href("/system/settings")} class="text-sm text-accent hover:underline"

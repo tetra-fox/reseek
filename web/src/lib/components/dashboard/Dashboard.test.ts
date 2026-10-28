@@ -100,7 +100,7 @@ describe("the dashboard", () => {
         .map((r) => r.url.searchParams.get("sortBy"));
     const button = (label: string) =>
       [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === label)!;
-    button("Total size").click();
+    button("Size").click();
     await flush();
     expect(sorts().slice(-2)).toEqual(["TotalBytes", "TotalBytes"]);
     // a background reload a moment later reads the same range again

@@ -121,7 +121,7 @@
   <Skeleton class="h-24" />
 {/if}
 
-<div class="grid gap-section lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+<div class="grid grid-cols-[minmax(0,1fr)] gap-section lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
   <Card title="Transfers over time">
     {#if histogramError}<p class="text-sm text-danger">
         Couldn't load the history: {histogramError}

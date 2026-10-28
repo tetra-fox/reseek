@@ -51,51 +51,56 @@
     });
   });
 
-  const COLUMNS: { by: Sort; label: string }[] = [
-    { by: "Count", label: "Files" },
-    { by: "TotalBytes", label: "Total size" },
-    { by: "AverageSpeed", label: "Average speed" }
+  // short headers and fixed widths keep the figures in view on a phone; the name gives way
+  const COLUMNS: { by: Sort; label: string; title: string; width: string }[] = [
+    { by: "Count", label: "Files", title: "Files", width: "w-14" },
+    { by: "TotalBytes", label: "Size", title: "Total size", width: "w-18" },
+    { by: "AverageSpeed", label: "Speed", title: "Average speed", width: "w-22" }
   ];
 </script>
 
 {#if error}<p class="text-sm text-danger">{error}</p>{/if}
-<div class="grid gap-section lg:grid-cols-2">
+<div class="grid grid-cols-[minmax(0,1fr)] gap-section lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
   {#each [{ direction: "Download" as const, title: "Downloads", Icon: DownloadIcon }, { direction: "Upload" as const, title: "Uploads", Icon: UploadIcon }] as table (table.direction)}
     <section class="flex flex-col gap-2">
       <h3 class="flex items-center gap-1.5 text-sm font-semibold">
         <table.Icon class="size-4" />{table.title}
         {#if loading}<Spinner class="size-3.5" />{/if}
       </h3>
-      <table class="w-full text-sm">
+      <table class="w-full table-fixed text-sm">
         <thead class="text-xs text-fg-muted">
           <tr class="border-b">
-            <th class="w-8 py-1 text-right font-medium">#</th>
+            <th class="w-6 py-1 text-right font-medium">#</th>
             <th class="px-2 py-1 text-left font-medium">Username</th>
             {#each COLUMNS as c (c.by)}
               <th
-                class="px-2 py-1 text-right font-medium"
+                class={["px-2 py-1 text-right font-medium", c.width]}
                 aria-sort={sortBy === c.by ? "descending" : "none"}>
                 <button
                   type="button"
                   class="inline-flex items-center gap-1"
+                  title={c.title}
                   onclick={() => (picked = { range, by: c.by })}>
                   {c.label}
                   {#if sortBy === c.by}<ArrowDownIcon class="size-3" />{/if}
                 </button>
               </th>
             {/each}
-            <th class="w-8"><span class="sr-only">Browse</span></th>
+            <!-- a phone leaves the browse button out, for the name's sake; the name's menu has it -->
+            <th class="w-10 max-sm:hidden"><span class="sr-only">Browse</span></th>
           </tr>
         </thead>
         <tbody>
           {#each rows[table.direction] as entry, i (entry.username)}
             <tr class="border-b last:border-b-0">
               <td class="py-1 text-right text-fg-muted tabular-nums">{i + 1}</td>
-              <td class="px-2 py-1"><Username name={entry.username} /></td>
+              <td class="overflow-hidden px-2 py-1"><Username name={entry.username} /></td>
               <td class="px-2 py-1 text-right tabular-nums">{entry.count.toLocaleString()}</td>
-              <td class="px-2 py-1 text-right tabular-nums">{formatBytes(entry.totalBytes)}</td>
-              <td class="px-2 py-1 text-right tabular-nums">{formatSpeed(entry.averageSpeed)}</td>
-              <td>
+              <td class="px-2 py-1 text-right whitespace-nowrap tabular-nums"
+                >{formatBytes(entry.totalBytes)}</td>
+              <td class="px-2 py-1 text-right whitespace-nowrap tabular-nums"
+                >{formatSpeed(entry.averageSpeed)}</td>
+              <td class="max-sm:hidden">
                 <Button
                   variant="ghost"
                   size="icon-sm"

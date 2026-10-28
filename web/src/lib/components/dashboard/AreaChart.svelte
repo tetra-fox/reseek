@@ -20,7 +20,8 @@
   const HEIGHT = 200;
   const PAD = { top: 8, right: 8, bottom: 22, left: 64 };
 
-  let width = $state(600);
+  // the drawing's width follows its box, which the layout sizes; the chart never sizes the box
+  let width = $state(0);
   let hover = $state<number | null>(null);
 
   const shown = $derived(series.filter((s) => visible.has(s.key)));
@@ -79,7 +80,7 @@
       aria-label={label}
       {width}
       height={HEIGHT}
-      class="block"
+      class="block w-full"
       onpointermove={point}
       onpointerleave={() => (hover = null)}>
       {#each yTicks as t (t)}
