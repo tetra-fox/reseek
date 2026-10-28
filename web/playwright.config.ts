@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 import { defineConfig } from "@playwright/test";
 
 const port = Number(process.env.SMOKE_PORT ?? 5139);
+/** the daemon with real transfers, logged in to a soulfind of its own when there is one */
+const networkPort = port + 10;
 
 /** The browser to drive: CHROMIUM_BIN, else a chromium on PATH */
 const chromium = (): string => {
@@ -23,7 +25,7 @@ export default defineConfig({
   projects: [
     {
       name: "localhost",
-      testIgnore: "**/insecure.e2e.ts",
+      testIgnore: ["**/insecure.e2e.ts", "**/network.e2e.ts"],
       use: {
         baseURL: `http://127.0.0.1:${port}/reseek/`,
         launchOptions: { executablePath: chromium() }
@@ -40,12 +42,28 @@ export default defineConfig({
           args: ["--host-resolver-rules=MAP reseek.test 127.0.0.1"]
         }
       }
+    },
+    {
+      name: "network",
+      testMatch: "**/network.e2e.ts",
+      use: {
+        baseURL: `http://127.0.0.1:${networkPort}/reseek/`,
+        launchOptions: { executablePath: chromium() }
+      }
     }
   ],
-  webServer: {
-    command: "./e2e/serve.sh",
-    url: `http://127.0.0.1:${port}/reseek/`,
-    reuseExistingServer: false,
-    env: { SMOKE_PORT: String(port) }
-  }
+  webServer: [
+    {
+      command: "./e2e/serve.sh",
+      url: `http://127.0.0.1:${port}/reseek/`,
+      reuseExistingServer: false,
+      env: { SMOKE_PORT: String(port) }
+    },
+    {
+      command: "./e2e/serve.sh",
+      url: `http://127.0.0.1:${networkPort}/reseek/`,
+      reuseExistingServer: false,
+      env: { SMOKE_PORT: String(networkPort), SMOKE_NETWORK: "1" }
+    }
+  ]
 });
