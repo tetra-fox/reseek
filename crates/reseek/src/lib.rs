@@ -23,6 +23,7 @@ pub mod network;
 pub mod paths;
 pub mod profile;
 pub mod safety;
+pub mod scripts;
 pub mod searches;
 pub mod services;
 pub mod shares;

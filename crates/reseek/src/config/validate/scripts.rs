@@ -4,11 +4,9 @@ use api_types::events::EventType;
 
 use super::Report;
 use crate::config::{Integrations, Script};
+use crate::scripts::WILDCARDS;
 
 const KEY: &str = "integrations.scripts";
-
-/// Names in `on` that match every event.
-const WILDCARDS: &[&str] = &["Any", "All", "*"];
 
 pub(super) fn check(integrations: &Integrations, report: &mut Report) {
   for (name, script) in &integrations.scripts {
@@ -24,10 +22,16 @@ fn check_script(name: &str, script: &Script, report: &mut Report) {
       format!("The field {on} contains one or more null or empty values"),
     );
   }
+  // a script's own record runs no script, so naming it would never run one
   let names: Vec<&str> = WILDCARDS
     .iter()
     .copied()
-    .chain(EventType::ALL.iter().map(|kind| kind.name()))
+    .chain(
+      EventType::ALL
+        .iter()
+        .filter(|&&kind| kind != EventType::ScriptRunCompleted)
+        .map(|kind| kind.name()),
+    )
     .collect();
   let known = |event: &str| names.iter().any(|name| name.eq_ignore_ascii_case(event));
   if script
@@ -102,6 +106,11 @@ mod tests {
     assert!(found[0].ends_with("contains one or more null or empty values"));
     assert!(found[1].contains("must all be one of: Any, All, *, DownloadFileComplete"));
     assert_eq!(problems(command(&["None"])).len(), 1, "None never matches");
+    assert_eq!(
+      problems(command(&["ScriptRunCompleted"])).len(),
+      1,
+      "a run's record runs no script"
+    );
   }
 
   #[test]

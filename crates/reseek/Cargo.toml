@@ -75,7 +75,7 @@ subtle = "2"
 sysinfo = { version = "0.39", default-features = false, features = ["disk", "network", "system"] }
 thiserror.workspace = true
 time = "0.3"
-tokio = { workspace = true, features = ["rt-multi-thread", "signal"] }
+tokio = { workspace = true, features = ["process", "rt-multi-thread", "signal"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws_lc_rs", "logging", "tls12"] }
 tokio-util = { workspace = true, features = ["rt"] }
 toml.workspace = true
@@ -92,9 +92,10 @@ uuid.workspace = true
 walkdir = "2"
 webpki-roots.workspace = true
 
-# deletes relative to an opened directory, never through a link
+# deletes relative to an opened directory, never through a link, and kills a script's process
+# group
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "1", features = ["fs"] }
+rustix = { version = "1", features = ["fs", "process"] }
 
 [dev-dependencies]
 api-client.workspace = true

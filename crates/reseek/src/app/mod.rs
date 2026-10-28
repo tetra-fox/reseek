@@ -37,6 +37,7 @@ use crate::logging::{self, LogBuffer, Logging, Sinks};
 use crate::messaging::Messaging;
 use crate::network::Network;
 use crate::paths::{Defaults, InstanceLock, Paths};
+use crate::scripts::{self, Scripts};
 use crate::searches::Searches;
 use crate::services::Services;
 use crate::shares::Shares;
@@ -171,6 +172,13 @@ impl AppState {
       )));
       async { Ok(()) }
     });
+    Scripts::start(
+      config.clone(),
+      &events,
+      paths.scripts.clone(),
+      scripts::shell(std::env::var_os("SHELL")),
+      shutdown.clone(),
+    );
     let location = paths.databases(&startup.values);
     let transfers = crate::transfers::open(&location)
       .await
