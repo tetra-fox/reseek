@@ -20,6 +20,7 @@ fn settings() -> Settings {
     sampled_windows: 240,
     scale: Scale::Log,
     deadline: Instant::now() + Duration::from_secs(600),
+    progress: None,
   }
 }
 
@@ -336,14 +337,17 @@ fn too_little_audio_is_inconclusive() {
 fn a_long_file_is_sampled_at_windows_spread_over_it() {
   let dir = tempfile::tempdir().unwrap();
   let path = flac(dir.path(), "a.flac", &music(1, 44_100, pink), 16);
+  let progress = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
   let settings = Settings {
     max_full_seconds: 10.0,
     sampled_windows: 20,
+    progress: Some(progress.clone()),
     ..settings()
   };
   let measured = engine::run(&path, &settings, &CancellationToken::new()).unwrap();
   assert!(measured.sampled);
   assert_eq!(measured.windows.len(), 20);
+  assert_eq!(progress.load(std::sync::atomic::Ordering::Relaxed), 1000);
   let starts: Vec<f64> = measured.windows.iter().map(|w| w.t).collect();
   assert_eq!(starts.first(), Some(&0.0));
   assert_eq!(starts.last(), Some(&32.0), "the last whole second");

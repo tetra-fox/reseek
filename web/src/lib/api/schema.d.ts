@@ -59,6 +59,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/analysis/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Takes a queued analysis off the queue, or stops a running one. */
+        delete: operations["cancel_job"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/application": {
         parameters: {
             query?: never;
@@ -526,6 +543,23 @@ export interface paths {
         };
         /** A file's spectrogram as a PNG image. A link token does not load it; the session does. */
         get: operations["spectrogram_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/files/{root}/files/{path}/analysis/windows/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The spectrum of one window of a file's analysis, as the spectrogram's column shows it. */
+        get: operations["window_file"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2051,6 +2085,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/transfers/downloads/{username}/{id}/analysis/windows/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The spectrum of one window of a succeeded download's analysis. */
+        get: operations["window_download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/transfers/downloads/{username}/{id}/content": {
         parameters: {
             query?: never;
@@ -2798,6 +2849,11 @@ export interface components {
             id: string;
             /** @description the file's local path */
             path: string;
+            /**
+             * Format: double
+             * @description how far the worker is through the file, from 0 to 1; null while queued
+             */
+            progress?: number | null;
             /**
              * Format: date-time
              * @description when it was queued
@@ -7364,6 +7420,23 @@ export interface components {
             /** @enum {string} */
             kind: "trustedNetwork";
         };
+        /** @description The spectrum of one analysed window, as `GET .../analysis/windows/{index}` answers it. */
+        WindowSpectrum: {
+            /** @description the level at each point, in dB relative to a full-scale sine, at least -160 */
+            db: number[];
+            /** @description the frequency of each point, in Hz, highest first: the middle of each spectrogram row */
+            hz: number[];
+            /**
+             * Format: int32
+             * @description the window's position in the report's windows
+             */
+            index: number;
+            /**
+             * Format: double
+             * @description where the window starts, in seconds from the start of the file
+             */
+            t: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -7478,6 +7551,67 @@ export interface operations {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    cancel_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the job's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description cancelled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9272,6 +9406,64 @@ export interface operations {
                 };
                 content: {
                     "image/png": components["schemas"]["FileContent"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    window_file: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the directory root */
+                root: components["schemas"]["FileRoot"];
+                /** @description the file's path under the root, base64 */
+                path: string;
+                /** @description the window's position in the report's windows */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WindowSpectrum"];
                 };
             };
             400: {
@@ -14914,6 +15106,64 @@ export interface operations {
                 };
                 content: {
                     "image/png": components["schemas"]["FileContent"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    window_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the peer */
+                username: string;
+                /** @description the download's id */
+                id: string;
+                /** @description the window's position in the report's windows */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WindowSpectrum"];
                 };
             };
             400: {

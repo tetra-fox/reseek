@@ -6,6 +6,7 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Instant;
 
 use api_types::analysis::{AnalysisCompleted, AnalysisJob, AnalysisJobState};
@@ -13,6 +14,7 @@ use api_types::events::{Event, FileAnalysisComplete};
 use api_types::live::LiveFrame;
 use chrono::{DateTime, Utc};
 use tokio::sync::broadcast::error::RecvError;
+use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 use uuid::Uuid;
 
@@ -36,6 +38,10 @@ pub(super) struct Job {
   pub file: LocalFile,
   pub queued_at: DateTime<Utc>,
   pub started_at: Option<DateTime<Utc>>,
+  /// cancelled when the job is cancelled or the daemon stops
+  pub cancel: CancellationToken,
+  /// how far the worker is, in thousandths of the file
+  pub progress: Arc<AtomicU32>,
 }
 
 impl Job {
@@ -52,6 +58,9 @@ impl Job {
       },
       queued_at: self.queued_at,
       started_at: self.started_at,
+      progress: self
+        .started_at
+        .map(|_| f64::from(self.progress.load(Ordering::Relaxed)) / 1000.0),
     }
   }
 }
@@ -80,6 +89,12 @@ pub(super) fn image_paths(dir: &Path, name: &str) -> (PathBuf, PathBuf) {
     dir.join(format!("{name}.png")),
     dir.join(format!("{name}.plain.png")),
   )
+}
+
+/// The spectrogram column of every window of a report, one after another, kept beside its
+/// images for showing one window's spectrum.
+pub(super) fn columns_path(dir: &Path, name: &str) -> PathBuf {
+  dir.join(format!("{name}.columns"))
 }
 
 /// Starts queued jobs whenever a worker is free, until the daemon stops.
@@ -127,7 +142,7 @@ fn start_free(analysis: &Arc<Analysis>) {
 }
 
 /// How an analysis runs under the options now.
-fn settings(options: &Options) -> Settings {
+fn settings(options: &Options, progress: Arc<AtomicU32>) -> Settings {
   let analysis = &options.analysis;
   Settings {
     max_full_seconds: f64::from(analysis.max_full_minutes) * 60.0,
@@ -137,6 +152,7 @@ fn settings(options: &Options) -> Settings {
       SpectrogramScale::Linear => Scale::Linear,
     },
     deadline: Instant::now() + analysis.timeout,
+    progress: Some(progress),
   }
 }
 
@@ -152,8 +168,8 @@ async fn run(analysis: Arc<Analysis>, job: Job) {
 }
 
 async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
-  let settings = settings(&analysis.config.current().values);
-  let cancel = analysis.shutdown.child_token();
+  let settings = settings(&analysis.config.current().values, job.progress.clone());
+  let cancel = job.cancel.clone();
   let file = job.file.clone();
   let images = analysis.images.clone();
   let modified = modified_text(file.modified);
@@ -177,12 +193,17 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
         let kept = render(&picture)
           .map_err(|e| e.to_string())
           .and_then(|rendered| {
-            write_images(&images, &image, &rendered.guided, &rendered.plain)?;
-            Ok(rendered)
+            let columns: Vec<u8> = measured
+              .windows
+              .iter()
+              .flat_map(|w| w.column.iter().copied())
+              .collect();
+            write_images(&images, &image, &rendered.guided, &rendered.plain, &columns)?;
+            Ok((rendered, columns.len()))
           });
         match kept {
-          Ok(rendered) => {
-            let bytes = (rendered.guided.len() + rendered.plain.len()) as u64;
+          Ok((rendered, columns)) => {
+            let bytes = (rendered.guided.len() + rendered.plain.len() + columns) as u64;
             Some((rendered.layout, bytes))
           }
           Err(e) => {
@@ -265,12 +286,25 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
     }));
 }
 
-/// Writes a report's two images under `dir`.
-fn write_images(dir: &Path, name: &str, guided: &[u8], plain: &[u8]) -> Result<(), String> {
+/// Writes a report's two images and its windows' columns under `dir`.
+fn write_images(
+  dir: &Path,
+  name: &str,
+  guided: &[u8],
+  plain: &[u8],
+  columns: &[u8],
+) -> Result<(), String> {
   std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
   let (with, without) = image_paths(dir, name);
-  std::fs::write(&with, guided).map_err(|e| format!("{}: {e}", with.display()))?;
-  std::fs::write(&without, plain).map_err(|e| format!("{}: {e}", without.display()))
+  let all = [
+    (with, guided),
+    (without, plain),
+    (columns_path(dir, name), columns),
+  ];
+  for (path, bytes) in all {
+    std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+  }
+  Ok(())
 }
 
 /// Records new images and removes the least recently viewed beyond `analysis.cache_max_bytes`.
@@ -309,7 +343,7 @@ async fn evict(analysis: &Analysis) {
   let removed = tokio::task::spawn_blocking(move || {
     for name in gone {
       let (with, without) = image_paths(&dir, &name);
-      for path in [with, without] {
+      for path in [with, without, columns_path(&dir, &name)] {
         if let Err(e) = std::fs::remove_file(&path)
           && e.kind() != std::io::ErrorKind::NotFound
         {

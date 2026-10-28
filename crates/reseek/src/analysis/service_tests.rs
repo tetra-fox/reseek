@@ -274,7 +274,11 @@ async fn spectrograms_beyond_the_cache_limit_go_least_recently_viewed_first() {
   assert_eq!(app.send(request("GET", &b, None)).await.status, 200);
   let images = app.state.paths.data.join("analysis");
   let kept: Vec<_> = std::fs::read_dir(&images).unwrap().collect();
-  assert_eq!(kept.len(), 2, "the newest report's two images");
+  assert_eq!(
+    kept.len(),
+    3,
+    "the newest report's two images and its spectra"
+  );
 }
 
 #[tokio::test]
@@ -337,21 +341,73 @@ async fn lowering_the_cache_limit_removes_spectrograms_at_once() {
     settled(&app).await;
   }
   let images = app.state.paths.data.join("analysis");
-  assert_eq!(std::fs::read_dir(&images).unwrap().count(), 4);
+  assert_eq!(std::fs::read_dir(&images).unwrap().count(), 6);
   let lowered = json!({ "set": { "analysis.cache_max_bytes": "1B" } });
   let (status, body) = send(&app, "PATCH", "/api/v0/options", Some(lowered)).await;
   assert_eq!(status, 200, "{body}");
   for _ in 0..200 {
-    if std::fs::read_dir(&images).unwrap().count() == 2 {
+    if std::fs::read_dir(&images).unwrap().count() == 3 {
       break;
     }
     tokio::time::sleep(Duration::from_millis(20)).await;
   }
   assert_eq!(
     std::fs::read_dir(&images).unwrap().count(),
-    2,
+    3,
     "the most recent kept"
   );
   let b = format!("{}/spectrogram.png", route("b.flac"));
   assert_eq!(app.send(request("GET", &b, None)).await.status, 200);
+}
+
+#[tokio::test]
+async fn a_queued_analysis_can_be_cancelled_and_a_window_read() {
+  let app = app(CONFIG, &[]).await;
+  for name in ["a.flac", "b.flac", "c.flac"] {
+    lossless(&app, name);
+  }
+  let mut ids = Vec::new();
+  for name in ["a.flac", "b.flac", "c.flac"] {
+    let (status, created) = send(&app, "POST", &route(name), None).await;
+    assert_eq!(status, 202);
+    ids.push(created["jobId"].as_str().unwrap().to_string());
+  }
+  // one worker: the last is still waiting
+  let (status, _) = send(
+    &app,
+    "DELETE",
+    &format!("/api/v0/analysis/jobs/{}", ids[2]),
+    None,
+  )
+  .await;
+  assert_eq!(status, 204);
+  let (_, jobs) = send(&app, "GET", "/api/v0/analysis/jobs", None).await;
+  let listed: Vec<&str> = jobs
+    .as_array()
+    .unwrap()
+    .iter()
+    .map(|j| j["id"].as_str().unwrap())
+    .collect();
+  assert!(!listed.contains(&ids[2].as_str()), "{jobs}");
+  let unknown = format!("/api/v0/analysis/jobs/{}", uuid::Uuid::new_v4());
+  assert_eq!(send(&app, "DELETE", &unknown, None).await.0, 404);
+  settled(&app).await;
+  let (status, _) = send(&app, "GET", &route("c.flac"), None).await;
+  assert_eq!(status, 404, "the cancelled file was not analysed");
+
+  let (status, window) = send(&app, "GET", &format!("{}/windows/3", route("a.flac")), None).await;
+  assert_eq!(status, 200, "{window}");
+  assert_eq!(window["t"], 3.0);
+  assert_eq!(window["hz"].as_array().unwrap().len(), 512);
+  assert_eq!(window["db"].as_array().unwrap().len(), 512);
+  let top = window["hz"][0].as_f64().unwrap();
+  assert!(top > 20_000.0 && top < 22_050.0, "{top}");
+  let (status, _) = send(
+    &app,
+    "GET",
+    &format!("{}/windows/999", route("a.flac")),
+    None,
+  )
+  .await;
+  assert_eq!(status, 404);
 }

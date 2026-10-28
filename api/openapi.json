@@ -195,6 +195,82 @@
         }
       }
     },
+    "/api/v0/analysis/jobs/{id}": {
+      "delete": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Takes a queued analysis off the queue, or stops a running one.",
+        "operationId": "cancel_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the job's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "cancelled"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/application": {
       "get": {
         "tags": [
@@ -2732,6 +2808,98 @@
               "image/png": {
                 "schema": {
                   "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/files/{root}/files/{path}/analysis/windows/{index}": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "The spectrum of one window of a file's analysis, as the spectrogram's column shows it.",
+        "operationId": "window_file",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "description": "the window's position in the report's windows",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowSpectrum"
                 }
               }
             }
@@ -10550,6 +10718,99 @@
         }
       }
     },
+    "/api/v0/transfers/downloads/{username}/{id}/analysis/windows/{index}": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "The spectrum of one window of a succeeded download's analysis.",
+        "operationId": "window_download",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "description": "the window's position in the report's windows",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowSpectrum"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/transfers/downloads/{username}/{id}/content": {
       "get": {
         "tags": [
@@ -14201,6 +14462,14 @@
           "path": {
             "type": "string",
             "description": "the file's local path"
+          },
+          "progress": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "how far the worker is through the file, from 0 to 1; null while queued"
           },
           "queuedAt": {
             "type": "string",
@@ -23767,6 +24036,45 @@
           }
         ],
         "description": "How a request's identity was established."
+      },
+      "WindowSpectrum": {
+        "type": "object",
+        "description": "The spectrum of one analysed window, as `GET .../analysis/windows/{index}` answers it.",
+        "required": [
+          "index",
+          "t",
+          "hz",
+          "db"
+        ],
+        "properties": {
+          "db": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            },
+            "description": "the level at each point, in dB relative to a full-scale sine, at least -160"
+          },
+          "hz": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            },
+            "description": "the frequency of each point, in Hz, highest first: the middle of each spectrogram row"
+          },
+          "index": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the window's position in the report's windows",
+            "minimum": 0
+          },
+          "t": {
+            "type": "number",
+            "format": "double",
+            "description": "where the window starts, in seconds from the start of the file"
+          }
+        }
       }
     }
   },

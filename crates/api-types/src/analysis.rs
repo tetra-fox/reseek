@@ -336,7 +336,7 @@ pub enum AnalysisJobState {
 }
 
 /// A file waiting for or under analysis, an entry of `GET /analysis/jobs`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisJob {
   /// the job's id
@@ -351,6 +351,22 @@ pub struct AnalysisJob {
   pub queued_at: DateTime<Utc>,
   /// when the worker took it, null while queued
   pub started_at: Option<DateTime<Utc>>,
+  /// how far the worker is through the file, from 0 to 1; null while queued
+  pub progress: Option<f64>,
+}
+
+/// The spectrum of one analysed window, as `GET .../analysis/windows/{index}` answers it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowSpectrum {
+  /// the window's position in the report's windows
+  pub index: u32,
+  /// where the window starts, in seconds from the start of the file
+  pub t: f64,
+  /// the frequency of each point, in Hz, highest first: the middle of each spectrogram row
+  pub hz: Vec<f64>,
+  /// the level at each point, in dB relative to a full-scale sine, at least -160
+  pub db: Vec<f64>,
 }
 
 /// The data of a `files.analysis` frame: a report finished.

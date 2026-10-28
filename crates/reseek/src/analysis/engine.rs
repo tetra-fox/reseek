@@ -5,6 +5,8 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Instant;
 
 use symphonia::core::formats::probe::Hint;
@@ -26,6 +28,17 @@ pub(super) struct Settings {
   pub scale: Scale,
   /// when the analysis stops with what it has
   pub deadline: Instant,
+  /// where the analysis reports how far it is, in thousandths of the file
+  pub progress: Option<Arc<AtomicU32>>,
+}
+
+impl Settings {
+  /// Says the analysis is `done` of the way through, from 0 to 1.
+  fn report(&self, done: f64) {
+    if let Some(progress) = &self.progress {
+      progress.store((done.clamp(0.0, 1.0) * 1000.0) as u32, Ordering::Relaxed);
+    }
+  }
 }
 
 /// What an analysis measured.
@@ -153,6 +166,7 @@ pub(super) fn measure(
       }
     }
   }
+  settings.report(1.0);
   measured.bits_used = decoder.bits_used();
   if measured.claimed.as_ref().is_some_and(|c| !c.lossless) {
     measured.bitrate_kbps = decoder.bitrate_kbps();
@@ -244,8 +258,17 @@ fn whole(
   measured: &mut Measured,
 ) -> Result<f64, Cancelled> {
   let rate = decoder.claimed.sample_rate as usize;
+  let stated = decoder
+    .claimed
+    .frames
+    .map(|frames| frames as f64 / rate as f64);
+  let expected = match read {
+    Read::Upto(longest) => stated.map_or(longest as f64, |s| s.min(longest as f64)),
+    Read::Only(picks) => picks.last().map_or(1.0, |last| (last + 1) as f64),
+  };
   let mut second = 0u64;
   loop {
+    settings.report(second as f64 / expected.max(1.0));
     if stop(settings, cancel, measured)? {
       return Ok(second as f64);
     }
@@ -304,6 +327,7 @@ fn sampled(
 ) -> Result<(), Cancelled> {
   let rate = decoder.claimed.sample_rate as usize;
   for (index, &second) in picks.iter().enumerate() {
+    settings.report(index as f64 / picks.len() as f64);
     if stop(settings, cancel, measured)? {
       return Ok(());
     }

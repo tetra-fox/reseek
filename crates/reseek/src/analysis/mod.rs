@@ -32,7 +32,7 @@ use std::time::SystemTime;
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AudioAnalysis, SetAnalysisOverride,
-  SpectrogramQuery,
+  SpectrogramQuery, WindowSpectrum,
 };
 use api_types::auth::Principal;
 use async_trait::async_trait;
@@ -127,6 +127,7 @@ pub fn verdict_of(bytes: Vec<u8>) -> api_types::analysis::AnalysisVerdict {
     sampled_windows: 240,
     scale: measure::Scale::Log,
     deadline: std::time::Instant::now() + std::time::Duration::from_secs(10),
+    progress: None,
   };
   match engine::read_bytes(bytes, &settings, &CancellationToken::new()) {
     Ok(measured) => reading::read(&measured).verdict,
@@ -175,6 +176,8 @@ impl AnalysisService for Analysis {
         file,
         queued_at: Utc::now(),
         started_at: None,
+        cancel: self.shutdown.child_token(),
+        progress: Arc::default(),
       });
     }
     self.wake.notify_one();
@@ -295,5 +298,71 @@ impl AnalysisService for Analysis {
         .map(Job::listed)
         .collect(),
     )
+  }
+
+  async fn cancel_job(&self, id: Uuid) -> Result<(), ApiError> {
+    let mut queue = lock(&self.queue);
+    if let Some(at) = queue.waiting.iter().position(|job| job.id == id) {
+      queue.waiting.remove(at);
+      debug!(job = %id, "queued analysis taken off the queue");
+      return Ok(());
+    }
+    match queue.running.iter().find(|job| job.id == id) {
+      Some(job) => {
+        // the worker sees it at its next window and takes the job off the queue itself
+        job.cancel.cancel();
+        Ok(())
+      }
+      None => Err(ApiError::not_found(format!("no analysis job {id}"))),
+    }
+  }
+
+  async fn window(&self, target: FileTarget, index: u32) -> Result<WindowSpectrum, ApiError> {
+    let file = self.files.local_path(&target).await?;
+    let stored = self.stored(&file.path).await?;
+    let missing = || ApiError::not_found(format!("the report has no window {index}"));
+    let windows = stored.report.windows.as_deref().unwrap_or_default();
+    let window = windows.get(index as usize).ok_or_else(missing)?;
+    let layout = stored.report.spectrogram.as_ref().ok_or_else(missing)?;
+    let path = jobs::columns_path(&self.images, &stored.image);
+    let columns = match tokio::fs::read(&path).await {
+      Ok(columns) => columns,
+      Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+        return Err(ApiError::not_found(
+          "the window's spectrum is no longer kept; analyse the file again to measure it",
+        ));
+      }
+      Err(e) => {
+        return Err(ApiError::internal(format!(
+          "the spectra '{}' could not be read: {e}",
+          path.display()
+        )));
+      }
+    };
+    let start = index as usize * measure::ROWS;
+    let column = columns
+      .get(start..start + measure::ROWS)
+      .ok_or_else(missing)?;
+    let scale = match layout.scale {
+      api_types::analysis::SpectrogramScale::Log => measure::Scale::Log,
+      api_types::analysis::SpectrogramScale::Linear => measure::Scale::Linear,
+    };
+    let hz = (0..measure::ROWS)
+      .map(|row| {
+        let position = 1.0 - (row as f64 + 0.5) / measure::ROWS as f64;
+        scale
+          .frequency(position, layout.min_hz, layout.max_hz)
+          .round()
+      })
+      .collect();
+    Ok(WindowSpectrum {
+      index,
+      t: window.t,
+      hz,
+      db: column
+        .iter()
+        .map(|byte| measure::column_db(*byte))
+        .collect(),
+    })
   }
 }

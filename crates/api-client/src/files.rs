@@ -3,7 +3,7 @@
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
-  RunAnalysisQuery, SetAnalysisOverride, SpectrogramQuery,
+  RunAnalysisQuery, SetAnalysisOverride, SpectrogramQuery, WindowSpectrum,
 };
 use api_types::files::{
   ArchiveQuery, ContentQuery, DirectoryListingQuery, FileRoot, FileToken, FileTokenRequest,
@@ -156,5 +156,22 @@ impl Client {
   /// `GET /analysis/jobs`: the analyses queued and running.
   pub async fn analysis_jobs(&self) -> Result<Vec<AnalysisJob>> {
     json(self.get(Route::new("analysis/jobs"))).await
+  }
+
+  /// `DELETE /analysis/jobs/{id}`: takes a queued analysis off the queue or stops a running one.
+  pub async fn cancel_analysis_job(&self, id: Uuid) -> Result<()> {
+    done(self.delete(Route::new("analysis/jobs").then(&id.to_string()))).await
+  }
+
+  /// `GET .../analysis/windows/{index}`: the spectrum of one window of a file's analysis.
+  pub async fn analysis_window(&self, target: LocalFile<'_>, index: u32) -> Result<WindowSpectrum> {
+    json(
+      self.get(
+        file(target)
+          .then("analysis/windows")
+          .then(&index.to_string()),
+      ),
+    )
+    .await
   }
 }

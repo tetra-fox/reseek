@@ -4,7 +4,7 @@
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
-  RunAnalysisQuery, SetAnalysisOverride, SpectrogramQuery,
+  RunAnalysisQuery, SetAnalysisOverride, SpectrogramQuery, WindowSpectrum,
 };
 use api_types::files::FileRoot;
 use axum::extract::State;
@@ -32,8 +32,11 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(set_download_override, clear_download_override))
     .routes(routes!(run_download, report_download))
     .routes(routes!(spectrogram_download))
+    .routes(routes!(window_file))
+    .routes(routes!(window_download))
     .routes(routes!(list))
     .routes(routes!(jobs))
+    .routes(routes!(cancel_job))
 }
 
 /// The file under a root that a path names.
@@ -346,4 +349,70 @@ async fn jobs(
   _caller: Authorized<AnyRole>,
 ) -> Result<Json<Vec<AnalysisJob>>, ApiError> {
   app.services.analysis.jobs().await.map(Json)
+}
+
+/// Takes a queued analysis off the queue, or stops a running one.
+#[utoipa::path(
+  delete, path = "/analysis/jobs/{id}", tag = "analysis",
+  params(("id" = Uuid, Path, description = "the job's id")),
+  responses(
+    (status = 204, description = "cancelled"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn cancel_job(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+  Path(id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+  app.services.analysis.cancel_job(id).await?;
+  info!(by = caller.principal.subject, job = %id, "analysis cancelled");
+  Ok(StatusCode::NO_CONTENT)
+}
+
+/// The spectrum of one window of a file's analysis, as the spectrogram's column shows it.
+#[utoipa::path(
+  get, path = "/files/{root}/files/{path}/analysis/windows/{index}", tag = "analysis",
+  params(
+    ("root" = FileRoot, Path, description = "the directory root"),
+    ("path" = String, Path, description = "the file's path under the root, base64"),
+    ("index" = u32, Path, description = "the window's position in the report's windows")
+  ),
+  responses(
+    (status = 200, body = WindowSpectrum), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn window_file(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+  Path((name, path, index)): Path<(String, String, u32)>,
+) -> Result<Json<WindowSpectrum>, ApiError> {
+  let target = file(&name, &path)?;
+  app.services.analysis.window(target, index).await.map(Json)
+}
+
+/// The spectrum of one window of a succeeded download's analysis.
+#[utoipa::path(
+  get, path = "/transfers/downloads/{username}/{id}/analysis/windows/{index}", tag = "analysis",
+  params(
+    ("username" = String, Path, description = "the peer"),
+    ("id" = Uuid, Path, description = "the download's id"),
+    ("index" = u32, Path, description = "the window's position in the report's windows")
+  ),
+  responses(
+    (status = 200, body = WindowSpectrum), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn window_download(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+  Path((username, id, index)): Path<(String, Uuid, u32)>,
+) -> Result<Json<WindowSpectrum>, ApiError> {
+  let target = FileTarget::Download { username, id };
+  app.services.analysis.window(target, index).await.map(Json)
 }

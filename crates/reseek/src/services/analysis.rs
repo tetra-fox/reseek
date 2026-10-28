@@ -3,11 +3,12 @@
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AudioAnalysis, SetAnalysisOverride,
-  SpectrogramQuery,
+  SpectrogramQuery, WindowSpectrum,
 };
 use api_types::auth::Principal;
 use async_trait::async_trait;
 use axum::response::Response;
+use uuid::Uuid;
 
 use super::{FileTarget, not_yet};
 use crate::api::error::ApiError;
@@ -62,6 +63,18 @@ pub trait AnalysisService: Send + Sync {
 
   /// The analyses queued and running.
   async fn jobs(&self) -> Result<Vec<AnalysisJob>, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// Takes a queued analysis off the queue or stops a running one; 404 when there is no such
+  /// job.
+  async fn cancel_job(&self, id: Uuid) -> Result<(), ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// The spectrum of one window of a file's report; 404 when there is no such window or it is
+  /// no longer kept.
+  async fn window(&self, target: FileTarget, index: u32) -> Result<WindowSpectrum, ApiError> {
     Err(not_yet(DOMAIN))
   }
 }
