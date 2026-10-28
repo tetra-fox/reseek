@@ -222,17 +222,17 @@ describe("a chat pane", () => {
     await flush();
     const grid = () => document.querySelector("[aria-label='Joins, leaves and status changes']")!;
     const lines = () => [...grid().querySelectorAll("[role=row]")].map((r) => r.ariaLabel);
-    expect(lines()).toEqual(["carol joined the room"]);
+    expect(lines()).toEqual(["carol joined"]);
     const first = grid().querySelector("[role=row]");
     // a second join soon after folds into the same row; a leave starts a new one above it
     joined("dave");
     net.frame("rooms.user_left", { roomName: "indie", username: "carol" });
     await flush();
-    expect(lines()).toEqual(["carol left the room", "carol and dave joined"]);
+    expect(lines()).toEqual(["carol left", "carol and dave joined"]);
     expect(grid().querySelectorAll("[role=row]")[1]).toBe(first);
     const log = document.querySelector("[role=log]")!;
     expect(ids()).toEqual(["1"]);
-    expect(log.textContent).not.toMatch(/joined|left the room/);
+    expect(log.textContent).not.toMatch(/joined|left/);
   });
 
   it("doesn't count messages read when the pane opens away from the bottom", async () => {

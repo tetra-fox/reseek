@@ -47,14 +47,17 @@ export const fold = (events: PresenceEvent[]): Burst[] => {
   return bursts;
 };
 
-/** What a line says after its names, by kind, for one name and for several */
+/**
+ * What a line says after its names, by kind, for one name and for several. The lines sit in the
+ * room's own panel, so they leave "the room" unsaid and fit its narrow column
+ */
 const VERBS: Record<PresenceKind, [string, string]> = {
-  joined: ["joined the room", "joined"],
-  left: ["left the room", "left"],
+  joined: ["joined", "joined"],
+  left: ["left", "left"],
   away: ["has gone away", "have gone away"],
   returned: ["has returned", "have returned"],
-  added: ["was added to the room", "were added to the room"],
-  removed: ["was removed from the room", "were removed from the room"],
+  added: ["was added", "were added"],
+  removed: ["was removed", "were removed"],
   operator: ["was made an operator", "were made operators"],
   notOperator: ["is no longer an operator", "are no longer operators"]
 };

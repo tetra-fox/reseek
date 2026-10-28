@@ -102,7 +102,7 @@ test("a busy room's comings and goings stay out of its messages", async ({ page 
   await expect(log.getByText("anyone have the new boards of canada rip?")).toBeVisible();
   await page.getByRole("tab", { name: "Activity" }).click();
   const activity = page.getByRole("grid", { name: "Joins, leaves and status changes" });
-  await expect(activity.getByRole("row").first()).toContainText("left the room");
+  await expect(activity.getByRole("row").first()).toContainText(/\bleft\b/);
   await expect(activity.getByRole("row")).toHaveCount(120);
   // a row's time keeps to one line, as in the activity log
   const time = (await activity.getByRole("row").first().locator("time").boundingBox())!;
@@ -110,7 +110,7 @@ test("a busy room's comings and goings stay out of its messages", async ({ page 
   // the message list holds the six messages and nothing else
   await expect(log.locator("[data-message]")).toHaveCount(6);
   await expect(log).not.toContainText("joined");
-  await expect(log).not.toContainText("left the room");
+  await expect(log).not.toContainText(" left");
 });
 
 test("a private chat shows both sides with their actions", async ({ page }) => {

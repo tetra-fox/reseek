@@ -62,7 +62,7 @@ describe("joins and leaves in a room", () => {
   it("say who in plain words, counting the rest", () => {
     const line = (kind: PresenceKind, names: string[]) =>
       burstText({ key: "k", at: at(0), last: at(0), kind, names });
-    expect(line("joined", ["alice"])).toBe("alice joined the room");
+    expect(line("joined", ["alice"])).toBe("alice joined");
     expect(line("left", ["alice", "bob"])).toBe("alice and bob left");
     expect(line("joined", ["a", "b", "c", "d"])).toBe("a, b, c and d joined");
     expect(line("joined", ["a", "b", "c", "d", "e"])).toBe("a, b and 3 others joined");
