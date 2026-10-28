@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { fakeChat, fakeReports, fakeSearch, SEARCH_ID } from "./fakes";
+import { fakeBrowse, fakeChat, fakeFolder, fakeReports, fakeSearch, SEARCH_ID } from "./fakes";
 import { login } from "./login";
 
 // a phone's width: no screen may be wider than it, so nothing runs off its right edge
@@ -13,6 +13,14 @@ test.use({ viewport: { width: 390, height: 844 } });
  */
 const holds = async (page: Page, what: string, ready: (page: Page) => Promise<void>) => {
   await ready(page);
+  // the window itself never scrolls or zooms out: the content area is what scrolls
+  const view = await page.evaluate(() => ({
+    width: innerWidth,
+    tall: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+    wide: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    scrolled: scrollY
+  }));
+  expect(view, `${what} moves the window`).toEqual({ width: 390, tall: 0, wide: 0, scrolled: 0 });
   const [scroll, client] = await page
     .locator("[data-content]")
     .evaluate((e) => [e.scrollWidth, e.clientWidth]);
@@ -47,6 +55,8 @@ test("every screen fits a phone's width", async ({ page }) => {
   await fakeReports(page);
   await fakeSearch(page);
   await fakeChat(page);
+  await fakeBrowse(page);
+  await fakeFolder(page);
   await login(page, "/dashboard");
 
   await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
@@ -60,6 +70,19 @@ test("every screen fits a phone's width", async ({ page }) => {
   }
   await fits(page, "/searches", shows("No searches yet"));
   await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
+  // the whole folder's dialog keeps its buttons on the screen
+  await page.getByRole("button", { name: "Show whole folder" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("04 A Long Track Name.flac")).toBeVisible();
+  for (const button of await dialog.getByRole("button").all()) {
+    const box = (await button.boundingBox())!;
+    expect(box.x, "a dialog button starts off the screen").toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width, "a dialog button ends off the screen").toBeLessThanOrEqual(390);
+  }
+  await page.keyboard.press("Escape");
+  await page.getByRole("radio", { name: "Dense" }).click();
+  await holds(page, "the dense results", shows("02 Two.flac"));
+  await page.getByRole("radio", { name: "Cards" }).click();
   await fits(page, "/downloads", shows("No downloads yet"));
   await fits(page, "/uploads", shows("No uploads yet"));
   await fits(page, "/chat", shows("indie"));
@@ -69,6 +92,10 @@ test("every screen fits a phone's width", async ({ page }) => {
   await fits(page, "/users?tab=blocked", shows("No blocked users"));
   await fits(page, "/users/alice", shows("Not seen before"));
   await fits(page, "/browse", shows("Browse a user's shares"));
+  await page.getByLabel("Username").fill("carol");
+  await page.getByLabel("Username").press("Enter");
+  await page.getByRole("treeitem", { name: /Bootlegs/ }).click();
+  await holds(page, "a browse with a folder open", shows("2.flac"));
   await fits(page, "/profile", shows("How others see you"));
   for (const [tab, text] of [
     ["info", "Process ID"],
@@ -82,4 +109,14 @@ test("every screen fits a phone's width", async ({ page }) => {
   ] as const) {
     await fits(page, `/system/${tab}`, shows(text));
   }
+
+  // past the end of a long screen, the wheel moves nothing else
+  await fits(page, "/system/settings", shows("Listen port"));
+  await page.locator("[data-content]").evaluate((e) => e.scrollTo({ top: e.scrollHeight }));
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 400);
+  await holds(page, "settings scrolled past the end", shows("Listen port"));
+
+  // the activity log's button, its only opener on a phone, is on the screen
+  const button = (await page.getByRole("button", { name: "Activity" }).boundingBox())!;
+  expect(button.x + button.width).toBeLessThanOrEqual(390);
 });

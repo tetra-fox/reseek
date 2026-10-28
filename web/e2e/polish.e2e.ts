@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { fakeSearch, file, SEARCH_ID } from "./fakes";
+import { fakeBrowse, fakeSearch, SEARCH_ID } from "./fakes";
 import { login } from "./login";
 
 test("shows search results as cards and as dense rows walked by key", async ({ page }) => {
@@ -115,30 +115,7 @@ test("groups downloads by user and a tree of folders", async ({ page }) => {
 });
 
 test("browses a user, finds a folder by typing and shows where it is", async ({ page }) => {
-  const dir = (name: string, files: string[]) => ({
-    name,
-    fileCount: files.length,
-    files: files.map((f) => file(f))
-  });
-  // carol is answered here alone, never asked of the daemon, so no other test sees her
-  await page.route(
-    (url) => url.pathname.includes("/api/v0/users/carol/"),
-    (route) =>
-      !new URL(route.request().url()).pathname.endsWith("/carol/browse")
-        ? route.fulfill({ status: 404, json: { error: "not found" } })
-        : route.fulfill({
-            json: {
-              directories: [
-                dir("@@c\\Music", []),
-                dir("@@c\\Music\\Albums", ["1.flac"]),
-                dir("@@c\\Music\\Bootlegs", ["2.flac"])
-              ],
-              directoryCount: 3,
-              lockedDirectories: [],
-              lockedDirectoryCount: 0
-            }
-          })
-  );
+  await fakeBrowse(page);
   await login(page, "/browse");
   await page.getByLabel("Username").fill("carol");
   await page.getByLabel("Username").press("Enter");

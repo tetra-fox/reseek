@@ -253,3 +253,46 @@ export const fakeReports = async (page: Page) => {
     });
   });
 };
+
+const dir = (name: string, files: string[]) => ({
+  name,
+  fileCount: files.length,
+  files: files.map((f) => file(f))
+});
+
+/**
+ * Answers a browse of carol's shares with three folders, never asking the daemon, so no other
+ * test sees her
+ */
+export const fakeBrowse = async (page: Page) => {
+  await page.route(
+    (url) => url.pathname.includes("/api/v0/users/carol/"),
+    (route) =>
+      !new URL(route.request().url()).pathname.endsWith("/carol/browse")
+        ? route.fulfill({ status: 404, json: { error: "not found" } })
+        : route.fulfill({
+            json: {
+              directories: [
+                dir("@@c\\Music", []),
+                dir("@@c\\Music\\Albums", ["1.flac"]),
+                dir("@@c\\Music\\Bootlegs", ["2.flac"])
+              ],
+              directoryCount: 3,
+              lockedDirectories: [],
+              lockedDirectoryCount: 0
+            }
+          })
+  );
+};
+
+/** Answers alice's whole folder, asked from a search result, with its files and a subfolder */
+export const fakeFolder = async (page: Page) => {
+  await page.route("**/api/v0/users/alice/directory**", (route) =>
+    route.fulfill({
+      json: [
+        dir("@@a\\Music\\Album", ["01 One.flac", "02 Two.flac", "04 A Long Track Name.flac"]),
+        dir("@@a\\Music\\Album\\Bonus", ["05 Demo.flac"])
+      ]
+    })
+  );
+};
