@@ -69,6 +69,16 @@ pub fn cut_at(hz: f64) -> impl Fn(f64) -> f64 + Copy {
   move |f| if f < hz { pink(f) } else { 0.0 }
 }
 
+/// [`pink`] with a comb of gaps 40 Hz wide every 80 Hz between 16 and 20 kHz, as a lossy
+/// encoder leaves in its top band when it drops coefficients there.
+pub fn combed(hz: f64) -> f64 {
+  if (16_000.0..20_000.0).contains(&hz) && (hz % 80.0) < 40.0 {
+    0.0
+  } else {
+    pink(hz)
+  }
+}
+
 /// [`pink`] rolling off gently from 3.5 kHz, 24 dB an octave, as a lo-fi recording does.
 pub fn lo_fi(hz: f64) -> f64 {
   pink(hz) / (1.0 + (hz / 3_500.0).powi(8)).sqrt()
@@ -172,6 +182,20 @@ impl Audio {
         })
         .collect(),
     }
+  }
+
+  /// The audio with a short burst of noise at the start of every `period` samples, as a
+  /// lossy codec can leave at its frame edges.
+  pub fn with_frame_rhythm(mut self, period: usize) -> Audio {
+    let mut rng = Rng(5);
+    for channel in &mut self.channels {
+      for (i, sample) in channel.iter_mut().enumerate() {
+        if i % period < 64 {
+          *sample += 0.06 * rng.gaussian() as f32;
+        }
+      }
+    }
+    self
   }
 
   /// The first channel twice, as a mono recording copied to stereo is.

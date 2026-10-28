@@ -331,3 +331,50 @@ fn a_file_without_a_stated_length_is_read_only_so_far() {
     "{reading:#?}"
   );
 }
+
+#[test]
+fn a_frame_rhythm_and_gaps_in_the_top_band_are_measured_and_read() {
+  let dir = tempfile::tempdir().unwrap();
+  let plain = analysed(&flac(dir.path(), "plain.flac", &music(1, 44_100, pink), 16));
+  assert!(
+    plain.measures.frame_artefact_score.unwrap() < 0.05,
+    "{plain:#?}"
+  );
+  assert!(plain.measures.sfb21_holes.unwrap() < 0.01, "{plain:#?}");
+
+  // a burst at every 1152-sample frame edge: full band, so it is the rhythm that keeps it
+  // from reading consistent
+  let rhythm = music(1, 44_100, pink).with_frame_rhythm(1152);
+  let reading = analysed(&flac(dir.path(), "rhythm.flac", &rhythm, 16));
+  assert!(
+    reading.measures.frame_artefact_score.unwrap() >= 0.2,
+    "{reading:#?}"
+  );
+  assert_eq!(
+    reading.verdict,
+    AnalysisVerdict::Inconclusive,
+    "{reading:#?}"
+  );
+  assert!(
+    reading.summary.contains("frame length"),
+    "{}",
+    reading.summary
+  );
+
+  // gaps below a cut where the highest bitrates cut make that cut a transcode
+  let combed = music(1, 44_100, |hz| {
+    if hz >= 20_000.0 {
+      0.0
+    } else {
+      fixtures::combed(hz)
+    }
+  });
+  let reading = analysed(&flac(dir.path(), "combed.flac", &combed, 16));
+  assert!(reading.measures.sfb21_holes.unwrap() >= 0.1, "{reading:#?}");
+  assert_eq!(
+    reading.verdict,
+    AnalysisVerdict::LikelyTranscode,
+    "{reading:#?}"
+  );
+  assert!(reading.confidence <= 0.75);
+}
