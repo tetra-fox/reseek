@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import BellOffIcon from "@lucide/svelte/icons/bell-off";
+  import CheckCheckIcon from "@lucide/svelte/icons/check-check";
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
@@ -124,6 +125,26 @@
     list.clear();
   };
 
+  /** every conversation and room with something unread */
+  const unreadChats = $derived([
+    ...chat.conversations.rows
+      .filter((c) => chat.unreadOf(c.username) > 0)
+      .map((c): Target => ({ kind: "user", name: c.username })),
+    ...chat.rooms.rows
+      .filter((r) => chat.roomUnread(r.name).unread > 0)
+      .map((r): Target => ({ kind: "room", name: r.name }))
+  ]);
+  const markAllRead = async () => {
+    const targets = unreadChats;
+    let failed = 0;
+    for (const t of targets) {
+      const outcome =
+        t.kind === "user" ? await chat.acknowledge(t.name) : await chat.markRoomReadNewest(t.name);
+      if (!outcome.ok) failed += 1;
+    }
+    if (failed) toast(`${plural(failed, "chat", "chats")} couldn't be marked read`, "error");
+  };
+
   const offer = (e: KeyboardEvent) => {
     if (e.key !== "Enter" || !filter) return;
     const first = lines.find((l) => l.kind === "row");
@@ -143,6 +164,15 @@
       bind:value={typed}
       onkeydown={offer} />
   </div>
+  {#if write && unreadChats.length}
+    <Button
+      variant="ghost"
+      size="sm"
+      class="self-end text-xs text-fg-muted"
+      onclick={() => void markAllRead()}>
+      <CheckCheckIcon />Mark all read
+    </Button>
+  {/if}
   {#if chat.error}
     <Notice kind="error">
       {chat.error}
