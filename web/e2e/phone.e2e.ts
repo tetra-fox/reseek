@@ -1,6 +1,14 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { fakeBrowse, fakeChat, fakeFolder, fakeReports, fakeSearch, SEARCH_ID } from "./fakes";
+import {
+  fakeBrowse,
+  fakeChat,
+  fakeFiles,
+  fakeFolder,
+  fakeReports,
+  fakeSearch,
+  SEARCH_ID
+} from "./fakes";
 import { login } from "./login";
 
 // a phone's width: no screen may be wider than it, so nothing runs off its right edge
@@ -20,11 +28,14 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
     wide: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     scrolled: scrollY
   }));
-  expect(view, `${what} moves the window`).toEqual({ width: 390, tall: 0, wide: 0, scrolled: 0 });
+  const width = page.viewportSize()!.width;
+  expect(view, `${what} moves the window`).toEqual({ width, tall: 0, wide: 0, scrolled: 0 });
   const [scroll, client] = await page
     .locator("[data-content]")
     .evaluate((e) => [e.scrollWidth, e.clientWidth]);
-  expect(scroll, `${what} is ${scroll - client}px wider than a phone`).toBeLessThanOrEqual(client);
+  expect(scroll, `${what} is ${scroll - client}px wider than its screen`).toBeLessThanOrEqual(
+    client
+  );
   const cut = await page.locator("[data-content]").evaluate((area) => {
     const edge = area.getBoundingClientRect().right + 0.5;
     const scrolls = (e: Element) => ["auto", "scroll"].includes(getComputedStyle(e).overflowX);
@@ -40,6 +51,26 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
     return null;
   });
   expect(cut, `${what} cuts off ${cut}`).toBeNull();
+  // a figure is never cut or painted over its neighbour, and a name never shrinks to nothing
+  const cells = await page.locator("[data-content]").evaluate((area) => {
+    const shown = (e: Element) => e.getClientRects().length > 0;
+    for (const e of area.querySelectorAll<HTMLElement>(".tabular-nums")) {
+      const style = getComputedStyle(e);
+      const kept = style.whiteSpace === "nowrap" || style.textOverflow === "ellipsis";
+      if (shown(e) && kept && e.scrollWidth > e.clientWidth + 1) {
+        return `the figure "${e.textContent?.trim()}" needs ${e.scrollWidth}px of ${e.clientWidth}px`;
+      }
+    }
+    for (const e of area.querySelectorAll<HTMLElement>(
+      "[role=row] .truncate, [role=treeitem] .truncate"
+    )) {
+      if (shown(e) && e.textContent?.trim() && e.getBoundingClientRect().width < 8) {
+        return `the name "${e.textContent.trim()}" has no room`;
+      }
+    }
+    return null;
+  });
+  expect(cells, `${what}: ${cells}`).toBeNull();
 };
 
 /** Opens `path` and checks it fits */
@@ -57,6 +88,7 @@ test("every screen fits a phone's width", async ({ page }) => {
   await fakeChat(page);
   await fakeBrowse(page);
   await fakeFolder(page);
+  await fakeFiles(page);
   await login(page, "/dashboard");
 
   await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
@@ -102,7 +134,7 @@ test("every screen fits a phone's width", async ({ page }) => {
     ["settings", "Listen port"],
     ["account", "API tokens"],
     ["shares", "No shares configured"],
-    ["files", "/downloads"],
+    ["files", "Kid A (Collector's Edition)"],
     ["data", "Finished transfers"],
     ["events", /types/],
     ["logs", "Live"]
@@ -119,4 +151,19 @@ test("every screen fits a phone's width", async ({ page }) => {
   // the activity log's button, its only opener on a phone, is on the screen
   const button = (await page.getByRole("button", { name: "Activity" }).boundingBox())!;
   expect(button.x + button.width).toBeLessThanOrEqual(390);
+});
+
+test.describe("on a wide screen", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("the dashboard and the dense results hold their figures", async ({ page }) => {
+    await fakeReports(page);
+    await fakeSearch(page);
+    await login(page, "/dashboard");
+    await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
+    await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
+    await page.getByRole("radio", { name: "Dense" }).click();
+    await holds(page, "the dense results", shows("02 Two.flac"));
+    await page.getByRole("radio", { name: "Cards" }).click();
+  });
 });

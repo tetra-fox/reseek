@@ -123,7 +123,7 @@ export const file = (filename: string, size = 4_000_000) => ({
   length: 200
 });
 
-const response = (username: string, speed: number, files: string[]) => ({
+const response = (username: string, speed: number, files: string[], size?: number) => ({
   username,
   country: "NL",
   token: 1,
@@ -131,7 +131,7 @@ const response = (username: string, speed: number, files: string[]) => ({
   uploadSpeed: speed,
   queueLength: 0,
   fileCount: files.length,
-  files: files.map((f) => file(f)),
+  files: files.map((f) => file(f, size)),
   lockedFileCount: 0,
   lockedFiles: []
 });
@@ -144,7 +144,8 @@ export const fakeSearch = async (page: Page) => {
       "@@a\\Music\\Album\\02 Two.flac",
       "@@a\\Music\\Other\\03 Three.mp3"
     ]),
-    response("bob", 1_000_000, ["music/x/1.flac", "music/x/2.flac"])
+    // the widest speed and size the formatters write, which their columns must hold
+    response("bob", 1023.9 * 1024, ["music/x/1.flac", "music/x/2.flac"], 1023.99 * 1024 ** 3)
   ];
   await page.route(`**/api/v0/searches/${SEARCH_ID}**`, (route) => {
     const url = new URL(route.request().url());
@@ -209,7 +210,12 @@ export const fakeReports = async (page: Page) => {
     }
     if (path === "leaderboard") {
       return route.fulfill({
-        json: [long, "alice", "bob"].map((username, n) => ({ username, ...summary(30 - n) }))
+        json: [long, "alice", "bob"].map((username, n) => ({
+          username,
+          ...summary(30 - n),
+          // the first row's figures are the widest the formatters write
+          ...(n === 0 ? { totalBytes: 1023.99 * 1024 ** 3, averageSpeed: 1023.9 * 1024 ** 2 } : {})
+        }))
       });
     }
     if (path === "directories") {
@@ -293,6 +299,38 @@ export const fakeFolder = async (page: Page) => {
         dir("@@a\\Music\\Album", ["01 One.flac", "02 Two.flac", "04 A Long Track Name.flac"]),
         dir("@@a\\Music\\Album\\Bonus", ["05 Demo.flac"])
       ]
+    })
+  );
+};
+
+/** Answers the downloads folder's listing on the Files screen with two folders and a file */
+export const fakeFiles = async (page: Page) => {
+  const at = "2026-10-27T18:00:00Z";
+  const folder = (name: string) => ({
+    attributes: "Directory",
+    createdAt: at,
+    modifiedAt: at,
+    fullName: `/downloads/${name}`,
+    name,
+    directories: null,
+    files: null
+  });
+  await page.route("**/api/v0/files/downloads/directories", (route) =>
+    route.fulfill({
+      json: {
+        ...folder(""),
+        directories: [folder("In Rainbows"), folder("Kid A (Collector's Edition)")],
+        files: [
+          {
+            attributes: "Normal",
+            createdAt: at,
+            modifiedAt: at,
+            fullName: "/downloads/notes.txt",
+            name: "notes.txt",
+            length: 1_234_567
+          }
+        ]
+      }
     })
   );
 };
