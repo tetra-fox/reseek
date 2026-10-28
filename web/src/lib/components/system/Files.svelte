@@ -38,6 +38,7 @@
   import { encodePath } from "#lib/transfers/content.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
+  import { viewport } from "#lib/viewport.svelte.js";
 
   import { type Entry, entries, type SortBy } from "./explorer";
 
@@ -244,7 +245,10 @@
   const sortBy = (by: SortBy) => {
     sort = { by, dir: sort.by === by && sort.dir === "asc" ? "desc" : "asc" };
   };
-  const COLUMNS = "2.5rem minmax(14rem,1fr) 10rem 7rem 3rem";
+  // a phone leaves out the modified date, so a name keeps the room it needs
+  const COLUMNS = $derived(
+    viewport.phone ? "2.5rem minmax(0,1fr) 5rem 3rem" : "2.5rem minmax(14rem,1fr) 10rem 7rem 3rem"
+  );
 </script>
 
 {#snippet sortable(label: string, by: SortBy)}
@@ -375,7 +379,8 @@
         style:grid-template-columns={COLUMNS}>
         <span role="columnheader"></span>
         <span role="columnheader">{@render sortable("Name", "name")}</span>
-        <span role="columnheader">{@render sortable("Modified", "date")}</span>
+        <span role="columnheader" class="max-md:hidden"
+          >{@render sortable("Modified", "date")}</span>
         <span role="columnheader" class="pr-3 text-right">Size</span>
         <span role="columnheader" class="sr-only">Actions</span>
       </div>
@@ -394,11 +399,11 @@
           {node.count} · {formatBytes(node.bytes)}
         </span>
       {/if}
-      <span class="ml-auto w-40 shrink-0 text-xs text-fg-muted">
+      <span class="ml-auto w-40 shrink-0 text-xs text-fg-muted max-md:hidden">
         {e?.modifiedAt ? dateTime(e.modifiedAt) : ""}
       </span>
-      <span class="w-28 shrink-0"></span>
-      {#if e}<span class="row-action">{@render menu(e)}</span>{/if}
+      <span class="w-28 shrink-0 max-md:hidden"></span>
+      {#if e}<span class="row-action max-md:ml-auto">{@render menu(e)}</span>{/if}
     {/snippet}
     {#snippet item(e)}
       <span role="gridcell" class="flex justify-center">
@@ -419,7 +424,7 @@
             onclick={() => void open(e)}>{e.name}</button>
         {/if}
       </span>
-      <span role="gridcell" class="text-xs text-fg-muted"
+      <span role="gridcell" class="text-xs text-fg-muted max-md:hidden"
         >{e.modifiedAt ? dateTime(e.modifiedAt) : ""}</span>
       <span role="gridcell" class="pr-3 text-right tabular-nums"
         >{e.size ? formatBytes(e.size) : ""}</span>
