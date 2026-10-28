@@ -27,7 +27,7 @@ pub use authentication::{
 pub use flags::Flags;
 pub use logging::{Logger, Logging, Metrics, MetricsAuthentication};
 pub use paths::{Directories, Paths};
-pub use relay::{Relay, RelayAgent, RelayController};
+pub use relay::{Relay, RelayAgent, RelayController, RelayLimits, RelayTimeouts};
 pub use retention::{
   FileRetention, MessageRetention, RETENTION_SWEEP, Retention, TransferRetention,
   TransfersRetention,

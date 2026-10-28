@@ -1,6 +1,7 @@
 //! Relay mode: a controller that fronts agents holding shares on other machines.
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,55 @@ pub struct Relay {
   /// The agents allowed to connect to this controller, by name.
   #[cascade(user_keyed)]
   pub agents: BTreeMap<String, RelayAgent>,
+  /// How long a controller waits for its agents.
+  pub controller_timeouts: RelayTimeouts,
+  /// What a controller accepts from its agents.
+  pub limits: RelayLimits,
+}
+
+/// How long a controller waits for its agents.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct RelayTimeouts {
+  /// For an agent to say whether a file a peer asked for exists and how long it is.
+  #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_INFO")]
+  #[serde(with = "humantime_serde")]
+  pub file_info: Duration,
+  /// For an agent to acknowledge that it is sending a file a peer downloads.
+  #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_ACK")]
+  #[serde(with = "humantime_serde")]
+  pub file_ack: Duration,
+  /// After the acknowledgement, for the file's bytes to start arriving.
+  #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_STREAM")]
+  #[serde(with = "humantime_serde")]
+  pub file_stream: Duration,
+}
+
+impl Default for RelayTimeouts {
+  fn default() -> Self {
+    Self {
+      file_info: Duration::from_secs(3),
+      file_ack: Duration::from_secs(5),
+      file_stream: Duration::from_secs(30),
+    }
+  }
+}
+
+/// What a controller accepts from its agents.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct RelayLimits {
+  /// The largest share database an agent may upload.
+  #[cascade(env = "RESEEK_RELAY_LIMITS_SHARE_DATABASE_MAX", kind = "size")]
+  pub share_database_max: bytesize::ByteSize,
+}
+
+impl Default for RelayLimits {
+  fn default() -> Self {
+    Self {
+      share_database_max: bytesize::ByteSize::gib(2),
+    }
+  }
 }
 
 /// The controller an agent connects to.
@@ -50,6 +100,10 @@ pub struct RelayController {
   /// Fetches finished downloads from the controller.
   #[cascade(env = "RESEEK_CONTROLLER_DOWNLOADS", cli = "--controller-downloads")]
   pub downloads: bool,
+  /// Glob patterns on a finished download's path under the controller's downloads directory;
+  /// only the downloads one matches are fetched, every one when empty.
+  #[cascade(env = "RESEEK_CONTROLLER_DOWNLOADS_FILTER")]
+  pub downloads_filter: Vec<String>,
 }
 
 /// An agent allowed to connect to this controller.

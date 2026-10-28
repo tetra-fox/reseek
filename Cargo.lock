@@ -3220,6 +3220,7 @@ dependencies = [
  "flate2",
  "form_urlencoded",
  "futures-util",
+ "glob",
  "hmac 0.12.1",
  "http-body-util",
  "humantime",

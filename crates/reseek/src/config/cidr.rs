@@ -97,6 +97,16 @@ pub fn parse_list(text: &str) -> Result<Vec<IpRange>, (String, RangeError)> {
     .collect()
 }
 
+/// Reads a comma-separated list of ranges, each element without the whitespace around it, as a
+/// relay agent's networks are written.
+pub fn parse_trimmed_list(text: &str) -> Result<Vec<IpRange>, (String, RangeError)> {
+  text
+    .split(',')
+    .map(str::trim)
+    .map(|element| element.parse().map_err(|e| (element.to_string(), e)))
+    .collect()
+}
+
 /// The address an IPv4-mapped IPv6 address carries, else the address itself.
 pub fn unmapped(ip: IpAddr) -> IpAddr {
   match ip {

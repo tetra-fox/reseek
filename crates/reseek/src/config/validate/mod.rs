@@ -6,6 +6,7 @@ pub(crate) mod blacklist;
 mod fields;
 mod general;
 mod paths;
+mod relay;
 mod scripts;
 mod shares;
 mod soulseek;
