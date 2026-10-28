@@ -5,6 +5,7 @@
 //! user's judgement, once recorded, is what counts. The analyser reads files under the
 //! downloads and incomplete directories only and never changes one.
 
+mod aggregate;
 mod canvas;
 mod decode;
 mod engine;
