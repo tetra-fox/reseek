@@ -90,4 +90,5 @@ class TransferNotices {
   }
 }
 
-export const transferNotices = new TransferNotices();
+// the shell imports this module for the notices alone; nothing reads them
+new TransferNotices();
