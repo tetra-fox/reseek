@@ -44,7 +44,8 @@
 </script>
 
 {#snippet body()}
-  <ChatText text={long ? `${text.slice(0, LONG)}…` : text} {watch} />
+  <!-- our own messages mark nothing: our name in them is no mention -->
+  <ChatText text={long ? `${text.slice(0, LONG)}…` : text} watch={m.self ? [] : watch} />
   {#if long}
     <button
       type="button"
