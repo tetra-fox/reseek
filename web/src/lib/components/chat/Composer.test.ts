@@ -63,4 +63,12 @@ describe("the composer", () => {
     expect(document.querySelector('[role="dialog"][aria-label="Chat commands"]')).not.toBeNull();
     expect(box.value).toBe("");
   });
+
+  it("quotes an action as what was done", async () => {
+    const { box } = open();
+    const quote = (component as unknown as { quote: (m: unknown) => void }).quote;
+    quote({ author: "carol", text: "/me waves at everyone" });
+    flushSync();
+    expect(box.value).toBe("[carol] waves at everyone --> ");
+  });
 });

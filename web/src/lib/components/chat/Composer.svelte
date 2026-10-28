@@ -21,6 +21,7 @@
   import type { Message } from "#lib/chat/messages.js";
   import type { MessagePane } from "#lib/chat/pane.svelte.js";
   import { chatLayout, roomDrafts } from "#lib/chat/prefs.svelte.js";
+  import { actionOf } from "#lib/chat/rich.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { links } from "#lib/components/users/actions.js";
@@ -153,7 +154,8 @@
 
   /** Puts a quote of `message` before what is being written, and the caret after it */
   export const quote = (message: Message) => {
-    const line = message.text.replace(/\s+/g, " ").trim();
+    // an action is quoted as what was done, without the `/me` it was sent with
+    const line = (actionOf(message.text) ?? message.text).replace(/\s+/g, " ").trim();
     const short = line.length > QUOTED ? `${line.slice(0, QUOTED)}…` : line;
     const head = `[${message.author}] ${short} --> `;
     text = `${head}${text}`;
