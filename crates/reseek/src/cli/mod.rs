@@ -8,7 +8,9 @@
 //! about it.
 
 mod commands;
+mod completions;
 mod help;
+mod man;
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -16,7 +18,9 @@ use std::path::PathBuf;
 use cascade::{Kind, Schema};
 
 pub use commands::{generate_cert, generate_secret, hash_password};
+pub use completions::completions;
 pub use help::{banner, envars, help};
+pub use man::man;
 
 /// What the command line asks for.
 #[derive(Debug, PartialEq)]
@@ -46,10 +50,43 @@ pub enum Command {
   },
   /// read a password and print its argon2id hash
   HashPassword,
+  /// print the completions of a shell
+  Completions(Shell),
+  /// print the manual page
+  Man,
 }
 
 /// The command that prints a password's hash, given as the only argument.
 pub const HASH_PASSWORD: &str = "hash-password";
+/// The command that prints a shell's completions, given with the shell's name.
+pub const COMPLETIONS: &str = "completions";
+/// The command that prints the manual page, given as the only argument.
+pub const MAN: &str = "man";
+
+/// A shell the program writes completions for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shell {
+  /// GNU bash
+  Bash,
+  /// the Z shell
+  Zsh,
+  /// the friendly interactive shell
+  Fish,
+}
+
+impl Shell {
+  /// The shells' names, as `completions` takes them.
+  pub const NAMES: [&str; 3] = ["bash", "zsh", "fish"];
+
+  fn named(name: &str) -> Option<Self> {
+    match name {
+      "bash" => Some(Self::Bash),
+      "zsh" => Some(Self::Zsh),
+      "fish" => Some(Self::Fish),
+      _ => None,
+    }
+  }
+}
 
 /// What the daemon is started with.
 #[derive(Debug, Default, PartialEq)]
@@ -182,13 +219,8 @@ pub fn parse(
         .map_err(|a| UsageError(format!("`{}` is not UTF-8", a.to_string_lossy())))
     })
     .collect::<Result<_, _>>()?;
-  if args.first().map(String::as_str) == Some(HASH_PASSWORD) {
-    return match args.get(1) {
-      Some(extra) => Err(UsageError(format!(
-        "{HASH_PASSWORD} takes no arguments, not `{extra}`"
-      ))),
-      None => Ok(Command::HashPassword),
-    };
+  if let Some(command) = word_command(&args) {
+    return command;
   }
   let mut invocation = Invocation::default();
   let mut seen: Vec<(Bootstrap, Option<String>)> = Vec::new();
@@ -255,6 +287,33 @@ pub fn parse(
     )));
   }
   command(seen, invocation, env)
+}
+
+/// The command a word given first names, with its arguments: `hash-password`, `completions
+/// <shell>` or `man`. `None` when the first argument is no such word.
+fn word_command(args: &[String]) -> Option<Result<Command, UsageError>> {
+  let (word, rest) = args.split_first()?;
+  let none = |command| match rest.first() {
+    Some(extra) => Err(UsageError(format!(
+      "{word} takes no arguments, not `{extra}`"
+    ))),
+    None => Ok(command),
+  };
+  let shells = || Shell::NAMES.join(", ");
+  Some(match word.as_str() {
+    HASH_PASSWORD => none(Command::HashPassword),
+    MAN => none(Command::Man),
+    COMPLETIONS => match rest {
+      [name] => Shell::named(name)
+        .map(Command::Completions)
+        .ok_or_else(|| UsageError(format!("no completions for `{name}`; one of {}", shells()))),
+      _ => Err(UsageError(format!(
+        "{COMPLETIONS} takes one shell: {}",
+        shells()
+      ))),
+    },
+    _ => return None,
+  })
 }
 
 /// The command the recognised flags ask for, in the order version, help and environment
@@ -543,6 +602,19 @@ mod tests {
     }
     assert_eq!(run(&["hash-password"]).unwrap(), Command::HashPassword);
     assert!(run(&["hash-password", "x"]).is_err());
+    assert_eq!(
+      run(&["completions", "zsh"]).unwrap(),
+      Command::Completions(Shell::Zsh)
+    );
+    for bad in [
+      &["completions"][..],
+      &["completions", "tcsh"],
+      &["completions", "bash", "x"],
+    ] {
+      assert!(run(bad).is_err(), "{bad:?}");
+    }
+    assert_eq!(run(&["man"]).unwrap(), Command::Man);
+    assert!(run(&["man", "1"]).is_err());
     assert_eq!(
       flags(&["-k", "abc"]),
       pairs(&[("--api-key", "abc")]),

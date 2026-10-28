@@ -451,6 +451,8 @@ pub fn main() -> ExitCode {
         return ExitCode::from(EXIT_FATAL);
       }
     },
+    Command::Completions(shell) => print!("{}", cli::completions(shell, &schema)),
+    Command::Man => print!("{}", cli::man(&schema)),
     Command::Run(invocation) => {
       let supervised = invocation
         .supervised
@@ -572,12 +574,7 @@ fn run(invocation: Invocation) -> u8 {
 
 /// Forwards the logs to Grafana Loki when it is configured, and serves until a signal; the last
 /// lines are pushed to Loki before it returns.
-async fn serve(
-  sources: Sources,
-  defaults: Defaults,
-  paths: Paths,
-  logging: Logging,
-) -> u8 {
+async fn serve(sources: Sources, defaults: Defaults, paths: Paths, logging: Logging) -> u8 {
   let loki = logging.start_loki();
   let code = host(sources, defaults, paths, logging).await;
   if let Some(loki) = loki {
@@ -587,12 +584,7 @@ async fn serve(
 }
 
 /// Loads the configuration for good, binds the listeners and serves until a signal.
-async fn host(
-  sources: Sources,
-  defaults: Defaults,
-  paths: Paths,
-  logging: Logging,
-) -> u8 {
+async fn host(sources: Sources, defaults: Defaults, paths: Paths, logging: Logging) -> u8 {
   let overrides = match Overrides::load(paths.overrides()) {
     Ok(overrides) => overrides,
     Err(e) => {

@@ -1,10 +1,9 @@
 //! The banner and the generated lists of command-line flags and environment variables.
 
-use super::HASH_PASSWORD;
 use cascade::{Field, Kind, Schema};
 use serde_json::Value;
 
-use super::{BOOTSTRAP, CONFIG_FILE};
+use super::{BOOTSTRAP, COMPLETIONS, CONFIG_FILE, HASH_PASSWORD, MAN, Shell};
 use crate::version;
 
 /// The startup banner: the name, the version, the licence and the build's markers.
@@ -24,52 +23,89 @@ pub fn banner() -> String {
   text
 }
 
+/// One command-line flag as the help, the man page and the shell completions show it.
+pub(super) struct FlagDoc {
+  /// the one-letter form, if it has one
+  pub short: Option<char>,
+  /// the long form, with its `--`
+  pub long: String,
+  /// what its value is, `None` for a flag that takes none
+  pub value: Option<String>,
+  /// what it does, on one line
+  pub doc: String,
+}
+
 /// Every command-line flag, the command line's own first, then the options' in the order the
 /// configuration declares them.
-pub fn help(schema: &Schema) -> String {
-  let mut rows: Vec<(String, String)> = BOOTSTRAP
+pub(super) fn flags(schema: &Schema) -> Vec<FlagDoc> {
+  let mut flags: Vec<FlagDoc> = BOOTSTRAP
     .iter()
-    .map(|(_, short, long, value, doc)| {
-      let mut item = flag_item(*short, long);
-      if let Some(value) = value {
-        item.push_str(&format!(" <{value}>"));
-      }
-      (item, doc.to_string())
+    .map(|(_, short, long, value, doc)| FlagDoc {
+      short: *short,
+      long: (*long).to_string(),
+      value: value.map(str::to_string),
+      doc: (*doc).to_string(),
     })
     .collect();
-  rows.push((
-    format!("    {CONFIG_FILE} <path>"),
-    "The same as --config.".to_string(),
-  ));
+  flags.push(FlagDoc {
+    short: None,
+    long: CONFIG_FILE.to_string(),
+    value: Some("path".to_string()),
+    doc: "The same as --config.".to_string(),
+  });
   for field in schema.fields() {
     let Some(long) = &field.cli else {
       continue;
     };
-    let mut item = flag_item(field.short, long);
-    if field.kind != Kind::Bool {
-      item.push_str(&format!(" <{}>", kind_name(&field.kind)));
-    }
-    rows.push((item, described(field)));
+    flags.push(FlagDoc {
+      short: field.short,
+      long: long.clone(),
+      value: (field.kind != Kind::Bool).then(|| kind_name(&field.kind)),
+      doc: described(field),
+    });
   }
+  flags
+}
+
+/// Every environment variable an option reads, with the kind of its value and what it does.
+pub(super) fn variables(schema: &Schema) -> Vec<(String, String, String)> {
+  schema
+    .fields()
+    .iter()
+    .filter_map(|field| {
+      let env = field.env.as_ref()?;
+      Some((env.clone(), kind_name(&field.kind), described(field)))
+    })
+    .collect()
+}
+
+/// Every command-line flag, as `--help` prints them.
+pub fn help(schema: &Schema) -> String {
+  let rows: Vec<(String, String)> = flags(schema)
+    .into_iter()
+    .map(|flag| {
+      let mut item = flag_item(flag.short, &flag.long);
+      if let Some(value) = &flag.value {
+        item.push_str(&format!(" <{value}>"));
+      }
+      (item, flag.doc)
+    })
+    .collect();
   format!(
-    "\nusage: reseek [arguments]\n       reseek {HASH_PASSWORD}   prints an argon2id hash of a password read from \
-     the terminal, or from stdin, for password_hash\n\narguments:\n{}",
-    table(&rows)
+    "\nusage: reseek [arguments]\n       reseek {HASH_PASSWORD}   prints an argon2id hash of a \
+     password read from the terminal, or from stdin, for password_hash\n       reseek \
+     {COMPLETIONS} <shell>   prints the shell's completions: {shells}\n       reseek {MAN}   \
+     prints the manual page\n\narguments:\n{}",
+    table(&rows),
+    shells = Shell::NAMES.join(", "),
   )
 }
 
 /// Every environment variable an option reads.
 pub fn envars(schema: &Schema) -> String {
-  let rows: Vec<(String, String)> = schema
-    .fields()
-    .iter()
-    .filter_map(|field| {
-      let env = field.env.as_ref()?;
-      Some((
-        format!("  {env} <{}>", kind_name(&field.kind)),
-        described(field),
-      ))
-    })
+  let rows: Vec<(String, String)> = variables(schema)
+    .into_iter()
+    .map(|(env, kind, doc)| (format!("  {env} <{kind}>"), doc))
     .collect();
   format!(
     "\nenvironment variables (arguments and config file have precedence):\n{}",
