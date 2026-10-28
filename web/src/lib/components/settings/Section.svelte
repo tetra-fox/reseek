@@ -198,7 +198,7 @@
             if (!done.length) await onchanged();
             return {
               ...outcome,
-              error: `${file} changed on disk, check the values and save again`
+              error: `${file} changed on disk. Check the values and save again.`
             };
           }
           const detail = (outcome.body as { detail?: string | null } | undefined)?.detail;
@@ -215,7 +215,7 @@
       }
       toast(
         `${section.title}: ${plural(done.length, "setting", "settings")} saved` +
-          (restart.length ? `, restart reseek for ${restart.join(", ")}` : "")
+          (restart.length ? `. Restart reseek to apply ${restart.join(", ")}.` : "")
       );
       await settle(done);
       return { ok: true as const, data: null };
@@ -310,7 +310,7 @@
   {#if nix}
     <div class="flex flex-col gap-1">
       <p class="text-xs text-fg-muted">
-        The browser won't copy here, copy it from this box
+        The browser blocked copying. Copy the text from this box.
         <Button variant="link" class="ml-1" onclick={() => (nix = null)}>close</Button>
       </p>
       <Textarea class="field-sizing-content max-h-64 font-mono text-xs" readonly value={nix} />

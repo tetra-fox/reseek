@@ -102,7 +102,7 @@ export const fromDraft = (
     } catch {
       // the message below says what is expected
     }
-    return { error: "must be a JSON object of entries by name" };
+    return { error: "must be a JSON object keyed by name" };
   }
   const choices = view?.choices;
   if (control === "select" && choices && !choices.includes(text)) {

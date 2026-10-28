@@ -18,7 +18,7 @@
 
 <!-- who this browser is signed in as -->
 {#if principal}
-  <Card title={principal.name} description={`${principal.role}, by ${via}`}>
+  <Card title={principal.name} description={`${principal.role}, via ${via}`}>
     <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
       <dt class="text-fg-muted">Subject</dt>
       <dd><code>{principal.subject}</code></dd>

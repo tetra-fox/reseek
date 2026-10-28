@@ -47,19 +47,20 @@
 
 {#if !remote}
   <Notice kind="warning">
-    Changes from here need <code>remote_configuration</code> on; until then the settings are only shown.
+    Remote configuration is off, so settings can only be viewed here. Set
+    <code>remote_configuration</code> to change them.
   </Notice>
 {/if}
 {#if view.loadError}
   <Notice kind="error"
-    >The last reload failed, the values before it still run: {view.loadError}</Notice>
+    >Couldn't reload the configuration, so the previous values are still in effect: {view.loadError}</Notice>
 {/if}
 {#each view.warnings as warning (warning)}
   <Notice kind="warning">{warning}</Notice>
 {/each}
 {#if view.pendingRestart.length || app.state?.pendingRestart}
   <Notice kind="warning">
-    A restart applies {view.pendingRestart.join(", ") || "a change"}.
+    Restart reseek to apply {view.pendingRestart.join(", ") || "a change"}.
     {#snippet action()}
       <Button
         variant="outline"
@@ -73,7 +74,7 @@
 {/if}
 {#if view.pendingReconnect.length || app.state?.pendingReconnect}
   <Notice kind="warning">
-    A reconnect to the Soulseek server applies {view.pendingReconnect.join(", ") || "a change"}.
+    Reconnect to the Soulseek server to apply {view.pendingReconnect.join(", ") || "a change"}.
     {#snippet action()}
       <Button variant="outline" size="sm" disabled={busy.running} onclick={reconnect}>
         Reconnect now
@@ -97,7 +98,7 @@
           <code class="text-xs text-fg-subtle" title={file.revision}
             >{file.revision.slice(0, 15)}</code>
         {:else}
-          <span class="text-xs text-fg-subtle">not written yet</span>
+          <span class="text-xs text-fg-subtle">Not written yet</span>
         {/if}
       </li>
     {/each}
@@ -105,7 +106,9 @@
 </Card>
 
 {#if overrides.length}
-  <Card title="Runtime overrides" description="Applied from here or the API, on top of the files">
+  <Card
+    title="Runtime overrides"
+    description="Applied from this page or the API, on top of the configuration files">
     <ul class="-mx-5 divide-y border-y">
       {#each overrides as [key, override] (key)}
         <li class="flex flex-wrap items-center gap-inline px-5 py-2 text-sm">
@@ -136,7 +139,7 @@
 <ConfirmDialog
   bind:open={restarting}
   title="Restart reseek"
-  body="Transfers in progress stop and resume after the restart. The page comes back once reseek is up."
+  body="Transfers in progress stop and resume after the restart. This page reconnects once reseek is back."
   confirm="Restart"
   danger
   onconfirm={restart} />

@@ -67,12 +67,12 @@ describe("the raw configuration file", () => {
     expect(document.body.textContent?.replace(/\s+/g, " ")).toContain(
       "Saved. 1 setting applied live."
     );
-    expect(document.body.textContent).toContain("Restart to apply: web.port.");
+    expect(document.body.textContent).toContain("Restart reseek to apply: web.port.");
   });
 
   it("asks to reload when the file changed on disk", async () => {
     await start(() => ({ status: 409, body: { error: "config file changed on disk" } }));
-    expect(document.body.textContent).toContain("changed on disk; reload it");
+    expect(document.body.textContent).toContain("changed on disk. Reload it");
     expect(
       [...document.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Reload")
     ).toBe(true);

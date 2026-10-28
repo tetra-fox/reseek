@@ -20,7 +20,7 @@ describe("the settings forms", () => {
       "Shares",
       "Transfers",
       "Groups",
-      "Directories",
+      "Folders",
       "Web",
       "Authentication",
       "Search filters",
@@ -132,10 +132,10 @@ describe("editability", () => {
     v.fields["web.port"].source = { layer: "cli", flag: "--http-port" };
     expect(editability(v, "soulseek.username")).toEqual({
       mode: "locked",
-      notice: "Set by RESEEK_SLSK_USERNAME; change it there"
+      notice: "Set by RESEEK_SLSK_USERNAME. Change it there."
     });
     expect(editability(v, "web.port").notice).toBe(
-      "Set on the command line (--http-port); change it there"
+      "Set on the command line with --http-port. Change it there."
     );
   });
 
