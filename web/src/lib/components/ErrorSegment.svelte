@@ -26,7 +26,7 @@
     <TriangleAlertIcon class="size-5 text-danger-soft-fg" />
   </span>
   <p class="text-sm font-medium wrap-anywhere">{caption}</p>
-  {#if detail}<p class="max-w-sm text-sm text-pretty text-fg-muted">{detail}</p>{/if}
+  {#if detail}<p class="max-w-sm text-sm text-pretty wrap-anywhere text-fg-muted">{detail}</p>{/if}
   <div class="flex gap-inline">
     <Button variant="outline" onclick={() => (retry ? retry() : location.reload())}>
       {retryLabel}

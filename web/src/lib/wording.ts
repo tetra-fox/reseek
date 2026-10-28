@@ -27,3 +27,6 @@ export const RESTART = {
   body: "Transfers in progress stop and resume after the restart.",
   confirm: "Restart"
 } as const;
+
+/** What a screen that failed to render says first; the error's own message follows it */
+export const SCREEN_FAILED = "This screen couldn't be shown";

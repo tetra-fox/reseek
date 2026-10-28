@@ -26,6 +26,7 @@
   import { session } from "#lib/session.svelte.js";
   // listens for transfer frames from the start, so its notifications follow every screen
   import "#lib/transfers/notices.svelte.js";
+  import { SCREEN_FAILED } from "#lib/wording.js";
 
   let { children } = $props();
 
@@ -158,7 +159,8 @@
               {#snippet failed(error, reset)}
                 <!-- SvelteKit hands a boundary an App.Error, which hooks.client.ts gives the message -->
                 <ErrorSegment
-                  caption={(error as App.Error).message}
+                  caption={SCREEN_FAILED}
+                  detail={(error as App.Error).message}
                   retry={reset}
                   retryLabel="Reload" />
               {/snippet}
