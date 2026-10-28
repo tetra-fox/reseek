@@ -96,6 +96,10 @@ webpki-roots.workspace = true
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", features = ["fs", "process"] }
 
+# puts each script in a job object, so killing it ends what it started too
+[target.'cfg(windows)'.dependencies]
+win32job = "2"
+
 [dev-dependencies]
 api-client.workspace = true
 # make the lossless and lossy audio the analyser is tested on

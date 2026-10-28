@@ -7,6 +7,7 @@
 // on Windows a program splits its argument string itself
 #[cfg(not(windows))]
 mod args;
+mod group;
 mod output;
 mod run;
 

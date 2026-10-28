@@ -13,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+use super::group::{self, Group};
 use super::output::{self, Tail};
 use crate::config::{Script, ScriptRun};
 use crate::sync::lock;
@@ -291,12 +292,7 @@ async fn attempt(
     .stdout(Stdio::piped())
     .stderr(Stdio::piped())
     .kill_on_drop(true);
-  // the script and whatever it starts can then be killed together
-  #[cfg(unix)]
-  command.process_group(0);
-  // no console window opens for it
-  #[cfg(windows)]
-  command.creation_flags(0x0800_0000);
+  group::prepare(&mut command);
   let ended = match command.spawn() {
     Ok(child) => waited(child, job.script.timeout, shutdown).await,
     Err(e) => Ended::not_started(format!("{} could not be started: {e}", invocation.program)),
@@ -319,6 +315,7 @@ enum Exit {
 
 /// Waits for `child` within `timeout`, none when it is zero, reading its output meanwhile.
 async fn waited(mut child: Child, timeout: Duration, shutdown: &CancellationToken) -> Ended {
+  let group = Group::of(&child);
   let tail = Arc::new(Mutex::new(Tail::default()));
   let readers = (
     child
@@ -344,10 +341,12 @@ async fn waited(mut child: Child, timeout: Duration, shutdown: &CancellationToke
     () = shutdown.cancelled() => Exit::Stopped,
   };
   if matches!(exit, Exit::TimedOut(_) | Exit::Stopped) {
-    kill(&mut child);
+    group.kill(&mut child);
     if let Err(e) = child.wait().await {
       debug!(error = %e, "a killed script was not waited for");
     }
+  } else {
+    group.release();
   }
   let read = (finish(readers.0).await, finish(readers.1).await);
   let output = lock(&tail).text();
@@ -393,24 +392,6 @@ async fn finish(reader: Option<tokio::task::JoinHandle<u64>>) -> u64 {
       reader.abort();
       0
     }
-  }
-}
-
-/// Kills the run and, where it has one, every process in its group.
-fn kill(child: &mut Child) {
-  #[cfg(unix)]
-  if let Some(group) = child
-    .id()
-    .and_then(|id| i32::try_from(id).ok())
-    .and_then(rustix::process::Pid::from_raw)
-  {
-    match rustix::process::kill_process_group(group, rustix::process::Signal::KILL) {
-      Ok(()) => return,
-      Err(e) => debug!(error = %e, "a script's process group was not killed; only the script is"),
-    }
-  }
-  if let Err(e) = child.start_kill() {
-    debug!(error = %e, "a script was not killed; it ended already");
   }
 }
 
