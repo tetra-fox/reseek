@@ -116,12 +116,25 @@ impl Heard {
       .flatten()
   }
 
+  /// Where a full-band window has a step of [`INNER_SHELF_DB`] or more under its top.
+  fn stepped(&self, window: &Seen) -> Option<f64> {
+    let step = window.inner_shelf?;
+    (self.full(window) && step.drop >= INNER_SHELF_DB).then_some(step.hz)
+  }
+
   /// A full-band window with a band-limited layer under it at an encoder's cutoff.
   fn layered(&self, window: &Seen) -> Option<f64> {
-    let step = window.inner_shelf?;
-    (self.full(window) && step.drop >= INNER_SHELF_DB && lower_profile_at(step.hz).is_some())
-      .then_some(step.hz)
+    self
+      .stepped(window)
+      .filter(|hz| lower_profile_at(*hz).is_some())
   }
+}
+
+/// The limitation of a cut where the highest bitrates cut.
+fn filtered_at_20_khz() -> String {
+  "Some recordings are filtered at 20 kHz when they are made or mastered, which looks the \
+   same as a high-bitrate encoder's cutoff."
+    .to_string()
 }
 
 /// The profile at `hz` when it is one below the highest bitrates: a cut where those cut is
@@ -302,11 +315,7 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
       profile: profile.name.to_string(),
       confidence: 0.4,
     });
-    reading.limitations.push(
-      "Some recordings are filtered at 20 kHz when they are made or mastered, which looks \
-       the same as a high-bitrate encoder's cutoff."
-        .to_string(),
-    );
+    reading.limitations.push(filtered_at_20_khz());
     reading.summary = format!(
       "{} of the time stops at {} with a sharp shelf, where an encoder at {} cuts off; a \
        recording filtered there when it was made looks the same, and the analyser can not \
@@ -367,6 +376,33 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     );
     return reading;
   }
+  // a step where the highest bitrates cut, under a band that reaches the top: a high-bitrate
+  // layer, or a recording filtered at 20 kHz with something above it
+  let high_steps: Vec<f64> = heard
+    .windows
+    .iter()
+    .filter_map(|w| heard.stepped(w))
+    .filter(|hz| profile_at(*hz).is_some_and(|p| p.kbps >= HIGH_BITRATE_KBPS))
+    .collect();
+  if high_steps.len() as f64 / count as f64 >= MIXED_SHARE {
+    let at = middle(&high_steps);
+    // every step here is at a profile
+    let profile = profile_at(at).map_or("a high bitrate", |p| p.name);
+    reading.encoder_guess = Some(EncoderGuess {
+      profile: profile.to_string(),
+      confidence: 0.4,
+    });
+    reading.cutoff_hz = Some(at);
+    reading.limitations.push(filtered_at_20_khz());
+    reading.summary = format!(
+      "The content reaches the top of the band, but {} of the time shows a sharp step at {} \
+       under it, where an encoder at {profile} cuts off; a layer at that bitrate and a \
+       recording filtered there with something above it look the same.",
+      percent(high_steps.len() as f64 / count as f64),
+      khz(at)
+    );
+    return reading;
+  }
 
   let open = heard.share(|w| heard.full(w) || !w.sharp);
   if open >= CONSISTENT_SHARE {
@@ -378,11 +414,18 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
       }
       reading.verdict = AnalysisVerdict::Consistent;
       reading.confidence = confidence.min(CONFIDENCE_CAP);
+      // a step that is no encoder's cutoff can still lie under the band
+      let stepped = heard.windows.iter().any(|w| heard.stepped(w).is_some());
       reading.summary = format!(
-        "{} of the time reaches {}, near the top of the {} band, with no encoder's shelf.",
+        "{} of the time reaches {}, near the top of the {} band{}.",
         percent(full),
         khz(median),
-        khz(heard.top)
+        khz(heard.top),
+        if stepped {
+          ""
+        } else {
+          ", with no encoder's shelf"
+        }
       );
       return reading;
     }

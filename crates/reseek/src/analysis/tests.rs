@@ -167,6 +167,26 @@ fn a_lossy_layer_or_a_lossy_part_reads_as_mixed_sources() {
     "{}",
     reading.summary
   );
+  // a 320 kbps stem under a bed: a step where the highest bitrates cut, which a recording
+  // filtered at 20 kHz with something above it also shows
+  let stem = fixtures::through_mp3(&music(3, 44_100, pink), Bitrate::Kbps320, dir.path());
+  let layered = stem.mixed(&music(4, 44_100, pink), 0.071);
+  let reading = analysed(&flac(dir.path(), "layered320.flac", &layered, 16));
+  assert_eq!(
+    reading.verdict,
+    AnalysisVerdict::Inconclusive,
+    "{reading:#?}"
+  );
+  let guess = reading.encoder_guess.as_ref().unwrap();
+  assert_eq!(
+    (guess.profile.as_str(), guess.confidence),
+    ("mp3 ~320 kbps or aac", 0.4)
+  );
+  assert!(
+    !reading.summary.contains("no encoder's shelf"),
+    "{}",
+    reading.summary
+  );
 }
 
 #[test]
@@ -190,22 +210,29 @@ fn honest_band_limited_audio_is_not_read_as_fake() {
 }
 
 #[test]
-fn a_filtered_synth_line_is_not_read_as_fake() {
+fn a_synth_line_filtered_at_20_khz_reads_as_that_cut() {
   let dir = tempfile::tempdir().unwrap();
-  // a synth line low-passed at 20 kHz: a line spectrum, with gaps between its harmonics
+  // a synth line low-passed at 20 kHz: a line spectrum, with gaps between its harmonics, which
+  // stops where the highest bitrates cut
   for hz in [110.0, 220.0] {
     let saw = fixtures::harmonics(hz, 20_000.0, 1.0);
-    not_fake(&analysed(&flac(dir.path(), "saw.flac", &saw, 16)));
+    let reading = analysed(&flac(dir.path(), "saw.flac", &saw, 16));
+    assert_eq!(
+      reading.verdict,
+      AnalysisVerdict::Inconclusive,
+      "{hz}: {reading:#?}"
+    );
+    assert!(reading.encoder_guess.is_some(), "{hz}");
   }
-  // a pulse of equal harmonics every 100 Hz, which clips when written, so its clipping puts
-  // lines above the 20 kHz step
+  // a pulse of equal harmonics every 100 Hz, which clips when written: its clipping fills the
+  // band above 20 kHz, so it reaches the top
   let pulse = fixtures::harmonics(100.0, 20_000.0, 0.0);
   let reading = analysed(&flac(dir.path(), "pulse.flac", &pulse, 16));
   assert!(
     reading.measures.clipped_samples_pct.unwrap() > 0.0,
     "{reading:#?}"
   );
-  not_fake(&reading);
+  assert_eq!(reading.verdict, AnalysisVerdict::Consistent, "{reading:#?}");
 }
 
 /// White noise at `dbfs`, a stand-in for tape hiss.
