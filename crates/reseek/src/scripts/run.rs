@@ -98,6 +98,7 @@ impl Invocation {
     const NO_SHELL: &str =
       "no program to run: the script names no executable and $SHELL is missing or blank";
     if let Some(command) = given(&run.command) {
+      let command = command.trim();
       let shell = shell.ok_or(NO_SHELL)?;
       let line = if command.starts_with(shell.prefix) {
         command.to_string()
@@ -454,6 +455,11 @@ mod tests {
     assert_eq!(
       line("-c 'echo hi'").arguments,
       Arguments::Line("-c 'echo hi'".into())
+    );
+    assert_eq!(
+      line("  -c 'echo hi' ").arguments,
+      Arguments::Line("-c 'echo hi'".into()),
+      "blanks around it do not hide the switch"
     );
     assert_eq!(line("echo hi").program, "/bin/sh");
     let listed =
