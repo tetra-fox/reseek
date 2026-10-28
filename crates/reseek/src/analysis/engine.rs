@@ -213,6 +213,15 @@ fn stop(
   Ok(false)
 }
 
+/// Whether a window filled as `filled` is worth measuring: a whole second, or a last part of at
+/// least half a second and one spectrum frame.
+fn usable(filled: &Filled, rate: usize) -> bool {
+  match filled {
+    Filled::Full => true,
+    Filled::End(length) => *length >= FFT_SIZE.min(rate) && length * 2 >= rate,
+  }
+}
+
 /// Reads windows one after another from where the decoder is, measuring every one or, with
 /// `only`, those starting at the listed seconds. Returns the seconds read.
 fn whole(
@@ -235,9 +244,7 @@ fn whole(
       Filled::Full => rate,
       Filled::End(length) => length,
     };
-    // a last part shorter than half a second, or than one spectrum frame, is left out
-    let usable = length >= FFT_SIZE.min(rate) && length * 2 >= rate;
-    if usable && only.is_none_or(|only| only.contains(&second)) {
+    if usable(&filled, rate) && only.is_none_or(|only| only.contains(&second)) {
       let window = analyser.measure(second as f64, buffer, &mut measured.totals);
       measured.windows.push(window);
     }
@@ -282,10 +289,8 @@ fn sampled(
       )?;
       return Ok(());
     }
-    match decoder.fill(buffer, rate) {
-      Filled::Full => {}
-      Filled::End(length) if length * 2 >= rate && length >= FFT_SIZE.min(rate) => {}
-      Filled::End(_) => continue,
+    if !usable(&decoder.fill(buffer, rate), rate) {
+      continue;
     }
     let window = analyser.measure(second as f64, buffer, &mut measured.totals);
     measured.windows.push(window);
