@@ -58,14 +58,21 @@ export const shouldNotify = (a: Arrival, o: NotifyOptions): boolean => {
  * message while its pane isn't open a toast that opens it
  */
 class Notifier {
-  /** the browser lets the page notify; asked for from a click, never on its own */
-  permission = $state<NotificationPermission | "unsupported">(
-    typeof Notification === "undefined" ? "unsupported" : Notification.permission
+  /**
+   * the browser lets the page notify; asked for from a click, never on its own. `insecure` on a
+   * page without a secure context (plain http on a LAN address), where browsers refuse to notify
+   */
+  permission = $state<NotificationPermission | "unsupported" | "insecure">(
+    typeof Notification === "undefined"
+      ? "unsupported"
+      : isSecureContext
+        ? Notification.permission
+        : "insecure"
   );
 
   /** Asks the browser for permission to notify */
   ask = async () => {
-    if (typeof Notification === "undefined") return;
+    if (this.permission === "unsupported" || this.permission === "insecure") return;
     this.permission = await Notification.requestPermission();
   };
 

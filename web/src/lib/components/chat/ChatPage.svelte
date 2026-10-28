@@ -1,5 +1,6 @@
 <script lang="ts">
   import { afterNavigate, goto } from "$app/navigation";
+  import BellOffIcon from "@lucide/svelte/icons/bell-off";
   import BellRingIcon from "@lucide/svelte/icons/bell-ring";
   import MessagesSquareIcon from "@lucide/svelte/icons/messages-square";
   import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
@@ -46,6 +47,7 @@
     target && target !== "search" ? paneKey(target.kind, target.name) : null
   );
   const asking = $derived(notifier.permission === "default" && notifyOptions().enabled);
+  const insecure = $derived(notifier.permission === "insecure" && notifyOptions().enabled);
 
   // the breadcrumb names the chat on show
   useCrumbs(() => {
@@ -128,6 +130,12 @@
         <Button variant="link" class="text-xs" onclick={() => void notifier.ask()}
           >Turn on notifications</Button>
       </div>
+    {/if}
+    {#if insecure}
+      <p class="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-fg-muted">
+        <BellOffIcon class="size-3.5 shrink-0" />Browsers only show notifications over HTTPS or on
+        localhost, so on this address reseek can tell you about new messages only inside the page.
+      </p>
     {/if}
     {#if target === "search"}
       <div class="flex flex-col gap-section overflow-y-auto p-4">
