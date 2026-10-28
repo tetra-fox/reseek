@@ -285,6 +285,18 @@ pub fn daemon_listening(
   listen: u16,
   extra: &[&str],
 ) -> Daemon {
+  daemon_on(0, dir, server, username, listen, extra)
+}
+
+/// [`daemon_listening`], serving HTTP on `http`, or a port the system picks when it is 0.
+pub fn daemon_on(
+  http: u16,
+  dir: &Path,
+  server: &Soulfind,
+  username: &str,
+  listen: u16,
+  extra: &[&str],
+) -> Daemon {
   let address = server.address();
   let port = address.port().to_string();
   let listen = listen.to_string();
@@ -306,7 +318,7 @@ pub fn daemon_listening(
     "--remote-configuration",
   ];
   args.extend_from_slice(extra);
-  Daemon::start(dir, &args, &ACCOUNT)
+  Daemon::start_on(http, dir, &args, &ACCOUNT)
 }
 
 /// An API client of `daemon`, logged in as its administrator.
