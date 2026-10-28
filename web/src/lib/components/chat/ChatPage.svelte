@@ -14,6 +14,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
+  import { useCrumbs } from "#lib/crumbs.svelte.js";
   import { chatHref, href, roomHref } from "#lib/nav.js";
 
   import ChatList from "./ChatList.svelte";
@@ -45,6 +46,13 @@
     target && target !== "search" ? paneKey(target.kind, target.name) : null
   );
   const asking = $derived(notifier.permission === "default" && notifyOptions().enabled);
+
+  // the breadcrumb names the chat on show
+  useCrumbs(() => {
+    if (target === "search") return [{ label: "Search messages" }];
+    if (!target) return [];
+    return [{ label: target.kind === "room" ? `#${target.name}` : target.name }];
+  });
 
   // a narrow screen shows the list in a sheet, which going to a chat closes
   afterNavigate(() => (sheet = false));
