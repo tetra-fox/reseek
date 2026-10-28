@@ -26,6 +26,7 @@
   import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
+  import { FILTER_PLACEHOLDER } from "#lib/search/filters.js";
   import { session } from "#lib/session.svelte.js";
   import { undoable } from "#lib/undo.js";
 
@@ -302,7 +303,7 @@
             bind:value={typed}
             type="search"
             aria-label="Filter"
-            placeholder="lackluster container type:flac bitrate:320" />
+            placeholder={FILTER_PLACEHOLDER} />
         </div>
         <Button variant="outline" size="sm" onclick={() => tree?.expandAll()}>
           <ChevronDownIcon />Expand all
