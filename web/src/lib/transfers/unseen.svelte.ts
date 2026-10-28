@@ -1,47 +1,63 @@
-import type { Schemas } from "#lib/api/client.js";
 import { live } from "#lib/live/live.svelte.js";
 
-import type { Direction } from "./states";
+import { ERRORED, type Direction, type Transfer } from "./states";
 
 type Counts = { succeeded: number; failed: number };
 
-const KEY = { download: "downloads", upload: "uploads" } as const;
+const DIRECTIONS = { Download: "download", Upload: "upload" } as const;
 
 /**
- * What finished and what failed in each direction since its screen was last open, from the
- * daemon's running totals, for the navigation's badges. Totals from before the page loaded count
- * as seen
+ * What finished and what failed in each direction while its screen was not open, for the
+ * navigation's badges: transfers that reach `Completed, Succeeded` or a failure on the
+ * `transfers` topic, each transfer counted once per outcome. Opening the screen clears its counts
  */
 class Unseen {
-  #seen = $state<Record<Direction, Counts | null>>({ download: null, upload: null });
-  #now = $state.raw<Schemas["TransferMetrics"] | null>(null);
+  #counts = $state<Record<Direction, Counts>>({
+    download: { succeeded: 0, failed: 0 },
+    upload: { succeeded: 0, failed: 0 }
+  });
+  #viewing: Record<Direction, number> = { download: 0, upload: 0 };
+  #counted = new Set<string>();
 
   constructor() {
-    live.on("metrics.update", (metrics) => {
-      this.#now = metrics;
-      for (const direction of ["download", "upload"] as const) {
-        const seen = this.#seen[direction];
-        const now = metrics[KEY[direction]].completed;
-        // a daemon that restarted counts from zero again
-        if (!seen || now.succeeded < seen.succeeded || now.failed < seen.failed) {
-          this.#seen[direction] = { succeeded: now.succeeded, failed: now.failed };
-        }
-      }
+    live.on("transfers.updated", (t) => this.#updated(t));
+    live.on("transfers.removed", (t) => {
+      this.#counted.delete(`${t.id}:succeeded`);
+      this.#counted.delete(`${t.id}:failed`);
     });
   }
 
   /** What finished and failed since the screen was last open */
   of(direction: Direction): Counts {
-    const seen = this.#seen[direction];
-    const now = this.#now?.[KEY[direction]].completed;
-    if (!seen || !now) return { succeeded: 0, failed: 0 };
-    return { succeeded: now.succeeded - seen.succeeded, failed: now.failed - seen.failed };
+    return this.#counts[direction];
   }
 
-  /** The screen is open: everything up to now is seen */
-  seen(direction: Direction) {
-    const now = this.#now?.[KEY[direction]].completed;
-    if (now) this.#seen[direction] = { succeeded: now.succeeded, failed: now.failed };
+  /**
+   * The screen is open from now until the returned function is called: what was counted is seen,
+   * and what finishes meanwhile is seen as it happens
+   */
+  view(direction: Direction): () => void {
+    this.#viewing[direction] += 1;
+    this.#counts[direction] = { succeeded: 0, failed: 0 };
+    return () => {
+      this.#viewing[direction] -= 1;
+    };
+  }
+
+  #updated(t: Transfer) {
+    const outcome =
+      t.state === "Completed, Succeeded"
+        ? "succeeded"
+        : ERRORED.includes(t.state)
+          ? "failed"
+          : null;
+    const direction = DIRECTIONS[t.direction as keyof typeof DIRECTIONS];
+    if (!outcome || !direction) return;
+    const key = `${t.id}:${outcome}`;
+    if (this.#counted.has(key)) return;
+    this.#counted.add(key);
+    if (this.#viewing[direction]) return;
+    this.#counts[direction][outcome] += 1;
   }
 }
 

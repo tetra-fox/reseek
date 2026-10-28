@@ -50,7 +50,7 @@
     () => "transfers"
   );
   // what finishes while the screen is open is seen, so the navigation shows no badge for it
-  $effect(() => unseen.seen(direction));
+  $effect(() => unseen.view(direction));
   void store.load();
 
   let typed = $state("");

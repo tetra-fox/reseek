@@ -2,18 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { live } from "#lib/live/live.svelte.js";
+import { transfer } from "#lib/testing/fixtures.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import { unseen } from "./unseen.svelte";
-
-const metrics = (succeeded: number, failed: number) => {
-  const direction = {
-    inProgress: { files: 0, users: 0, averageSpeed: 0, totalSpeed: 0 },
-    queued: { files: 0, users: 0, bytes: 0 },
-    completed: { succeeded, failed, bytes: 0 }
-  };
-  return { downloads: direction, uploads: direction } as unknown as Schemas["TransferMetrics"];
-};
 
 describe("what finished unseen", () => {
   afterEach(() => {
@@ -21,21 +13,36 @@ describe("what finished unseen", () => {
     vi.unstubAllGlobals();
   });
 
-  it("counts from the totals at load and from each visit on", async () => {
+  it("counts transfers that finish or fail while their screen is closed, each once", async () => {
     const net = fakeNetwork(() => undefined);
     live.start();
+    net.frame("hello", { principal: { name: "a", role: "ReadOnly" } } as Schemas["Hello"]);
     const settle = () => new Promise((done) => setTimeout(done, 0));
-    net.frame("metrics.update", metrics(5, 1));
+    const a = transfer({ state: "InProgress" });
+    const b = transfer();
+    const up = transfer({ direction: "Upload", state: "Completed, Succeeded" });
+    net.frame("transfers.updated", a);
+    net.frame("transfers.updated", { ...a, state: "Completed, Succeeded" });
+    // a frame repeating the same outcome counts no more
+    net.frame("transfers.updated", { ...a, state: "Completed, Succeeded" });
+    net.frame("transfers.updated", { ...b, state: "Completed, Errored" });
+    net.frame("transfers.updated", { ...b, state: "Completed, Cancelled" });
+    net.frame("transfers.updated", up);
+    await settle();
+    expect(unseen.of("download")).toEqual({ succeeded: 1, failed: 1 });
+    expect(unseen.of("upload")).toEqual({ succeeded: 1, failed: 0 });
+
+    // the screen open clears its counts and takes what finishes meanwhile as seen
+    const close = unseen.view("download");
+    expect(unseen.of("download")).toEqual({ succeeded: 0, failed: 0 });
+    const c = transfer();
+    net.frame("transfers.updated", { ...c, state: "Completed, Succeeded" });
     await settle();
     expect(unseen.of("download")).toEqual({ succeeded: 0, failed: 0 });
-    net.frame("metrics.update", metrics(8, 2));
+    close();
+    const d = transfer();
+    net.frame("transfers.updated", { ...d, state: "Completed, TimedOut" });
     await settle();
-    expect(unseen.of("download")).toEqual({ succeeded: 3, failed: 1 });
-    unseen.seen("download");
-    expect(unseen.of("download")).toEqual({ succeeded: 0, failed: 0 });
-    // a restarted daemon starts its totals over
-    net.frame("metrics.update", metrics(1, 0));
-    await settle();
-    expect(unseen.of("download")).toEqual({ succeeded: 0, failed: 0 });
+    expect(unseen.of("download")).toEqual({ succeeded: 0, failed: 1 });
   });
 });

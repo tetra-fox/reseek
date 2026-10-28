@@ -6,7 +6,6 @@
 
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
-  import { notifier } from "#lib/chat/notify.svelte.js";
   import ConfirmHost from "#lib/components/ConfirmHost.svelte";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import PlayerBar from "#lib/components/player/PlayerBar.svelte";
@@ -21,7 +20,8 @@
   import { live } from "#lib/live/live.svelte.js";
   import { baseCrumbs, href, redirectFor, route, titleOf } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
-  import { transferNotices } from "#lib/transfers/notices.svelte.js";
+  // listens for transfer frames from the start, so its notifications follow every screen
+  import "#lib/transfers/notices.svelte.js";
 
   let { children } = $props();
 
@@ -73,10 +73,9 @@
     return () => untrack(() => chat.stop());
   });
 
-  // transfers are followed on every screen while their notifications can show
+  // transfers are followed on every screen, for the navigation's badges and their notifications
   $effect(() => {
     if (app.phase !== "app" || app.mode === "agent") return;
-    if (!transferNotices.wanted || notifier.permission !== "granted") return;
     return untrack(() => live.retain("transfers"));
   });
 
