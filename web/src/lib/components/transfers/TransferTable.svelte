@@ -58,8 +58,11 @@
     drawerOpen
   }: Props = $props();
 
-  /** a line's height in rem for each density */
-  const LINES = { comfortable: 2.25, compact: 1.75 };
+  /** a line's height in rem for each density, on a wider screen and on a phone */
+  const LINES = {
+    comfortable: { wide: 2.25, phone: 3.25 },
+    compact: { wide: 1.75, phone: 2.75 }
+  };
   /** lines drawn beyond the visible ones, above and below */
   const OVERSCAN = 10;
 
@@ -70,8 +73,9 @@
   let rowsTop = $state(0);
   let resizing: { id: ColumnId; x: number; width: number } | null = null;
 
+  // a phone's row has two lines, the name over its size and progress
   const rem = remPx();
-  const row = $derived(rem * LINES[view.density]);
+  const row = $derived(rem * LINES[view.density][viewport.phone ? "phone" : "wide"]);
   const columns = $derived(
     view.columns
       .filter((c) => c.visible && !(c.id === "user" && view.groupBy === "user"))

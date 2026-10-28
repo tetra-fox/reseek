@@ -80,12 +80,10 @@ export const columnsFor = (direction: Direction) =>
   COLUMNS.filter((c) => !c.only || c.only === direction);
 
 /**
- * The columns a phone shows, with the widths it gives them: a file's name, its size, how far it
- * is, and the menu that holds every action, so nothing needs a sideways scroll
+ * The columns a phone shows, with the widths it gives them: the file, with its size and progress
+ * drawn under its name, and the menu that holds every action, so nothing needs a sideways scroll
  */
 export const PHONE_COLUMNS: Partial<Record<ColumnId, string>> = {
-  file: "4rem",
-  size: columnWidth(WIDEST.size),
-  progress: "6.5rem",
+  file: "0rem",
   actions: "2.5rem"
 };
