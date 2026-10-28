@@ -1,6 +1,7 @@
 //! The HTTP API under `/api/v0`: the routes, their OpenAPI document, and the error type every
 //! handler answers failures with.
 
+mod activity;
 pub mod agent;
 mod analysis;
 mod application;
@@ -77,6 +78,7 @@ use crate::auth;
     (name = "analysis", description = "Checking whether a downloaded file is what it claims"),
     (name = "relay", description = "Relay controller and agents"),
     (name = "events", description = "The event log"),
+    (name = "activity", description = "What other users did with us"),
     (name = "telemetry", description = "Metrics and reports over the transfer history")
   )
 )]
@@ -95,6 +97,7 @@ fn routes() -> OpenApiRouter<AppState> {
     .merge(analysis::routes())
     .merge(relay::routes())
     .merge(events::routes())
+    .merge(activity::routes())
     .merge(telemetry::routes())
     .merge(options::routes())
     .merge(profile::routes())

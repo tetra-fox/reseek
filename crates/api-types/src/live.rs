@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
+use crate::activity::ActivityEntry;
 use crate::analysis::AnalysisCompleted;
 use crate::auth::PrincipalSummary;
 use crate::chat::{ChatUnread, ServerMessage};
@@ -127,6 +128,12 @@ pub enum LiveFrame {
   /// an event was raised
   #[serde(rename = "events.raised")]
   EventsRaised(Box<EventRecord>),
+  /// the activity log's entries, oldest first, on open
+  #[serde(rename = "activity.buffer")]
+  ActivityBuffer(Vec<ActivityEntry>),
+  /// a new activity entry, or one that grew
+  #[serde(rename = "activity.entry")]
+  ActivityEntry(ActivityEntry),
 }
 
 /// The query of `GET /live`, which opens the event stream.
@@ -134,8 +141,8 @@ pub enum LiveFrame {
 #[into_params(parameter_in = Query)]
 pub struct LiveQuery {
   /// the topics to follow, comma-separated: `application`, `logs`, `metrics`, `search`,
-  /// `search:<id>`, `transfers`, `conversations`, `rooms`, `users`, `events`; `application`
-  /// when left out
+  /// `search:<id>`, `transfers`, `conversations`, `rooms`, `users`, `events`, `activity`;
+  /// `application` when left out
   #[param(example = "application,transfers")]
   pub topics: Option<String>,
   /// an API token or a configuration API key, for clients that can not set an
@@ -224,6 +231,8 @@ mod tests {
     "users.removed",
     "chat.unread",
     "events.raised",
+    "activity.buffer",
+    "activity.entry",
   ];
 
   #[test]

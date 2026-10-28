@@ -12,6 +12,7 @@
 
 mod flags;
 
+pub mod activity;
 pub mod analysis;
 pub mod application;
 pub mod auth;

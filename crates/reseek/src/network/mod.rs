@@ -27,6 +27,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 
+use crate::activity::Activity;
 use crate::config::Options;
 use crate::services::Connected;
 use crate::shares::Shares;
@@ -130,6 +131,7 @@ impl Network {
   pub fn new(
     config: &Watcher<Options>,
     users: Arc<Directory>,
+    activity: Arc<Activity>,
     shares: Arc<Shares>,
     telemetry: Arc<Telemetry>,
     state: StateOwner,
@@ -142,6 +144,7 @@ impl Network {
     Ok(Arc::new_cyclic(|this| {
       let edges = Arc::new(Edges::new(
         users,
+        activity,
         shares.clone(),
         config.clone(),
         telemetry,

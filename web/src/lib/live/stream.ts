@@ -18,7 +18,8 @@ export type Topic =
   | "conversations"
   | "rooms"
   | "users"
-  | "events";
+  | "events"
+  | "activity";
 
 /** The order topics are asked for in, so one set of topics is always the same request */
 const ORDER = [
@@ -30,7 +31,8 @@ const ORDER = [
   "conversations",
   "rooms",
   "users",
-  "events"
+  "events",
+  "activity"
 ];
 const rank = (topic: string) => {
   const i = ORDER.indexOf(topic.startsWith("search:") ? "search" : topic);

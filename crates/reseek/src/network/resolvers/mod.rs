@@ -11,6 +11,7 @@ mod search;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock, Weak};
 
+use api_types::activity::ActivityKind;
 use api_types::blocking::BlockScope;
 use cascade::Watcher;
 use soulseek_client::{ClientError, LogLimiter, Resolvers};
@@ -22,6 +23,7 @@ pub use browse::{browse, directory_contents};
 pub use search::{IncomingSearches, search};
 
 use super::Network;
+use crate::activity::Activity;
 use crate::config::Options;
 use crate::safety::traverses;
 use crate::shares::Shares;
@@ -39,6 +41,8 @@ static BLOCKED: LogLimiter = LogLimiter::new();
 pub struct Edges {
   /// who is blocked from what
   users: Arc<Users>,
+  /// where what other users ask of us is noted
+  activity: Arc<Activity>,
   /// what we share
   shares: Arc<Shares>,
   /// the options, read once per request
@@ -61,6 +65,7 @@ impl Edges {
   /// `network`, with `searches` working out the searches.
   pub(super) fn new(
     users: Arc<Users>,
+    activity: Arc<Activity>,
     shares: Arc<Shares>,
     config: Watcher<Options>,
     telemetry: Arc<Telemetry>,
@@ -69,6 +74,7 @@ impl Edges {
   ) -> Self {
     Self {
       users,
+      activity,
       shares,
       config,
       telemetry,
@@ -186,7 +192,9 @@ pub async fn enqueue_download(
     uploads.request_refused();
     return Err(ClientError::DownloadEnqueue(NOT_SHARED.into()));
   }
-  uploads.request(username, filename.as_str()).await
+  uploads.request(username, filename.as_str()).await?;
+  edges.activity.queued(username, filename.as_str());
+  Ok(())
 }
 
 /// The forecast for a new upload request from `username`, by the group known for them now.
@@ -207,6 +215,7 @@ pub async fn user_info(edges: &Edges, username: &str, endpoint: SocketAddr) -> U
       upload_permitted: None,
     };
   }
+  edges.activity.record(Some(username), ActivityKind::Profile);
   profile(edges, username).await
 }
 

@@ -20,6 +20,7 @@ pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
       LiveFrame::ApplicationOptions(OptionsDocument(redact::values(&app.config.current()))),
     ],
     Topic::Logs => vec![LiveFrame::LogsBuffer(app.logs.snapshot())],
+    Topic::Activity => vec![LiveFrame::ActivityBuffer(app.activity.snapshot())],
     Topic::Search => match app.searches.snapshot().await {
       Ok(searches) => vec![LiveFrame::SearchList(searches)],
       Err(e) => {

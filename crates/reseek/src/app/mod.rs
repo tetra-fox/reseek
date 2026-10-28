@@ -20,6 +20,7 @@ use cascade::{Loaded, Overrides, Schema, Watch, Watcher};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
+use crate::activity::Activity;
 use crate::auth::Auth;
 use crate::cli::{self, Command, Invocation};
 use crate::clock::Clock;
@@ -96,6 +97,8 @@ pub struct AppState {
   pub events: EventBus,
   /// the event stream's hub
   pub live: Live,
+  /// what other users did with us
+  pub activity: Arc<Activity>,
   /// the application state document
   pub state: StateOwner,
   /// cancelled when the daemon shuts down
@@ -158,6 +161,7 @@ impl AppState {
     };
     let url_base = pipeline::url_base(&startup.values.web.url_base).into();
     let live = Live::new(shutdown.clone());
+    let activity = Activity::new(live.clone());
     let state = StateOwner::new(&startup, &paths, live.clone());
     let events = EventBus::new(shutdown.clone());
     let pushed = live.clone();
@@ -204,6 +208,7 @@ impl AppState {
     let network = Network::new(
       &config,
       users.clone(),
+      activity.clone(),
       shares.clone(),
       telemetry.clone(),
       state.clone(),
@@ -307,6 +312,7 @@ impl AppState {
       auth,
       events,
       live,
+      activity,
       state,
       shutdown,
       paths,

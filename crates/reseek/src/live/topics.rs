@@ -30,6 +30,8 @@ pub enum Topic {
   Users,
   /// raised events
   Events,
+  /// what other users did with us
+  Activity,
 }
 
 impl Topic {
@@ -56,6 +58,7 @@ impl FromStr for Topic {
       "rooms" => Topic::Rooms,
       "users" => Topic::Users,
       "events" => Topic::Events,
+      "activity" => Topic::Activity,
       other => match other.strip_prefix("search:") {
         Some(id) => Topic::SearchResponses(
           id.parse()
@@ -80,6 +83,7 @@ impl fmt::Display for Topic {
       Topic::Rooms => f.write_str("rooms"),
       Topic::Users => f.write_str("users"),
       Topic::Events => f.write_str("events"),
+      Topic::Activity => f.write_str("activity"),
     }
   }
 }
@@ -135,6 +139,7 @@ pub fn routes(frame: &LiveFrame) -> Vec<Topic> {
       Topic::Users
     }
     F::EventsRaised(_) => Topic::Events,
+    F::ActivityBuffer(_) | F::ActivityEntry(_) => Topic::Activity,
   };
   vec![topic]
 }

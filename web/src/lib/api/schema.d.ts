@@ -4,6 +4,27 @@
  */
 
 export interface paths {
+    "/api/v0/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The activity log's entries, oldest first: the last few hundred things other users did with
+         *     us since the daemon started. The `activity` topic of the event stream sends the same entries,
+         *     then each new one.
+         */
+        get: operations["get_activity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/analysis": {
         parameters: {
             query?: never;
@@ -2648,6 +2669,84 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description One line of the activity log. */
+        ActivityEntry: {
+            /**
+             * Format: date-time
+             * @description when it happened, or when it last grew
+             */
+            at: string;
+            /**
+             * Format: int64
+             * @description grows in the order entries are made; an entry that grows, such as more files queued by the
+             *     same user, keeps its id and is sent again
+             */
+            id: number;
+            /** @description what happened */
+            kind: components["schemas"]["ActivityKind"];
+            /**
+             * @description the other user, null for a change to our own membership of a private room
+             * @example alice
+             */
+            username?: string | null;
+        };
+        /** @description What another user did with us. */
+        ActivityKind: {
+            /** @enum {string} */
+            type: "browse";
+        } | {
+            /** @enum {string} */
+            type: "profile";
+        } | {
+            /** @description what they searched for */
+            query: string;
+            /**
+             * Format: int32
+             * @description how many files we answered with
+             */
+            results: number;
+            /** @enum {string} */
+            type: "search";
+        } | {
+            /** @description the last file they queued, as they named it */
+            filename: string;
+            /**
+             * Format: int32
+             * @description how many files
+             */
+            files: number;
+            /** @enum {string} */
+            type: "queued";
+        } | {
+            /** @description the file, as they named it */
+            filename: string;
+            /**
+             * Format: int64
+             * @description its size in bytes
+             */
+            size: number;
+            /** @enum {string} */
+            type: "uploadStarted";
+        } | {
+            /**
+             * Format: int64
+             * @description how many bytes were sent
+             */
+            bytes: number;
+            /** @description the file, as they named it */
+            filename: string;
+            /** @description the final state, such as `Completed, Succeeded` */
+            state: components["schemas"]["TransferStates"];
+            /** @enum {string} */
+            type: "uploadEnded";
+        } | {
+            /** @description what changed */
+            change: components["schemas"]["PrivateRoomChange"];
+            /** @description the room */
+            room: string;
+            /** @enum {string} */
+            type: "privateRoom";
+        };
         /** @description The data of a `files.analysis` frame: a report finished. */
         AnalysisCompleted: {
             /**
@@ -4582,6 +4681,16 @@ export interface components {
             data: components["schemas"]["EventRecord"];
             /** @enum {string} */
             type: "events.raised";
+        } | {
+            /** @description the activity log's entries, oldest first, on open */
+            data: components["schemas"]["ActivityEntry"][];
+            /** @enum {string} */
+            type: "activity.buffer";
+        } | {
+            /** @description a new activity entry, or one that grew */
+            data: components["schemas"]["ActivityEntry"];
+            /** @enum {string} */
+            type: "activity.entry";
         };
         /** @description Password login with a local account. */
         LocalProvider: {
@@ -5170,6 +5279,11 @@ export interface components {
              */
             version: number;
         };
+        /**
+         * @description How our membership of a private room changed.
+         * @enum {string}
+         */
+        PrivateRoomChange: "added" | "removed" | "operator" | "noLongerOperator";
         /** @description Privileges on the Soulseek network. */
         Privileges: {
             /** @description `privilegesRemaining` is above zero */
@@ -7102,6 +7216,41 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_activity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityEntry"][];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_analyses: {
         parameters: {
             query?: {
@@ -9195,8 +9344,8 @@ export interface operations {
             query?: {
                 /**
                  * @description the topics to follow, comma-separated: `application`, `logs`, `metrics`, `search`,
-                 *     `search:<id>`, `transfers`, `conversations`, `rooms`, `users`, `events`; `application`
-                 *     when left out
+                 *     `search:<id>`, `transfers`, `conversations`, `rooms`, `users`, `events`, `activity`;
+                 *     `application` when left out
                  * @example application,transfers
                  */
                 topics?: string;

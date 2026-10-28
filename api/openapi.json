@@ -10,6 +10,50 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/v0/activity": {
+      "get": {
+        "tags": [
+          "activity"
+        ],
+        "summary": "The activity log's entries, oldest first: the last few hundred things other users did with\nus since the daemon started. The `activity` topic of the event stream sends the same entries,\nthen each new one.",
+        "operationId": "get_activity",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ActivityEntry"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/analysis": {
       "get": {
         "tags": [
@@ -2983,7 +3027,7 @@
           {
             "name": "topics",
             "in": "query",
-            "description": "the topics to follow, comma-separated: `application`, `logs`, `metrics`, `search`,\n`search:<id>`, `transfers`, `conversations`, `rooms`, `users`, `events`; `application`\nwhen left out",
+            "description": "the topics to follow, comma-separated: `application`, `logs`, `metrics`, `search`,\n`search:<id>`, `transfers`, `conversations`, `rooms`, `users`, `events`, `activity`;\n`application` when left out",
             "required": false,
             "schema": {
               "type": "string"
@@ -13706,6 +13750,213 @@
   },
   "components": {
     "schemas": {
+      "ActivityEntry": {
+        "type": "object",
+        "description": "One line of the activity log.",
+        "required": [
+          "id",
+          "at",
+          "kind"
+        ],
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when it happened, or when it last grew"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "grows in the order entries are made; an entry that grows, such as more files queued by the\nsame user, keeps its id and is sent again",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActivityKind",
+            "description": "what happened"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the other user, null for a change to our own membership of a private room",
+            "example": "alice"
+          }
+        }
+      },
+      "ActivityKind": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "they asked for our whole share listing",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "browse"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "they asked for our profile: our description, picture and upload slots",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "profile"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "we sent our results for their search",
+            "required": [
+              "query",
+              "results",
+              "type"
+            ],
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "what they searched for"
+              },
+              "results": {
+                "type": "integer",
+                "format": "int32",
+                "description": "how many files we answered with",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "search"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "they queued uploads from us; more requests from them close together add to it",
+            "required": [
+              "files",
+              "filename",
+              "type"
+            ],
+            "properties": {
+              "filename": {
+                "type": "string",
+                "description": "the last file they queued, as they named it"
+              },
+              "files": {
+                "type": "integer",
+                "format": "int32",
+                "description": "how many files",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "queued"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "an upload to them started sending",
+            "required": [
+              "filename",
+              "size",
+              "type"
+            ],
+            "properties": {
+              "filename": {
+                "type": "string",
+                "description": "the file, as they named it"
+              },
+              "size": {
+                "type": "integer",
+                "format": "int64",
+                "description": "its size in bytes",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "uploadStarted"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "an upload to them ended, its state saying how",
+            "required": [
+              "filename",
+              "state",
+              "bytes",
+              "type"
+            ],
+            "properties": {
+              "bytes": {
+                "type": "integer",
+                "format": "int64",
+                "description": "how many bytes were sent",
+                "minimum": 0
+              },
+              "filename": {
+                "type": "string",
+                "description": "the file, as they named it"
+              },
+              "state": {
+                "$ref": "#/components/schemas/TransferStates",
+                "description": "the final state, such as `Completed, Succeeded`"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "uploadEnded"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "our membership of a private room changed",
+            "required": [
+              "room",
+              "change",
+              "type"
+            ],
+            "properties": {
+              "change": {
+                "$ref": "#/components/schemas/PrivateRoomChange",
+                "description": "what changed"
+              },
+              "room": {
+                "type": "string",
+                "description": "the room"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "privateRoom"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "What another user did with us."
+      },
       "AnalysisCompleted": {
         "type": "object",
         "description": "The data of a `files.analysis` frame: a report finished.",
@@ -18119,6 +18370,49 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "the activity log's entries, oldest first, on open",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ActivityEntry"
+                },
+                "description": "the activity log's entries, oldest first, on open"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "activity.buffer"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "a new activity entry, or one that grew",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ActivityEntry",
+                "description": "a new activity entry, or one that grew"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "activity.entry"
+                ]
+              }
+            }
           }
         ],
         "description": "One frame of the event stream. Frames are named `<topic>.<event>`; the control frames\n`hello`, `lagged` and `bye` belong to no topic and are always sent."
@@ -19326,6 +19620,16 @@
             "minimum": 0
           }
         }
+      },
+      "PrivateRoomChange": {
+        "type": "string",
+        "description": "How our membership of a private room changed.",
+        "enum": [
+          "added",
+          "removed",
+          "operator",
+          "noLongerOperator"
+        ]
       },
       "Privileges": {
         "type": "object",
@@ -23140,6 +23444,10 @@
     {
       "name": "events",
       "description": "The event log"
+    },
+    {
+      "name": "activity",
+      "description": "What other users did with us"
     },
     {
       "name": "telemetry",

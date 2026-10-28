@@ -6,6 +6,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Instant;
 
+use api_types::activity::ActivityKind;
 use api_types::blocking::BlockScope;
 use soulseek_client::{BrowseReply, EncodedFrame, LogLimiter};
 use soulseek_proto::RemoteFilename;
@@ -32,6 +33,7 @@ pub async fn browse(edges: &Edges, username: &str, endpoint: SocketAddr) -> Brow
   if blocked(edges, username, Some(endpoint), BlockScope::Browse) {
     return BrowseReply::Response(empty_listing());
   }
+  edges.activity.record(Some(username), ActivityKind::Browse);
   let started = Instant::now();
   let reply = listing(edges).await;
   let elapsed = millis(started);

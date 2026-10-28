@@ -104,6 +104,7 @@ fn answered_here(operation: &Operation) -> bool {
     || route == "/api/v0/live"
     || (route == "/api/v0/relay" && operation.method == Method::GET)
     || under("/api/v0/events")
+    || under("/api/v0/activity")
     || under("/api/v0/telemetry")
     || under("/api/v0/transfers")
     || route == "/api/v0/debug/transfers"
@@ -193,6 +194,7 @@ async fn each_route_takes_its_least_role() {
       write,
     ),
     (Method::GET, "/api/v0/events", read),
+    (Method::GET, "/api/v0/activity", read),
     (Method::POST, "/api/v0/events/{type}", admin),
     (
       Method::GET,

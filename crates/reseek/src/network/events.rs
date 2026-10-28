@@ -6,10 +6,12 @@
 //! order they came; events whose engine is another part of the daemon are handed on where that
 //! engine takes them.
 
+use api_types::activity::{ActivityKind, PrivateRoomChange};
 use api_types::chat::ServerMessage;
 use api_types::events::{Event as BusEvent, EventError, NoFields, SoulseekClientDisconnected};
 use api_types::live::LiveFrame;
 use api_types::state::{DistributedNetworkState, ServerConnectionState};
+use api_types::transfers::TransferStates;
 use api_types::users::{UserPresence, UserStatus, UserStatusChanged};
 use chrono::Utc;
 use soulseek_client::{
@@ -132,6 +134,13 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
       %filename,
       "Download was reported as failed by the remote user"
     ),
+    room @ (Event::PrivateRoomMembershipAdded(_)
+    | Event::PrivateRoomMembershipRemoved(_)
+    | Event::PrivateRoomModerationAdded(_)
+    | Event::PrivateRoomModerationRemoved(_)) => {
+      private_room(app, &room);
+      app.messaging.take(room).await;
+    }
     room @ (Event::RoomJoined { .. }
     | Event::RoomLeft { .. }
     | Event::RoomMessageReceived { .. }
@@ -143,11 +152,7 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
     | Event::PrivateRoomOperatorAdded { .. }
     | Event::PrivateRoomOperatorRemoved { .. }
     | Event::PrivateRoomUserListReceived(_)
-    | Event::PrivateRoomModeratedUserListReceived(_)
-    | Event::PrivateRoomMembershipAdded(_)
-    | Event::PrivateRoomMembershipRemoved(_)
-    | Event::PrivateRoomModerationAdded(_)
-    | Event::PrivateRoomModerationRemoved(_)) => app.messaging.take(room).await,
+    | Event::PrivateRoomModeratedUserListReceived(_)) => app.messaging.take(room).await,
     Event::GlobalMessageReceived(message) => server_message(app, message),
     Event::UserStatusChanged(status) => user_status(app, &status).await,
     Event::UserStatisticsChanged(statistics) => {
@@ -172,10 +177,21 @@ async fn handle(app: &AppState, event: Event, reached: &mut bool) {
     | Event::PromotedToDistributedBranchRoot
     | Event::DemotedFromDistributedBranchRoot
     | Event::SearchRequestReceived { .. }
-    | Event::SearchResponseDelivered(_)
     | Event::SearchResponseDeliveryFailed(_)
     | Event::TransferProgressUpdated { .. }
     | Event::SearchStateChanged { .. } => {}
+    Event::SearchResponseDelivered(delivery) => {
+      // the daemon answers with the files themselves, never a frame encoded ahead, so the count
+      // is always known
+      let results = delivery.search_response.file_count().unwrap_or(0);
+      app.activity.record(
+        Some(&delivery.username),
+        ActivityKind::Search {
+          query: delivery.query,
+          results: u32::try_from(results).unwrap_or(u32::MAX),
+        },
+      );
+    }
     Event::SearchResponseReceived { search, .. } => {
       app.network.reachability.search_answered(search.token);
     }
@@ -472,6 +488,9 @@ fn transfer_state(app: &AppState, previous: TransferState, transfer: &Transfer) 
     speed = transfer.average_speed,
     "transfer state changed"
   );
+  if transfer.direction == soulseek_proto::TransferDirection::Upload {
+    upload_activity(app, previous, transfer);
+  }
   let client = app.network.client();
   {
     let family = app.telemetry.metrics().transfers();
@@ -497,6 +516,46 @@ fn transfer_state(app: &AppState, previous: TransferState, transfer: &Transfer) 
       .in_current_span(),
     );
   }
+}
+
+/// An upload that started sending, or one that ended after it began, into the activity log. An
+/// upload that ends while still queued was never under way, so it is not noted.
+fn upload_activity(app: &AppState, previous: TransferState, transfer: &Transfer) {
+  let begun = TransferState::INITIALIZING | TransferState::IN_PROGRESS;
+  let kind =
+    if transfer.state == TransferState::IN_PROGRESS && previous != TransferState::IN_PROGRESS {
+      ActivityKind::UploadStarted {
+        filename: transfer.filename.to_string(),
+        size: transfer.size,
+      }
+    } else if transfer.state.contains(TransferState::COMPLETED) && previous.intersects(begun) {
+      ActivityKind::UploadEnded {
+        filename: transfer.filename.to_string(),
+        state: TransferStates::from_bits_retain(transfer.state.bits()),
+        bytes: transfer.bytes_transferred,
+      }
+    } else {
+      return;
+    };
+  app.activity.record(Some(&transfer.username), kind);
+}
+
+/// A change to our own membership of a private room, into the activity log.
+fn private_room(app: &AppState, event: &Event) {
+  let (room, change) = match event {
+    Event::PrivateRoomMembershipAdded(room) => (room, PrivateRoomChange::Added),
+    Event::PrivateRoomMembershipRemoved(room) => (room, PrivateRoomChange::Removed),
+    Event::PrivateRoomModerationAdded(room) => (room, PrivateRoomChange::Operator),
+    Event::PrivateRoomModerationRemoved(room) => (room, PrivateRoomChange::NoLongerOperator),
+    _ => return,
+  };
+  app.activity.record(
+    None,
+    ActivityKind::PrivateRoom {
+      room: room.clone(),
+      change,
+    },
+  );
 }
 
 /// A message from the server's administrators to every user: logged and pushed.
