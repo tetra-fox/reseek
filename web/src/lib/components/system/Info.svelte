@@ -1,4 +1,6 @@
 <script lang="ts">
+  import CheckIcon from "@lucide/svelte/icons/check";
+  import ClipboardListIcon from "@lucide/svelte/icons/clipboard-list";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import PowerIcon from "@lucide/svelte/icons/power";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
@@ -9,7 +11,7 @@
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import { Busy } from "#lib/busy.svelte.js";
-  import { copyText } from "#lib/clipboard.svelte.js";
+  import { CopyButton, copyText } from "#lib/clipboard.svelte.js";
   import { clock } from "#lib/clock.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
@@ -19,6 +21,8 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
+
+  import { diagnostics, latestProblems } from "./diagnostics";
 
   // the daemon's state at a glance, its whole state document, and the process controls
   const s = $derived(app.state);
@@ -71,6 +75,17 @@
     });
 
   const dump = $derived(s ? JSON.stringify(s, null, 2) : "");
+
+  const copying = new CopyButton();
+  /** Copies what a bug report needs; an administrator's also carries the latest log problems */
+  const copyDiagnostics = async () => {
+    if (!s) return;
+    const log = session.can("Administrator")
+      ? await call(() => api.GET("/api/v0/logs/live"))
+      : null;
+    const problems = log?.ok ? latestProblems(log.data) : [];
+    await copying.copy(diagnostics(s, navigator.userAgent, problems));
+  };
   const yes = (on: boolean) => (on ? "yes" : "no");
 </script>
 
@@ -86,6 +101,9 @@
       target="_blank"
       rel="noopener"><StarIcon class="text-warning" />Get Privileges</Button>
   {/if}
+  <Button variant="outline" disabled={!s} onclick={() => void copyDiagnostics()}>
+    {#if copying.copied}<CheckIcon />Copied{:else}<ClipboardListIcon />Copy diagnostics{/if}
+  </Button>
   <div class="ml-auto flex flex-wrap gap-inline">
     {#if write}
       <Button
