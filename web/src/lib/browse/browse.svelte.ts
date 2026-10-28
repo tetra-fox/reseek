@@ -7,6 +7,7 @@ import { fields } from "#lib/stored.svelte.js";
 import { toast } from "#lib/toast.svelte.js";
 
 import { type BrowseInfo, readListing, writeListing } from "./cache";
+import { rememberBrowsed } from "./recent.svelte";
 import {
   buildTree,
   detectSeparator,
@@ -100,6 +101,7 @@ class Browse {
     };
     this.#show(name, all, detectSeparator(all), info);
     this.phase = "complete";
+    rememberBrowsed(name);
     this.#saveMeta();
     const listing = { username: name, directories: all, separator: this.separator, info };
     // a listing that can't be kept is browsed again after a reload

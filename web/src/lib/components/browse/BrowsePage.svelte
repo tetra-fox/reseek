@@ -4,6 +4,7 @@
   import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
   import CrosshairIcon from "@lucide/svelte/icons/crosshair";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
+  import HistoryIcon from "@lucide/svelte/icons/history";
   import SearchIcon from "@lucide/svelte/icons/search";
   import XIcon from "@lucide/svelte/icons/x";
   import { tick, untrack } from "svelte";
@@ -11,17 +12,22 @@
   import { app } from "#lib/app.svelte.js";
   import { browser } from "#lib/browse/browse.svelte.js";
   import { browseFilter } from "#lib/browse/filter.js";
+  import { browsed, forgetBrowsed, restoreBrowsed } from "#lib/browse/recent.svelte.js";
   import { filesUnder } from "#lib/browse/tree.js";
   import FolderFiles from "#lib/components/files/FolderFiles.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import Input from "#lib/components/ui/Input.svelte";
+  import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Username from "#lib/components/users/Username.svelte";
+  import { useCrumbs } from "#lib/crumbs.svelte.js";
   import { formatBytes } from "#lib/format.js";
   import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
+  import { undoable } from "#lib/undo.js";
 
   import DirectoryTree from "./DirectoryTree.svelte";
   import FileBrowser from "./FileBrowser.svelte";
@@ -101,6 +107,44 @@
 
   const info = $derived(browser.info);
 
+  /** Shows a folder of the listing: the tree opens to it and the selection card shows it */
+  const show = (name: string) => {
+    typed = "";
+    query = "";
+    void tree?.navigate(name);
+  };
+
+  // the user, then each folder down to the one open; a step that is a listed folder opens it
+  useCrumbs(() => {
+    if (!browser.username || browser.phase === "idle") return [];
+    const user = { label: browser.username, onclick: () => browser.select(null) };
+    const directory = browser.directory;
+    if (!directory) return [user];
+    const sep = browser.separator;
+    const parts = directory.split(sep);
+    return [
+      user,
+      ...parts.map((part, i) => {
+        const path = parts.slice(0, i + 1).join(sep);
+        const last = i === parts.length - 1;
+        return {
+          label: part,
+          onclick: !last && browser.tree.byName.has(path) ? () => show(path) : undefined,
+          copy: last ? directory : undefined
+        };
+      })
+    ];
+  });
+
+  const forget = (username: string) => {
+    const at = forgetBrowsed(username);
+    undoable(
+      `Removed ${username} from recently browsed`,
+      () => {},
+      () => restoreBrowsed(username, at)
+    );
+  };
+
   const escapeClears = (node: HTMLElement) => {
     const keydown = (e: KeyboardEvent) => {
       // Escape in the filter field clears what was typed there, not the browse
@@ -124,17 +168,16 @@
       start();
     }}>
     <div class="relative min-w-0 flex-1">
-      <FolderOpenIcon
-        class="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-fg-muted" />
-      <input
-        bind:this={field}
+      <Input
+        bind:ref={field}
         bind:value={input}
         type="search"
+        icon={FolderOpenIcon}
         data-lpignore="true"
         aria-label="Username"
         placeholder="Username"
         disabled={browser.phase !== "idle"}
-        class="h-11 w-full rounded-control border border-input bg-surface pr-10 pl-10 text-base shadow-xs placeholder:text-fg-muted focus-visible:border-accent disabled:opacity-60" />
+        class="h-11 pl-10 text-base md:text-base" />
       {#if browser.phase === "pending"}
         <Spinner class="absolute top-1/2 right-3 size-4 -translate-y-1/2" label="Browsing" />
       {/if}
@@ -160,12 +203,62 @@
     {/if}
   </form>
 
+  {#if browser.phase === "idle" && !browser.restoring}
+    {#if browsed.users.length}
+      <section class="flex flex-col gap-2" aria-label="Recently browsed">
+        <h2 class="flex items-center gap-1.5 text-sm text-fg-muted">
+          <HistoryIcon class="size-4" />Recently browsed
+        </h2>
+        <ul class="flex flex-wrap gap-1.5">
+          {#each browsed.users as name (name)}
+            <li class="group flex items-center rounded-full border bg-surface shadow-xs">
+              <button
+                type="button"
+                class="py-1 pl-3 text-sm hover:text-accent"
+                onclick={() => {
+                  input = name;
+                  start();
+                }}>{name}</button>
+              <button
+                type="button"
+                class="rounded-full p-1.5 text-fg-muted row-action"
+                aria-label={`Remove ${name} from recently browsed`}
+                onclick={() => forget(name)}>
+                <XIcon class="size-3" />
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {:else}
+      <EmptyState
+        icon={FolderOpenIcon}
+        title="Browse someone's shares"
+        description="Type a username above and press Enter to see every folder they share; the users you browse are listed here next time." />
+    {/if}
+  {/if}
+
   {#if browser.phase === "pending"}
+    {@const percent = Math.round(browser.progress?.percentComplete ?? 0)}
     <div class="flex flex-col items-center gap-3 py-10" role="status">
-      <Spinner class="size-10" />
-      <p class="text-lg">
-        Downloaded {Math.round(browser.progress?.percentComplete ?? 0)}% of Response
-      </p>
+      <p class="text-lg">Downloaded {percent}% of Response</p>
+      <div
+        class="h-1.5 w-64 overflow-hidden rounded-full bg-surface-muted ring-1 ring-border"
+        role="progressbar"
+        aria-label="Browse progress"
+        aria-valuenow={percent}
+        aria-valuemin={0}
+        aria-valuemax={100}>
+        <div
+          class="h-full bg-accent transition-[width] duration-(--motion-slow)"
+          style:width={`${percent}%`}>
+        </div>
+      </div>
+      <div class="mt-4 flex w-full max-w-xl flex-col gap-2" aria-hidden="true">
+        {#each [0, 1, 2, 3, 4] as n (n)}
+          <Skeleton class={`h-5 ${["", "ml-6", "ml-12"][n % 3]}`} />
+        {/each}
+      </div>
     </div>
   {:else if browser.phase === "error"}
     <div class="mt-12 flex flex-col items-center gap-1 text-center">
@@ -175,7 +268,7 @@
   {:else if !browser.tree.roots.length}
     {#if browser.restoring}
       <div class="flex flex-col items-center gap-3 py-10" role="status">
-        <Spinner class="size-10" />
+        <Spinner class="size-6" />
         <p class="text-lg">Loading saved results</p>
       </div>
     {:else if browser.phase === "complete"}
@@ -204,22 +297,12 @@
         {/if}
       </header>
       <div class="flex flex-wrap items-center gap-inline px-4 py-3">
-        <div class="relative min-w-48 flex-1">
-          <input
+        <div class="min-w-48 flex-1">
+          <Input
             bind:value={typed}
             type="search"
             aria-label="Filter"
-            placeholder="lackluster container ext:flac minbr:320"
-            class="h-control w-full rounded-control border border-input bg-surface pr-9 pl-3 text-sm placeholder:text-fg-subtle focus-visible:border-accent" />
-          {#if typed}
-            <button
-              type="button"
-              class="absolute top-1/2 right-3 -translate-y-1/2"
-              aria-label="Clear the filter"
-              onclick={() => (typed = "")}>
-              <XIcon class="size-4 text-danger" />
-            </button>
-          {/if}
+            placeholder="lackluster container type:flac bitrate:320" />
         </div>
         <Button variant="outline" size="sm" onclick={() => tree?.expandAll()}>
           <ChevronDownIcon />Expand all
@@ -256,11 +339,7 @@
         {filter}
         {canWrite}
         {connected}
-        onnavigate={(name) => {
-          typed = "";
-          query = "";
-          void tree?.navigate(name);
-        }} />
+        onnavigate={show} />
     {/if}
   {/if}
 </div>
