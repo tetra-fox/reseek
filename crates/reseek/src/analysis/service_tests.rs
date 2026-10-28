@@ -326,3 +326,32 @@ async fn a_report_and_its_judgement_outlive_the_file() {
   let (status, _) = send(&app, "POST", &format!("{by_download}?force=true"), None).await;
   assert_eq!(status, 404, "a file that is gone can not be analysed again");
 }
+
+#[tokio::test]
+async fn lowering_the_cache_limit_removes_spectrograms_at_once() {
+  let app = app(&format!("remote_configuration = true\n{CONFIG}"), &[]).await;
+  lossless(&app, "a.flac");
+  lossless(&app, "b.flac");
+  for name in ["a.flac", "b.flac"] {
+    send(&app, "POST", &route(name), None).await;
+    settled(&app).await;
+  }
+  let images = app.state.paths.data.join("analysis");
+  assert_eq!(std::fs::read_dir(&images).unwrap().count(), 4);
+  let lowered = json!({ "set": { "analysis.cache_max_bytes": "1B" } });
+  let (status, body) = send(&app, "PATCH", "/api/v0/options", Some(lowered)).await;
+  assert_eq!(status, 200, "{body}");
+  for _ in 0..200 {
+    if std::fs::read_dir(&images).unwrap().count() == 2 {
+      break;
+    }
+    tokio::time::sleep(Duration::from_millis(20)).await;
+  }
+  assert_eq!(
+    std::fs::read_dir(&images).unwrap().count(),
+    2,
+    "the most recent kept"
+  );
+  let b = format!("{}/spectrogram.png", route("b.flac"));
+  assert_eq!(app.send(request("GET", &b, None)).await.status, 200);
+}

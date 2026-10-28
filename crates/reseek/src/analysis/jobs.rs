@@ -91,7 +91,13 @@ pub(super) async fn dispatch(analysis: Arc<Analysis>) {
       () = analysis.shutdown.cancelled() => return,
       () = analysis.wake.notified() => {}
       change = changes.recv() => match change {
-        Ok(_) | Err(RecvError::Lagged(_)) => {}
+        Ok(change) => {
+          let limit = |options: &Options| options.analysis.cache_max_bytes;
+          if limit(&change.current.values) < limit(&change.previous.values) {
+            evict(&analysis).await;
+          }
+        }
+        Err(RecvError::Lagged(_)) => evict(&analysis).await,
         Err(RecvError::Closed) => return,
       },
     }
@@ -273,6 +279,11 @@ async fn keep_images(analysis: &Analysis, name: &str, bytes: u64) {
     error!(error = %e, "spectrogram not recorded");
     return;
   }
+  evict(analysis).await;
+}
+
+/// Removes the least recently viewed images beyond `analysis.cache_max_bytes`.
+async fn evict(analysis: &Analysis) {
   let limit = analysis
     .config
     .current()
@@ -280,7 +291,7 @@ async fn keep_images(analysis: &Analysis, name: &str, bytes: u64) {
     .analysis
     .cache_max_bytes
     .as_u64();
-  let gone = match store::evict(&analysis.db, limit, name).await {
+  let gone = match store::evict(&analysis.db, limit).await {
     Ok(gone) => gone,
     Err(e) => {
       error!(error = %e, "spectrograms over the limit not removed");

@@ -214,9 +214,9 @@ pub(super) async fn used_image(
 }
 
 /// Forgets the least recently used images until the rest take no more than `limit` bytes,
-/// keeping `newest` whatever its size; returns the names forgotten, whose files are to go.
-pub(super) async fn evict(db: &Database, limit: u64, newest: &str) -> Result<Vec<String>, DbError> {
-  let newest = newest.to_string();
+/// keeping the most recently used whatever its size; returns the names forgotten, whose
+/// files are to go.
+pub(super) async fn evict(db: &Database, limit: u64) -> Result<Vec<String>, DbError> {
   db.write(move |conn| {
     let transaction = conn.transaction()?;
     let images: Vec<(String, u64)> = {
@@ -233,16 +233,13 @@ pub(super) async fn evict(db: &Database, limit: u64, newest: &str) -> Result<Vec
     };
     let mut total: u64 = images.iter().map(|(_, bytes)| bytes).sum();
     let mut gone = Vec::new();
-    for (name, bytes) in images {
+    for (name, bytes) in images.iter().take(images.len().saturating_sub(1)) {
       if total <= limit {
         break;
       }
-      if name == newest {
-        continue;
-      }
-      transaction.execute("DELETE FROM images WHERE name = ?1", [&name])?;
+      transaction.execute("DELETE FROM images WHERE name = ?1", [name])?;
       total -= bytes;
-      gone.push(name);
+      gone.push(name.clone());
     }
     transaction.commit()?;
     Ok(gone)
