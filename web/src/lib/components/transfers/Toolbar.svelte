@@ -17,7 +17,7 @@
   import { type BulkAction, SCOPES } from "#lib/transfers/bulk.js";
   import { COLUMNS } from "#lib/transfers/columns.js";
   import { defaults, type ViewSettings } from "#lib/transfers/settings.svelte.js";
-  import { type ChipId, type Direction, STATE_CHIPS } from "#lib/transfers/states.js";
+  import { type ChipId, type Direction, isSucceeded, STATE_CHIPS } from "#lib/transfers/states.js";
   import type { GroupBy } from "#lib/transfers/view.js";
 
   type Props = {
@@ -179,7 +179,7 @@
           variant="outline"
           size="sm"
           disabled={disabled || !counts.completed}
-          onclick={() => scoped("remove", "succeeded")}>
+          onclick={() => onbulk("remove", isSucceeded, "succeeded")}>
           <BrushCleaningIcon />Clear succeeded
         </Button>
         {#if direction === "upload"}
