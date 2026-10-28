@@ -35,6 +35,3 @@ export const rem = {
     return parseFloat(getComputedStyle(document.documentElement).fontSize);
   }
 };
-
-/** The pixels in a rem, read when called */
-export const remPx = (): number => parseFloat(getComputedStyle(document.documentElement).fontSize);
