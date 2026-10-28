@@ -154,6 +154,7 @@ impl Controller {
       Ok(shares) => self.load(&name, socket, shares, &file).await,
       Err(e) => Err(e),
     };
+    self.count("shares", if loaded.is_ok() { "loaded" } else { "refused" });
     let removed = file.clone();
     if let Err(e) = tokio::task::spawn_blocking(move || remove_database(&removed)).await {
       warn!(file = %file.display(), error = %e, "uploaded share database not deleted");

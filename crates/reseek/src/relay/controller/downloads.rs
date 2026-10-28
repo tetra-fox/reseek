@@ -106,6 +106,22 @@ impl Controller {
     caller: AgentCredential,
     filename: String,
   ) -> Result<Response, ApiError> {
+    let served = self.open_download(token, caller, filename).await;
+    let outcome = match &served {
+      Ok(_) => "served",
+      Err(e) if e.status() == StatusCode::NOT_FOUND => "missing",
+      Err(_) => "refused",
+    };
+    self.count("download", outcome);
+    served
+  }
+
+  async fn open_download(
+    &self,
+    token: Uuid,
+    caller: AgentCredential,
+    filename: String,
+  ) -> Result<Response, ApiError> {
     let name = caller.agent.as_str();
     let announced = lock(&self.registry)
       .download_tokens

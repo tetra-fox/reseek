@@ -27,6 +27,7 @@ use crate::events::EventBus;
 use crate::paths::Paths;
 use crate::shares::Shares;
 use crate::state::StateOwner;
+use crate::telemetry::Telemetry;
 
 /// The relay halves this daemon runs, as it started.
 pub struct Relay {
@@ -43,6 +44,7 @@ impl Relay {
     shares: &Arc<Shares>,
     events: &EventBus,
     state: &StateOwner,
+    telemetry: &Arc<Telemetry>,
     paths: &Paths,
     shutdown: &CancellationToken,
   ) -> Arc<Self> {
@@ -60,6 +62,7 @@ impl Relay {
         shares.clone(),
         events.clone(),
         state.clone(),
+        telemetry.clone(),
         paths.downloads.clone(),
         shutdown.clone(),
       )

@@ -1,12 +1,12 @@
 //! Every metric the daemon keeps, registered once at startup with its name and help: incoming
-//! searches, browses and enqueue requests, both directions of transfers, and the distributed
-//! network. The engines hold the handles and update them where things happen; until then every
-//! value is zero. None of these carries labels.
+//! searches, browses and enqueue requests, both directions of transfers, the distributed
+//! network, and a relay controller's agents. The engines hold the handles and update them where
+//! things happen; until then every value is zero. Only the relay's requests carry labels.
 
 use std::sync::{Mutex, MutexGuard};
 
 use super::derived::{Ema, TimedCounter};
-use super::registry::{Counter, Gauge, Histogram, Registry, exponential};
+use super::registry::{Counter, Gauge, Histogram, LabelledCounter, Registry, exponential};
 use super::transfers::{TransferFamily, TransferMetrics};
 use crate::sync::lock;
 
@@ -114,6 +114,17 @@ pub struct DistributedMetrics {
   pub broadcast_latency_current: Gauge,
 }
 
+/// A relay controller's agents and what it asks of them.
+#[derive(Debug)]
+pub struct RelayMetrics {
+  /// agents logged in
+  pub agents_connected: Gauge,
+  /// peers' downloads of agents' files whose bytes are flowing through the controller
+  pub uploads_in_flight: Gauge,
+  /// what the controller was asked by or asked of its agents, by `type` and `outcome`
+  pub requests: LabelledCounter,
+}
+
 /// Every metric of the daemon, and the registry they are exposed from.
 #[derive(Debug)]
 pub struct Catalogue {
@@ -127,6 +138,8 @@ pub struct Catalogue {
   transfers: Mutex<TransferFamily>,
   /// the distributed network
   pub distributed: DistributedMetrics,
+  /// a relay controller's agents
+  pub relay: RelayMetrics,
   /// where they are all registered
   pub registry: Registry,
 }
@@ -292,12 +305,27 @@ impl Default for Catalogue {
         "The average time taken to broadcast incoming search requests to connected children",
       ),
     };
+    let relay = RelayMetrics {
+      agents_connected: r.gauge(
+        name("relay_agents_connected"),
+        "Current number of relay agents logged in",
+      ),
+      uploads_in_flight: r.gauge(
+        name("relay_uploads_in_flight"),
+        "Current number of uploads whose file is coming from a relay agent",
+      ),
+      requests: r.labelled_counter(
+        name("relay_requests_total"),
+        "Total number of relay requests, by type and outcome",
+      ),
+    };
     Self {
       search,
       browse,
       enqueue,
       transfers: Mutex::new(transfers),
       distributed,
+      relay,
       registry: r,
     }
   }
@@ -324,7 +352,7 @@ mod tests {
   use crate::telemetry::registry::text;
 
   /// The names dashboards are built on, besides the transfer families.
-  const FIXED: [&str; 33] = [
+  const FIXED: [&str; 36] = [
     "reseek_search_incoming_requests_received",
     "reseek_search_incoming_request_receive_rate_current",
     "reseek_search_incoming_requests_dropped",
@@ -358,6 +386,9 @@ mod tests {
     "reseek_dnet_branch_level",
     "reseek_dnet_broadcast_latency",
     "reseek_dnet_broadcast_latency_current",
+    "reseek_relay_agents_connected",
+    "reseek_relay_uploads_in_flight",
+    "reseek_relay_requests_total",
   ];
 
   /// The names of each transfer direction's families after `reseek_transfers_<direction>_`.

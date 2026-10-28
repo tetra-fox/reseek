@@ -70,6 +70,11 @@ async fn exactly(api: &Client, kind: &str, count: usize) {
   assert_eq!(all.len(), count, "{kind}: {all:?}");
 }
 
+/// The value of the unlabelled metric `name`.
+async fn value_of(api: &Client, name: &str) -> f64 {
+  api.metrics().await.unwrap()[name].samples.as_ref().unwrap()[0].value
+}
+
 #[tokio::test]
 async fn an_agents_file_is_downloaded_through_its_controller() {
   let Some(server) = soulfind::server() else {
@@ -122,6 +127,32 @@ async fn an_agents_file_is_downloaded_through_its_controller() {
   .unwrap();
   assert_eq!(done.bytes_transferred, size as u64);
   assert_eq!(std::fs::read(&into).unwrap(), content(size));
+  let metrics = api.metrics().await.unwrap();
+  let value = |name: &str| metrics[name].samples.as_ref().unwrap()[0].value;
+  assert_eq!(value("reseek_relay_agents_connected"), 1.0);
+  let requests = metrics["reseek_relay_requests_total"]
+    .samples
+    .clone()
+    .unwrap();
+  let counted = |kind: &str, outcome: &str| {
+    requests.iter().any(|sample| {
+      let labels = sample.labels.as_ref().unwrap();
+      labels["type"] == kind && labels["outcome"] == outcome && sample.value >= 1.0
+    })
+  };
+  assert!(
+    counted("login", "accepted") && counted("shares", "loaded"),
+    "{requests:?}"
+  );
+  assert!(
+    counted("file_info", "answered") && counted("file", "streamed"),
+    "{requests:?}"
+  );
+  let started = Instant::now();
+  while value_of(&api, "reseek_relay_uploads_in_flight").await != 0.0 {
+    assert!(started.elapsed() < PATIENCE, "the relayed upload ends");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  }
 
   api.kick_agent("nas").await.unwrap();
   let dropped = until(&api, "the agent's shares dropped", |s| {

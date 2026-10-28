@@ -245,6 +245,14 @@ impl Session {
       credential,
       |secret| self.controller.key(&name, secret),
     );
+    let counted = match checked {
+      Ok(()) => "accepted",
+      Err(LoginFailure::UnknownAgent) => "unknown_agent",
+      Err(LoginFailure::AddressNotAllowed) => "address_not_allowed",
+      Err(LoginFailure::ChallengeExpired) => "challenge_expired",
+      Err(LoginFailure::BadCredential) => "bad_credential",
+    };
+    self.controller.count("login", counted);
     if let Err(reason) = checked {
       log_refusal(&name, self.address, reason, configured.map(|a| a.cidr));
       let refusal = frames::encode(None, RelayMessage::LoginFailed { reason });

@@ -219,7 +219,9 @@ impl AppState {
     let shares = Shares::open(config.clone(), &paths, state.clone(), shutdown.clone())
       .await
       .map_err(|e| StartError::Open(format!("shares.local.db: {e}")))?;
-    let relay = Relay::new(&config, &shares, &events, &state, &paths, &shutdown);
+    let relay = Relay::new(
+      &config, &shares, &events, &state, &telemetry, &paths, &shutdown,
+    );
     let network = Network::new(
       &config,
       users.clone(),

@@ -35,6 +35,8 @@ use crate::services::AgentCredential;
 use crate::shares::Shares;
 use crate::state::StateOwner;
 use crate::sync::lock;
+use crate::telemetry::Telemetry;
+use crate::telemetry::catalogue::RelayMetrics;
 pub use files::RelayStream;
 use files::{FileInfoWait, StreamWait};
 
@@ -91,6 +93,8 @@ pub struct Controller {
   shares: Arc<Shares>,
   events: EventBus,
   state: StateOwner,
+  /// counts the agents and what is asked of them
+  telemetry: Arc<Telemetry>,
   /// the downloads directory, which finished downloads are offered from
   downloads: PathBuf,
   /// where uploaded share databases are written before they are loaded
@@ -104,13 +108,15 @@ pub struct Controller {
 
 impl Controller {
   /// The controller serving the agents of the options, loading their shares into `shares`,
-  /// raising its events on `events` and keeping `State.relay.agents` current. It follows the
+  /// raising its events on `events`, keeping `State.relay.agents` current and counting in
+  /// `telemetry`. It follows the
   /// agents' configuration until `shutdown`, which closes every agent's socket.
   pub fn new(
     config: Watcher<Options>,
     shares: Arc<Shares>,
     events: EventBus,
     state: StateOwner,
+    telemetry: Arc<Telemetry>,
     downloads: PathBuf,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
@@ -119,6 +125,7 @@ impl Controller {
       shares,
       events,
       state,
+      telemetry,
       downloads,
       temporary: std::env::temp_dir().join("reseek"),
       shutdown,
@@ -339,7 +346,23 @@ impl Controller {
   /// Puts the agents into `State.relay.agents`.
   fn publish(&self) {
     let agents = self.agents();
+    self
+      .relay_metrics()
+      .agents_connected
+      .set(agents.len() as f64);
     self.state.update(|state| state.relay.agents = agents);
+  }
+
+  fn relay_metrics(&self) -> &RelayMetrics {
+    &self.telemetry.metrics().relay
+  }
+
+  /// Counts a request of `kind` that ended with `outcome`.
+  fn count(&self, kind: &str, outcome: &str) {
+    self
+      .relay_metrics()
+      .requests
+      .inc(&[("type", kind), ("outcome", outcome)]);
   }
 
   /// Queues `frame` for the agent `name`'s socket; false when it is not logged in or its queue

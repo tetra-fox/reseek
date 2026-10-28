@@ -113,6 +113,22 @@ impl AsyncSeek for RelayStream {
   }
 }
 
+/// Counts an upload whose bytes flow from an agent while it lives.
+struct InFlight<'a>(&'a crate::telemetry::registry::Gauge);
+
+impl<'a> InFlight<'a> {
+  fn start(gauge: &'a crate::telemetry::registry::Gauge) -> Self {
+    gauge.add(1.0);
+    Self(gauge)
+  }
+}
+
+impl Drop for InFlight<'_> {
+  fn drop(&mut self) {
+    self.0.add(-1.0);
+  }
+}
+
 /// Removes a file request's wait when the upload stops waiting for it, whatever the reason.
 struct Waiting<'a> {
   controller: &'a Controller,
@@ -147,6 +163,19 @@ impl Controller {
   /// Asks the agent `agent` whether `filename` exists and how long it is. `None` when the agent
   /// is not ready, leaves, or does not answer within the configured time.
   pub async fn file_info(&self, agent: &str, filename: &str) -> Option<(bool, u64)> {
+    let answer = self.ask_file_info(agent, filename).await;
+    self.count(
+      "file_info",
+      if answer.is_some() {
+        "answered"
+      } else {
+        "unanswered"
+      },
+    );
+    answer
+  }
+
+  async fn ask_file_info(&self, agent: &str, filename: &str) -> Option<(bool, u64)> {
     if !self.ready(agent) {
       debug!(agent, "Agent is not registered");
       return None;
@@ -230,6 +259,27 @@ impl Controller {
   /// the bytes. An agent not logged in or without the file fails as not found, a wait too
   /// long as timed out.
   pub async fn open_stream(
+    &self,
+    agent: &str,
+    filename: &str,
+    start: u64,
+    transfer: Uuid,
+  ) -> io::Result<RelayStream> {
+    let opened = self.request_stream(agent, filename, start, transfer).await;
+    let outcome = match &opened {
+      Ok(_) => "streamed",
+      Err(e) => match e.kind() {
+        io::ErrorKind::NotFound => "not_found",
+        io::ErrorKind::TimedOut => "timeout",
+        io::ErrorKind::ConnectionAborted => "disconnected",
+        _ => "failed",
+      },
+    };
+    self.count("file", outcome);
+    opened
+  }
+
+  async fn request_stream(
     &self,
     agent: &str,
     filename: &str,
@@ -448,6 +498,7 @@ impl Controller {
       ));
     }
     info!(agent = name, filename, %token, "Agent authenticated for token. Forwarding file stream");
+    let _flowing = InFlight::start(&self.relay_metrics().uploads_in_flight);
     loop {
       let chunk = tokio::select! {
         () = self.shutdown.cancelled() => break,
