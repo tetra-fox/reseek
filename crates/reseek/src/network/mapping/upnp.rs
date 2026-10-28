@@ -129,14 +129,21 @@ impl Gateway for Upnp {
           .router
           .remove_port(PortMappingProtocol::TCP, held.local.port())
           .await;
-        if let Err(e) = removed {
+        if let Err(e) = &removed {
           debug!(error = %e, "the UPnP router did not remove the mapping before it was made again");
         }
-        Self::add(&held.router, held.local, held.lease).await
+        Self::add(&held.router, held.local, held.lease)
+          .await
+          .map_err(|e| match removed {
+            Ok(()) => refused(e),
+            Err(not_removed) => format!(
+              "{}, after it did not remove the mapping first: {not_removed}",
+              refused(e)
+            ),
+          })
       }
-      added => added,
-    }
-    .map_err(refused)?;
+      added => added.map_err(refused),
+    }?;
     let mapped = Mapped {
       lifetime: lifetime(lease),
       ..held.mapped.clone()
