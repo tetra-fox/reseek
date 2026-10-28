@@ -123,6 +123,19 @@ export class MessagePane {
     }
   };
 
+  /**
+   * Empties the view, the stored history kept: opening the chat again shows it, and messages
+   * that arrive meanwhile show as usual
+   */
+  clearView = () => {
+    for (const m of this.messages.rows.filter((m) => m.localId > 0)) {
+      this.messages.remove(String(m.localId));
+    }
+    this.gaps = [];
+    this.unreadFrom = null;
+    this.hasMore = false;
+  };
+
   /** Sends `text`; it shows at once, marked until the daemon has it, failed if it can't */
   send = async (text: string) => {
     const pending: Message = {
