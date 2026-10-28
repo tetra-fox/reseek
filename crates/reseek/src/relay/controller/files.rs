@@ -1,6 +1,5 @@
-//! The files of agents that peers download through the controller. Before an upload is queued
-//! the agent may be asked whether the file still exists and how long it is. When the upload
-//! starts, the agent is asked for the file from the peer's offset with a fresh token: it
+//! The files of agents that peers download through the controller. When the upload starts,
+//! the agent is asked for the file from the peer's offset with a fresh token: it
 //! acknowledges on its socket, then sends the bytes in an HTTP call that stays open while the
 //! peer reads them, and is answered with how the upload ended. A refusal on the socket fails
 //! the upload at once, as does the agent leaving before its bytes arrive.
@@ -28,12 +27,6 @@ use crate::sync::lock;
 
 /// How many chunks of an agent's file wait to be read by the upload.
 const CHUNKS: usize = 8;
-
-/// A file info request waiting for its answer.
-pub(super) struct FileInfoWait {
-  pub agent: String,
-  answer: oneshot::Sender<(bool, u64)>,
-}
 
 /// Why an agent's file did not arrive.
 #[derive(Debug)]
@@ -160,100 +153,6 @@ fn names_the_same(sent: &str, asked: &str) -> bool {
 }
 
 impl Controller {
-  /// Asks the agent `agent` whether `filename` exists and how long it is. `None` when the agent
-  /// is not ready, leaves, or does not answer within the configured time.
-  pub async fn file_info(&self, agent: &str, filename: &str) -> Option<(bool, u64)> {
-    let answer = self.ask_file_info(agent, filename).await;
-    self.count(
-      "file_info",
-      if answer.is_some() {
-        "answered"
-      } else {
-        "unanswered"
-      },
-    );
-    answer
-  }
-
-  async fn ask_file_info(&self, agent: &str, filename: &str) -> Option<(bool, u64)> {
-    if !self.ready(agent) {
-      debug!(agent, "Agent is not registered");
-      return None;
-    }
-    let id = Uuid::new_v4();
-    let (answer, answered) = oneshot::channel();
-    lock(&self.registry).file_infos.insert(
-      id,
-      FileInfoWait {
-        agent: agent.to_string(),
-        answer,
-      },
-    );
-    let asked = self.send(
-      agent,
-      frames::encode(
-        Some(id),
-        RelayMessage::FileInfoRequest {
-          filename: filename.to_string(),
-        },
-      ),
-    );
-    debug!(agent, filename, %id, "Requested file information from Agent. Waiting for response.");
-    let limit = self
-      .config
-      .current()
-      .values
-      .relay
-      .controller_timeouts
-      .file_info;
-    if !asked {
-      lock(&self.registry).file_infos.remove(&id);
-      return None;
-    }
-    let answer = timeout(limit, answered).await;
-    lock(&self.registry).file_infos.remove(&id);
-    match answer {
-      Ok(Ok(answer)) => Some(answer),
-      Ok(Err(_)) => {
-        debug!(
-          agent,
-          filename, "the agent left before it said whether it has the file"
-        );
-        None
-      }
-      Err(_) => {
-        warn!(
-          agent,
-          filename,
-          ?limit,
-          "Timed out waiting for file information from agent"
-        );
-        None
-      }
-    }
-  }
-
-  /// Takes the agent `agent`'s answer `id` to a file info request; false when nobody waits
-  /// for it.
-  pub(super) fn file_info_arrived(&self, agent: &str, id: Uuid, exists: bool, length: u64) -> bool {
-    let mut registry = lock(&self.registry);
-    if !registry
-      .file_infos
-      .get(&id)
-      .is_some_and(|w| w.agent == agent)
-    {
-      return false;
-    }
-    let wait = registry
-      .file_infos
-      .remove(&id)
-      .expect("the wait was just found");
-    if wait.answer.send((exists, length)).is_err() {
-      debug!(agent, %id, "file info arrived after its asker gave up");
-    }
-    true
-  }
-
   /// Asks the agent `agent` for `filename` from `start` for the upload `transfer`, and waits
   /// for its bytes: for the acknowledgement as long as the options say, then as long again for
   /// the bytes. An agent not logged in or without the file fails as not found, a wait too

@@ -5,13 +5,15 @@
 //! anything can start new ones; then, in the background, the client's events and the options
 //! are followed, whether other users can reach us is judged and the router is asked to forward
 //! our peer port while we are logged in, the release feed is read, the shares are initialized,
-//! the clock starts, a relay agent dials its controller, and the watchdog connects, unless
-//! this is a relay agent, connecting is turned off or there are no credentials. Stopping, once the HTTP host has stopped: the
-//! running searches end as cancelled, the watchdog stops, the port mapping is removed, the
-//! client disconnects and is disposed, the events this raised are handled, the session is
-//! closed, the statistics fetched again and the transfer tasks end, the transfers still
-//! unfinished are ended as shut down, the scripts' tasks end with the runs the shutdown killed
-//! recorded, and last the event bus delivers what was raised and stops.
+//! the clock starts and a relay agent dials its controller. Then the watchdog connects, unless
+//! this is a relay agent, connecting is turned off or there are no credentials.
+//!
+//! Stopping, once the HTTP host has stopped: the running searches end as cancelled, the
+//! watchdog stops, the port mapping is removed, the client disconnects and is disposed, the
+//! events this raised are handled, the session is closed, the statistics fetched again and the
+//! transfer tasks end, the transfers still unfinished are ended as shut down, the scripts' tasks
+//! end with the runs the shutdown killed recorded, and last the event bus delivers what was
+//! raised and stops.
 
 use tracing::{Instrument, debug, info, info_span, warn};
 

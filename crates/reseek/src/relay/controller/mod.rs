@@ -5,6 +5,7 @@
 
 mod downloads;
 mod files;
+mod info;
 mod login;
 mod session;
 mod shares;
@@ -38,7 +39,8 @@ use crate::sync::lock;
 use crate::telemetry::Telemetry;
 use crate::telemetry::catalogue::RelayMetrics;
 pub use files::RelayStream;
-use files::{FileInfoWait, StreamWait};
+use files::StreamWait;
+use info::FileInfoWait;
 
 /// How many frames wait to be written to one agent's socket.
 const OUTBOUND: usize = 64;
