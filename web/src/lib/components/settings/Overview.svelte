@@ -13,6 +13,7 @@
   import { valueAt } from "#lib/config/sections.js";
   import { dateTime } from "#lib/format.js";
   import { call } from "#lib/request.js";
+  import { UNTIL_RESTART } from "#lib/wording.js";
 
   // what the configuration as a whole says: its files, what was ignored or failed, what waits on
   // a reconnect or a restart, and the runtime overrides in effect
@@ -112,7 +113,7 @@
           <code class="text-fg-muted">{JSON.stringify(override.value)}</code>
           <span class="text-xs text-fg-subtle">
             by {override.setBy}, {override.untilRestart
-              ? "until restart"
+              ? UNTIL_RESTART
               : override.expiresAt
                 ? `until ${dateTime(override.expiresAt)}`
                 : "until removed"}

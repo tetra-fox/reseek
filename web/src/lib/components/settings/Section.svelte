@@ -28,6 +28,7 @@
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { toast } from "#lib/toast.svelte.js";
+  import { UNTIL_RESTART } from "#lib/wording.js";
 
   import FieldRow from "./FieldRow.svelte";
   import OidcTest from "./OidcTest.svelte";
@@ -187,7 +188,11 @@
    * null for until removed. Until restart comes first, as the change the read-only notices describe
    */
   const EXPIRIES = [
-    { label: "Until restart", value: "restart", words: "until restart" },
+    {
+      label: UNTIL_RESTART[0].toUpperCase() + UNTIL_RESTART.slice(1),
+      value: "restart",
+      words: UNTIL_RESTART
+    },
     { label: "For an hour", value: "1h", words: "for an hour" },
     { label: "For a day", value: "1d", words: "for a day" },
     { label: "Until removed", value: null, words: "until removed" }

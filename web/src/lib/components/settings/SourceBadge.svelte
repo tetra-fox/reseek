@@ -3,6 +3,7 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { dateTime } from "#lib/format.js";
+  import { UNTIL_RESTART } from "#lib/wording.js";
 
   // where a value comes from; nothing for a default
   let { source }: { source: Schemas["OptionSource"] } = $props();
@@ -25,7 +26,7 @@
     {#snippet child({ props })}
       <Badge {...props} tone="accent">
         runtime{source.untilRestart
-          ? " until restart"
+          ? ` ${UNTIL_RESTART}`
           : source.expiresAt
             ? ` until ${dateTime(source.expiresAt)}`
             : ""}

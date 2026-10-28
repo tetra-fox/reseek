@@ -20,12 +20,12 @@
   --color-fg: oklch(0.2 0.012 255);
   --color-fg-muted: oklch(0.5 0.014 255);
   --color-fg-subtle: oklch(0.63 0.012 255);
-  --color-accent: oklch(0.56 0.2 252);
-  --color-accent-hover: oklch(0.51 0.19 252);
-  --color-accent-press: oklch(0.46 0.17 252);
+  --color-accent: oklch(0.56 0.2 var(--accent-hue));
+  --color-accent-hover: oklch(0.51 0.19 var(--accent-hue));
+  --color-accent-press: oklch(0.46 0.17 var(--accent-hue));
   --color-accent-fg: oklch(0.99 0 0);
-  --color-accent-soft: oklch(0.955 0.03 252);
-  --color-accent-soft-fg: oklch(0.45 0.17 252);
+  --color-accent-soft: oklch(0.955 0.03 var(--accent-hue));
+  --color-accent-soft-fg: oklch(0.45 0.17 var(--accent-hue));
   --color-danger: oklch(0.58 0.2 25);
   --color-danger-hover: oklch(0.53 0.19 25);
   --color-danger-press: oklch(0.48 0.18 25);
@@ -42,7 +42,7 @@
   --color-info-soft: oklch(0.955 0.025 250);
   --color-info-soft-fg: oklch(0.45 0.13 250);
   --color-ring: color-mix(in oklab, var(--color-accent) 50%, transparent);
-  --color-selection: oklch(0.9 0.06 252);
+  --color-selection: oklch(0.9 0.06 var(--accent-hue));
   --color-scrollbar: oklch(0.82 0.008 255);
   --color-scrim: oklch(0.15 0.006 255 / 0.45);
   --color-glow: color-mix(in oklab, var(--color-accent) 7%, transparent);
@@ -146,6 +146,9 @@
 
 /* shadows refer to these so dark mode can swap them, tailwind inlines theme shadows otherwise */
 :root {
+  /* the accent's hue, which every accent colour in both themes takes; the colour is the owner's
+     to choose, so choosing it is this one line */
+  --accent-hue: 252;
   --elevation-card: 0 1px 2px 0 oklch(0.2 0.01 255 / 0.04), 0 1px 3px 0 oklch(0.2 0.01 255 / 0.03);
   --elevation-raised:
     0 8px 24px -6px oklch(0.2 0.01 255 / 0.14), 0 2px 6px oklch(0.2 0.01 255 / 0.06);
@@ -169,12 +172,12 @@
   --color-fg: oklch(0.955 0.004 255);
   --color-fg-muted: oklch(0.69 0.012 255);
   --color-fg-subtle: oklch(0.54 0.012 255);
-  --color-accent: oklch(0.73 0.16 252);
-  --color-accent-hover: oklch(0.78 0.14 252);
-  --color-accent-press: oklch(0.82 0.12 252);
-  --color-accent-fg: oklch(0.17 0.02 252);
-  --color-accent-soft: oklch(0.27 0.065 252);
-  --color-accent-soft-fg: oklch(0.87 0.085 252);
+  --color-accent: oklch(0.73 0.16 var(--accent-hue));
+  --color-accent-hover: oklch(0.78 0.14 var(--accent-hue));
+  --color-accent-press: oklch(0.82 0.12 var(--accent-hue));
+  --color-accent-fg: oklch(0.17 0.02 var(--accent-hue));
+  --color-accent-soft: oklch(0.27 0.065 var(--accent-hue));
+  --color-accent-soft-fg: oklch(0.87 0.085 var(--accent-hue));
   --color-danger: oklch(0.68 0.17 25);
   --color-danger-hover: oklch(0.73 0.15 25);
   --color-danger-press: oklch(0.78 0.13 25);
@@ -190,7 +193,7 @@
   --color-info: oklch(0.7 0.11 250);
   --color-info-soft: oklch(0.27 0.05 250);
   --color-info-soft-fg: oklch(0.86 0.07 250);
-  --color-selection: oklch(0.38 0.09 252);
+  --color-selection: oklch(0.38 0.09 var(--accent-hue));
   --color-scrollbar: oklch(0.36 0.012 255);
   --color-scrim: oklch(0.08 0.006 255 / 0.6);
   --color-glow: color-mix(in oklab, var(--color-accent) 9%, transparent);
