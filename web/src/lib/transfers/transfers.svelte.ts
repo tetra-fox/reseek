@@ -1,10 +1,11 @@
-import { SvelteMap } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
 import { api, byUser, type Schemas } from "#lib/api/client.js";
 import { Keyed } from "#lib/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
 import { toast } from "#lib/toast.svelte.js";
+import { undoable } from "#lib/undo.js";
 
 import { type BulkAction, summary } from "./bulk";
 import type { Direction, Transfer } from "./states";
@@ -28,6 +29,8 @@ export class Transfers {
   speeds = new SvelteMap<string, number[]>();
   /** why the last ask for a download's place in the queue failed, by transfer id */
   queueErrors = new SvelteMap<string, string>();
+  /** transfers removed on screen whose removal waits until it can no longer be undone */
+  hidden = new SvelteSet<string>();
 
   constructor(direction: Direction) {
     this.direction = direction;
@@ -46,6 +49,7 @@ export class Transfers {
     live.on("transfers.removed", (t) => {
       if (!mine(t)) return;
       this.list.remove(t.id);
+      this.hidden.delete(t.id);
       this.speeds.delete(t.id);
       this.queueErrors.delete(t.id);
     });
@@ -67,14 +71,53 @@ export class Transfers {
     this.error = "";
   };
 
-  /** One call for `action` on `ids`, answered with a line saying what it did */
-  bulk = async (action: BulkAction, ids: string[]): Promise<Outcome<string>> => {
+  /** One call for `action` on `ids`, answered with a line saying what it did and how many failed */
+  bulk = async (
+    action: BulkAction,
+    ids: string[]
+  ): Promise<Outcome<{ text: string; failed: number }>> => {
     const body = { action, ids };
     const outcome =
       this.direction === "download"
         ? await call(() => api.POST("/api/v0/transfers/downloads/bulk", { body }))
         : await call(() => api.POST("/api/v0/transfers/uploads/bulk", { body }));
-    return outcome.ok ? { ok: true, data: summary(action, outcome.data) } : outcome;
+    if (!outcome.ok) return outcome;
+    return {
+      ok: true,
+      data: { text: summary(action, outcome.data), failed: outcome.data.failed.length }
+    };
+  };
+
+  /**
+   * Removes transfers once their Undo has passed, cancelling running ones then; until then they
+   * only leave the screen. `all` removes every completed one with one call instead
+   */
+  removeLater = (ids: string[], { all = false } = {}) => {
+    if (!ids.length) return;
+    for (const id of ids) this.hidden.add(id);
+    const text = `Removed ${ids.length === 1 ? "a transfer" : `${ids.length} transfers`}`;
+    undoable(
+      text,
+      async () => {
+        // removed rows stay hidden until their frames take them off the list; a failure shows
+        // them again
+        if (all) {
+          const outcome = await this.removeCompleted();
+          if (outcome.ok) return;
+          for (const id of ids) this.hidden.delete(id);
+          toast(outcome.error, "error");
+          return;
+        }
+        const outcome = await this.bulk("remove", ids);
+        if (outcome.ok && !outcome.data.failed) return;
+        for (const id of ids) this.hidden.delete(id);
+        void this.load();
+        toast(outcome.ok ? outcome.data.text : outcome.error, "error");
+      },
+      () => {
+        for (const id of ids) this.hidden.delete(id);
+      }
+    );
   };
 
   /** Removes every completed transfer of this direction from the list */
@@ -115,6 +158,7 @@ export class Transfers {
     this.list.clear();
     this.speeds.clear();
     this.queueErrors.clear();
+    this.hidden.clear();
     this.loaded = false;
   }
 }

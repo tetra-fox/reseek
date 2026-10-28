@@ -21,7 +21,7 @@ export const storeOf = (t: Transfer): Transfers => (t.direction === "Upload" ? u
 export const act = async (store: Transfers, action: BulkAction, ids: string[]) => {
   if (!ids.length) return;
   const outcome = await store.bulk(action, ids);
-  toast(outcome.ok ? outcome.data : outcome.error, outcome.ok ? "info" : "error");
+  toast(outcome.ok ? outcome.data.text : outcome.error, outcome.ok ? "info" : "error");
 };
 
 /** Opens a finished download in a new tab, where the browser shows, plays or saves it */
