@@ -167,9 +167,10 @@
   const actions = $derived(ACTIONS.filter((a) => a.shown()));
 </script>
 
+<!-- a phone indents each level less, so a nested folder keeps room for its name -->
 <div
   class="flex h-full items-center gap-2 border-b bg-surface-muted/80 px-2 text-sm"
-  style:padding-left={`${0.5 + group.depth * 1.5}rem`}
+  style:padding-left={`${0.5 + group.depth * (viewport.phone ? 0.75 : 1.5)}rem`}
   role="rowheader">
   <Checkbox
     aria-label={`Select every transfer in ${group.label}`}
