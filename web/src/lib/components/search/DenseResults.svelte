@@ -30,6 +30,7 @@
     type DenseColumn,
     type DenseRow,
     denseView,
+    denseWidth,
     nextSort,
     sortDense
   } from "#lib/search/dense.js";
@@ -66,11 +67,9 @@
   $effect(() => arrivals.see(sorted.map((r) => r.key)));
 
   const template = $derived(
-    `2.5rem ${DENSE_COLUMNS.map((c) => cssWidth(denseView.widths[c.id])).join(" ")} 4.5rem`
+    `2.5rem ${DENSE_COLUMNS.map((c) => cssWidth(denseWidth(c))).join(" ")} 4.5rem`
   );
-  const width = $derived(
-    sumWidths(["2.5rem", ...DENSE_COLUMNS.map((c) => denseView.widths[c.id]), "4.5rem"])
-  );
+  const width = $derived(sumWidths(["2.5rem", ...DENSE_COLUMNS.map(denseWidth), "4.5rem"]));
   const start = $derived(Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN));
   const end = $derived(Math.min(sorted.length, Math.ceil((scrollTop + height) / ROW) + OVERSCAN));
   const chosen = $derived(sorted.filter((r) => selected.has(r.key)));
@@ -196,7 +195,10 @@
             }}
             onpointermove={(e) => {
               if (!resizing) return;
-              denseView.widths[resizing.id] = Math.max(40, resizing.width + e.clientX - resizing.x);
+              denseView.dragged[resizing.id] = Math.max(
+                40,
+                resizing.width + e.clientX - resizing.x
+              );
             }}
             onpointerup={() => (resizing = null)}></span>
         </span>

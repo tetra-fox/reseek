@@ -75,9 +75,10 @@
       .filter((c) => !viewport.phone || c.id in PHONE_COLUMNS)
       .map((c) => c.id)
   );
-  /** a column's width: a phone's own for the few it shows, else the one set */
-  const widthOf = (c: { id: ColumnId; width: number | string }) =>
-    (viewport.phone && PHONE_COLUMNS[c.id]) || c.width;
+  /** a column's width: a phone's own for the few it shows, else pixels dragged to, else its default */
+  const widthOf = (c: { id: ColumnId; dragged?: number }): number | string =>
+    (viewport.phone && PHONE_COLUMNS[c.id]) ||
+    (c.dragged ?? COLUMNS.find((known) => known.id === c.id)!.width);
   const template = $derived(
     view.columns
       .filter((c) => columns.includes(c.id))
@@ -251,7 +252,7 @@
               onpointermove={(e) => {
                 if (!resizing) return;
                 const column = view.columns.find((c) => c.id === resizing!.id)!;
-                column.width = Math.max(40, resizing.width + e.clientX - resizing.x);
+                column.dragged = Math.max(40, resizing.width + e.clientX - resizing.x);
               }}
               onpointerup={() => (resizing = null)}></span>
           {/if}

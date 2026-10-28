@@ -98,19 +98,27 @@ export const nextSort = (sort: DenseSort, id: DenseColumn): DenseSort => {
   return sort.dir === first ? { id, dir: first === "asc" ? "desc" : "asc" } : null;
 };
 
-/** The dense view's sort and column widths in this browser */
+/**
+ * The dense view's sort and the widths the user dragged columns to, in pixels, in this browser.
+ * Only a drag is kept, so a column never dragged follows its default as that changes. Widths saved
+ * under `widths` by older builds held every default too, so they are not read
+ */
 export const denseView = stored("reseek.search.dense", (saved) => {
   const s = fields(saved);
   const sort = fields(s.sort);
-  const widths = fields(s.widths);
+  const dragged = fields(s.dragged);
   const known = DENSE_COLUMNS.find((c) => c.id === sort.id);
   return {
     sort: (known ? { id: known.id, dir: sort.dir === "desc" ? "desc" : "asc" } : null) as DenseSort,
-    widths: Object.fromEntries(
-      DENSE_COLUMNS.map((c) => {
-        const w = widths[c.id];
-        return [c.id, typeof w === "number" && w >= 40 ? w : c.width];
+    dragged: Object.fromEntries(
+      DENSE_COLUMNS.flatMap((c) => {
+        const w = dragged[c.id];
+        return typeof w === "number" && w >= 40 ? [[c.id, w]] : [];
       })
-    ) as Record<DenseColumn, number | string>
+    ) as Partial<Record<DenseColumn, number>>
   };
 });
+
+/** A dense column's width: pixels the user dragged it to, else its default length */
+export const denseWidth = (column: (typeof DENSE_COLUMNS)[number]): number | string =>
+  denseView.dragged[column.id] ?? column.width;
