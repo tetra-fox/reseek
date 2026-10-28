@@ -31,7 +31,15 @@ describe("the join dialog", () => {
     document.body.innerHTML = "";
   });
 
-  it("lists the busiest rooms first and joins by name as private", async () => {
+  const type = (selector: string, value: string) => {
+    const field = document.querySelector<HTMLInputElement>(selector)!;
+    field.value = value;
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+  };
+  const create = () => document.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+
+  it("lists the busiest rooms first and creates a private room by name", async () => {
     const net = fakeNetwork((url, method) => {
       if (url.pathname.endsWith("/rooms/available")) {
         return [room("jazz", 4), room("indie", 40), room("ambient", 4)];
@@ -47,15 +55,11 @@ describe("the join dialog", () => {
       [...document.querySelectorAll("[data-line]")].map((l) => l.getAttribute("data-line"));
     expect(names()).toEqual(["indie", "ambient", "jazz"]);
 
-    const field = document.querySelector<HTMLInputElement>("#join-name")!;
-    field.value = "club";
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-    [...document.querySelectorAll("label")]
-      .find((l) => l.textContent?.includes("private room"))!
-      .querySelector<HTMLElement>("[role=checkbox]")!
-      .click();
+    type("#create-name", "club");
+    document.querySelector<HTMLElement>("[role=switch]")!.click();
     flushSync();
-    document.querySelector<HTMLButtonElement>('button[type=submit][form="join-room"]')!.click();
+    expect(create().textContent).toBe("Create");
+    create().click();
     await flush();
     expect(net.requests.find((r) => r.method === "POST")?.body).toEqual({
       name: "club",
@@ -63,6 +67,43 @@ describe("the join dialog", () => {
     });
     // the server's refusal shows in the dialog, which stays open
     expect(document.body.textContent).toContain("A private room with this name already exists");
+  });
+
+  it("offers a public room's Join instead of creating one by its name", async () => {
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/rooms/available") ? [room("indie", 40)] : undefined
+    );
+    component = mount(JoinRoomDialog, { target: document.body, props: { open: true } });
+    await flush();
+    type("#create-name", "indie");
+    expect(create().disabled).toBe(true);
+    expect(document.querySelector("[role=status]")!.textContent).toContain(
+      "There is a public room called indie"
+    );
+    create().closest("form")!.requestSubmit();
+    await flush();
+    expect(net.requests.some((r) => r.method === "POST")).toBe(false);
+  });
+
+  it("joins the first listed room on Enter in the filter", async () => {
+    const net = fakeNetwork((url, method) => {
+      if (url.pathname.endsWith("/rooms/available")) return [room("indie", 40), room("jazz", 4)];
+      if (method === "POST") return { status: 403, body: { error: "no" } };
+      return undefined;
+    });
+    component = mount(JoinRoomDialog, { target: document.body, props: { open: true } });
+    await flush();
+    type('input[aria-label="Filter rooms"]', "jaz");
+    document
+      .querySelector('input[aria-label="Filter rooms"]')!
+      .dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
+      );
+    await flush();
+    expect(net.requests.find((r) => r.method === "POST")?.body).toEqual({
+      name: "jazz",
+      private: false
+    });
   });
 
   it("joins a room from its row in one click, the row then saying so", async () => {

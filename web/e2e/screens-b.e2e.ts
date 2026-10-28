@@ -12,6 +12,17 @@ test("opens the dashboard, chat, rooms, users, a profile and your profile", asyn
   await expect(page).toHaveURL(/#\/chat$/);
   await expect(page.getByRole("grid", { name: "Rooms and conversations" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Join a room" })).toBeVisible();
+  // the dialog joins public rooms from their rows and creates a room by name, nothing else
+  await page.getByRole("button", { name: "Join a room" }).click();
+  const dialog = page.getByRole("dialog", { name: "Join a room" });
+  await expect(dialog.getByRole("heading", { name: "Public rooms" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Create a room" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
+  await dialog.getByLabel("Name").fill("a new room");
+  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+  await expect(dialog.getByRole("button", { name: "Join", exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
 
   // rooms are a section of the chat page
   await page.goto("./#/rooms");

@@ -20,12 +20,12 @@
   import Field from "#lib/components/Field.svelte";
   import Form from "#lib/components/Form.svelte";
   import Button from "#lib/components/ui/Button.svelte";
-  import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import Switch from "#lib/components/ui/Switch.svelte";
   import { ListControl } from "#lib/list.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { href, roomHref } from "#lib/nav.js";
@@ -35,7 +35,7 @@
   import { rem } from "#lib/viewport.svelte.js";
   import { ListWindow } from "#lib/virtual.svelte.js";
 
-  // the server's rooms to pick one from, or a name to join or create
+  // two parts: the server's public rooms, each joined from its row, and a room created by name
   let { open = $bindable(), name: start = "" }: { open: boolean; name?: string } = $props();
 
   /** whether we take invitations to private rooms, the daemon's `chat` option; on unless set off */
@@ -48,7 +48,7 @@
   let name = $state("");
   let isPrivate = $state(false);
   let error = $state("");
-  let joining = $state(false);
+  let creating = $state(false);
 
   // each opening reads the list and starts from the name it was opened with
   $effect(() => {
@@ -132,20 +132,43 @@
     if (!outcome.ok) error = `${room}: ${outcome.error}`;
   };
 
-  const join = async (room: string) => {
-    if (!room.trim() || joining) return;
-    joining = true;
-    const outcome = await chat.join(room.trim(), isPrivate);
-    joining = false;
+  /** a public room already called what the create box holds, which is joined rather than made */
+  const existing = $derived((available.data ?? []).find((r) => r.name === name.trim()));
+
+  /** Creates the room named in the box, private if asked, and opens it */
+  const create = async () => {
+    const room = name.trim();
+    if (!room || existing || creating) return;
+    creating = true;
+    const outcome = await chat.join(room, isPrivate);
+    creating = false;
     if (!outcome.ok) return void (error = outcome.error);
     open = false;
-    void goto(roomHref(room.trim()));
+    void goto(roomHref(room));
+  };
+
+  /** Enter in the filter: joins the focused room, or the first one listed */
+  const joinFocused = () => {
+    const room = list.focused ?? rooms[0];
+    if (!room) return;
+    if (isJoined(room.name)) enter(room.name);
+    else void joinRow(room.name);
   };
 </script>
 
 <Dialog bind:open title="Join a room" class="w-[min(36rem,calc(100vw-2rem))]">
+  <h3 class="text-sm font-semibold">Public rooms</h3>
   <div class="flex gap-2">
-    <Input type="search" placeholder="Filter rooms" aria-label="Filter rooms" bind:value={filter} />
+    <Input
+      type="search"
+      placeholder="Filter rooms"
+      aria-label="Filter rooms"
+      bind:value={filter}
+      onkeydown={(e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        joinFocused();
+      }} />
     <Button
       variant="outline"
       size="icon"
@@ -225,24 +248,44 @@
       </div>
     </div>
   {/if}
+  {#if error}<Notice kind="error">{error}</Notice>{/if}
   <Form
-    id="join-room"
+    id="create-room"
     layout="stacked"
-    class="flex flex-col gap-group"
+    class="flex flex-col gap-group border-t pt-group"
     onsubmit={(e) => {
       e.preventDefault();
-      void join(name);
+      void create();
     }}>
-    <Field label="Join or create by name" for="join-name">
-      <Input id="join-name" maxlength={24} bind:value={name} autocomplete="off" />
+    <h3 class="text-sm font-semibold">Create a room</h3>
+    <Field label="Name" for="create-name">
+      <Input id="create-name" maxlength={24} bind:value={name} autocomplete="off" />
     </Field>
-    <label class="flex items-center gap-2 text-sm">
-      <Checkbox checked={isPrivate} onCheckedChange={(on) => (isPrivate = on)} />
-      Create as a private room if it doesn't exist
-    </label>
-    {#if error}<Notice kind="error">{error}</Notice>{/if}
+    {#if existing}
+      <div class="flex flex-wrap items-center gap-inline text-sm" role="status">
+        <span class="text-fg-muted">There is a public room called {existing.name}.</span>
+        {#if isJoined(existing.name)}
+          <Button size="sm" variant="outline" onclick={() => enter(existing.name)}>Open it</Button>
+        {:else}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy.has(existing.name)}
+            onclick={() => void joinRow(existing.name)}>Join it</Button>
+        {/if}
+      </div>
+    {/if}
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <label class="flex items-center gap-2 text-sm">
+        <Switch bind:checked={isPrivate} />
+        Private
+      </label>
+      <Button type="submit" class="ml-auto" disabled={!name.trim() || !!existing || creating}
+        >Create</Button>
+    </div>
     <p class="text-xs text-fg-muted">
-      Invitations to private rooms are {invitations ? "accepted" : "refused"}.
+      A private room lets in only the members you add. Invitations to private rooms are
+      {invitations ? "accepted" : "refused"}.
       <a
         class="text-accent hover:underline"
         href={href("/system/settings?q=accept_private_room_invitations")}
@@ -250,7 +293,6 @@
     </p>
   </Form>
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
-    <Button type="submit" form="join-room" disabled={!name.trim() || joining}>Join</Button>
+    <Button variant="ghost" onclick={() => (open = false)}>Close</Button>
   {/snippet}
 </Dialog>
