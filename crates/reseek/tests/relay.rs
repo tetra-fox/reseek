@@ -4,7 +4,7 @@
 //! after its controller restarts; an agent that stops takes its shares with it. The controller
 //! refuses a wrong secret, an unknown name, a replayed credential and an address outside the
 //! agent's networks. A controller's finished download is copied to an agent that asks for
-//! them, and a stopping controller tells its agents before it stops listening.
+//! them, and a controller that stops closes its agents' sockets as shutting down.
 
 mod support;
 
@@ -213,7 +213,7 @@ async fn an_agent_comes_back_after_its_controller_restarts_and_leaves_with_its_s
 
 #[cfg(unix)]
 #[tokio::test]
-async fn a_stopping_controller_tells_its_agents_before_it_stops_listening() {
+async fn a_stopping_controller_closes_its_agents_as_shutting_down() {
   let Some(server) = soulfind::server() else {
     return;
   };
