@@ -97,7 +97,7 @@
   const data = $derived(histogram ? chartData(histogram) : []);
 </script>
 
-<SearchBar announce />
+<SearchBar />
 
 <Glance />
 

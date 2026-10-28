@@ -3,7 +3,6 @@
   import HistoryIcon from "@lucide/svelte/icons/history";
   import PinIcon from "@lucide/svelte/icons/pin";
   import PinOffIcon from "@lucide/svelte/icons/pin-off";
-  import PlusIcon from "@lucide/svelte/icons/plus";
   import SearchIcon from "@lucide/svelte/icons/search";
   import XIcon from "@lucide/svelte/icons/x";
 
@@ -11,7 +10,6 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
-  import Spinner from "#lib/components/ui/Spinner.svelte";
   import { href } from "#lib/nav.js";
   import { forget, recent, remember, restore, togglePin } from "#lib/search/recent.svelte.js";
   import { type SearchScope, scopeLabel, searches } from "#lib/search/searches.svelte.js";
@@ -25,28 +23,17 @@
     onclearscope?: () => void;
     /** the text the box starts with */
     text?: string;
-    /** says in a toast that a search started from + where it doesn't show in a list */
-    announce?: boolean;
     /** lists the recent and pinned searches under the box */
     history?: boolean;
   };
 
-  let {
-    scope,
-    onclearscope,
-    text: initial = "",
-    announce = false,
-    history = false
-  }: Props = $props();
+  let { scope, onclearscope, text: initial = "", history = false }: Props = $props();
 
   // the box starts from what the page was opened with and is the user's from then on
   // svelte-ignore state_referenced_locally
   let text = $state(initial);
-  let creating = $state(false);
-  let input = $state<HTMLInputElement | null>(null);
 
   const connected = $derived(app.isServerConnected);
-  const disabled = $derived(creating || !connected);
   const scoped = $derived(scope ? scopeLabel(scope) : null);
 
   /** Opens a search's page at once; the results stream in as the daemon finds them */
@@ -60,29 +47,7 @@
     });
   };
 
-  /** Starts the search and stays; a second submit while one runs is ignored */
-  const stay = async (phrase: string) => {
-    creating = true;
-    const outcome = await searches.create(phrase, scope);
-    creating = false;
-    if (!outcome.ok) {
-      toast(outcome.error, "error");
-      return;
-    }
-    remember(phrase);
-    text = "";
-    if (announce) {
-      const to = href(`/searches/${outcome.data.id}`);
-      const label = phrase.length > 30 ? `${phrase.slice(0, 15)}...` : phrase;
-      toast(`Search for '${label}' started`, "info", {
-        action: { label: "View results", run: () => void goto(to) }
-      });
-    }
-    // the box gets focus back once it is enabled again
-    queueMicrotask(() => input?.focus());
-  };
-
-  const submit = (opening: boolean) => {
+  const submit = () => {
     const phrase = text.trim();
     // a pasted slsk:// link opens what it points at rather than searching for its text
     const link = parseSlsk(phrase);
@@ -91,9 +56,8 @@
       void goto(slskBrowse(link));
       return;
     }
-    if (!phrase || creating || !connected) return;
-    if (opening) open(phrase);
-    else void stay(phrase);
+    if (!phrase || !connected) return;
+    open(phrase);
   };
 
   const remove = (search: string) => {
@@ -108,45 +72,28 @@
   class="flex flex-col gap-2 rounded-card border bg-surface p-3 shadow-card"
   onsubmit={(e) => {
     e.preventDefault();
-    submit(true);
+    submit();
   }}>
+  <!-- the button isn't disabled while the box is empty: a browser ignores Enter when the form's
+       default button is disabled, and submit already ignores an empty phrase -->
   <div class="flex items-center gap-inline">
-    <div class="relative min-w-0 flex-1">
-      <Input
-        bind:ref={input}
-        bind:value={text}
-        type="search"
-        icon={SearchIcon}
-        autofocus
-        data-lpignore="true"
-        aria-label="Search phrase"
-        placeholder={connected ? "Search phrase" : "Connect to server to perform a search"}
-        {disabled}
-        class="h-11 pl-10 text-base md:text-base" />
-      {#if creating}
-        <Spinner class="absolute top-1/2 right-9 size-4 -translate-y-1/2" label="Starting" />
-      {/if}
-    </div>
-    <Button
-      variant="outline"
-      size="icon"
-      class="size-11"
-      aria-label="Search and stay here"
-      title="Search and stay here"
-      disabled={disabled || !text.trim()}
-      onclick={() => submit(false)}>
-      <PlusIcon />
-    </Button>
-    <Button
-      type="submit"
-      size="icon"
-      class="size-11"
-      aria-label="Search and show the results"
-      title="Search and show the results (Enter)"
-      disabled={disabled || !text.trim()}>
-      <SearchIcon />
-    </Button>
+    <Input
+      bind:value={text}
+      type="search"
+      enterkeyhint="search"
+      icon={SearchIcon}
+      wrapperClass="flex-1"
+      autofocus
+      data-lpignore="true"
+      aria-label="Search for files"
+      placeholder="Search for files"
+      disabled={!connected}
+      class="h-11 pl-10 text-base md:text-base" />
+    <Button type="submit" class="h-11 px-4" disabled={!connected}>Search</Button>
   </div>
+  {#if app.state && !connected}
+    <p class="text-xs text-fg-muted">Connect to the Soulseek server to search.</p>
+  {/if}
   {#if scoped}
     <div class="flex items-center gap-2 text-xs text-fg-muted">
       Only searching

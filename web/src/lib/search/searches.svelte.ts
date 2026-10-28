@@ -89,10 +89,6 @@ class Searches {
     return { id, done };
   };
 
-  /** Starts a search and waits for the daemon's answer */
-  create = (text: string, scope?: SearchScope): Promise<Outcome<Search>> =>
-    this.start(text, scope).done;
-
   /** Fetches one search into the list, for a page opened before its frame arrived */
   fetch = async (id: string): Promise<Outcome<Search>> => {
     const outcome = await call(() =>

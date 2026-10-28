@@ -5,7 +5,8 @@ import { login } from "./login";
 test("opens search, browse and both transfer screens", async ({ page }) => {
   await login(page, "/searches");
   // the smoke daemon never connects to a Soulseek server
-  await expect(page.getByPlaceholder("Connect to server to perform a search")).toBeDisabled();
+  await expect(page.getByRole("searchbox", { name: "Search for files" })).toBeDisabled();
+  await expect(page.getByText("Connect to the Soulseek server to search.")).toBeVisible();
   await expect(page.getByText("No searches to display")).toBeVisible();
 
   await page.getByRole("link", { name: "Browse" }).click();
