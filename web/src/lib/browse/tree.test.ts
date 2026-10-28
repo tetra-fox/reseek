@@ -59,13 +59,22 @@ describe("the browse tree", () => {
     );
     const names = (rows: ReturnType<typeof flatten>) =>
       rows.map((r) => `${r.depth}:${r.node.name}`);
-    expect(names(flatten(tree.roots, new Set()))).toEqual(["0:a", "0:d"]);
-    expect(names(flatten(tree.roots, new Set(["a"])))).toEqual(["0:a", "1:a\\b", "1:a\\c", "0:d"]);
-    expect(names(flatten(tree.roots, new Set(), (n) => n.name.endsWith("target")))).toEqual([
+    expect(names(flatten(tree.roots, () => false))).toEqual(["0:a", "0:d"]);
+    expect(names(flatten(tree.roots, (n) => n === "a"))).toEqual([
       "0:a",
       "1:a\\b",
-      "2:a\\b\\target"
+      "1:a\\c",
+      "0:d"
     ]);
+    expect(
+      names(
+        flatten(
+          tree.roots,
+          () => false,
+          (n) => n.name.endsWith("target")
+        )
+      )
+    ).toEqual(["0:a", "1:a\\b", "2:a\\b\\target"]);
   });
 
   it("gives every file under a folder its full path", () => {

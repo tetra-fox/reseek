@@ -30,13 +30,22 @@
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import LockIcon from "@lucide/svelte/icons/lock";
   import { tick, untrack } from "svelte";
-  import { SvelteSet } from "svelte/reactivity";
 
   import type { BrowseFilter } from "#lib/browse/filter.js";
-  import { ancestors, flatten, leaf, type Separator, type Tree } from "#lib/browse/tree.js";
+  import {
+    ancestors,
+    flatten,
+    leaf,
+    parentOf,
+    type Separator,
+    type Tree,
+    type TreeNode
+  } from "#lib/browse/tree.js";
+  import { TYPE_AHEAD_MS, typeAhead } from "#lib/browse/typeahead.js";
   import { formatBytes } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepsKey, withModifier } from "#lib/keys.js";
+  import { Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
 
   import { LOCKED_HINT } from "./locked";
 
@@ -51,7 +60,7 @@
 
   let { tree, separator, selected, onselect, filter }: Props = $props();
 
-  const expanded = new SvelteSet<string>();
+  const expansion = new Expansion(false);
   let scroller = $state<HTMLDivElement | null>(null);
   let scrollTop = $state(0);
   let height = $state(savedHeight());
@@ -60,14 +69,14 @@
   $effect(() => {
     const first = tree.roots[0];
     untrack(() => {
-      expanded.clear();
-      if (first?.children.length) expanded.add(first.name);
+      expansion.reset(false);
+      if (first?.children.length) expansion.set(first.name, true);
       scrollTop = 0;
       if (scroller) scroller.scrollTop = 0;
     });
   });
 
-  const rows = $derived(flatten(tree.roots, expanded, filter?.folder));
+  const rows = $derived(flatten(tree.roots, expansion.isOpen, filter?.folder));
   const start = $derived(Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN));
   const end = $derived(Math.min(rows.length, Math.ceil((scrollTop + height) / ROW) + OVERSCAN));
 
@@ -79,25 +88,46 @@
       .filter(Boolean)
       .join(", ");
 
-  const toggle = (name: string) => {
-    if (expanded.has(name)) expanded.delete(name);
-    else expanded.add(name);
-  };
+  /** The folders beside a folder, itself among them, which Alt-click opens or closes with it */
+  const siblings = (node: TreeNode) =>
+    (tree.byName.get(parentOf(node.name, separator))?.children ?? tree.roots).map((n) => n.name);
 
-  export const expandAll = () => {
-    for (const name of tree.byName.keys()) expanded.add(name);
-  };
-  export const collapseAll = () => expanded.clear();
+  export const expandAll = () => expansion.reset(true);
+  export const collapseAll = () => expansion.reset(false);
 
-  /** Opens every folder above `name`, selects it and scrolls it to the middle */
-  export const navigate = async (name: string) => {
-    for (const above of ancestors(name, tree, separator)) expanded.add(above);
-    onselect(name);
-    await tick();
-    const index = rows.findIndex((r) => r.node.name === name);
+  /** Scrolls the row at `index` to the middle of the list */
+  const centre = (index: number) => {
     if (scroller && index !== -1) {
       scroller.scrollTop = Math.max(0, index * ROW - height / 2 + ROW / 2);
     }
+  };
+
+  // letters typed with the list focused select the next folder starting with them
+  let typed = "";
+  let typedAt = 0;
+  const typeToFind = (e: KeyboardEvent) => {
+    if (e.key.length !== 1 || withModifier(e) || keepsKey(e) || e.key === " ") return;
+    const now = Date.now();
+    typed = now - typedAt > TYPE_AHEAD_MS ? e.key : typed + e.key;
+    typedAt = now;
+    const from = rows.findIndex((r) => r.node.name === selected);
+    const at = typeAhead(
+      rows.map((r) => leaf(r.node.name)),
+      from,
+      typed
+    );
+    if (at === -1) return;
+    e.preventDefault();
+    onselect(rows[at].node.name);
+    centre(at);
+  };
+
+  /** Opens every folder above `name`, selects it and scrolls it to the middle */
+  export const navigate = async (name: string) => {
+    for (const above of ancestors(name, tree, separator)) expansion.set(above, true);
+    onselect(name);
+    await tick();
+    centre(rows.findIndex((r) => r.node.name === name));
   };
 
   let dragging: { y: number; height: number } | null = null;
@@ -105,15 +135,18 @@
 
 <div
   bind:this={scroller}
-  class="relative overflow-y-auto [overflow-anchor:auto]"
+  class="relative overflow-y-auto outline-none [overflow-anchor:auto] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
   style:height={`${height}px`}
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
   role="tree"
   aria-label="Shared folders"
+  tabindex="0"
+  title="Type a folder's first letters to go to it"
+  onkeydown={typeToFind}
   {@attach freezesWhileUsed}>
   <div style:height={`${rows.length * ROW}px`} class="relative">
     {#each rows.slice(start, end) as { node, depth }, i (node.name)}
-      {@const open = !!filter || expanded.has(node.name)}
+      {@const open = !!filter || expansion.isOpen(node.name)}
       <div
         role="treeitem"
         aria-selected={node.name === selected}
@@ -135,11 +168,11 @@
         <button
           type="button"
           class="shrink-0"
-          aria-label={open ? "Collapse" : "Expand"}
-          title={node.locked ? LOCKED_HINT : undefined}
+          aria-label={`${open ? "Collapse" : "Expand"} ${leaf(node.name)}`}
+          title={node.locked ? LOCKED_HINT : "Alt-click to open or close the folders beside it too"}
           onclick={(e) => {
             e.stopPropagation();
-            toggle(node.name);
+            expansion.toggle(node.name, siblings(node), withSiblings(e));
           }}>
           {#if node.locked}
             <LockIcon class="size-4 text-fg-muted" />

@@ -90,7 +90,7 @@ export type TreeRow = { node: TreeNode; depth: number };
  */
 export const flatten = (
   roots: TreeNode[],
-  expanded: Set<string>,
+  isOpen: (name: string) => boolean,
   matches?: (node: TreeNode) => boolean
 ): TreeRow[] => {
   const rows: TreeRow[] = [];
@@ -98,7 +98,7 @@ export const flatten = (
     const walk = (nodes: TreeNode[], depth: number) => {
       for (const node of nodes) {
         rows.push({ node, depth });
-        if (expanded.has(node.name)) walk(node.children, depth + 1);
+        if (isOpen(node.name)) walk(node.children, depth + 1);
       }
     };
     walk(roots, 0);
