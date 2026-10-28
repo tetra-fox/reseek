@@ -42,7 +42,7 @@
     {id}
     aria-label={ariaLabel}
     class={cn(
-      "flex h-control w-full items-center justify-between gap-2 rounded-control border border-input bg-surface pr-2 pl-3 text-sm whitespace-nowrap shadow-xs transition-colors duration-(--motion-fast) select-none hover:border-fg-subtle/50 disabled:opacity-50 data-[state=open]:border-accent",
+      "flex h-control w-full items-center justify-between gap-2 rounded-control border border-input bg-surface pr-2 pl-3 text-sm whitespace-nowrap shadow-xs transition-colors duration-(--motion-fast) hover:border-fg-subtle/50 disabled:opacity-50 data-[state=open]:border-accent",
       className
     )}>
     <Select.Value class="truncate" />
@@ -56,7 +56,7 @@
         <Select.Item
           value={item.value}
           label={item.label}
-          class="flex h-control-sm items-center justify-between gap-4 rounded-badge px-2 text-sm select-none data-highlighted:bg-hover">
+          class="flex h-control-sm items-center justify-between gap-4 rounded-badge px-2 text-sm data-highlighted:bg-hover">
           {#snippet children({ selected })}
             {item.label}
             {#if selected}<CheckIcon class="size-4 text-fg-muted" />{/if}

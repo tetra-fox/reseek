@@ -52,7 +52,7 @@
               {...trigger}
               aria-label={sidebar.collapsed ? name : undefined}
               class={[
-                "flex min-w-0 flex-1 items-center gap-2 rounded-control text-left text-sm transition-colors duration-(--motion-fast) select-none hover:bg-hover active:bg-press data-[state=open]:bg-hover",
+                "flex min-w-0 flex-1 items-center gap-2 rounded-control text-left text-sm transition-colors duration-(--motion-fast) hover:bg-hover active:bg-press data-[state=open]:bg-hover",
                 sidebar.collapsed ? "p-0" : "p-1"
               ]}>
               {#if sidebar.collapsed}

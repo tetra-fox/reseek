@@ -252,6 +252,32 @@
     margin: 0;
   }
 
+  /* search boxes have their own clear button, Input.svelte's */
+  input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+  }
+
+  /* labels, chips, counts and controls are clicked and dragged near, never copied, so a press or
+     a drag across them selects nothing */
+  :where(
+    label,
+    button,
+    th,
+    summary,
+    [role="button"],
+    [role="tab"],
+    [role="columnheader"],
+    [role="menuitem"],
+    [role="menuitemradio"],
+    [role="menuitemcheckbox"],
+    [role="option"],
+    [role="radio"],
+    [role="switch"],
+    [data-label]
+  ) {
+    user-select: none;
+  }
+
   /* 0.01ms rather than 0 so animationend still fires, bits-ui waits on it before unmounting */
   @media (prefers-reduced-motion: reduce) {
     *,

@@ -23,10 +23,11 @@
 
 <span
   class={cn(
-    "inline-flex w-fit shrink-0 items-center gap-1 rounded-badge border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap select-none [&>svg]:size-3",
+    "inline-flex w-fit shrink-0 items-center gap-1 rounded-badge border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap [&>svg]:size-3",
     tones[tone],
     className
   )}
+  data-label
   {...rest}>
   {@render children?.()}
 </span>

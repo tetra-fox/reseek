@@ -52,11 +52,12 @@
   {href}
   type={href ? undefined : type}
   class={cn(
-    "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-medium whitespace-nowrap transition duration-(--motion-fast) select-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+    "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-medium whitespace-nowrap transition duration-(--motion-fast) disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
     variants[variant],
     variant !== "link" && sizes[size],
     className
   )}
+  data-label
   {...rest}>
   {@render children?.()}
 </svelte:element>
