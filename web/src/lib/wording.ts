@@ -14,4 +14,9 @@ export const GAP_REASONS = {
  * The words for pinning a user, which keeps them first in lists and is the buddy list; the
  * owner's to word
  */
-export const BUDDY = { add: "Add buddy", remove: "Remove buddy", badge: "buddy" } as const;
+export const BUDDY = {
+  add: "Add buddy",
+  remove: "Remove buddy",
+  badge: "buddy",
+  plural: "Buddies"
+} as const;

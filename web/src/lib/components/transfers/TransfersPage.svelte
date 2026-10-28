@@ -1,6 +1,7 @@
 <script lang="ts">
   import DownloadIcon from "@lucide/svelte/icons/download";
   import UploadIcon from "@lucide/svelte/icons/upload";
+  import { untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
@@ -38,7 +39,12 @@
   import TransferTable from "./TransferTable.svelte";
 
   // the downloads or the uploads screen: one dense table, live by frames and kept current
-  let { direction }: { direction: Direction } = $props();
+  type Props = {
+    direction: Direction;
+    /** a state filter the screen opens with, from a link such as the dashboard's */
+    filter?: string | null;
+  };
+  let { direction, filter = null }: Props = $props();
 
   // svelte-ignore state_referenced_locally
   const store = direction === "download" ? downloads : uploads;
@@ -49,6 +55,12 @@
     () => void store.load(),
     () => "transfers"
   );
+  // a link naming a state filter shows that one alone
+  $effect(() => {
+    const chip = STATE_CHIPS.find((c) => c.id === filter);
+    if (chip) untrack(() => (view.filters.states = [chip.id]));
+  });
+
   // what finishes while the screen is open is seen, so the navigation shows no badge for it
   $effect(() => unseen.view(direction));
   void store.load();

@@ -8,7 +8,7 @@
   import { href, route, userHref } from "#lib/nav.js";
 
   // /users is the directory; ?user=<name> goes to that user's profile, ?tag= filters by a tag,
-  // ?tab=blocked shows the blocked users
+  // ?has=transfers those we transferred with, ?tab=blocked shows the blocked users
   const query = $derived(route(page.url).query);
   $effect(() => {
     const user = query.get("user");
@@ -33,7 +33,7 @@
 {#if tab === "blocked"}
   <BlockedList />
 {:else}
-  {#key query.get("tag")}
-    <Directory tag={query.get("tag")} />
+  {#key `${query.get("tag")}|${query.get("has")}`}
+    <Directory tag={query.get("tag")} withTransfers={query.get("has") === "transfers"} />
   {/key}
 {/if}

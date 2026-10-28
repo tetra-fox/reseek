@@ -50,9 +50,11 @@
   type Props = {
     /** the tag the list starts filtered by, from the link that opened it */
     tag?: string | null;
+    /** the list starts with the users we transferred with, from the link that opened it */
+    withTransfers?: boolean;
   };
 
-  let { tag: startTag = null }: Props = $props();
+  let { tag: startTag = null, withTransfers = false }: Props = $props();
 
   const PAGE = 50;
   const BUILTIN_GROUPS = ["privileged", "default", "leechers"];
@@ -69,7 +71,8 @@
   let q = $state("");
   let blocked = $state(false);
   let pinned = $state(false);
-  let hasTransfers = $state(false);
+  // svelte-ignore state_referenced_locally
+  let hasTransfers = $state(withTransfers);
   let presence = $state<Schemas["UserPresence"] | "">("");
   let group = $state("");
   // svelte-ignore state_referenced_locally
@@ -213,7 +216,7 @@
     aria-label="Search users"
     bind:value={typed} />
   <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Filters">
-    {#each [{ label: "Blocked", on: blocked, set: (v: boolean) => (blocked = v) }, { label: "Pinned", on: pinned, set: (v: boolean) => (pinned = v) }, { label: "Has transfers", on: hasTransfers, set: (v: boolean) => (hasTransfers = v) }] as chip (chip.label)}
+    {#each [{ label: "Blocked", on: blocked, set: (v: boolean) => (blocked = v) }, { label: BUDDY.plural, on: pinned, set: (v: boolean) => (pinned = v) }, { label: "Has transfers", on: hasTransfers, set: (v: boolean) => (hasTransfers = v) }] as chip (chip.label)}
       <Button
         size="sm"
         variant={chip.on ? "secondary" : "outline"}
