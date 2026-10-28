@@ -300,4 +300,36 @@ describe("search results", () => {
     ]);
     expect(chips()).toEqual(["No small files", "FLAC"]);
   });
+
+  it("show a removed preset again once it is added back elsewhere", async () => {
+    session.principal = { name: "a", role: "Administrator", session: null } as never;
+    const big = { name: "Big", filter: "size:>100MB" };
+    const flac = { name: "FLAC", filter: "type:flac" };
+    const options = (presets: unknown[]) =>
+      ({
+        remote_configuration: true,
+        search: { filter_presets: presets }
+      }) as unknown as Schemas["OptionsDocument"];
+    app.options = options([big, flac]);
+    const one = response("alice", 1);
+    const net = await open([one]);
+    net.frame("search.response", { searchId: ID, response: one });
+    await flush();
+    const chips = () =>
+      [...document.querySelectorAll('[aria-label="Filter presets"] button[aria-pressed]')].map(
+        (b) => b.textContent?.trim()
+      );
+    document
+      .querySelector<HTMLButtonElement>('button[aria-label="Remove the preset Big"]')!
+      .click();
+    await vi.advanceTimersByTimeAsync(UNDO_MS);
+    flushSync();
+    expect(chips()).toEqual(["FLAC"]);
+    // the options come back without it, then someone adds it again from another tab
+    app.options = options([flac]);
+    flushSync();
+    app.options = options([flac, big]);
+    flushSync();
+    expect(chips()).toEqual(["FLAC", "Big"]);
+  });
 });

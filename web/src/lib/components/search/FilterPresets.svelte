@@ -33,6 +33,13 @@
   let text = $state("");
   let busy = $state(false);
 
+  // a removal the options no longer list is done, so a preset of that name added again elsewhere
+  // shows
+  $effect(() => {
+    const listed = new Set(presets.map((p) => p.name));
+    for (const name of removed) if (!listed.has(name)) removed.delete(name);
+  });
+
   const shown = $derived(presets.filter((p) => !waiting.has(p.name) && !removed.has(p.name)));
   const replaces = $derived(presets.some((p) => p.name === name.trim()));
 
