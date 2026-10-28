@@ -56,7 +56,6 @@
 
   let { result, searchId, cards, siblings, connected, canWrite, ondismiss }: Props = $props();
 
-
   const response = $derived(result.response);
   const name = $derived(response.username);
   const user = $derived(users.get(name));
