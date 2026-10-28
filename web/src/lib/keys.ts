@@ -53,8 +53,11 @@ export const mac = typeof navigator !== "undefined" && /mac|iphone|ipad/i.test(n
 export const togglesActivity = (e: KeyboardEvent) =>
   (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "j";
 
-/** The activity log's shortcut as the keyboard in use names it */
-export const ACTIVITY_KEYS = mac ? "⌘J" : "Ctrl+J";
+/** A Ctrl/Cmd shortcut as the keyboard in use names it: "Ctrl+K", or "⌘K" on a Mac */
+export const shortcutText = (key: string) => (mac ? `⌘${key}` : `Ctrl+${key}`);
+
+/** A Ctrl/Cmd shortcut for `aria-keyshortcuts`: "Control+K", or "Meta+K" on a Mac */
+export const shortcutAria = (key: string) => `${mac ? "Meta" : "Control"}+${key}`;
 
 /**
  * Ctrl+K, or Cmd+K on a Mac: opens the command palette from anywhere, a text field included,

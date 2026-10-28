@@ -6,7 +6,7 @@
   import { activityPrefs } from "#lib/activity/activity.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import { formatSpeedPadded } from "#lib/format.js";
-  import { ACTIVITY_KEYS, mac } from "#lib/keys.js";
+  import { shortcutAria, shortcutText } from "#lib/keys.js";
   import { REPOSITORY } from "#lib/project.js";
 
   const connected = $derived(app.isServerConnected);
@@ -47,8 +47,8 @@
       type="button"
       aria-pressed={activityPrefs.open}
       class="flex shrink-0 items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg"
-      title={`Who is browsing, searching and downloading from you (${ACTIVITY_KEYS})`}
-      aria-keyshortcuts={mac ? "Meta+J" : "Control+J"}
+      title={`Who is browsing, searching and downloading from you (${shortcutText("J")})`}
+      aria-keyshortcuts={shortcutAria("J")}
       onclick={() => (activityPrefs.open = !activityPrefs.open)}>
       <ActivityIcon class="size-3.5" />Activity
     </button>

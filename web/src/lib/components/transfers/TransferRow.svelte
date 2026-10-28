@@ -172,7 +172,7 @@
                 {...props}
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Ask for the place in the queue"
+                aria-label="Check queue position"
                 onclick={() => void queuePosition(t)}>
                 <RefreshCwIcon />
               </Button>

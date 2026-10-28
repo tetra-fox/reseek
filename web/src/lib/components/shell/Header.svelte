@@ -13,7 +13,7 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { trail } from "#lib/crumbs.svelte.js";
   import { listText } from "#lib/format.js";
-  import { mac } from "#lib/keys.js";
+  import { shortcutAria, shortcutText } from "#lib/keys.js";
   import { baseCrumbs, href, route } from "#lib/nav.js";
 
   import NewVersion from "./NewVersion.svelte";
@@ -101,12 +101,12 @@
       type="button"
       class="flex h-control-sm items-center gap-2 rounded-control border bg-surface px-2 text-sm text-fg-muted shadow-xs hover:bg-hover hover:text-fg"
       aria-label="Go to a screen, user, room or setting"
-      aria-keyshortcuts={mac ? "Meta+K" : "Control+K"}
+      aria-keyshortcuts={shortcutAria("K")}
       onclick={() => palette.show()}>
       <SearchIcon class="size-4" />
       <span class="hidden md:inline">Go to</span>
       <kbd class="hidden rounded-badge border px-1 font-sans text-xs md:inline"
-        >{mac ? "⌘K" : "Ctrl K"}</kbd>
+        >{shortcutText("K")}</kbd>
     </button>
   </div>
 </header>
