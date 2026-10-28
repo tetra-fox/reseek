@@ -4,6 +4,7 @@
   import FileIcon from "@lucide/svelte/icons/file";
   import FileAudioIcon from "@lucide/svelte/icons/file-audio";
   import FileVideoIcon from "@lucide/svelte/icons/file-video";
+  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
@@ -28,7 +29,14 @@
     getFileName
   } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
-  import { act, open, queueFailure, queuePosition, storeOf } from "#lib/transfers/actions.js";
+  import {
+    act,
+    open,
+    openFolder,
+    queueFailure,
+    queuePosition,
+    storeOf
+  } from "#lib/transfers/actions.js";
   import type { ColumnId } from "#lib/transfers/columns.js";
   import { type Direction, rowActions, stateChip, type Transfer } from "#lib/transfers/states.js";
   import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
@@ -222,6 +230,16 @@
         {#if can.open}
           <Button variant="ghost" size="icon-sm" aria-label="Open" onclick={() => void open(t)}>
             <ExternalLinkIcon />
+          </Button>
+        {/if}
+        {#if can.openFolder}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Open folder"
+            title="Open folder"
+            onclick={() => openFolder([t])}>
+            <FolderOpenIcon />
           </Button>
         {/if}
         <Menu.Root>
