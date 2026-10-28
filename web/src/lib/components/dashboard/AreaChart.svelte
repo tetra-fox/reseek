@@ -32,7 +32,10 @@
   const top = $derived(Math.max(0, ...data.flatMap((p) => shown.map((s) => p[s.key]))));
   const yTicks = $derived(valueTicks(top));
   const yMax = $derived(yTicks.at(-1) || 1);
-  const xTicks = $derived(timeTicks(min, max));
+  // as many time labels as fit the width, one for each 72 px: "05:00 PM" with room around it
+  const xTicks = $derived(
+    timeTicks(min, max, Math.max(2, Math.floor((width - PAD.left - PAD.right) / 72)))
+  );
   const xLabel = $derived(timeLabel(min, max));
 
   const x = (t: number) =>
