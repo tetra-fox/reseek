@@ -283,6 +283,12 @@
     cursor: not-allowed;
   }
 
+  /* a box that scrolls also holds what is placed absolutely inside it, such as a screen reader's
+     hidden label in a wide table, which would otherwise escape it and widen what is around it */
+  :where(.overflow-auto, .overflow-x-auto, .overflow-y-auto) {
+    position: relative;
+  }
+
   :focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 1px;

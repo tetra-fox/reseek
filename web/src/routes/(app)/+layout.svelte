@@ -143,10 +143,12 @@
       <div class="flex min-w-0 flex-1 flex-col">
         <Header />
         <LostBanner />
+        <!-- relative, so what is placed absolutely inside, such as a screen reader's hidden label,
+             is held and clipped here rather than stretching the window past the shell -->
         <div
           bind:this={content.scroller}
           bind:clientHeight={contentHeight}
-          class="min-h-0 flex-1 overflow-y-auto"
+          class="relative min-h-0 flex-1 overflow-y-auto"
           data-content>
           <main
             style:view-transition-name="page"
