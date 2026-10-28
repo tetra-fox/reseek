@@ -14,6 +14,7 @@
   import { chat, paneKey, paneOf } from "#lib/chat/chat.svelte.js";
   import { sortedConversations, sortedRooms } from "#lib/chat/order.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
+  import { actionOf } from "#lib/chat/rich.js";
   import { clock } from "#lib/clock.svelte.js";
   import { nameColour } from "#lib/colours.js";
   import Badge from "#lib/components/ui/Badge.svelte";
@@ -266,9 +267,10 @@
             </span>
             <span class="flex items-center gap-1">
               <span class="truncate text-xs text-fg-muted">
-                {#if preview}{preview.author && t.kind === "room"
-                    ? `${preview.author}: `
-                    : ""}{preview.text}{:else if t.kind === "room"}{plural(
+                {#if preview}{@const action = actionOf(preview.text)}{preview.author &&
+                  t.kind === "room"
+                    ? `${preview.author}${action ? " " : ": "}`
+                    : ""}{action ?? preview.text}{:else if t.kind === "room"}{plural(
                     room?.userCount ?? 0,
                     "user",
                     "users"
