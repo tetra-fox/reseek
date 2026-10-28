@@ -1,4 +1,3 @@
-import { SPARKLINE_WIDTH } from "#lib/components/transfers/Sparkline.svelte";
 import { columnWidth, getFileName, WIDEST } from "#lib/format.js";
 import type { GridColumn } from "#lib/table.svelte.js";
 
@@ -35,6 +34,9 @@ export type Column = GridColumn<Transfer> & {
   /** always shown, never in the picker */
   always?: boolean;
 };
+
+/** How wide a transfer's speed sparkline is drawn, in pixels, which its column makes room for */
+export const SPARKLINE_WIDTH = 48;
 
 const time = (iso: string | null | undefined) => (iso ? Date.parse(iso) : 0);
 

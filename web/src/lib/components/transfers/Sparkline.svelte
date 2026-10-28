@@ -1,12 +1,8 @@
-<script lang="ts" module>
-  /** how wide the line is drawn, in pixels */
-  export const SPARKLINE_WIDTH = 48;
-</script>
-
 <script lang="ts">
   import { Chart, Html } from "layerchart";
 
   import DitherFill from "#lib/components/charts/DitherFill.svelte";
+  import { SPARKLINE_WIDTH } from "#lib/transfers/columns.js";
 
   // the last speeds a transfer reported, as a small dithered area on LayerChart, still and
   // without axes; nothing until there are two
