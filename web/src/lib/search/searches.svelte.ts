@@ -1,6 +1,7 @@
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
 import { api, type Schemas } from "#lib/api/client.js";
+import { newId } from "#lib/ids.js";
 import { Keyed } from "#lib/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
@@ -71,7 +72,7 @@ class Searches {
    * row stands for it until then. A refused search leaves the list and its reason is kept
    */
   start = (text: string, scope?: SearchScope): { id: string; done: Promise<Outcome<Search>> } => {
-    const id = crypto.randomUUID();
+    const id = newId();
     this.starting.add(id);
     this.list.upsert(placeholder(id, text, scope));
     const done = call(() =>

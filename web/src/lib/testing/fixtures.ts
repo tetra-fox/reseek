@@ -1,8 +1,9 @@
+import { newId } from "#lib/ids.js";
 import type { Transfer } from "#lib/transfers/states.js";
 
 /** A queued download from alice, with `fields` over it */
 export const transfer = (fields: Partial<Transfer> = {}): Transfer => ({
-  id: crypto.randomUUID(),
+  id: newId(),
   username: "alice",
   direction: "Download",
   filename: "@@a\\Music\\Album\\01 One.flac",
