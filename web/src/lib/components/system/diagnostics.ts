@@ -1,5 +1,4 @@
 import type { Schemas } from "#lib/api/client.js";
-import { mappingText, reachableText } from "#lib/reachability.js";
 
 /**
  * What a bug report needs about this reseek, as plain text to paste: versions, the connection and
@@ -12,11 +11,13 @@ export const diagnostics = (
   problems: Schemas["LogRecord"][] = []
 ): string => {
   const d = s.distributedNetwork;
+  // the mapping's own text names the router's and the outside address, which stay out
+  const listen = s.server.listen;
   const lines = [
     `reseek ${s.version.full}${s.version.isUpdateAvailable && s.version.latest ? ` (latest ${s.version.latest})` : ""}`,
     `browser: ${browser}`,
     `server: ${s.server.state}${s.connectionWatchdog.isEnabled ? ", reconnects on" : ""}`,
-    `listen: port ${s.server.listen.port}; ${mappingText(s.server.listen)} ${reachableText(s.server.listen)}`,
+    `listen: port ${listen.port}, port mapping ${listen.portMapping.state}${listen.portMapping.method ? ` (${listen.portMapping.method})` : ""}, reachable ${listen.reachable}`,
     `shares: ${s.shares.files} files in ${s.shares.directories} folders${s.shares.scanning ? ", scanning" : ""}${s.shares.scanPending ? ", rescan pending" : ""}${s.shares.faulted ? ", last scan failed" : ""}`,
     `distributed: ${d.hasParent ? "parent" : "no parent"}, level ${d.branchLevel}, ${d.children.length}/${d.childLimit} children`,
     `searches from others: ${s.health.search.incoming.queueDepth} waiting, ${Math.round(s.health.search.incoming.latency)} ms`,
