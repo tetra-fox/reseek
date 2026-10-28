@@ -133,20 +133,19 @@ impl Client {
     bytes(self.get(route)).await
   }
 
-  /// `PUT /files/{root}/files/{path}/analysis/override`: records our verdict on a file.
+  /// `PUT .../analysis/override`: records our verdict on a file.
   pub async fn set_analysis_override(
     &self,
-    root: FileRoot,
-    path: &str,
+    target: LocalFile<'_>,
     verdict: &SetAnalysisOverride,
   ) -> Result<()> {
-    let route = under(root, "files", path).then("analysis/override");
+    let route = file(target).then("analysis/override");
     done(self.put(route).json(verdict)).await
   }
 
-  /// `DELETE /files/{root}/files/{path}/analysis/override`: takes our verdict away.
-  pub async fn clear_analysis_override(&self, root: FileRoot, path: &str) -> Result<()> {
-    done(self.delete(under(root, "files", path).then("analysis/override"))).await
+  /// `DELETE .../analysis/override`: takes our verdict away.
+  pub async fn clear_analysis_override(&self, target: LocalFile<'_>) -> Result<()> {
+    done(self.delete(file(target).then("analysis/override"))).await
   }
 
   /// `GET /analysis`: the analysis reports.

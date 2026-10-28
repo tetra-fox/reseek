@@ -1,0 +1,294 @@
+//! One analysis from file to measures: the file is decoded a window at a time, in full or, for
+//! a long file, at windows spread evenly over it, and each window is measured. It runs on a
+//! blocking thread, stops promptly when cancelled, and stops with what it has when its time
+//! is up.
+
+use std::collections::BTreeSet;
+use std::path::Path;
+use std::time::Instant;
+
+use symphonia::core::formats::probe::Hint;
+use tokio_util::sync::CancellationToken;
+use tracing::debug;
+
+use super::decode::{Claimed, Decoder, Filled};
+use super::measure::{Analyser, FFT_SIZE, Scale, Totals, Window};
+
+/// How one analysis runs.
+#[derive(Clone, Debug)]
+pub(super) struct Settings {
+  /// files up to this many seconds long are analysed in full
+  pub max_full_seconds: f64,
+  /// how many windows a longer file is analysed at
+  pub sampled_windows: usize,
+  /// how the spectrogram's columns are drawn
+  pub scale: Scale,
+  /// when the analysis stops with what it has
+  pub deadline: Instant,
+}
+
+/// What an analysis measured.
+#[derive(Debug)]
+pub(super) struct Measured {
+  /// the format the file claims, `None` when it could not be opened as audio
+  pub claimed: Option<Claimed>,
+  /// how long the audio is, in seconds
+  pub duration: f64,
+  /// a lossy file's bitrate in kbit/s, its size over its length
+  pub bitrate_kbps: Option<u32>,
+  /// every analysed window, in time order
+  pub windows: Vec<Window>,
+  /// the figures over every analysed sample
+  pub totals: Totals,
+  /// the bits per sample the integer samples use
+  pub bits_used: Option<u32>,
+  /// whether only windows spread over the file were analysed
+  pub sampled: bool,
+  /// the channels left out of a file with more than two
+  pub channels_left_out: u32,
+  /// what made the analysis stop early or skip audio, in words for the report
+  pub problems: Vec<String>,
+}
+
+/// The analysis was cancelled; nothing is reported.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct Cancelled;
+
+/// Analyses the file at `path`.
+pub(super) fn run(
+  path: &Path,
+  settings: &Settings,
+  cancel: &CancellationToken,
+) -> Result<Measured, Cancelled> {
+  match Decoder::open(path) {
+    Ok(decoder) => {
+      let mut measured = measure(decoder, settings, cancel)?;
+      let lossy = measured.claimed.as_ref().is_some_and(|c| !c.lossless);
+      if lossy && measured.duration > 0.0 {
+        match std::fs::metadata(path) {
+          Ok(metadata) => {
+            let kbps = metadata.len() as f64 * 8.0 / measured.duration / 1000.0;
+            measured.bitrate_kbps = Some(kbps.round() as u32);
+          }
+          Err(e) => debug!(path = %path.display(), error = %e, "size not read for the bitrate"),
+        }
+      }
+      Ok(measured)
+    }
+    Err(problem) => {
+      debug!(path = %path.display(), problem, "audio not opened");
+      Ok(unreadable(problem))
+    }
+  }
+}
+
+/// Analyses audio held in memory, as a file's would be.
+pub(super) fn read_bytes(
+  bytes: Vec<u8>,
+  settings: &Settings,
+  cancel: &CancellationToken,
+) -> Result<Measured, Cancelled> {
+  let source = Box::new(std::io::Cursor::new(bytes));
+  match Decoder::from_source(source, &Hint::new()) {
+    Ok(decoder) => measure(decoder, settings, cancel),
+    Err(problem) => Ok(unreadable(problem)),
+  }
+}
+
+/// What is reported for audio that could not be opened.
+pub(super) fn unreadable(problem: String) -> Measured {
+  Measured {
+    claimed: None,
+    duration: 0.0,
+    bitrate_kbps: None,
+    windows: Vec::new(),
+    totals: Totals::default(),
+    bits_used: None,
+    sampled: false,
+    channels_left_out: 0,
+    problems: vec![problem],
+  }
+}
+
+/// Measures the audio `decoder` reads.
+pub(super) fn measure(
+  mut decoder: Decoder,
+  settings: &Settings,
+  cancel: &CancellationToken,
+) -> Result<Measured, Cancelled> {
+  let claimed = decoder.claimed.clone();
+  let rate = claimed.sample_rate as usize;
+  let stated = claimed.frames.map(|frames| frames as f64 / rate as f64);
+  let mut analyser = Analyser::new(claimed.sample_rate, settings.scale);
+  let mut buffer = vec![Vec::with_capacity(rate); decoder.channels];
+  let mut measured = Measured {
+    duration: stated.unwrap_or(0.0),
+    bitrate_kbps: None,
+    channels_left_out: claimed.channels.saturating_sub(decoder.channels as u32),
+    claimed: Some(claimed),
+    windows: Vec::new(),
+    totals: Totals::default(),
+    bits_used: None,
+    sampled: false,
+    problems: Vec::new(),
+  };
+  let picks = stated
+    .filter(|seconds| *seconds > settings.max_full_seconds)
+    .map(|seconds| picks(seconds, settings.sampled_windows));
+  match picks {
+    Some(picks) => {
+      measured.sampled = true;
+      sampled(
+        &mut decoder,
+        &mut analyser,
+        &mut buffer,
+        &picks,
+        settings,
+        cancel,
+        &mut measured,
+      )?;
+    }
+    None => {
+      let decoded = whole(
+        &mut decoder,
+        &mut analyser,
+        &mut buffer,
+        None,
+        settings,
+        cancel,
+        &mut measured,
+      )?;
+      if stated.is_none() {
+        measured.duration = decoded;
+      }
+    }
+  }
+  measured.bits_used = decoder.bits_used();
+  if decoder.skipped > 0 {
+    measured.problems.push(format!(
+      "{} packets could not be decoded and were skipped",
+      decoder.skipped
+    ));
+  }
+  if let Some(stopped) = decoder.stopped.take() {
+    measured.problems.push(stopped);
+  }
+  debug!(
+    windows = measured.windows.len(),
+    sampled = measured.sampled,
+    skipped = decoder.skipped,
+    "audio measured"
+  );
+  Ok(measured)
+}
+
+/// The whole seconds `count` windows spread evenly over `seconds` of audio start at.
+fn picks(seconds: f64, count: usize) -> BTreeSet<u64> {
+  let last = (seconds - 1.0).max(0.0);
+  (0..count)
+    .map(|i| {
+      let at = last * i as f64 / (count.max(2) - 1) as f64;
+      at.floor() as u64
+    })
+    .collect()
+}
+
+/// Whether the analysis is to stop: an error when it was cancelled, true when its time is up,
+/// which is noted once in `measured`.
+fn stop(
+  settings: &Settings,
+  cancel: &CancellationToken,
+  measured: &mut Measured,
+) -> Result<bool, Cancelled> {
+  if cancel.is_cancelled() {
+    return Err(Cancelled);
+  }
+  if Instant::now() >= settings.deadline {
+    debug!(windows = measured.windows.len(), "analysis out of time");
+    measured
+      .problems
+      .push("the analysis ran out of time and covers only the part read until then".to_string());
+    return Ok(true);
+  }
+  Ok(false)
+}
+
+/// Reads windows one after another from where the decoder is, measuring every one or, with
+/// `only`, those starting at the listed seconds. Returns the seconds read.
+fn whole(
+  decoder: &mut Decoder,
+  analyser: &mut Analyser,
+  buffer: &mut [Vec<f32>],
+  only: Option<&BTreeSet<u64>>,
+  settings: &Settings,
+  cancel: &CancellationToken,
+  measured: &mut Measured,
+) -> Result<f64, Cancelled> {
+  let rate = decoder.claimed.sample_rate as usize;
+  let mut second = 0u64;
+  loop {
+    if stop(settings, cancel, measured)? {
+      return Ok(second as f64);
+    }
+    let filled = decoder.fill(buffer, rate);
+    let length = match filled {
+      Filled::Full => rate,
+      Filled::End(length) => length,
+    };
+    // a last part shorter than half a second, or than one spectrum frame, is left out
+    let usable = length >= FFT_SIZE.min(rate) && length * 2 >= rate;
+    if usable && only.is_none_or(|only| only.contains(&second)) {
+      let window = analyser.measure(second as f64, buffer, &mut measured.totals);
+      measured.windows.push(window);
+    }
+    if filled != Filled::Full {
+      return Ok(second as f64 + length as f64 / rate as f64);
+    }
+    second += 1;
+  }
+}
+
+/// Measures one window at each of `picks`, seeking to each; when the file can not be sought
+/// in, reads it from the start and measures the picked seconds as they come.
+fn sampled(
+  decoder: &mut Decoder,
+  analyser: &mut Analyser,
+  buffer: &mut [Vec<f32>],
+  picks: &BTreeSet<u64>,
+  settings: &Settings,
+  cancel: &CancellationToken,
+  measured: &mut Measured,
+) -> Result<(), Cancelled> {
+  let rate = decoder.claimed.sample_rate as usize;
+  for (index, &second) in picks.iter().enumerate() {
+    if stop(settings, cancel, measured)? {
+      return Ok(());
+    }
+    if let Err(problem) = decoder.seek(second as f64) {
+      if index > 0 {
+        debug!(problem, second, "seeking failed part way, sampling stopped");
+        measured.problems.push(problem);
+        return Ok(());
+      }
+      debug!(problem, "the file can not be sought in, reading it through");
+      whole(
+        decoder,
+        analyser,
+        buffer,
+        Some(picks),
+        settings,
+        cancel,
+        measured,
+      )?;
+      return Ok(());
+    }
+    match decoder.fill(buffer, rate) {
+      Filled::Full => {}
+      Filled::End(length) if length * 2 >= rate && length >= FFT_SIZE.min(rate) => {}
+      Filled::End(_) => continue,
+    }
+    let window = analyser.measure(second as f64, buffer, &mut measured.totals);
+    measured.windows.push(window);
+  }
+  Ok(())
+}

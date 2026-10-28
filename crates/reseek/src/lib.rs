@@ -3,6 +3,7 @@
 #![warn(missing_docs)]
 
 pub mod activity;
+pub mod analysis;
 pub mod api;
 pub mod app;
 pub mod auth;

@@ -10281,6 +10281,184 @@
         }
       }
     },
+    "/api/v0/transfers/downloads/{username}/{id}/analysis/override": {
+      "put": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Records the user's own verdict on a succeeded download's file.",
+        "operationId": "set_download_override",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAnalysisOverride"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "recorded"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Takes the user's verdict on a succeeded download's file away.",
+        "operationId": "clear_download_override",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "removed"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/transfers/downloads/{username}/{id}/analysis/spectrogram.png": {
       "get": {
         "tags": [
@@ -14370,6 +14548,17 @@
             "description": "the file's size in bytes when it was analysed",
             "minimum": 0
           },
+          "spectrogram": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SpectrogramLayout",
+                "description": "where in the spectrogram image the plot is and how its axes run, for drawing over it;\nnull when the file could not be read as audio and has no spectrogram"
+              }
+            ]
+          },
           "spectrogramUrl": {
             "type": "string",
             "description": "where the spectrogram image of this report is served"
@@ -15020,7 +15209,7 @@
       },
       "ClaimedFormat": {
         "type": "object",
-        "description": "The format a file's container claims.",
+        "description": "The format a file's container claims. A file that could not be read as audio claims the\ncodec `unknown`, with no samples per second and no channels.",
         "required": [
           "codec",
           "sampleRate",
@@ -17227,6 +17416,40 @@
           "override",
           "builtin"
         ]
+      },
+      "GuideKind": {
+        "type": "string",
+        "description": "What a guide line marks.",
+        "enum": [
+          "encoder",
+          "file_limit",
+          "cutoff"
+        ]
+      },
+      "GuideLine": {
+        "type": "object",
+        "description": "A horizontal line across the spectrogram at a frequency worth comparing the content with.",
+        "required": [
+          "hz",
+          "label",
+          "kind"
+        ],
+        "properties": {
+          "hz": {
+            "type": "number",
+            "format": "double",
+            "description": "the frequency, in Hz"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GuideKind",
+            "description": "what the line marks"
+          },
+          "label": {
+            "type": "string",
+            "description": "the label drawn beside it",
+            "example": "MP3 128k"
+          }
+        }
       },
       "HealthState": {
         "type": "object",
@@ -21442,6 +21665,94 @@
             "minimum": 0
           }
         }
+      },
+      "SpectrogramLayout": {
+        "type": "object",
+        "description": "Where the plot sits in a spectrogram image and how its axes map to time and frequency, so\na client can draw the guide lines over the image served without them.",
+        "required": [
+          "width",
+          "height",
+          "plotX",
+          "plotY",
+          "plotWidth",
+          "plotHeight",
+          "scale",
+          "minHz",
+          "maxHz",
+          "sampled",
+          "guides"
+        ],
+        "properties": {
+          "guides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuideLine"
+            },
+            "description": "the lines drawn across the plot in the image served with guides, lowest first"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the whole image's height in pixels",
+            "minimum": 0
+          },
+          "maxHz": {
+            "type": "number",
+            "format": "double",
+            "description": "the frequency at the plot's top edge, in Hz: half the sample rate"
+          },
+          "minHz": {
+            "type": "number",
+            "format": "double",
+            "description": "the frequency at the plot's bottom edge, in Hz"
+          },
+          "plotHeight": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the plot's height in pixels",
+            "minimum": 0
+          },
+          "plotWidth": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the plot's width in pixels: one column per window, or per run of windows for a long file",
+            "minimum": 0
+          },
+          "plotX": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the plot's left edge, in pixels from the image's left",
+            "minimum": 0
+          },
+          "plotY": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the plot's top edge, in pixels from the image's top",
+            "minimum": 0
+          },
+          "sampled": {
+            "type": "boolean",
+            "description": "whether the columns are windows sampled from a long file, with gaps between them, rather\nthan every second of it"
+          },
+          "scale": {
+            "$ref": "#/components/schemas/SpectrogramScale",
+            "description": "how the frequency axis runs"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the whole image's width in pixels",
+            "minimum": 0
+          }
+        }
+      },
+      "SpectrogramScale": {
+        "type": "string",
+        "description": "How a spectrogram's frequency axis runs.",
+        "enum": [
+          "log",
+          "linear"
+        ]
       },
       "State": {
         "type": "object",

@@ -22,6 +22,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
 use crate::activity::Activity;
+use crate::analysis::Analysis;
 use crate::auth::Auth;
 use crate::cli::{self, Command, Invocation};
 use crate::clock::Clock;
@@ -200,6 +201,17 @@ impl AppState {
       auth.clone(),
       shutdown.clone(),
     );
+    let analysis = Analysis::open(
+      &location,
+      &paths.data,
+      files.clone(),
+      config.clone(),
+      live.clone(),
+      events.clone(),
+      shutdown.clone(),
+    )
+    .await
+    .map_err(|e| StartError::Open(format!("analysis.db: {e}")))?;
     let event_log = EventLog::open(&location, &events, config.clone(), shutdown.clone())
       .await
       .map_err(|e| StartError::Open(format!("events.db: {e}")))?;
@@ -297,6 +309,7 @@ impl AppState {
     services.shares = shares.clone();
     services.events = event_log;
     services.files = files.clone();
+    services.analysis = analysis.clone();
     services.reports = telemetry.clone();
     services.searches = searches.clone();
     services.messaging = messaging.clone();
@@ -318,6 +331,7 @@ impl AppState {
       shares.database(),
       searches.database().clone(),
       messaging_db,
+      analysis.database().clone(),
     ]));
     services.application = Arc::new(Application {
       network: network.clone(),

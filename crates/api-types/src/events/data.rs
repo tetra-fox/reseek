@@ -247,7 +247,7 @@ pub struct FileAnalysisComplete {
   pub version: u32,
   /// the report, with `windows` null
   #[serde(flatten)]
-  pub report: AudioAnalysis,
+  pub report: Box<AudioAnalysis>,
 }
 
 /// The data of `ScriptRunCompleted`: how one run of a script went.

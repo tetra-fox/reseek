@@ -37,6 +37,8 @@ chrono.workspace = true
 crc32fast = "1"
 directories = "6"
 flate2.workspace = true
+# the eight-pixel glyphs the spectrogram's labels are drawn with
+font8x8 = { version = "0.3", default-features = false }
 form_urlencoded = "1"
 futures-util = { workspace = true, features = ["sink"] }
 glob = "0.3"
@@ -59,6 +61,7 @@ openidconnect = { version = "4", default-features = false, features = ["reqwest"
 p12-keystore = "0.4"
 percent-encoding = "2"
 rand = "0.9"
+realfft = "3"
 rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs", "pem"] }
 regex = "1"
 reqwest = { workspace = true, features = ["multipart", "stream"] }
@@ -73,6 +76,8 @@ serde_path_to_error.workspace = true
 sha1 = "0.10"
 sha2.workspace = true
 subtle = "2"
+# decodes every audio format the analyser reads, streamed
+symphonia = { version = "0.6", features = ["all"] }
 sysinfo = { version = "0.39", default-features = false, features = ["disk", "network", "system"] }
 thiserror.workspace = true
 time = "0.3"
@@ -101,6 +106,10 @@ rustix = { version = "1", features = ["fs", "process"] }
 
 [dev-dependencies]
 api-client.workspace = true
+# make the lossless and lossy audio the analyser is tested on
+flacenc = { version = "0.5", default-features = false }
+mp3lame-encoder = "0.2"
+proptest.workspace = true
 # turns a generated key into the PKCS#1 form the test identity provider signs with
 rsa = "0.9"
 tempfile.workspace = true

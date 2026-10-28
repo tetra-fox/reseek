@@ -2016,6 +2016,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/transfers/downloads/{username}/{id}/analysis/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Records the user's own verdict on a succeeded download's file. */
+        put: operations["set_download_override"];
+        post?: never;
+        /** Takes the user's verdict on a succeeded download's file away. */
+        delete: operations["clear_download_override"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/transfers/downloads/{username}/{id}/analysis/spectrogram.png": {
         parameters: {
             query?: never;
@@ -2974,6 +2992,7 @@ export interface components {
              * @description the file's size in bytes when it was analysed
              */
             size: number;
+            spectrogram?: null | components["schemas"]["SpectrogramLayout"];
             /** @description where the spectrogram image of this report is served */
             spectrogramUrl: string;
             /**
@@ -3294,7 +3313,10 @@ export interface components {
              */
             totalMentions: number;
         };
-        /** @description The format a file's container claims. */
+        /**
+         * @description The format a file's container claims. A file that could not be read as audio claims the
+         *     codec `unknown`, with no samples per second and no channels.
+         */
         ClaimedFormat: {
             /**
              * Format: int32
@@ -4284,6 +4306,26 @@ export interface components {
          * @enum {string}
          */
         GroupSource: "config" | "override" | "builtin";
+        /**
+         * @description What a guide line marks.
+         * @enum {string}
+         */
+        GuideKind: "encoder" | "file_limit" | "cutoff";
+        /** @description A horizontal line across the spectrogram at a frequency worth comparing the content with. */
+        GuideLine: {
+            /**
+             * Format: double
+             * @description the frequency, in Hz
+             */
+            hz: number;
+            /** @description what the line marks */
+            kind: components["schemas"]["GuideKind"];
+            /**
+             * @description the label drawn beside it
+             * @example MP3 128k
+             */
+            label: string;
+        };
         /** @description Sampled health figures. */
         HealthState: {
             /** @description how incoming searches are being answered */
@@ -6233,6 +6275,66 @@ export interface components {
              */
             version: number;
         };
+        /**
+         * @description Where the plot sits in a spectrogram image and how its axes map to time and frequency, so
+         *     a client can draw the guide lines over the image served without them.
+         */
+        SpectrogramLayout: {
+            /** @description the lines drawn across the plot in the image served with guides, lowest first */
+            guides: components["schemas"]["GuideLine"][];
+            /**
+             * Format: int32
+             * @description the whole image's height in pixels
+             */
+            height: number;
+            /**
+             * Format: double
+             * @description the frequency at the plot's top edge, in Hz: half the sample rate
+             */
+            maxHz: number;
+            /**
+             * Format: double
+             * @description the frequency at the plot's bottom edge, in Hz
+             */
+            minHz: number;
+            /**
+             * Format: int32
+             * @description the plot's height in pixels
+             */
+            plotHeight: number;
+            /**
+             * Format: int32
+             * @description the plot's width in pixels: one column per window, or per run of windows for a long file
+             */
+            plotWidth: number;
+            /**
+             * Format: int32
+             * @description the plot's left edge, in pixels from the image's left
+             */
+            plotX: number;
+            /**
+             * Format: int32
+             * @description the plot's top edge, in pixels from the image's top
+             */
+            plotY: number;
+            /**
+             * @description whether the columns are windows sampled from a long file, with gaps between them, rather
+             *     than every second of it
+             */
+            sampled: boolean;
+            /** @description how the frequency axis runs */
+            scale: components["schemas"]["SpectrogramScale"];
+            /**
+             * Format: int32
+             * @description the whole image's width in pixels
+             */
+            width: number;
+        };
+        /**
+         * @description How a spectrogram's frequency axis runs.
+         * @enum {string}
+         */
+        SpectrogramScale: "log" | "linear";
         /**
          * @description The daemon's state, as `GET /application` returns it and `application.state` frames carry
          *     it.
@@ -14642,6 +14744,136 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_download_override: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the peer */
+                username: string;
+                /** @description the download's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAnalysisOverride"];
+            };
+        };
+        responses: {
+            /** @description recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    clear_download_override: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the peer */
+                username: string;
+                /** @description the download's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

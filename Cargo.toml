@@ -72,3 +72,23 @@ opt-level = 3
 
 [profile.dev.package.blake2]
 opt-level = 3
+
+# the audio analyser's transforms and decoders are slow unoptimised; tests analyse audio
+[profile.dev.package.rustfft]
+opt-level = 3
+
+[profile.dev.package.symphonia-bundle-mp3]
+opt-level = 3
+
+[profile.dev.package.symphonia-bundle-flac]
+opt-level = 3
+
+[profile.dev.package.symphonia-core]
+opt-level = 3
+
+# the encoders the analyser's tests make audio with
+[profile.dev.package.flacenc]
+opt-level = 3
+
+[profile.dev.package.mp3lame-sys]
+opt-level = 3

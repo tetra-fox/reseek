@@ -78,6 +78,9 @@ pub struct AudioAnalysis {
   pub windows: Option<Vec<AnalysisWindow>>,
   /// where the spectrogram image of this report is served
   pub spectrogram_url: String,
+  /// where in the spectrogram image the plot is and how its axes run, for drawing over it;
+  /// null when the file could not be read as audio and has no spectrogram
+  pub spectrogram: Option<SpectrogramLayout>,
   /// the user's judgement, shown in place of the verdict; null until the user sets one
   #[serde(rename = "override")]
   pub judgement: Option<AnalysisOverride>,
@@ -85,7 +88,8 @@ pub struct AudioAnalysis {
   pub limitations: Vec<String>,
 }
 
-/// The format a file's container claims.
+/// The format a file's container claims. A file that could not be read as audio claims the
+/// codec `unknown`, with no samples per second and no channels.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaimedFormat {
@@ -159,6 +163,72 @@ pub struct AnalysisWindow {
   pub shelf_db: Option<f64>,
   /// the window's loudness in dBFS
   pub rms_dbfs: f64,
+}
+
+/// How a spectrogram's frequency axis runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SpectrogramScale {
+  /// octaves take the same height
+  Log,
+  /// every kilohertz takes the same height
+  Linear,
+}
+
+/// Where the plot sits in a spectrogram image and how its axes map to time and frequency, so
+/// a client can draw the guide lines over the image served without them.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpectrogramLayout {
+  /// the whole image's width in pixels
+  pub width: u32,
+  /// the whole image's height in pixels
+  pub height: u32,
+  /// the plot's left edge, in pixels from the image's left
+  pub plot_x: u32,
+  /// the plot's top edge, in pixels from the image's top
+  pub plot_y: u32,
+  /// the plot's width in pixels: one column per window, or per run of windows for a long file
+  pub plot_width: u32,
+  /// the plot's height in pixels
+  pub plot_height: u32,
+  /// how the frequency axis runs
+  pub scale: SpectrogramScale,
+  /// the frequency at the plot's bottom edge, in Hz
+  pub min_hz: f64,
+  /// the frequency at the plot's top edge, in Hz: half the sample rate
+  pub max_hz: f64,
+  /// whether the columns are windows sampled from a long file, with gaps between them, rather
+  /// than every second of it
+  pub sampled: bool,
+  /// the lines drawn across the plot in the image served with guides, lowest first
+  pub guides: Vec<GuideLine>,
+}
+
+/// A horizontal line across the spectrogram at a frequency worth comparing the content with.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GuideLine {
+  /// the frequency, in Hz
+  pub hz: f64,
+  /// the label drawn beside it
+  #[schema(example = "MP3 128k")]
+  pub label: String,
+  /// what the line marks
+  pub kind: GuideKind,
+}
+
+/// What a guide line marks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GuideKind {
+  /// where a common encoder setting cuts off by default; other encoders and settings cut
+  /// elsewhere
+  Encoder,
+  /// half the file's sample rate, the highest frequency it can hold
+  FileLimit,
+  /// the cutoff the analyser measured, drawn dashed
+  Cutoff,
 }
 
 /// The user's judgement of a file, with who recorded it.

@@ -8,7 +8,7 @@
 
 use api_types::analysis::{
   AnalysisMeasures, AnalysisOverride, AnalysisVerdict, AudioAnalysis, ClaimedFormat, EncoderGuess,
-  Judgement,
+  Judgement, SpectrogramLayout, SpectrogramScale,
 };
 use api_types::auth::{Role, Via};
 use api_types::conversations::{MessageDirection, PrivateMessage};
@@ -143,7 +143,7 @@ pub fn sample(kind: EventType, d: &str, now: DateTime<Utc>) -> Option<Event> {
     }),
     EventType::FileAnalysisComplete => Event::FileAnalysisComplete(FileAnalysisComplete {
       version: 0,
-      report: blank_analysis(d, now),
+      report: Box::new(blank_analysis(d, now)),
     }),
     EventType::RelayAgentConnected => Event::RelayAgentConnected(RelayAgentConnected {
       version: 0,
@@ -240,6 +240,19 @@ fn blank_analysis(d: &str, now: DateTime<Utc>) -> AudioAnalysis {
     },
     windows: None,
     spectrogram_url: text("spectrogramUrl"),
+    spectrogram: Some(SpectrogramLayout {
+      width: 0,
+      height: 0,
+      plot_x: 0,
+      plot_y: 0,
+      plot_width: 0,
+      plot_height: 0,
+      scale: SpectrogramScale::Log,
+      min_hz: 0.0,
+      max_hz: 0.0,
+      sampled: false,
+      guides: Vec::new(),
+    }),
     judgement: Some(AnalysisOverride {
       verdict: Judgement::Legit,
       note: Some(text("note")),

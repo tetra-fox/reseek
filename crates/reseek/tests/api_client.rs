@@ -1,10 +1,9 @@
-//! The API through its typed client, against the daemon program: signing in, a route the
-//! daemon answers, one whose engine is not built yet, and the event stream with a resume and a
-//! reconnect.
+//! The API through its typed client, against the daemon program: signing in, the routes it
+//! answers, and the event stream with a resume and a reconnect.
 
 mod support;
 
-use api_client::{Client, Error};
+use api_client::Client;
 use api_types::live::LiveFrame;
 use api_types::search::SearchListQuery;
 use std::time::Duration;
@@ -15,7 +14,7 @@ use support::Daemon;
 const ACCOUNT: [(&str, &str); 2] = [("RESEEK_USERNAME", "admin"), ("RESEEK_PASSWORD", "hunter2")];
 
 #[tokio::test]
-async fn a_signed_in_client_reads_what_is_built_and_hears_what_is_not() {
+async fn a_signed_in_client_reads_the_daemon() {
   let dir = tempfile::tempdir().unwrap();
   let daemon = Daemon::start(dir.path(), &[], &ACCOUNT);
   let client = Client::new(&daemon.url()).unwrap();
@@ -33,14 +32,7 @@ async fn a_signed_in_client_reads_what_is_built_and_hears_what_is_not() {
   assert_eq!(client.version().await.unwrap(), env!("CARGO_PKG_VERSION"));
   let state = client.application().await.unwrap();
   assert!(!state.server.is_connected);
-  match client.analysis_jobs().await {
-    Err(Error::Api { status, body }) => {
-      assert_eq!(status.as_u16(), 503);
-      assert_eq!(body.error, "soulseek_unavailable");
-      assert_eq!(body.detail.as_deref(), Some("analysis not implemented yet"));
-    }
-    other => panic!("{:?}", other.map(|_| ())),
-  }
+  assert!(client.analysis_jobs().await.unwrap().is_empty());
   let joined = client.join_room(" bad", false).await.unwrap_err();
   assert_eq!(
     joined.status().map(|s| s.as_u16()),

@@ -29,6 +29,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(run_file, report_file))
     .routes(routes!(spectrogram_file))
     .routes(routes!(set_override, clear_override))
+    .routes(routes!(set_download_override, clear_download_override))
     .routes(routes!(run_download, report_download))
     .routes(routes!(spectrogram_download))
     .routes(routes!(list))
@@ -258,6 +259,58 @@ async fn clear_override(
   Path((name, path)): Path<(String, String)>,
 ) -> Result<StatusCode, ApiError> {
   let target = file(&name, &path)?;
+  app.services.analysis.clear_override(target).await?;
+  Ok(StatusCode::NO_CONTENT)
+}
+
+/// Records the user's own verdict on a succeeded download's file.
+#[utoipa::path(
+  put, path = "/transfers/downloads/{username}/{id}/analysis/override", tag = "analysis",
+  request_body = SetAnalysisOverride,
+  params(
+    ("username" = String, Path, description = "the peer"),
+    ("id" = Uuid, Path, description = "the download's id")
+  ),
+  responses(
+    (status = 204, description = "recorded"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn set_download_override(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+  Path((username, id)): Path<(String, Uuid)>,
+  Json(verdict): Json<SetAnalysisOverride>,
+) -> Result<StatusCode, ApiError> {
+  let target = FileTarget::Download { username, id };
+  app
+    .services
+    .analysis
+    .set_override(&caller.principal, target, verdict)
+    .await?;
+  Ok(StatusCode::NO_CONTENT)
+}
+
+/// Takes the user's verdict on a succeeded download's file away.
+#[utoipa::path(
+  delete, path = "/transfers/downloads/{username}/{id}/analysis/override", tag = "analysis",
+  params(
+    ("username" = String, Path, description = "the peer"),
+    ("id" = Uuid, Path, description = "the download's id")
+  ),
+  responses(
+    (status = 204, description = "removed"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn clear_download_override(
+  State(app): State<AppState>,
+  _caller: Authorized<ReadWrite>,
+  Path((username, id)): Path<(String, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+  let target = FileTarget::Download { username, id };
   app.services.analysis.clear_override(target).await?;
   Ok(StatusCode::NO_CONTENT)
 }

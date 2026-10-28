@@ -58,6 +58,11 @@ impl Answer {
 pub async fn app(config: &str, env: &[(&str, &str)]) -> TestApp {
   let dir = tempfile::tempdir().unwrap();
   std::fs::write(dir.path().join("config.toml"), config).unwrap();
+  start(dir, env).await
+}
+
+/// A daemon serving from `dir`, which holds its `config.toml`, with the environment `env`.
+async fn start(dir: tempfile::TempDir, env: &[(&str, &str)]) -> TestApp {
   let defaults = Defaults::new(Some(dir.path()));
   let sources = Sources {
     // a release build is not a development build, and tests never reach the release feed
@@ -113,6 +118,14 @@ pub fn state() -> StateOwner {
 }
 
 impl TestApp {
+  /// The daemon stopped and started again on the same directory, with the environment `env`.
+  pub async fn restarted(self, env: &[(&str, &str)]) -> TestApp {
+    self.state.shutdown.cancel();
+    self.state.stop().await;
+    self.state.databases.close().await;
+    start(self.dir, env).await
+  }
+
   /// The same daemon serving a web UI whose page is `<html>app</html>`.
   pub fn with_page(mut self) -> Self {
     let web = self.dir.path().join("web");

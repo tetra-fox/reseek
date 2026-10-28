@@ -86,37 +86,8 @@ fn a_dangling_ref_and_a_repeated_operation_id_make_a_document_invalid() {
   );
 }
 
-/// Whether the daemon answers `operation` itself, rather than a service not built yet.
-fn answered_here(operation: &Operation) -> bool {
-  let route = operation.route.as_str();
-  let under = |prefix: &str| route == prefix || route.starts_with(&format!("{prefix}/"));
-  under("/api/v0/application")
-    || under("/api/v0/server")
-    || under("/api/v0/logs")
-    || under("/api/v0/files")
-    || under("/api/v0/shares")
-    || under("/api/v0/options")
-    || under("/api/v0/profile")
-    || under("/api/v0/session")
-    || under("/api/v0/sessions")
-    || under("/api/v0/tokens")
-    || under("/api/v0/auth")
-    || route == "/api/v0/live"
-    || under("/api/v0/relay")
-    || under("/api/v0/events")
-    || under("/api/v0/activity")
-    || under("/api/v0/telemetry")
-    || under("/api/v0/transfers")
-    || route == "/api/v0/debug/transfers"
-    || under("/api/v0/searches")
-    || under("/api/v0/conversations")
-    || under("/api/v0/rooms")
-    || under("/api/v0/messages")
-    || under("/api/v0/users")
-}
-
 #[tokio::test]
-async fn every_route_is_answered_and_the_unbuilt_ones_say_so() {
+async fn every_route_is_answered() {
   let app = app(CONFIG, &[]).await;
   let operations = in_order();
   assert!(operations.len() > 150, "{} operations", operations.len());
@@ -128,20 +99,6 @@ async fn every_route_is_answered_and_the_unbuilt_ones_say_so() {
       answer.status == 404 && answer.body.is_empty() && operation.method != Method::HEAD;
     let routed = answer.status != 405 && !unrouted_404;
     assert!(routed, "{operation:?} is not routed: {}", answer.status);
-    if answered_here(operation) {
-      continue;
-    }
-    assert_eq!(answer.status, 503, "{operation:?}: {:?}", answer.body);
-    if operation.method == Method::HEAD {
-      continue;
-    }
-    let body = answer.json();
-    assert_eq!(body["error"], "soulseek_unavailable", "{operation:?}");
-    let detail = body["detail"].as_str().unwrap_or_default();
-    assert!(
-      detail.ends_with(" not implemented yet"),
-      "{operation:?}: {detail}"
-    );
   }
 }
 
