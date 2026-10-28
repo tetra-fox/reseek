@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { Command, computeCommandScore, Dialog } from "bits-ui";
+  import { Command, Dialog } from "bits-ui";
 
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
@@ -18,6 +18,7 @@
     systemTabs,
     userHref
   } from "#lib/nav.js";
+  import { paletteScore, paletteValue } from "#lib/palette.js";
   import { call } from "#lib/request.js";
   import { recent, remember } from "#lib/search/recent.svelte.js";
   import { searches } from "#lib/search/searches.svelte.js";
@@ -189,12 +190,7 @@
     <Dialog.Content
       class="fixed top-[15svh] left-1/2 z-50 flex max-h-[70svh] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-card border bg-overlay shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in">
       <Dialog.Title class="sr-only">Go to</Dialog.Title>
-      <!-- what the typed text can be named comes last, below everything it matches -->
-      <Command.Root
-        loop
-        class="flex min-h-0 flex-col"
-        filter={(value, search, keywords) =>
-          value.includes("|do:") ? 0.001 : computeCommandScore(value, search, keywords)}>
+      <Command.Root loop class="flex min-h-0 flex-col" filter={paletteScore}>
         <Command.Input
           bind:value={query}
           aria-label="Go to a screen, user, room or setting, or search"
@@ -212,9 +208,8 @@
                 </Command.GroupHeading>
                 <Command.GroupItems>
                   {#each entries as entry (entry.id)}
-                    <!-- matched by its label first; the id keeps two alike labels apart -->
                     <Command.Item
-                      value={`${entry.label}|${entry.id}`}
+                      value={paletteValue(entry.label, entry.id)}
                       keywords={[entry.hint ?? "", entry.keywords ?? ""]}
                       onSelect={() => run(entry)}
                       class="flex h-9 items-center gap-2 rounded-control px-2.5 text-sm data-selected:bg-hover">
