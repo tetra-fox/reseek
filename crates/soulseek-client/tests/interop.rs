@@ -5,9 +5,7 @@
 
 mod support;
 
-use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Output, Stdio};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,6 +17,7 @@ use soulseek_proto::peer::{File, SearchResponse};
 use soulseek_proto::server::{GetStatusRequest, UserStatus};
 use soulseek_proto::{ServerCode, ServerRequest, UserPresence};
 use support::soulfind::{self, Soulfind, User};
+use support::soulseek_rs::Peer;
 use support::transfers::{self, content, scratch};
 use support::{PATIENCE, free_port};
 use tokio_util::sync::CancellationToken;
@@ -29,81 +28,6 @@ const THEIR_SIZE: usize = 200_000;
 const OUR_SIZE: usize = 150_000;
 const OUR_FILE: &str = "@@reseek\\interop\\reseekprobe ours.flac";
 const PASSWORD: &str = "interop-password";
-
-/// The soulseek-rs CLI as one user, with its own config, state, share and download directories
-struct Peer {
-  binary: PathBuf,
-  server: SocketAddr,
-  username: String,
-  root: PathBuf,
-}
-
-impl Peer {
-  fn share(&self) -> PathBuf {
-    self.root.join("share")
-  }
-
-  fn downloads(&self) -> PathBuf {
-    self.root.join("downloads")
-  }
-
-  /// the CLI with this user's flags and directories, then `args`
-  fn command(&self, args: &[&str]) -> Command {
-    let mut command = Command::new(&self.binary);
-    command
-      .env("SOULSEEK_CONFIG_DIR", self.root.join("config"))
-      .env("SOULSEEK_STATE_DIR", self.root.join("state"))
-      .args(["--no-daemon", "--no-config", "--quiet"])
-      .args(["--server", &self.server.to_string()])
-      .args(["--username", &self.username, "--password", PASSWORD])
-      .args(["--listener-port", &free_port().to_string()])
-      .arg("--shared-dir")
-      .arg(self.share())
-      .arg("--download-dir")
-      .arg(self.downloads())
-      .args(args)
-      .stdin(Stdio::null());
-    command
-  }
-
-  /// runs a one-shot command to its end
-  async fn run(&self, args: &[&str]) -> Output {
-    let mut command = self.command(args);
-    let output = tokio::task::spawn_blocking(move || command.output())
-      .await
-      .unwrap()
-      .expect("soulseek-rs runs");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-      output.status.success(),
-      "soulseek-rs {args:?} failed with {}: {stderr}",
-      output.status
-    );
-    output
-  }
-
-  /// stays online sharing until the returned guard is dropped
-  fn serve(&self) -> Serving {
-    let child = self
-      .command(&["serve", "--duration", "600"])
-      .stdout(Stdio::null())
-      .stderr(Stdio::null())
-      .spawn()
-      .expect("soulseek-rs runs");
-    Serving(child)
-  }
-}
-
-/// a running `serve`, stopped when dropped
-struct Serving(Child);
-
-impl Drop for Serving {
-  fn drop(&mut self) {
-    // it may have exited already; it is gone either way
-    let _ = self.0.kill();
-    let _ = self.0.wait();
-  }
-}
 
 /// our client: listening, answering searches for the probe with one file, and queueing every
 /// upload the other user asks for
@@ -215,6 +139,8 @@ async fn search_browse_and_transfers_both_ways_with_soulseek_rs() {
     binary: binary.into(),
     server: server.address(),
     username: soulfind::username("rsuser"),
+    password: PASSWORD.to_string(),
+    listen_port: free_port(),
     root: scratch(),
   };
   write(
