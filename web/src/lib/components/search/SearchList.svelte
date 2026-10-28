@@ -16,6 +16,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Time from "#lib/components/ui/Time.svelte";
+  import { NONE } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { href } from "#lib/nav.js";
@@ -122,7 +123,7 @@
                 </td>
                 <td class="text-right tabular-nums">{search.responseCount.toLocaleString()}</td>
                 <td class="text-fg-muted tabular-nums">
-                  {#if search.endedAt}<Time at={search.endedAt} />{:else}-{/if}
+                  {#if search.endedAt}<Time at={search.endedAt} />{:else}{NONE}{/if}
                 </td>
                 <td class="text-right">
                   {#if working.has(search.id)}

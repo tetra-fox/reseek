@@ -7,7 +7,7 @@
 
   import type { Schemas } from "#lib/api/client.js";
   import { ratioTone, tiles } from "#lib/dashboard/reports.js";
-  import { formatBytes } from "#lib/format.js";
+  import { formatBytes, NONE } from "#lib/format.js";
   import { href } from "#lib/nav.js";
 
   // what the range moved: bytes and files each way, the share ratio and the peers
@@ -64,7 +64,7 @@
   )}
   {@render tile(
     ChartPieIcon,
-    t.ratio === null ? "—" : t.ratio.toFixed(2),
+    t.ratio === null ? NONE : t.ratio.toFixed(2),
     "",
     "Share ratio (↑/↓)",
     TONES[tone],

@@ -26,7 +26,8 @@
     formatDuration,
     formatSpeed,
     getDirectoryName,
-    getFileName
+    getFileName,
+    NONE
   } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
   import {
@@ -157,7 +158,7 @@
     {:else if column === "eta"}
       {t.state === "InProgress" && t.remainingTime !== null && t.remainingTime !== undefined
         ? formatDuration(t.remainingTime / 1000)
-        : "—"}
+        : NONE}
     {:else if column === "transferred"}
       {formatBytesTransferred(t.size, t.bytesTransferred)}
     {:else if column === "queue"}

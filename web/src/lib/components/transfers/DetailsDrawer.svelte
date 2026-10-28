@@ -7,6 +7,7 @@
 
   import type { Schemas } from "#lib/api/client.js";
   import { copyText } from "#lib/clipboard.svelte.js";
+  import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Username from "#lib/components/users/Username.svelte";
@@ -16,7 +17,8 @@
     formatDate,
     formatDuration,
     formatSpeed,
-    getFileName
+    getFileName,
+    NONE
   } from "#lib/format.js";
   import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
   import { motionFast } from "#lib/motion.js";
@@ -78,14 +80,14 @@
   });
 
   const user = $derived(users.get(t.username));
+  const chip = $derived(stateChip(t));
   const extension = $derived(getFileName(t.filename).split(".").pop() ?? "");
   const when = (iso: string | null | undefined) =>
-    iso ? `${formatDate(iso)} (${ago(iso)})` : "N/A";
+    iso ? `${formatDate(iso)} (${ago(iso)})` : NONE;
   const fields = $derived<[string, string][]>([
     ["ID", t.id],
-    ["Batch ID", t.batchId ?? "N/A"],
+    ["Batch ID", t.batchId ?? NONE],
     ["Direction", t.direction],
-    ["State", t.state],
     ["Requested", when(t.requestedAt)],
     ["Queued", when(t.enqueuedAt)],
     ["Started", when(t.startedAt)],
@@ -97,16 +99,16 @@
       "Elapsed",
       t.elapsedTime !== null && t.elapsedTime !== undefined
         ? formatDuration(t.elapsedTime / 1000)
-        : "N/A"
+        : NONE
     ],
     [
       "Time left",
       t.remainingTime !== null && t.remainingTime !== undefined
         ? formatDuration(t.remainingTime / 1000)
-        : "N/A"
+        : NONE
     ],
     ["Progress", `${t.percentComplete.toFixed(2)}%`],
-    ["Place in queue", t.placeInQueue ? String(t.placeInQueue) : "N/A"],
+    ["Place in queue", t.placeInQueue ? String(t.placeInQueue) : NONE],
     ["Attempts", String(t.attempts)],
     ["Next attempt", when(t.nextAttemptAt)]
   ]);
@@ -173,6 +175,11 @@
     <section class="flex flex-col gap-1">
       <h3 class="text-xs font-medium text-fg-muted uppercase">Transfer</h3>
       <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+        <dt class="font-medium">State</dt>
+        <dd>
+          <Badge tone={chip.tone} class="max-w-full truncate" title={chip.title ?? undefined}
+            >{chip.text}</Badge>
+        </dd>
         {#each fields as [label, value] (label)}
           <dt class="font-medium">{label}</dt>
           <dd class="min-w-0 wrap-anywhere">{value}</dd>

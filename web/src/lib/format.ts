@@ -181,6 +181,9 @@ export const truncate = (text: string | null | undefined, max: number): string =
   return text.length <= max ? text : `${text.slice(0, max)}...`;
 };
 
+/** What a figure or a field shows when it has no value */
+export const NONE = "—";
+
 /** `n` with the noun for that many, "1 file" or "2,048 files" */
 export const plural = (n: number, one: string, many: string): string =>
   `${n.toLocaleString()} ${n === 1 ? one : many}`;
