@@ -334,6 +334,16 @@
   }
 }
 
+/* the chart library's colours from the page's tokens, so its axes, grid and tooltips follow the theme */
+.lc-root-container,
+.lc-tooltip-root {
+  --color-primary: var(--color-accent);
+  --color-surface-100: var(--color-overlay);
+  --color-surface-200: var(--color-surface-muted);
+  --color-surface-300: var(--color-border);
+  --color-surface-content: var(--color-fg);
+}
+
 /* the nav link for where the page is, marked with aria-current */
 @utility nav-current {
   @apply bg-surface-muted font-medium text-fg shadow-xs ring-1 ring-border;

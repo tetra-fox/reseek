@@ -188,3 +188,27 @@ export const merged = <T>(
 /** The last two parts of a directory path, either separator */
 export const shortDirectory = (path: string) =>
   path.split(/[\\/]/).filter(Boolean).slice(-2).join("/");
+
+/** How the transfers of one direction ended in the range: done, failed, or cancelled here */
+export type Outcome = { direction: string; succeeded: number; failed: number; cancelled: number };
+
+/**
+ * Each direction's finished transfers by how they ended, for the outcome bars. A timeout, an
+ * error, a refusal and a size mismatch are all failures, as the transfers list's Errored filter
+ * counts them
+ */
+export const outcomes = (summary: Schemas["SummaryReport"]): Outcome[] =>
+  (
+    [
+      ["Downloads", summary.Download],
+      ["Uploads", summary.Upload]
+    ] as const
+  ).map(([direction, d]) => ({
+    direction,
+    succeeded: d.Succeeded?.count ?? 0,
+    failed: ["Errored", "TimedOut", "Rejected", "Aborted"].reduce(
+      (n, s) => n + (d[s]?.count ?? 0),
+      0
+    ),
+    cancelled: d.Cancelled?.count ?? 0
+  }));

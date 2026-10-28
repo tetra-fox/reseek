@@ -17,7 +17,9 @@
 
   import AreaChart from "./AreaChart.svelte";
   import Errors from "./Errors.svelte";
+  import Glance from "./Glance.svelte";
   import Leaderboard from "./Leaderboard.svelte";
+  import Outcomes from "./Outcomes.svelte";
   import StatTiles from "./StatTiles.svelte";
   import TopDirectories from "./TopDirectories.svelte";
 
@@ -64,29 +66,11 @@
   });
 
   const data = $derived(histogram ? chartData(histogram) : []);
-  const metrics = $derived(app.metrics);
 </script>
 
 <SearchBar announce />
 
-{#if metrics}
-  <div class="grid gap-section sm:grid-cols-2">
-    {#each [{ label: "Downloading", m: metrics.downloads, Icon: ArrowDownIcon, tone: "text-info" }, { label: "Uploading", m: metrics.uploads, Icon: ArrowUpIcon, tone: "text-success" }] as row (row.label)}
-      <div class="flex items-center gap-4 rounded-card border bg-surface p-4 shadow-card">
-        <row.Icon class={["size-5", row.tone]} />
-        <div class="flex flex-col">
-          <span class="text-lg font-semibold tabular-nums"
-            >{formatSpeed(row.m.inProgress.totalSpeed)}</span>
-          <span class="text-xs text-fg-muted">
-            {row.label}: {row.m.inProgress.files} active, {row.m.queued.files} queued ({formatBytes(
-              row.m.queued.bytes
-            )}), {row.m.completed.succeeded} done and {row.m.completed.failed} failed since start
-          </span>
-        </div>
-      </div>
-    {/each}
-  </div>
-{/if}
+<Glance />
 
 <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Range">
   {#each RANGES as r (r.label)}
@@ -108,16 +92,25 @@
   <Skeleton class="h-24" />
 {/if}
 
-<Card title="History">
-  {#if histogramError}<p class="text-sm text-danger">
-      Couldn't load the history: {histogramError}
-    </p>{/if}
-  {#if histogram}
-    <AreaChart {data} series={SERIES} {visible} label="Transfers over time" />
-  {:else if !histogramError}
-    <Skeleton class="h-52" />
-  {/if}
-</Card>
+<div class="grid gap-section lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+  <Card title="History">
+    {#if histogramError}<p class="text-sm text-danger">
+        Couldn't load the history: {histogramError}
+      </p>{/if}
+    {#if histogram}
+      <AreaChart {data} series={SERIES} {visible} label="Transfers over time" />
+    {:else if !histogramError}
+      <Skeleton class="h-52" />
+    {/if}
+  </Card>
+  <Card title="How they ended" description="Click a part for those transfers.">
+    {#if summary}
+      <Outcomes {summary} />
+    {:else}
+      <Skeleton class="h-28" />
+    {/if}
+  </Card>
+</div>
 
 <nav aria-label="Statistics" class="flex gap-1">
   {#each [{ id: "users", title: "Users" }, { id: "content", title: "Content" }, { id: "errors", title: "Errors" }] as t (t.id)}

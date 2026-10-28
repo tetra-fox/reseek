@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import { timeTicks, valueTicks } from "./chart";
-import { chartData, errorCount, merged, queries, shortDirectory, tiles, windowOf } from "./reports";
+import {
+  chartData,
+  errorCount,
+  merged,
+  outcomes,
+  queries,
+  shortDirectory,
+  tiles,
+  windowOf
+} from "./reports";
 
 const summary = (count: number, totalBytes: number) => ({
   count,
@@ -102,6 +111,22 @@ describe("the dashboard's reports", () => {
     ]);
     expect(shortDirectory("@@a\\Music\\Artist\\Album")).toBe("Artist/Album");
     expect(shortDirectory("Album")).toBe("Album");
+  });
+});
+
+describe("the outcome bars", () => {
+  it("count each direction's transfers as done, failed or cancelled", () => {
+    const n = (count: number) => ({ count }) as never;
+    expect(
+      outcomes({
+        Download: { Succeeded: n(10), Errored: n(2), TimedOut: n(1), Cancelled: n(3) },
+        Upload: { Rejected: n(4), Aborted: n(1) },
+        distinctUsers: 0
+      } as never)
+    ).toEqual([
+      { direction: "Downloads", succeeded: 10, failed: 3, cancelled: 3 },
+      { direction: "Uploads", succeeded: 0, failed: 5, cancelled: 0 }
+    ]);
   });
 });
 

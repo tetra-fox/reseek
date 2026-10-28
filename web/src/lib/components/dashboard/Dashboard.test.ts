@@ -34,7 +34,11 @@ describe("the dashboard", () => {
   });
 
   it("shows the totals, the history, the leaderboard and the errors of fixture reports", async () => {
-    app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
+    app.state = {
+      server: { isConnected: true, listen: { port: 2234, reachable: "unknown" } },
+      user: { username: "me" },
+      shares: { files: 0, directories: 0, scanning: false, scanPending: false }
+    } as never;
     fakeNetwork((url) => {
       const path = url.pathname.replace("/api/v0/telemetry/reports/transfers/", "");
       if (path === "summary") {
@@ -78,7 +82,11 @@ describe("the dashboard", () => {
   });
 
   it("keeps the leaderboard's column through a reload and starts a new range at Count", async () => {
-    app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
+    app.state = {
+      server: { isConnected: true, listen: { port: 2234, reachable: "unknown" } },
+      user: { username: "me" },
+      shares: { files: 0, directories: 0, scanning: false, scanPending: false }
+    } as never;
     const net = fakeNetwork((url) => {
       if (url.pathname.endsWith("/summary")) return { Download: {}, Upload: {}, distinctUsers: 0 };
       return url.pathname.endsWith("/histogram") ? {} : [];

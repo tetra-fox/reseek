@@ -8,6 +8,7 @@
   import type { Schemas } from "#lib/api/client.js";
   import { ratioTone, tiles } from "#lib/dashboard/reports.js";
   import { formatBytes } from "#lib/format.js";
+  import { href } from "#lib/nav.js";
 
   // what the range moved: bytes and files each way, the share ratio and the peers
   let { summary }: { summary: Schemas["SummaryReport"] } = $props();
@@ -26,13 +27,22 @@
   };
 </script>
 
-{#snippet tile(Icon: Component, value: string, unit: string, label: string, color: string)}
-  <div class="flex flex-col gap-1 rounded-card border bg-surface p-4 shadow-card">
+{#snippet tile(
+  Icon: Component,
+  value: string,
+  unit: string,
+  label: string,
+  color: string,
+  to: string
+)}
+  <a
+    href={href(to)}
+    class="group flex flex-col gap-1 rounded-card border bg-surface p-4 shadow-card transition-colors duration-(--motion-fast) hover:border-fg-subtle/40">
     <span class={["flex items-baseline gap-1 text-2xl font-semibold tabular-nums", color]}>
       <Icon class="size-4 self-center" />{value}<span class="text-sm font-normal">{unit}</span>
     </span>
-    <span class="text-xs text-fg-muted">{label}</span>
-  </div>
+    <span class="text-xs text-fg-muted group-hover:text-fg">{label}</span>
+  </a>
 {/snippet}
 
 <div class="grid grid-cols-2 gap-section lg:grid-cols-4">
@@ -41,21 +51,31 @@
     down[0],
     down[1],
     `Downloaded · ${t.downloadedFiles.toLocaleString()} files`,
-    "text-info"
+    "text-info",
+    "/downloads?state=completed"
   )}
   {@render tile(
     ArrowUpIcon,
     up[0],
     up[1],
     `Uploaded · ${t.uploadedFiles.toLocaleString()} files`,
-    "text-success"
+    "text-success",
+    "/uploads?state=completed"
   )}
   {@render tile(
     ChartPieIcon,
     t.ratio === null ? "—" : t.ratio.toFixed(2),
     "",
     "Share ratio (↑/↓)",
-    TONES[tone]
+    TONES[tone],
+    "/uploads"
   )}
-  {@render tile(UserIcon, t.peers.toLocaleString(), "", "Distinct peers", "")}
+  {@render tile(
+    UserIcon,
+    t.peers.toLocaleString(),
+    "",
+    "Distinct peers",
+    "",
+    "/users?has=transfers"
+  )}
 </div>
