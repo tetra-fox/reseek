@@ -1,9 +1,8 @@
-//! A script's arguments written as one string, split the way the program loader of the
-//! runtime scripts were first written for splits a command line: spaces and tabs separate
-//! arguments outside double quotes, a double quote opens or closes a quoted part, two double
-//! quotes inside one stand for a literal quote, and backslashes are literal except before a
-//! double quote, where each pair stands for one backslash and an odd one left over makes the
-//! quote literal.
+//! A script's arguments written as one string, split into the program's arguments: spaces and
+//! tabs separate arguments outside double quotes, a double quote opens or closes a quoted part,
+//! two double quotes inside one stand for a literal quote, and backslashes are literal except
+//! before a double quote, where each pair stands for one backslash and an odd one left over
+//! makes the quote literal.
 
 /// The arguments of `line`.
 pub fn split(line: &str) -> Vec<String> {
@@ -101,8 +100,7 @@ mod tests {
   }
 
   #[test]
-  fn a_command_with_quotes_inside_its_quotes_splits_as_it_always_has() {
-    // the documented example only ever worked because of these rules
+  fn quotes_inside_a_quoted_part_close_it_and_open_the_next() {
     assert_eq!(
       split(r#"-c "echo "new event!" >> event_log.txt""#),
       ["-c", "echo new", "event! >> event_log.txt"]
