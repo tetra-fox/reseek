@@ -12,8 +12,8 @@ use super::flags::findings;
 use super::measure::{Step, Window};
 use super::thresholds::{
   CLEAR_DB, CLUSTER_HZ, CONFIDENCE_CAP, CONSISTENT_SHARE, FEW_WINDOWS, FULL_BAND,
-  HIGH_BITRATE_KBPS, INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE, NATURAL_LIMIT,
-  OTHER_RATE_EDGES, Profile, QUIET_DBFS, TRANSCODE_SHARE, profile_at,
+  HIGH_BITRATE_KBPS, HIGH_STEP_DB, INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE,
+  NATURAL_LIMIT, OTHER_RATE_EDGES, Profile, QUIET_DBFS, TRANSCODE_SHARE, profile_at,
 };
 
 /// The top of the band of a 48 kHz recording; a file whose band goes past it is hi-res.
@@ -119,16 +119,16 @@ impl Heard {
       .flatten()
   }
 
-  /// Where a full-band window has a step of [`INNER_SHELF_DB`] or more under its top.
-  fn stepped(&self, window: &Seen) -> Option<f64> {
+  /// Where a full-band window has a step of `depth` dB or more under its top.
+  fn stepped(&self, window: &Seen, depth: f64) -> Option<f64> {
     let step = window.inner_shelf?;
-    (self.full(window) && step.drop >= INNER_SHELF_DB).then_some(step.hz)
+    (self.full(window) && step.drop >= depth).then_some(step.hz)
   }
 
   /// A full-band window with a band-limited layer under it at an encoder's cutoff.
   fn layered(&self, window: &Seen) -> Option<f64> {
     self
-      .stepped(window)
+      .stepped(window, INNER_SHELF_DB)
       .filter(|hz| lower_profile_at(*hz).is_some())
   }
 }
@@ -403,7 +403,7 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
   let high_steps: Vec<f64> = heard
     .windows
     .iter()
-    .filter_map(|w| heard.stepped(w))
+    .filter_map(|w| heard.stepped(w, HIGH_STEP_DB))
     .filter(|hz| profile_at(*hz).is_some_and(|p| p.kbps >= HIGH_BITRATE_KBPS))
     .collect();
   if high_steps.len() as f64 / count as f64 >= MIXED_SHARE {
@@ -437,7 +437,10 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
       reading.verdict = AnalysisVerdict::Consistent;
       reading.confidence = confidence.min(CONFIDENCE_CAP);
       // a step that is no encoder's cutoff can still lie under the band
-      let stepped = heard.windows.iter().any(|w| heard.stepped(w).is_some());
+      let stepped = heard
+        .windows
+        .iter()
+        .any(|w| heard.stepped(w, HIGH_STEP_DB).is_some());
       reading.summary = format!(
         "{} of the time reaches {}, near the top of the {} band{}.",
         percent(full),
