@@ -19,6 +19,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { useCrumbs } from "#lib/crumbs.svelte.js";
+  import { plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
@@ -126,7 +127,31 @@
       sort: results.stored ? searchOptions.sort : null
     })
   );
-  const hiddenCount = $derived(results.results.length - view.length);
+  // what keeps results out of view, counted apart since each has its own way back: the ones
+  // dismissed, those from blocked users, and the rest, which the filter and toggles hide
+  const dismissedCount = $derived(
+    results.results.filter((r) => dismissed.has(r.response.username)).length
+  );
+  const fromBlocked = $derived(
+    showBlocked
+      ? 0
+      : results.results.filter(
+          (r) => !dismissed.has(r.response.username) && blocked.has(r.response.username)
+        ).length
+  );
+  const filteredCount = $derived(
+    results.results.length - dismissedCount - fromBlocked - view.length
+  );
+
+  /** Empties the filter and turns off every toggle that hides results */
+  const clearFilters = () => {
+    typed = "";
+    filterText = "";
+    searchOptions.hideLocked = false;
+    searchOptions.hideNoFreeSlots = false;
+    searchOptions.hideOffline = false;
+    searchOptions.hideLongQueues = false;
+  };
   const remaining = $derived(Math.max(view.length - shown, 0));
   const cardKeys = $derived(view.slice(0, shown).map((r) => r.key));
   const rows = $derived(searchOptions.view === "dense" ? denseRows(view) : []);
@@ -172,6 +197,27 @@
   const motion = () => ({ duration: motionFast(), easing: cubicOut, y: -6 });
 </script>
 
+<!-- what is out of view and how to bring each part back -->
+{#snippet hiddenLine()}
+  <p class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-fg-muted">
+    {#if filteredCount}
+      <span
+        >{plural(filteredCount, "result", "results")} hidden by filters
+        <Button variant="link" onclick={clearFilters}>Clear filters</Button></span>
+    {/if}
+    {#if dismissedCount}
+      <span
+        >{dismissedCount} dismissed
+        <Button variant="link" onclick={() => dismissed.clear()}>Show again</Button></span>
+    {/if}
+    {#if fromBlocked}
+      <span
+        >{fromBlocked} from blocked users
+        <Button variant="link" onclick={() => (showBlocked = true)}>Show</Button></span>
+    {/if}
+  </p>
+{/snippet}
+
 {#if refused}
   <ErrorSegment
     caption={`The search couldn't start: ${refused}`}
@@ -191,9 +237,12 @@
   <div
     class="flex flex-wrap items-center gap-inline rounded-card border bg-surface p-4 shadow-card">
     <StatusIcon state={search.state} />
-    <h2 class="min-w-0 flex-1 text-lg font-semibold wrap-anywhere">{search.searchText}</h2>
+    <!-- the buttons go under the title rather than squeeze it below a word's width -->
+    <h2 class="min-w-0 flex-1 basis-40 truncate text-lg font-semibold" title={search.searchText}>
+      {search.searchText}
+    </h2>
     {#if scopeLabel(search.scope)}<Badge tone="accent">{scopeLabel(search.scope)}</Badge>{/if}
-    <div class="flex gap-inline">
+    <div class="flex flex-wrap gap-inline">
       <Button
         variant="ghost"
         size="icon"
@@ -206,7 +255,7 @@
       {#if canWrite}
         <Button variant="outline" disabled={!connected || working} onclick={again}>
           <RefreshCwIcon />
-          <span class="sm:max-lg:sr-only">Search Again</span>
+          <span class="sm:max-lg:sr-only">Search again</span>
         </Button>
         {#if search.isComplete}
           <Button variant="danger" disabled={working} onclick={remove}>
@@ -263,31 +312,25 @@
       {#if remaining > 0}
         <div class="flex gap-inline">
           <Button size="default" class="h-11 flex-1" onclick={() => (shown += STEP)}>
-            Show {Math.min(STEP, remaining)} More Results ({remaining} remaining, {hiddenCount} hidden
-            by filter(s))
+            Show {Math.min(STEP, remaining)} more results ({remaining} left)
           </Button>
           <Button variant="outline" class="h-11" onclick={() => (shown = view.length)}>
             Show all
           </Button>
         </div>
-      {:else if hiddenCount > 0}
-        <Button variant="secondary" class="h-11 w-full" disabled>
-          All results shown. {hiddenCount} results hidden by filter(s)
-        </Button>
       {/if}
     {/if}
     {#if !view.length}
-      <EmptyState
-        icon={SearchXIcon}
-        title="Every result is hidden"
-        description="The filter or the toggles above leave nothing. Clear the filter or turn a toggle off to see them." />
+      <EmptyState icon={SearchXIcon} title="All results are hidden">
+        {#snippet action()}{@render hiddenLine()}{/snippet}
+      </EmptyState>
+    {:else if filteredCount || dismissedCount || fromBlocked}
+      {@render hiddenLine()}
     {/if}
   {:else if !complete}
     <div class="flex items-center gap-2 text-sm text-fg-muted" role="status">
       <Spinner class="size-4" />
-      {search.state === "InProgress"
-        ? "Searching, results show as they arrive"
-        : "Starting the search"}
+      {search.state === "InProgress" ? "Searching..." : "Starting search..."}
     </div>
     {#each [0, 1, 2] as n (n)}
       <div
@@ -303,7 +346,7 @@
   {:else if !results.error}
     <EmptyState
       icon={SearchXIcon}
-      title="Nobody answered"
-      description="Try fewer or different words, or search again later: users come and go." />
+      title="No results"
+      description="Try fewer or different words, or search again later." />
   {/if}
 {/if}

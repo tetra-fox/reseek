@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { burstText, fold, FOLD_MS, type PresenceEvent, type PresenceKind } from "./presence";
+import {
+  addChange,
+  type Burst,
+  burstText,
+  fold,
+  FOLD_MS,
+  type PresenceEvent,
+  type PresenceKind
+} from "./presence";
 
 let id = 0;
 const at = (seconds: number) => new Date(Date.UTC(2026, 9, 27, 12, 0, seconds)).toISOString();
@@ -40,10 +48,21 @@ describe("joins and leaves in a room", () => {
     expect(bursts.map((b) => b.names)).toEqual([["a", "b", "c"], ["d"]]);
   });
 
+  it("grow the open burst in place, so a room's row for it stays the same", () => {
+    const bursts: Burst[] = [];
+    addChange(bursts, event(0, "joined", "alice"));
+    const open = bursts[0];
+    addChange(bursts, event(3, "joined", "bob"));
+    expect(bursts).toHaveLength(1);
+    expect(bursts[0]).toBe(open);
+    expect(open.names).toEqual(["alice", "bob"]);
+    expect(open.last).toBe(at(3));
+  });
+
   it("say who in plain words, counting the rest", () => {
     const line = (kind: PresenceKind, names: string[]) =>
-      burstText({ key: "k", at: at(0), kind, names });
-    expect(line("joined", ["alice"])).toBe("alice joined the room");
+      burstText({ key: "k", at: at(0), last: at(0), kind, names });
+    expect(line("joined", ["alice"])).toBe("alice joined");
     expect(line("left", ["alice", "bob"])).toBe("alice and bob left");
     expect(line("joined", ["a", "b", "c", "d"])).toBe("a, b, c and d joined");
     expect(line("joined", ["a", "b", "c", "d", "e"])).toBe("a, b and 3 others joined");

@@ -11,17 +11,17 @@ export type BlockRequest = Schemas["BlockRequest"];
 
 /** What a block stops the user from, in the order the dialog lists it */
 export const STOP_SCOPES: { scope: BlockScope; label: string }[] = [
-  { scope: "uploads", label: "downloading from you" },
-  { scope: "searches", label: "getting your search results" },
-  { scope: "browse", label: "browsing your shares" },
-  { scope: "messages", label: "messaging you" },
-  { scope: "rooms", label: "being seen in your rooms" }
+  { scope: "uploads", label: "Stop their downloads from you" },
+  { scope: "searches", label: "Don't send them your search results" },
+  { scope: "browse", label: "Stop them browsing your shares" },
+  { scope: "messages", label: "Stop their private messages" },
+  { scope: "rooms", label: "Hide their messages in rooms" }
 ];
 
 /** What a block may do besides, off unless chosen */
 export const ALSO_SCOPES: { scope: BlockScope; label: string }[] = [
-  { scope: "downloads", label: "cancel my downloads from them" },
-  { scope: "distributed", label: "drop them from the distributed network" }
+  { scope: "downloads", label: "Cancel your downloads from them" },
+  { scope: "distributed", label: "Drop them from the distributed network" }
 ];
 
 const ALL = [...STOP_SCOPES, ...ALSO_SCOPES].map((s) => s.scope);

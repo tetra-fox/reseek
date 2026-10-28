@@ -1,15 +1,13 @@
 <script lang="ts" module>
-  /** one row's height; the list draws only the rows in view and a margin around them */
-  const ROW = 33;
+  /** the rows drawn beyond the visible ones, above and below */
   const OVERSCAN = 15;
-  const MIN_HEIGHT = ROW;
   const HEIGHT_KEY = "reseek-browse-tree-height";
 
   /** The tree's height saved in this browser, 300 px when none or nothing usable is */
-  const savedHeight = () => {
+  const savedHeight = (min: number) => {
     try {
       const height = Number.parseInt(localStorage.getItem(HEIGHT_KEY) ?? "", 10);
-      return Number.isFinite(height) && height >= MIN_HEIGHT ? height : 300;
+      return Number.isFinite(height) && height >= min ? height : 300;
     } catch {
       return 300;
     }
@@ -42,10 +40,12 @@
     type TreeNode
   } from "#lib/browse/tree.js";
   import { TYPE_AHEAD_MS, typeAhead } from "#lib/browse/typeahead.js";
-  import { formatBytes } from "#lib/format.js";
+  import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
+  import { formatBytes, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepsKey, withModifier } from "#lib/keys.js";
   import { Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
+  import { remPx } from "#lib/viewport.svelte.js";
 
   import { LOCKED_HINT } from "./locked";
 
@@ -63,7 +63,9 @@
   const expansion = new Expansion(false);
   let scroller = $state<HTMLDivElement | null>(null);
   let scrollTop = $state(0);
-  let height = $state(savedHeight());
+  /** one row's height, 2.0625rem in pixels; the tree is never shorter than a row */
+  const ROW = 2.0625 * remPx();
+  let height = $state(savedHeight(ROW));
 
   // a new listing starts with its first folder open, a hint that folders open
   $effect(() => {
@@ -82,8 +84,8 @@
 
   const caption = (files: number, folders: number) =>
     [
-      files ? `${files} file${files === 1 ? "" : "s"}` : "",
-      folders ? `${folders} director${folders === 1 ? "y" : "ies"}` : ""
+      files ? plural(files, "file", "files") : "",
+      folders ? plural(folders, "folder", "folders") : ""
     ]
       .filter(Boolean)
       .join(", ");
@@ -129,8 +131,6 @@
     await tick();
     centre(rows.findIndex((r) => r.node.name === name));
   };
-
-  let dragging: { y: number; height: number } | null = null;
 </script>
 
 <div
@@ -184,41 +184,26 @@
             <FolderIcon class="size-4 text-fg-muted" />
           {/if}
         </button>
-        <span class="truncate">{leaf(node.name)}</span>
-        <span class="ml-auto shrink-0 text-xs font-normal text-fg-muted">
-          {caption(node.totalFileCount, node.totalDirectoryCount)}
-          {#if node.totalBytes}· {formatBytes(node.totalBytes)}{/if}
+        <!-- the name's track fills before the caption's, so the caption gives way first -->
+        <span
+          class="grid min-w-0 flex-1 grid-cols-[minmax(0,max-content)_minmax(0,1fr)] items-center gap-1.5">
+          <span class="truncate">{leaf(node.name)}</span>
+          <span
+            class="overflow-hidden text-right text-xs font-normal text-ellipsis whitespace-nowrap text-fg-muted">
+            {caption(node.totalFileCount, node.totalDirectoryCount)}
+            {#if node.totalBytes}· {formatBytes(node.totalBytes)}{/if}
+          </span>
         </span>
       </div>
     {/each}
   </div>
 </div>
-<div
-  role="slider"
-  tabindex="0"
-  aria-label="Height of the folder list"
-  aria-valuemin={MIN_HEIGHT}
-  aria-valuenow={height}
-  title="Drag or use arrow keys to resize"
-  class="flex h-4 cursor-ns-resize items-center justify-center border-t"
-  onpointerdown={(e) => {
-    dragging = { y: e.clientY, height: height };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }}
-  onpointermove={(e) => {
-    if (dragging) height = Math.max(MIN_HEIGHT, dragging.height + e.clientY - dragging.y);
-  }}
-  onpointerup={() => {
-    if (dragging) saveHeight(height);
-    dragging = null;
-  }}
-  onkeydown={(e) => {
-    if (withModifier(e)) return;
-    if (e.key === "ArrowUp") height = Math.max(MIN_HEIGHT, height - 20);
-    else if (e.key === "ArrowDown") height += 20;
-    else return;
-    e.preventDefault();
-    saveHeight(height);
-  }}>
+<ResizeHandle
+  bind:value={height}
+  min={ROW}
+  edge="bottom"
+  label="Height of the folder list"
+  onchange={saveHeight}
+  class="flex h-4 items-center justify-center border-t">
   <span class="h-1 w-8 rounded-full bg-border"></span>
-</div>
+</ResizeHandle>

@@ -10,7 +10,6 @@
   import { type Line, layout, LONG, type Message } from "#lib/chat/messages.js";
   import { pullOlder } from "#lib/chat/older.js";
   import type { MessagePane } from "#lib/chat/pane.svelte.js";
-  import type { Burst } from "#lib/chat/presence.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { formatDay, plural } from "#lib/format.js";
@@ -19,14 +18,11 @@
 
   import GapRow from "./GapRow.svelte";
   import MessageRow from "./MessageRow.svelte";
-  import PresenceRow from "./PresenceRow.svelte";
 
   type Props = {
     pane: MessagePane;
     /** a message to scroll to and mark, from a link */
     at: number | null;
-    /** members coming and going, shown among the messages */
-    bursts?: Burst[];
     /** the words marked in the messages: our name and the watched words */
     watch: string[];
     /** quotes a message in the composer, when one can be sent */
@@ -35,7 +31,7 @@
     onread: () => void;
   };
 
-  let { pane, at, bursts = [], watch, onreply, onread }: Props = $props();
+  let { pane, at, watch, onreply, onread }: Props = $props();
 
   /** this close to the bottom counts as at the bottom */
   const NEAR = 48;
@@ -55,7 +51,7 @@
   /** the newest message when the list was placed or last followed a new one */
   let seenNewest: number | null = null;
 
-  const lines = $derived(layout(pane.ordered, pane.gaps, pane.unreadFrom, bursts));
+  const lines = $derived(layout(pane.ordered, pane.gaps, pane.unreadFrom));
   const newest = $derived(pane.ordered.at(-1)?.localId ?? null);
 
   /*
@@ -71,7 +67,7 @@
    * each line of its text, plus 2 px of padding, or 32 px with the header of a group's first
    */
   const guess = (line: Line) => {
-    if (line.kind === "unread" || line.kind === "presence") return 24;
+    if (line.kind === "unread") return 24;
     if (line.kind !== "message") return 36;
     const { message: m, head } = line;
     const rows = m.hidden
@@ -341,8 +337,6 @@
           </div>
         {:else if line.kind === "gap"}
           <GapRow gap={line.gap} />
-        {:else if line.kind === "presence"}
-          <PresenceRow burst={line.burst} />
         {:else if line.kind === "unread"}
           <div class="flex items-center gap-3 px-3 py-1 text-xs text-accent" role="separator">
             <span class="h-px flex-1 bg-accent"></span>New<span class="h-px flex-1 bg-accent"

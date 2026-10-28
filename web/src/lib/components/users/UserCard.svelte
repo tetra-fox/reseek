@@ -1,5 +1,6 @@
 <script lang="ts">
   import BanIcon from "@lucide/svelte/icons/ban";
+  import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
@@ -15,7 +16,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { ago, formatSpeed } from "#lib/format.js";
+  import { ago, formatSpeed, plural } from "#lib/format.js";
   import { userHref } from "#lib/nav.js";
   import { firstLines, ownProfile } from "#lib/profile.svelte.js";
   import { session } from "#lib/session.svelte.js";
@@ -33,11 +34,13 @@
     /** what the directory holds, undefined until it arrived */
     user: UserSummary | undefined;
     onblock: () => void;
+    /** opens the name's menu, for the actions the card has no room for */
+    onmenu?: () => void;
     /** a profile not saved yet, which the card shows as it would show for us */
     draft?: { description: string; src: string | null; pictureUrl: string | null };
   };
 
-  let { name, user, onblock, draft }: Props = $props();
+  let { name, user, onblock, onmenu, draft }: Props = $props();
 
   const to = $derived(links(name));
   // our own name shows what peers are sent now, from our profile
@@ -133,8 +136,8 @@
     {/if}
 
     <p class="text-xs">
-      {stats ? stats.fileCount.toLocaleString() : "?"} files ·
-      {stats ? stats.directoryCount.toLocaleString() : "?"} folders ·
+      {stats ? plural(stats.fileCount, "file", "files") : "? files"} ·
+      {stats ? plural(stats.directoryCount, "folder", "folders") : "? folders"} ·
       {stats ? formatSpeed(stats.averageSpeed) : "?"}
       {#if stats?.fetchedAt}<span class="text-fg-subtle">· {ago(stats.fetchedAt, clock.now)}</span
         >{/if}
@@ -142,11 +145,11 @@
 
     {#if user && figures}
       <p class="text-xs text-fg-muted">
-        {figures.uploads.succeeded + figures.uploads.active} uploads ·
-        {figures.downloads.succeeded + figures.downloads.active} downloads ·
-        {figures.messages.in + figures.messages.out} messages
+        {plural(figures.uploads.succeeded + figures.uploads.active, "upload", "uploads")} ·
+        {plural(figures.downloads.succeeded + figures.downloads.active, "download", "downloads")} ·
+        {plural(figures.messages.in + figures.messages.out, "message", "messages")}
         {#if figures.messages.unread}({figures.messages.unread} unread){/if}
-        {#if user.firstSeenAt}<br />first seen {ago(user.firstSeenAt, clock.now)}{/if}
+        {#if user.firstSeenAt}<br />First seen {ago(user.firstSeenAt, clock.now)}{/if}
       </p>
     {/if}
 
@@ -200,6 +203,15 @@
           </Button>
         {/snippet}
       </Tooltip>
+      {#if onmenu}
+        <Tooltip text="More">
+          {#snippet child({ props })}
+            <Button {...props} variant="ghost" size="icon-sm" aria-label="More" onclick={onmenu}>
+              <EllipsisIcon />
+            </Button>
+          {/snippet}
+        </Tooltip>
+      {/if}
     </span>
   </div>
 </div>

@@ -1,71 +1,12 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
+import { fakeBrowse, fakeDownloads, fakeSearch, SEARCH_ID } from "./fakes";
 import { login } from "./login";
-
-const ID = "6f1c9a52-0d1e-4c43-9d55-3a1f0b6e7a10";
-
-const file = (filename: string, size = 4_000_000) => ({
-  filename,
-  size,
-  code: 1,
-  extension: filename.split(".").pop(),
-  isLocked: false,
-  attributeCount: 0,
-  attributes: [],
-  bitRate: 320,
-  length: 200
-});
-
-const response = (username: string, speed: number, files: string[]) => ({
-  username,
-  country: "NL",
-  token: 1,
-  hasFreeUploadSlot: true,
-  uploadSpeed: speed,
-  queueLength: 0,
-  fileCount: files.length,
-  files: files.map((f) => file(f)),
-  lockedFileCount: 0,
-  lockedFiles: []
-});
-
-/** Answers the search page's calls with one finished search and its responses */
-const fakeSearch = async (page: Page) => {
-  const responses = [
-    response("alice", 3_000_000, [
-      "@@a\\Music\\Album\\01 One.flac",
-      "@@a\\Music\\Album\\02 Two.flac",
-      "@@a\\Music\\Other\\03 Three.mp3"
-    ]),
-    response("bob", 1_000_000, ["music/x/1.flac", "music/x/2.flac"])
-  ];
-  await page.route(`**/api/v0/searches/${ID}**`, (route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/responses")) return route.fulfill({ json: responses });
-    return route.fulfill({
-      json: {
-        id: ID,
-        searchText: "album",
-        token: 1,
-        state: "Completed, TimedOut",
-        isComplete: true,
-        startedAt: "2026-10-26T10:00:00Z",
-        endedAt: "2026-10-26T10:00:15Z",
-        responseCount: 2,
-        fileCount: 5,
-        lockedFileCount: 0,
-        responseBytes: 0,
-        responses: null,
-        scope: { type: "network", subjects: [] }
-      }
-    });
-  });
-};
 
 test("shows search results as cards and as dense rows walked by key", async ({ page }) => {
   await fakeSearch(page);
   await login(page, "/dashboard");
-  await page.goto(`./#/searches/${ID}`);
+  await page.goto(`./#/searches/${SEARCH_ID}`);
   const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(crumbs).toContainText("Search");
   await expect(crumbs).toContainText("album");
@@ -86,15 +27,22 @@ test("shows search results as cards and as dense rows walked by key", async ({ p
   const filter = page.getByLabel("Filter", { exact: true });
   await filter.fill("type:mp3");
   await expect(alice.getByText("03 Three.mp3")).toBeVisible();
+  // a result's row acts on a click and shows it; the count above them is plain text
+  await expect(alice.locator("[role=row][data-line]").last()).toHaveCSS("cursor", "pointer");
+  await expect(page.getByRole("status").filter({ hasText: "files from" })).toHaveCSS(
+    "cursor",
+    "default"
+  );
   await expect(page.locator('section[data-key="0:bob"]')).toHaveCount(0);
-  await page.getByRole("button", { name: "Clear" }).click();
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(filter).toHaveValue("");
   await expect(page.locator('section[data-key="0:bob"]')).toBeVisible();
 
   // the dense view: one row per file, walked with the keys
   await page.getByRole("radio", { name: "Dense" }).click();
-  const grid = page.getByRole("grid", { name: "Search results, one file a row" });
+  const grid = page.getByRole("grid", { name: "Search results" });
   await expect(grid.locator("[role=row][data-line]")).toHaveCount(5);
+  await expect(grid.locator("[role=row][data-line]").first()).toHaveCSS("cursor", "pointer");
   await grid.focus();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
@@ -130,32 +78,7 @@ test("cross-fades between screens", async ({ page }) => {
 });
 
 test("groups downloads by user and a tree of folders", async ({ page }) => {
-  const transfer = (filename: string, state = "Completed, Succeeded") => ({
-    id: crypto.randomUUID(),
-    username: "alice",
-    direction: "Download",
-    filename,
-    size: 1000,
-    state,
-    requestedAt: "2026-10-26T10:00:00Z",
-    bytesTransferred: state === "InProgress" ? 400 : 1000,
-    bytesRemaining: 0,
-    averageSpeed: state === "InProgress" ? 100 : 0,
-    percentComplete: state === "InProgress" ? 40 : 100,
-    attempts: 1,
-    removed: false
-  });
-  const files = [
-    transfer("@@a\\Music\\One\\1.flac", "InProgress"),
-    transfer("@@a\\Music\\Two\\2.flac")
-  ];
-  await page.route(
-    (url) => url.pathname.endsWith("/api/v0/transfers/downloads"),
-    (route) =>
-      route.fulfill({
-        json: [{ username: "alice", directories: [{ directory: "d", fileCount: 2, files }] }]
-      })
-  );
+  await fakeDownloads(page);
   await login(page, "/downloads");
   const grid = page.getByRole("grid", { name: "Downloads" });
   await expect(grid.getByRole("button", { name: "Close @@a\\Music" })).toBeVisible();
@@ -167,35 +90,14 @@ test("groups downloads by user and a tree of folders", async ({ page }) => {
 });
 
 test("browses a user, finds a folder by typing and shows where it is", async ({ page }) => {
-  const dir = (name: string, files: string[]) => ({
-    name,
-    fileCount: files.length,
-    files: files.map((f) => file(f))
-  });
-  // carol is answered here alone, never asked of the daemon, so no other test sees her
-  await page.route(
-    (url) => url.pathname.includes("/api/v0/users/carol/"),
-    (route) =>
-      !new URL(route.request().url()).pathname.endsWith("/carol/browse")
-        ? route.fulfill({ status: 404, json: { error: "not found" } })
-        : route.fulfill({
-            json: {
-              directories: [
-                dir("@@c\\Music", []),
-                dir("@@c\\Music\\Albums", ["1.flac"]),
-                dir("@@c\\Music\\Bootlegs", ["2.flac"])
-              ],
-              directoryCount: 3,
-              lockedDirectories: [],
-              lockedDirectoryCount: 0
-            }
-          })
-  );
+  await fakeBrowse(page);
   await login(page, "/browse");
   await page.getByLabel("Username").fill("carol");
   await page.getByLabel("Username").press("Enter");
   const tree = page.getByRole("tree", { name: "Shared folders" });
   await expect(tree.getByText("Bootlegs")).toBeVisible();
+  // a folder is a pointer target, not text to select
+  await expect(tree.getByRole("treeitem", { name: /Bootlegs/ })).toHaveCSS("cursor", "pointer");
   await tree.focus();
   await page.keyboard.type("bo");
   await expect(tree.getByRole("treeitem", { name: /Bootlegs/ })).toHaveAttribute(

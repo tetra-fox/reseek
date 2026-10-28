@@ -85,7 +85,7 @@
       role="row"
       class="grid min-w-max grid-cols-[minmax(14rem,1fr)_10rem_6rem_5rem] gap-2 border-b bg-surface-muted px-2 py-1.5 text-xs font-medium text-fg-muted">
       <span role="columnheader">{@render header("Name", "name")}</span>
-      <span role="columnheader">{@render header("Date Modified", "date")}</span>
+      <span role="columnheader">{@render header("Modified", "date")}</span>
       <span role="columnheader" class="text-right">Size</span>
       <span role="columnheader" class="sr-only">Actions</span>
     </div>

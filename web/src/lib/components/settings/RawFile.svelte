@@ -114,7 +114,7 @@
   const discard = () =>
     confirmation.ask({
       title: "Discard changes?",
-      body: "The edits made here go; the file stays as it is.",
+      body: "Your edits are discarded and the file is left unchanged.",
       confirm: "Discard",
       run: () => void load()
     });
@@ -159,8 +159,8 @@
 
 {#if !remote}
   <Notice kind="info">
-    <LockIcon class="inline size-3.5" /> Remote configuration is off: set
-    <code>remote_configuration</code> to edit the file from here.
+    <LockIcon class="inline size-3.5" /> Remote configuration is off. Set
+    <code>remote_configuration</code> to edit the file here.
   </Notice>
 {:else if !writable}
   <Notice kind="warning"
@@ -183,7 +183,7 @@
   <div class="flex flex-wrap items-center gap-inline text-sm">
     {#if validating}
       <span class="flex items-center gap-1 text-fg-muted"
-        ><Spinner class="size-3.5" />checking…</span>
+        ><Spinner class="size-3.5" />Checking...</span>
     {:else if validation?.valid && dirty}
       <span class="text-success">Valid</span>
     {/if}
@@ -217,7 +217,7 @@
   {/if}
   {#if saveError}
     <Notice kind="error">
-      {stale ? `${name} changed on disk; reload it, then make the change again.` : saveError}
+      {stale ? `${name} changed on disk. Reload it, then make your changes again.` : saveError}
       {#snippet action()}
         {#if stale}<Button variant="outline" size="sm" onclick={() => void load()}>Reload</Button
           >{/if}
@@ -235,7 +235,9 @@
         )}.
       {/if}
       {#if s.restartRequired.length}
-        <Badge tone="warning">restart</Badge> Restart to apply: {s.restartRequired.join(", ")}.
+        <Badge tone="warning">restart</Badge> Restart reseek to apply: {s.restartRequired.join(
+          ", "
+        )}.
       {/if}
       {#snippet action()}
         <Button variant="ghost" size="sm" onclick={() => (saved = null)}>Dismiss</Button>
@@ -246,7 +248,7 @@
 
 <Dialog
   bind:open={() => debugText !== null, (o) => !o && (debugText = null)}
-  title="Effective configuration with source per key"
+  title="Effective configuration, with the source of each value"
   class="w-[min(56rem,calc(100vw-2rem))]">
   <CodeEditor class="h-[60svh]" aria-label="Debug view" value={debugText ?? ""} readonly />
   {#snippet footer()}

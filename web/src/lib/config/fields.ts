@@ -24,7 +24,11 @@ export const controlOf = (field: Field, view: FieldView | undefined): Control =>
   if (view?.choices) return "select";
   const kind = view?.kind;
   if (kind === undefined) return "text";
-  if (typeof kind === "object") return "list";
+  // a list of tables or maps can't be a line each, so it is edited as JSON
+  if (typeof kind === "object")
+    return typeof kind.list === "object" || kind.list === "map" || kind.list === "table"
+      ? "table-list"
+      : "list";
   if (kind === "bool") return "bool";
   if (kind === "integer" || kind === "float") return "number";
   if (kind === "duration" || kind === "size") return kind;
@@ -39,7 +43,7 @@ const isList = (control: Control) =>
 export const toDraft = (control: Control, value: unknown): Draft => {
   if (control === "bool") return value === true;
   if (isList(control)) return Array.isArray(value) ? value.map(String).join("\n") : "";
-  if (control === "map")
+  if (control === "map" || control === "table-list")
     return value === null || value === undefined ? "" : JSON.stringify(value, null, 2);
   return value === null || value === undefined ? "" : String(value);
 };
@@ -102,7 +106,20 @@ export const fromDraft = (
     } catch {
       // the message below says what is expected
     }
-    return { error: "must be a JSON object of entries by name" };
+    return { error: "must be a JSON object keyed by name" };
+  }
+  if (control === "table-list") {
+    try {
+      const value: unknown = JSON.parse(text);
+      if (
+        Array.isArray(value) &&
+        value.every((v) => v && typeof v === "object" && !Array.isArray(v))
+      )
+        return { set: value };
+    } catch {
+      // the message below says what is expected
+    }
+    return { error: "must be a JSON list of objects" };
   }
   const choices = view?.choices;
   if (control === "select" && choices && !choices.includes(text)) {

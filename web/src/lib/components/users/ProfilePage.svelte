@@ -106,7 +106,7 @@
     <ProfileTransfers {username} />
   {:else if tab === "messages"}
     <div
-      class="flex h-[calc(100svh-22rem)] min-h-80 overflow-hidden rounded-card border bg-surface shadow-card">
+      class="flex h-[calc(var(--content-h)-16rem)] min-h-80 overflow-hidden rounded-card border bg-surface shadow-card">
       <Pane target={{ kind: "user", name: username }} />
     </div>
   {:else if tab === "activity"}

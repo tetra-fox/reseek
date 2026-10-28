@@ -5,17 +5,18 @@
 
   import { app } from "#lib/app.svelte.js";
   import { Arrivals } from "#lib/arrivals.svelte.js";
-  import { parseDuration } from "#lib/format.js";
+  import { cssWidth, parseDuration, sumWidths } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
-  import { COLUMNS, type ColumnId } from "#lib/transfers/columns.js";
+  import { COLUMNS, type ColumnId, PHONE_COLUMNS } from "#lib/transfers/columns.js";
   import type { ViewSettings } from "#lib/transfers/settings.svelte.js";
   import type { Direction, Transfer } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Group, Item } from "#lib/transfers/view.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
+  import { remPx, viewport } from "#lib/viewport.svelte.js";
 
   import GroupHeader from "./GroupHeader.svelte";
   import TransferRow from "./TransferRow.svelte";
@@ -57,6 +58,11 @@
     drawerOpen
   }: Props = $props();
 
+  /** a line's height in rem for each density, on a wider screen and on a phone */
+  const LINES = {
+    comfortable: { wide: 2.25, phone: 3.25 },
+    compact: { wide: 1.75, phone: 2.75 }
+  };
   /** lines drawn beyond the visible ones, above and below */
   const OVERSCAN = 10;
 
@@ -67,20 +73,27 @@
   let rowsTop = $state(0);
   let resizing: { id: ColumnId; x: number; width: number } | null = null;
 
-  const row = $derived(view.density === "compact" ? 28 : 36);
+  // a phone's row has two lines, the name over its size and progress
+  const rem = remPx();
+  const row = $derived(rem * LINES[view.density][viewport.phone ? "phone" : "wide"]);
   const columns = $derived(
     view.columns
       .filter((c) => c.visible && !(c.id === "user" && view.groupBy === "user"))
+      .filter((c) => !viewport.phone || c.id in PHONE_COLUMNS)
       .map((c) => c.id)
   );
+  /** a column's width: a phone's own for the few it shows, else pixels dragged to, else its default */
+  const widthOf = (c: { id: ColumnId; dragged?: number }): number | string =>
+    (viewport.phone && PHONE_COLUMNS[c.id]) ||
+    (c.dragged ?? COLUMNS.find((known) => known.id === c.id)!.width);
   const template = $derived(
     view.columns
       .filter((c) => columns.includes(c.id))
-      .map((c) => (c.id === "file" ? `minmax(${c.width}px, 1fr)` : `${c.width}px`))
+      .map((c) => (c.id === "file" ? `minmax(${cssWidth(widthOf(c))}, 1fr)` : cssWidth(widthOf(c))))
       .join(" ")
   );
   const width = $derived(
-    view.columns.filter((c) => columns.includes(c.id)).reduce((n, c) => n + c.width, 0)
+    sumWidths(view.columns.filter((c) => columns.includes(c.id)).map(widthOf))
   );
   const start = $derived(Math.max(0, Math.floor(scrollTop / row) - OVERSCAN));
   const end = $derived(Math.min(items.length, Math.ceil((scrollTop + height) / row) + OVERSCAN));
@@ -189,9 +202,11 @@
   );
 </script>
 
+<!-- every row, the header too, has the cells' font with tabular figures, so a column width in ch
+     measures the same in each; the header's labels are smaller inside it -->
 <div
-  class="relative overflow-auto rounded-card border bg-surface text-sm shadow-card outline-none [overflow-anchor:auto]"
-  style:height="max(20rem, calc(100svh - 20rem))"
+  class="relative overflow-auto rounded-card border bg-surface text-sm tabular-nums shadow-card outline-none [overflow-anchor:auto]"
+  style:height="max(20rem, calc(var(--content-h) - 14rem))"
   role="grid"
   aria-label={direction === "download" ? "Downloads" : "Uploads"}
   aria-rowcount={items.length}
@@ -205,14 +220,14 @@
     list.scrolled();
   }}
   {@attach list.attach}>
-  <div class="sticky top-0 z-10" style:min-width={`${width}px`} bind:offsetHeight={rowsTop}>
+  <div class="sticky top-0 z-10" style:min-width={width} bind:offsetHeight={rowsTop}>
     <div
       role="row"
-      class="grid h-9 items-center border-b bg-surface-muted text-xs font-medium text-fg-muted"
+      class="grid h-9 items-center border-b bg-surface-muted text-sm font-medium text-fg-muted"
       style:grid-template-columns={template}>
       {#each columns as id (id)}
         {@const sortable = COLUMNS.find((c) => c.id === id)?.sort}
-        <div role="columnheader" class="relative flex min-w-0 items-center px-2">
+        <div role="columnheader" class="relative flex min-w-0 items-center px-2 text-xs">
           {#if id === "select" || id === "actions"}
             <span class="sr-only">{label(id)}</span>
           {:else if sortable}
@@ -236,14 +251,15 @@
               role="separator"
               aria-label={`Width of ${label(id)}`}
               onpointerdown={(e) => {
-                const column = view.columns.find((c) => c.id === id)!;
-                resizing = { id, x: e.clientX, width: column.width };
+                // a drag starts from the width the column has on screen, whatever it was set as
+                const cell = e.currentTarget.parentElement!.getBoundingClientRect();
+                resizing = { id, x: e.clientX, width: cell.width };
                 e.currentTarget.setPointerCapture(e.pointerId);
               }}
               onpointermove={(e) => {
                 if (!resizing) return;
                 const column = view.columns.find((c) => c.id === resizing!.id)!;
-                column.width = Math.max(40, resizing.width + e.clientX - resizing.x);
+                column.dragged = Math.max(40, Math.round(resizing.width + e.clientX - resizing.x));
               }}
               onpointerup={() => (resizing = null)}></span>
           {/if}
@@ -276,7 +292,7 @@
   <div
     class="relative"
     style:height={`${items.length * row}px`}
-    style:min-width={`${width}px`}
+    style:min-width={width}
     role="rowgroup"
     {@attach freezesWhileUsed}>
     {#each items.slice(start, end) as item, i (item.key)}

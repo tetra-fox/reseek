@@ -1,112 +1,7 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
+import { at, fakeChat } from "./fakes";
 import { login } from "./login";
-
-const at = (minute: number, second = 0) =>
-  new Date(Date.UTC(2026, 9, 27, 18, minute, second)).toISOString();
-
-const MEMBERS = ["alice", "bob", "carol", "dave", "erin", "frank", "grace", "heidi"];
-
-/** Answers the chat calls with one room, "indie", and one conversation, with "alice" */
-const fakeChat = async (page: Page) => {
-  const said: [string, string][] = [
-    ["alice", "anyone have the new boards of canada rip?"],
-    ["bob", "yes, slsk://bob/Music/Boards%20of%20Canada/Tomorrow's%20Harvest/ in flac"],
-    ["bob", "320 too if you want it smaller"],
-    ["carol", "/me waves at everyone"],
-    ["reseek", "thanks bob, grabbing it now"],
-    ["dave", "reseek: did you see https://example.com/review ?"]
-  ];
-  const roomMessages = said.map(([username, message], n) => ({
-    localId: n + 1,
-    timestamp: at(n),
-    username,
-    message,
-    roomName: "indie",
-    self: username === "reseek",
-    isMention: message.includes("reseek"),
-    hidden: false
-  }));
-  const joined = [
-    {
-      name: "indie",
-      unread: 0,
-      mentions: 0,
-      notify: "mentions",
-      userCount: MEMBERS.length,
-      lastMessageAt: at(5),
-      lastReadId: 6
-    }
-  ];
-  await page.route("**/api/v0/rooms/joined", (route) => route.fulfill({ json: joined }));
-  // a pane opened before the joined rooms are read asks the history for the same page
-  await page.route("**/api/v0/rooms/history/indie/messages**", (route) =>
-    route.fulfill({ json: { messages: roomMessages, hasMore: false, gaps: [] } })
-  );
-  await page.route("**/api/v0/rooms/joined/indie**", (route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/messages")) {
-      return route.fulfill({ json: { messages: roomMessages, hasMore: false, gaps: [] } });
-    }
-    return route.fulfill({
-      json: {
-        name: "indie",
-        isPrivate: false,
-        users: MEMBERS.map((username, n) => ({
-          username,
-          status: n % 3 === 2 ? "Away" : "Online",
-          averageSpeed: 400_000 * (n + 1),
-          uploadCount: n,
-          fileCount: 1000 * (n + 1),
-          directoryCount: 40,
-          countryCode: ["NL", "DE", "US", "FR"][n % 4],
-          slotsFull: false,
-          self: false
-        })),
-        tickers: [
-          { username: "alice", ticker: "listening to Geogaddi" },
-          { username: "bob", ticker: "sharing the whole BoC catalogue" }
-        ],
-        messages: null
-      }
-    });
-  });
-  const conversation = {
-    username: "alice",
-    isActive: true,
-    isServerNotice: false,
-    unAcknowledgedMessageCount: 0,
-    hasUnAcknowledgedMessages: false,
-    notify: "all",
-    draft: "",
-    lastMessage: null,
-    messages: null
-  };
-  await page.route("**/api/v0/conversations**", (route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/api/v0/conversations"))
-      return route.fulfill({ json: [conversation] });
-    if (url.pathname.endsWith("/messages")) {
-      return route.fulfill({
-        json: [
-          ["In", "hey, are you still sharing the warp records stuff?"],
-          ["Out", "yes, browse away"],
-          ["In", "thanks!"]
-        ].map(([direction, message], n) => ({
-          localId: n + 1,
-          id: n + 1,
-          timestamp: at(10 + n),
-          username: "alice",
-          direction,
-          message,
-          isAcknowledged: true,
-          wasReplayed: false
-        }))
-      });
-    }
-    return route.fulfill({ json: conversation });
-  });
-};
 
 test("a room reads like a chat: names, actions, links and the wall", async ({ page }) => {
   await fakeChat(page);
@@ -124,8 +19,18 @@ test("a room reads like a chat: names, actions, links and the wall", async ({ pa
     .evaluate((a) => getComputedStyle(a).color);
   const listed = page.getByRole("grid", { name: "Users in the room" });
   await expect(listed.getByRole("link", { name: "bob", exact: true })).toHaveCSS("color", colour);
+  // a name takes only its text's width: its menu button takes no room until it shows
+  const widths = await log
+    .getByRole("link", { name: "bob", exact: true })
+    .evaluate((a) => [
+      a.getBoundingClientRect().width,
+      a.parentElement!.getBoundingClientRect().width
+    ]);
+  expect(widths[1]).toBeCloseTo(widths[0], 0);
   // a /me message is an action, a slsk:// link opens Browse, a mention is marked
   await expect(log.getByText("waves at everyone")).toBeVisible();
+  // a message's text is for reading and copying: the I-beam; the name above it is a link
+  await expect(log.getByText("320 too if you want it smaller")).toHaveCSS("cursor", "text");
   await expect(log.getByRole("link", { name: /^slsk:\/\/bob/ })).toHaveAttribute(
     "href",
     /#\/browse\?user=bob&path=Music/
@@ -149,14 +54,63 @@ test("a room reads like a chat: names, actions, links and the wall", async ({ pa
   await page.mouse.move(5, 5);
   await page.waitForTimeout(400);
   await expect(page.getByRole("dialog", { name: "Profile of alice" })).toBeVisible();
+  // the card's More opens the name's menu, which no button beside the name offers
+  await page
+    .getByRole("dialog", { name: "Profile of alice" })
+    .getByRole("button", { name: "More" })
+    .click();
+  await expect(page.getByRole("menuitem", { name: "Copy username" })).toBeVisible();
   await page.keyboard.press("Escape");
+});
 
-  // joins and leaves can be turned off from the room menu
-  await page.getByRole("button", { name: "Room menu" }).click();
-  await expect(
-    page.getByRole("menuitemcheckbox", { name: "Show joins and leaves" })
-  ).toHaveAttribute("aria-checked", "true");
-  await page.keyboard.press("Escape");
+/** One event stream frame as the daemon writes it */
+const frame = (id: number, event: string, data: unknown) =>
+  `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+
+test("a busy room's comings and goings stay out of its messages", async ({ page }) => {
+  await fakeChat(page);
+  // the first stream that carries the room's frames is a burst of 120 members joining and
+  // leaving; every later one is the daemon's own
+  let served = false;
+  await page.route("**/api/v0/live**", (route) => {
+    const topics = new URL(route.request().url()).searchParams.get("topics") ?? "";
+    if (served || !topics.split(",").includes("rooms")) return route.continue();
+    served = true;
+    const hello = {
+      principal: { name: "reseek", role: "Administrator" },
+      resumed: false,
+      serverTime: at(30),
+      topics: topics.split(","),
+      version: { current: "0.0.0", full: "0.0.0", latest: null, isUpdateAvailable: false }
+    };
+    const churn = Array.from({ length: 120 }, (_, n) =>
+      n % 2
+        ? frame(n + 2, "rooms.user_left", { roomName: "indie", username: `guest${n - 1}` })
+        : frame(n + 2, "rooms.user_joined", {
+            roomName: "indie",
+            user: { username: `guest${n}`, status: "Online", self: false }
+          })
+    );
+    return route.fulfill({
+      headers: { "content-type": "text/event-stream" },
+      body: frame(1, "hello", hello) + churn.join("")
+    });
+  });
+  await login(page, "/chat");
+  await page.goto("./#/chat/rooms/indie");
+  const log = page.getByRole("log");
+  await expect(log.getByText("anyone have the new boards of canada rip?")).toBeVisible();
+  await page.getByRole("tab", { name: "Activity" }).click();
+  const activity = page.getByRole("grid", { name: "Joins, leaves and status changes" });
+  await expect(activity.getByRole("row").first()).toContainText(/\bleft\b/);
+  await expect(activity.getByRole("row")).toHaveCount(120);
+  // a row's time keeps to one line, as in the activity log
+  const time = (await activity.getByRole("row").first().locator("time").boundingBox())!;
+  expect(time.height).toBeLessThan(20);
+  // the message list holds the six messages and nothing else
+  await expect(log.locator("[data-message]")).toHaveCount(6);
+  await expect(log).not.toContainText("joined");
+  await expect(log).not.toContainText(" left");
 });
 
 test("a private chat shows both sides with their actions", async ({ page }) => {
@@ -169,4 +123,27 @@ test("a private chat shows both sides with their actions", async ({ page }) => {
   // hovering a message offers to copy it
   await log.getByText("thanks!").hover();
   await expect(page.getByRole("button", { name: "Copy the text" }).last()).toBeVisible();
+});
+
+test("a toast sits above the docked activity log", async ({ page }) => {
+  // a copy the browser refuses is a toast that needs nothing from the daemon
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: () => Promise.reject(new Error("refused")) }
+    })
+  );
+  await fakeChat(page);
+  await login(page, "/chat");
+  await page.goto("./#/chat/rooms/indie");
+  const log = page.getByRole("log");
+  await expect(log.getByText("thanks bob, grabbing it now")).toBeVisible();
+  await page.keyboard.press("Control+j");
+  const dock = page.getByRole("region", { name: "Activity on the network" });
+  await expect.poll(async () => (await dock.boundingBox())?.height).toBe(288);
+  await log.getByText("thanks bob, grabbing it now").hover();
+  await page.getByRole("button", { name: "Copy the text" }).last().click();
+  const toast = page.getByRole("alert").filter({ hasText: "Couldn't copy" });
+  await expect(toast).toBeVisible();
+  const [above, top] = [(await toast.boundingBox())!, (await dock.boundingBox())!];
+  expect(above.y + above.height).toBeLessThanOrEqual(top.y);
 });

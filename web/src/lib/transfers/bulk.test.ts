@@ -30,7 +30,7 @@ describe("bulk actions", () => {
       "Completed, Aborted"
     ]);
     expect(pick(SCOPES.cancel[1])).toEqual(["Queued, Remotely", "Queued, Locally"]);
-    expect(pick(SCOPES.remove[3])).toHaveLength(6);
+    expect(pick(SCOPES.remove[2])).toHaveLength(6);
   });
 
   it("count the active transfers a cancel asks about and sum up a result", () => {

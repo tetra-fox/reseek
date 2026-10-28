@@ -133,7 +133,9 @@
       <button
         type="button"
         aria-pressed={on}
-        title={on ? `Hide ${l.level} lines; Alt-click shows only these` : `Show ${l.level} lines`}
+        title={on
+          ? `Hide ${l.level} lines. Alt-click to show only these.`
+          : `Show ${l.level} lines`}
         class={[
           "flex h-control-sm items-center gap-1.5 rounded-full border px-2.5 font-mono text-xs transition-colors duration-(--motion-fast)",
           on ? [l.chip, "border-transparent"] : "text-fg-subtle line-through hover:text-fg-muted"
@@ -165,7 +167,7 @@
       <Menu.Trigger disabled={!shown.length}>
         {#snippet child({ props })}
           <Button {...props} size="sm" variant="outline"
-            ><CopyIcon />Copy the last<ChevronDownIcon /></Button>
+            ><CopyIcon />Copy last<ChevronDownIcon /></Button>
         {/snippet}
       </Menu.Trigger>
       <Menu.Content align="end">
@@ -219,6 +221,6 @@
       </span>
     </div>
   {:else}
-    <p class="px-4 py-6 text-center text-fg-subtle">No logs</p>
+    <p class="px-4 py-6 text-center text-fg-subtle">No log lines</p>
   {/each}
 </div>

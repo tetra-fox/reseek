@@ -30,7 +30,7 @@
   )}
   aria-expanded={open}
   aria-label={`${open ? "Close" : "Open"} ${name}`}
-  title="Alt-click to open or close the ones beside it too"
+  title="Alt-click to open or close the folders beside it too"
   onclick={(e) => {
     const all = withSiblings(e);
     expansion.toggle(key, siblings, all);

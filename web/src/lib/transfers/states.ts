@@ -33,6 +33,14 @@ export const isQueued = (state: string) => state.includes("Queued");
 
 export const isSucceeded = (state: string) => state === "Completed, Succeeded";
 
+const ENDINGS: Record<string, string> = { Errored: "failed", TimedOut: "timed out" };
+
+/** How an ended transfer's state reads in a sentence: "failed", "timed out", "cancelled" */
+export const endingText = (state: string) => {
+  const word = state.replace("Completed, ", "");
+  return ENDINGS[word] ?? word.toLowerCase();
+};
+
 export const isActive = (state: string) => state === "InProgress" || state === "Initializing";
 
 /** The state chips above the table, each with the states it stands for */
@@ -40,8 +48,8 @@ export const STATE_CHIPS = [
   { id: "active", label: "Active", test: isActive },
   { id: "queued", label: "Queued", test: (s: string) => isQueued(s) },
   { id: "requested", label: "Requested", test: (s: string) => s === "Requested" },
-  { id: "completed", label: "Completed", test: isSucceeded },
-  { id: "errored", label: "Errored", test: (s: string) => ERRORED.includes(s) },
+  { id: "completed", label: "Succeeded", test: isSucceeded },
+  { id: "errored", label: "Failed", test: (s: string) => ERRORED.includes(s) },
   { id: "cancelled", label: "Cancelled", test: (s: string) => s === "Completed, Cancelled" }
 ] as const;
 
@@ -73,9 +81,11 @@ export const stateChip = (t: Transfer): { text: string; tone: Tone; title: strin
     return { text: `Requested${tries}`, tone: t.attempts > 1 ? "warning" : "neutral", title: null };
   }
   if (s === "Completed, Errored")
-    return { text: reason("Errored") + tries, tone: "danger", title: why };
+    return { text: reason("Failed") + tries, tone: "danger", title: why };
   if (s === "Completed, Rejected")
     return { text: reason("Rejected") + tries, tone: "danger", title: why };
+  if (s === "Completed, TimedOut")
+    return { text: reason("Timed out") + tries, tone: "danger", title: why };
   if (s.startsWith("Completed, ")) {
     return { text: s.slice("Completed, ".length) + tries, tone: "danger", title: why };
   }

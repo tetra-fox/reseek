@@ -5,6 +5,7 @@ import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { chat } from "#lib/chat/chat.svelte.js";
 import { ECHO_WAIT } from "#lib/chat/pane.svelte.js";
+import { chatLayout } from "#lib/chat/prefs.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
@@ -186,6 +187,54 @@ describe("a chat pane", () => {
     expect(document.body.textContent).toContain("(disconnected from Soulseek)");
   });
 
+  it("keeps joins and leaves out of the messages and folds them in the room's activity", async () => {
+    const net = fakeNetwork((url) => {
+      if (url.pathname.endsWith("/rooms/joined/indie/messages")) {
+        return { messages: [roomMessage(1)], hasMore: false, gaps: [] };
+      }
+      if (url.pathname.endsWith("/rooms/joined/indie")) {
+        return { name: "indie", isPrivate: false, users: [], tickers: [], messages: null };
+      }
+      return undefined;
+    });
+    chat.rooms.upsert({
+      name: "indie",
+      unread: 0,
+      mentions: 0,
+      notify: "mentions",
+      userCount: 2,
+      lastReadId: 1
+    });
+    chatLayout.users = true;
+    chatLayout.side = "activity";
+    live.start();
+    component = mount(Pane, {
+      target: document.body,
+      props: { target: { kind: "room", name: "indie" } }
+    });
+    await flush();
+    const joined = (username: string) =>
+      net.frame("rooms.user_joined", {
+        roomName: "indie",
+        user: { username, status: "Online" } as Schemas["RoomUser"]
+      });
+    joined("carol");
+    await flush();
+    const grid = () => document.querySelector("[aria-label='Joins, leaves and status changes']")!;
+    const lines = () => [...grid().querySelectorAll("[role=row]")].map((r) => r.ariaLabel);
+    expect(lines()).toEqual(["carol joined"]);
+    const first = grid().querySelector("[role=row]");
+    // a second join soon after folds into the same row; a leave starts a new one above it
+    joined("dave");
+    net.frame("rooms.user_left", { roomName: "indie", username: "carol" });
+    await flush();
+    expect(lines()).toEqual(["carol left", "carol and dave joined"]);
+    expect(grid().querySelectorAll("[role=row]")[1]).toBe(first);
+    const log = document.querySelector("[role=log]")!;
+    expect(ids()).toEqual(["1"]);
+    expect(log.textContent).not.toMatch(/joined|left/);
+  });
+
   it("doesn't count messages read when the pane opens away from the bottom", async () => {
     const many = Array.from({ length: 40 }, (_, n) =>
       privateMessage(n + 1, { isAcknowledged: false })
@@ -300,10 +349,10 @@ describe("a chat pane", () => {
         new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
       );
       await step();
-      expect(document.body.textContent).not.toContain("not sent");
+      expect(document.body.textContent).not.toContain("Not sent");
       await vi.advanceTimersByTimeAsync(ECHO_WAIT);
       flushSync();
-      expect(document.body.textContent).toContain("not sent");
+      expect(document.body.textContent).toContain("Not sent");
       expect(ids()).toHaveLength(2);
       // the echo came after all: it takes the row's place
       net.frame("rooms.message", {
@@ -312,7 +361,7 @@ describe("a chat pane", () => {
       });
       await step();
       expect(ids()).toEqual(["1", "2"]);
-      expect(document.body.textContent).not.toContain("not sent");
+      expect(document.body.textContent).not.toContain("Not sent");
     } finally {
       vi.useRealTimers();
     }

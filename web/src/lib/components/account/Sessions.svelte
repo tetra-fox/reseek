@@ -34,17 +34,17 @@
       );
       if (outcome.ok) await loader.load();
       return outcome;
-    }, "Session signed out");
+    }, "Session logged out");
 
   const revokeOthers = () =>
     busy.run(async () => {
       const outcome = await call(() => api.DELETE("/api/v0/sessions"));
       if (outcome.ok) await loader.load();
       return outcome;
-    }, "Every other session signed out");
+    }, "Logged out every other session");
 </script>
 
-<Card title="Sessions" description="The browsers signed in now">
+<Card title="Sessions">
   {#snippet action()}
     {#if admin}
       <Button
@@ -52,7 +52,7 @@
         size="sm"
         disabled={busy.running}
         onclick={() => (everywhere = true)}>
-        Sign out everywhere
+        Log out other sessions
       </Button>
     {/if}
   {/snippet}
@@ -62,7 +62,7 @@
       <table class="data-table w-full text-sm">
         <thead>
           <tr
-            ><th>Who</th><th>Role</th><th>Signed in</th><th>Last used</th><th>From</th><th></th
+            ><th>Who</th><th>Role</th><th>Logged in</th><th>Last used</th><th>From</th><th></th
             ></tr>
         </thead>
         <tbody>
@@ -81,7 +81,7 @@
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`Sign out ${s.name}'s session`}
+                    aria-label={`Log out ${s.name}'s session`}
                     disabled={busy.running}
                     onclick={() => revoke(s.id)}>
                     <LogOutIcon />
@@ -98,8 +98,8 @@
 
 <ConfirmDialog
   bind:open={everywhere}
-  title="Sign out everywhere"
-  body="Every session but this one ends now; each of those browsers has to log in again."
-  confirm="Sign out everywhere"
+  title="Log out other sessions?"
+  body="Every other browser will have to log in again."
+  confirm="Log out other sessions"
   danger
   onconfirm={revokeOthers} />

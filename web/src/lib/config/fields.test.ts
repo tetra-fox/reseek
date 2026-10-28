@@ -4,7 +4,7 @@ import { editability } from "./editability";
 import { type ConfigView, controlOf, errorsByKey, fromDraft, leftovers, toDraft } from "./fields";
 import fixture from "./fixtures/view.json";
 import { asNixSettings } from "./nix";
-import { sections } from "./sections";
+import { sections, valueAt } from "./sections";
 
 /**
  * The daemon's options view of the default configuration with an empty config.toml, written by
@@ -20,7 +20,7 @@ describe("the settings forms", () => {
       "Shares",
       "Transfers",
       "Groups",
-      "Directories",
+      "Folders",
       "Web",
       "Authentication",
       "Search filters",
@@ -132,10 +132,10 @@ describe("editability", () => {
     v.fields["web.port"].source = { layer: "cli", flag: "--http-port" };
     expect(editability(v, "soulseek.username")).toEqual({
       mode: "locked",
-      notice: "Set by RESEEK_SLSK_USERNAME; change it there"
+      notice: "Set by RESEEK_SLSK_USERNAME. Change it there."
     });
     expect(editability(v, "web.port").notice).toBe(
-      "Set on the command line (--http-port); change it there"
+      "Set on the command line with --http-port. Change it there."
     );
   });
 
@@ -170,5 +170,27 @@ describe("Copy as Nix", () => {
     ).toBe(
       'services.reseek.settings = {\n  web = {\n    port = 5030;\n  };\n  shares = {\n    directories = [ ];\n  };\n  a = {\n    b = "\\${x}";\n  };\n};\n'
     );
+  });
+});
+
+describe("an option made of tables", () => {
+  it("is edited as JSON, so no option's value shows as [object Object]", () => {
+    for (const [key, info] of Object.entries(view.fields)) {
+      const field = { key, label: key };
+      const value = valueAt(view.values, key);
+      const draft = toDraft(controlOf(field, info), value);
+      expect([key, String(draft)]).not.toEqual([key, expect.stringContaining("[object Object]")]);
+    }
+    const presets = { key: "search.filter_presets", label: "Filter presets" };
+    const info = view.fields["search.filter_presets"];
+    expect(controlOf(presets, info)).toBe("table-list");
+    expect(
+      fromDraft(presets, "table-list", '[{"name": "FLAC", "filter": "type:flac"}]', info)
+    ).toEqual({
+      set: [{ name: "FLAC", filter: "type:flac" }]
+    });
+    expect(fromDraft(presets, "table-list", '["type:flac"]', info)).toEqual({
+      error: "must be a JSON list of objects"
+    });
   });
 });

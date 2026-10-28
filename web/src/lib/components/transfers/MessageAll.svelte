@@ -35,7 +35,10 @@
     }
     sending = false;
     if (failed.length) {
-      toast(`Sent to ${sent} of ${usernames.length}; not sent to ${failed.join("; ")}`, "error");
+      toast(
+        `Sent to ${sent} of ${plural(usernames.length, "user", "users")}. Couldn't send to ${failed.join("; ")}`,
+        "error"
+      );
       return;
     }
     toast(`Sent to ${plural(sent, "user", "users")}`);
@@ -47,7 +50,7 @@
 <Dialog
   bind:open
   title="Message everyone downloading from you"
-  description={`One private message to each of the ${plural(usernames.length, "user", "users")} in the list as it is filtered now.`}>
+  description={`Sends a private message to each of the ${plural(usernames.length, "user", "users")} in the filtered list.`}>
   <form
     id="message-all"
     onsubmit={(e) => {

@@ -206,7 +206,7 @@ export type Outcome = { direction: string; succeeded: number; failed: number; ca
 
 /**
  * Each direction's finished transfers by how they ended, for the outcome bars. A timeout, an
- * error, a refusal and a size mismatch are all failures, as the transfers list's Errored filter
+ * error, a refusal and a size mismatch are all failures, as the transfers list's Failed filter
  * counts them
  */
 export const outcomes = (summary: Schemas["SummaryReport"]): Outcome[] =>

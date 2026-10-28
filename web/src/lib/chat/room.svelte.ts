@@ -3,14 +3,14 @@ import { Keyed } from "#lib/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
 
-import type { PresenceEvent, PresenceKind } from "./presence";
+import { addChange, type Burst, type PresenceKind } from "./presence";
 
 export type RoomUser = Schemas["RoomUser"];
 
 /** One member's ticker on the room's wall, with when it was last seen to change */
 export type WallLine = { username: string; ticker: string; at: number };
 
-/** How many presence changes a pane keeps, the oldest going first */
+/** How many folded lines of presence changes a room keeps, the oldest going first */
 const KEPT = 500;
 
 let seq = 0;
@@ -19,8 +19,8 @@ let seq = 0;
  * Who is in a joined room and who runs it: read once, then kept by the room's frames, a member
  * joining or leaving patching the list in place. What happens to the members while the pane is
  * open (joins, leaves, going away and coming back, changes to a private room's members and
- * operators) is kept as presence changes for the pane's muted lines; they are not stored, so a
- * reload starts without them
+ * operators) is kept for the room's activity pane, folded as it arrives; it is not stored, so a
+ * reload starts without it
  */
 export class RoomMembers {
   /** the room */
@@ -31,8 +31,8 @@ export class RoomMembers {
   room = $state.raw<Schemas["Room"] | null>(null);
   /** why the last read failed, empty when it didn't */
   error = $state("");
-  /** what happened to the members since the pane opened, oldest first */
-  presence = $state.raw<PresenceEvent[]>([]);
+  /** what happened to the members since the pane opened, folded into bursts, oldest first */
+  bursts = $state<Burst[]>([]);
   /** the members' tickers, the latest change first */
   wall = $state.raw<WallLine[]>([]);
 
@@ -198,7 +198,7 @@ export class RoomMembers {
   }
 
   #note(kind: PresenceKind, username: string) {
-    const event = { id: ++seq, at: new Date().toISOString(), kind, username };
-    this.presence = [...this.presence.slice(-(KEPT - 1)), event];
+    addChange(this.bursts, { id: ++seq, at: new Date().toISOString(), kind, username });
+    if (this.bursts.length > KEPT) this.bursts.splice(0, this.bursts.length - KEPT);
   }
 }

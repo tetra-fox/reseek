@@ -16,6 +16,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import { plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { Keyed } from "#lib/keyed.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
@@ -101,7 +102,7 @@
         variant="danger"
         disabled={busy.running}
         onclick={() => void busy.run(() => call(() => api.DELETE("/api/v0/shares")))}
-        ><XIcon />Cancel the scan</Button>
+        ><XIcon />Cancel scan</Button>
     {:else}
       <Button
         variant={scan.scanPending ? "secondary" : "primary"}
@@ -116,9 +117,9 @@
 </div>
 
 {#if scan?.faulted}
-  <Notice kind="warning">The last scan failed, see Logs.</Notice>
+  <Notice kind="warning">The last scan failed. See Logs for details.</Notice>
 {:else if scan?.cancelled}
-  <Notice kind="warning">The last scan was cancelled; shares may be incomplete.</Notice>
+  <Notice kind="warning">The last scan was cancelled, so shares may be incomplete.</Notice>
 {/if}
 <LoadError loader={shares} />
 
@@ -129,7 +130,7 @@
     role="status"
     aria-live="polite">
     <div class="flex items-baseline gap-3">
-      <span class="text-sm font-medium">Scanning the shares</span>
+      <span class="text-sm font-medium">Scanning shares</span>
       <span class="ml-auto text-sm font-semibold tabular-nums">{percent}%</span>
     </div>
     <div
@@ -145,7 +146,11 @@
       </div>
     </div>
     <span class="text-xs text-fg-muted tabular-nums"
-      >Found {scan.files.toLocaleString()} files in {scan.directories.toLocaleString()} folders so far</span>
+      >Found {plural(scan.files, "file", "files")} in {plural(
+        scan.directories,
+        "folder",
+        "folders"
+      )} so far</span>
   </div>
 {/if}
 {#if shares.loading && !rows.size}
@@ -156,7 +161,7 @@
       <div
         class="overflow-x-auto border-t text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
         role="grid"
-        aria-label="Shared directories"
+        aria-label="Shared folders"
         aria-multiselectable="true"
         aria-activedescendant={sharedList.activeId}
         tabindex="0"
@@ -166,7 +171,7 @@
           role="row"
           class="grid min-w-max gap-2 border-b bg-surface-muted px-4 py-1.5 text-xs font-medium text-fg-muted"
           style:grid-template-columns={COLUMNS}>
-          {#each ["Host", "Local Path", "Directories", "Files", "Alias", "Remote Path"] as h (h)}
+          {#each ["Host", "Local path", "Folders", "Files", "Alias", "Remote path"] as h (h)}
             <span role="columnheader">{h}</span>
           {/each}
         </div>
@@ -212,7 +217,7 @@
     {/snippet}
   </Card>
 
-  <Card title="Excluded Paths">
+  <Card title="Excluded paths">
     {#snippet flush()}
       <div
         class="border-t text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"

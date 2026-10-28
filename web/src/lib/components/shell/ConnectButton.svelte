@@ -27,7 +27,7 @@
       const ready = controller === "Ready";
       const started = controller !== "Disconnected";
       return {
-        label: `Controller ${controller}`,
+        label: `Controller ${controller.toLowerCase()}`,
         plug: ready ? "text-success" : started ? "text-warning" : "text-fg-subtle",
         badge: ready ? null : ("closed" as const),
         connected: started
@@ -38,7 +38,7 @@
     if (server?.isConnected) {
       const cut = server.listen.reachable === "no";
       return {
-        label: cut ? "Connected, unreachable" : "Connected",
+        label: cut ? "Connected, port blocked" : "Connected",
         plug: state?.pendingReconnect || cut ? "text-warning" : "text-success",
         badge: cut
           ? ("unreachable" as const)
@@ -79,7 +79,9 @@
   const hint = $derived(
     [
       view.badge === "unreachable" && listen ? unreachable(listen.port) : null,
-      allowed ? (view.connected ? "Click to disconnect" : "Click to connect") : null
+      allowed
+        ? `${view.connected ? "Disconnect from" : "Connect to"} ${app.mode === "agent" ? "the controller" : "the Soulseek server"}`
+        : null
     ]
       .filter(Boolean)
       .join(" ") || undefined

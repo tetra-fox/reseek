@@ -81,7 +81,7 @@
         <button
           type="button"
           class="flex items-center gap-1 rounded-badge border border-dashed border-accent/50 px-1.5 text-xs text-accent-soft-fg hover:bg-accent-soft"
-          title={`Changed from the default, ${shown(info.default)}. Click to put the default back`}
+          title={`Changed from the default (${shown(info.default)}). Click to restore it.`}
           onclick={ondefault}>
           <RotateCcwIcon class="size-3" />default
         </button>
@@ -91,7 +91,7 @@
       <SourceBadge source={info.source} />
       {#if info.apply !== "live"}<Badge tone="warning">{info.apply}</Badge>{/if}
     </div>
-    <p id={help} class="text-xs text-pretty text-fg-muted">
+    <p id={help} class="text-xs text-pretty wrap-anywhere text-fg-muted">
       {info.doc}
       {#if info.default !== null && info.default !== undefined && !(Array.isArray(info.default) && !info.default.length)}
         <span class="text-fg-subtle"
@@ -117,7 +117,9 @@
             align="start"
             sideOffset={4}
             class="z-50 flex w-max max-w-[calc(100vw-1rem)] flex-col gap-1.5 rounded-card border bg-overlay p-3 text-xs shadow-raised motion-safe:animate-popover-in">
-            <p class="text-fg-muted">Set it outside the file, where scripts and services do:</p>
+            <p class="text-fg-muted">
+              Set it with an environment variable or a command-line flag instead:
+            </p>
             {#each [info.envVar && `${info.envVar}=…`, info.cliFlag && `${info.cliFlag} …`].filter((t): t is string => !!t) as text (text)}
               <span class="flex items-center gap-2">
                 <code class="flex-1 rounded-badge bg-surface-muted px-1.5 py-0.5 font-mono"
@@ -153,7 +155,7 @@
     {#if edit.notice}<p class="text-xs text-fg-muted">{edit.notice}</p>{/if}
     {#if notApplied}
       <p class="text-xs text-danger">
-        The file's value <code>{JSON.stringify(notApplied.value)}</code> isn't running: {notApplied.reason}
+        The value <code>{JSON.stringify(notApplied.value)}</code> in the file isn't in effect: {notApplied.reason}
       </p>
     {/if}
     {@render extra?.()}

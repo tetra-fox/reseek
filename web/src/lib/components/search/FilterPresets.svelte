@@ -58,7 +58,7 @@
     busy = false;
     if (!outcome.ok) return void toast(outcome.error, "error");
     saving = false;
-    toast(`Saved the preset ${name.trim()}`);
+    toast(`Saved preset ${name.trim()}`);
   };
 
   /**
@@ -69,7 +69,7 @@
   const remove = (preset: Preset) => {
     waiting.add(preset.name);
     undoable(
-      `Removed the preset ${preset.name}`,
+      `Removed preset ${preset.name}`,
       async () => {
         const outcome = await savePresets(
           presets.filter((p) => p.name !== preset.name && !removed.has(p.name))
@@ -102,7 +102,7 @@
         <button
           type="button"
           class="rounded-full p-1 pr-1.5 row-action"
-          aria-label={`Remove the preset ${preset.name}`}
+          aria-label={`Remove preset ${preset.name}`}
           onclick={() => remove(preset)}>
           <XIcon class="size-3" />
         </button>
@@ -116,7 +116,7 @@
     size="sm"
     class="h-6 text-xs"
     disabled={!!why || !filter.trim()}
-    title={why ?? (filter.trim() ? "Name the filter typed above" : "Type a filter first")}
+    title={why ?? (filter.trim() ? "Save the current filter as a preset" : "Type a filter first")}
     onclick={ask}>
     <PlusIcon />Save as preset
   </Button>
@@ -139,7 +139,7 @@
       <Input bind:value={text} required class="font-mono" />
     </label>
     {#if replaces}
-      <Notice kind="info">This replaces the preset {name.trim()}.</Notice>
+      <Notice kind="info">A preset named {name.trim()} already exists and will be replaced.</Notice>
     {/if}
   </form>
   {#snippet footer()}

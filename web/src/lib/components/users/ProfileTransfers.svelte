@@ -14,7 +14,7 @@
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
-  import { dateTime, formatBytes, getDirectoryName, getFileName } from "#lib/format.js";
+  import { dateTime, formatBytes, getDirectoryName, getFileName, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { Keyed } from "#lib/keyed.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
@@ -124,7 +124,7 @@
         }}>{d.label}</Button>
     {/each}
   </div>
-  <span class="ml-auto text-sm text-fg-muted">{total.toLocaleString()} transfers</span>
+  <span class="ml-auto text-sm text-fg-muted">{plural(total, "transfer", "transfers")}</span>
 </div>
 
 <LoadError loader={{ error, load }} />
@@ -205,7 +205,7 @@
 <ConfirmDialog
   bind:open={confirmOpen}
   title="Remove a running transfer?"
-  body="It is cancelled first; its file stays."
+  body="The transfer is cancelled first. The file on disk is kept."
   confirm="Remove"
   danger
   onconfirm={() => removing && void act(storeOf(removing), "remove", [removing.id])} />

@@ -6,14 +6,14 @@ test("logs in, shows where it is and moves between screens", async ({ page }) =>
   await expect(page.getByLabel("Username")).toBeFocused();
   await page.getByLabel("Username").fill("reseek");
   await page.getByLabel("Password").fill("wrong");
-  await page.getByRole("button", { name: "Login" }).click();
+  await page.getByRole("button", { name: "Log in", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveText("Invalid username or password");
   await expect(page.getByLabel("Username")).toBeFocused();
 
   await page.getByLabel("Password").fill("reseek");
-  await page.getByRole("button", { name: "Login" }).click();
+  await page.getByRole("button", { name: "Log in", exact: true }).click();
   await expect(page).toHaveURL(/#\/downloads$/);
-  await expect(page.getByText("No downloads to display")).toBeVisible();
+  await expect(page.getByText("No downloads yet")).toBeVisible();
   // no badge for the live connection: only its loss is shown
   await expect(page.getByRole("status", { name: /^Updates/ })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveText("Downloads");

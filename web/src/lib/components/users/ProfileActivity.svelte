@@ -9,7 +9,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { formatDate, getFileName, plural } from "#lib/format.js";
   import { call } from "#lib/request.js";
-  import { isSucceeded } from "#lib/transfers/states.js";
+  import { endingText, isSucceeded } from "#lib/transfers/states.js";
 
   // a newest-first timeline of what happened with one user: transfers, messages by day, blocks
   let { username }: { username: string } = $props();
@@ -34,7 +34,8 @@
   }): Entry => {
     const name = getFileName(t.filename);
     const what = t.direction === "Upload" ? "Upload of" : "Download of";
-    if (!t.endedAt) return { key: `t:${t.id}`, at: t.requestedAt, text: `${what} ${name} asked` };
+    if (!t.endedAt)
+      return { key: `t:${t.id}`, at: t.requestedAt, text: `${what} ${name} requested` };
     if (isSucceeded(t.state)) {
       return {
         key: `t:${t.id}`,
@@ -42,7 +43,7 @@
         text: `${t.direction === "Upload" ? "Uploaded" : "Downloaded"} ${name}`
       };
     }
-    const outcome = t.state.replace("Completed, ", "").toLowerCase();
+    const outcome = endingText(t.state);
     return {
       key: `t:${t.id}`,
       at: t.endedAt,
@@ -94,7 +95,7 @@
             ? `Blocked by ${e.data.by}${e.data.reason ? `: ${e.data.reason}` : ""}`
             : e.type === "UserUnblocked"
               ? e.data.reason === "expired"
-                ? "The block ended"
+                ? "Block expired"
                 : `Unblocked by ${e.data.by}`
               : e.type;
         found.push({ key: `e:${e.id}`, at: e.timestamp, text });
@@ -121,7 +122,7 @@
 {#if !loaded}
   <Skeleton class="h-40" />
 {:else if !entries.length}
-  <EmptyState icon={HistoryIcon} title="Nothing with this user yet" />
+  <EmptyState icon={HistoryIcon} title="No activity with this user yet" />
 {:else}
   <ol class="flex flex-col rounded-card border bg-surface shadow-card">
     {#each entries as entry (entry.key)}

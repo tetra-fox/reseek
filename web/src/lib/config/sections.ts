@@ -19,7 +19,8 @@ export type Control =
   | "secret"
   | "regex-list"
   | "cidr-list"
-  | "map";
+  | "map"
+  | "table-list";
 
 /**
  * One option on the settings page. Its help text, apply class, kind and source come from the
@@ -177,12 +178,12 @@ export const sections: Section[] = [
     fields: [
       {
         key: "shares.directories",
-        label: "Shared directories",
+        label: "Shared folders",
         derived: {
           from: "shares.share_downloads",
           entry: (values) =>
             valueAt(values, "shares.share_downloads") === true
-              ? String(valueAt(values, "directories.downloads") ?? "the downloads directory")
+              ? String(valueAt(values, "directories.downloads") ?? "the downloads folder")
               : null,
           note: "From Share the downloads folder (shares.share_downloads)"
         }
@@ -224,14 +225,14 @@ export const sections: Section[] = [
       },
       {
         key: "transfers.download.request_style",
-        label: "Ask for files with"
+        label: "Download request style"
       },
       { key: "transfers.download.retry.attempts", label: "Download attempts", ...AT_LEAST_1 },
       { key: "transfers.download.retry.delay", label: "First retry after" },
       { key: "transfers.download.retry.max_delay", label: "Longest retry wait" },
       {
         key: "transfers.download.retry.partial",
-        label: "A retry"
+        label: "Partial file on retry"
       },
       {
         key: "transfers.download.destination.subdirectory",
@@ -247,7 +248,7 @@ export const sections: Section[] = [
         label: "File mode",
         placeholder: "the system's"
       },
-      { key: "transfers.ui.queue_refresh", label: "Ask for queue places every" }
+      { key: "transfers.ui.queue_refresh", label: "Refresh queue positions every" }
     ]
   },
   {
@@ -263,18 +264,18 @@ export const sections: Section[] = [
       },
       {
         key: "transfers.groups.leechers.thresholds.directories",
-        label: "Leechers: fewest shared directories",
+        label: "Leechers: fewest shared folders",
         ...AT_LEAST_1
       },
-      { key: "transfers.groups.blacklisted.members", label: "Blacklisted users" },
+      { key: "transfers.groups.blacklisted.members", label: "Blocked users" },
       {
         key: "transfers.groups.blacklisted.patterns",
-        label: "Blacklisted name patterns",
+        label: "Blocked name patterns",
         control: "regex-list"
       },
       {
         key: "transfers.groups.blacklisted.cidrs",
-        label: "Blacklisted networks",
+        label: "Blocked networks",
         control: "cidr-list"
       },
       { key: "transfers.groups.user_defined", label: "Your groups" },
@@ -288,17 +289,17 @@ export const sections: Section[] = [
   },
   {
     id: "directories",
-    title: "Directories",
+    title: "Folders",
     fields: [
       {
         key: "directories.downloads",
         label: "Downloads",
-        placeholder: "downloads in the data directory"
+        placeholder: "downloads in the data folder"
       },
       {
         key: "directories.incomplete",
         label: "Downloads in progress",
-        placeholder: "incomplete in the data directory"
+        placeholder: "incomplete in the data folder"
       }
     ]
   },
@@ -325,7 +326,7 @@ export const sections: Section[] = [
       { key: "web.https.certificate.key", label: "Private key (PEM)" },
       { key: "web.https.certificate.pfx", label: "Certificate (PKCS#12)" },
       { key: "web.https.certificate.password", label: "PKCS#12 password", control: "secret" },
-      { key: "web.live.max_streams_per_principal", label: "Event streams each", ...AT_LEAST_1 },
+      { key: "web.live.max_streams_per_principal", label: "Event streams per user", ...AT_LEAST_1 },
       { key: "web.files.serve", label: "Serve downloaded files" },
       { key: "web.files.archive_max_bytes", label: "Largest zip of a folder" },
       {
@@ -393,7 +394,8 @@ export const sections: Section[] = [
     id: "search-filters",
     title: "Search filters",
     fields: [
-      { key: "filters.search.request", label: "Searches not answered", control: "regex-list" }
+      { key: "filters.search.request", label: "Searches not answered", control: "regex-list" },
+      { key: "search.filter_presets", label: "Filter presets" }
     ]
   },
   {

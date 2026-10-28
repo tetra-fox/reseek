@@ -18,7 +18,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { dateTime } from "#lib/format.js";
+  import { dateTime, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { Keyed } from "#lib/keyed.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
@@ -117,7 +117,9 @@
     <Menu.Trigger>
       {#snippet child({ props })}
         <Button {...props} variant="outline" size="sm"
-          >{types.length ? `${types.length} types` : "Every type"}<ChevronDownIcon /></Button>
+          >{types.length
+            ? plural(types.length, "type", "types")
+            : "All types"}<ChevronDownIcon /></Button>
       {/snippet}
     </Menu.Trigger>
     <Menu.Content align="start" class="max-h-80 overflow-y-auto">
@@ -129,14 +131,14 @@
     </Menu.Content>
   </Menu.Root>
   {#if types.length}
-    <Button variant="ghost" size="sm" onclick={() => to({ page: 1, types: [] })}>Every type</Button>
+    <Button variant="ghost" size="sm" onclick={() => to({ page: 1, types: [] })}>All types</Button>
   {/if}
   <div class="ml-auto flex items-center gap-inline">
     <Select
-      class="h-control-sm w-28"
-      aria-label="Events a page"
+      class="h-control-sm w-32"
+      aria-label="Events per page"
       bind:value={() => perPage, (v) => to({ page: 1, perPage: v })}
-      options={SIZES.map((n) => ({ value: n, label: `${n} a page` }))} />
+      options={SIZES.map((n) => ({ value: n, label: `${n} per page` }))} />
     <Pagination {page} {pages} onpage={(p) => to({ page: p })} />
   </div>
 </div>
@@ -191,8 +193,8 @@
             variant="ghost"
             size="icon-sm"
             class="shrink-0"
-            aria-label="Show the whole payload"
-            title="Show the whole payload"
+            aria-label="Show full payload"
+            title="Show full payload"
             onclick={() => (shown = e)}><Maximize2Icon /></Button>
         </span>
       </div>

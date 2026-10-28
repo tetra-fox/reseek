@@ -141,6 +141,12 @@ describe("chart axes", () => {
     expect(timeTicks(min, min)).toEqual([]);
   });
 
+  it("keeps at least two ticks when a narrow chart allows few", () => {
+    const min = Date.parse("2026-09-27T00:07:00Z");
+    const max = min + 30 * 86_400_000;
+    expect(timeTicks(min, max, 3).length).toBeGreaterThanOrEqual(2);
+  });
+
   it("rounds the value axis up to a whole step", () => {
     expect(valueTicks(97)).toEqual([0, 25, 50, 75, 100]);
     expect(valueTicks(0)).toEqual([0]);

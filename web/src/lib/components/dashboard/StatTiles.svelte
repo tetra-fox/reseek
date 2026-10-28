@@ -7,7 +7,7 @@
 
   import type { Schemas } from "#lib/api/client.js";
   import { ratioTone, tiles } from "#lib/dashboard/reports.js";
-  import { formatBytes } from "#lib/format.js";
+  import { formatBytes, NONE, plural } from "#lib/format.js";
   import { href } from "#lib/nav.js";
 
   // what the range moved: bytes and files each way, the share ratio and the peers
@@ -50,7 +50,7 @@
     ArrowDownIcon,
     down[0],
     down[1],
-    `Downloaded · ${t.downloadedFiles.toLocaleString()} files`,
+    `Downloaded · ${plural(t.downloadedFiles, "file", "files")}`,
     "text-info",
     "/downloads?state=completed"
   )}
@@ -58,13 +58,13 @@
     ArrowUpIcon,
     up[0],
     up[1],
-    `Uploaded · ${t.uploadedFiles.toLocaleString()} files`,
+    `Uploaded · ${plural(t.uploadedFiles, "file", "files")}`,
     "text-success",
     "/uploads?state=completed"
   )}
   {@render tile(
     ChartPieIcon,
-    t.ratio === null ? "—" : t.ratio.toFixed(2),
+    t.ratio === null ? NONE : t.ratio.toFixed(2),
     "",
     "Share ratio (↑/↓)",
     TONES[tone],
@@ -74,7 +74,7 @@
     UserIcon,
     t.peers.toLocaleString(),
     "",
-    "Distinct peers",
+    "Users transferred with",
     "",
     "/users?has=transfers"
   )}

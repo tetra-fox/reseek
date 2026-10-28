@@ -15,11 +15,13 @@
   import Username from "#lib/components/users/Username.svelte";
   import { asItem, enqueue } from "#lib/downloads.js";
   import {
+    cssWidth,
     formatAttributes,
     formatBytes,
     formatSeconds,
     getFileName,
-    plural
+    plural,
+    sumWidths
   } from "#lib/format.js";
   import { freezesWhileUsed, heldOrder } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
@@ -28,11 +30,13 @@
     type DenseColumn,
     type DenseRow,
     denseView,
+    denseWidth,
     nextSort,
     sortDense
   } from "#lib/search/dense.js";
   import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
+  import { remPx } from "#lib/viewport.svelte.js";
 
   import Country from "./Country.svelte";
 
@@ -46,8 +50,8 @@
 
   let { rows, searchId, canDownload }: Props = $props();
 
-  /** one row's height, and the rows drawn beyond the visible ones */
-  const ROW = 28;
+  /** one row's height, 1.75rem in pixels, and the rows drawn beyond the visible ones */
+  const ROW = 1.75 * remPx();
   const OVERSCAN = 12;
 
   let scrollTop = $state(0);
@@ -64,9 +68,9 @@
   $effect(() => arrivals.see(sorted.map((r) => r.key)));
 
   const template = $derived(
-    `2.5rem ${DENSE_COLUMNS.map((c) => `${denseView.widths[c.id]}px`).join(" ")} 4.5rem`
+    `2.5rem ${DENSE_COLUMNS.map((c) => cssWidth(denseWidth(c))).join(" ")} 4.5rem`
   );
-  const width = $derived(40 + 72 + DENSE_COLUMNS.reduce((n, c) => n + denseView.widths[c.id], 0));
+  const width = $derived(sumWidths(["2.5rem", ...DENSE_COLUMNS.map(denseWidth), "4.5rem"]));
   const start = $derived(Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN));
   const end = $derived(Math.min(sorted.length, Math.ceil((scrollTop + height) / ROW) + OVERSCAN));
   const chosen = $derived(sorted.filter((r) => selected.has(r.key)));
@@ -139,11 +143,13 @@
 </script>
 
 <div class="flex flex-col gap-2">
+  <!-- every row, the header too, has the cells' font with tabular figures, so a column width in
+       ch measures the same in each; the header's labels are smaller inside it -->
   <div
-    class="relative overflow-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    style:height="max(20rem, calc(100svh - 22rem))"
+    class="relative overflow-auto rounded-card border bg-surface text-sm tabular-nums shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    style:height="max(20rem, calc(var(--content-h) - 16rem))"
     role="grid"
-    aria-label="Search results, one file a row"
+    aria-label="Search results"
     aria-rowcount={sorted.length}
     aria-multiselectable="true"
     aria-activedescendant={list.activeId}
@@ -157,17 +163,18 @@
     {@attach list.attach}>
     <div
       role="row"
-      class="sticky top-0 z-10 grid h-8 items-center border-b bg-surface-muted text-xs font-medium text-fg-muted"
+      class="sticky top-0 z-10 grid h-8 items-center border-b bg-surface-muted text-sm font-medium text-fg-muted"
       style:grid-template-columns={template}
-      style:min-width={`${width}px`}
+      style:min-width={width}
       bind:offsetHeight={headerHeight}>
-      <span role="columnheader" class="sr-only">Select</span>
+      <!-- each header holds its cell, so the labels line up with the columns under them -->
+      <span role="columnheader"><span class="sr-only">Select</span></span>
       {#each DENSE_COLUMNS as column (column.id)}
         {@const sort = denseView.sort?.id === column.id ? denseView.sort.dir : null}
         <span
           role="columnheader"
           aria-sort={sort === "asc" ? "ascending" : sort === "desc" ? "descending" : undefined}
-          class={["relative flex min-w-0 items-center px-2", column.end && "justify-end"]}>
+          class={["relative flex min-w-0 items-center px-2 text-xs", column.end && "justify-end"]}>
           <button
             type="button"
             class="flex min-w-0 items-center gap-1 truncate hover:text-fg"
@@ -182,23 +189,28 @@
             role="separator"
             aria-label={`Width of ${column.label}`}
             onpointerdown={(e) => {
-              resizing = { id: column.id, x: e.clientX, width: denseView.widths[column.id] };
+              // a drag starts from the width the column has on screen, whatever it was set as
+              const cell = e.currentTarget.parentElement!.getBoundingClientRect();
+              resizing = { id: column.id, x: e.clientX, width: cell.width };
               e.currentTarget.setPointerCapture(e.pointerId);
             }}
             onpointermove={(e) => {
               if (!resizing) return;
-              denseView.widths[resizing.id] = Math.max(40, resizing.width + e.clientX - resizing.x);
+              denseView.dragged[resizing.id] = Math.max(
+                40,
+                Math.round(resizing.width + e.clientX - resizing.x)
+              );
             }}
             onpointerup={() => (resizing = null)}></span>
         </span>
       {/each}
-      <span role="columnheader" class="sr-only">Actions</span>
+      <span role="columnheader"><span class="sr-only">Actions</span></span>
     </div>
     <div
       class="relative"
       role="rowgroup"
       style:height={`${sorted.length * ROW}px`}
-      style:min-width={`${width}px`}
+      style:min-width={width}
       {@attach freezesWhileUsed}>
       {#each sorted.slice(start, end) as row, i (row.key)}
         {@const name = getFileName(row.file.filename)}
@@ -236,9 +248,9 @@
             <span class="min-w-0 truncate"><Username name={row.username} /></span>
             {#if row.country}<Country code={row.country} />{/if}
           </span>
-          <span role="gridcell" class="px-2 text-right tabular-nums"
+          <span role="gridcell" class="truncate px-2 text-right tabular-nums"
             >{formatBytes(row.speed, 1)}/s</span>
-          <span role="gridcell" class="px-2 text-right tabular-nums">{row.queue}</span>
+          <span role="gridcell" class="truncate px-2 text-right tabular-nums">{row.queue}</span>
           <span role="gridcell" class={["px-2", row.free ? "text-success" : "text-fg-muted"]}>
             {row.free ? "Yes" : "No"}
           </span>
@@ -249,13 +261,13 @@
             {#if row.file.locked}<LockIcon class="size-3.5 shrink-0 text-fg-muted" />{/if}
             <span class="truncate">{name}</span>
           </span>
-          <span role="gridcell" class="px-2 text-right tabular-nums"
+          <span role="gridcell" class="truncate px-2 text-right tabular-nums"
             >{formatBytes(row.file.size)}</span>
           <span role="gridcell" class="flex min-w-0 items-center gap-1 truncate px-2 text-fg-muted">
             {#if row.file.suspect}<Suspect suspect={row.file.suspect} />{/if}
             {formatAttributes(row.file)}
           </span>
-          <span role="gridcell" class="px-2 text-right text-fg-muted tabular-nums">
+          <span role="gridcell" class="truncate px-2 text-right text-fg-muted tabular-nums">
             {formatSeconds(row.file.length)}
           </span>
           <span
@@ -297,10 +309,7 @@
     </div>
   </div>
   {#if chosen.length}
-    <div
-      class="sticky bottom-12 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised"
-      role="toolbar"
-      aria-label="Selected files">
+    <div class="selection-bar" role="toolbar" aria-label="Selected files">
       <span class="text-sm"
         >{plural(chosen.length, "file", "files")} · {formatBytes(chosenBytes)}</span>
       {#if canDownload}

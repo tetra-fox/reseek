@@ -6,6 +6,7 @@
   import { activityPrefs } from "#lib/activity/activity.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import { formatSpeedPadded } from "#lib/format.js";
+  import { shortcutAria, shortcutText } from "#lib/keys.js";
   import { REPOSITORY } from "#lib/project.js";
 
   const connected = $derived(app.isServerConnected);
@@ -24,38 +25,45 @@
   const uploads = $derived(figures("uploads"));
 </script>
 
-<!-- the server connection and the transfer figures, always in view -->
+<!-- the server connection and the transfer figures, always in view. A phone keeps the speeds
+     and the activity log's button and leaves out the counts and the project link. Where a large
+     text size leaves no room, the speeds move to a second line together -->
 <footer
-  class="fixed inset-x-0 bottom-0 z-20 flex h-10 items-center gap-4 overflow-x-auto border-t bg-surface/90 px-gutter text-xs backdrop-blur-md">
-  <span class="flex shrink-0 items-center gap-1.5">
-    <span class={["size-2 rounded-full", connected ? "bg-success" : "bg-danger"]}></span>
-    <span class="font-medium">{connected && username ? username : "Disconnected"}</span>
+  class="relative z-20 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 border-t bg-surface/90 px-gutter py-1.5 text-xs backdrop-blur-md md:gap-x-4">
+  <span class="flex min-w-0 items-center gap-1.5">
+    <span class={["size-2 shrink-0 rounded-full", connected ? "bg-success" : "bg-danger"]}></span>
+    <span class="truncate font-medium">{connected && username ? username : "Disconnected"}</span>
   </span>
-  <span class="flex shrink-0 items-center gap-1.5" aria-label="Downloads">
-    <ArrowDownIcon class="size-3.5 text-info" />
-    <span class="font-mono whitespace-pre tabular-nums">{downloads.speed}</span>
-    <span class="text-fg-muted">{downloads.active} active · {downloads.queued} queued</span>
-  </span>
-  <span class="flex shrink-0 items-center gap-1.5" aria-label="Uploads">
-    <ArrowUpIcon class="size-3.5 text-success" />
-    <span class="font-mono whitespace-pre tabular-nums">{uploads.speed}</span>
-    <span class="text-fg-muted">{uploads.active} active · {uploads.queued} queued</span>
+  <span class="flex shrink-0 items-center gap-3 md:gap-4">
+    <span class="flex shrink-0 items-center gap-1.5" aria-label="Downloads">
+      <ArrowDownIcon class="size-3.5 text-info" />
+      <span class="font-mono whitespace-pre tabular-nums">{downloads.speed}</span>
+      <span class="text-fg-muted max-md:hidden"
+        >{downloads.active} active · {downloads.queued} queued</span>
+    </span>
+    <span class="flex shrink-0 items-center gap-1.5" aria-label="Uploads">
+      <ArrowUpIcon class="size-3.5 text-success" />
+      <span class="font-mono whitespace-pre tabular-nums">{uploads.speed}</span>
+      <span class="text-fg-muted max-md:hidden"
+        >{uploads.active} active · {uploads.queued} queued</span>
+    </span>
   </span>
   {#if app.mode !== "agent"}
     <button
       type="button"
       aria-pressed={activityPrefs.open}
-      class="flex shrink-0 items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg"
-      title="What other users do with you: browses, searches, queued files, uploads"
+      class="flex shrink-0 items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg max-md:ml-auto"
+      title={`Who is browsing, searching and downloading from you (${shortcutText("J")})`}
+      aria-keyshortcuts={shortcutAria("J")}
       onclick={() => (activityPrefs.open = !activityPrefs.open)}>
-      <ActivityIcon class="size-3.5" />Activity
+      <ActivityIcon class="size-3.5" /><span class="max-md:sr-only">Activity</span>
     </button>
   {/if}
   <a
     href={REPOSITORY}
     target="_blank"
     rel="noreferrer"
-    class="ml-auto flex shrink-0 items-center gap-1.5 text-fg-muted hover:text-fg">
+    class="ml-auto flex shrink-0 items-center gap-1.5 text-fg-muted hover:text-fg max-md:hidden">
     <img src="./favicon.svg" width="18" height="18" alt="" />
     <span class="font-medium">reseek</span>
     <span class="font-mono opacity-70">{app.state?.version.current ?? ""}</span>

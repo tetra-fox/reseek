@@ -29,15 +29,17 @@
     if (failed.length) error = failed.join("; ");
     else {
       open = false;
-      toast(group ? `Put in ${group}` : "Taken out of their group");
+      toast(group ? `Moved to group ${group}` : "Removed from their group");
     }
   };
 </script>
 
 <Dialog
   bind:open
-  title={usernames.length === 1 ? `Group of ${usernames[0]}` : `Group of ${usernames.length} users`}
-  description="A group set in the configuration wins over one chosen here.">
+  title={usernames.length === 1
+    ? `Upload group for ${usernames[0]}`
+    : `Upload group for ${usernames.length} users`}
+  description="A group set in the configuration takes precedence over this one.">
   <Form layout="stacked">
     <Field label="Upload group" for="assign-group">
       <Select

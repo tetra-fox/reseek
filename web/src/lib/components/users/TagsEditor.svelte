@@ -38,7 +38,7 @@
       {#if !disabled}
         <button
           type="button"
-          aria-label={`Remove the tag ${tag}`}
+          aria-label={`Remove tag ${tag}`}
           onclick={() => void save(tags.filter((t) => t !== tag))}><XIcon /></button>
       {/if}
     </Badge>
@@ -46,7 +46,7 @@
   {#if !disabled}
     <Input
       class="h-control-sm w-32"
-      placeholder="add a tag"
+      placeholder="Add a tag"
       aria-label="Add a tag"
       maxlength={32}
       bind:value={typed}

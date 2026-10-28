@@ -122,7 +122,7 @@
   class={["flex flex-col rounded-card border bg-surface shadow-card", node.locked && "opacity-50"]}>
   <!-- the folder's name and its download stay in view while its files scroll -->
   <header
-    class="sticky top-14 z-[4] flex flex-wrap items-center gap-2 rounded-t-card border-b bg-surface/95 px-4 py-3 backdrop-blur-md">
+    class="sticky top-0 z-[4] flex flex-wrap items-center gap-2 rounded-t-card border-b bg-surface/95 px-4 py-3 backdrop-blur-md">
     {#if node.locked}
       <span title={LOCKED_HINT}><LockIcon class="size-5 text-fg-muted" /></span>
     {:else}
@@ -143,7 +143,8 @@
           disabled={!connected || downloading || !node.totalFileCount}
           onclick={() => void downloadFolder()}>
           <DownloadIcon />Download this folder
-          <span class="font-normal text-fg-muted">
+          <!-- a phone leaves the count to the folder's line in the tree above -->
+          <span class="font-normal text-fg-muted max-md:hidden">
             {plural(node.totalFileCount, "file", "files")}, {formatBytes(node.totalBytes)}
           </span>
         </Button>
@@ -178,7 +179,7 @@
           <tr>
             <th class="w-10">
               <Checkbox
-                aria-label="Select every file in the folder and under it"
+                aria-label="Select every file in this folder and its subfolders"
                 checked={allTicked(candidates)}
                 indeterminate={someTicked(candidates)}
                 onCheckedChange={(on) => tick(candidates, on)} />
@@ -213,14 +214,14 @@
                     {child.totalFileCount
                       ? plural(child.totalFileCount, "file", "files")
                       : "0 files"}{child.totalDirectoryCount
-                      ? `, ${plural(child.totalDirectoryCount, "directory", "directories")}`
+                      ? `, ${plural(child.totalDirectoryCount, "folder", "folders")}`
                       : ""}
                   </span>
                   <Button
                     variant="ghost"
                     size="icon-sm"
                     class="ml-auto row-action"
-                    aria-label="Navigate to this directory"
+                    aria-label="Open this folder"
                     onclick={(e) => {
                       e.stopPropagation();
                       onnavigate(child.name);

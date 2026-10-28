@@ -22,13 +22,10 @@ export type Message = {
 
 export type Gap = Schemas["HistoryGap"];
 
-import type { Burst } from "./presence";
-
 /** A line of the message list */
 export type Line =
   | { kind: "day"; key: string; date: string }
   | { kind: "gap"; key: string; gap: Gap }
-  | { kind: "presence"; key: string; burst: Burst }
   | { kind: "unread"; key: "unread" }
   | { kind: "message"; key: string; message: Message; head: boolean };
 
@@ -68,32 +65,15 @@ const day = (iso: string) => new Date(iso).toDateString();
 
 /**
  * The list's lines for messages in the order they arrived: a day line where the day changes, a
- * gap line where history is missing and a presence line where members came and went, both in
- * time order, an unread line before `unreadFrom`, and each message with whether it starts a group
- * (a new author, a line between, a new day, or five minutes since the one before). A gap still
- * open, with no end, and presence after the last message go last
+ * gap line in time order where history is missing, an unread line before `unreadFrom`, and each
+ * message with whether it starts a group (a new author, a line between, a new day, or five
+ * minutes since the one before). A gap still open, with no end, goes last
  */
-export const layout = (
-  messages: Message[],
-  gaps: Gap[],
-  unreadFrom: number | null,
-  bursts: Burst[] = []
-): Line[] => {
+export const layout = (messages: Message[], gaps: Gap[], unreadFrom: number | null): Line[] => {
   const lines: Line[] = [];
-  const pending: (Line & { kind: "gap" | "presence"; at: number })[] = [
-    ...gaps.map((gap) => ({
-      kind: "gap" as const,
-      key: `gap:${gap.from}`,
-      gap,
-      at: Date.parse(gap.from)
-    })),
-    ...bursts.map((burst) => ({
-      kind: "presence" as const,
-      key: burst.key,
-      burst,
-      at: Date.parse(burst.at)
-    }))
-  ].toSorted((a, b) => a.at - b.at);
+  const pending: (Line & { kind: "gap"; at: number })[] = gaps
+    .map((gap) => ({ kind: "gap" as const, key: `gap:${gap.from}`, gap, at: Date.parse(gap.from) }))
+    .toSorted((a, b) => a.at - b.at);
   let lastDay: string | null = null;
   let previous: Message | null = null;
   const placeBetween = (before: number) => {

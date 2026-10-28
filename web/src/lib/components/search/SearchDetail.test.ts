@@ -230,6 +230,42 @@ describe("search results", () => {
     expect(toggle("Three").getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("count what is hidden by why, each with its own way back", async () => {
+    const stored = [response("alice", 300), response("bob", 200)];
+    const net = await open(stored);
+    for (const r of stored) net.frame("search.response", { searchId: ID, response: r });
+    await flush();
+    const text = () => document.body.textContent?.replace(/\s+/g, " ") ?? "";
+    const button = (label: string) =>
+      [...document.querySelectorAll("button")].filter((b) => b.textContent?.trim() === label);
+
+    // a dismissed result is counted as dismissed, not as hidden by filters
+    document.querySelector<HTMLButtonElement>('button[aria-label="Hide this result"]')!.click();
+    await flush();
+    expect(text()).toContain("1 dismissed");
+    expect(text()).not.toContain("hidden by filters");
+
+    // a filter that hides the rest leaves one message with one Clear filters, and no "shown"
+    const box = document.querySelector<HTMLInputElement>('input[aria-label="Filter"]')!;
+    box.value = "nothing-matches";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(200);
+    flushSync();
+    expect(text()).toContain("All results are hidden");
+    expect(text()).toContain("1 result hidden by filters");
+    expect(text()).not.toContain("All results shown");
+    expect(button("Clear filters")).toHaveLength(1);
+
+    // each way back brings back its own part
+    button("Show again")[0].click();
+    flushSync();
+    expect(text()).not.toContain("dismissed");
+    button("Clear filters")[0].click();
+    await vi.advanceTimersByTimeAsync(200);
+    flushSync();
+    expect(text()).not.toContain("hidden by filters");
+  });
+
   it("put a preset in the filter box, which keeps only what it matches", async () => {
     app.options = {
       search: { filter_presets: [{ name: "FLAC", filter: "type:flac" }] }
@@ -275,7 +311,7 @@ describe("search results", () => {
       );
     expect(chips()).toEqual(["Big", "No small files", "FLAC"]);
     const remove = (name: string) =>
-      document.querySelector<HTMLButtonElement>(`button[aria-label="Remove the preset ${name}"]`)!;
+      document.querySelector<HTMLButtonElement>(`button[aria-label="Remove preset ${name}"]`)!;
     remove("Big").click();
     await flush();
     remove("No small files").click();
@@ -319,9 +355,7 @@ describe("search results", () => {
       [...document.querySelectorAll('[aria-label="Filter presets"] button[aria-pressed]')].map(
         (b) => b.textContent?.trim()
       );
-    document
-      .querySelector<HTMLButtonElement>('button[aria-label="Remove the preset Big"]')!
-      .click();
+    document.querySelector<HTMLButtonElement>('button[aria-label="Remove preset Big"]')!.click();
     await vi.advanceTimersByTimeAsync(UNDO_MS);
     flushSync();
     expect(chips()).toEqual(["FLAC"]);

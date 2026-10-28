@@ -133,16 +133,16 @@
 
 <Dialog bind:open title="Join a room" class="w-[min(36rem,calc(100vw-2rem))]">
   <div class="flex gap-2">
-    <Input type="search" placeholder="Room filter" aria-label="Room filter" bind:value={filter} />
+    <Input type="search" placeholder="Filter rooms" aria-label="Filter rooms" bind:value={filter} />
     <Button
       variant="outline"
       size="icon"
-      aria-label="Ask the server again"
+      aria-label="Refresh the room list"
       onclick={() => void available.load()}><RefreshCwIcon /></Button>
   </div>
   {#if available.loading}
     <div class="flex items-center justify-center gap-2 py-8 text-sm text-fg-muted">
-      <Spinner class="size-5" />Loading Room List
+      <Spinner class="size-5" />Loading rooms...
     </div>
   {:else if available.error}
     <Notice kind="error">{available.error}</Notice>
@@ -178,7 +178,7 @@
             {#if room.isOwned}<CrownIcon class="size-3.5 text-warning" aria-label="yours" />{/if}
             {#if room.isModerated}<GavelIcon
                 class="size-3.5 text-fg-muted"
-                aria-label="you moderate it" />{/if}
+                aria-label="you're an operator" />{/if}
             <span class="truncate">{room.name}</span>
           </span>
           <span role="gridcell" class="text-right tabular-nums"
@@ -229,7 +229,7 @@
     </Field>
     <label class="flex items-center gap-2 text-sm">
       <Checkbox checked={isPrivate} onCheckedChange={(on) => (isPrivate = on)} />
-      Private: create it as a private room if it doesn't exist
+      Create as a private room if it doesn't exist
     </label>
     {#if error}<Notice kind="error">{error}</Notice>{/if}
     <p class="text-xs text-fg-muted">

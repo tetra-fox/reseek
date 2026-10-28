@@ -53,17 +53,17 @@ describe("browse progress", () => {
     });
     await flush();
     const line = () => document.querySelector("[role=status] p")!;
-    expect(line().textContent).toContain("Downloaded 0% of Response");
+    expect(line().textContent).toContain("Loading shares... 0%");
     const before = line();
 
     net.frame("users.browse_progress", progress(40));
     await flush();
     expect(line()).toBe(before);
-    expect(line().textContent).toContain("Downloaded 40% of Response");
+    expect(line().textContent).toContain("Loading shares... 40%");
     // another user's browse doesn't move this one
     net.frame("users.browse_progress", { ...progress(90), username: "bob" });
     await flush();
-    expect(line().textContent).toContain("Downloaded 40% of Response");
+    expect(line().textContent).toContain("Loading shares... 40%");
 
     answer({
       directories: [

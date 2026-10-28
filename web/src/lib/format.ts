@@ -86,24 +86,59 @@ export const formatDuration = (seconds: number): string => {
   return parts.join(" ");
 };
 
-const UNIT_MS: Record<string, number> = {
-  ms: 1,
-  s: 1_000,
-  m: 60_000,
-  h: 3_600_000,
-  d: 86_400_000
-};
+const DAY_MS = 86_400_000;
+const MONTH_MS = 2_630_016_000;
+const YEAR_MS = 31_557_600_000;
+
+// the units an option's duration is written with, as the daemon's humantime reads and writes
+// them; "m" is minutes and "M" months
+const UNIT_MS: Record<string, number> = Object.fromEntries(
+  (
+    [
+      [1, ["ms", "msec"]],
+      [1_000, ["s", "sec", "secs", "second", "seconds"]],
+      [60_000, ["m", "min", "mins", "minute", "minutes"]],
+      [3_600_000, ["h", "hr", "hrs", "hour", "hours"]],
+      [DAY_MS, ["d", "day", "days"]],
+      [7 * DAY_MS, ["w", "week", "weeks"]],
+      [MONTH_MS, ["M", "month", "months"]],
+      [YEAR_MS, ["y", "year", "years"]]
+    ] as const
+  ).flatMap(([ms, names]) => names.map((n) => [n, ms]))
+);
 
 /**
- * A duration the way options write them, "2m" or "1h 30m", in milliseconds; null for anything
- * else
+ * A duration the way options write them, "2m", "1h 30m" or "5months 27days", in milliseconds;
+ * null for anything else
  */
 export const parseDuration = (text: unknown): number | null => {
   if (typeof text !== "string") return null;
   const trimmed = text.trim();
-  const parts = [...trimmed.matchAll(/(\d+)\s*(ms|s|m|h|d)\s*/g)];
+  const parts = [...trimmed.matchAll(/(\d+)\s*([a-zA-Z]+)\s*/g)];
   if (!parts.length || parts.map((p) => p[0]).join("") !== trimmed) return null;
+  if (parts.some(([, , unit]) => !(unit in UNIT_MS))) return null;
   return parts.reduce((sum, [, n, unit]) => sum + Number(n) * UNIT_MS[unit], 0);
+};
+
+// the units a duration is said in, largest first, with their lengths in milliseconds
+const SAID: [string, number][] = [
+  ["year", YEAR_MS],
+  ["month", MONTH_MS],
+  ["day", DAY_MS],
+  ["hour", 3_600_000],
+  ["minute", 60_000],
+  ["second", 1_000]
+];
+
+/**
+ * A length of time as a person says it, in its largest unit: "30 days", "1 hour", and "about 6
+ * months" for 5 months 27 days 19 hours
+ */
+export const sayDuration = (ms: number): string => {
+  const [unit, size] = SAID.find(([, s]) => ms >= s) ?? ["second", 1_000];
+  const n = Math.round(ms / size);
+  const words = plural(n, unit, `${unit}s`);
+  return n * size === ms ? words : `about ${words}`;
 };
 
 /** A fraction as a percentage to one decimal, 0.256 as "25.6%" */
@@ -148,7 +183,7 @@ export const formatDay = (iso: string): string =>
 export const chatTime = (iso: string, now = Date.now()): string =>
   new Date(iso).toDateString() === new Date(now).toDateString() ? shortTime(iso) : dateTime(iso);
 
-/** What a file's attributes say about its quality: "16/44.1kHz", "320 Kbps", "245 Kbps, VBR" */
+/** What a file's attributes say about its quality: "16/44.1kHz", "320 kbps", "245 kbps, VBR" */
 export const formatAttributes = (file: {
   bitRate?: number | null;
   isVariableBitRate?: boolean | null;
@@ -157,8 +192,8 @@ export const formatAttributes = (file: {
 }): string => {
   const { bitRate, isVariableBitRate, bitDepth, sampleRate } = file;
   if (sampleRate && bitDepth) return `${bitDepth}/${sampleRate / 1000}kHz`;
-  if (isVariableBitRate) return bitRate ? `${bitRate} Kbps, VBR` : "VBR";
-  if (bitRate) return `${bitRate} Kbps`;
+  if (isVariableBitRate) return bitRate ? `${bitRate} kbps, VBR` : "VBR";
+  if (bitRate) return `${bitRate} kbps`;
   return "";
 };
 
@@ -181,9 +216,17 @@ export const truncate = (text: string | null | undefined, max: number): string =
   return text.length <= max ? text : `${text.slice(0, max)}...`;
 };
 
+/** What a figure or a field shows when it has no value */
+export const NONE = "—";
+
 /** `n` with the noun for that many, "1 file" or "2,048 files" */
 export const plural = (n: number, one: string, many: string): string =>
   `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
+const LIST = new Intl.ListFormat("en", { type: "conjunction" });
+
+/** Parts joined as a sentence does, "a, b, and c" */
+export const listText = (parts: string[]) => LIST.format(parts);
 
 export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -202,3 +245,31 @@ export const downloadFile = (
   link.remove();
   URL.revokeObjectURL(url);
 };
+
+/** The widest text each formatter writes, which a column of its values must hold */
+export const WIDEST = {
+  size: formatBytes(1023.99 * 1024 ** 3),
+  speed: formatSpeed(1023.9 * 1024 ** 2),
+  count: (99_999).toLocaleString(),
+  length: formatSeconds(99 * 3600 + 59 * 60 + 59),
+  duration: formatDuration(23 * 3600 + 59 * 60),
+  transferred: formatBytesTransferred(1023.9 * 1024 ** 3, 1023.9 * 1024 ** 3)
+};
+
+/**
+ * The width a column of figures needs to show `widest` whole, as a CSS length, with `extra` for
+ * anything drawn beside the text: N characters in N ch plus the cells' 1rem of padding. A tabular
+ * digit is a little wider than 1ch, which is the plain zero, but the point, space and separators
+ * each formatter writes are narrower by more, and both scale with the font. It must be set where
+ * the font is the cells', so the ch is theirs
+ */
+export const columnWidth = (widest: string, extra?: string): string =>
+  `calc(${widest.length}ch + 1rem${extra ? ` + ${extra}` : ""})`;
+
+/** A column's width as CSS: a number is the pixels a user dragged it to, a string a length */
+export const cssWidth = (width: number | string): string =>
+  typeof width === "number" ? `${width}px` : width;
+
+/** The widths of columns side by side, as one CSS length */
+export const sumWidths = (widths: (number | string)[]): string =>
+  `calc(${widths.map(cssWidth).join(" + ")})`;

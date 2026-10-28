@@ -27,7 +27,7 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { ago, formatBytes, formatSpeed } from "#lib/format.js";
+  import { ago, formatBytes, formatSpeed, plural } from "#lib/format.js";
   import { href, userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
@@ -69,7 +69,7 @@
   /** Runs a write and reads the profile again after it, or says why it failed */
   const run = async (write: () => Promise<{ ok: boolean; error?: string }>) => {
     const outcome = await write();
-    if (!outcome.ok) toast(outcome.error ?? "Failed", "error");
+    if (!outcome.ok) toast(outcome.error ?? "Something went wrong", "error");
     onchanged();
   };
   const mute = (on: boolean) =>
@@ -86,7 +86,7 @@
     );
     if (!outcome.ok) return void toast(outcome.error, "error");
     deleting = false;
-    toast(`${name} is forgotten`);
+    toast(`Removed ${name} from your user list`);
     void goto(href("/users"));
   };
 </script>
@@ -112,8 +112,8 @@
         {#if country}<span title={p.countryCode ?? ""}>{country}</span>{/if}
         <GroupBadge group={p.group} />
         {#if lostGroup}
-          <Badge tone="warning" title={`The override names ${p.groupOverride}`}
-            >group no longer exists</Badge>
+          <Badge tone="warning" title={`This user is assigned to ${p.groupOverride}`}
+            >Group no longer exists</Badge>
         {/if}
         {#if p.block}
           {@const b = p.block}
@@ -134,24 +134,34 @@
           </a>
         {/each}
       </div>
-      <p class="flex items-center gap-1.5 text-sm">
-        {stats ? stats.fileCount.toLocaleString() : "?"} files ·
-        {stats ? stats.directoryCount.toLocaleString() : "?"} folders ·
+      <!-- wraps as words do, so how long ago moves to the next line whole -->
+      <p class="flex flex-wrap items-center gap-x-1.5 text-sm">
+        {stats ? plural(stats.fileCount, "file", "files") : "? files"} ·
+        {stats ? plural(stats.directoryCount, "folder", "folders") : "? folders"} ·
         {stats ? formatSpeed(stats.averageSpeed) : "?"} ·
-        {stats ? stats.uploadCount.toLocaleString() : "?"} uploads
+        {stats ? plural(stats.uploadCount, "upload", "uploads") : "? uploads"}
         {#if refreshing}
           <Spinner class="size-3.5" label="Refreshing" />
         {:else if stats}
-          <span class="text-xs text-fg-subtle">{ago(stats.fetchedAt, clock.now)}</span>
+          <span class="text-xs whitespace-nowrap text-fg-subtle"
+            >{ago(stats.fetchedAt, clock.now)}</span>
         {/if}
       </p>
       {#if p.known}
         <p class="text-xs text-fg-muted">
-          {#if p.firstSeenAt}first seen {ago(p.firstSeenAt, clock.now)},{/if}
-          {#if p.lastSeenAt}last seen {ago(p.lastSeenAt, clock.now)},{/if}
-          {p.figures.downloads.succeeded} downloads ({formatBytes(p.figures.downloads.bytes)}) /
-          {p.figures.uploads.succeeded} uploads ({formatBytes(p.figures.uploads.bytes)}),
-          {p.figures.messages.in + p.figures.messages.out} messages
+          {[
+            p.firstSeenAt && `First seen ${ago(p.firstSeenAt, clock.now)}`,
+            p.lastSeenAt && `last seen ${ago(p.lastSeenAt, clock.now)}`
+          ]
+            .filter(Boolean)
+            .join(", ")}
+        </p>
+        <p class="text-xs text-fg-muted">
+          {plural(p.figures.downloads.succeeded, "download", "downloads")} ({formatBytes(
+            p.figures.downloads.bytes
+          )}) · {plural(p.figures.uploads.succeeded, "upload", "uploads")} ({formatBytes(
+            p.figures.uploads.bytes
+          )}) · {plural(p.figures.messages.in + p.figures.messages.out, "message", "messages")}
         </p>
       {/if}
     </div>
@@ -188,10 +198,7 @@
     {/if}
     {#if admin && p.known}
       <Menu.Root>
-        <Tooltip
-          text={p.group.source === "config"
-            ? "The configuration puts them in this group"
-            : undefined}>
+        <Tooltip text={p.group.source === "config" ? "Set in the configuration" : undefined}>
           {#snippet child({ props })}
             <span {...props}>
               <Menu.Trigger disabled={p.group.source === "config"}>
@@ -223,7 +230,7 @@
           ><ExternalLinkIcon />Open in new tab</Menu.Item>
         {#if admin && p.known}
           <Menu.Separator />
-          <Menu.Item onSelect={() => (deleting = true)}><Trash2Icon />Delete user</Menu.Item>
+          <Menu.Item onSelect={() => (deleting = true)}><Trash2Icon />Forget user</Menu.Item>
         {/if}
       </Menu.Content>
     </Menu.Root>
@@ -233,13 +240,13 @@
 <Dialog
   bind:open={deleting}
   title={`Forget ${name}?`}
-  description="Their directory entry, notes, tags and block go. They come back when you deal with them again.">
+  description="This removes them from your user list, with your notes, tags and block. They come back if you interact with them again.">
   <label class="flex items-center gap-2 text-sm">
     <Checkbox checked={purge} onCheckedChange={(on) => (purge = on)} />
-    Also remove their transfers from the lists and delete our messages
+    Also remove their transfers and delete your messages with them
   </label>
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (deleting = false)}>Cancel</Button>
-    <Button variant="danger" onclick={() => void remove()}>Delete</Button>
+    <Button variant="danger" onclick={() => void remove()}>Forget</Button>
   {/snippet}
 </Dialog>

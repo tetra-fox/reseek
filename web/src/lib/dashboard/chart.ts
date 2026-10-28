@@ -27,18 +27,27 @@ const STEPS = [
   365 * DAY
 ];
 
-/**
- * Ticks for a time axis from `min` to `max`: about `count` of them on round times (whole hours,
- * whole days) rather than on wherever the span happens to start. None for a span of nothing
- */
-export const timeTicks = (min: number, max: number, count = 11): number[] => {
-  if (!(max > min)) return [];
-  const step = STEPS.find((s) => (max - min) / s <= count - 1) ?? STEPS.at(-1)!;
+/** The ticks a step puts between `min` and `max`, on its round times */
+const ticksOf = (min: number, max: number, step: number): number[] => {
   // whole days and longer start at local midnight, shorter steps at round UTC times
   const offset = step >= DAY ? new Date(min).getTimezoneOffset() * MINUTE : 0;
   const first = Math.ceil((min - offset) / step) * step + offset;
   const ticks: number[] = [];
   for (let t = first; t <= max; t += step) ticks.push(t);
+  return ticks;
+};
+
+/**
+ * Ticks for a time axis from `min` to `max`: about `count` of them on round times (whole hours,
+ * whole days) rather than on wherever the span happens to start, and at least two, so a narrow
+ * chart still says where its curve lies in time. None for a span of nothing
+ */
+export const timeTicks = (min: number, max: number, count = 11): number[] => {
+  if (!(max > min)) return [];
+  let at = STEPS.findIndex((s) => (max - min) / s <= count - 1);
+  if (at === -1) at = STEPS.length - 1;
+  let ticks = ticksOf(min, max, STEPS[at]);
+  while (ticks.length < 2 && at > 0) ticks = ticksOf(min, max, STEPS[--at]);
   return ticks;
 };
 

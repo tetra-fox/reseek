@@ -49,12 +49,12 @@ describe("the block dialog", () => {
     app.options = { blocking: { default_scopes: ["searches", "browse"] } } as never;
     const net = await open(["uploads"]);
     expect(checked()).toEqual([
-      "downloading from you",
-      "getting your search results",
-      "browsing your shares"
+      "Stop their downloads from you",
+      "Don't send them your search results",
+      "Stop them browsing your shares"
     ]);
-    box("cancel my downloads from them").click();
-    box("getting your search results").click();
+    box("Cancel your downloads from them").click();
+    box("Don't send them your search results").click();
     flushSync();
     const reason = document.querySelector<HTMLInputElement>("#block-reason")!;
     reason.value = "  spam ";

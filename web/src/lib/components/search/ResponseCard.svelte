@@ -7,7 +7,7 @@
   import LockIcon from "@lucide/svelte/icons/lock";
   import SearchIcon from "@lucide/svelte/icons/search";
   import XIcon from "@lucide/svelte/icons/x";
-  import { SvelteMap, SvelteSet } from "svelte/reactivity";
+  import { SvelteSet } from "svelte/reactivity";
 
   import type { Schemas } from "#lib/api/client.js";
   import FileMenu from "#lib/components/files/FileMenu.svelte";
@@ -23,12 +23,13 @@
   import { asItem, type Enqueued, enqueue } from "#lib/downloads.js";
   import { fetchFolder } from "#lib/folders.js";
   import {
+    columnWidth,
     formatAttributes,
     formatBytes,
     formatSeconds,
-    getDirectoryName,
     getFileName,
-    plural
+    plural,
+    WIDEST
   } from "#lib/format.js";
   import { href } from "#lib/nav.js";
   import { type Result, type ResultFile, resultFiles } from "#lib/search/results.js";
@@ -36,6 +37,7 @@
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, folderTree, treeLines } from "#lib/tree/folders.js";
   import { users } from "#lib/users.svelte.js";
+  import { viewport } from "#lib/viewport.svelte.js";
 
   import Country from "./Country.svelte";
 
@@ -55,7 +57,11 @@
   let { result, searchId, cards, siblings, connected, canWrite, ondismiss }: Props = $props();
 
   /** the file table's columns: tick, name, size, attributes, length, menu */
-  const COLUMNS = "2.25rem minmax(12rem, 1fr) 6rem 9rem 4.5rem 2.5rem";
+  // the figures hold their widest value in the rows' own font, which the cells share, and the name
+  // takes what is left, so a large text size never pushes the menu out of the card. A phone's
+  // rows show the tick, the name with its size under it, and the menu
+  const COLUMNS = `2.25rem minmax(0, 1fr) ${columnWidth(WIDEST.size)} 9rem ${columnWidth(WIDEST.length)} 2.5rem`;
+  const PHONE_COLUMNS = "2.25rem minmax(0, 1fr) 2.5rem";
 
   const response = $derived(result.response);
   const name = $derived(response.username);
@@ -64,8 +70,6 @@
 
   const selected = new SvelteSet<string>();
   const folders = new Expansion(true);
-  /** folders replaced by what the user sent when asked for the whole folder */
-  const fetched = new SvelteMap<string, ResultFile[]>();
   let asking = $state<string | null>(null);
   let downloading = $state(false);
   let status = $state<Enqueued | null>(null);
@@ -74,21 +78,7 @@
 
   $effect(() => void users.load(name));
 
-  // a folder the user was asked for again lists what they sent, where its first file was
-  const files = $derived.by(() => {
-    const list: ResultFile[] = [];
-    const placed = new Set<string>();
-    for (const f of resultFiles(response)) {
-      const folder = getDirectoryName(f.filename);
-      const replaced = fetched.get(folder);
-      if (!replaced) list.push(f);
-      else if (!placed.has(folder)) {
-        placed.add(folder);
-        list.push(...replaced);
-      }
-    }
-    return list;
-  });
+  const files = $derived(resultFiles(response));
   const roots = $derived(
     folderTree(
       files,
@@ -116,28 +106,13 @@
     toast(status.text, status.kind === "done" ? "info" : "error");
   };
 
-  /** Asks the user for the whole folder and lists what they send in place of the results */
-  const askFolder = async (folder: string) => {
-    asking = folder;
-    const outcome = await fetchFolder(name, folder);
-    asking = null;
-    if (!outcome.ok) {
-      toast(`Failed to process directory response: ${outcome.error}`, "error");
-      return;
-    }
-    fetched.set(
-      folder,
-      outcome.data[0].files.map((f) => ({ ...f, locked: false }))
-    );
-  };
-
   /** Lists every file under the folder, asked of the user so files the search missed are in */
-  const viewAll = async (folder: string) => {
+  const showFolder = async (folder: string) => {
     asking = folder;
     const outcome = await fetchFolder(name, folder);
     asking = null;
     if (!outcome.ok) {
-      toast(outcome.error, "error");
+      toast(`Couldn't load the folder: ${outcome.error}`, "error");
       return;
     }
     flat = { folder, files: outcome.data.flatMap((d) => d.files) };
@@ -187,7 +162,7 @@
         ? "free slot"
         : "no free slot"} · {response.queueLength} queued · {plural(files.length, "file", "files")}
     </span>
-    <div class="ml-auto flex items-center gap-1">
+    <div class="ml-auto flex flex-wrap items-center justify-end gap-1">
       <Button variant="ghost" size="sm" href={href(`/browse?user=${encodeURIComponent(name)}`)}>
         <FolderOpenIcon />Browse
       </Button>
@@ -216,7 +191,7 @@
       {lines}
       expansion={folders}
       label={`Files from ${name}`}
-      columns={COLUMNS}
+      columns={viewport.phone ? PHONE_COLUMNS : COLUMNS}
       {selected}
       idOf={(f) => f.filename}
       onopen={write ? (f) => void download([f]) : undefined}
@@ -234,13 +209,17 @@
               inside.map((f) => f.filename),
               on
             )} />
-        {#if locked}<LockIcon class="size-3.5 text-fg-muted" />{/if}
-        <span
-          class={["min-w-0 truncate font-mono text-xs", depth === 0 ? "text-fg" : "text-fg-muted"]}
-          title={node.path}>{node.label}</span>
-        <span class="shrink-0 text-xs text-fg-subtle tabular-nums">
-          {plural(node.count, "file", "files")} · {formatBytes(node.bytes)}
-        </span>
+        {#if locked}<LockIcon class="size-3.5 shrink-0 text-fg-muted" />{/if}
+        <!-- the name's track fills before the count's, so the count gives way first -->
+        <div
+          class="grid min-w-0 grid-cols-[minmax(0,max-content)_minmax(0,1fr)] items-center gap-1.5">
+          <span
+            class={["truncate font-mono text-xs", depth === 0 ? "text-fg" : "text-fg-muted"]}
+            title={node.path}>{node.label}</span>
+          <span class="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-fg-subtle">
+            {plural(node.count, "file", "files")} · {formatBytes(node.bytes)}
+          </span>
+        </div>
         <div class="ml-auto flex shrink-0 items-center gap-0.5 row-action">
           {#if canWrite}
             <Button
@@ -248,32 +227,23 @@
               size="sm"
               class="h-7"
               disabled={!connected || downloading}
+              aria-label={`Download folder, ${plural(node.count, "file", "files")}, ${formatBytes(node.bytes)}`}
               onclick={() => void download(inside)}>
-              <DownloadIcon />Download folder
-              <span class="font-normal text-fg-muted">
+              <!-- a phone shows the icon alone, the row having no room for the words -->
+              <DownloadIcon /><span class="max-md:hidden">Download folder</span>
+              <span class="font-normal text-fg-muted max-md:hidden">
                 {node.count}, {formatBytes(node.bytes)}
               </span>
-            </Button>
-          {/if}
-          {#if node.items.length}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Search for additional files in this directory"
-              title="Search for additional files in this directory"
-              disabled={asking !== null}
-              onclick={() => void askFolder(node.path)}>
-              {#if asking === node.path}<Spinner class="size-4" />{:else}<SearchIcon />{/if}
             </Button>
           {/if}
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="View all files"
-            title="View all files"
+            aria-label="Show whole folder"
+            title="Show whole folder"
             disabled={asking !== null}
-            onclick={() => void viewAll(node.path)}>
-            <ListIcon />
+            onclick={() => void showFolder(node.path)}>
+            {#if asking === node.path}<Spinner class="size-4" />{:else}<ListIcon />{/if}
           </Button>
         </div>
       {/snippet}
@@ -290,14 +260,30 @@
           style:padding-left="calc((var(--depth) - 1) * 1.25rem + 0.25rem)"
           title={file.filename}>
           {#if file.locked}<LockIcon class="size-3.5 shrink-0 text-fg-muted" />{/if}
-          <span class="truncate">{getFileName(file.filename)}</span>
+          {#if viewport.phone}
+            <!-- a phone gives the name the row's width, with the size under it -->
+            <span class="flex min-w-0 flex-col py-1">
+              <span class="truncate">{getFileName(file.filename)}</span>
+              <span class="text-xs whitespace-nowrap text-fg-muted tabular-nums"
+                >{formatBytes(file.size)}</span>
+            </span>
+          {:else}
+            <span class="truncate">{getFileName(file.filename)}</span>
+          {/if}
         </span>
-        <span role="gridcell" class="pr-3 text-right tabular-nums">{formatBytes(file.size)}</span>
-        <span role="gridcell" class="flex min-w-0 items-center gap-1 truncate text-fg-muted">
+        {#if !viewport.phone}
+          <span role="gridcell" class="pr-3 text-right whitespace-nowrap tabular-nums"
+            >{formatBytes(file.size)}</span>
+        {/if}
+        <span
+          role="gridcell"
+          class="flex min-w-0 items-center gap-1 truncate text-fg-muted max-md:hidden">
           {#if file.suspect}<Suspect suspect={file.suspect} />{/if}
           {formatAttributes(file)}
         </span>
-        <span role="gridcell" class="pr-3 text-right text-fg-muted tabular-nums"
+        <span
+          role="gridcell"
+          class="pr-3 text-right whitespace-nowrap text-fg-muted tabular-nums max-md:hidden"
           >{formatSeconds(file.length)}</span>
         <span role="gridcell" class="flex justify-end pr-1">
           <FileMenu

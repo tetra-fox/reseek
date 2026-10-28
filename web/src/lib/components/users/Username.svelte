@@ -1,15 +1,14 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import BanIcon from "@lucide/svelte/icons/ban";
-  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
-  import PinIcon from "@lucide/svelte/icons/pin";
-  import PinOffIcon from "@lucide/svelte/icons/pin-off";
   import SearchIcon from "@lucide/svelte/icons/search";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
   import UserIcon from "@lucide/svelte/icons/user";
+  import UserCheckIcon from "@lucide/svelte/icons/user-check";
+  import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import { DropdownMenu, Popover } from "bits-ui";
 
   import { Busy } from "#lib/busy.svelte.js";
@@ -21,6 +20,7 @@
   import { session } from "#lib/session.svelte.js";
   import { users } from "#lib/users.svelte.js";
   import { cn } from "#lib/utils.js";
+  import { BUDDY } from "#lib/wording.js";
 
   import { links, pin } from "./actions";
   import { blocking, unblock } from "./block.svelte";
@@ -31,7 +31,7 @@
   type Props = {
     /** the username, shown exactly as it is */
     name: string;
-    /** the folder the name was shown with, which "Search their files" starts from */
+    /** the folder the name was shown with, which "Search their shares" starts from */
     folder?: string;
     /**
      * a click opens the card and keeps it open, and a double click opens a private chat, as
@@ -92,7 +92,8 @@
   };
 
   const enter = (e: PointerEvent) => {
-    // touch has no hover card: a tap follows the link and a long press opens the menu
+    // touch has no hover card: a tap is a click, which opens the card on a name with `card` and
+    // follows the link elsewhere, and a long press opens the menu
     if (e.pointerType === "touch") return;
     if (active === "card") clearTimeout(timer);
     else if (!active) later(() => show("card"), OPEN_DELAY_MS);
@@ -138,11 +139,9 @@
   };
 </script>
 
-<span
-  class={cn(
-    "group/username inline-flex max-w-full items-center gap-0.5 align-baseline",
-    className
-  )}>
+<!-- a name takes only its text's width: its menu opens from a right-click, a long press,
+     Shift+F10 or the card's More button, never from a control beside it -->
+<span class={cn("inline-flex max-w-full items-center align-baseline", className)}>
   <a
     bind:this={link}
     href={userHref(name)}
@@ -173,14 +172,6 @@
       show("menu");
     }}
     onkeydown={keydown}>{name}</a>
-  <button
-    type="button"
-    tabindex="-1"
-    aria-label={`Menu for ${name}`}
-    class="rounded-badge text-fg-muted opacity-0 transition-opacity group-focus-within/username:opacity-100 group-hover/username:opacity-100 hover:bg-hover"
-    onclick={() => show("menu")}>
-    <ChevronDownIcon class="size-3.5" />
-  </button>
 </span>
 
 {#if active === "card"}
@@ -201,7 +192,7 @@
         role="dialog"
         aria-label={`Profile of ${name}`}
         class="z-50 w-80 max-w-[calc(100vw-1rem)] rounded-card border bg-overlay p-3 text-fg shadow-raised outline-none motion-safe:animate-popover-in">
-        <UserCard {name} {user} onblock={blockOrAsk} />
+        <UserCard {name} {user} onblock={blockOrAsk} onmenu={() => show("menu", keyboard)} />
       </Popover.Content>
     </Popover.Portal>
   </Popover.Root>
@@ -229,11 +220,11 @@
       {#if readWrite}
         <Menu.Item onSelect={() => goto(to.message)}><MessageSquareIcon />Message</Menu.Item>
       {/if}
-      <Menu.Item onSelect={() => goto(to.search)}><SearchIcon />Search their files</Menu.Item>
+      <Menu.Item onSelect={() => goto(to.search)}><SearchIcon />Search their shares</Menu.Item>
       {#if readWrite}
         <Menu.Separator />
         <Menu.Item onSelect={togglePin}>
-          {#if user?.pinned}<PinOffIcon />Unpin{:else}<PinIcon />Pin{/if}
+          {#if user?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
         </Menu.Item>
         <Menu.Item onSelect={blockOrAsk}>
           {#if user?.block}<ShieldCheckIcon />Unblock{:else}<BanIcon />Block{/if}

@@ -81,7 +81,7 @@
       class="pl-8"
       type="search"
       maxlength={200}
-      placeholder="Words, a quoted phrase, or OR between words"
+      placeholder={'Words, a "quoted phrase", or one OR another'}
       aria-label="Search messages"
       bind:value={typed} />
   </div>
@@ -115,12 +115,12 @@
           <time class="text-xs text-fg-subtle" datetime={hit.timestamp}
             >{formatDate(hit.timestamp)}</time>
           {#if group.room}<span class="text-xs font-medium">{hit.username}</span>{/if}
-          <span class="min-w-0 flex-1 wrap-anywhere">
+          <span class="min-w-0 flex-1 cursor-text wrap-anywhere">
             {#each snippetParts(hit.snippet) as part (part.at)}{#if part.hit}<mark
                   class="rounded-sm bg-warning-soft px-0.5 text-fg">{part.text}</mark
                 >{:else}{part.text}{/if}{/each}
           </span>
-          <a href={at(hit)} class="text-xs text-accent hover:underline">open at message</a>
+          <a href={at(hit)} class="text-xs text-accent hover:underline">Show in chat</a>
         </li>
       {/each}
     </ul>

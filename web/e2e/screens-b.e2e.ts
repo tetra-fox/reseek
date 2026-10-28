@@ -4,8 +4,8 @@ import { login } from "./login";
 
 test("opens the dashboard, chat, rooms, users, a profile and your profile", async ({ page }) => {
   await login(page, "/dashboard");
-  await expect(page.getByRole("group", { name: "Range" })).toBeVisible();
-  await expect(page.getByText("Distinct peers")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Time range" })).toBeVisible();
+  await expect(page.getByText("Users transferred with")).toBeVisible();
   await expect(page.getByRole("img", { name: "Transfers over time" })).toBeVisible();
 
   await page.getByRole("link", { name: "Chat" }).click();
@@ -18,12 +18,16 @@ test("opens the dashboard, chat, rooms, users, a profile and your profile", asyn
   await expect(page).toHaveURL(/#\/chat$/);
   await page.goto("./#/nowhere");
   await expect(page).toHaveURL(/#\/dashboard$/);
+  // a path under a screen that renders nothing goes to that screen rather than a blank page
+  await page.goto("./#/browse/carol");
+  await expect(page).toHaveURL(/#\/browse$/);
+  await expect(page.getByLabel("Username")).toBeVisible();
 
-  await page.getByRole("link", { name: "Users" }).click();
+  await page.getByRole("link", { name: "Users", exact: true }).click();
   await expect(page).toHaveURL(/#\/users$/);
   await expect(page.getByText("No users yet")).toBeVisible();
   await page.getByRole("link", { name: "Blocked users" }).click();
-  await expect(page.getByText("Nobody is blocked")).toBeVisible();
+  await expect(page.getByText("No blocked users")).toBeVisible();
 
   await page.goto("./#/users/alice");
   await expect(page.getByRole("heading", { name: "alice" })).toBeVisible();
@@ -53,10 +57,10 @@ test("opens each System tab", async ({ page }) => {
   await expect(page.getByRole("link", { name: "/downloads" })).toBeVisible();
 
   await tabs.getByRole("link", { name: "Data" }).click();
-  await expect(page.getByText("Transfer Data")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Finished transfers" })).toBeVisible();
 
   await tabs.getByRole("link", { name: "Events" }).click();
-  await expect(page.getByRole("button", { name: "Every type" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "All types" })).toBeVisible();
 
   await tabs.getByRole("link", { name: "Logs" }).click();
   await expect(page.getByRole("grid", { name: "Live log" })).toBeVisible();

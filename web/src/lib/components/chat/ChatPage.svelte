@@ -106,7 +106,7 @@
 {/snippet}
 
 <div
-  class="flex h-[calc(100svh-9rem)] min-h-96 overflow-hidden rounded-card border bg-surface shadow-card">
+  class="flex h-[calc(var(--content-h)-2*var(--spacing-gutter))] overflow-hidden rounded-card border bg-surface shadow-card">
   {#if wide.current}
     <div class="flex w-72 shrink-0 flex-col border-r">
       {@render list()}
@@ -138,10 +138,7 @@
         <Pane {target} {at} {lead} />
       {/key}
     {:else if wide.current}
-      <EmptyState
-        icon={MessagesSquareIcon}
-        title="No chat open"
-        description="Pick a room or a conversation, join a room, or write to someone." />
+      <EmptyState icon={MessagesSquareIcon} title="No chat selected" />
     {:else}
       {@render list()}
     {/if}

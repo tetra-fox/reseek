@@ -47,7 +47,7 @@
 <Dialog
   bind:open
   title="Add downloads"
-  description="A user and the path of a file they share, or paste slsk:// links or search results as JSON">
+  description="Enter a user and the path of a file they share, or paste slsk:// links or search results as JSON.">
   <form
     id="add-download"
     class="flex flex-col gap-group"

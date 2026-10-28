@@ -7,7 +7,8 @@ import type { GroupBy, SortKey } from "./view";
 export type ViewSettings = {
   groupBy: GroupBy;
   density: "comfortable" | "compact";
-  columns: { id: ColumnId; width: number; visible: boolean }[];
+  /** every column in the order shown, with the width in pixels the user dragged it to, if any */
+  columns: { id: ColumnId; visible: boolean; dragged?: number }[];
   sort: { id: SortKey; dir: "asc" | "desc" };
   filters: { states: ChipId[] };
 };
@@ -30,14 +31,16 @@ const SORTS: SortKey[] = [
 export const defaults = (direction: Direction): ViewSettings => ({
   groupBy: "user",
   density: "comfortable",
-  columns: columnsFor(direction).map(({ id, width, visible }) => ({ id, width, visible })),
+  columns: columnsFor(direction).map(({ id, visible }) => ({ id, visible })),
   sort: { id: "file", dir: "asc" },
   filters: { states: [] }
 });
 
 /**
  * What was saved as far as it fits: every column of the direction once, in the saved order with
- * new columns after, and anything unknown dropped. The text filter is never saved
+ * new columns after, and anything unknown dropped. A column keeps only a width the user dragged,
+ * so one never dragged follows its default as that changes; the `width` older builds saved held
+ * every default too, so it is not read. The text filter is never saved
  */
 const read = (direction: Direction, saved: unknown): ViewSettings => {
   const base = defaults(direction);
@@ -50,8 +53,8 @@ const read = (direction: Direction, saved: unknown): ViewSettings => {
       return [
         {
           id: known.id,
-          width: typeof c.width === "number" && c.width >= 40 ? c.width : known.width,
-          visible: typeof c.visible === "boolean" ? c.visible : known.visible
+          visible: typeof c.visible === "boolean" ? c.visible : known.visible,
+          ...(typeof c.dragged === "number" && c.dragged >= 40 ? { dragged: c.dragged } : {})
         }
       ];
     })

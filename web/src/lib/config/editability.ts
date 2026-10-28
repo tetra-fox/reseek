@@ -12,13 +12,16 @@ export const fileOf = (view: ConfigView, key: string): string =>
 
 export const editability = (view: ConfigView, key: string): Editability => {
   const field = view.fields[key];
-  if (!field) return { mode: "locked", notice: "Not an option this reseek knows" };
+  if (!field) return { mode: "locked", notice: "This version of reseek doesn't know this option" };
   const { source, apply } = field;
   if (source.layer === "env") {
-    return { mode: "locked", notice: `Set by ${source.var}; change it there` };
+    return { mode: "locked", notice: `Set by ${source.var}. Change it there.` };
   }
   if (source.layer === "cli") {
-    return { mode: "locked", notice: `Set on the command line (${source.flag}); change it there` };
+    return {
+      mode: "locked",
+      notice: `Set on the command line with ${source.flag}. Change it there.`
+    };
   }
   const name = fileOf(view, key);
   const file = view.files.find((f) => f.name === name);

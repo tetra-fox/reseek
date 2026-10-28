@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { redirectFor, route, safeReturn, title, userHref } from "./nav";
+import {
+  changesScreen,
+  redirectFor,
+  route,
+  safeReturn,
+  title,
+  unknownTarget,
+  userHref
+} from "./nav";
 
 describe("routes after the hash", () => {
   it("read the path and the query from the hash", () => {
@@ -17,14 +25,21 @@ describe("routes after the hash", () => {
 });
 
 describe("redirects", () => {
-  it("send unknown routes to the dashboard and an agent to System", () => {
+  it("send the root to the dashboard and an agent to System", () => {
     expect(redirectFor("/", false)).toBe("/dashboard");
-    expect(redirectFor("/nowhere", false)).toBe("/dashboard");
     expect(redirectFor("/searches/42", false)).toBeNull();
     expect(redirectFor("/searches/42", true)).toBe("/system");
     expect(redirectFor("/system/logs", true)).toBeNull();
-    expect(redirectFor("/rooms", false)).toBe("/chat");
     expect(redirectFor("/profile", false)).toBeNull();
+  });
+
+  it("send a path no screen renders to the screen it belongs to, else the dashboard", () => {
+    expect(unknownTarget("/nowhere")).toBe("/dashboard");
+    expect(unknownTarget("/browse/carol")).toBe("/browse");
+    expect(unknownTarget("/downloads/x/y")).toBe("/downloads");
+    expect(unknownTarget("/system/nothing")).toBe("/system");
+    expect(unknownTarget("/rooms")).toBe("/chat");
+    expect(unknownTarget("/rooms/indie")).toBe("/chat");
   });
 
   it("only return to a route of this app after login", () => {
@@ -42,5 +57,28 @@ describe("titles", () => {
     expect(title("/searches/1")).toBe("Search - reseek");
     expect(title("/system/settings")).toBe("Settings - System - reseek");
     expect(title("/login")).toBe("Log in - reseek");
+  });
+});
+
+describe("screen changes", () => {
+  it("count only a move to another destination of the navigation", () => {
+    const moves: [string, string, boolean][] = [
+      ["/dashboard", "/searches", true],
+      ["/searches", "/searches/42", false],
+      ["/searches/42", "/downloads", true],
+      ["/downloads", "/uploads", true],
+      ["/users/alice", "/users/alice/shares", false],
+      ["/users/alice/shares", "/users/bob", false],
+      ["/users", "/users/alice", false],
+      ["/chat/alice", "/chat/rooms/indie", false],
+      ["/chat", "/users", true],
+      ["/system/info", "/system/settings", false],
+      ["/system/settings", "/system/logs", false],
+      ["/system/info", "/dashboard", true],
+      ["/browse", "/browse", false],
+      ["/profile", "/users", true]
+    ];
+    for (const [from, to, changes] of moves)
+      expect([from, to, changesScreen(from, to)]).toEqual([from, to, changes]);
   });
 });

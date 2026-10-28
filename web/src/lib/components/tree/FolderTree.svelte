@@ -175,7 +175,7 @@
   {/each}
   {#if hidden > 0}
     <p class="flex flex-wrap items-center gap-2 px-4 py-2 text-sm text-fg-muted">
-      {shown.length.toLocaleString()} of {lines.length.toLocaleString()} lines shown.
+      Showing {shown.length.toLocaleString()} of {lines.length.toLocaleString()} rows.
       <Button variant="link" onclick={() => (more += cap)}>
         Show {Math.min(cap, hidden).toLocaleString()} more
       </Button>

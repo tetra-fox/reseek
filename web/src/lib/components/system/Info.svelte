@@ -17,10 +17,19 @@
   import Card from "#lib/components/ui/Card.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
-  import { ago, formatBytes, formatDate, formatDuration, formatSpeed } from "#lib/format.js";
+  import {
+    ago,
+    formatBytes,
+    formatDate,
+    formatDuration,
+    formatSpeed,
+    plural
+  } from "#lib/format.js";
+  import { serverStateText } from "#lib/reachability.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
+  import { RESTART } from "#lib/wording.js";
 
   import { diagnostics, latestProblems } from "./diagnostics";
 
@@ -47,7 +56,7 @@
         toast(
           v.isUpdateAvailable && v.latest
             ? `Version ${v.latest} is available`
-            : `You are running the latest version (${v.current})`
+            : `You're running the latest version (${v.current})`
         );
       }
       return outcome;
@@ -55,8 +64,8 @@
 
   const reconnect = () =>
     confirmation.ask({
-      title: "Reconnect",
-      body: "Reconnect to the Soulseek server? Active transfers will be interrupted.",
+      title: "Reconnect?",
+      body: "Transfers in progress are interrupted while reseek reconnects to the Soulseek server.",
       confirm: "Reconnect",
       run: () =>
         void busy.run(async () => {
@@ -68,16 +77,14 @@
     });
   const restart = () =>
     confirmation.ask({
-      title: "Restart",
-      body: "Are you sure you want to restart the application?",
-      confirm: "Restart",
+      ...RESTART,
       run: () => void busy.run(() => call(() => api.PUT("/api/v0/application")))
     });
   const shutDown = () =>
     confirmation.ask({
-      title: "Shut Down",
-      body: "Are you sure you want to shut the application down? You'll need to start it again by hand.",
-      confirm: "Shut Down",
+      title: "Shut down reseek?",
+      body: "You'll need to start it again yourself.",
+      confirm: "Shut down",
       run: () => void busy.run(() => call(() => api.DELETE("/api/v0/application")))
     });
 
@@ -93,20 +100,19 @@
     const problems = log?.ok ? latestProblems(log.data) : [];
     await copying.copy(diagnostics(s, navigator.userAgent, problems));
   };
-  const yes = (on: boolean) => (on ? "yes" : "no");
 </script>
 
 <div class="flex flex-wrap items-center gap-inline">
   {#if write}
     <Button variant="outline" disabled={busy.running || !s} onclick={() => void checkVersion()}
-      ><RefreshCwIcon />Check for Updates</Button>
+      ><RefreshCwIcon />Check for updates</Button>
   {/if}
   {#if s?.user.username}
     <Button
       variant="outline"
       href={`https://www.slsknet.org/qtlogin.php?username=${encodeURIComponent(s.user.username)}`}
       target="_blank"
-      rel="noopener"><StarIcon class="text-warning" />Get Privileges</Button>
+      rel="noopener"><StarIcon class="text-warning" />Get privileges</Button>
   {/if}
   <Button variant="outline" disabled={!s} onclick={() => void copyDiagnostics()}>
     {#if copying.copied}<CheckIcon />Copied{:else}<ClipboardListIcon />Copy diagnostics{/if}
@@ -126,7 +132,7 @@
         disabled={busy.running || !s}
         onclick={restart}><RotateCwIcon />Restart</Button>
       <Button variant="danger" disabled={busy.running || !s} onclick={shutDown}
-        ><PowerIcon />Shut Down</Button>
+        ><PowerIcon />Shut down</Button>
     {/if}
   </div>
 </div>
@@ -141,11 +147,11 @@
         <dd class="font-mono">{s.version.full}</dd>
         <dt>Latest</dt>
         <dd>
-          {s.version.latest ?? "not checked"}
+          {s.version.latest ?? "Not checked"}
           {#if s.version.isUpdateAvailable}<span class="text-warning">(update available)</span>{/if}
         </dd>
         {#if s.pendingRestart || s.pendingReconnect}
-          <dt>Waiting on</dt>
+          <dt>Pending</dt>
           <dd class="text-warning">
             {[s.pendingRestart && "a restart", s.pendingReconnect && "a reconnect"]
               .filter(Boolean)
@@ -153,11 +159,11 @@
           </dd>
         {/if}
         {#if s.configuration.lastReloadAt}
-          <dt>Options read</dt>
+          <dt>Configuration loaded</dt>
           <dd>{ago(s.configuration.lastReloadAt, clock.now)}</dd>
         {/if}
         {#if s.configuration.lastReloadError}
-          <dt>Last reload</dt>
+          <dt>Last reload error</dt>
           <dd class="text-danger">{s.configuration.lastReloadError}</dd>
         {/if}
       </dl>
@@ -168,20 +174,22 @@
         <dd title={formatDate(s.startedAt)}>
           {formatDuration((clock.now - Date.parse(s.startedAt)) / 1000)}
         </dd>
-        <dt>Process</dt>
-        <dd>{s.process.pid} on {s.process.os} ({s.process.arch})</dd>
+        <dt>Process ID</dt>
+        <dd>{s.process.pid}</dd>
+        <dt>Platform</dt>
+        <dd>{s.process.os} ({s.process.arch})</dd>
         <dt>Memory</dt>
-        <dd>{s.process.memoryBytes ? formatBytes(s.process.memoryBytes) : "not known yet"}</dd>
-        <dt>Web</dt>
+        <dd>{s.process.memoryBytes ? formatBytes(s.process.memoryBytes) : "Not known yet"}</dd>
+        <dt>Web addresses</dt>
         <dd class="font-mono">
-          {#each s.listeners as url (url)}<span class="block">{url}</span>{:else}none{/each}
+          {#each s.listeners as url (url)}<span class="block">{url}</span>{:else}None{/each}
         </dd>
       </dl>
     </Card>
     <Card title="Soulseek">
       <dl class="info">
         <dt>State</dt>
-        <dd>{s.server.state}</dd>
+        <dd>{serverStateText(s.server)}</dd>
         <dt>Server</dt>
         <dd class="font-mono">
           {s.server.address ?? "?"}
@@ -195,7 +203,7 @@
             ? `until ${s.user.privileges.privilegedUntil ? new Date(s.user.privileges.privilegedUntil).toLocaleString() : formatDuration(s.user.privileges.privilegesRemaining)}`
             : "none"}
         </dd>
-        <dt>Reconnects</dt>
+        <dt>Auto-reconnect</dt>
         <dd>
           {s.connectionWatchdog.isEnabled ? "on" : "off"}
           {#if s.connectionWatchdog.nextAttemptAt}, next {ago(
@@ -209,20 +217,24 @@
       <dl class="info">
         <dt>Shares</dt>
         <dd>
-          {s.shares.files.toLocaleString()} files in {s.shares.directories.toLocaleString()} folders
+          {plural(s.shares.files, "file", "files")} in {plural(
+            s.shares.directories,
+            "folder",
+            "folders"
+          )}
         </dd>
-        <dt>As others see us</dt>
+        <dt>As others see you</dt>
         <dd>
-          {s.user.statistics.fileCount.toLocaleString()} files, {formatSpeed(
+          {plural(s.user.statistics.fileCount, "file", "files")}, {formatSpeed(
             s.user.statistics.averageSpeed
           )},
           {s.user.statistics.uploadCount.toLocaleString()} uploads
         </dd>
-        <dt>Searches</dt>
+        <dt>Incoming searches</dt>
         <dd>
           {s.health.search.incoming.queueDepth} waiting, {Math.round(
             s.health.search.incoming.latency
-          )} ms,
+          )} ms to answer,
           {s.health.search.incoming.dropRate} dropped this minute
         </dd>
       </dl>
@@ -232,7 +244,7 @@
         <dt>Parent</dt>
         <dd>
           {s.distributedNetwork.parent ??
-            (s.distributedNetwork.isBranchRoot ? "we are a branch root" : "none")}
+            (s.distributedNetwork.isBranchRoot ? "none, this is a branch root" : "none")}
         </dd>
         <dt>Branch</dt>
         <dd>
@@ -240,9 +252,10 @@
         </dd>
         <dt>Children</dt>
         <dd>
-          {s.distributedNetwork.children.length} of {s.distributedNetwork.childLimit}, accepting {yes(
-            s.distributedNetwork.canAcceptChildren
-          )}
+          {s.distributedNetwork.children.length} of {s.distributedNetwork.childLimit}, {s
+            .distributedNetwork.canAcceptChildren
+            ? "accepting more"
+            : "not accepting more"}
         </dd>
       </dl>
     </Card>

@@ -12,7 +12,7 @@
 
   const data = $derived(outcomes(summary));
   const SERIES = [
-    { key: "succeeded", label: "Done", color: "var(--color-success)", state: "completed" },
+    { key: "succeeded", label: "Succeeded", color: "var(--color-success)", state: "completed" },
     { key: "failed", label: "Failed", color: "var(--color-danger)", state: "errored" },
     { key: "cancelled", label: "Cancelled", color: "var(--color-fg-subtle)", state: "cancelled" }
   ] as const;
@@ -33,7 +33,7 @@
     {/each}
   </div>
   {#if total}
-    <div class="h-28" role="img" aria-label="How the transfers ended">
+    <div class="h-28" role="img" aria-label="Transfer outcomes">
       <BarChart
         {data}
         y="direction"
@@ -42,30 +42,33 @@
           key: s.key,
           label: s.label,
           color: s.color,
-          props: { strokeWidth: 0 }
+          props: { strokeWidth: 0, class: "cursor-pointer" }
         }))}
         seriesLayout="stack"
         bandPadding={0.35}
         onBarClick={(_, { data: row, series }) => open(row.direction, series.key)} />
     </div>
   {:else}
-    <p class="text-sm text-fg-subtle">No transfer ended in this range.</p>
+    <p class="text-sm text-fg-subtle">No transfers finished in this range.</p>
   {/if}
-  <!-- the same figures as links, for the keyboard and for reading exactly -->
-  <dl class="grid grid-cols-[auto_repeat(3,minmax(0,1fr))] gap-x-4 gap-y-1 text-sm">
+  <!-- the same figures as links, for the keyboard and for reading exactly: a column for each
+       direction, each figure whole on a line of its own -->
+  <dl class="grid grid-cols-2 gap-x-4 text-sm">
     {#each data as d (d.direction)}
-      <dt class="text-fg-muted">{d.direction}</dt>
-      {#each SERIES as s (s.key)}
-        <dd>
-          <a
-            class="tabular-nums underline-offset-2 hover:underline"
-            href={href(
-              `${d.direction === "Downloads" ? "/downloads" : "/uploads"}?state=${s.state}`
-            )}
-            >{d[s.key].toLocaleString()}
-            <span class="text-fg-muted">{s.label.toLowerCase()}</span></a>
-        </dd>
-      {/each}
+      <div class="flex flex-col gap-0.5">
+        <dt class="text-fg-muted">{d.direction}</dt>
+        {#each SERIES as s (s.key)}
+          <dd>
+            <a
+              class="whitespace-nowrap tabular-nums underline-offset-2 hover:underline"
+              href={href(
+                `${d.direction === "Downloads" ? "/downloads" : "/uploads"}?state=${s.state}`
+              )}
+              >{d[s.key].toLocaleString()}
+              <span class="text-fg-muted">{s.label.toLowerCase()}</span></a>
+          </dd>
+        {/each}
+      </div>
     {/each}
   </dl>
 </div>

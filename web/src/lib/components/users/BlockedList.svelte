@@ -14,7 +14,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
-  import { ago, dateTime } from "#lib/format.js";
+  import { ago, dateTime, listText, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -111,21 +111,21 @@
 {#if rules && (rules.patterns.length || rules.cidrs.length || rules.blocklistFile)}
   <Notice kind="info">
     The configuration also blocks
-    {[
-      rules.patterns.length && `${rules.patterns.length} name patterns`,
-      rules.cidrs.length && `${rules.cidrs.length} address ranges`,
-      rules.blocklistFile &&
-        `the ${rules.blocklistFile.entries} entries of ${rules.blocklistFile.path}`
-    ]
-      .filter(Boolean)
-      .join(", ")}; change those in Settings, under Groups.
+    {listText(
+      [
+        rules.patterns.length && plural(rules.patterns.length, "name pattern", "name patterns"),
+        rules.cidrs.length && plural(rules.cidrs.length, "address range", "address ranges"),
+        rules.blocklistFile &&
+          `${plural(rules.blocklistFile.entries, "entry", "entries")} from ${rules.blocklistFile.path}`
+      ].filter((p): p is string => !!p)
+    )}. You can change these in Settings, under Groups.
   </Notice>
 {/if}
 
 {#if blocked.loading}
   <Skeleton class="h-40" />
 {:else if !entries.length}
-  <EmptyState icon={ShieldCheckIcon} title="Nobody is blocked" />
+  <EmptyState icon={ShieldCheckIcon} title="No blocked users" />
 {:else}
   <div
     class="overflow-x-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -207,10 +207,7 @@
 {/if}
 
 {#if list.selected.size && write}
-  <div
-    class="sticky bottom-12 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised"
-    role="toolbar"
-    aria-label="Selected blocks">
+  <div class="selection-bar" role="toolbar" aria-label="Selected blocks">
     <span class="text-sm">{chosen.length} selected</span>
     <Button size="sm" variant="outline" onclick={() => void unblockChosen()}>Unblock</Button>
     <Button size="sm" variant="ghost" onclick={() => list.clear()}>Clear</Button>
@@ -220,7 +217,7 @@
 <Dialog
   bind:open={importing}
   title="Import blocks"
-  description="One username a line; lines starting with # are skipped. A JSON export works too.">
+  description="One username per line. Lines starting with # are ignored. You can also paste a JSON export.">
   <Textarea
     class="min-h-40 font-mono text-xs"
     aria-label="Blocks to import"

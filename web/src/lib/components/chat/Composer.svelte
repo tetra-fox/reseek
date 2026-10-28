@@ -283,13 +283,13 @@
         ? "Commands"
         : word?.kind === "emoji"
           ? "Emoji"
-          : "Names"}
+          : "Usernames"}
       class="absolute bottom-full left-2 z-20 mb-1 min-w-48 rounded-control border bg-overlay p-1 text-sm shadow-raised">
       {#each suggestions as s, i (s.key)}
         <li
           role="option"
           aria-selected={i === choice}
-          class="cursor-pointer rounded-badge px-2 py-0.5 aria-selected:bg-hover">
+          class="rounded-badge px-2 py-0.5 aria-selected:bg-hover">
           <button type="button" class="flex w-full gap-2 text-left" onclick={() => complete(s)}>
             <span>{s.label}</span>
             {#if s.detail}<span class="text-fg-muted">{s.detail}</span>{/if}

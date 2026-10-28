@@ -103,20 +103,23 @@
         onclick={() => (shownHidden = true)}>1 hidden message from a blocked user</button>
     {:else if action}
       <!-- an action reads as a sentence: the name starts it unless the header above shows it -->
-      <p class="text-sm leading-5 wrap-anywhere whitespace-pre-wrap text-fg-muted italic">
+      <p
+        class="cursor-text text-sm leading-5 wrap-anywhere whitespace-pre-wrap text-fg-muted italic">
         {#if !head}<span class="font-medium not-italic" style:color={nameColour(m.author)}
             >{m.author}</span
           >{" "}{/if}{@render body()}
       </p>
     {:else}
-      <p class="text-sm leading-5 wrap-anywhere whitespace-pre-wrap">{@render body()}</p>
+      <p class="cursor-text text-sm leading-5 wrap-anywhere whitespace-pre-wrap">
+        {@render body()}
+      </p>
     {/if}
     {#if m.sending === "sending"}
       <span class="flex items-center gap-1 text-xs text-fg-subtle"
         ><ClockIcon class="size-3" />sending</span>
     {:else if m.sending === "failed"}
       <span class="flex items-center gap-1 text-xs text-danger">
-        not sent
+        Not sent
         <Button variant="link" class="text-xs" onclick={onretry}>retry</Button>
       </span>
     {/if}

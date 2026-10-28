@@ -65,8 +65,8 @@ class TransferNotices {
     this.#told.add(`batch:${t.batchId}`);
     const failed = batch.data.failedCount ? `, ${batch.data.failedCount} failed` : "";
     notifier.other(
-      "Album finished",
-      `${getFileName(getDirectoryName(t.filename))} from ${t.username}: ${plural(batch.data.fileCount, "file", "files")}${failed}`,
+      `Folder finished: ${getFileName(getDirectoryName(t.filename))}`,
+      `From ${t.username}: ${plural(batch.data.fileCount, "file", "files")}${failed}`,
       `batch:${t.batchId}`,
       href("/downloads")
     );

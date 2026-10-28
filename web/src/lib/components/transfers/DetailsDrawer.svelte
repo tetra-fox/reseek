@@ -7,6 +7,7 @@
 
   import type { Schemas } from "#lib/api/client.js";
   import { copyText } from "#lib/clipboard.svelte.js";
+  import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Username from "#lib/components/users/Username.svelte";
@@ -16,7 +17,9 @@
     formatDate,
     formatDuration,
     formatSpeed,
-    getFileName
+    getFileName,
+    NONE,
+    plural
   } from "#lib/format.js";
   import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
   import { motionFast } from "#lib/motion.js";
@@ -78,37 +81,37 @@
   });
 
   const user = $derived(users.get(t.username));
+  const chip = $derived(stateChip(t));
   const extension = $derived(getFileName(t.filename).split(".").pop() ?? "");
   const when = (iso: string | null | undefined) =>
-    iso ? `${formatDate(iso)} (${ago(iso)})` : "N/A";
+    iso ? `${formatDate(iso)} (${ago(iso)})` : NONE;
   const fields = $derived<[string, string][]>([
-    ["Id", t.id],
-    ["Batch Id", t.batchId ?? "N/A"],
+    ["ID", t.id],
+    ["Batch ID", t.batchId ?? NONE],
     ["Direction", t.direction],
-    ["State", t.state],
-    ["Requested At", when(t.requestedAt)],
-    ["Enqueued At", when(t.enqueuedAt)],
-    ["Started At", when(t.startedAt)],
-    ["Ended At", when(t.endedAt)],
-    ["Bytes Transferred", formatBytes(t.bytesTransferred)],
-    ["Bytes Remaining", formatBytes(t.bytesRemaining)],
-    ["Average Speed", formatSpeed(t.averageSpeed)],
+    ["Requested", when(t.requestedAt)],
+    ["Queued", when(t.enqueuedAt)],
+    ["Started", when(t.startedAt)],
+    ["Ended", when(t.endedAt)],
+    ["Transferred", formatBytes(t.bytesTransferred)],
+    ["Remaining", formatBytes(t.bytesRemaining)],
+    ["Average speed", formatSpeed(t.averageSpeed)],
     [
-      "Elapsed Time",
+      "Elapsed",
       t.elapsedTime !== null && t.elapsedTime !== undefined
         ? formatDuration(t.elapsedTime / 1000)
-        : "N/A"
+        : NONE
     ],
     [
-      "Remaining Time",
+      "Time left",
       t.remainingTime !== null && t.remainingTime !== undefined
         ? formatDuration(t.remainingTime / 1000)
-        : "N/A"
+        : NONE
     ],
-    ["Percent Complete", `${t.percentComplete.toFixed(2)}%`],
-    ["Place In Queue", t.placeInQueue ? String(t.placeInQueue) : "N/A"],
+    ["Progress", `${t.percentComplete.toFixed(2)}%`],
+    ["Place in queue", t.placeInQueue ? String(t.placeInQueue) : NONE],
     ["Attempts", String(t.attempts)],
-    ["Next Attempt At", when(t.nextAttemptAt)]
+    ["Next attempt", when(t.nextAttemptAt)]
   ]);
 </script>
 
@@ -123,7 +126,7 @@
   }} />
 
 <aside
-  class="fixed top-0 right-0 bottom-10 z-30 flex w-[min(28rem,100vw)] flex-col border-l bg-surface shadow-raised"
+  class="fixed top-0 right-0 bottom-(--bottom-h) z-30 flex w-[min(28rem,100vw)] flex-col border-l bg-surface shadow-raised"
   aria-label="Transfer details"
   transition:fly|global={{ x: 32, duration: motionFast(), easing: cubicOut }}>
   <header class="flex items-center gap-2 border-b px-4 py-3">
@@ -139,14 +142,14 @@
       </Menu.Trigger>
       <RowMenu transfer={t} {direction} {around} {onremove} {onblock} />
     </Menu.Root>
-    <Button variant="ghost" size="icon-sm" aria-label="Close the details" onclick={onclose}
+    <Button variant="ghost" size="icon-sm" aria-label="Close details" onclick={onclose}
       ><XIcon /></Button>
   </header>
   <div class="flex flex-1 flex-col gap-section overflow-y-auto p-4 text-sm">
     <section class="flex flex-col gap-1">
       <h3 class="text-xs font-medium text-fg-muted uppercase">File</h3>
       <p>{getFileName(t.filename)}</p>
-      <p class="flex items-start gap-1 font-mono text-xs wrap-anywhere">
+      <p class="flex cursor-text items-start gap-1 font-mono text-xs wrap-anywhere">
         {t.filename}
         <button
           type="button"
@@ -156,7 +159,7 @@
         </button>
       </p>
       {#if t.localPath}
-        <p class="flex items-start gap-1 font-mono text-xs wrap-anywhere">
+        <p class="flex cursor-text items-start gap-1 font-mono text-xs wrap-anywhere">
           {t.localPath}
           <button
             type="button"
@@ -173,6 +176,11 @@
     <section class="flex flex-col gap-1">
       <h3 class="text-xs font-medium text-fg-muted uppercase">Transfer</h3>
       <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+        <dt class="font-medium">State</dt>
+        <dd>
+          <Badge tone={chip.tone} class="max-w-full truncate" title={chip.title ?? undefined}
+            >{chip.text}</Badge>
+        </dd>
         {#each fields as [label, value] (label)}
           <dt class="font-medium">{label}</dt>
           <dd class="min-w-0 wrap-anywhere">{value}</dd>
@@ -192,7 +200,7 @@
       {/if}
     </section>
     <section class="flex flex-col gap-1">
-      <h3 class="text-xs font-medium text-fg-muted uppercase">Peer</h3>
+      <h3 class="text-xs font-medium text-fg-muted uppercase">User</h3>
       <Username name={t.username} />
       <p class="text-fg-muted">
         {user?.presence ?? "Unknown"} · group {user?.group.name ?? "?"}{address
@@ -201,7 +209,9 @@
       </p>
       {#if user?.statistics}
         <p class="text-fg-muted">
-          {user.statistics.fileCount?.toLocaleString() ?? "?"} files · {formatSpeed(
+          {user.statistics.fileCount === null || user.statistics.fileCount === undefined
+            ? "? files"
+            : plural(user.statistics.fileCount, "file", "files")} · {formatSpeed(
             user.statistics.averageSpeed
           )}
         </p>
@@ -210,9 +220,9 @@
     <section class="flex flex-col gap-1">
       <h3 class="text-xs font-medium text-fg-muted uppercase">Timeline</h3>
       {#if history === null}
-        <p class="text-fg-muted">Loading</p>
+        <p class="text-fg-muted">Loading...</p>
       {:else if !history.length}
-        <p class="text-fg-muted">No states recorded</p>
+        <p class="text-fg-muted">No state changes recorded</p>
       {:else}
         <ol class="flex flex-col gap-1">
           {#each history as change, i (`${change.at}:${change.state}`)}
@@ -235,8 +245,10 @@
         <h3 class="text-xs font-medium text-fg-muted uppercase">Batch</h3>
         <p class="font-mono text-xs">{t.batchId}</p>
         <p class="text-fg-muted">
-          {batch.length} files · {formatBytes(batch.reduce((n, o) => n + o.size, 0))} ·
-          {batch.filter((o) => o.state === "Completed, Succeeded").length} done
+          {plural(batch.length, "file", "files")} · {formatBytes(
+            batch.reduce((n, o) => n + o.size, 0)
+          )} ·
+          {batch.filter((o) => o.state === "Completed, Succeeded").length} succeeded
         </p>
       </section>
     {/if}

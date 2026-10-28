@@ -26,7 +26,7 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
-  import { ago, dateTime } from "#lib/format.js";
+  import { ago, dateTime, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { Keyed } from "#lib/keyed.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
@@ -194,7 +194,10 @@
   const unblockAll = (names: string[]) =>
     unblockMany(names.filter((name) => (rows.get(name) ?? usersStore.get(name))?.block));
 
-  const COLUMNS = "2rem minmax(11rem,1fr) 5rem 8rem 9rem 7rem 6rem 6rem 4rem 7.5rem";
+  // the columns; below a very wide screen the group column is left out, so the table fits
+  // beside the sidebar without a sideways scroll. The group shows on the user's card
+  const COLUMNS =
+    "grid-cols-[2rem_minmax(11rem,1fr)_5rem_7rem_7rem_6rem_6rem_4rem_7rem] 2xl:grid-cols-[2rem_minmax(11rem,1fr)_5rem_8rem_7rem_7rem_6rem_6rem_4rem_7rem]";
 </script>
 
 {#snippet sortHeader(label: string, by: Schemas["UserSort"])}
@@ -224,7 +227,7 @@
         onclick={() => refilter(() => chip.set(!chip.on))}>{chip.label}</Button>
     {/each}
     <Select
-      class="h-control-sm w-32"
+      class="h-control-sm w-36"
       aria-label="Presence"
       bind:value={() => presence, (v) => refilter(() => (presence = v))}
       options={[
@@ -233,8 +236,9 @@
         { value: "Away", label: "Away" },
         { value: "Offline", label: "Offline" }
       ]} />
+    <!-- a group's name is the user's own, so the box takes the width of the one chosen -->
     <Select
-      class="h-control-sm w-36"
+      class="h-control-sm w-fit max-w-48 min-w-32"
       aria-label="Group"
       bind:value={() => group, (v) => refilter(() => (group = v))}
       options={[
@@ -250,7 +254,7 @@
       </Badge>
     {/if}
   </div>
-  <span class="ml-auto text-sm text-fg-muted">{total.toLocaleString()} users</span>
+  <span class="ml-auto text-sm text-fg-muted">{plural(total, "user", "users")}</span>
 </div>
 
 <LoadError loader={{ error, load }} />
@@ -263,7 +267,7 @@
     title={filtered ? "No users match" : "No users yet"}
     description={filtered
       ? undefined
-      : "Users appear here once you download from, upload to, message or browse them."} />
+      : "Users you download from, upload to, message or browse appear here."} />
 {:else}
   <div
     class="overflow-x-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -276,8 +280,10 @@
     {@attach list.attach}>
     <div
       role="row"
-      class="grid h-9 min-w-max items-center gap-2 border-b bg-surface-muted px-2 text-xs font-medium text-fg-muted"
-      style:grid-template-columns={COLUMNS}>
+      class={[
+        "grid h-9 min-w-max items-center gap-2 border-b bg-surface-muted px-2 text-xs font-medium text-fg-muted",
+        COLUMNS
+      ]}>
       <span role="columnheader">
         <Checkbox
           aria-label="Select every user shown"
@@ -291,7 +297,7 @@
       </span>
       <span role="columnheader">{@render sortHeader("User", "username")}</span>
       <span role="columnheader">Presence</span>
-      <span role="columnheader">Group</span>
+      <span role="columnheader" class="max-2xl:hidden">Group</span>
       <span role="columnheader">Tags</span>
       <span role="columnheader">{@render sortHeader("Last seen", "lastSeen")}</span>
       <span role="columnheader">{@render sortHeader("Uploads", "uploads")}</span>
@@ -307,12 +313,12 @@
           {...list.line(u, i)}
           class={[
             "grid min-w-max items-center gap-2 border-b px-2 py-1.5 last:border-b-0 hover:bg-hover",
+            COLUMNS,
             u.block && "bg-danger-soft/40",
             list.selected.has(u.username) && "bg-accent-soft/60",
             list.isFocused(u) && "ring-1 ring-accent ring-inset",
             rows.removed.has(u.username) && "opacity-40"
-          ]}
-          style:grid-template-columns={COLUMNS}>
+          ]}>
           <span role="gridcell">
             <Checkbox
               aria-label={`Select ${u.username}`}
@@ -333,13 +339,13 @@
           <span role="gridcell" class="flex items-center gap-1.5 text-xs">
             <Presence presence={u.presence} />{u.presence ?? "?"}
           </span>
-          <span role="gridcell"><GroupBadge group={u.group} /></span>
+          <span role="gridcell" class="max-2xl:hidden"><GroupBadge group={u.group} /></span>
           <span role="gridcell" class="flex min-w-0 flex-wrap gap-1">
             {#each u.tags as t (t)}
               <button
                 type="button"
                 class="rounded-badge border px-1 text-xs text-fg-muted hover:bg-hover"
-                title={`Only users tagged ${t}`}
+                title={`Show only users tagged ${t}`}
                 onclick={() => refilter(() => (tag = t))}>{t}</button>
             {/each}
           </span>
@@ -410,10 +416,7 @@
 {/if}
 
 {#if list.selected.size}
-  <div
-    class="sticky bottom-12 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised"
-    role="toolbar"
-    aria-label="Selected users">
+  <div class="selection-bar" role="toolbar" aria-label="Selected users">
     <span class="text-sm">{picked.length} selected</span>
     {#if write}
       <Button size="sm" variant="outline" onclick={() => blocking.ask(picked)}>Block</Button>

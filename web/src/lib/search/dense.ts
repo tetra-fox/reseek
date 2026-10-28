@@ -1,4 +1,4 @@
-import { getDirectoryName, getFileName } from "#lib/format.js";
+import { columnWidth, getDirectoryName, getFileName, WIDEST } from "#lib/format.js";
 import { fields, stored } from "#lib/stored.svelte.js";
 
 import { type Result, type ResultFile, resultFiles } from "./results";
@@ -42,17 +42,25 @@ export type DenseColumn =
   | "length"
   | "folder";
 
-/** The dense view's columns in order, with their default widths in pixels */
-export const DENSE_COLUMNS: { id: DenseColumn; label: string; width: number; end?: boolean }[] = [
-  { id: "user", label: "User", width: 140 },
-  { id: "speed", label: "Speed", width: 90, end: true },
-  { id: "queue", label: "Queue", width: 64, end: true },
-  { id: "free", label: "Free slot", width: 72 },
-  { id: "file", label: "File", width: 280 },
-  { id: "size", label: "Size", width: 84, end: true },
-  { id: "bitrate", label: "Bitrate", width: 110 },
-  { id: "length", label: "Length", width: 70, end: true },
-  { id: "folder", label: "Folder", width: 260 }
+/**
+ * The dense view's columns in order, with their default widths as CSS lengths that grow with the
+ * text: a column of figures holds its widest value, the others are in rem
+ */
+export const DENSE_COLUMNS: {
+  id: DenseColumn;
+  label: string;
+  width: string;
+  end?: boolean;
+}[] = [
+  { id: "user", label: "User", width: "8.75rem" },
+  { id: "speed", label: "Speed", width: columnWidth(WIDEST.speed), end: true },
+  { id: "queue", label: "Queue", width: columnWidth(WIDEST.count), end: true },
+  { id: "free", label: "Free slot", width: "5.5rem" },
+  { id: "file", label: "File", width: "17.5rem" },
+  { id: "size", label: "Size", width: columnWidth(WIDEST.size), end: true },
+  { id: "bitrate", label: "Bitrate", width: "7rem" },
+  { id: "length", label: "Length", width: columnWidth(WIDEST.length), end: true },
+  { id: "folder", label: "Folder", width: "16.25rem" }
 ];
 
 const VALUE: Record<DenseColumn, (row: DenseRow) => number | string> = {
@@ -90,19 +98,27 @@ export const nextSort = (sort: DenseSort, id: DenseColumn): DenseSort => {
   return sort.dir === first ? { id, dir: first === "asc" ? "desc" : "asc" } : null;
 };
 
-/** The dense view's sort and column widths in this browser */
+/**
+ * The dense view's sort and the widths the user dragged columns to, in pixels, in this browser.
+ * Only a drag is kept, so a column never dragged follows its default as that changes. Widths saved
+ * under `widths` by older builds held every default too, so they are not read
+ */
 export const denseView = stored("reseek.search.dense", (saved) => {
   const s = fields(saved);
   const sort = fields(s.sort);
-  const widths = fields(s.widths);
+  const dragged = fields(s.dragged);
   const known = DENSE_COLUMNS.find((c) => c.id === sort.id);
   return {
     sort: (known ? { id: known.id, dir: sort.dir === "desc" ? "desc" : "asc" } : null) as DenseSort,
-    widths: Object.fromEntries(
-      DENSE_COLUMNS.map((c) => {
-        const w = widths[c.id];
-        return [c.id, typeof w === "number" && w >= 40 ? w : c.width];
+    dragged: Object.fromEntries(
+      DENSE_COLUMNS.flatMap((c) => {
+        const w = dragged[c.id];
+        return typeof w === "number" && w >= 40 ? [[c.id, w]] : [];
       })
-    ) as Record<DenseColumn, number>
+    ) as Partial<Record<DenseColumn, number>>
   };
 });
+
+/** A dense column's width: pixels the user dragged it to, else its default length */
+export const denseWidth = (column: (typeof DENSE_COLUMNS)[number]): number | string =>
+  denseView.dragged[column.id] ?? column.width;

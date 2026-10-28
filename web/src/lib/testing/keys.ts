@@ -19,3 +19,22 @@ export const active = (grid: Element) =>
   document
     .getElementById(grid.getAttribute("aria-activedescendant") ?? "")
     ?.getAttribute("data-line") ?? null;
+
+/**
+ * Presses Enter in a form's field the way a browser does, which jsdom doesn't: the form's
+ * default button is clicked, unless it is disabled, and a form without one is submitted. The
+ * page isn't brought up to date first, as when Enter comes right after the last keystroke
+ */
+export const pressEnter = (field: HTMLInputElement) => {
+  const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+  field.dispatchEvent(event);
+  const form = field.form;
+  if (!event.defaultPrevented && form) {
+    const button = form.querySelector<HTMLButtonElement>(
+      'button[type="submit"], button:not([type])'
+    );
+    if (!button) form.requestSubmit();
+    else if (!button.disabled) button.click();
+  }
+  flushSync();
+};

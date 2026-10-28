@@ -1,13 +1,6 @@
 import type { Schemas } from "#lib/api/client.js";
 
-import {
-  ERRORED,
-  isCancellable,
-  isRemovable,
-  isRetryable,
-  isSucceeded,
-  type Transfer
-} from "./states";
+import { ERRORED, isCancellable, isRemovable, isRetryable, type Transfer } from "./states";
 
 export type BulkAction = Schemas["BulkAction"];
 
@@ -32,14 +25,13 @@ export const SCOPES = {
     { id: "inProgress", label: "Cancel all in progress", test: (s: string) => s === "InProgress" }
   ],
   remove: [
-    { id: "succeeded", label: "Remove all succeeded", test: isSucceeded },
-    { id: "errored", label: "Remove all errored", test: (s: string) => ERRORED.includes(s) },
+    { id: "errored", label: "Remove all failed", test: (s: string) => ERRORED.includes(s) },
     {
       id: "cancelled",
       label: "Remove all cancelled",
       test: (s: string) => s === "Completed, Cancelled"
     },
-    { id: "completed", label: "Remove all completed", test: isRemovable }
+    { id: "completed", label: "Remove all finished", test: isRemovable }
   ]
 } as const;
 

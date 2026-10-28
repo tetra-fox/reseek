@@ -6,14 +6,15 @@
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import HighlighterIcon from "@lucide/svelte/icons/highlighter";
   import LogOutIcon from "@lucide/svelte/icons/log-out";
-  import PinIcon from "@lucide/svelte/icons/pin";
   import UserIcon from "@lucide/svelte/icons/user";
+  import UserCheckIcon from "@lucide/svelte/icons/user-check";
+  import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import XIcon from "@lucide/svelte/icons/x";
 
   import { root, type Schemas } from "#lib/api/client.js";
   import { chat } from "#lib/chat/chat.svelte.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
-  import { chatLayout, setPresence, showsPresence } from "#lib/chat/prefs.svelte.js";
+  import { chatLayout } from "#lib/chat/prefs.svelte.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { links, pin } from "#lib/components/users/actions.js";
   import { confirmation } from "#lib/confirm.svelte.js";
@@ -21,6 +22,7 @@
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
+  import { BUDDY } from "#lib/wording.js";
 
   // what can be done to a conversation or a room, for its row's menu and its pane's
   let { target }: { target: Target } = $props();
@@ -37,7 +39,7 @@
       : `${root()}/api/v0/rooms/history/${segment(target.name)}/export?format=${format}`;
 
   const report = (outcome: { ok: boolean; error?: string }) => {
-    if (!outcome.ok) toast(outcome.error ?? "Failed", "error");
+    if (!outcome.ok) toast(outcome.error ?? "Something went wrong", "error");
   };
   const markRead = async () =>
     report(user ? await chat.acknowledge(target.name) : await chat.markRoomReadNewest(target.name));
@@ -65,7 +67,7 @@
       title: "Clear history",
       body: user
         ? `Delete every stored message with ${target.name}? The conversation closes too.`
-        : `Delete every stored message of ${target.name}?`,
+        : `Delete every stored message in ${target.name}?`,
       confirm: "Delete",
       run: async () =>
         report(user ? await chat.close(target.name, true) : await chat.clearRoom(target.name))
@@ -84,18 +86,13 @@
   </Menu.RadioGroup>
   <Menu.Separator />
 {/if}
-{#if !user && row}
-  <Menu.CheckboxItem
-    checked={showsPresence(target.name)}
-    onCheckedChange={(on) => setPresence(target.name, on)}>Show joins and leaves</Menu.CheckboxItem>
-  {#if admin}
-    <Menu.Item onSelect={() => goto(href("/system/settings?q=highlight_words"))}
-      ><HighlighterIcon />Watched words</Menu.Item>
-  {/if}
+{#if !user && row && admin}
+  <Menu.Item onSelect={() => goto(href("/system/settings?q=highlight_words"))}
+    ><HighlighterIcon />Watched words</Menu.Item>
   <Menu.Separator />
 {/if}
 <Menu.CheckboxItem checked={chatLayout.emoji} onCheckedChange={(on) => (chatLayout.emoji = on)}
-  >Suggest emoji for :name</Menu.CheckboxItem>
+  >Suggest emoji after a colon</Menu.CheckboxItem>
 <Menu.Separator />
 {#if user}
   <Menu.Item onSelect={() => goto(userHref(target.name))}><UserIcon />View profile</Menu.Item>
@@ -103,7 +100,7 @@
     ><FolderOpenIcon />Browse shares</Menu.Item>
   {#if write}
     <Menu.Item onSelect={() => void pin(target.name, !summary?.pinned).then(report)}>
-      <PinIcon />{summary?.pinned ? "Unpin" : "Pin"}
+      {#if summary?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
     </Menu.Item>
   {/if}
 {/if}

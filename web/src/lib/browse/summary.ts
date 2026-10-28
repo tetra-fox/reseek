@@ -9,7 +9,7 @@ export const attributesOf = (files: File[]): string => {
   if (vbr === files.length) return "VBR";
   if (vbr > 0) return "Mixed";
   const rates = new Set(files.map((f) => f.bitRate).filter((r) => r));
-  if (rates.size === 1) return `${[...rates][0]} Kbps`;
+  if (rates.size === 1) return `${[...rates][0]} kbps`;
   return rates.size > 1 ? "Mixed" : "";
 };
 

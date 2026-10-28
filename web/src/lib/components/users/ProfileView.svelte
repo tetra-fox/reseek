@@ -27,7 +27,9 @@
   <Avatar {name} {pictureUrl} {src} class="size-32 text-4xl" />
   <div class="flex min-w-0 flex-1 flex-col gap-3">
     {#if description}
-      <p class="text-sm wrap-anywhere whitespace-pre-wrap"><Linked text={description} /></p>
+      <p class="cursor-text text-sm wrap-anywhere whitespace-pre-wrap">
+        <Linked text={description} />
+      </p>
     {:else}
       <p class="text-sm text-fg-muted">No profile text.</p>
     {/if}

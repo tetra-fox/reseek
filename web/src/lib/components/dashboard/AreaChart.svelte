@@ -20,7 +20,8 @@
   const HEIGHT = 200;
   const PAD = { top: 8, right: 8, bottom: 22, left: 64 };
 
-  let width = $state(600);
+  // the drawing's width follows its box, which the layout sizes; the chart never sizes the box
+  let width = $state(0);
   let hover = $state<number | null>(null);
 
   const shown = $derived(series.filter((s) => visible.has(s.key)));
@@ -31,7 +32,10 @@
   const top = $derived(Math.max(0, ...data.flatMap((p) => shown.map((s) => p[s.key]))));
   const yTicks = $derived(valueTicks(top));
   const yMax = $derived(yTicks.at(-1) || 1);
-  const xTicks = $derived(timeTicks(min, max));
+  // as many time labels as fit the width, one for each 72 px: "05:00 PM" with room around it
+  const xTicks = $derived(
+    timeTicks(min, max, Math.max(2, Math.floor((width - PAD.left - PAD.right) / 72)))
+  );
   const xLabel = $derived(timeLabel(min, max));
 
   const x = (t: number) =>
@@ -79,7 +83,7 @@
       aria-label={label}
       {width}
       height={HEIGHT}
-      class="block"
+      class="block w-full"
       onpointermove={point}
       onpointerleave={() => (hover = null)}>
       {#each yTicks as t (t)}

@@ -176,8 +176,8 @@
     ask(
       active > 0,
       `Cancel ${plural(active, "active transfer", "active transfers")}?`,
-      "They stop where they are.",
-      "Cancel them",
+      "Any transfer in progress stops immediately.",
+      "Cancel transfers",
       () => void runBulk("cancel", transfers)
     );
   };
@@ -246,10 +246,10 @@
 {:else if !all.length}
   <EmptyState
     icon={direction === "download" ? DownloadIcon : UploadIcon}
-    title={direction === "download" ? "No downloads to display" : "No uploads to display"}
+    title={direction === "download" ? "No downloads yet" : "No uploads yet"}
     description={direction === "download"
-      ? "Search for something, or browse a user's shares, and download from there; Add takes a path or a link."
-      : "Uploads show here when other users download what you share."} />
+      ? "Download from search results or a user's shares, or use Add to enter a path or link."
+      : undefined} />
 {:else}
   <TransferTable
     bind:this={table}
@@ -269,10 +269,7 @@
 {/if}
 
 {#if selected.size}
-  <div
-    class="sticky bottom-12 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised"
-    role="toolbar"
-    aria-label="Selected transfers">
+  <div class="selection-bar" role="toolbar" aria-label="Selected transfers">
     <span class="text-sm">
       {chosen.length} selected · {formatBytes(chosen.reduce((n, t) => n + t.size, 0))}
     </span>

@@ -10,30 +10,42 @@
   import LockIcon from "@lucide/svelte/icons/lock";
   import SearchIcon from "@lucide/svelte/icons/search";
   import XIcon from "@lucide/svelte/icons/x";
-  import { fly } from "svelte/transition";
+  import { fly, slide } from "svelte/transition";
 
   import {
     activity,
     activityPrefs,
     type ActivityEntry,
-    type ActivityType
+    type ActivityType,
+    DOCK_MIN,
+    dockMax
   } from "#lib/activity/activity.svelte.js";
   import { activityParts, activityText, baseName, KINDS, kindOf } from "#lib/activity/text.js";
-  import { clock } from "#lib/clock.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import LogTime from "#lib/components/ui/LogTime.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { ago, formatBytes, formatDate, shortTime } from "#lib/format.js";
+  import { formatBytes } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { motionFast } from "#lib/motion.js";
   import { roomHref, userHref } from "#lib/nav.js";
+  import { viewport } from "#lib/viewport.svelte.js";
 
-  // what other users do with us on the network: a panel over the bottom of every screen, opened
-  // from the footer, so it stays in view whatever screen is open
+  // what other users do with us on the network: a panel at the bottom of every screen, opened
+  // from the footer or with Ctrl+J, so it stays in view whatever screen is open
   $effect(() => activity.follow());
+
+  /** the docked height: the remembered one, or less in a window too short for it */
+  let height = $state(Math.min(activityPrefs.height, dockMax()));
+  /** docked it opens and closes by its height, which moves the content with it; a sheet rises */
+  const drawer = (node: Element) =>
+    viewport.phone
+      ? fly(node, { y: 24, duration: motionFast() })
+      : slide(node, { duration: motionFast() });
   keepCurrent(() => void activity.load());
 
   const hidden = $derived(new Set(activityPrefs.hidden));
@@ -65,14 +77,33 @@
   } as const;
 </script>
 
+<!-- on a wide screen the log is a panel in the shell, above the footer, that takes its height
+     from the content area and slides it up as it opens; a phone has no room to spare for one,
+     so there it is a sheet over the bottom of the screen, standing on the footer at the height
+     the shell measures for it -->
 <section
   aria-label="Activity on the network"
-  class="fixed inset-x-0 bottom-10 z-20 flex h-72 max-h-[45svh] flex-col border-t bg-surface/95 shadow-raised backdrop-blur-md"
-  transition:fly={{ y: 24, duration: motionFast() }}>
+  class={[
+    "flex flex-col border-t",
+    viewport.phone
+      ? "fixed inset-x-0 bottom-(--bottom-h) z-20 h-72 max-h-[45svh] bg-surface/95 shadow-raised backdrop-blur-md"
+      : "relative bg-surface"
+  ]}
+  style:height={viewport.phone ? undefined : `${height}px`}
+  transition:drawer|global>
+  {#if !viewport.phone}
+    <ResizeHandle
+      bind:value={height}
+      min={DOCK_MIN}
+      max={dockMax()}
+      edge="top"
+      label="Height of the activity log"
+      onchange={(h) => (activityPrefs.height = h)}
+      class="absolute inset-x-0 -top-1 z-10 h-2" />
+  {/if}
   <header class="flex flex-wrap items-center gap-2 border-b px-gutter py-1.5">
     <h2 class="text-sm font-semibold">Activity</h2>
-    <span class="text-xs text-fg-muted">what other users do with you, since reseek started</span>
-    <div class="ml-auto flex flex-wrap items-center gap-1" role="group" aria-label="Kinds shown">
+    <div class="ml-auto flex flex-wrap items-center gap-1" role="group" aria-label="Activity types">
       {#each KINDS as k (k.type)}
         <button
           type="button"
@@ -83,13 +114,13 @@
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label="Clear the view"
-        title="Clear the view"
+        aria-label="Clear the list"
+        title="Clear the list"
         onclick={() => activity.clearView()}><EraserIcon /></Button>
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label="Close the activity"
+        aria-label="Close the activity log"
         onclick={() => (activityPrefs.open = false)}><XIcon /></Button>
     </div>
   </header>
@@ -121,15 +152,12 @@
         {...list.line(e, i)}
         aria-label={activityText(e, formatBytes)}
         class={[
-          "grid grid-cols-[4.5rem_1.25rem_minmax(0,1fr)] items-center gap-2 rounded-badge px-1 py-0.5 hover:bg-hover",
+          "log-row",
           list.selected.has(String(e.id)) && "bg-accent-soft/60",
           list.isFocused(e) && "ring-1 ring-accent ring-inset"
         ]}>
-        <span role="gridcell" class="text-xs text-fg-subtle tabular-nums"
-          ><time datetime={e.at} title={`${formatDate(e.at)}, ${ago(e.at, clock.now)}`}
-            >{shortTime(e.at)}</time
-          ></span>
-        <span role="gridcell" class="flex justify-center">
+        <LogTime at={e.at} />
+        <span role="gridcell" class="flex justify-center pt-1">
           <Icon
             class={[
               "size-3.5",
@@ -156,10 +184,7 @@
         </span>
       </div>
     {:else}
-      <EmptyState
-        icon={FolderOpenIcon}
-        title="Nothing yet"
-        description="When someone browses your shares, gets your search results or queues a file, it shows here." />
+      <EmptyState icon={FolderOpenIcon} title="No activity yet" />
     {/each}
   </div>
 </section>

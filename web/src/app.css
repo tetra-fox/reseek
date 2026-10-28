@@ -112,15 +112,16 @@
     }
   }
 
+  /* a sheet slides in from the left unless it sets --sheet-from to 100% for the right */
   @keyframes sheet-in {
     from {
-      translate: -100% 0;
+      translate: var(--sheet-from, -100%) 0;
     }
   }
 
   @keyframes sheet-out {
     to {
-      translate: -100% 0;
+      translate: var(--sheet-from, -100%) 0;
     }
   }
 
@@ -158,6 +159,13 @@
   :root {
     --spacing-gutter: 2rem;
   }
+}
+
+/* the shell measures these: the content area's height, which screens fill, and the height of
+   the panels and footer below it, which fixed layers keep clear of. Until it has, a guess */
+:root {
+  --content-h: calc(100svh - 6rem);
+  --bottom-h: 2.5rem;
 }
 
 .dark {
@@ -228,19 +236,42 @@
     background: var(--color-selection);
   }
 
-  /* tailwind v4's preflight no longer gives buttons a pointer, and :where keeps the disabled rule below winning */
+  /* the app reads as controls, not a page of text: the arrow by default, and the I-beam only
+     where text is typed or meant to be copied (pre, code, and `cursor-text` where a screen says so) */
+  body {
+    cursor: default;
+  }
+
+  :where(
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"]),
+    textarea,
+    [contenteditable="true"],
+    pre,
+    code
+  ) {
+    cursor: text;
+  }
+
+  /* tailwind v4's preflight no longer gives buttons a pointer, and :where keeps the disabled rule
+     below winning. A list's rows select or open on click: the list controller marks each with
+     aria-selected, which is what gives them the pointer here */
   :where(
     button:not(:disabled),
     a[href],
     [role="button"],
     [role="menuitem"],
     [role="menuitemradio"],
+    [role="menuitemcheckbox"],
     [role="option"],
     [role="tab"],
     [role="switch"],
     [role="radio"],
+    [role="checkbox"],
+    [role="treeitem"],
+    [data-line][aria-selected],
     label:has(> [role="switch"]),
     label:has(> [role="radio"]),
+    label:has(> [role="checkbox"]),
     summary
   ) {
     cursor: pointer;
@@ -250,6 +281,12 @@
   [aria-disabled="true"],
   [data-disabled] {
     cursor: not-allowed;
+  }
+
+  /* a box that scrolls also holds what is placed absolutely inside it, such as a screen reader's
+     hidden label in a wide table, which would otherwise escape it and widen what is around it */
+  :where(.overflow-auto, .overflow-x-auto, .overflow-y-auto) {
+    position: relative;
   }
 
   :focus-visible {
@@ -347,6 +384,17 @@
 /* the nav link for where the page is, marked with aria-current */
 @utility nav-current {
   @apply bg-surface-muted font-medium text-fg shadow-xs ring-1 ring-border;
+}
+
+/* a line of an activity log, the network's and a room's: the time, which never wraps, an icon,
+   and what happened */
+@utility log-row {
+  @apply grid grid-cols-[4.5rem_1.25rem_minmax(0,1fr)] items-start gap-2 rounded-badge px-1 py-0.5 hover:bg-hover;
+}
+
+/* the bar of what is selected in a list, which stays at the bottom of the content area */
+@utility selection-bar {
+  @apply sticky bottom-2 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised;
 }
 
 /* a row's buttons, put on an element inside a `group` row. Half shown until the row is hovered or

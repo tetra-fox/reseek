@@ -58,7 +58,7 @@
         id={field.key}
         type="password"
         autocomplete="new-password"
-        placeholder={cleared ? "cleared on save" : "the new value"}
+        placeholder={cleared ? "Cleared when you save" : "New value"}
         aria-describedby={described}
         aria-invalid={invalid || undefined}
         value={draft === kept || cleared ? "" : String(draft)}
@@ -83,13 +83,13 @@
         }}>Change</Button>
     </div>
   {/if}
-{:else if control === "list" || control === "regex-list" || control === "cidr-list" || control === "map"}
+{:else if control === "list" || control === "regex-list" || control === "cidr-list" || control === "map" || control === "table-list"}
   <!-- grows with its lines between the two heights, then scrolls; lists take one entry a line -->
   <Textarea
     id={field.key}
     class="field-sizing-content max-h-64 min-h-20 font-mono text-xs leading-5"
     spellcheck="false"
-    placeholder={control === "map" ? "{}" : "one per line"}
+    placeholder={control === "map" ? "{}" : control === "table-list" ? "[]" : "One per line"}
     aria-describedby={described}
     aria-invalid={invalid || undefined}
     bind:value={draft as string}
@@ -100,7 +100,11 @@
     class={control === "number" ? "tabular-nums" : "font-mono"}
     inputmode={control === "number" ? "decimal" : undefined}
     placeholder={field.placeholder ??
-      (control === "duration" ? "like 15m or 2h" : control === "size" ? "like 10 MiB" : undefined)}
+      (control === "duration"
+        ? "For example 15m or 2h"
+        : control === "size"
+          ? "For example 10 MiB"
+          : undefined)}
     aria-describedby={described}
     aria-invalid={invalid || undefined}
     bind:value={draft}

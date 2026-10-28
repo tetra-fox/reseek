@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
+  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import BrushCleaningIcon from "@lucide/svelte/icons/brush-cleaning";
   import Columns3Icon from "@lucide/svelte/icons/columns-3";
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
@@ -15,10 +17,11 @@
   import { formatBytes, formatSpeed } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
   import { type BulkAction, SCOPES } from "#lib/transfers/bulk.js";
-  import { COLUMNS } from "#lib/transfers/columns.js";
+  import { COLUMNS, columnsFor } from "#lib/transfers/columns.js";
   import { defaults, type ViewSettings } from "#lib/transfers/settings.svelte.js";
-  import { type ChipId, type Direction, STATE_CHIPS } from "#lib/transfers/states.js";
-  import type { GroupBy } from "#lib/transfers/view.js";
+  import { type ChipId, type Direction, isSucceeded, STATE_CHIPS } from "#lib/transfers/states.js";
+  import type { GroupBy, SortKey } from "#lib/transfers/view.js";
+  import { viewport } from "#lib/viewport.svelte.js";
 
   type Props = {
     direction: Direction;
@@ -57,6 +60,16 @@
     ...(direction === "download" ? [{ id: "batch" as const, label: "Batch" }] : []),
     { id: "flat", label: "Flat" }
   ]);
+
+  // every order a column header can sort by, named after the first column that sorts by it
+  const SORTS = $derived(
+    columnsFor(direction)
+      .flatMap((c) => (c.sort ? [{ id: c.sort, label: c.label }] : []))
+      .filter((s, i, all) => all.findIndex((o) => o.id === s.id) === i)
+  );
+  const sortLabel = $derived(SORTS.find((s) => s.id === view.sort.id)?.label ?? view.sort.id);
+
+  const reset = () => Object.assign(view, defaults(direction));
 
   const toggleChip = (id: ChipId) => {
     const states = view.filters.states;
@@ -129,30 +142,67 @@
     <Menu.Root>
       <Menu.Trigger>
         {#snippet child({ props })}
-          <Button {...props} variant="outline" size="sm"><Columns3Icon />Columns</Button>
+          <Button {...props} variant="outline" size="sm">
+            {#if view.sort.dir === "asc"}<ArrowUpIcon />{:else}<ArrowDownIcon />{/if}Sort: {sortLabel}
+          </Button>
         {/snippet}
       </Menu.Trigger>
       <Menu.Content align="start" class="min-w-48">
-        {#each view.columns as column (column.id)}
-          {@const known = COLUMNS.find((c) => c.id === column.id)}
-          {#if known && !known.fixed}
-            <Menu.Item
-              closeOnSelect={false}
-              onSelect={() => (column.visible = !column.visible)}
-              aria-checked={column.visible}
-              role="menuitemcheckbox">
-              <span
-                class={["rounded-sm size-3 border", column.visible && "border-accent bg-accent"]}
-              ></span>
-              {known.label}
-            </Menu.Item>
-          {/if}
-        {/each}
+        <Menu.RadioGroup
+          aria-label="Sort by"
+          bind:value={
+            () => view.sort.id, (id) => (view.sort = { id: id as SortKey, dir: view.sort.dir })
+          }>
+          {#each SORTS as s (s.id)}
+            <Menu.RadioItem value={s.id} closeOnSelect={false}>{s.label}</Menu.RadioItem>
+          {/each}
+        </Menu.RadioGroup>
         <Menu.Separator />
-        <Menu.Item onSelect={() => Object.assign(view, defaults(direction))}
-          >Reset the view</Menu.Item>
+        <Menu.RadioGroup
+          aria-label="Direction"
+          bind:value={
+            () => view.sort.dir,
+            (dir) => (view.sort = { id: view.sort.id, dir: dir as "asc" | "desc" })
+          }>
+          <Menu.RadioItem value="asc" closeOnSelect={false}>Ascending</Menu.RadioItem>
+          <Menu.RadioItem value="desc" closeOnSelect={false}>Descending</Menu.RadioItem>
+        </Menu.RadioGroup>
+        {#if viewport.phone}
+          <!-- a phone has no Columns menu, which holds this on a wider screen -->
+          <Menu.Separator />
+          <Menu.Item onSelect={reset}>Reset view</Menu.Item>
+        {/if}
       </Menu.Content>
     </Menu.Root>
+    <!-- a phone shows a fixed few columns, so it has nothing to choose -->
+    {#if !viewport.phone}
+      <Menu.Root>
+        <Menu.Trigger>
+          {#snippet child({ props })}
+            <Button {...props} variant="outline" size="sm"><Columns3Icon />Columns</Button>
+          {/snippet}
+        </Menu.Trigger>
+        <Menu.Content align="start" class="min-w-48">
+          {#each view.columns as column (column.id)}
+            {@const known = COLUMNS.find((c) => c.id === column.id)}
+            {#if known && !known.fixed}
+              <Menu.Item
+                closeOnSelect={false}
+                onSelect={() => (column.visible = !column.visible)}
+                aria-checked={column.visible}
+                role="menuitemcheckbox">
+                <span
+                  class={["rounded-sm size-3 border", column.visible && "border-accent bg-accent"]}
+                ></span>
+                {known.label}
+              </Menu.Item>
+            {/if}
+          {/each}
+          <Menu.Separator />
+          <Menu.Item onSelect={reset}>Reset view</Menu.Item>
+        </Menu.Content>
+      </Menu.Root>
+    {/if}
     {#if write}
       <div class="ml-auto flex flex-wrap items-center gap-inline">
         {#if direction === "download"}
@@ -180,8 +230,8 @@
           variant="outline"
           size="sm"
           disabled={disabled || !counts.completed}
-          onclick={() => scoped("remove", "succeeded")}>
-          <BrushCleaningIcon />Clear finished
+          onclick={() => onbulk("remove", isSucceeded, "succeeded")}>
+          <BrushCleaningIcon />Clear succeeded
         </Button>
         {#if direction === "upload"}
           <Button variant="outline" size="sm" {disabled} onclick={onmessage}>
@@ -197,9 +247,9 @@
   {#if metrics}
     <p class="text-xs text-fg-muted tabular-nums">
       {metrics.inProgress.files} active · {formatSpeed(metrics.inProgress.totalSpeed)} ·
-      {metrics.queued.files} queued · {metrics.completed.failed} errored · {formatBytes(
+      {metrics.queued.files} queued · {metrics.completed.failed} failed · {formatBytes(
         metrics.completed.bytes
-      )} since start
+      )} since reseek started
     </p>
   {/if}
 </div>

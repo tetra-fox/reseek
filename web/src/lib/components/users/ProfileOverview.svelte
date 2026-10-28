@@ -45,7 +45,7 @@
       queueLength={p.info.queueLength} />
   {:else}
     <p class="text-sm text-fg-muted">
-      Their profile hasn't been fetched. Refresh asks them for it.
+      Their profile hasn't been loaded yet. Use Refresh to request it.
     </p>
   {/if}
 </Card>

@@ -25,9 +25,9 @@ export const whyNotSaved = (
   options: Schemas["OptionsDocument"] | null,
   administrator: boolean
 ): string | null => {
-  if (!administrator) return "Presets are options, which only an administrator can change";
+  if (!administrator) return "Only administrators can save presets";
   if (fields(options).remote_configuration !== true) {
-    return "Presets are options, and changing options from here needs remote_configuration";
+    return "Presets can't be saved because remote configuration is off";
   }
   return null;
 };

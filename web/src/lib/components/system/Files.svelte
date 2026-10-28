@@ -27,7 +27,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
-  import { dateTime, formatBytes } from "#lib/format.js";
+  import { dateTime, formatBytes, plural } from "#lib/format.js";
   import { archiveUrl, fileTrack, fileUrl, joinPath, type Root } from "#lib/localfiles.js";
   import { href } from "#lib/nav.js";
   import { player } from "#lib/player.svelte.js";
@@ -38,6 +38,7 @@
   import { encodePath } from "#lib/transfers/content.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
+  import { viewport } from "#lib/viewport.svelte.js";
 
   import { type Entry, entries, type SortBy } from "./explorer";
 
@@ -189,14 +190,19 @@
       );
       if (!outcome.ok) {
         failed.push(
-          `${e.name}: ${outcome.status === 403 ? "Remote file management is disabled" : outcome.error}`
+          `${e.name}: ${outcome.status === 403 ? "deleting files from the UI is turned off" : outcome.error}`
         );
       }
     }
     selected.clear();
     load();
-    if (failed.length) toast(`${failed.length} not deleted: ${failed.join("; ")}`, "error");
-    else toast(targets.length === 1 ? `${targets[0].name} deleted` : `${targets.length} deleted`);
+    if (failed.length) toast(`Couldn't delete ${failed.join("; ")}`, "error");
+    else
+      toast(
+        targets.length === 1
+          ? `${targets[0].name} deleted`
+          : `${plural(targets.length, "item", "items")} deleted`
+      );
   };
   const askRemove = (targets: Entry[]) => {
     if (!targets.length || !canDelete) return;
@@ -204,14 +210,14 @@
     confirmation.ask(
       targets.length === 1
         ? {
-            title: one.kind === "directory" ? "Confirm Directory Delete" : "Confirm File Delete",
-            body: `Are you sure you want to delete ${one.kind === "directory" ? "directory" : "file"} '${one.path}'?`,
+            title: one.kind === "directory" ? "Delete folder?" : "Delete file?",
+            body: `${one.path} will be deleted. This can't be undone.`,
             confirm: "Delete",
             run: () => void remove(targets)
           }
         : {
-            title: "Delete items",
-            body: `Delete ${targets.length} items? This cannot be undone.`,
+            title: `Delete ${targets.length} items?`,
+            body: "This can't be undone.",
             confirm: "Delete",
             run: () => void remove(targets)
           }
@@ -239,7 +245,10 @@
   const sortBy = (by: SortBy) => {
     sort = { by, dir: sort.by === by && sort.dir === "asc" ? "desc" : "asc" };
   };
-  const COLUMNS = "2.5rem minmax(14rem,1fr) 10rem 7rem 3rem";
+  // a phone leaves out the modified date, so a name keeps the room it needs
+  const COLUMNS = $derived(
+    viewport.phone ? "2.5rem minmax(0,1fr) 5rem 3rem" : "2.5rem minmax(14rem,1fr) 10rem 7rem 3rem"
+  );
 </script>
 
 {#snippet sortable(label: string, by: SortBy)}
@@ -252,7 +261,7 @@
   </button>
 {/snippet}
 
-<nav aria-label="Directory" class="flex gap-1">
+<nav aria-label="Location" class="flex gap-1">
   {#each [{ id: "downloads", title: "Downloads" }, { id: "incomplete", title: "Incomplete" }] as t (t.id)}
     <a
       href={href(`/system/files?root=${t.id}`)}
@@ -370,7 +379,8 @@
         style:grid-template-columns={COLUMNS}>
         <span role="columnheader"></span>
         <span role="columnheader">{@render sortable("Name", "name")}</span>
-        <span role="columnheader">{@render sortable("Date Modified", "date")}</span>
+        <span role="columnheader" class="max-md:hidden"
+          >{@render sortable("Modified", "date")}</span>
         <span role="columnheader" class="pr-3 text-right">Size</span>
         <span role="columnheader" class="sr-only">Actions</span>
       </div>
@@ -389,11 +399,11 @@
           {node.count} · {formatBytes(node.bytes)}
         </span>
       {/if}
-      <span class="ml-auto w-40 shrink-0 text-xs text-fg-muted">
+      <span class="ml-auto w-40 shrink-0 text-xs text-fg-muted max-md:hidden">
         {e?.modifiedAt ? dateTime(e.modifiedAt) : ""}
       </span>
-      <span class="w-28 shrink-0"></span>
-      {#if e}<span class="row-action">{@render menu(e)}</span>{/if}
+      <span class="w-28 shrink-0 max-md:hidden"></span>
+      {#if e}<span class="row-action max-md:ml-auto">{@render menu(e)}</span>{/if}
     {/snippet}
     {#snippet item(e)}
       <span role="gridcell" class="flex justify-center">
@@ -414,7 +424,7 @@
             onclick={() => void open(e)}>{e.name}</button>
         {/if}
       </span>
-      <span role="gridcell" class="text-xs text-fg-muted"
+      <span role="gridcell" class="text-xs text-fg-muted max-md:hidden"
         >{e.modifiedAt ? dateTime(e.modifiedAt) : ""}</span>
       <span role="gridcell" class="pr-3 text-right tabular-nums"
         >{e.size ? formatBytes(e.size) : ""}</span>
@@ -424,9 +434,7 @@
   </FolderTree>
   {#if lines.every((l) => l.kind === "item" && l.item.kind === "up")}
     <p class="px-4 py-6 text-center text-sm text-fg-subtle">
-      {root === "downloads" && !path
-        ? "Nothing here yet; finished downloads land in this folder."
-        : "This folder is empty."}
+      {root === "downloads" && !path ? "No finished downloads yet." : "This folder is empty."}
     </p>
   {/if}
 {/if}

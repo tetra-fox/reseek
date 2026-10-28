@@ -10,8 +10,9 @@
   import Card from "#lib/components/ui/Card.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import { sections, valueAt } from "#lib/config/sections.js";
   import { confirmation } from "#lib/confirm.svelte.js";
-  import { formatBytes } from "#lib/format.js";
+  import { formatBytes, parseDuration, sayDuration } from "#lib/format.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
@@ -54,8 +55,8 @@
 
   const clearCompleted = (direction: "uploads" | "downloads") =>
     confirmation.ask({
-      title: `Clear completed ${direction}`,
-      body: `Remove all completed ${direction} from the list? They stay in the statistics.`,
+      title: `Clear finished ${direction}?`,
+      body: `All finished ${direction} leave the list. They still count in the statistics.`,
       confirm: "Remove",
       run: () =>
         void busy.run(
@@ -65,20 +66,27 @@
                 ? api.DELETE("/api/v0/transfers/uploads/all/completed")
                 : api.DELETE("/api/v0/transfers/downloads/all/completed")
             ),
-          `Completed ${direction} cleared!`
+          `Finished ${direction} cleared`
         )
     });
 
-  /** The retention options as dotted keys and their values, for a table */
-  const flatten = (value: unknown, prefix: string): [string, unknown][] =>
-    value && typeof value === "object" && !Array.isArray(value)
-      ? Object.entries(value).flatMap(([k, v]) => flatten(v, `${prefix}.${k}`))
-      : [[prefix, value]];
-  const retention = $derived(flatten(fields(app.options).retention, "retention"));
+  /** The retention options as the settings page names and orders them, with their values */
+  const retention = $derived(
+    sections
+      .find((s) => s.id === "retention")!
+      .fields.map((f) => ({ key: f.key, label: f.label, value: valueAt(app.options, f.key) }))
+  );
+  /** a retention option's value as people say it: an age, a count, or kept forever */
+  const retentionText = (value: unknown) => {
+    if (value === null || value === undefined) return "Kept forever";
+    if (typeof value === "number") return value.toLocaleString();
+    const ms = parseDuration(value);
+    return ms === null ? String(value) : sayDuration(ms);
+  };
   const chosen = $derived(rows.filter((d) => list.selected.has(d.name)).map((d) => d.name));
 </script>
 
-<Card title="Databases" description="The daemon's database files and the space they take.">
+<Card title="Databases">
   {#snippet action()}
     {#if admin && chosen.length}
       <Button size="sm" variant="outline" disabled={busy.running} onclick={() => vacuum(chosen)}
@@ -92,7 +100,7 @@
     <EmptyState
       icon={DatabaseIcon}
       title="No database files"
-      description="The daemon keeps its databases in memory." />
+      description="reseek keeps its databases in memory." />
   {:else}
     <div
       class="-mx-5 border-y text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
@@ -107,15 +115,18 @@
           role="row"
           {...list.line(d, i)}
           class={[
-            "grid grid-cols-[10rem_1fr_6rem_6rem_6rem] items-center gap-2 border-b px-5 py-1.5 last:border-b-0 hover:bg-hover",
+            // a phone puts the path on a line of its own and leaves out the log's size
+            "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-0.5 border-b px-5 py-1.5 last:border-b-0 hover:bg-hover md:grid-cols-[10rem_minmax(0,1fr)_6rem_6rem_6rem]",
             list.selected.has(d.name) && "bg-accent-soft/60",
             list.isFocused(d) && "ring-1 ring-accent ring-inset"
           ]}>
-          <span role="gridcell" class="font-medium">{d.name}</span>
-          <span role="gridcell" class="truncate font-mono text-xs text-fg-muted" title={d.path}
-            >{d.path}</span>
+          <span role="gridcell" class="truncate font-medium">{d.name}</span>
+          <span
+            role="gridcell"
+            class="truncate font-mono text-xs text-fg-muted max-md:col-span-3 max-md:row-start-2"
+            title={d.path}>{d.path}</span>
           <span role="gridcell" class="text-right tabular-nums">{formatBytes(d.sizeBytes)}</span>
-          <span role="gridcell" class="text-right text-xs text-fg-muted tabular-nums"
+          <span role="gridcell" class="text-right text-xs text-fg-muted tabular-nums max-md:hidden"
             >{d.walSizeBytes ? `+${formatBytes(d.walSizeBytes)} log` : ""}</span>
           <span role="gridcell" class="flex justify-end">
             {#if admin}
@@ -132,29 +143,29 @@
   {/if}
 </Card>
 
-<Card title="Retention" description="How long history is kept, as the options say.">
-  <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
-    {#each retention as [key, value] (key)}
-      <dt class="font-mono text-xs text-fg-muted">{key}</dt>
-      <dd>{value === null || value === undefined ? "kept forever" : String(value)}</dd>
+<Card title="Retention">
+  <dl
+    class="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-1 text-sm md:grid-cols-[auto_minmax(0,1fr)]">
+    {#each retention as r (r.key)}
+      <dt class="text-fg-muted" title={r.key}>{r.label}</dt>
+      <dd class="max-md:mb-1">{retentionText(r.value)}</dd>
     {/each}
   </dl>
   <a href={href("/system/settings")} class="text-sm text-accent hover:underline"
     >Change them in Settings</a>
 </Card>
 
-<Card title="Transfer Data">
+<Card title="Finished transfers">
   <p class="text-sm text-fg-muted">
-    The Uploads and Downloads pages can become unresponsive if too many transfers are displayed. If
-    you're having trouble with either page, try using the buttons below to remove completed
-    transfers.
+    Very long lists can slow down the Downloads and Uploads pages. Clearing finished transfers keeps
+    them in the statistics.
   </p>
   {#if write}
     <div class="flex flex-wrap gap-inline">
       <Button disabled={busy.running} onclick={() => clearCompleted("uploads")}
-        ><Trash2Icon />Clear All Completed Uploads</Button>
+        ><Trash2Icon />Clear finished uploads</Button>
       <Button disabled={busy.running} onclick={() => clearCompleted("downloads")}
-        ><Trash2Icon />Clear All Completed Downloads</Button>
+        ><Trash2Icon />Clear finished downloads</Button>
     </div>
   {/if}
 </Card>

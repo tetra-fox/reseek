@@ -46,7 +46,7 @@
         {@render children()}
       </div>
       {#if footer}
-        <div class="flex items-center justify-end gap-inline border-t px-5 py-3">
+        <div class="flex flex-wrap items-center justify-end gap-inline border-t px-5 py-3">
           {@render footer()}
         </div>
       {/if}

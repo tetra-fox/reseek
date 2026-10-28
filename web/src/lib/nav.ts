@@ -83,6 +83,13 @@ export const navCurrent = (path: string): NavItem | undefined =>
   );
 
 /**
+ * Whether going from one path to another changes the screen, a different destination of the
+ * navigation, rather than a tab, a sub-page or a query within the same one
+ */
+export const changesScreen = (from: string, to: string): boolean =>
+  navCurrent(from) !== navCurrent(to);
+
+/**
  * One step of the header's breadcrumb: a link back to it, or an action for a step that is the
  * same route (closing a drawer). The last step is where the user is. `copy` gives the step a
  * copy button for its text, such as a folder's full path
@@ -111,14 +118,20 @@ export const title = (path: string): string => titleOf(baseCrumbs(path));
 
 /**
  * Where a route goes instead of rendering, or null when it renders: a relay agent shows only
- * the System area, and anything unknown goes to the dashboard
+ * the System area, and the root is the dashboard
  */
 export const redirectFor = (path: string, agent: boolean): string | null => {
   if (agent) return path.startsWith("/system") ? null : "/system";
-  // rooms are a section of the chat page
+  return path === "/" ? "/dashboard" : null;
+};
+
+/**
+ * Where a path that no screen renders goes: the chat page for the old rooms paths, the screen
+ * whose path it starts with, such as Browse for /browse/carol, else the dashboard
+ */
+export const unknownTarget = (path: string): string => {
   if (path === "/rooms" || path.startsWith("/rooms/")) return "/chat";
-  if (path === "/" || !navCurrent(path)) return "/dashboard";
-  return null;
+  return navCurrent(path)?.path ?? "/dashboard";
 };
 
 /** Where to go after login: a route of this app, never the login itself, else the dashboard */

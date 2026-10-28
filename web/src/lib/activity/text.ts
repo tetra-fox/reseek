@@ -1,4 +1,5 @@
 import { plural } from "#lib/format.js";
+import { endingText } from "#lib/transfers/states.js";
 
 import type { ActivityEntry, ActivityType } from "./activity.svelte";
 
@@ -76,8 +77,8 @@ export const activityParts = (e: ActivityEntry, size: (bytes: number) => string)
             { kind: "file", path: k.filename },
             t(" to "),
             ...who,
-            t(" ended: "),
-            { kind: "failed", text: k.state.replace("Completed, ", "") },
+            t(" "),
+            { kind: "failed", text: endingText(k.state) },
             { kind: "muted", text: ` after ${size(k.bytes)}` }
           ];
     case "privateRoom": {
@@ -85,8 +86,8 @@ export const activityParts = (e: ActivityEntry, size: (bytes: number) => string)
       return {
         added: [t("You were added to the private room "), room],
         removed: [t("You were removed from the private room "), room],
-        operator: [t("You are an operator of "), room, t(" now")],
-        noLongerOperator: [t("You are no longer an operator of "), room]
+        operator: [t("You're now an operator of "), room],
+        noLongerOperator: [t("You're no longer an operator of "), room]
       }[k.change];
     }
   }

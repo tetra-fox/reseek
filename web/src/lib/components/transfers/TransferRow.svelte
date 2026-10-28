@@ -26,7 +26,9 @@
     formatDuration,
     formatSpeed,
     getDirectoryName,
-    getFileName
+    getFileName,
+    NONE,
+    plural
   } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
   import {
@@ -41,6 +43,7 @@
   import { type Direction, rowActions, stateChip, type Transfer } from "#lib/transfers/states.js";
   import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
   import { users } from "#lib/users.svelte.js";
+  import { viewport } from "#lib/viewport.svelte.js";
 
   import RowMenu from "./RowMenu.svelte";
   import Sparkline from "./Sparkline.svelte";
@@ -85,13 +88,50 @@
   const retryIn = $derived(t.nextAttemptAt ? ago(t.nextAttemptAt) : null);
 </script>
 
+{#snippet name()}
+  <Icon class="size-4 shrink-0 text-fg-muted" />
+  <button
+    type="button"
+    class="min-w-0 truncate text-left hover:underline"
+    title={t.filename}
+    onclick={ondetails}>
+    {getFileName(t.filename)}
+    {#if showFolder}
+      <span class="text-fg-muted"> {getDirectoryName(t.filename)}</span>
+    {/if}
+  </button>
+{/snippet}
+
+{#snippet progress()}
+  {#if t.state === "InProgress"}
+    <div
+      class="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-muted"
+      role="progressbar"
+      aria-valuenow={Math.round(t.percentComplete)}
+      aria-valuemin={0}
+      aria-valuemax={100}>
+      <div class="h-full bg-accent transition-[width]" style:width={`${t.percentComplete}%`}></div>
+    </div>
+    <span class="text-xs tabular-nums">{chip.text}</span>
+  {:else}
+    <Tooltip text={chip.title ?? (retryIn ? `next attempt ${retryIn}` : undefined)}>
+      {#snippet child({ props })}
+        <span {...props} class="min-w-0">
+          <Badge tone={chip.tone} class="max-w-full truncate">{chip.text}</Badge>
+        </span>
+      {/snippet}
+    </Tooltip>
+    {#if retryIn}<span class="truncate text-xs text-fg-muted">retry {retryIn}</span>{/if}
+  {/if}
+{/snippet}
+
 {#each columns as column (column)}
   <div
     role="gridcell"
     class={[
       "flex min-w-0 items-center gap-1.5 px-2",
       ["size", "speed", "eta", "elapsed", "attempts", "transferred"].includes(column) &&
-        "justify-end tabular-nums"
+        "justify-end whitespace-nowrap tabular-nums"
     ]}>
     {#if column === "select"}
       <Checkbox
@@ -105,17 +145,20 @@
         }}
         onCheckedChange={(on) => on !== selected && onselect(false)} />
     {:else if column === "file"}
-      <Icon class="size-4 shrink-0 text-fg-muted" />
-      <button
-        type="button"
-        class="min-w-0 truncate text-left hover:underline"
-        title={t.filename}
-        onclick={ondetails}>
-        {getFileName(t.filename)}
-        {#if showFolder}
-          <span class="text-fg-muted"> {getDirectoryName(t.filename)}</span>
-        {/if}
-      </button>
+      {#if viewport.phone}
+        <!-- a phone gives the name the row's width, with the size and progress under it -->
+        <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div class="flex min-w-0 items-center gap-1.5">{@render name()}</div>
+          <div class="flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
+            <span
+              class="shrink-0 whitespace-nowrap tabular-nums"
+              title={plural(t.size, "byte", "bytes")}>{formatBytes(t.size)}</span>
+            {@render progress()}
+          </div>
+        </div>
+      {:else}
+        {@render name()}
+      {/if}
     {:else if column === "user"}
       {#if direction === "upload" && user?.group.color}
         <span
@@ -126,29 +169,9 @@
       <Username name={t.username} folder={leaf(getDirectoryName(t.filename))} />
       {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
     {:else if column === "size"}
-      <span title={`${t.size.toLocaleString()} bytes`}>{formatBytes(t.size)}</span>
+      <span title={plural(t.size, "byte", "bytes")}>{formatBytes(t.size)}</span>
     {:else if column === "progress"}
-      {#if t.state === "InProgress"}
-        <div
-          class="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-muted"
-          role="progressbar"
-          aria-valuenow={Math.round(t.percentComplete)}
-          aria-valuemin={0}
-          aria-valuemax={100}>
-          <div class="h-full bg-accent transition-[width]" style:width={`${t.percentComplete}%`}>
-          </div>
-        </div>
-        <span class="text-xs tabular-nums">{chip.text}</span>
-      {:else}
-        <Tooltip text={chip.title ?? (retryIn ? `next attempt ${retryIn}` : undefined)}>
-          {#snippet child({ props })}
-            <span {...props} class="min-w-0">
-              <Badge tone={chip.tone} class="max-w-full truncate">{chip.text}</Badge>
-            </span>
-          {/snippet}
-        </Tooltip>
-        {#if retryIn}<span class="truncate text-xs text-fg-muted">retry {retryIn}</span>{/if}
-      {/if}
+      {@render progress()}
     {:else if column === "speed"}
       {#if t.state === "InProgress"}
         <Sparkline points={speeds} />
@@ -157,7 +180,7 @@
     {:else if column === "eta"}
       {t.state === "InProgress" && t.remainingTime !== null && t.remainingTime !== undefined
         ? formatDuration(t.remainingTime / 1000)
-        : "—"}
+        : NONE}
     {:else if column === "transferred"}
       {formatBytesTransferred(t.size, t.bytesTransferred)}
     {:else if column === "queue"}
@@ -171,7 +194,7 @@
                 {...props}
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Ask for the place in the queue"
+                aria-label="Check queue position"
                 onclick={() => void queuePosition(t)}>
                 <RefreshCwIcon />
               </Button>
@@ -204,44 +227,47 @@
       {user?.group.name ?? ""}
     {:else if column === "actions"}
       <div class="ml-auto flex items-center row-action">
-        {#if write && can.retry}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Retry"
-            onclick={() => void act(storeOf(t), "retry", [t.id])}>
-            <RotateCwIcon />
-          </Button>
-        {/if}
-        {#if write && can.cancel}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Cancel"
-            onclick={() => void act(storeOf(t), "cancel", [t.id])}>
-            <XIcon />
-          </Button>
-        {/if}
-        {#if write}
-          <Button variant="ghost" size="icon-sm" aria-label="Remove" onclick={onremove}>
-            <Trash2Icon />
-          </Button>
-        {/if}
-        {#if can.open}
-          <Button variant="ghost" size="icon-sm" aria-label="Open" onclick={() => void open(t)}>
-            <ExternalLinkIcon />
-          </Button>
-        {/if}
-        {#if can.openFolder}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Open folder"
-            title="Open folder"
-            onclick={() => openFolder([t])}>
-            <FolderOpenIcon />
-          </Button>
-        {/if}
+        <!-- a phone shows only the menu, which holds every one of these too -->
+        <span class="contents max-md:hidden">
+          {#if write && can.retry}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Retry"
+              onclick={() => void act(storeOf(t), "retry", [t.id])}>
+              <RotateCwIcon />
+            </Button>
+          {/if}
+          {#if write && can.cancel}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Cancel"
+              onclick={() => void act(storeOf(t), "cancel", [t.id])}>
+              <XIcon />
+            </Button>
+          {/if}
+          {#if write}
+            <Button variant="ghost" size="icon-sm" aria-label="Remove" onclick={onremove}>
+              <Trash2Icon />
+            </Button>
+          {/if}
+          {#if can.open}
+            <Button variant="ghost" size="icon-sm" aria-label="Open" onclick={() => void open(t)}>
+              <ExternalLinkIcon />
+            </Button>
+          {/if}
+          {#if can.openFolder}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Open folder"
+              title="Open folder"
+              onclick={() => openFolder([t])}>
+              <FolderOpenIcon />
+            </Button>
+          {/if}
+        </span>
         <Menu.Root>
           <Menu.Trigger>
             {#snippet child({ props })}

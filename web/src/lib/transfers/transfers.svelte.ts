@@ -1,6 +1,7 @@
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
 import { api, byUser, type Schemas } from "#lib/api/client.js";
+import { plural } from "#lib/format.js";
 import { Keyed } from "#lib/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
@@ -95,7 +96,7 @@ export class Transfers {
   removeLater = (ids: string[], { all = false } = {}) => {
     if (!ids.length) return;
     for (const id of ids) this.hidden.add(id);
-    const text = `Removed ${ids.length === 1 ? "a transfer" : `${ids.length} transfers`}`;
+    const text = `Removed ${plural(ids.length, "transfer", "transfers")}`;
     undoable(
       text,
       async () => {

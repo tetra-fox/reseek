@@ -69,12 +69,12 @@ describe("the dashboard", () => {
     expect(text()).toContain("3GB Downloaded · 3 files");
     expect(text()).toContain("1.5GB Uploaded · 6 files");
     expect(text()).toContain("0.50 Share ratio");
-    expect(text()).toContain("5 Distinct peers");
+    expect(text()).toContain("5 Users transferred with");
     // two series drawn by default, each an area and its edge
     expect(document.querySelectorAll('svg[aria-label="Transfers over time"] path')).toHaveLength(4);
     expect(text()).toContain("alice");
 
-    [...document.querySelectorAll("button")].find((b) => b.textContent === "Content")!.click();
+    [...document.querySelectorAll("button")].find((b) => b.textContent === "Folders")!.click();
     flushSync();
     expect(text()).toContain("Music/Album");
     [...document.querySelectorAll("button")].find((b) => b.textContent === "Errors")!.click();
@@ -100,7 +100,7 @@ describe("the dashboard", () => {
         .map((r) => r.url.searchParams.get("sortBy"));
     const button = (label: string) =>
       [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === label)!;
-    button("Total Size").click();
+    button("Size").click();
     await flush();
     expect(sorts().slice(-2)).toEqual(["TotalBytes", "TotalBytes"]);
     // a background reload a moment later reads the same range again
@@ -134,10 +134,10 @@ describe("the dashboard", () => {
     component = mount(Dashboard, { target: document.body });
     await flush();
     const now = document
-      .querySelector('[aria-label="Right now"]')
+      .querySelector('[aria-label="Current activity"]')
       ?.textContent?.replace(/\s+/g, " ");
     expect(now).toContain("2 active5 queued 4 KB/s");
-    expect(now).toContain("1 active0 waiting 2 KB/s");
+    expect(now).toContain("1 active0 queued 2 KB/s");
     const summaries = () => net.requests.filter((r) => r.url.pathname.endsWith("/summary")).length;
     const loaded = summaries();
     app.metrics = { downloads: direction(1, 5, 1), uploads: direction(1, 0, 0) };

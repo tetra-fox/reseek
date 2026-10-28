@@ -48,7 +48,7 @@ describe("chat commands", () => {
   it("say what is wrong rather than send a command", () => {
     expect(parseCommand("/dance", "room")).toEqual({
       kind: "error",
-      message: "/dance is not a command; /help lists them"
+      message: "/dance isn't a command. Type /help to see the list."
     });
     expect(parseCommand("/msg alice", "room")).toEqual({
       kind: "error",
@@ -60,7 +60,7 @@ describe("chat commands", () => {
     });
     expect(parseCommand("/rsearch x", "user")).toEqual({
       kind: "error",
-      message: "/rsearch works in a room"
+      message: "/rsearch only works in a room"
     });
     expect(parseCommand("/leave", "user").kind).toBe("error");
   });
