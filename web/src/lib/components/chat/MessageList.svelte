@@ -5,6 +5,7 @@
   import { SvelteMap } from "svelte/reactivity";
 
   import { type Line, layout, LONG } from "#lib/chat/messages.js";
+  import { pullOlder } from "#lib/chat/older.js";
   import type { MessagePane } from "#lib/chat/pane.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
@@ -245,23 +246,44 @@
       readIfSeen();
     }
     if (box.scrollTop < NEAR * 2 && pane.hasMore && !loadingOlder && placed) {
-      // older messages go above; the view stays on the line it showed
+      // older messages go above; the view stays on the line it showed, or at the top for as long
+      // as the scrollbar is held there
       loadingOlder = true;
       anchor = anchorOf();
-      await pane.older();
+      await pullOlder({
+        older: () => pane.older(),
+        more: () => pane.hasMore,
+        held: () => gripped && !!box && box.scrollTop < NEAR * 2,
+        settle: async (held) => {
+          await tick();
+          if (held && box) {
+            anchor = null;
+            box.scrollTop = 0;
+            seen();
+            return;
+          }
+          toAnchor();
+          // the lines drawn at the new place are measured now rather than when the observer
+          // runs, so the view never shows them placed by their guessed heights
+          await tick();
+          if (box)
+            for (const node of box.querySelectorAll<HTMLElement>("[data-key]")) remember(node);
+          toAnchor();
+        }
+      });
       loadingOlder = false;
-      await tick();
-      toAnchor();
-      // the lines drawn at the new place are measured now rather than when the observer runs, so
-      // the view never shows them placed by their guessed heights
-      await tick();
-      for (const node of box.querySelectorAll<HTMLElement>("[data-key]")) remember(node);
-      toAnchor();
     }
+  };
+
+  /** the scrollbar is held down: a press on the list beside its content */
+  let gripped = false;
+  const grip = (e: PointerEvent) => {
+    if (box && e.target === box && e.offsetX >= box.clientWidth) gripped = true;
   };
 </script>
 
 <svelte:document onvisibilitychange={readIfSeen} />
+<svelte:window onpointerup={() => (gripped = false)} onpointercancel={() => (gripped = false)} />
 
 <div class="relative flex min-h-0 flex-1 flex-col">
   <div
@@ -270,6 +292,7 @@
     role="log"
     aria-live="polite"
     onscroll={scrolled}
+    onpointerdown={grip}
     {@attach releasesOnUse}
     {@attach freezesWhileUsed}>
     {#if !pane.hasMore && pane.loaded && pane.ordered.length}
