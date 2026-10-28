@@ -102,13 +102,13 @@
       </Field>
     {/if}
     <fieldset class="flex flex-col gap-1.5">
-      <legend class="mb-1 text-sm font-medium">Stop them from…</legend>
+      <legend class="mb-1 text-sm font-medium">What to block</legend>
       {#each STOP_SCOPES as { scope, label } (scope)}
         {@render scopeBox(scope, label)}
       {/each}
     </fieldset>
     <fieldset class="flex flex-col gap-1.5">
-      <legend class="mb-1 text-sm font-medium">Also…</legend>
+      <legend class="mb-1 text-sm font-medium">Also</legend>
       {#each ALSO_SCOPES as { scope, label } (scope)}
         {@render scopeBox(scope, label)}
       {/each}
