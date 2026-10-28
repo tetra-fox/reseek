@@ -3,6 +3,7 @@
 //! attribute names the environment variable, the command-line flag, when a change takes effect
 //! and whether the value is secret.
 
+mod analysis;
 mod authentication;
 mod flags;
 mod logging;
@@ -21,6 +22,7 @@ use std::time::Duration;
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
 
+pub use analysis::{Analysis, MAX_ANALYSIS_WORKERS, Spectrogram};
 pub use authentication::{
   ApiKey, Authentication, Local, LocalUser, Oidc, OidcLogout, OidcRoleMapping, Proxy, RoleMapping,
 };
@@ -128,6 +130,8 @@ pub struct Options {
   pub notifications: Notifications,
   /// Blocking users.
   pub blocking: Blocking,
+  /// Audio analysis of downloaded files.
+  pub analysis: Analysis,
 }
 
 impl Default for Options {
@@ -162,6 +166,7 @@ impl Default for Options {
       chat: Chat::default(),
       notifications: Notifications::default(),
       blocking: Blocking::default(),
+      analysis: Analysis::default(),
     }
   }
 }

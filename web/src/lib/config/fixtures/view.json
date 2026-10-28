@@ -1,5 +1,24 @@
 {
   "values": {
+    "analysis": {
+      "cache_max_bytes": "476.8 MiB",
+      "extensions": [
+        "flac",
+        "wav",
+        "aiff",
+        "alac",
+        "m4a",
+        "ape",
+        "wv"
+      ],
+      "max_full_minutes": 15,
+      "sampled_windows": 240,
+      "spectrogram": {
+        "scale": "log"
+      },
+      "timeout": "2m",
+      "workers": 1
+    },
     "blacklist": {
       "enabled": false,
       "file": null
@@ -443,6 +462,124 @@
     }
   },
   "fields": {
+    "analysis.cache_max_bytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "size",
+      "doc": "How much disk the spectrogram images may take; the least recently viewed go first.",
+      "choices": null,
+      "default": "476.8 MiB",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "analysis.extensions": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "File extensions, without the dot, that analysing a folder queues.",
+      "choices": null,
+      "default": [
+        "flac",
+        "wav",
+        "aiff",
+        "alac",
+        "m4a",
+        "ape",
+        "wv"
+      ],
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "analysis.max_full_minutes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Files up to this many minutes long are analysed in full; longer ones are sampled.",
+      "choices": null,
+      "default": 15,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "analysis.sampled_windows": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many one-second windows, spread evenly, a sampled file is analysed at.",
+      "choices": null,
+      "default": 240,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "analysis.spectrogram.scale": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "The frequency axis: `log` or `linear`.",
+      "choices": [
+        "log",
+        "linear"
+      ],
+      "default": "log",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "analysis.timeout": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "How long one file may take; an analysis that runs longer stops and reports what it measured so far.",
+      "choices": null,
+      "default": "2m",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "analysis.workers": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "How many files are analysed at the same time, at most 4.",
+      "choices": null,
+      "default": 1,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
     "blacklist.enabled": {
       "source": {
         "layer": "default"

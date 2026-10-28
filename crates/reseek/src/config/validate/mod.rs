@@ -2,6 +2,7 @@
 //! problem is reported, each under the key it is about; a problem inside a user-keyed entry
 //! is reported under the map's key, with the entry's name in the message.
 
+mod analysis;
 pub(crate) mod blacklist;
 mod fields;
 mod general;
@@ -48,6 +49,7 @@ pub fn validate(options: &Options, context: &Context) -> Result<(), Vec<Invalid>
   web::check(&options.web, context, &mut report);
   soulseek::check(&options.soulseek, &mut report);
   scripts::check(&options.integrations, &mut report);
+  analysis::check(&options.analysis, &mut report);
   if report.0.is_empty() {
     Ok(())
   } else {

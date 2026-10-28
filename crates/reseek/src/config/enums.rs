@@ -201,6 +201,17 @@ option_enum! {
   }
 }
 
+option_enum! {
+  /// How the spectrogram's frequency axis is drawn.
+  pub enum SpectrogramScale {
+    /// octaves take the same height
+    #[default]
+    Log = "log",
+    /// every kilohertz takes the same height
+    Linear = "linear",
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
