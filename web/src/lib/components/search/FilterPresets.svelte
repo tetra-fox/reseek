@@ -1,6 +1,7 @@
 <script lang="ts">
   import PlusIcon from "@lucide/svelte/icons/plus";
   import XIcon from "@lucide/svelte/icons/x";
+  import { SvelteSet } from "svelte/reactivity";
 
   import { app } from "#lib/app.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
@@ -23,14 +24,16 @@
 
   const presets = $derived(presetsOf(app.options));
   const why = $derived(whyNotSaved(app.options, session.can("Administrator")));
-  /** a removed preset stays off the row while its undo waits */
-  let removing = $state<string | null>(null);
+  /** removed presets whose undo still waits, off the row meanwhile */
+  const waiting = new SvelteSet<string>();
+  /** removed presets saved without them, off the row until the options come back without them */
+  const removed = new SvelteSet<string>();
   let saving = $state(false);
   let name = $state("");
   let text = $state("");
   let busy = $state(false);
 
-  const shown = $derived(presets.filter((p) => p.name !== removing));
+  const shown = $derived(presets.filter((p) => !waiting.has(p.name) && !removed.has(p.name)));
   const replaces = $derived(presets.some((p) => p.name === name.trim()));
 
   const ask = () => {
@@ -42,27 +45,33 @@
 
   const save = async () => {
     busy = true;
-    const outcome = await savePresets(
-      withPreset(presets, { name: name.trim(), filter: text.trim() })
-    );
+    const kept = presets.filter((p) => !removed.has(p.name));
+    const outcome = await savePresets(withPreset(kept, { name: name.trim(), filter: text.trim() }));
+    if (outcome.ok) removed.delete(name.trim());
     busy = false;
     if (!outcome.ok) return void toast(outcome.error, "error");
     saving = false;
     toast(`Saved the preset ${name.trim()}`);
   };
 
+  /**
+   * Takes a preset off the row at once and out of the daemon once its undo has passed. Each
+   * removal saves the presets as they are then without its own name and those already removed,
+   * so removing several in a row keeps every one off, and each undo puts back its own
+   */
   const remove = (preset: Preset) => {
-    removing = preset.name;
+    waiting.add(preset.name);
     undoable(
       `Removed the preset ${preset.name}`,
       async () => {
-        const outcome = await savePresets(presets.filter((p) => p.name !== preset.name));
-        // a saved removal stays hidden until the options come back without it
-        if (outcome.ok) return;
-        removing = null;
-        toast(outcome.error, "error");
+        const outcome = await savePresets(
+          presets.filter((p) => p.name !== preset.name && !removed.has(p.name))
+        );
+        waiting.delete(preset.name);
+        if (outcome.ok) removed.add(preset.name);
+        else toast(outcome.error, "error");
       },
-      () => (removing = null)
+      () => waiting.delete(preset.name)
     );
   };
 </script>

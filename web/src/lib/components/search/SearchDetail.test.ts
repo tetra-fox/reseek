@@ -5,8 +5,11 @@ import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
+import { session } from "#lib/session.svelte.js";
 import { searchOptions } from "#lib/settings.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { toasts } from "#lib/toast.svelte.js";
+import { UNDO_MS } from "#lib/undo.js";
 
 import SearchDetail from "./SearchDetail.svelte";
 
@@ -69,6 +72,8 @@ describe("search results", () => {
     if (component) unmount(component);
     searchOptions.view = "cards";
     app.options = null;
+    session.principal = null;
+    toasts.splice(0);
     live.stop();
     searches.clear();
     vi.useRealTimers();
@@ -142,6 +147,7 @@ describe("search results", () => {
       if (url.pathname.endsWith("/api/v0/users")) return { users: [], total: 0 };
       if (url.pathname.endsWith(`/searches/${ID}/responses`)) return stored;
       if (url.pathname.endsWith(`/searches/${ID}`)) return search({});
+      if (url.pathname.endsWith("/api/v0/options")) return { applied: [], pending: [] };
       return undefined;
     });
     searches.list.upsert(search({}));
@@ -249,5 +255,48 @@ describe("search results", () => {
     );
     expect(preset.getAttribute("aria-pressed")).toBe("true");
     expect(names()).toEqual(["1.flac"]);
+  });
+
+  it("keep every preset removed in a row off, and undo only the one undone", async () => {
+    session.principal = { name: "a", role: "Administrator", session: null } as never;
+    const presets = ["Big", "No small files", "FLAC"].map((name) => ({ name, filter: name }));
+    app.options = {
+      remote_configuration: true,
+      search: { filter_presets: presets }
+    } as unknown as Schemas["OptionsDocument"];
+    const one = response("alice", 1);
+    const net = await open([one]);
+    net.frame("search.response", { searchId: ID, response: one });
+    await flush();
+    const chips = () =>
+      [...document.querySelectorAll('[aria-label="Filter presets"] button[aria-pressed]')].map(
+        (b) => b.textContent?.trim()
+      );
+    expect(chips()).toEqual(["Big", "No small files", "FLAC"]);
+    const remove = (name: string) =>
+      document.querySelector<HTMLButtonElement>(`button[aria-label="Remove the preset ${name}"]`)!;
+    remove("Big").click();
+    await flush();
+    remove("No small files").click();
+    await flush();
+    expect(chips()).toEqual(["FLAC"]);
+    // Undo on the second puts back the second alone
+    toasts.find((t) => t.text.includes("No small files"))!.action!.run();
+    await flush();
+    expect(chips()).toEqual(["No small files", "FLAC"]);
+    await vi.advanceTimersByTimeAsync(UNDO_MS);
+    flushSync();
+    const saved = net.requests.filter((r) => r.method === "PATCH").map((r) => r.body);
+    expect(saved).toEqual([
+      {
+        set: {
+          "search.filter_presets": [
+            { name: "No small files", filter: "No small files" },
+            { name: "FLAC", filter: "FLAC" }
+          ]
+        }
+      }
+    ]);
+    expect(chips()).toEqual(["No small files", "FLAC"]);
   });
 });
