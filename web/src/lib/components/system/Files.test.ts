@@ -117,4 +117,16 @@ describe("the file explorer", () => {
     press(grid, "ArrowLeft");
     expect(rows()).toEqual(["..", "folder:Album/CD1"]);
   });
+
+  it("says a subfolder holding nothing is empty, its way up shown", async () => {
+    fakeNetwork(() => ({ name: "Empty", fullName: "", directories: [], files: [] }));
+    component = mount(Files, {
+      target: document.body,
+      props: { root: "downloads", path: "Album/Empty" }
+    });
+    await flush();
+    const rows = [...document.querySelectorAll("[role=row][data-line]")];
+    expect(rows.map((r) => r.getAttribute("data-line"))).toEqual([".."]);
+    expect(document.body.textContent).toContain("This folder is empty.");
+  });
 });

@@ -422,7 +422,7 @@
         >{#if e.kind !== "up"}{@render menu(e)}{/if}</span>
     {/snippet}
   </FolderTree>
-  {#if !lines.length}
+  {#if lines.every((l) => l.kind === "item" && l.item.kind === "up")}
     <p class="px-4 py-6 text-center text-sm text-fg-subtle">
       {root === "downloads" && !path
         ? "Nothing here yet; finished downloads land in this folder."
