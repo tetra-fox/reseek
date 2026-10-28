@@ -104,7 +104,7 @@
           <!-- a relay agent has only the System area, so the screens are one plain label -->
           <li class={[itemClass, "pointer-events-none"]}>
             <UserSearchIcon class="size-4 shrink-0" />
-            <span class={["truncate", sidebar.collapsed && "hidden"]}>Agent Mode</span>
+            <span class={["truncate", sidebar.collapsed && "hidden"]}>Agent mode</span>
           </li>
         {:else}
           {#each navItems as item (item.path)}
@@ -120,7 +120,7 @@
                 {...props}
                 type="button"
                 class={itemClass}
-                aria-label="Toggle dark and light theme"
+                aria-label="Switch between light and dark theme"
                 onclick={() =>
                   void crossFade(async () => {
                     toggleMode();

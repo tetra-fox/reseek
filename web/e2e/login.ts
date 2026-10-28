@@ -5,6 +5,6 @@ export const login = async (page: Page, route = "/dashboard") => {
   await page.goto(`./#${route}`);
   await page.getByLabel("Username").fill("reseek");
   await page.getByLabel("Password").fill("reseek");
-  await page.getByRole("button", { name: "Login" }).click();
+  await page.getByRole("button", { name: "Log in", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`#${route}$`));
 };

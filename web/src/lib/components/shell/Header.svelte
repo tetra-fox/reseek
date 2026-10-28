@@ -22,13 +22,14 @@
   const copier = new CopyButton();
   const mac = typeof navigator !== "undefined" && /mac|iphone|ipad/i.test(navigator.platform);
 
+  const LIST = new Intl.ListFormat("en", { type: "conjunction" });
   const pending = $derived.by(() => {
     const s = app.state;
     if (!s) return [];
     return [
       s.pendingRestart && "a restart",
       s.pendingReconnect && "a reconnect",
-      s.shares.scanPending && "a share scan"
+      s.shares.scanPending && "a share rescan"
     ].filter((p): p is string => !!p);
   });
 </script>
@@ -37,7 +38,7 @@
   class="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-inline border-b bg-page/75 px-gutter backdrop-blur-md">
   <Button variant="ghost" size="icon-sm" class="-ml-1.5" onclick={sidebar.toggle}>
     <PanelLeftIcon />
-    <span class="sr-only">Toggle the navigation</span>
+    <span class="sr-only">Toggle navigation</span>
   </Button>
   <div class="mx-1 h-4 w-px bg-border"></div>
   <nav aria-label="Breadcrumb" class="min-w-0 flex-1">
@@ -83,14 +84,14 @@
 
   <div class="ml-auto flex items-center gap-inline">
     {#if pending.length}
-      <Tooltip text={`Waiting on ${pending.join(", ")}`}>
+      <Tooltip text={`Some changes take effect after ${LIST.format(pending)}`}>
         {#snippet child({ props })}
           <a
             {...props}
             href={href("/system/info")}
             class="flex h-control-sm items-center gap-1.5 rounded-control px-2 text-sm text-warning-soft-fg hover:bg-hover">
             <CircleAlertIcon class="size-4 text-warning" />
-            <span class="hidden sm:inline">Pending Action</span>
+            <span class="hidden sm:inline">Changes pending</span>
           </a>
         {/snippet}
       </Tooltip>

@@ -75,6 +75,6 @@ test("the activity log opens from the footer and lists what others did", async (
   await expect(log).toContainText('bob searched for "boards of canada" and got 12 results');
   await expect(log).toContainText("alice is browsing your shares");
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/activity.png` });
-  await page.getByRole("button", { name: "Close the activity" }).click();
+  await page.getByRole("button", { name: "Close the activity log" }).click();
   await expect(log).toBeHidden();
 });

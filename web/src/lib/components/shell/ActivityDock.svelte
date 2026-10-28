@@ -71,8 +71,7 @@
   transition:fly={{ y: 24, duration: motionFast() }}>
   <header class="flex flex-wrap items-center gap-2 border-b px-gutter py-1.5">
     <h2 class="text-sm font-semibold">Activity</h2>
-    <span class="text-xs text-fg-muted">what other users do with you, since reseek started</span>
-    <div class="ml-auto flex flex-wrap items-center gap-1" role="group" aria-label="Kinds shown">
+    <div class="ml-auto flex flex-wrap items-center gap-1" role="group" aria-label="Activity types">
       {#each KINDS as k (k.type)}
         <button
           type="button"
@@ -83,13 +82,13 @@
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label="Clear the view"
-        title="Clear the view"
+        aria-label="Clear the list"
+        title="Clear the list"
         onclick={() => activity.clearView()}><EraserIcon /></Button>
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label="Close the activity"
+        aria-label="Close the activity log"
         onclick={() => (activityPrefs.open = false)}><XIcon /></Button>
     </div>
   </header>
@@ -156,10 +155,7 @@
         </span>
       </div>
     {:else}
-      <EmptyState
-        icon={FolderOpenIcon}
-        title="Nothing yet"
-        description="When someone browses your shares, gets your search results or queues a file, it shows here." />
+      <EmptyState icon={FolderOpenIcon} title="No activity yet" />
     {/each}
   </div>
 </section>

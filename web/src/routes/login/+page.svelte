@@ -81,7 +81,7 @@
       </div>
     </div>
     {#if refused}
-      <Notice kind="error">The sign-in didn't complete: {refused}</Notice>
+      <Notice kind="error">Couldn't log in: {refused}</Notice>
     {/if}
     {#if loadError}
       <Notice kind="error">{loadError}</Notice>
@@ -92,7 +92,7 @@
         <div class="flex flex-col gap-2">
           {#each providers.oidc as provider (provider.name)}
             <Button variant="outline" class="w-full" href={oidcLogin(provider)}>
-              Sign in with {provider.displayName}
+              Log in with {provider.displayName}
             </Button>
           {/each}
         </div>
@@ -122,7 +122,7 @@
           </Field>
           <Button type="submit" class="w-full" disabled={!ready}>
             {#if submitting}<Spinner class="size-4" label="Logging in" />{:else}<LogInIcon />{/if}
-            Login
+            Log in
           </Button>
           {#if error}
             <p class="text-sm text-danger" role="alert">{error}</p>
@@ -130,7 +130,7 @@
         </Form>
       {:else if !providers.oidc.length}
         <Notice kind="warning">
-          This server offers no way to sign in from here. Ask its administrator.
+          No login method is enabled on this server. Ask its administrator.
         </Notice>
       {/if}
     {/if}

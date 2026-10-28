@@ -111,7 +111,7 @@
 {#if raw}<Crumbs steps={[{ label: "Raw file" }]} />{/if}
 
 {#if !admin}
-  <Notice kind="info">The settings are for administrators.</Notice>
+  <Notice kind="info">Only administrators can view settings.</Notice>
 {:else if view.loading}
   <Skeleton class="h-40" />
   <Skeleton class="h-96" />
@@ -173,8 +173,8 @@
         {#if q && !matched}
           <EmptyState
             icon={SearchIcon}
-            title="No setting matches"
-            description="Try another word: the search looks in names, help, environment variables and flags." />
+            title="No settings match"
+            description="The search looks in names, descriptions, environment variables and flags." />
         {/if}
         {#each all as section (section.id)}
           <Section

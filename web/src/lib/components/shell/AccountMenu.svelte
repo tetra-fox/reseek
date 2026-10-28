@@ -88,7 +88,7 @@
         <Menu.Separator />
         <Menu.Item onSelect={() => (confirming = true)}>
           <LogOutIcon />
-          Log Out
+          Log out
         </Menu.Item>
       {/if}
     </Menu.Content>
@@ -97,8 +97,8 @@
 
 <ConfirmDialog
   bind:open={confirming}
-  title="Confirm Log Out"
-  body="Are you sure you want to log out?"
-  confirm="Log Out"
+  title="Log out?"
+  body="You'll need to log in again to use reseek in this browser."
+  confirm="Log out"
   danger
   onconfirm={logout} />

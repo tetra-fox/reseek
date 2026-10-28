@@ -23,7 +23,7 @@
     role="status">
     <TriangleAlertIcon class="size-4 shrink-0 text-warning" />
     <span>
-      Lost connection to reseek, {seconds ? `retrying in ${seconds}s` : "retrying"}
+      Lost connection to reseek. {seconds ? `Retrying in ${seconds}s.` : "Retrying..."}
     </span>
   </div>
 {/if}

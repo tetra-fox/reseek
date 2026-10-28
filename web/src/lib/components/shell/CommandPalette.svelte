@@ -211,7 +211,7 @@
         <Command.List class="overflow-y-auto p-1.5">
           <Command.Viewport>
             <Command.Empty class="px-3 py-6 text-center text-sm text-fg-muted">
-              Nothing matches
+              No matches
             </Command.Empty>
             {#each groups as [group, entries] (group)}
               <Command.Group value={group}>

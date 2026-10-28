@@ -46,7 +46,7 @@
       type="button"
       aria-pressed={activityPrefs.open}
       class="flex shrink-0 items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg"
-      title="What other users do with you: browses, searches, queued files, uploads"
+      title="Who is browsing, searching and downloading from you"
       onclick={() => (activityPrefs.open = !activityPrefs.open)}>
       <ActivityIcon class="size-3.5" />Activity
     </button>

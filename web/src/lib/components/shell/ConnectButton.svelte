@@ -25,7 +25,7 @@
       const controller = state?.relay.controller.state ?? "Disconnected";
       const connected = controller === "Connected";
       return {
-        label: `Controller ${controller}`,
+        label: `Controller ${controller.toLowerCase()}`,
         plug: connected
           ? "text-success"
           : controller === "Connecting" || controller === "Reconnecting"
@@ -81,7 +81,9 @@
   const hint = $derived(
     [
       view.badge === "unreachable" && listen ? unreachable(listen.port) : null,
-      allowed ? (view.connected ? "Click to disconnect" : "Click to connect") : null
+      allowed
+        ? `${view.connected ? "Disconnect from" : "Connect to"} ${app.mode === "agent" ? "the controller" : "the Soulseek server"}`
+        : null
     ]
       .filter(Boolean)
       .join(" ") || undefined
