@@ -202,15 +202,13 @@
 {/snippet}
 
 <div class="flex flex-wrap items-center gap-inline">
-  <div class="relative w-full max-w-xs">
-    <SearchIcon class="pointer-events-none absolute top-2.5 left-2.5 size-4 text-fg-muted" />
-    <Input
-      class="pl-8"
-      type="search"
-      placeholder="Username, tag or note"
-      aria-label="Search users"
-      bind:value={typed} />
-  </div>
+  <Input
+    icon={SearchIcon}
+    wrapperClass="w-full max-w-xs"
+    type="search"
+    placeholder="Username, tag or note"
+    aria-label="Search users"
+    bind:value={typed} />
   <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Filters">
     {#each [{ label: "Blocked", on: blocked, set: (v: boolean) => (blocked = v) }, { label: "Pinned", on: pinned, set: (v: boolean) => (pinned = v) }, { label: "Has transfers", on: hasTransfers, set: (v: boolean) => (hasTransfers = v) }] as chip (chip.label)}
       <Button

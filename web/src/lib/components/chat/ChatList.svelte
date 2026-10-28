@@ -153,17 +153,14 @@
 </script>
 
 <div class="flex min-h-0 flex-col gap-2 p-2">
-  <div class="relative">
-    <SearchIcon class="pointer-events-none absolute top-2.5 left-2.5 size-4 text-fg-muted" />
-    <Input
-      bind:ref={search}
-      class="pl-8"
-      type="search"
-      placeholder="Search chats"
-      aria-label="Search chats"
-      bind:value={typed}
-      onkeydown={offer} />
-  </div>
+  <Input
+    bind:ref={search}
+    icon={SearchIcon}
+    type="search"
+    placeholder="Search chats"
+    aria-label="Search chats"
+    bind:value={typed}
+    onkeydown={offer} />
   {#if write && unreadChats.length}
     <Button
       variant="ghost"
