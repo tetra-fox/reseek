@@ -19,7 +19,8 @@ export type Control =
   | "secret"
   | "regex-list"
   | "cidr-list"
-  | "map";
+  | "map"
+  | "table-list";
 
 /**
  * One option on the settings page. Its help text, apply class, kind and source come from the
@@ -393,7 +394,8 @@ export const sections: Section[] = [
     id: "search-filters",
     title: "Search filters",
     fields: [
-      { key: "filters.search.request", label: "Searches not answered", control: "regex-list" }
+      { key: "filters.search.request", label: "Searches not answered", control: "regex-list" },
+      { key: "search.filter_presets", label: "Filter presets" }
     ]
   },
   {

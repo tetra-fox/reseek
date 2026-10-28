@@ -340,6 +340,9 @@
             {:else if field.key === "soulseek.description" || field.key === "soulseek.picture"}
               <a href={href("/profile")} class="text-xs text-accent hover:underline"
                 >Edit on your profile page</a>
+            {:else if field.key === "search.filter_presets"}
+              <span class="text-xs text-fg-muted"
+                >A search's results can save and remove presets too.</span>
             {/if}
           {/snippet}
         </FieldRow>

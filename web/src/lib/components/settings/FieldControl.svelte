@@ -83,13 +83,13 @@
         }}>Change</Button>
     </div>
   {/if}
-{:else if control === "list" || control === "regex-list" || control === "cidr-list" || control === "map"}
+{:else if control === "list" || control === "regex-list" || control === "cidr-list" || control === "map" || control === "table-list"}
   <!-- grows with its lines between the two heights, then scrolls; lists take one entry a line -->
   <Textarea
     id={field.key}
     class="field-sizing-content max-h-64 min-h-20 font-mono text-xs leading-5"
     spellcheck="false"
-    placeholder={control === "map" ? "{}" : "One per line"}
+    placeholder={control === "map" ? "{}" : control === "table-list" ? "[]" : "One per line"}
     aria-describedby={described}
     aria-invalid={invalid || undefined}
     bind:value={draft as string}
