@@ -17,18 +17,23 @@
   import { type Component, untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
+  import { queue } from "#lib/analysis/analysis.js";
   import { jobs } from "#lib/analysis/jobs.svelte.js";
+  import { FILE_FILTERS, type MarkFilter, passes } from "#lib/analysis/marks.js";
+  import { analysable, analyserOffered, marks } from "#lib/analysis/marks.svelte.js";
   import { api, type Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import { copyText } from "#lib/clipboard.svelte.js";
   import AnalysisDrawer from "#lib/components/analysis/AnalysisDrawer.svelte";
   import AnalysisJobs from "#lib/components/analysis/AnalysisJobs.svelte";
+  import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
   import { isAudio } from "#lib/components/files/links.js";
   import FolderTree from "#lib/components/tree/FolderTree.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
@@ -106,7 +111,7 @@
     const read = listings.get(folder.path);
     const inside = read ? entries(read, folder.path.split("/"), sort.by, sort.dir) : [];
     const children = inside.filter((e) => e.kind === "directory").map(nodeOf);
-    const items = inside.filter((e) => e.kind === "file");
+    const items = inside.filter((e) => e.kind === "file" && shows(e));
     return {
       path: folder.path,
       label: folder.name,
@@ -123,7 +128,7 @@
   const here = $derived<FolderNode<Entry>>({
     path,
     label: parts.at(-1) ?? root,
-    items: top.filter((e) => e.kind !== "directory"),
+    items: top.filter((e) => e.kind !== "directory" && shows(e)),
     children: roots,
     count: 0,
     bytes: 0
@@ -134,7 +139,7 @@
       .map((e) => ({ kind: "item" as const, key: e.key, item: e, depth: 0, folder: here })),
     ...treeLines(roots, expansion.isOpen, (e) => e.key),
     ...top
-      .filter((e) => e.kind === "file")
+      .filter((e) => e.kind === "file" && shows(e))
       .map((e) => ({ kind: "item" as const, key: e.key, item: e, depth: 0, folder: here }))
   ]);
   /** every entry read so far, by key, for the selection */
@@ -148,12 +153,11 @@
     return map;
   });
   const managed = $derived(fields(app.options).remote_file_management === true);
-  /** the extensions the analyser is offered for, as the options name them */
-  const analysable = $derived.by(() => {
-    const listed = fields(fields(app.options).analysis).extensions;
-    return new Set(Array.isArray(listed) ? listed.map((x) => String(x).toLowerCase()) : []);
-  });
-  const canAnalyse = (name: string) => analysable.has(name.split(".").pop()?.toLowerCase() ?? "");
+  /** which files the list shows by their analysis, every file when null */
+  let only = $state<MarkFilter | null>(null);
+  const shows = (e: Entry) =>
+    e.kind !== "file" || !only || passes(only, marks.file(root, e.path), analysable(e.name));
+  $effect(() => marks.retain());
   /** the file whose analysis the drawer shows, queued when it has none with `start` */
   let analysing = $state<{ entry: Entry; start: boolean } | null>(null);
   $effect(() => {
@@ -171,15 +175,12 @@
     if (!listing.ok) return void toast(`Couldn't read ${e.name}: ${listing.error}`, "error");
     const files = (listing.data.files ?? [])
       .map((f) => f.fullName.replaceAll("\\", "/"))
-      .filter(canAnalyse);
+      .filter(analysable);
     if (!files.length) return void toast(`${e.name} has no files to analyse`);
     let queued = 0;
     const failed: string[] = [];
     for (const file of files) {
-      const outcome = await jobs.queue(
-        { kind: "file", root, path: joinPath([e.path, file]) },
-        false
-      );
+      const outcome = await queue({ kind: "file", root, path: joinPath([e.path, file]) });
       // a file analysed already or in the queue is left as it is
       if (outcome.ok) queued++;
       else if (outcome.status !== 409) failed.push(`${file}: ${outcome.error}`);
@@ -340,7 +341,17 @@
         class="hover:underline">{part}</a>
     {/each}
   </nav>
-  <div class="ml-auto flex gap-inline">
+  <div class="ml-auto flex max-w-full flex-wrap justify-end gap-inline">
+    {#if analyserOffered()}
+      <Select
+        bind:value={only}
+        aria-label="Show"
+        class="h-control-sm w-52 max-w-full"
+        options={[
+          { value: null, label: "All files" },
+          ...FILE_FILTERS.map((f) => ({ value: f.id, label: f.label }))
+        ]} />
+    {/if}
     {#if canDelete && chosen.length}
       <Button variant="danger" size="sm" onclick={() => askRemove(chosen)}
         ><Trash2Icon />Delete selected ({chosen.length})</Button>
@@ -364,7 +375,7 @@
         {#if isAudio(e.name)}
           <Menu.Item onSelect={() => preview(e)}><PlayIcon />Preview</Menu.Item>
         {/if}
-        {#if canAnalyse(e.name)}
+        {#if analysable(e.name)}
           <Menu.Item onSelect={() => (analysing = { entry: e, start: write })}
             ><AudioLinesIcon />Analyse</Menu.Item>
         {/if}
@@ -373,7 +384,7 @@
         <Menu.Item onSelect={() => void open(e)}><FolderOpenIcon />Open</Menu.Item>
         <Menu.Item onSelect={() => window.location.assign(archiveUrl(root, e.path))}
           ><FileArchiveIcon />Download as zip</Menu.Item>
-        {#if write && analysable.size}
+        {#if write && analyserOffered()}
           <Menu.Item onSelect={() => void analyseFolder(e)}
             ><AudioLinesIcon />Analyse folder</Menu.Item>
         {/if}
@@ -475,6 +486,7 @@
         {#if e.kind === "file"}
           <FileIcon class="size-4 shrink-0 text-fg-muted" />
           <span class="truncate" title={e.path}>{e.name}</span>
+          <AnalysisMark mark={marks.file(root, e.path)} />
         {:else}
           <FolderIcon class="size-4 shrink-0 text-fg-muted" />
           <button
@@ -493,7 +505,11 @@
   </FolderTree>
   {#if lines.every((l) => l.kind === "item" && l.item.kind === "up")}
     <p class="px-4 py-6 text-center text-sm text-fg-subtle">
-      {root === "downloads" && !path ? "No finished downloads yet." : "This folder is empty."}
+      {only
+        ? "No files here match the filter."
+        : root === "downloads" && !path
+          ? "No finished downloads yet."
+          : "This folder is empty."}
     </p>
   {/if}
 {/if}
