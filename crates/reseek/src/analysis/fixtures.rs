@@ -59,6 +59,27 @@ pub fn tone(hz: f64, seconds: usize) -> Audio {
   audio
 }
 
+/// [`SECONDS`] of a sawtooth at `hz`, its harmonics up to `top` falling 6 dB an octave, as a
+/// synth or a bowed string has, one channel at 44.1 kHz at -15 dBFS.
+pub fn sawtooth(hz: f64, top: f64) -> Audio {
+  let rate = 44_100u32;
+  let mut channel = vec![0f32; SECONDS * rate as usize];
+  let mut harmonic = 1.0;
+  while hz * harmonic < top {
+    let step = 2.0 * std::f64::consts::PI * hz * harmonic / f64::from(rate);
+    for (i, sample) in channel.iter_mut().enumerate() {
+      *sample += (((i as f64 * step) % (2.0 * std::f64::consts::PI)).sin() / harmonic) as f32;
+    }
+    harmonic += 1.0;
+  }
+  let mut audio = Audio {
+    rate,
+    channels: vec![channel],
+  };
+  audio.set_level(-15.0);
+  audio
+}
+
 /// Music's spectrum, roughly: power falling 3 dB an octave, from 20 Hz up.
 pub fn pink(hz: f64) -> f64 {
   if hz < 20.0 { 0.0 } else { (100.0 / hz).sqrt() }
@@ -69,8 +90,8 @@ pub fn cut_at(hz: f64) -> impl Fn(f64) -> f64 + Copy {
   move |f| if f < hz { pink(f) } else { 0.0 }
 }
 
-/// [`pink`] with a comb of gaps 40 Hz wide every 80 Hz between 16 and 20 kHz, as a lossy
-/// encoder leaves in its top band when it drops coefficients there.
+/// [`pink`] with a comb of gaps 40 Hz wide every 80 Hz between 16 and 20 kHz: what the gap
+/// measure counts.
 pub fn combed(hz: f64) -> f64 {
   if (16_000.0..20_000.0).contains(&hz) && (hz % 80.0) < 40.0 {
     0.0

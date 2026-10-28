@@ -12,9 +12,9 @@ use super::engine::Measured;
 use super::flags::findings;
 use super::measure::Window;
 use super::thresholds::{
-  CLUSTER_HZ, CONFIDENCE_CAP, CONSISTENT_SHARE, FEW_WINDOWS, FRAME_ARTEFACTS_PRESENT, FULL_BAND,
-  HIGH_BITRATE_KBPS, HOLES_PRESENT, INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE,
-  NATURAL_LIMIT, Profile, QUIET_DBFS, SHARP_SHELF_DB, TRANSCODE_SHARE, profile_at,
+  CLUSTER_HZ, CONFIDENCE_CAP, CONSISTENT_SHARE, FEW_WINDOWS, FULL_BAND, HIGH_BITRATE_KBPS,
+  INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE, NATURAL_LIMIT, Profile, QUIET_DBFS,
+  SHARP_SHELF_DB, TRANSCODE_SHARE, profile_at,
 };
 
 /// The width of a cutoff histogram bucket, in Hz.
@@ -127,13 +127,7 @@ pub(super) fn read(measured: &Measured) -> Reading {
       claimed.channels
     ));
   }
-  let mut found = verdict(
-    &heard,
-    median,
-    &measures,
-    claimed.lossless,
-    measured.bitrate_kbps,
-  );
+  let mut found = verdict(&heard, median, claimed.lossless, measured.bitrate_kbps);
   if heard.windows.len() < FEW_WINDOWS {
     limitations.push("Short or mostly quiet audio gives few windows to judge from.".to_string());
   }
@@ -183,7 +177,6 @@ pub(super) fn read(measured: &Measured) -> Reading {
 fn verdict(
   heard: &Heard<'_>,
   median: Option<f64>,
-  measures: &AnalysisMeasures,
   lossless: bool,
   bitrate: Option<u32>,
 ) -> Verdict {
@@ -204,10 +197,6 @@ fn verdict(
     );
     return reading;
   };
-  let artefacts = measures
-    .frame_artefact_score
-    .is_some_and(|s| s >= FRAME_ARTEFACTS_PRESENT);
-  let holes = measures.sfb21_holes.is_some_and(|h| h >= HOLES_PRESENT);
   let clustered = heard.share(|w| {
     w.cutoff_hz
       .is_some_and(|c| (c - median).abs() <= CLUSTER_HZ)
@@ -222,25 +211,17 @@ fn verdict(
   let below_claim =
     |profile: &Profile| lossless || bitrate.is_some_and(|kbps| profile.kbps * 3 / 2 <= kbps);
 
-  // a cutoff where the highest bitrates cut is also where some recordings are filtered
-  let high = |profile: &Profile| profile.kbps >= HIGH_BITRATE_KBPS;
-  if let Some(profile) = profile_at(median).filter(|p| below_claim(p))
+  // a cutoff where the highest bitrates cut is also where some recordings are filtered, and
+  // no measure tells the two apart
+  if let Some(profile) = profile_at(median)
+    .filter(|p| below_claim(p))
+    .filter(|p| p.kbps < HIGH_BITRATE_KBPS)
     && clustered >= TRANSCODE_SHARE
-    && (sharp_share >= 0.5 || artefacts)
-    && (!high(profile) || artefacts || holes)
+    && sharp_share >= 0.5
   {
-    let evidence = 0.5 * ((clustered - TRANSCODE_SHARE) / (1.0 - TRANSCODE_SHARE)).clamp(0.0, 1.0)
-      + 0.25 * sharp_share
-      + if artefacts || holes { 0.25 } else { 0.0 };
-    let mut confidence = 0.6 + 0.38 * evidence;
-    if high(profile) {
-      confidence = confidence.min(0.75);
-      reading.limitations.push(
-        "A transcode from a high bitrate is the hardest case: the reading rests on frame \
-         artefacts and gaps in the upper band and is less sure."
-          .to_string(),
-      );
-    }
+    let evidence = 0.6 * ((clustered - TRANSCODE_SHARE) / (1.0 - TRANSCODE_SHARE)).clamp(0.0, 1.0)
+      + 0.4 * sharp_share;
+    let confidence = 0.6 + 0.38 * evidence;
     reading
       .limitations
       .push("Two or more lossy generations show as the lowest cutoff among them.".to_string());
@@ -252,15 +233,10 @@ fn verdict(
     });
     reading.cutoff_hz = Some(median);
     reading.summary = format!(
-      "{} of the time stops at {} with a sharp shelf, where an encoder at {} cuts off{}.",
+      "{} of the time stops at {} with a sharp shelf, where an encoder at {} cuts off.",
       percent(clustered),
       khz(median),
-      profile.name,
-      if artefacts {
-        ", and the noise repeats at a lossy codec's frame length"
-      } else {
-        ""
-      }
+      profile.name
     );
     return reading;
   }
@@ -282,8 +258,7 @@ fn verdict(
       );
       return reading;
     }
-    // past the transcode rule, this is a sharp cutoff where the highest bitrates cut, without
-    // other signs
+    // past the transcode rule, this is a sharp cutoff where the highest bitrates cut
     reading.encoder_guess = Some(EncoderGuess {
       profile: profile.name.to_string(),
       confidence: 0.4,
@@ -294,9 +269,9 @@ fn verdict(
         .to_string(),
     );
     reading.summary = format!(
-      "{} of the time stops at {} with a sharp shelf, where an encoder at {} cuts off, but \
-       without frame artefacts or gaps in the upper band to tell a transcode from a \
-       recording filtered there.",
+      "{} of the time stops at {} with a sharp shelf, where an encoder at {} cuts off; a \
+       recording filtered there when it was made looks the same, and the analyser can not \
+       tell the two apart.",
       percent(clustered),
       khz(median),
       profile.name
@@ -355,7 +330,7 @@ fn verdict(
   }
 
   let open = heard.share(|w| heard.full(w) || !sharp(w));
-  if open >= CONSISTENT_SHARE && !artefacts {
+  if open >= CONSISTENT_SHARE {
     if full >= CONSISTENT_SHARE {
       let windows = ((count - MIN_WINDOWS) as f64 / 100.0).min(1.0);
       let mut confidence = 0.7 + 0.25 * windows;
@@ -394,11 +369,7 @@ fn verdict(
     );
     return reading;
   }
-  reading.summary = if artefacts && full >= CONSISTENT_SHARE {
-    "The content reaches the top of the band, but its noise repeats at a lossy codec's frame \
-     length."
-      .to_string()
-  } else if sharp_share >= 0.5 && clustered >= TRANSCODE_SHARE {
+  reading.summary = if sharp_share >= 0.5 && clustered >= TRANSCODE_SHARE {
     format!(
       "The content stops at {} with a sharp shelf, which is not where common encoders cut off.",
       khz(median)

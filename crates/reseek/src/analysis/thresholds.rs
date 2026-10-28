@@ -28,10 +28,6 @@ pub(super) const HOLES_FROM_HZ: f64 = 16_000.0;
 pub(super) const HOLES_TO_HZ: f64 = 20_000.0;
 /// A bin this many dB below the bins around it is a gap.
 pub(super) const HOLE_DEPTH_DB: f64 = 20.0;
-/// Gaps per populated bin at or above this are an encoder's.
-pub(super) const HOLES_PRESENT: f64 = 0.1;
-/// A frame-rhythm score at or above this is a lossy codec's.
-pub(super) const FRAME_ARTEFACTS_PRESENT: f64 = 0.2;
 
 /// A reading needs at least this many non-silent windows.
 pub(super) const MIN_WINDOWS: usize = 20;
@@ -76,7 +72,8 @@ pub(super) struct Profile {
 }
 
 /// Profiles at this bitrate and above cut where some recordings are filtered when they are
-/// made, so a sharp shelf there is a transcode only with frame artefacts or gaps beside it.
+/// made, so a sharp shelf there reads as something the analyser can not tell, never as a
+/// transcode.
 pub(super) const HIGH_BITRATE_KBPS: u32 = 320;
 
 /// The cutoffs of common lossy encoder settings, lowest first. LAME's defaults are the
