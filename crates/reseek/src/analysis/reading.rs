@@ -10,11 +10,11 @@ use api_types::analysis::{AnalysisFlag, AnalysisMeasures, AnalysisVerdict, Encod
 
 use super::engine::Measured;
 use super::flags::findings;
-use super::measure::Window;
+use super::measure::{Step, Window};
 use super::thresholds::{
-  CLUSTER_HZ, CONFIDENCE_CAP, CONSISTENT_SHARE, FEW_WINDOWS, FULL_BAND, HIGH_BITRATE_KBPS,
-  INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE, NATURAL_LIMIT, Profile, QUIET_DBFS,
-  SHARP_SHELF_DB, TRANSCODE_SHARE, profile_at,
+  CLEAR_DB, CLUSTER_HZ, CONFIDENCE_CAP, CONSISTENT_SHARE, FEW_WINDOWS, FULL_BAND,
+  HIGH_BITRATE_KBPS, INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE, NATURAL_LIMIT, Profile,
+  QUIET_DBFS, SHARP_SHELF_DB, TRANSCODE_SHARE, profile_at,
 };
 
 /// The width of a cutoff histogram bucket, in Hz.
@@ -51,25 +51,63 @@ struct Verdict {
   cutoff_hz: Option<f64>,
 }
 
-/// The measures of the windows that are not near-silent.
-struct Heard<'a> {
-  windows: Vec<&'a Window>,
+/// A window that is not near-silent, as the reading counts it.
+#[derive(Clone, Copy, Debug)]
+struct Seen {
+  cutoff_hz: Option<f64>,
+  shelf_db: Option<f64>,
+  inner_shelf: Option<Step>,
+  rms_dbfs: f64,
+}
+
+impl Seen {
+  /// `window` as the reading counts it against a band ending at `top`. A window whose band
+  /// reaches the top only through a floor that just clears the cutoff line, above a step at an
+  /// encoder's cutoff, stops at that step: hiss or dither over a filtered recording is not
+  /// full-band content.
+  fn of(window: &Window, top: f64) -> Self {
+    let floor = window.inner_shelf.filter(|step| {
+      window.cutoff_hz.is_some_and(|c| c >= FULL_BAND * top)
+        && step.drop >= INNER_SHELF_DB
+        && profile_at(step.hz).is_some()
+        && step.clearance < CLEAR_DB
+    });
+    match floor {
+      Some(step) => Self {
+        cutoff_hz: Some(step.hz),
+        shelf_db: Some(step.drop),
+        inner_shelf: None,
+        rms_dbfs: window.rms_dbfs,
+      },
+      None => Self {
+        cutoff_hz: window.cutoff_hz,
+        shelf_db: window.shelf_db,
+        inner_shelf: window.inner_shelf,
+        rms_dbfs: window.rms_dbfs,
+      },
+    }
+  }
+}
+
+/// The windows that are not near-silent, as the reading counts them.
+struct Heard {
+  windows: Vec<Seen>,
   /// the top of the band the content is judged against, in Hz
   top: f64,
 }
 
-impl Heard<'_> {
-  fn share(&self, keep: impl Fn(&Window) -> bool) -> f64 {
+impl Heard {
+  fn share(&self, keep: impl Fn(&Seen) -> bool) -> f64 {
     let kept = self.windows.iter().filter(|w| keep(w)).count();
     kept as f64 / self.windows.len().max(1) as f64
   }
 
-  fn full(&self, window: &Window) -> bool {
+  fn full(&self, window: &Seen) -> bool {
     window.cutoff_hz.is_some_and(|c| c >= FULL_BAND * self.top)
   }
 
   /// A window that stops short of the top at an encoder's cutoff, with a sharp shelf.
-  fn limited(&self, window: &Window) -> Option<&'static Profile> {
+  fn limited(&self, window: &Seen) -> Option<&'static Profile> {
     let cutoff = window.cutoff_hz?;
     (!self.full(window) && sharp(window))
       .then(|| profile_at(cutoff))
@@ -77,13 +115,14 @@ impl Heard<'_> {
   }
 
   /// A full-band window with a band-limited layer under it at an encoder's cutoff.
-  fn layered(&self, window: &Window) -> Option<f64> {
-    let (hz, drop) = window.inner_shelf?;
-    (self.full(window) && drop >= INNER_SHELF_DB && profile_at(hz).is_some()).then_some(hz)
+  fn layered(&self, window: &Seen) -> Option<f64> {
+    let step = window.inner_shelf?;
+    (self.full(window) && step.drop >= INNER_SHELF_DB && profile_at(step.hz).is_some())
+      .then_some(step.hz)
   }
 }
 
-fn sharp(window: &Window) -> bool {
+fn sharp(window: &Seen) -> bool {
   window.shelf_db.is_some_and(|s| s >= SHARP_SHELF_DB)
 }
 
@@ -113,6 +152,9 @@ pub(super) fn read(measured: &Measured) -> Reading {
   let found_beside = findings(claimed, &windows, median, &measures);
   // an upsampled file is judged against the band of the rate it was made at
   let top = found_beside.source_edge.unwrap_or(nyquist);
+  let windows: Vec<Seen> = windows.iter().map(|w| Seen::of(w, top)).collect();
+  let cutoffs: Vec<f64> = windows.iter().filter_map(|w| w.cutoff_hz).collect();
+  let median = (!cutoffs.is_empty()).then(|| middle(&cutoffs));
   let heard = Heard { windows, top };
   let mut limitations = measured.problems.clone();
   if measured.sampled {
@@ -174,12 +216,7 @@ pub(super) fn read(measured: &Measured) -> Reading {
 }
 
 /// Reads the cutoff of the non-silent windows, whose median cutoff is `median`.
-fn verdict(
-  heard: &Heard<'_>,
-  median: Option<f64>,
-  lossless: bool,
-  bitrate: Option<u32>,
-) -> Verdict {
+fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u32>) -> Verdict {
   let count = heard.windows.len();
   let seconds = count as f64;
   let mut reading = Verdict {
@@ -423,7 +460,7 @@ fn upsample_ratio(windows: &[&Window]) -> f64 {
 }
 
 /// Whether the middle window is quiet.
-fn quiet(heard: &Heard<'_>) -> bool {
+fn quiet(heard: &Heard) -> bool {
   let levels: Vec<f64> = heard.windows.iter().map(|w| w.rms_dbfs).collect();
   percentile(&levels, 0.5).is_some_and(|level| level < QUIET_DBFS)
 }

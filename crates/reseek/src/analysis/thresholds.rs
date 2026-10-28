@@ -22,6 +22,9 @@ pub(super) const NATURAL_LIMIT: f64 = 0.75;
 pub(super) const INNER_SHELF_FROM_HZ: f64 = 10_000.0;
 /// A step of at least this many dB inside a full band is a band-limited layer under it.
 pub(super) const INNER_SHELF_DB: f64 = 20.0;
+/// The band above such a step is content only when it is at least this many dB over the
+/// cutoff line; nearer the line it is the recording's noise floor, hiss or dither.
+pub(super) const CLEAR_DB: f64 = 10.0;
 /// The band gaps are counted in, in Hz: where MP3's top scale-factor band sits.
 pub(super) const HOLES_FROM_HZ: f64 = 16_000.0;
 /// The top of that band, in Hz.

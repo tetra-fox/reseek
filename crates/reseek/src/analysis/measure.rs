@@ -74,6 +74,18 @@ impl Scale {
   }
 }
 
+/// A step down in level inside a band that reaches the top.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Step {
+  /// where it is, in Hz
+  pub hz: f64,
+  /// how much quieter the band above it is than the band below, in dB
+  pub drop: f64,
+  /// how far the band above it is over the cutoff line, the loudest band less
+  /// [`CUTOFF_RANGE_DB`], in dB: a few dB is a noise floor that only just reaches the line
+  pub clearance: f64,
+}
+
 /// What one window measured.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Window {
@@ -89,8 +101,8 @@ pub(super) struct Window {
   pub shelf_db: Option<f64>,
   /// how many bins in the upper band below the cutoff are empty per populated bin
   pub holes: Option<f64>,
-  /// the steepest step inside a band that reaches the top: its frequency and depth in dB
-  pub inner_shelf: Option<(f64, f64)>,
+  /// the steepest step inside a band that reaches the top
+  pub inner_shelf: Option<Step>,
   /// how strongly the noise repeats at a lossy codec's frame length, from 0 to 1
   pub frame_score: Option<f64>,
   /// the power above half the band, and in the whole band
@@ -211,11 +223,13 @@ impl Analyser {
       .unwrap_or(0);
     let cutoff = top as f64 * self.bin_hz;
     window.cutoff_hz = Some(cutoff);
-    window.shelf_db = self.step(&smoothed, cutoff);
+    window.shelf_db = self
+      .step(&smoothed, cutoff)
+      .map(|(below, above)| below - above);
     window.holes = self.holes(cutoff);
     window.frame_score = frame_score;
     if cutoff >= FULL_BAND * self.rate / 2.0 {
-      window.inner_shelf = self.inner_shelf(&smoothed, cutoff);
+      window.inner_shelf = self.inner_shelf(&smoothed, cutoff, peak - CUTOFF_RANGE_DB);
     }
     window
   }
@@ -293,10 +307,10 @@ impl Analyser {
     (count > 0).then(|| smoothed[range].iter().sum::<f64>() / count as f64)
   }
 
-  /// The drop in level across `hz`: the band below it less the band above it, each
+  /// The levels either side of `hz`: of the band below it and of the band above it, each
   /// [`SHELF_SPAN_HZ`] wide and [`SHELF_GAP_HZ`] away; `None` when the band above passes the
   /// top of the spectrum.
-  fn step(&self, smoothed: &[f64], hz: f64) -> Option<f64> {
+  fn step(&self, smoothed: &[f64], hz: f64) -> Option<(f64, f64)> {
     let nyquist = self.rate / 2.0;
     if hz + SHELF_GAP_HZ + SHELF_SPAN_HZ > nyquist || hz < SHELF_GAP_HZ + SHELF_SPAN_HZ {
       return None;
@@ -311,19 +325,23 @@ impl Analyser {
       hz + SHELF_GAP_HZ,
       hz + SHELF_GAP_HZ + SHELF_SPAN_HZ,
     )?;
-    Some(below - above)
+    Some((below, above))
   }
 
   /// The steepest step in the upper band of a window whose content reaches `cutoff` near the
-  /// top: where it is and how deep, searched every 100 Hz.
-  fn inner_shelf(&self, smoothed: &[f64], cutoff: f64) -> Option<(f64, f64)> {
-    let mut best: Option<(f64, f64)> = None;
+  /// top, searched every 100 Hz, with how far the band above it is over `line`.
+  fn inner_shelf(&self, smoothed: &[f64], cutoff: f64, line: f64) -> Option<Step> {
+    let mut best: Option<Step> = None;
     let mut hz = INNER_SHELF_FROM_HZ;
     while hz + SHELF_GAP_HZ + SHELF_SPAN_HZ <= cutoff {
-      if let Some(drop) = self.step(smoothed, hz)
-        && best.is_none_or(|(_, deepest)| drop > deepest)
+      if let Some((below, above)) = self.step(smoothed, hz)
+        && best.is_none_or(|deepest| below - above > deepest.drop)
       {
-        best = Some((hz, drop));
+        best = Some(Step {
+          hz,
+          drop: below - above,
+          clearance: above - line,
+        });
       }
       hz += 100.0;
     }

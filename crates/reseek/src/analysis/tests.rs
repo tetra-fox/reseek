@@ -138,8 +138,8 @@ fn a_mono_source_copied_to_stereo_shows_in_the_measures() {
 fn a_lossy_layer_or_a_lossy_part_reads_as_mixed_sources() {
   let dir = tempfile::tempdir().unwrap();
   let stem = fixtures::through_mp3(&music(3, 44_100, pink), Bitrate::Kbps128, dir.path());
-  // a full-band bed 25 dB under a stem from a 128 kbps MP3, all the way through
-  let layered = stem.clone().mixed(&music(4, 44_100, pink), 0.056);
+  // a full-band bed 23 dB under a stem from a 128 kbps MP3, all the way through
+  let layered = stem.clone().mixed(&music(4, 44_100, pink), 0.071);
   let reading = analysed(&flac(dir.path(), "layered.flac", &layered, 16));
   assert_eq!(
     reading.verdict,
@@ -180,10 +180,33 @@ fn honest_band_limited_audio_is_not_read_as_fake() {
     AnalysisVerdict::Inconclusive,
     "{reading:#?}"
   );
+}
+
+#[test]
+fn a_filtered_synth_line_is_not_read_as_fake() {
+  let dir = tempfile::tempdir().unwrap();
   // a synth line low-passed at 20 kHz: a line spectrum, with gaps between its harmonics
   for hz in [110.0, 220.0] {
     let saw = fixtures::sawtooth(hz, 20_000.0);
     not_fake(&analysed(&flac(dir.path(), "saw.flac", &saw, 16)));
+  }
+}
+
+#[test]
+fn a_noise_floor_over_a_filtered_recording_is_not_read_as_fake() {
+  let dir = tempfile::tempdir().unwrap();
+  // a recording filtered at 20 kHz with hiss over it, or so quiet that 16-bit dither is its
+  // floor: the floor sits near the cutoff line and must not read as a full-band layer
+  for hiss in [-55.0, -60.0] {
+    let mut floor = music(9, 44_100, |_| 1.0);
+    floor.set_level(hiss);
+    let hissy = music(1, 44_100, fixtures::cut_at(20_000.0)).mixed(&floor, 1.0);
+    not_fake(&analysed(&flac(dir.path(), "hiss.flac", &hissy, 16)));
+  }
+  for level in [-50.0, -55.0] {
+    let mut quiet = music(1, 44_100, fixtures::cut_at(20_000.0));
+    quiet.set_level(level);
+    not_fake(&analysed(&flac(dir.path(), "quiet.flac", &quiet, 16)));
   }
 }
 
