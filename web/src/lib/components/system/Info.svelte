@@ -17,7 +17,7 @@
   import Card from "#lib/components/ui/Card.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
-  import { ago, formatDuration, formatPercent, formatSpeed } from "#lib/format.js";
+  import { ago, formatBytes, formatDate, formatDuration, formatSpeed } from "#lib/format.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
@@ -155,6 +155,22 @@
         {/if}
       </dl>
     </Card>
+    <Card title="Process">
+      <dl class="info">
+        <dt>Running for</dt>
+        <dd title={formatDate(s.startedAt)}>
+          {formatDuration((clock.now - Date.parse(s.startedAt)) / 1000)}
+        </dd>
+        <dt>Process</dt>
+        <dd>{s.process.pid} on {s.process.os} ({s.process.arch})</dd>
+        <dt>Memory</dt>
+        <dd>{s.process.memoryBytes ? formatBytes(s.process.memoryBytes) : "not known yet"}</dd>
+        <dt>Web</dt>
+        <dd class="font-mono">
+          {#each s.listeners as url (url)}<span class="block">{url}</span>{:else}none{/each}
+        </dd>
+      </dl>
+    </Card>
     <Card title="Soulseek">
       <dl class="info">
         <dt>State</dt>
@@ -200,7 +216,7 @@
           {s.health.search.incoming.queueDepth} waiting, {Math.round(
             s.health.search.incoming.latency
           )} ms,
-          {formatPercent(s.health.search.incoming.dropRate)} dropped
+          {s.health.search.incoming.dropRate} dropped this minute
         </dd>
       </dl>
     </Card>
