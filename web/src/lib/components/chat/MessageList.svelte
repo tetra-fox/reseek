@@ -94,7 +94,7 @@
       // while the scrollbar is held at the top, older pages go above it rather than keep the view
       anchor: gripped ? undefined : (line) => line.kind === "message",
       followOnAppend: !interaction.frozen,
-      anchorTo: gripped ? "start" : "end",
+      anchorTo: "end",
       scrollEndThreshold: NEAR,
       rangeExtractor: (range) => {
         const drawn = defaultRangeExtractor(range);
