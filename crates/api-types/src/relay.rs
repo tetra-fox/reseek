@@ -239,6 +239,13 @@ pub enum RelayMessage {
     /// why
     reason: String,
   },
+  /// agent to controller: the agent's own shares are being scanned, so it sends them once the
+  /// scan ends; the controller waits longer for them
+  #[serde(rename_all = "camelCase")]
+  SyncDeferred {
+    /// why, such as `scanning`
+    reason: String,
+  },
   /// either side: a message could not be handled
   #[serde(rename_all = "camelCase")]
   Error {

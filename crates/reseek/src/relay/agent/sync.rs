@@ -2,8 +2,10 @@
 //! controller with a token it hands out on the socket. One upload runs at a time; one asked
 //! for meanwhile runs once after it. While the local shares are being scanned the upload
 //! waits, and the scan's end asks for it again, so the controller never gets half an index.
-//! The first upload on a socket failing closes the socket to try again from the start; a later
-//! one failing leaves the last upload in place until the next change.
+//! Until the first upload on a socket, the controller is told every minute that the scan runs,
+//! so it waits for the shares. The first upload on a socket failing closes the socket to try
+//! again from the start; a later one failing leaves the last upload in place until the next
+//! change.
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -49,6 +51,7 @@ impl AgentClient {
       return debug!("not logged in to the controller; the shares are uploaded at the next login");
     }
     if self.shares.scanning() {
+      self.defer_while_scanning();
       return debug!("the shares are being scanned; they are uploaded when the scan ends");
     }
     if self.syncing.swap(true, Ordering::AcqRel) {
@@ -57,6 +60,23 @@ impl AgentClient {
     }
     let agent = self.this();
     tokio::spawn(async move { agent.sync_while_asked().await }.in_current_span());
+  }
+
+  /// Tells the controller the shares come once the scan running ends, while none were sent on
+  /// this socket, so it waits for them.
+  pub(super) fn defer_while_scanning(&self) {
+    let Some(link) = self.current() else {
+      return;
+    };
+    if link.logged_in() && !link.ready() && self.shares.scanning() {
+      debug!("telling the controller the shares come after the scan");
+      link.send(
+        None,
+        RelayMessage::SyncDeferred {
+          reason: "scanning".to_string(),
+        },
+      );
+    }
   }
 
   /// Uploads until no further upload was asked for.

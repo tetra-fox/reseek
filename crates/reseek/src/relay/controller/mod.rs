@@ -9,6 +9,8 @@ mod info;
 mod login;
 mod session;
 mod shares;
+#[cfg(test)]
+mod tests;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::net::IpAddr;

@@ -16,8 +16,12 @@ pub const SILENCE: Duration = Duration::from_secs(30);
 /// its login.
 pub const LOGIN_WITHIN: Duration = Duration::from_secs(10);
 
-/// How long a controller waits after a login for the agent to start sending its shares.
+/// How long a controller waits after a login, or after the agent last said its scan runs, for
+/// the agent to start sending its shares.
 pub const SYNC_WITHIN: Duration = Duration::from_secs(120);
+
+/// How often an agent whose shares are being scanned says so while it has not sent them.
+pub const DEFER_EVERY: Duration = Duration::from_secs(60);
 
 /// How long a share upload token is valid.
 pub const SHARE_TOKEN_LIFETIME: Duration = Duration::from_secs(300);
@@ -126,6 +130,7 @@ pub fn kind(message: &RelayMessage) -> &'static str {
     RelayMessage::DownloadAvailable { .. } => "download_available",
     RelayMessage::DownloadDone { .. } => "download_done",
     RelayMessage::RescanRequested { .. } => "rescan_requested",
+    RelayMessage::SyncDeferred { .. } => "sync_deferred",
     RelayMessage::Error { .. } => "error",
     RelayMessage::Ping {} => "ping",
     RelayMessage::Pong {} => "pong",

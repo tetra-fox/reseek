@@ -1,8 +1,9 @@
 //! One agent's socket on the controller, from the challenge to its close. The socket is sent a
 //! challenge as it opens and must log in within the challenge's life; logged in, the agent is
-//! registered and has a while to start sending its shares. Both sides ping every 15 seconds
-//! and the socket closes after 30 seconds without a frame. One task owns the socket: it reads
-//! the agent's frames, writes what the controller queues for it, and keeps the timers.
+//! registered and has two minutes to start sending its shares; an agent whose shares are being
+//! scanned renews that by saying so, up to the configured deferral in all. Both sides ping every
+//! 15 seconds and the socket closes after 30 seconds without a frame. One task owns the socket:
+//! it reads the agent's frames, writes what the controller queues for it, and keeps the timers.
 
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -10,8 +11,9 @@ use std::sync::Arc;
 use api_types::relay::{
   LoginFailure, RELAY_PROTOCOL, RelayAgentState, RelayErrorCode, RelayMessage, RelayTimeouts,
 };
-use axum::extract::ws::{CloseFrame, Message, WebSocket};
+use axum::extract::ws::{CloseFrame, Message};
 use chrono::Utc;
+use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use tokio::sync::mpsc;
 use tokio::time::{Instant, sleep_until};
 use tracing::{Instrument, debug, info, info_span, trace, warn};
@@ -28,11 +30,30 @@ enum Phase {
   /// sent its challenge, which is `None` once a login used it
   Challenged(Option<Challenge>),
   /// logged in as `name`; `sync_by` is when it must have begun sending its shares, `None`
-  /// once it has
+  /// once it has, which a deferral moves up to `deferred_until` at the latest
   LoggedIn {
     name: String,
     sync_by: Option<Instant>,
+    deferred_until: Instant,
   },
+}
+
+/// The socket an agent is served on: its frames in, frames out.
+pub(crate) trait AgentSocket:
+  Stream<Item = Result<Message, axum::Error>> + Sink<Message, Error = axum::Error> + Unpin + Send
+{
+}
+
+impl<T> AgentSocket for T where
+  T:
+    Stream<Item = Result<Message, axum::Error>> + Sink<Message, Error = axum::Error> + Unpin + Send
+{
+}
+
+/// When an agent that is deferring its share upload at `now` must have begun it: two minutes on,
+/// but no later than the deferral allows.
+fn deferred(now: Instant, until: Instant) -> Instant {
+  (now + SYNC_WITHIN).min(until)
 }
 
 /// How a socket ended.
@@ -44,7 +65,7 @@ struct Ended {
 
 impl Controller {
   /// Serves the agent socket `socket`, opened from `address`, until it closes.
-  pub async fn serve_socket(self: Arc<Self>, socket: WebSocket, address: IpAddr) {
+  pub(crate) async fn serve_socket(self: Arc<Self>, socket: impl AgentSocket, address: IpAddr) {
     let id = self.next_socket();
     let span = info_span!("relay_agent_socket", socket = id, address = %address);
     async move {
@@ -82,7 +103,11 @@ struct Session {
 }
 
 impl Session {
-  async fn run(&mut self, mut socket: WebSocket, mut queued: mpsc::Receiver<Outbound>) -> Ended {
+  async fn run(
+    &mut self,
+    mut socket: impl AgentSocket,
+    mut queued: mpsc::Receiver<Outbound>,
+  ) -> Ended {
     let token = base62(&random_bytes(32));
     let opened = Instant::now();
     let challenge = frames::encode(
@@ -129,7 +154,7 @@ impl Session {
             return Ended { code: None, reason: "closed" };
           }
         }
-        frame = socket.recv() => {
+        frame = socket.next() => {
           let frame = match frame {
             Some(Ok(frame)) => frame,
             Some(Err(e)) => {
@@ -171,7 +196,7 @@ impl Session {
   }
 
   /// Handles a text frame; `Some` when it ended the socket.
-  async fn handle(&mut self, socket: &mut WebSocket, text: &str) -> Option<Ended> {
+  async fn handle(&mut self, socket: &mut impl AgentSocket, text: &str) -> Option<Ended> {
     let envelope = match frames::decode(text) {
       Ok(envelope) => envelope,
       Err(unsupported) => {
@@ -197,7 +222,21 @@ impl Session {
           ..
         },
       ) => return self.login(socket, agent, &credential, version).await,
-      (Phase::LoggedIn { name, sync_by }, message) => {
+      (
+        Phase::LoggedIn {
+          name,
+          sync_by: Some(by),
+          deferred_until,
+        },
+        RelayMessage::SyncDeferred { reason },
+      ) => {
+        *by = deferred(Instant::now(), *deferred_until);
+        debug!(
+          agent = name.as_str(),
+          reason, "agent defers sending its shares"
+        );
+      }
+      (Phase::LoggedIn { name, sync_by, .. }, message) => {
         let name = name.clone();
         if matches!(message, RelayMessage::SharesBegin { .. }) {
           *sync_by = None;
@@ -225,7 +264,7 @@ impl Session {
   /// and closes the socket. The challenge is used up either way.
   async fn login(
     &mut self,
-    socket: &mut WebSocket,
+    socket: &mut impl AgentSocket,
     name: String,
     credential: &str,
     version: String,
@@ -296,9 +335,11 @@ impl Session {
       .controller
       .register(self.id, record, self.outbound.clone());
     info!(agent = name, "Agent connection authenticated");
+    let now = Instant::now();
     self.phase = Phase::LoggedIn {
       name,
-      sync_by: Some(Instant::now() + SYNC_WITHIN),
+      sync_by: Some(now + SYNC_WITHIN),
+      deferred_until: now + SYNC_WITHIN + timeouts.sync_deferral,
     };
     None
   }
@@ -342,7 +383,7 @@ fn log_refusal(name: &str, address: IpAddr, reason: LoginFailure, cidr: Option<S
 }
 
 /// Sends the close frame with `code` and ends the socket.
-async fn closing(socket: &mut WebSocket, code: u16, reason: &'static str) -> Ended {
+async fn closing(socket: &mut impl AgentSocket, code: u16, reason: &'static str) -> Ended {
   let frame = CloseFrame {
     code,
     reason: reason.into(),
@@ -405,6 +446,13 @@ impl Controller {
           ?outcome,
           detail,
           "agent's download of a finished file ended"
+        );
+        None
+      }
+      RelayMessage::SyncDeferred { reason } => {
+        debug!(
+          agent = name,
+          reason, "agent defers sending its shares after it began"
         );
         None
       }

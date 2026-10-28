@@ -106,7 +106,8 @@
       "controller_timeouts": {
         "file_ack": "5s",
         "file_info": "3s",
-        "file_stream": "30s"
+        "file_stream": "30s",
+        "sync_deferral": "12h"
       },
       "enabled": false,
       "limits": {
@@ -1405,6 +1406,21 @@
       "doc": "After the acknowledgement, for the file's bytes to start arriving.",
       "choices": null,
       "default": "30s",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "relay.controller_timeouts.sync_deferral": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RELAY_CONTROLLER_TIMEOUTS_SYNC_DEFERRAL",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "In all, after an agent's login, while the agent says its shares are being scanned, for it to start sending them; past it the agent is disconnected and dials again.",
+      "choices": null,
+      "default": "12h",
       "apply": "live",
       "secret": false,
       "notApplied": null

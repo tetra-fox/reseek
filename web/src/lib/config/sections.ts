@@ -508,6 +508,7 @@ export const sections: Section[] = [
           ["controller_timeouts.file_info", "Wait for a file's details"],
           ["controller_timeouts.file_ack", "Wait for a file to be acknowledged"],
           ["controller_timeouts.file_stream", "Wait for a file's bytes"],
+          ["controller_timeouts.sync_deferral", "Wait for a scanning agent's shares"],
           ["limits.share_database_max", "Largest share database"]
         ] as const
       ).map(([part, label]): Field => ({

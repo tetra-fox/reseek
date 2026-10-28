@@ -45,6 +45,11 @@ pub struct RelayTimeouts {
   #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_STREAM")]
   #[serde(with = "humantime_serde")]
   pub file_stream: Duration,
+  /// In all, after an agent's login, while the agent says its shares are being scanned, for it
+  /// to start sending them; past it the agent is disconnected and dials again.
+  #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_SYNC_DEFERRAL")]
+  #[serde(with = "humantime_serde")]
+  pub sync_deferral: Duration,
 }
 
 impl Default for RelayTimeouts {
@@ -53,6 +58,7 @@ impl Default for RelayTimeouts {
       file_info: Duration::from_secs(3),
       file_ack: Duration::from_secs(5),
       file_stream: Duration::from_secs(30),
+      sync_deferral: Duration::from_secs(12 * 3600),
     }
   }
 }

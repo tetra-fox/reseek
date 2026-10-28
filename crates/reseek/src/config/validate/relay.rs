@@ -41,6 +41,10 @@ pub(super) fn check(options: &Options, report: &mut Report) {
       "relay.controller_timeouts.file_stream",
       timeouts.file_stream,
     ),
+    (
+      "relay.controller_timeouts.sync_deferral",
+      timeouts.sync_deferral,
+    ),
   ] {
     if value < Duration::from_millis(1) {
       report.add(key, format!("The field {key} must be longer than 0."));

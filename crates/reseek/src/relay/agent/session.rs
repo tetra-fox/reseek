@@ -19,7 +19,9 @@ use tracing::{Instrument, debug, info, trace, warn};
 
 use super::AgentClient;
 use super::dial::{Settings, Socket};
-use crate::relay::frames::{self, LOGIN_WITHIN, MAX_FRAME, PING_EVERY, SILENCE, close};
+use crate::relay::frames::{
+  self, DEFER_EVERY, LOGIN_WITHIN, MAX_FRAME, PING_EVERY, SILENCE, close,
+};
 use crate::sync::lock;
 
 /// How many frames wait to be written to the socket.
@@ -132,6 +134,7 @@ impl AgentClient {
     let opened = Instant::now();
     let mut heard = opened;
     let mut ping = tokio::time::interval_at(opened + PING_EVERY, PING_EVERY);
+    let mut defer = tokio::time::interval_at(opened + DEFER_EVERY, DEFER_EVERY);
     let mut code = None;
     loop {
       let deadline = if link.logged_in() {
@@ -156,6 +159,7 @@ impl AgentClient {
             break;
           }
         }
+        _ = defer.tick() => self.defer_while_scanning(),
         _ = ping.tick() => {
           if socket.send(Message::Ping(Default::default())).await.is_err() {
             break;
