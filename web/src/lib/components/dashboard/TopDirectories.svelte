@@ -24,7 +24,8 @@
     {#each rows as row, i (row.directory)}
       <tr class="border-b last:border-b-0">
         <td class="py-1 text-right text-fg-muted tabular-nums">{i + 1}</td>
-        <td class="px-2 py-1" title={row.directory}>{shortDirectory(row.directory)}</td>
+        <td class="px-2 py-1 wrap-anywhere" title={row.directory}
+          >{shortDirectory(row.directory)}</td>
         <td class="px-2 py-1 text-right tabular-nums">{row.count.toLocaleString()}</td>
         <td class="px-2 py-1 text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
       </tr>
