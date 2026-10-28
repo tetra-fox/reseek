@@ -192,9 +192,9 @@ export class MessagePane {
     }
     // read up to the newest message unless the marker is there already; the unread counts can
     // lag behind the messages shown, so they don't decide it
-    // a room we are not in has no marker to move
     const room = chat.rooms.get(name);
     const newest = this.ordered.findLast((m) => m.localId > 0)?.localId;
+    // a room we are not in has no marker to move
     if (room && newest !== undefined && newest > room.lastReadId) {
       await chat.markRoomRead(name, newest);
     }
