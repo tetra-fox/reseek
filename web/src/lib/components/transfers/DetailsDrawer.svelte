@@ -263,7 +263,6 @@
         <h3 class="text-xs font-medium text-fg-muted uppercase">Analysis</h3>
         <AnalysisPanel
           target={{ kind: "download", username: t.username, id: t.id }}
-          transferId={t.id}
           start={analyse}
           onshown={reveal} />
       </section>

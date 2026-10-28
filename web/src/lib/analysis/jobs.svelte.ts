@@ -1,10 +1,8 @@
-import { SvelteMap } from "svelte/reactivity";
-
 import { api } from "#lib/api/client.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 
-import { type Job, queue, type Target, targetKey } from "./analysis";
+import { type Job, names, type Target } from "./analysis";
 
 /** How often the queue is read while something runs in it, and while it is idle */
 const BUSY_MS = 1000;
@@ -21,9 +19,6 @@ class Jobs {
   #holders = 0;
   #timer: ReturnType<typeof setTimeout> | undefined;
   #stops: (() => void)[] = [];
-  // the job queued from this page for each file, by target key, since a job names its file by
-  // the daemon's local path; a short string per queued file, kept for the life of the page
-  #queued = new SvelteMap<string, string>();
 
   /** Keeps the queue current while the returned function has not been called */
   retain(): () => void {
@@ -55,17 +50,9 @@ class Jobs {
     }
   }
 
-  /** Queues a file for analysis and remembers its job; the caller reads the queue again */
-  async queue(target: Target, force: boolean) {
-    const outcome = await queue(target, force);
-    if (outcome.ok) this.#queued.set(targetKey(target), outcome.data.jobId);
-    return outcome;
-  }
-
-  /** The job last queued from this page for a file, if it still waits or runs */
+  /** The job of the file a target names, if it waits or runs */
   of(target: Target): Job | undefined {
-    const id = this.#queued.get(targetKey(target));
-    return id === undefined ? undefined : this.list.find((j) => j.id === id);
+    return this.list.find((j) => names(target, j));
   }
 
   async cancel(id: string) {

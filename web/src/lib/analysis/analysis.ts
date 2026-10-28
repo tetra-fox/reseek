@@ -25,6 +25,15 @@ const route = (t: Target) =>
 export const targetKey = (t: Target) =>
   t.kind === "file" ? `file:${t.root}:${t.path}` : `download:${t.id}`;
 
+/** Whether a report or a job is about the file a target names */
+export const names = (
+  t: Target,
+  file: { root: Root; relativePath: string; transferId?: string | null }
+) =>
+  t.kind === "file"
+    ? file.root === t.root && file.relativePath === t.path
+    : file.transferId === t.id;
+
 /** The URL of a target's spectrogram image, with or without the guide lines drawn in */
 export const imageUrl = (t: Target, guides: boolean) =>
   `${root()}${route(t)}/spectrogram.png?guides=${guides}`;

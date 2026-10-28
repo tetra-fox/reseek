@@ -3,8 +3,15 @@
   import XIcon from "@lucide/svelte/icons/x";
   import { tick } from "svelte";
 
-  import { loadReport, type Report, type Target, targetKey } from "#lib/analysis/analysis.js";
+  import {
+    loadReport,
+    queue,
+    type Report,
+    type Target,
+    targetKey
+  } from "#lib/analysis/analysis.js";
   import { jobs } from "#lib/analysis/jobs.svelte.js";
+  import { marks } from "#lib/analysis/marks.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
@@ -20,15 +27,13 @@
   // in the queue, how far it is with a way to cancel it
   type Props = {
     target: Target;
-    /** the download the file belongs to, which the queue names it by */
-    transferId?: string;
     /** queue the file at once when it has no report yet, as the Analyse action does */
     start?: boolean;
     /** called once a file's report, or the lack of one, is on the page */
     onshown?: () => void;
   };
 
-  let { target, transferId, start = false, onshown }: Props = $props();
+  let { target, start = false, onshown }: Props = $props();
 
   /** undefined while loading, null when the file has no report */
   let report = $state.raw<Report | null | undefined>(undefined);
@@ -45,14 +50,16 @@
     if (ask !== asked) return;
     if (outcome.ok) {
       report = outcome.data;
+      // the lists' chips follow what the drawer shows, a judgement saved here included
+      if (report) marks.put(report);
       error = "";
     } else {
       error = outcome.error;
     }
   };
   const analyse = async (force: boolean) => {
-    const outcome = await jobs.queue(target, force);
-    // a file queued already is shown by its job once the queue is read
+    const outcome = await queue(target, force);
+    // a file queued already shows its job once the queue is read
     if (outcome.ok || outcome.status === 409) void jobs.refresh();
     else toast(`Couldn't analyse the file: ${outcome.error}`, "error");
   };
@@ -80,14 +87,7 @@
     if (jobs.finished) void load();
   });
 
-  const job = $derived(
-    jobs.of(target) ??
-      jobs.list.find(
-        (j) =>
-          (transferId !== undefined && j.transferId === transferId) ||
-          (report && j.path === report.path)
-      )
-  );
+  const job = $derived(jobs.of(target));
   const starts = $derived(report?.windows?.map((w) => w.t) ?? []);
   /** A window picked on the spectrogram opens the reading at that window's spectrum */
   const pickOnPlot = async (index: number) => {
