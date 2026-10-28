@@ -269,11 +269,14 @@ pub struct Integrations {
   pub scripts: BTreeMap<String, Script>,
 }
 
-/// A program run when one of its events is raised.
+/// A program run when one of its events is raised. It finds the event as JSON in
+/// `RESEEK_SCRIPT_DATA`, and a download's outcome in `RESEEK_SCRIPT_RESULT` and the other
+/// `RESEEK_SCRIPT_*` variables. They hold text other users chose, such as filenames, usernames
+/// and messages: quote them, and never put one unquoted into a shell command.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Script {
-  /// The events that run it, by name; `Any` for every event.
+  /// The events that run it, by name; `Any`, `All` or `*` for every event.
   pub on: Vec<String>,
   /// What the script runs.
   pub run: ScriptRun,
@@ -302,7 +305,8 @@ pub struct ScriptRun {
   pub executable: Option<String>,
   /// The program's arguments as one string, quoted by the user.
   pub args: Option<String>,
-  /// The program's arguments as a list, each passed as it is.
+  /// The program's arguments as a list, each passed as it is; safer than `args`, whose quotes
+  /// decide where one argument ends.
   pub arglist: Option<Vec<String>>,
 }
 
