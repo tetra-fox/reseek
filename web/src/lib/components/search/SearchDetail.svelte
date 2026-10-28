@@ -20,7 +20,7 @@
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
-  import { FILTER_HELP, parseFilters } from "#lib/search/filters.js";
+  import { FILTER_PLACEHOLDER, parseFilters } from "#lib/search/filters.js";
   import { pipeline } from "#lib/search/results.js";
   import { Results } from "#lib/search/results.svelte.js";
   import { scopeLabel, searches } from "#lib/search/searches.svelte.js";
@@ -213,7 +213,7 @@
           type="search"
           aria-label="Filter"
           aria-describedby="filter-help"
-          placeholder={FILTER_HELP}
+          placeholder={FILTER_PLACEHOLDER}
           class="h-control w-full rounded-control border border-input bg-surface pr-9 pl-9 text-sm placeholder:text-fg-subtle focus-visible:border-accent" />
         {#if text}
           <button

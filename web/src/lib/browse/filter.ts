@@ -10,25 +10,14 @@ export type BrowseFilter = {
 };
 
 /**
- * Reads the browse filter: the search results' filter language over full paths, plus `ext:flac`
- * to keep files of some extensions. A folder is kept when its name has every word, or when a
- * file directly in it is kept. Null for an empty filter
+ * Reads the browse filter: the search results' filter language over full paths, `ext:flac`
+ * being its `type:`. A folder is kept when its name has every word, or when a file directly in
+ * it is kept. Null for an empty filter
  */
 export const browseFilter = (text: string, separator: Separator): BrowseFilter | null => {
-  const tokens = text.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!tokens.length) return null;
-  const extensions = tokens
-    .filter((t) => t.startsWith("ext:"))
-    .map((t) => t.slice(4).replace(/^\./, ""))
-    .filter(Boolean);
+  if (!text.trim()) return null;
   const filters = parseFilters(text);
-  const file = (f: Schemas["File"], path: string) => {
-    const extension = (f.extension || path.split(".").pop() || "").toLowerCase();
-    return (
-      (!extensions.length || extensions.includes(extension)) &&
-      fileMatches(filters, { ...f, filename: path })
-    );
-  };
+  const file = (f: Schemas["File"], path: string) => fileMatches(filters, { ...f, filename: path });
   const words = filters.include;
   return {
     file,
