@@ -11,6 +11,7 @@
   import { SvelteSet } from "svelte/reactivity";
 
   import { chat, paneKey, paneOf } from "#lib/chat/chat.svelte.js";
+  import { sortedConversations, sortedRooms } from "#lib/chat/order.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { clock } from "#lib/clock.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
@@ -49,29 +50,9 @@
   /** the row whose menu is open, from its button or a right click */
   let menuFor = $state<string | null>(null);
 
-  const time = (iso: string | null | undefined) => (iso ? Date.parse(iso) : 0);
   const filter = $derived(typed.trim().toLowerCase());
-  const matches = (name: string) => !filter || name.toLowerCase().includes(filter);
-
-  const rooms = $derived(
-    chat.rooms.rows
-      .filter((r) => matches(r.name))
-      .toSorted(
-        (a, b) => time(b.lastMessageAt) - time(a.lastMessageAt) || a.name.localeCompare(b.name)
-      )
-  );
-  // pinned first, then the newest message first: local ids grow in the order messages were
-  // stored, so a replayed message dated long ago still counts as new
-  const conversations = $derived(
-    chat.conversations.rows
-      .filter((c) => matches(c.username))
-      .toSorted(
-        (a, b) =>
-          Number(!!users.get(b.username)?.pinned) - Number(!!users.get(a.username)?.pinned) ||
-          (b.lastMessage?.localId ?? 0) - (a.lastMessage?.localId ?? 0) ||
-          a.username.localeCompare(b.username)
-      )
-  );
+  const rooms = $derived(sortedRooms(filter));
+  const conversations = $derived(sortedConversations(filter));
 
   // the list holds still while the pointer is on it, a text is selected in it or a row's menu
   // is open, so a row never moves away from a click
@@ -106,9 +87,6 @@
       )
     ]);
   });
-  /** the panes in the order they are listed, for moving between them */
-  export const order = () => lines.flatMap((l) => (l.kind === "row" ? [l.target] : []));
-
   // focus stays on the list, so the arrows go on from the chat just opened
   const open = (target: Target) =>
     void goto(target.kind === "user" ? chatHref(target.name) : roomHref(target.name), {

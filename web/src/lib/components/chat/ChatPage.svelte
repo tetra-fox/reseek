@@ -9,6 +9,7 @@
 
   import { paneKey } from "#lib/chat/chat.svelte.js";
   import { notifier, notifyOptions } from "#lib/chat/notify.svelte.js";
+  import { chatOrder } from "#lib/chat/order.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
@@ -39,7 +40,6 @@
   let writing = $state(false);
   let writeTo = $state("");
   let search = $state<HTMLInputElement | null>(null);
-  let chats = $state<ChatList | null>(null);
 
   const current = $derived(
     target && target !== "search" ? paneKey(target.kind, target.name) : null
@@ -62,7 +62,8 @@
       return;
     }
     if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-      const order = chats?.order() ?? [];
+      // from the chats themselves, so it works with the list closed in its sheet
+      const order = chatOrder();
       const at = order.findIndex((t) => paneKey(t.kind, t.name) === current);
       const next =
         order[at + (e.key === "ArrowDown" ? 1 : -1)] ?? (at === -1 ? order[0] : undefined);
@@ -77,7 +78,6 @@
 
 {#snippet list()}
   <ChatList
-    bind:this={chats}
     bind:search
     {current}
     onjoin={(name) => {

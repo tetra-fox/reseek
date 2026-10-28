@@ -1,0 +1,53 @@
+import { goto } from "$app/navigation";
+import { flushSync, mount, unmount } from "svelte";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { chat } from "#lib/chat/chat.svelte.js";
+import { session } from "#lib/session.svelte.js";
+import { installMedia } from "#lib/testing/media.js";
+import { fakeNetwork } from "#lib/testing/network.js";
+
+import ChatPage from "./ChatPage.svelte";
+
+vi.mock("$app/navigation", () => ({ goto: vi.fn(), afterNavigate: vi.fn() }));
+
+const room = (name: string, lastMessageAt: string) => ({
+  name,
+  unread: 0,
+  mentions: 0,
+  notify: "mentions" as const,
+  userCount: 3,
+  lastMessageAt,
+  lastReadId: 0
+});
+
+describe("the chat page", () => {
+  let component: ReturnType<typeof mount> | null = null;
+  afterEach(() => {
+    if (component) unmount(component);
+    component = null;
+    chat.clear();
+    session.principal = null;
+    vi.unstubAllGlobals();
+    vi.mocked(goto).mockClear();
+    document.body.innerHTML = "";
+  });
+
+  it("moves between chats with Alt and the arrows on a narrow screen, the list closed", () => {
+    installMedia();
+    session.principal = { name: "me", role: "ReadWrite" } as never;
+    fakeNetwork(() => undefined);
+    chat.rooms.reconcile([
+      room("indie", "2026-10-26T10:00:00Z"),
+      room("jazz", "2026-10-26T11:00:00Z")
+    ]);
+    component = mount(ChatPage, {
+      target: document.body,
+      props: { target: { kind: "room", name: "jazz" }, at: null, q: "" }
+    });
+    flushSync();
+    expect(document.querySelector('[aria-label="Rooms and conversations"]')).toBeNull();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true }));
+    expect(goto).toHaveBeenCalledWith("#/chat/rooms/indie", { reset: false });
+  });
+});
