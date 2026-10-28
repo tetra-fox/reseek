@@ -14,7 +14,7 @@ describe("a transfers view saved by an older build", () => {
       { id: "size", width: 84, visible: true }
     ],
     sort: { id: "speed", dir: "desc" },
-    filters: { states: ["failed"] }
+    filters: { states: ["failed"], analysis: "fake" }
   };
 
   const load = async (saved: unknown) => {
@@ -28,6 +28,7 @@ describe("a transfers view saved by an older build", () => {
     expect(view.groupBy).toBe("folder");
     expect(view.density).toBe("compact");
     expect(view.sort).toEqual({ id: "speed", dir: "desc" });
+    expect(view.filters.analysis).toBe("fake");
     expect(view.columns.slice(0, 4)).toEqual([
       { id: "file", visible: true },
       { id: "select", visible: true },
@@ -35,6 +36,11 @@ describe("a transfers view saved by an older build", () => {
       { id: "size", visible: true }
     ]);
     expect(view.columns.some((c) => "dragged" in c)).toBe(false);
+  });
+
+  it("drops an analysis filter it does not know", async () => {
+    const view = await load({ filters: { analysis: "reading:consistent" } });
+    expect(view.filters).toEqual({ states: [], analysis: null });
   });
 
   it("keeps a width the user dragged", async () => {

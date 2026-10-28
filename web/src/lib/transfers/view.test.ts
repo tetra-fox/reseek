@@ -13,6 +13,20 @@ describe("the transfers view", () => {
     expect(textFilter("  ")).toBeNull();
   });
 
+  it("filters by analysis through the marks it is given", () => {
+    const mark = { verdict: "consistent", profile: null, judgement: "fake", note: null } as const;
+    const marks = (t: { id: string }) => ({
+      mark: t.id === "marked" ? mark : undefined,
+      analysable: true
+    });
+    const fake = textFilter("marked:fake", marks)!;
+    expect(fake(transfer({ id: "marked" }))).toBe(true);
+    expect(fake(transfer({ id: "other" }))).toBe(false);
+    expect(textFilter("analysed:no one", marks)!(transfer({ id: "other" }))).toBe(true);
+    // the uploads screen has no marks, so an analysis word matches nothing there
+    expect(textFilter("marked:fake")!(transfer({ id: "marked" }))).toBe(false);
+  });
+
   it("groups by user then a tree of folders, and closes a group to its header", () => {
     const a = transfer({ filename: "x\\A\\1.flac" });
     const b = transfer({ filename: "x\\B\\1.flac" });

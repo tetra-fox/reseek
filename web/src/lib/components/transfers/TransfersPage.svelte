@@ -4,6 +4,8 @@
   import { untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
+  import { MARK_FILTERS, type MarkFilter, passes } from "#lib/analysis/marks.js";
+  import { analysable, marks } from "#lib/analysis/marks.svelte.js";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
@@ -23,13 +25,14 @@
   import {
     type ChipId,
     type Direction,
+    isSucceeded,
     rowActions,
     STATE_CHIPS,
     type Transfer
   } from "#lib/transfers/states.js";
   import { downloads, uploads } from "#lib/transfers/transfers.svelte.js";
   import { unseen } from "#lib/transfers/unseen.svelte.js";
-  import { inStates, type Item, layout, textFilter } from "#lib/transfers/view.js";
+  import { inStates, type Item, layout, type MarkLookup, textFilter } from "#lib/transfers/view.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { users } from "#lib/users.svelte.js";
 
@@ -95,10 +98,32 @@
     for (const chip of STATE_CHIPS) result[chip.id] = all.filter((t) => chip.test(t.state)).length;
     return result;
   });
+  // a download's analysis, which its chip shows and the analysis filters read
+  $effect(() => (direction === "download" ? marks.retain() : undefined));
+  // svelte-ignore state_referenced_locally
+  const markLookup: MarkLookup | undefined =
+    direction === "download"
+      ? (t) => ({
+          mark: marks.download(t.id),
+          analysable: isSucceeded(t.state) && analysable(getFileName(t.filename))
+        })
+      : undefined;
+  const marked = (lookup: MarkLookup, filter: MarkFilter) => (t: Transfer) => {
+    const found = lookup(t);
+    return passes(filter, found.mark, found.analysable);
+  };
+  const markCounts = $derived.by(() => {
+    if (!markLookup) return null;
+    const result = {} as Record<MarkFilter, number>;
+    for (const f of MARK_FILTERS) result[f.id] = all.filter(marked(markLookup, f.id)).length;
+    return result;
+  });
   const filtered = $derived.by(() => {
-    const byText = textFilter(text);
+    const byText = textFilter(text, markLookup);
     const byState = inStates(view.filters.states);
-    return all.filter((t) => byState(t) && (!byText || byText(t)));
+    const byMark =
+      markLookup && view.filters.analysis ? marked(markLookup, view.filters.analysis) : null;
+    return all.filter((t) => byState(t) && (!byMark || byMark(t)) && (!byText || byText(t)));
   });
 
   // while the user holds the table still, rows keep their places and new ones go below
@@ -230,6 +255,7 @@
   {direction}
   {view}
   {counts}
+  {markCounts}
   bind:text={typed}
   disabled={working || !filtered.length}
   onbulk={bulk}

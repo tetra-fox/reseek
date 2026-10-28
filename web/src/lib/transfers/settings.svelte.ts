@@ -1,3 +1,4 @@
+import { MARK_FILTERS, type MarkFilter } from "#lib/analysis/marks.js";
 import { fields, stored } from "#lib/stored.svelte.js";
 
 import { type ColumnId, columnsFor } from "./columns";
@@ -10,7 +11,8 @@ export type ViewSettings = {
   /** every column in the order shown, with the width in pixels the user dragged it to, if any */
   columns: { id: ColumnId; visible: boolean; dragged?: number }[];
   sort: { id: SortKey; dir: "asc" | "desc" };
-  filters: { states: ChipId[] };
+  /** the state chips chosen, and the analysis chip on the downloads screen, null for none */
+  filters: { states: ChipId[]; analysis: MarkFilter | null };
 };
 
 const GROUPINGS: GroupBy[] = ["user", "folder", "batch", "flat"];
@@ -33,7 +35,7 @@ export const defaults = (direction: Direction): ViewSettings => ({
   density: "comfortable",
   columns: columnsFor(direction).map(({ id, visible }) => ({ id, visible })),
   sort: { id: "file", dir: "asc" },
-  filters: { states: [] }
+  filters: { states: [], analysis: null }
 });
 
 /**
@@ -61,7 +63,7 @@ const read = (direction: Direction, saved: unknown): ViewSettings => {
     .filter((c, i, all) => all.findIndex((o) => o.id === c.id) === i);
   for (const c of base.columns) if (!columns.some((o) => o.id === c.id)) columns.push(c);
   const sort = fields(s.sort);
-  const states = fields(s.filters).states;
+  const { states, analysis } = fields(s.filters);
   return {
     groupBy: GROUPINGS.includes(s.groupBy as GroupBy) ? (s.groupBy as GroupBy) : base.groupBy,
     density: s.density === "compact" ? "compact" : "comfortable",
@@ -73,7 +75,8 @@ const read = (direction: Direction, saved: unknown): ViewSettings => {
     filters: {
       states: Array.isArray(states)
         ? STATE_CHIPS.map((c) => c.id).filter((id) => states.includes(id))
-        : []
+        : [],
+      analysis: MARK_FILTERS.find((f) => f.id === analysis)?.id ?? null
     }
   };
 };

@@ -10,8 +10,10 @@
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import XIcon from "@lucide/svelte/icons/x";
 
+  import { marks } from "#lib/analysis/marks.svelte.js";
   import { kindOf } from "#lib/browse/summary.js";
   import { leaf } from "#lib/browse/tree.js";
+  import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
@@ -101,6 +103,7 @@
       <span class="text-fg-muted"> {getDirectoryName(t.filename)}</span>
     {/if}
   </button>
+  {#if direction === "download"}<AnalysisMark mark={marks.download(t.id)} />{/if}
 {/snippet}
 
 {#snippet progress()}

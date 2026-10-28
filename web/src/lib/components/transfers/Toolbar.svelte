@@ -9,6 +9,8 @@
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import XIcon from "@lucide/svelte/icons/x";
 
+  import { MARK_FILTERS, type MarkFilter } from "#lib/analysis/marks.js";
+  import { analyserOffered } from "#lib/analysis/marks.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
@@ -28,6 +30,8 @@
     view: ViewSettings;
     /** how many transfers each state chip stands for, and all of them */
     counts: Record<ChipId | "all", number>;
+    /** how many downloads each analysis chip stands for; null on the uploads screen */
+    markCounts: Record<MarkFilter, number> | null;
     text: string;
     /** a bulk action is running, or there is nothing to act on */
     disabled: boolean;
@@ -41,6 +45,7 @@
     direction,
     view,
     counts,
+    markCounts,
     text = $bindable(),
     disabled,
     onbulk,
@@ -106,6 +111,20 @@
         </Button>
       {/each}
     </div>
+    {#if markCounts && analyserOffered()}
+      <div class="flex flex-wrap gap-1" role="group" aria-label="Analysis">
+        {#each MARK_FILTERS as f (f.id)}
+          {@const on = view.filters.analysis === f.id}
+          <Button
+            variant={on ? "secondary" : "outline"}
+            size="sm"
+            aria-pressed={on}
+            onclick={() => (view.filters.analysis = on ? null : f.id)}>
+            {f.label} <span class="text-fg-muted tabular-nums">{markCounts[f.id]}</span>
+          </Button>
+        {/each}
+      </div>
+    {/if}
     <div class="relative min-w-48 flex-1">
       <Input
         bind:value={text}
