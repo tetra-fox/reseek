@@ -59,19 +59,24 @@ pub fn tone(hz: f64, seconds: usize) -> Audio {
   audio
 }
 
-/// [`SECONDS`] of a sawtooth at `hz`, its harmonics up to `top` falling 6 dB an octave, as a
-/// synth or a bowed string has, one channel at 44.1 kHz at -15 dBFS.
-pub fn sawtooth(hz: f64, top: f64) -> Audio {
+/// [`SECONDS`] of a tone at `hz` with its harmonics up to `top`, the k-th at 1/k^`fall`: a
+/// sawtooth with `fall` 1, as a synth or a bowed string has, or a pulse with 0. One channel at
+/// 44.1 kHz at -15 dBFS.
+pub fn harmonics(hz: f64, top: f64, fall: f64) -> Audio {
   let rate = 44_100u32;
-  let mut channel = vec![0f32; SECONDS * rate as usize];
+  let length = SECONDS * rate as usize;
+  let inverse = RealFftPlanner::<f32>::new().plan_fft_inverse(length);
+  let mut spectrum = inverse.make_input_vec();
+  // a whole number of cycles in the file puts every harmonic on a bin of its own
+  let bin_hz = f64::from(rate) / length as f64;
   let mut harmonic = 1.0;
   while hz * harmonic < top {
-    let step = 2.0 * std::f64::consts::PI * hz * harmonic / f64::from(rate);
-    for (i, sample) in channel.iter_mut().enumerate() {
-      *sample += (((i as f64 * step) % (2.0 * std::f64::consts::PI)).sin() / harmonic) as f32;
-    }
+    let bin = (hz * harmonic / bin_hz).round() as usize;
+    spectrum[bin] = Complex::new(0.0, -1.0 / harmonic.powf(fall) as f32);
     harmonic += 1.0;
   }
+  let mut channel = inverse.make_output_vec();
+  inverse.process(&mut spectrum, &mut channel).unwrap();
   let mut audio = Audio {
     rate,
     channels: vec![channel],

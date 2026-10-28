@@ -109,16 +109,22 @@ impl Heard {
   fn limited(&self, window: &Seen) -> Option<&'static Profile> {
     let cutoff = window.cutoff_hz?;
     (!self.full(window) && sharp(window))
-      .then(|| profile_at(cutoff))
+      .then(|| lower_profile_at(cutoff))
       .flatten()
   }
 
   /// A full-band window with a band-limited layer under it at an encoder's cutoff.
   fn layered(&self, window: &Seen) -> Option<f64> {
     let step = window.inner_shelf?;
-    (self.full(window) && step.drop >= INNER_SHELF_DB && profile_at(step.hz).is_some())
+    (self.full(window) && step.drop >= INNER_SHELF_DB && lower_profile_at(step.hz).is_some())
       .then_some(step.hz)
   }
+}
+
+/// The profile at `hz` when it is one below the highest bitrates: a cut where those cut is
+/// also where recordings are filtered, so it is no sign of a lossy part in a mix either.
+fn lower_profile_at(hz: f64) -> Option<&'static Profile> {
+  profile_at(hz).filter(|p| p.kbps < HIGH_BITRATE_KBPS)
 }
 
 fn sharp(window: &Seen) -> bool {
@@ -249,9 +255,7 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
 
   // a cutoff where the highest bitrates cut is also where some recordings are filtered, and
   // no measure tells the two apart
-  if let Some(profile) = profile_at(median)
-    .filter(|p| below_claim(p))
-    .filter(|p| p.kbps < HIGH_BITRATE_KBPS)
+  if let Some(profile) = lower_profile_at(median).filter(|p| below_claim(p))
     && clustered >= TRANSCODE_SHARE
     && sharp_share >= 0.5
   {

@@ -194,9 +194,18 @@ fn a_filtered_synth_line_is_not_read_as_fake() {
   let dir = tempfile::tempdir().unwrap();
   // a synth line low-passed at 20 kHz: a line spectrum, with gaps between its harmonics
   for hz in [110.0, 220.0] {
-    let saw = fixtures::sawtooth(hz, 20_000.0);
+    let saw = fixtures::harmonics(hz, 20_000.0, 1.0);
     not_fake(&analysed(&flac(dir.path(), "saw.flac", &saw, 16)));
   }
+  // a pulse of equal harmonics every 100 Hz, which clips when written, so its clipping puts
+  // lines above the 20 kHz step
+  let pulse = fixtures::harmonics(100.0, 20_000.0, 0.0);
+  let reading = analysed(&flac(dir.path(), "pulse.flac", &pulse, 16));
+  assert!(
+    reading.measures.clipped_samples_pct.unwrap() > 0.0,
+    "{reading:#?}"
+  );
+  not_fake(&reading);
 }
 
 #[test]
