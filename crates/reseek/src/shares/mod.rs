@@ -43,7 +43,7 @@ use crate::db::{Database, DbError};
 use crate::paths::Paths;
 use crate::state::StateOwner;
 use crate::sync::lock;
-pub use hosts::{HostError, remove_unknown_hosts};
+pub use hosts::{HostError, remove_agent_hosts};
 use scanner::{Outcome, Settings};
 use share::Share;
 
@@ -222,13 +222,7 @@ impl Shares {
     )
     .await?;
     browse::remove_stale(&paths.cache).await;
-    let agents = options
-      .relay
-      .agents
-      .values()
-      .filter_map(|agent| agent.instance_name.clone())
-      .collect();
-    remove_unknown_hosts(&paths.cache, agents).await;
+    remove_agent_hosts(&paths.cache).await;
     let shares = Arc::new_cyclic(|this| Self {
       this: this.clone(),
       db: storage.db,

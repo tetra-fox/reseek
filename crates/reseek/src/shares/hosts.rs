@@ -303,9 +303,9 @@ impl Shares {
   }
 }
 
-/// Deletes the index files of hosts in `cache` that are neither the local one nor named in
-/// `agents`, an earlier run's agents' that are never served again, each with its journal files.
-pub async fn remove_unknown_hosts(cache: &Path, agents: Vec<String>) {
+/// Deletes every agent's index file in `cache`, with its journal files: an earlier run's agents'
+/// indexes are never served again, since each agent uploads its shares anew when it logs in.
+pub async fn remove_agent_hosts(cache: &Path) {
   let mut entries = match tokio::fs::read_dir(cache).await {
     Ok(entries) => entries,
     Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
@@ -321,20 +321,12 @@ pub async fn remove_unknown_hosts(cache: &Path, agents: Vec<String>) {
     let Some(host) = host_of(&file) else {
       continue;
     };
-    if host == LOCAL_HOST
-      || host == format!("{LOCAL_HOST}.bak")
-      || agents.iter().any(|a| *a == host)
-    {
+    if host == LOCAL_HOST || host == format!("{LOCAL_HOST}.bak") {
       continue;
     }
     match tokio::fs::remove_file(entry.path()).await {
-      Ok(()) => info!(
-        file,
-        "share database of an agent no longer configured deleted"
-      ),
-      Err(e) => {
-        warn!(file, error = %e, "share database of an agent no longer configured not deleted")
-      }
+      Ok(()) => info!(file, "agent share database of an earlier run deleted"),
+      Err(e) => warn!(file, error = %e, "agent share database of an earlier run not deleted"),
     }
   }
 }
@@ -367,7 +359,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn only_the_files_of_unknown_agents_are_deleted() {
+  async fn every_agents_files_are_deleted_and_the_local_ones_kept() {
     let dir = tempfile::tempdir().unwrap();
     let names = [
       "shares.local.db",
@@ -375,6 +367,7 @@ mod tests {
       "shares.local.bak.db",
       "shares.local.bak.db.tmp",
       "shares.nas.db",
+      "shares.nas.3.db",
       "shares.gone.db",
       "shares.gone.db-shm",
       "browse.cache",
@@ -382,7 +375,7 @@ mod tests {
     for name in names {
       std::fs::write(dir.path().join(name), "x").unwrap();
     }
-    remove_unknown_hosts(dir.path(), vec!["nas".to_string()]).await;
+    remove_agent_hosts(dir.path()).await;
     let mut left: Vec<String> = std::fs::read_dir(dir.path())
       .unwrap()
       .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
@@ -396,7 +389,6 @@ mod tests {
         "shares.local.bak.db.tmp",
         "shares.local.db",
         "shares.local.db-wal",
-        "shares.nas.db",
       ]
     );
   }
