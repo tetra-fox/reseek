@@ -40,8 +40,8 @@
   }: Props = $props();
 
   const SORTS: { value: ResultSort; label: string }[] = [
-    { value: "uploadSpeed", label: "Upload Speed (Fastest to Slowest)" },
-    { value: "queueLength", label: "Queue Depth (Least to Most)" }
+    { value: "uploadSpeed", label: "Fastest upload speed" },
+    { value: "queueLength", label: "Shortest queue" }
   ];
 
   const VIEWS = [
@@ -92,26 +92,26 @@
   </div>
   <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
     <label class="flex items-center gap-2">
-      <Switch bind:checked={searchOptions.hideLocked} />Hide Locked Results
+      <Switch bind:checked={searchOptions.hideLocked} />Hide locked files
     </label>
     <label class="flex items-center gap-2">
-      <Switch bind:checked={searchOptions.hideNoFreeSlots} />Hide Results with No Free Slots
+      <Switch bind:checked={searchOptions.hideNoFreeSlots} />Hide users with no free slot
     </label>
-    <label class="flex items-center gap-2" title="Users the directory last saw offline">
+    <label class="flex items-center gap-2" title="Hides users who were offline when last seen">
       <Switch bind:checked={searchOptions.hideOffline} />Hide offline users
     </label>
     <label class="flex items-center gap-2">
-      <Switch bind:checked={searchOptions.hideLongQueues} />Hide queues over {LONG_QUEUE}
+      <Switch bind:checked={searchOptions.hideLongQueues} />Hide queues longer than {LONG_QUEUE}
     </label>
     {#if searchOptions.view === "cards"}
       <label class="flex items-center gap-2">
         <Switch bind:checked={searchOptions.fold} onCheckedChange={(fold) => onfold(fold)} />Fold
-        Results
+        results
       </label>
     {/if}
     {#if blockedCount}
       <label class="flex items-center gap-2">
-        <Switch bind:checked={showBlocked} />Show blocked
+        <Switch bind:checked={showBlocked} />Show blocked users
       </label>
     {/if}
   </div>

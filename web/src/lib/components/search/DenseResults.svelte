@@ -143,7 +143,7 @@
     class="relative overflow-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
     style:height="max(20rem, calc(100svh - 22rem))"
     role="grid"
-    aria-label="Search results, one file a row"
+    aria-label="Search results"
     aria-rowcount={sorted.length}
     aria-multiselectable="true"
     aria-activedescendant={list.activeId}

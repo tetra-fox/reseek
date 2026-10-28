@@ -166,8 +166,8 @@ export const FILTER_TOKENS: { token: string; meaning: string }[] = [
   { token: "country:NL|BE", meaning: "the user is in one of these countries; !country:NL for not" },
   { token: "islossless, islossy", meaning: "lossless or lossy files only" },
   { token: "iscbr, isvbr", meaning: "constant or variable bit rate only" },
-  { token: "minbr:, minbd:, minfs:, minlen:", meaning: "the older minimum tokens" },
-  { token: "minfif:8", meaning: "users with at least 8 files" }
+  { token: "minbr:, minbd:, minfs:, minlen:", meaning: "older minimum filters, still accepted" },
+  { token: "minfif:8", meaning: "users with at least 8 matching files" }
 ];
 
 /** The filter box's placeholder: a few tokens to show what it takes */

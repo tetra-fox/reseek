@@ -19,6 +19,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { useCrumbs } from "#lib/crumbs.svelte.js";
+  import { plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
@@ -206,7 +207,7 @@
       {#if canWrite}
         <Button variant="outline" disabled={!connected || working} onclick={again}>
           <RefreshCwIcon />
-          <span class="sm:max-lg:sr-only">Search Again</span>
+          <span class="sm:max-lg:sr-only">Search again</span>
         </Button>
         {#if search.isComplete}
           <Button variant="danger" disabled={working} onclick={remove}>
@@ -263,8 +264,9 @@
       {#if remaining > 0}
         <div class="flex gap-inline">
           <Button size="default" class="h-11 flex-1" onclick={() => (shown += STEP)}>
-            Show {Math.min(STEP, remaining)} More Results ({remaining} remaining, {hiddenCount} hidden
-            by filter(s))
+            Show {Math.min(STEP, remaining)} more results ({remaining} left{hiddenCount
+              ? `, ${hiddenCount} hidden by filters`
+              : ""})
           </Button>
           <Button variant="outline" class="h-11" onclick={() => (shown = view.length)}>
             Show all
@@ -272,22 +274,20 @@
         </div>
       {:else if hiddenCount > 0}
         <Button variant="secondary" class="h-11 w-full" disabled>
-          All results shown. {hiddenCount} results hidden by filter(s)
+          All results shown, {plural(hiddenCount, "result", "results")} hidden by filters
         </Button>
       {/if}
     {/if}
     {#if !view.length}
       <EmptyState
         icon={SearchXIcon}
-        title="Every result is hidden"
-        description="The filter or the toggles above leave nothing. Clear the filter or turn a toggle off to see them." />
+        title="All results are hidden by filters"
+        description="Clear the filter or turn off a toggle to see them." />
     {/if}
   {:else if !complete}
     <div class="flex items-center gap-2 text-sm text-fg-muted" role="status">
       <Spinner class="size-4" />
-      {search.state === "InProgress"
-        ? "Searching, results show as they arrive"
-        : "Starting the search"}
+      {search.state === "InProgress" ? "Searching..." : "Starting search..."}
     </div>
     {#each [0, 1, 2] as n (n)}
       <div
@@ -303,7 +303,7 @@
   {:else if !results.error}
     <EmptyState
       icon={SearchXIcon}
-      title="Nobody answered"
-      description="Try fewer or different words, or search again later: users come and go." />
+      title="No results"
+      description="Try fewer or different words, or search again later." />
   {/if}
 {/if}

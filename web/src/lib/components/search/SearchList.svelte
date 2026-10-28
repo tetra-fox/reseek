@@ -73,12 +73,9 @@
     {#each [0, 1, 2, 3] as n (n)}<Skeleton class="h-6" />{/each}
   </div>
 {:else if rows.length === 0}
-  <EmptyState
-    icon={SearchIcon}
-    title="No searches to display"
-    description="Type what you're looking for in the box above and press Enter; the results open as they arrive." />
+  <EmptyState icon={SearchIcon} title="No searches yet" />
 {:else}
-  <Card title="Searches" description={`${rows.length} kept`}>
+  <Card title="Searches">
     {#snippet action()}
       {#if canWrite}
         <Button
@@ -86,7 +83,7 @@
           size="sm"
           disabled={!completed.length}
           onclick={() => searches.removeLater(completed.map((c) => c.id))}>
-          <Trash2Icon />Delete all completed
+          <Trash2Icon />Delete completed searches
         </Button>
       {/if}
     {/snippet}
@@ -99,7 +96,7 @@
               <th>Search</th>
               <th class="text-right">Files</th>
               <th class="text-right">Locked</th>
-              <th class="text-right">Responses</th>
+              <th class="text-right">Users</th>
               <th>Ended</th>
               <th class="w-20"><span class="sr-only">Actions</span></th>
             </tr>

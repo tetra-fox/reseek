@@ -122,7 +122,7 @@
     const outcome = await fetchFolder(name, folder);
     asking = null;
     if (!outcome.ok) {
-      toast(`Failed to process directory response: ${outcome.error}`, "error");
+      toast(`Couldn't load the folder: ${outcome.error}`, "error");
       return;
     }
     fetched.set(
@@ -259,8 +259,8 @@
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="Search for additional files in this directory"
-              title="Search for additional files in this directory"
+              aria-label="Add the folder's other files to this result"
+              title="Add the folder's other files to this result"
               disabled={asking !== null}
               onclick={() => void askFolder(node.path)}>
               {#if asking === node.path}<Spinner class="size-4" />{:else}<SearchIcon />{/if}
@@ -269,8 +269,8 @@
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="View all files"
-            title="View all files"
+            aria-label="Open the folder's full file list"
+            title="Open the folder's full file list"
             disabled={asking !== null}
             onclick={() => void viewAll(node.path)}>
             <ListIcon />

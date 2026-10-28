@@ -93,7 +93,7 @@ test("shows search results as cards and as dense rows walked by key", async ({ p
 
   // the dense view: one row per file, walked with the keys
   await page.getByRole("radio", { name: "Dense" }).click();
-  const grid = page.getByRole("grid", { name: "Search results, one file a row" });
+  const grid = page.getByRole("grid", { name: "Search results" });
   await expect(grid.locator("[role=row][data-line]")).toHaveCount(5);
   await grid.focus();
   await page.keyboard.press("ArrowDown");

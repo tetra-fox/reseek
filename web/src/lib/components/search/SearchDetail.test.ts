@@ -275,7 +275,7 @@ describe("search results", () => {
       );
     expect(chips()).toEqual(["Big", "No small files", "FLAC"]);
     const remove = (name: string) =>
-      document.querySelector<HTMLButtonElement>(`button[aria-label="Remove the preset ${name}"]`)!;
+      document.querySelector<HTMLButtonElement>(`button[aria-label="Remove preset ${name}"]`)!;
     remove("Big").click();
     await flush();
     remove("No small files").click();
@@ -319,9 +319,7 @@ describe("search results", () => {
       [...document.querySelectorAll('[aria-label="Filter presets"] button[aria-pressed]')].map(
         (b) => b.textContent?.trim()
       );
-    document
-      .querySelector<HTMLButtonElement>('button[aria-label="Remove the preset Big"]')!
-      .click();
+    document.querySelector<HTMLButtonElement>('button[aria-label="Remove preset Big"]')!.click();
     await vi.advanceTimersByTimeAsync(UNDO_MS);
     flushSync();
     expect(chips()).toEqual(["FLAC"]);
