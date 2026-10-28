@@ -11,27 +11,21 @@
   import { formatSpeed, plural } from "#lib/format.js";
   import { href } from "#lib/nav.js";
   import { SOULSEEK_SETTINGS } from "#lib/reachability.js";
-  import { isActive, isQueued } from "#lib/transfers/states.js";
-  import { downloads, uploads } from "#lib/transfers/transfers.svelte.js";
 
-  // what is happening now, each figure a link to the list it counts
-  $effect(() => {
-    void downloads.load();
-    void uploads.load();
-  });
+  // what is happening now, by the daemon's live transfer figures as the footer shows them,
+  // each figure a link to the list it counts
 
   /** a direction's active and queued transfers, with their speed */
-  const now = (store: typeof downloads) => {
-    const rows = store.list.rows;
-    const active = rows.filter((t) => isActive(t.state));
+  const now = (direction: "downloads" | "uploads") => {
+    const m = app.metrics?.[direction];
     return {
-      active: active.length,
-      queued: rows.filter((t) => isQueued(t.state)).length,
-      speed: active.reduce((n, t) => n + t.averageSpeed, 0)
+      active: m?.inProgress.files ?? 0,
+      queued: m?.queued.files ?? 0,
+      speed: m?.inProgress.totalSpeed ?? 0
     };
   };
-  const down = $derived(now(downloads));
-  const up = $derived(now(uploads));
+  const down = $derived(now("downloads"));
+  const up = $derived(now("uploads"));
   const s = $derived(app.state);
   const reach = $derived(s?.server.listen.reachable);
 </script>

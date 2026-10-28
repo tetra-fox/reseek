@@ -29,6 +29,7 @@ describe("the dashboard", () => {
     component = null;
     live.stop();
     app.state = null;
+    app.metrics = null;
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
   });
@@ -112,5 +113,41 @@ describe("the dashboard", () => {
     button("7d").click();
     await flush();
     expect(sorts().slice(-2)).toEqual(["Count", "Count"]);
+  });
+
+  it("counts what moves now from the live figures and reloads the reports as transfers finish", async () => {
+    app.state = {
+      server: { isConnected: true, listen: { port: 2234, reachable: "yes" } },
+      user: { username: "me" },
+      shares: { files: 0, directories: 0, scanning: false, scanPending: false }
+    } as never;
+    const direction = (active: number, queued: number, finished: number) => ({
+      inProgress: { files: active, users: 1, averageSpeed: 1024, totalSpeed: 2048 * active },
+      queued: { files: queued, users: 1, bytes: 0 },
+      completed: { succeeded: finished, failed: 0, bytes: 0 }
+    });
+    app.metrics = { downloads: direction(2, 5, 1), uploads: direction(1, 0, 0) };
+    const net = fakeNetwork((url) => {
+      if (url.pathname.endsWith("/summary")) return { Download: {}, Upload: {}, distinctUsers: 0 };
+      return url.pathname.endsWith("/histogram") ? {} : [];
+    });
+    component = mount(Dashboard, { target: document.body });
+    await flush();
+    const now = document
+      .querySelector('[aria-label="Right now"]')
+      ?.textContent?.replace(/\s+/g, " ");
+    expect(now).toContain("2 active5 queued 4 KB/s");
+    expect(now).toContain("1 active0 waiting 2 KB/s");
+    const summaries = () => net.requests.filter((r) => r.url.pathname.endsWith("/summary")).length;
+    const loaded = summaries();
+    app.metrics = { downloads: direction(1, 5, 1), uploads: direction(1, 0, 0) };
+    await flush();
+    expect(summaries()).toBe(loaded);
+    app.metrics = { downloads: direction(1, 5, 2), uploads: direction(1, 0, 0) };
+    await flush();
+    expect(summaries()).toBe(loaded + 1);
+    app.metrics = { downloads: direction(1, 5, 3), uploads: direction(1, 0, 0) };
+    await flush();
+    expect(summaries()).toBe(loaded + 1);
   });
 });

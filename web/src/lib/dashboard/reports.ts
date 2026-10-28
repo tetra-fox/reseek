@@ -31,6 +31,18 @@ export const windowOf = (label: RangeLabel, now = Date.now()): Window & { bucket
 /** How many rows the dashboard's tables ask for */
 export const TOP = 10;
 
+/** The least time between two reloads of the reports that finished transfers ask for */
+export const FINISHED_RELOAD_MS = 30_000;
+
+/** How many transfers finished either way since the daemon started, by its live figures */
+export const finishedOf = (metrics: Schemas["TransferMetrics"] | null): number | null =>
+  metrics
+    ? (["downloads", "uploads"] as const).reduce(
+        (n, d) => n + metrics[d].completed.succeeded + metrics[d].completed.failed,
+        0
+      )
+    : null;
+
 /** The queries of the dashboard's reports, each as the daemon takes it */
 export const queries = {
   summary: (w: Window) => ({ start: w.start, end: w.end }),

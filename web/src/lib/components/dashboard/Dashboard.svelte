@@ -10,7 +10,14 @@
   import Card from "#lib/components/ui/Card.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { dashboardPrefs } from "#lib/dashboard/prefs.svelte.js";
-  import { chartData, RANGES, reports, windowOf } from "#lib/dashboard/reports.js";
+  import {
+    chartData,
+    FINISHED_RELOAD_MS,
+    finishedOf,
+    RANGES,
+    reports,
+    windowOf
+  } from "#lib/dashboard/reports.js";
   import { SERIES } from "#lib/dashboard/series.js";
   import { formatBytes, formatSpeed } from "#lib/format.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -30,6 +37,28 @@
   let now = $state(Date.now());
   const span = $derived(windowOf(dashboardPrefs.range, now));
   keepCurrent(() => (now = Date.now()));
+
+  // a transfer that finishes shows in the reports: a reload follows, at most every 30 s
+  let counted: number | null = null;
+  let reloaded = 0;
+  let due: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    const finished = finishedOf(app.metrics);
+    untrack(() => {
+      const more = finished !== null && counted !== null && finished > counted;
+      counted = finished;
+      if (!more || due) return;
+      due = setTimeout(
+        () => {
+          due = undefined;
+          reloaded = Date.now();
+          now = reloaded;
+        },
+        Math.max(0, reloaded + FINISHED_RELOAD_MS - Date.now())
+      );
+    });
+  });
+  $effect(() => () => clearTimeout(due));
 
   let summary = $state.raw<Schemas["SummaryReport"] | null>(null);
   let summaryError = $state("");
