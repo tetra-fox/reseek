@@ -11,7 +11,7 @@ use realfft::{RealFftPlanner, RealToComplex};
 
 use super::thresholds::{
   CUTOFF_RANGE_DB, FULL_BAND, HOLE_DEPTH_DB, HOLES_FROM_HZ, HOLES_TO_HZ, INNER_SHELF_FROM_HZ,
-  SHELF_GAP_HZ, SHELF_SPAN_HZ, SILENCE_DBFS,
+  SHARP_SHELF_DB, SHELF_GAP_HZ, SHELF_SPAN_HZ, SILENCE_DBFS,
 };
 use super::totals::Totals;
 
@@ -113,6 +113,12 @@ pub(super) struct Window {
 }
 
 impl Window {
+  /// Whether the window stops with an encoder's low-pass rather than a natural roll-off: its
+  /// shelf drops by [`SHARP_SHELF_DB`] or more.
+  pub fn sharp(&self) -> bool {
+    self.shelf_db.is_some_and(|shelf| shelf >= SHARP_SHELF_DB)
+  }
+
   /// Whether the window is too quiet to measure a spectrum in.
   pub fn silent(&self) -> bool {
     self.rms_dbfs < SILENCE_DBFS

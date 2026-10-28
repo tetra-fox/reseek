@@ -6,9 +6,7 @@ use api_types::analysis::{AnalysisFlag, AnalysisMeasures};
 
 use super::decode::Claimed;
 use super::measure::Window;
-use super::thresholds::{
-  CLUSTER_HZ, LOWER_RATE_EDGES, MONO_CORRELATION, MONO_SIDE_DB, SHARP_SHELF_DB,
-};
+use super::thresholds::{CLUSTER_HZ, LOWER_RATE_EDGES, MONO_CORRELATION, MONO_SIDE_DB};
 
 /// What was found beside the reading.
 pub(super) struct Findings {
@@ -77,9 +75,6 @@ fn source_edge(windows: &[&Window], median: f64, nyquist: f64) -> Option<f64> {
     .iter()
     .filter(|w| w.cutoff_hz.is_some_and(|c| (c - edge).abs() <= CLUSTER_HZ))
     .collect();
-  let sharp = near
-    .iter()
-    .filter(|w| w.shelf_db.is_some_and(|s| s >= SHARP_SHELF_DB))
-    .count();
+  let sharp = near.iter().filter(|w| w.sharp()).count();
   (near.len() * 2 > windows.len() && sharp * 2 > near.len()).then_some(edge)
 }

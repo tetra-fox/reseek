@@ -54,7 +54,8 @@ struct Verdict {
 #[derive(Clone, Copy, Debug)]
 struct Seen {
   cutoff_hz: Option<f64>,
-  shelf_db: Option<f64>,
+  /// it stops with an encoder's low-pass rather than a natural roll-off
+  sharp: bool,
   inner_shelf: Option<Step>,
   rms_dbfs: f64,
 }
@@ -74,13 +75,13 @@ impl Seen {
     match floor {
       Some(step) => Self {
         cutoff_hz: Some(step.hz),
-        shelf_db: Some(step.drop),
+        sharp: step.drop >= SHARP_SHELF_DB,
         inner_shelf: None,
         rms_dbfs: window.rms_dbfs,
       },
       None => Self {
         cutoff_hz: window.cutoff_hz,
-        shelf_db: window.shelf_db,
+        sharp: window.sharp(),
         inner_shelf: window.inner_shelf,
         rms_dbfs: window.rms_dbfs,
       },
@@ -108,7 +109,7 @@ impl Heard {
   /// A window that stops short of the top at an encoder's cutoff, with a sharp shelf.
   fn limited(&self, window: &Seen) -> Option<&'static Profile> {
     let cutoff = window.cutoff_hz?;
-    (!self.full(window) && sharp(window))
+    (!self.full(window) && window.sharp)
       .then(|| lower_profile_at(cutoff))
       .flatten()
   }
@@ -125,10 +126,6 @@ impl Heard {
 /// also where recordings are filtered, so it is no sign of a lossy part in a mix either.
 fn lower_profile_at(hz: f64) -> Option<&'static Profile> {
   profile_at(hz).filter(|p| p.kbps < HIGH_BITRATE_KBPS)
-}
-
-fn sharp(window: &Seen) -> bool {
-  window.shelf_db.is_some_and(|s| s >= SHARP_SHELF_DB)
 }
 
 /// Reads what `measured` found.
@@ -244,7 +241,7 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
       .is_some_and(|c| (c - median).abs() <= CLUSTER_HZ)
   });
   let sharp_share = heard.share(|w| {
-    sharp(w)
+    w.sharp
       && w
         .cutoff_hz
         .is_some_and(|c| (c - median).abs() <= CLUSTER_HZ)
@@ -369,7 +366,7 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     return reading;
   }
 
-  let open = heard.share(|w| heard.full(w) || !sharp(w));
+  let open = heard.share(|w| heard.full(w) || !w.sharp);
   if open >= CONSISTENT_SHARE {
     if full >= CONSISTENT_SHARE {
       let windows = ((count - MIN_WINDOWS) as f64 / 100.0).min(1.0);
