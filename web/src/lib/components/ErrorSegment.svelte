@@ -1,6 +1,9 @@
 <script lang="ts">
+  import CheckIcon from "@lucide/svelte/icons/check";
+  import CopyIcon from "@lucide/svelte/icons/copy";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
 
+  import { CopyButton } from "#lib/clipboard.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
 
   type Props = {
@@ -13,6 +16,8 @@
   };
 
   let { caption, detail, retry, retryLabel = "Reload" }: Props = $props();
+
+  const copier = new CopyButton();
 </script>
 
 <!-- a failure that takes a whole region: what went wrong and a way to try again -->
@@ -22,7 +27,14 @@
   </span>
   <p class="text-sm font-medium wrap-anywhere">{caption}</p>
   {#if detail}<p class="max-w-sm text-sm text-pretty text-fg-muted">{detail}</p>{/if}
-  <Button variant="outline" onclick={() => (retry ? retry() : location.reload())}>
-    {retryLabel}
-  </Button>
+  <div class="flex gap-inline">
+    <Button variant="outline" onclick={() => (retry ? retry() : location.reload())}>
+      {retryLabel}
+    </Button>
+    <Button
+      variant="ghost"
+      onclick={() => void copier.copy([caption, detail].filter(Boolean).join("\n"))}>
+      {#if copier.copied}<CheckIcon />Copied{:else}<CopyIcon />Copy the error{/if}
+    </Button>
+  </div>
 </div>
