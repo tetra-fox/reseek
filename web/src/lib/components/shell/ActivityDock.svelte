@@ -18,7 +18,7 @@
     type ActivityEntry,
     type ActivityType
   } from "#lib/activity/activity.svelte.js";
-  import { activityText, baseName, KINDS, kindOf } from "#lib/activity/text.js";
+  import { activityParts, activityText, baseName, KINDS, kindOf } from "#lib/activity/text.js";
   import { clock } from "#lib/clock.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
@@ -31,8 +31,8 @@
   import { motionFast } from "#lib/motion.js";
   import { roomHref, userHref } from "#lib/nav.js";
 
-  // what other users do with us on the network, as Nicotine+'s log pane shows it: a panel over the
-  // bottom of every screen, opened from the footer
+  // what other users do with us on the network: a panel over the bottom of every screen, opened
+  // from the footer, so it stays in view whatever screen is open
   $effect(() => activity.follow());
   keepCurrent(() => void activity.load());
 
@@ -64,10 +64,6 @@
     privateRoom: LockIcon
   } as const;
 </script>
-
-{#snippet file(path: string)}<span class="font-medium" title={path}>{baseName(path)}</span
-  >{/snippet}
-{#snippet who(name: string | null | undefined)}{#if name}<Username {name} />{/if}{/snippet}
 
 <section
   aria-label="Activity on the network"
@@ -123,7 +119,7 @@
       <div
         role="row"
         {...list.line(e, i)}
-        aria-label={activityText(e)}
+        aria-label={activityText(e, formatBytes)}
         class={[
           "grid grid-cols-[4.5rem_1.25rem_minmax(0,1fr)] items-center gap-2 rounded-badge px-1 py-0.5 hover:bg-hover",
           list.selected.has(String(e.id)) && "bg-accent-soft/60",
@@ -145,41 +141,18 @@
             ]} />
         </span>
         <span role="gridcell" class="min-w-0 truncate">
-          {#if k.type === "browse"}
-            {@render who(e.username)} is browsing your shares
-          {:else if k.type === "profile"}
-            {@render who(e.username)} is viewing your profile
-          {:else if k.type === "search"}
-            {@render who(e.username)} searched for
-            <span class="font-medium">"{k.query}"</span>
-            and got {k.results === 1 ? "1 result" : `${k.results.toLocaleString()} results`}
-          {:else if k.type === "queued"}
-            {@render who(e.username)} queued
-            <span class="font-medium tabular-nums"
-              >{k.files === 1 ? "1 file" : `${k.files} files`}</span
-            ><span class="text-fg-muted">, the last {@render file(k.filename)}</span>
-          {:else if k.type === "uploadStarted"}
-            Uploading {@render file(k.filename)}
-            <span class="text-fg-muted">({formatBytes(k.size)})</span> to {@render who(e.username)}
-          {:else if k.type === "uploadEnded"}
-            {#if k.state === "Completed, Succeeded"}
-              Finished uploading {@render file(k.filename)} to {@render who(e.username)}
-            {:else}
-              Upload of {@render file(k.filename)} to {@render who(e.username)} ended:
-              <span class="text-danger">{k.state.replace("Completed, ", "")}</span>
-              <span class="text-fg-muted">after {formatBytes(k.bytes)}</span>
-            {/if}
-          {:else if k.type === "privateRoom"}
-            {@const room = k.room}
-            {#snippet link()}<a
+          {#each activityParts(e, formatBytes) as part, n (n)}{#if part.kind === "user"}<Username
+                name={part.name} />{:else if part.kind === "file"}<span
+                class="font-medium"
+                title={part.path}>{baseName(part.path)}</span
+              >{:else if part.kind === "room"}<a
                 class="font-medium text-accent hover:underline"
-                href={roomHref(room)}>{room}</a
-              >{/snippet}
-            {#if k.change === "added"}You were added to the private room {@render link()}
-            {:else if k.change === "removed"}You were removed from the private room {@render link()}
-            {:else if k.change === "operator"}You are an operator of {@render link()} now
-            {:else}You are no longer an operator of {@render link()}{/if}
-          {/if}
+                href={roomHref(part.name)}>{part.name}</a
+              >{:else if part.kind === "strong"}<span class="font-medium tabular-nums"
+                >{part.text}</span
+              >{:else if part.kind === "failed"}<span class="text-danger">{part.text}</span
+              >{:else if part.kind === "muted"}<span class="text-fg-muted">{part.text}</span
+              >{:else}{part.text}{/if}{/each}
         </span>
       </div>
     {:else}
