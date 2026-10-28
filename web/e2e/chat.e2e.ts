@@ -1,112 +1,7 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
+import { at, fakeChat } from "./fakes";
 import { login } from "./login";
-
-const at = (minute: number, second = 0) =>
-  new Date(Date.UTC(2026, 9, 27, 18, minute, second)).toISOString();
-
-const MEMBERS = ["alice", "bob", "carol", "dave", "erin", "frank", "grace", "heidi"];
-
-/** Answers the chat calls with one room, "indie", and one conversation, with "alice" */
-const fakeChat = async (page: Page) => {
-  const said: [string, string][] = [
-    ["alice", "anyone have the new boards of canada rip?"],
-    ["bob", "yes, slsk://bob/Music/Boards%20of%20Canada/Tomorrow's%20Harvest/ in flac"],
-    ["bob", "320 too if you want it smaller"],
-    ["carol", "/me waves at everyone"],
-    ["reseek", "thanks bob, grabbing it now"],
-    ["dave", "reseek: did you see https://example.com/review ?"]
-  ];
-  const roomMessages = said.map(([username, message], n) => ({
-    localId: n + 1,
-    timestamp: at(n),
-    username,
-    message,
-    roomName: "indie",
-    self: username === "reseek",
-    isMention: message.includes("reseek"),
-    hidden: false
-  }));
-  const joined = [
-    {
-      name: "indie",
-      unread: 0,
-      mentions: 0,
-      notify: "mentions",
-      userCount: MEMBERS.length,
-      lastMessageAt: at(5),
-      lastReadId: 6
-    }
-  ];
-  await page.route("**/api/v0/rooms/joined", (route) => route.fulfill({ json: joined }));
-  // a pane opened before the joined rooms are read asks the history for the same page
-  await page.route("**/api/v0/rooms/history/indie/messages**", (route) =>
-    route.fulfill({ json: { messages: roomMessages, hasMore: false, gaps: [] } })
-  );
-  await page.route("**/api/v0/rooms/joined/indie**", (route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/messages")) {
-      return route.fulfill({ json: { messages: roomMessages, hasMore: false, gaps: [] } });
-    }
-    return route.fulfill({
-      json: {
-        name: "indie",
-        isPrivate: false,
-        users: MEMBERS.map((username, n) => ({
-          username,
-          status: n % 3 === 2 ? "Away" : "Online",
-          averageSpeed: 400_000 * (n + 1),
-          uploadCount: n,
-          fileCount: 1000 * (n + 1),
-          directoryCount: 40,
-          countryCode: ["NL", "DE", "US", "FR"][n % 4],
-          slotsFull: false,
-          self: false
-        })),
-        tickers: [
-          { username: "alice", ticker: "listening to Geogaddi" },
-          { username: "bob", ticker: "sharing the whole BoC catalogue" }
-        ],
-        messages: null
-      }
-    });
-  });
-  const conversation = {
-    username: "alice",
-    isActive: true,
-    isServerNotice: false,
-    unAcknowledgedMessageCount: 0,
-    hasUnAcknowledgedMessages: false,
-    notify: "all",
-    draft: "",
-    lastMessage: null,
-    messages: null
-  };
-  await page.route("**/api/v0/conversations**", (route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/api/v0/conversations"))
-      return route.fulfill({ json: [conversation] });
-    if (url.pathname.endsWith("/messages")) {
-      return route.fulfill({
-        json: [
-          ["In", "hey, are you still sharing the warp records stuff?"],
-          ["Out", "yes, browse away"],
-          ["In", "thanks!"]
-        ].map(([direction, message], n) => ({
-          localId: n + 1,
-          id: n + 1,
-          timestamp: at(10 + n),
-          username: "alice",
-          direction,
-          message,
-          isAcknowledged: true,
-          wasReplayed: false
-        }))
-      });
-    }
-    return route.fulfill({ json: conversation });
-  });
-};
 
 test("a room reads like a chat: names, actions, links and the wall", async ({ page }) => {
   await fakeChat(page);
@@ -159,6 +54,12 @@ test("a room reads like a chat: names, actions, links and the wall", async ({ pa
   await page.mouse.move(5, 5);
   await page.waitForTimeout(400);
   await expect(page.getByRole("dialog", { name: "Profile of alice" })).toBeVisible();
+  // the card's More opens the name's menu, which no button beside the name offers
+  await page
+    .getByRole("dialog", { name: "Profile of alice" })
+    .getByRole("button", { name: "More" })
+    .click();
+  await expect(page.getByRole("menuitem", { name: "Copy username" })).toBeVisible();
   await page.keyboard.press("Escape");
 });
 
@@ -203,6 +104,9 @@ test("a busy room's comings and goings stay out of its messages", async ({ page 
   const activity = page.getByRole("grid", { name: "Joins, leaves and status changes" });
   await expect(activity.getByRole("row").first()).toContainText("left the room");
   await expect(activity.getByRole("row")).toHaveCount(120);
+  // a row's time keeps to one line, as in the activity log
+  const time = (await activity.getByRole("row").first().locator("time").boundingBox())!;
+  expect(time.height).toBeLessThan(20);
   // the message list holds the six messages and nothing else
   await expect(log.locator("[data-message]")).toHaveCount(6);
   await expect(log).not.toContainText("joined");

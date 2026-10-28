@@ -1,71 +1,12 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
+import { fakeSearch, file, SEARCH_ID } from "./fakes";
 import { login } from "./login";
-
-const ID = "6f1c9a52-0d1e-4c43-9d55-3a1f0b6e7a10";
-
-const file = (filename: string, size = 4_000_000) => ({
-  filename,
-  size,
-  code: 1,
-  extension: filename.split(".").pop(),
-  isLocked: false,
-  attributeCount: 0,
-  attributes: [],
-  bitRate: 320,
-  length: 200
-});
-
-const response = (username: string, speed: number, files: string[]) => ({
-  username,
-  country: "NL",
-  token: 1,
-  hasFreeUploadSlot: true,
-  uploadSpeed: speed,
-  queueLength: 0,
-  fileCount: files.length,
-  files: files.map((f) => file(f)),
-  lockedFileCount: 0,
-  lockedFiles: []
-});
-
-/** Answers the search page's calls with one finished search and its responses */
-const fakeSearch = async (page: Page) => {
-  const responses = [
-    response("alice", 3_000_000, [
-      "@@a\\Music\\Album\\01 One.flac",
-      "@@a\\Music\\Album\\02 Two.flac",
-      "@@a\\Music\\Other\\03 Three.mp3"
-    ]),
-    response("bob", 1_000_000, ["music/x/1.flac", "music/x/2.flac"])
-  ];
-  await page.route(`**/api/v0/searches/${ID}**`, (route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/responses")) return route.fulfill({ json: responses });
-    return route.fulfill({
-      json: {
-        id: ID,
-        searchText: "album",
-        token: 1,
-        state: "Completed, TimedOut",
-        isComplete: true,
-        startedAt: "2026-10-26T10:00:00Z",
-        endedAt: "2026-10-26T10:00:15Z",
-        responseCount: 2,
-        fileCount: 5,
-        lockedFileCount: 0,
-        responseBytes: 0,
-        responses: null,
-        scope: { type: "network", subjects: [] }
-      }
-    });
-  });
-};
 
 test("shows search results as cards and as dense rows walked by key", async ({ page }) => {
   await fakeSearch(page);
   await login(page, "/dashboard");
-  await page.goto(`./#/searches/${ID}`);
+  await page.goto(`./#/searches/${SEARCH_ID}`);
   const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(crumbs).toContainText("Search");
   await expect(crumbs).toContainText("album");
@@ -93,7 +34,7 @@ test("shows search results as cards and as dense rows walked by key", async ({ p
     "default"
   );
   await expect(page.locator('section[data-key="0:bob"]')).toHaveCount(0);
-  await page.getByRole("button", { name: "Clear" }).click();
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(filter).toHaveValue("");
   await expect(page.locator('section[data-key="0:bob"]')).toBeVisible();
 
