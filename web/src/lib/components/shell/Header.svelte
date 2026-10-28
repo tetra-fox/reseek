@@ -46,7 +46,9 @@
       {#each crumbs as crumb, i (`${i}:${crumb.label}`)}
         {@const last = i === crumbs.length - 1}
         <li class={["flex min-w-0 items-center gap-1", !last && "max-sm:hidden"]}>
-          {#if i > 0}<ChevronRightIcon class="size-3.5 shrink-0 text-fg-subtle" />{/if}
+          <!-- a phone shows only the last step, so it has no step before it to point from -->
+          {#if i > 0}<ChevronRightIcon
+              class="size-3.5 shrink-0 text-fg-subtle max-sm:hidden" />{/if}
           {#if last}
             <span aria-current="page" class="truncate font-medium" title={crumb.copy}>
               {crumb.label}
