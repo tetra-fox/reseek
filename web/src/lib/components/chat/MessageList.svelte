@@ -1,16 +1,21 @@
 <script lang="ts">
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
+  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
+  import XIcon from "@lucide/svelte/icons/x";
   import { tick, untrack } from "svelte";
   import { on } from "svelte/events";
   import { SvelteMap } from "svelte/reactivity";
+  import { fly } from "svelte/transition";
 
-  import { type Line, layout, LONG } from "#lib/chat/messages.js";
+  import { type Line, layout, LONG, type Message } from "#lib/chat/messages.js";
   import { pullOlder } from "#lib/chat/older.js";
   import type { MessagePane } from "#lib/chat/pane.svelte.js";
+  import type { Burst } from "#lib/chat/presence.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
-  import { formatDay } from "#lib/format.js";
+  import { formatDay, plural } from "#lib/format.js";
   import { freezesWhileUsed, interaction } from "#lib/interaction.svelte.js";
+  import { motionFast } from "#lib/motion.js";
 
   import GapRow from "./GapRow.svelte";
   import MessageRow from "./MessageRow.svelte";
@@ -20,11 +25,17 @@
     pane: MessagePane;
     /** a message to scroll to and mark, from a link */
     at: number | null;
+    /** members coming and going, shown among the messages */
+    bursts?: Burst[];
+    /** the words marked in the messages: our name and the watched words */
+    watch: string[];
+    /** quotes a message in the composer, when one can be sent */
+    onreply?: (message: Message) => void;
     /** the newest messages are in view on a visible tab: they count as read */
     onread: () => void;
   };
 
-  let { pane, at, onread }: Props = $props();
+  let { pane, at, bursts = [], watch, onreply, onread }: Props = $props();
 
   /** this close to the bottom counts as at the bottom */
   const NEAR = 48;
@@ -44,7 +55,7 @@
   /** the newest message when the list was placed or last followed a new one */
   let seenNewest: number | null = null;
 
-  const lines = $derived(layout(pane.ordered, pane.gaps, pane.unreadFrom));
+  const lines = $derived(layout(pane.ordered, pane.gaps, pane.unreadFrom, bursts));
   const newest = $derived(pane.ordered.at(-1)?.localId ?? null);
 
   /*
@@ -60,7 +71,7 @@
    * each line of its text, plus 2 px of padding, or 32 px with the header of a group's first
    */
   const guess = (line: Line) => {
-    if (line.kind === "unread") return 24;
+    if (line.kind === "unread" || line.kind === "presence") return 24;
     if (line.kind !== "message") return 36;
     const { message: m, head } = line;
     const rows = m.hidden
@@ -190,6 +201,26 @@
     seen();
     fresh = 0;
   };
+  /** where the line marking the first unread message is, -1 without one */
+  const unreadAt = $derived(lines.findIndex((l) => l.kind === "unread"));
+  /** how many messages came after the unread line */
+  const unreadCount = $derived(
+    unreadAt === -1 ? 0 : lines.slice(unreadAt).filter((l) => l.kind === "message").length
+  );
+  let unreadDismissed = $state(false);
+  /** the unread line is above the view: a pill offers to go up to it */
+  const unreadAbove = $derived(
+    !unreadDismissed && unreadAt !== -1 && !!head && tops[unreadAt] + head.offsetTop < scrollTop
+  );
+  const toUnread = () => {
+    if (!box || !head || unreadAt === -1) return;
+    stick = false;
+    anchor = null;
+    box.scrollTop = Math.max(0, head.offsetTop + tops[unreadAt] - 8);
+    seen();
+    unreadDismissed = true;
+  };
+
   /** The newest messages count as read only when the view really is at them on a visible tab */
   const readIfSeen = () => {
     seen();
@@ -322,12 +353,37 @@
             message={line.message}
             head={line.head}
             highlight={line.message.localId === at}
+            {watch}
+            room={pane.target.kind === "room"}
+            {onreply}
             onretry={() => void pane.retry(line.message)} />
         {/if}
       </div>
     {/each}
     <div style:height={`${tops[lines.length] - tops[range.end]}px`} aria-hidden="true"></div>
   </div>
+  {#if unreadAbove}
+    <div
+      class="absolute inset-x-0 top-2 z-10 flex justify-center"
+      transition:fly={{ y: -8, duration: motionFast() }}>
+      <div
+        class="flex items-center rounded-full border border-accent/40 bg-overlay text-xs shadow-raised">
+        <button
+          type="button"
+          class="flex items-center gap-1.5 rounded-l-full py-1 pr-2 pl-3 font-medium text-accent hover:bg-hover"
+          onclick={toUnread}>
+          <ArrowUpIcon class="size-3.5" />{plural(unreadCount, "new message", "new messages")}
+        </button>
+        <button
+          type="button"
+          class="rounded-r-full border-l px-2 py-1 text-fg-muted hover:bg-hover"
+          aria-label="Dismiss"
+          onclick={() => (unreadDismissed = true)}>
+          <XIcon class="size-3.5" />
+        </button>
+      </div>
+    </div>
+  {/if}
   {#if loadingOlder}
     <!-- over the list, not in it: a line in the list would move the messages under the view -->
     <div class="pointer-events-none absolute inset-x-0 top-2 flex justify-center">

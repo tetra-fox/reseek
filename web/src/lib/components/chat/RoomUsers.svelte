@@ -1,21 +1,32 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import SearchIcon from "@lucide/svelte/icons/search";
+  import CrownIcon from "@lucide/svelte/icons/crown";
+  import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
+  import ShieldIcon from "@lucide/svelte/icons/shield";
+  import UserMinusIcon from "@lucide/svelte/icons/user-minus";
+  import UserPlusIcon from "@lucide/svelte/icons/user-plus";
 
+  import { app } from "#lib/app.svelte.js";
   import type { RoomMembers, RoomUser } from "#lib/chat/room.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
   import { flag } from "#lib/components/users/hover.svelte.js";
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
+  import { confirmation } from "#lib/confirm.svelte.js";
   import { formatSpeed, plural } from "#lib/format.js";
-  import { freezesWhileUsed, heldOrder } from "#lib/interaction.svelte.js";
+  import { freezesWhileUsed, heldOrder, interaction } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { userHref } from "#lib/nav.js";
+  import type { Outcome } from "#lib/request.js";
+  import { session } from "#lib/session.svelte.js";
+  import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
 
-  // who is in a room: operators then members, online first, a filter and the counts
+  // who is in a room: operators then members, online first, a filter and the counts; in a private
+  // room its owner and operators also manage who belongs from here
   let { members }: { members: RoomMembers } = $props();
 
   type Line =
@@ -23,6 +34,9 @@
     | { kind: "user"; key: string; user: RoomUser; names: string[] };
 
   let typed = $state("");
+  let adding = $state("");
+  /** the row whose menu is open, which holds the list still */
+  let menuFor = $state<string | null>(null);
 
   const PRESENCE = { Online: 0, Away: 1, Offline: 2 } as const;
   const blocked = (name: string) => !!users.get(name)?.block;
@@ -33,8 +47,12 @@
 
   const all = $derived(members.users.rows);
   const online = $derived(all.filter((u) => u.status === "Online").length);
+  const us = $derived(app.state?.user.username ?? "");
+  const role = $derived(session.can("ReadWrite") ? members.roleOf(us) : null);
+  const room = $derived(members.room);
   // the list holds still while it is pressed, selected in or a name's card or menu is open from it
   const hold = heldOrder<Line>((l) => l.key);
+  $effect(() => (menuFor ? interaction.hold() : undefined));
   const lines = $derived.by(() => {
     const filter = typed.trim().toLowerCase();
     const shown = all.filter((u) => !filter || u.username.toLowerCase().includes(filter));
@@ -71,12 +89,83 @@
       if (l.kind === "user") void goto(userHref(l.user.username));
     }
   });
+
+  /** What the owner or an operator may do to `name` in a private room */
+  const powers = (name: string) => {
+    if (!role || name === us || name === room?.owner) return null;
+    const operator = !!room?.operators?.includes(name);
+    return {
+      // operators take out members only; the owner takes out operators too
+      remove: role === "owner" || !operator,
+      promote: role === "owner" && !operator,
+      demote: role === "owner" && operator
+    };
+  };
+
+  const report = (done: string) => (outcome: Outcome<unknown>) =>
+    toast(outcome.ok ? done : outcome.error, outcome.ok ? "info" : "error");
+
+  const add = async () => {
+    const name = adding.trim();
+    if (!name) return;
+    const outcome = await members.addMember(name);
+    report(`${name} was added to ${members.name}`)(outcome);
+    if (outcome.ok) adding = "";
+  };
+  const remove = (name: string) =>
+    confirmation.ask({
+      title: "Remove from the room",
+      body: `Take ${name} out of ${members.name}? They can't join again until someone adds them.`,
+      confirm: "Remove",
+      run: () => void members.removeMember(name).then(report(`${name} was removed`))
+    });
+  const giveUp = () =>
+    confirmation.ask({
+      title: "Give up ownership",
+      body: `Give up ownership of ${members.name}? The server dissolves a private room without an owner.`,
+      confirm: "Give up",
+      run: () => void members.dropOwnership().then(report(`You gave up ${members.name}`))
+    });
+  const quit = () =>
+    confirmation.ask({
+      title: "Leave the private room",
+      body: `Stop being a member of ${members.name}? Someone has to add you again to come back.`,
+      confirm: "Leave",
+      run: () => void members.dropMembership().then(report(`You left ${members.name}`))
+    });
 </script>
 
-<aside class="flex min-h-0 flex-col gap-2 border-l p-2" aria-label="Room users">
-  <p class="px-1 text-xs text-fg-muted">
-    {plural(all.length, "user", "users")} · {online} online
-  </p>
+<aside class="flex min-h-0 w-full flex-col gap-2 p-2" aria-label="Room users">
+  <div class="flex items-center gap-1 px-1">
+    <p class="text-xs text-fg-muted">
+      {plural(all.length, "user", "users")} · {online} online
+    </p>
+    {#if room?.isPrivate && session.can("ReadWrite")}
+      <Menu.Root>
+        <Menu.Trigger>
+          {#snippet child({ props })}
+            <Button
+              {...props}
+              variant="ghost"
+              size="icon-sm"
+              class="ml-auto"
+              aria-label="Private room menu"><EllipsisIcon /></Button>
+          {/snippet}
+        </Menu.Trigger>
+        <Menu.Content align="end" class="min-w-52">
+          <Menu.Label>
+            {#if role === "owner"}You own this room{:else if role === "operator"}You operate this
+              room{:else}You are a member{/if}
+          </Menu.Label>
+          {#if role === "owner"}
+            <Menu.Item onSelect={giveUp}><CrownIcon />Give up ownership</Menu.Item>
+          {:else}
+            <Menu.Item onSelect={quit}><UserMinusIcon />Leave the private room</Menu.Item>
+          {/if}
+        </Menu.Content>
+      </Menu.Root>
+    {/if}
+  </div>
   {#if members.error}
     <Notice kind="error">
       {members.error}
@@ -85,14 +174,32 @@
       {/snippet}
     </Notice>
   {/if}
-  <div class="relative">
-    <SearchIcon class="pointer-events-none absolute top-2 left-2 size-3.5 text-fg-muted" />
-    <Input
-      class="h-control-sm pl-7"
-      placeholder="Filter"
-      aria-label="Filter users"
-      bind:value={typed} />
-  </div>
+  <Input
+    type="search"
+    class="h-control-sm"
+    placeholder="Filter"
+    aria-label="Filter users"
+    bind:value={typed} />
+  {#if role}
+    <form
+      class="flex gap-1"
+      onsubmit={(e) => {
+        e.preventDefault();
+        void add();
+      }}>
+      <Input
+        class="h-control-sm"
+        placeholder="Add a member"
+        aria-label="Username to add"
+        bind:value={adding} />
+      <Button
+        type="submit"
+        size="icon-sm"
+        variant="outline"
+        aria-label="Add"
+        disabled={!adding.trim()}><UserPlusIcon /></Button>
+    </form>
+  {/if}
   <div
     class="min-h-0 flex-1 overflow-y-auto rounded-control outline-none focus-visible:ring-2 focus-visible:ring-accent"
     role="grid"
@@ -116,28 +223,72 @@
       {:else}
         {@const u = line.user}
         {@const country = flag(u.countryCode)}
+        {@const can = powers(u.username)}
         <div
           role="row"
           {...list.line(line, i)}
           class={[
-            "flex items-center gap-1.5 rounded-badge px-1 py-0.5 text-sm hover:bg-hover",
+            "group flex items-center gap-1.5 rounded-badge px-1 py-0.5 text-sm hover:bg-hover",
             list.selected.has(u.username) && "bg-accent-soft/60",
             list.isFocused(line) && "ring-1 ring-accent ring-inset",
             members.users.removed.has(u.username) && "opacity-40"
           ]}>
           <span role="gridcell" class="flex min-w-0 flex-1 items-center gap-1.5">
             <Presence presence={u.status} />
-            <span class="w-5 text-center" title={u.countryCode ?? "?"}>{country ?? "?"}</span>
+            <span class="w-5 shrink-0 text-center" title={u.countryCode ?? "?"}
+              >{country ?? "?"}</span>
             <span class={["min-w-0 truncate", blocked(u.username) && "line-through"]}>
-              <Username name={u.username} />
+              <Username name={u.username} card />
             </span>
-            {#if blocked(u.username)}<span class="size-2 rounded-full bg-danger" title="blocked"
-              ></span
+            {#if u.username === room?.owner}<CrownIcon
+                class="size-3 shrink-0 text-warning"
+                aria-label="owner" />{/if}
+            {#if blocked(u.username)}<span
+                class="size-2 shrink-0 rounded-full bg-danger"
+                title="blocked"></span
               >{/if}
             {#if u.self}<span class="text-xs text-accent">you</span>{/if}
           </span>
           <span role="gridcell" class="shrink-0 text-right text-xs text-fg-muted tabular-nums"
             >{formatSpeed(u.averageSpeed)} · {u.fileCount.toLocaleString()}</span>
+          {#if can}
+            <Menu.Root
+              open={menuFor === u.username}
+              onOpenChange={(o) => (menuFor = o ? u.username : null)}>
+              <Menu.Trigger>
+                {#snippet child({ props })}
+                  <Button
+                    {...props}
+                    variant="ghost"
+                    size="icon-sm"
+                    class="shrink-0 row-action"
+                    aria-label={`Manage ${u.username}`}><EllipsisIcon /></Button>
+                {/snippet}
+              </Menu.Trigger>
+              <Menu.Content align="end" class="min-w-48">
+                {#if can.promote}
+                  <Menu.Item
+                    onSelect={() =>
+                      void members
+                        .addOperator(u.username)
+                        .then(report(`${u.username} is an operator now`))}
+                    ><ShieldIcon />Make operator</Menu.Item>
+                {/if}
+                {#if can.demote}
+                  <Menu.Item
+                    onSelect={() =>
+                      void members
+                        .removeOperator(u.username)
+                        .then(report(`${u.username} is no longer an operator`))}
+                    ><ShieldIcon />Remove as operator</Menu.Item>
+                {/if}
+                {#if can.remove}
+                  <Menu.Item onSelect={() => remove(u.username)}
+                    ><UserMinusIcon />Remove from the room</Menu.Item>
+                {/if}
+              </Menu.Content>
+            </Menu.Root>
+          {/if}
         </div>
       {/if}
     {/each}
