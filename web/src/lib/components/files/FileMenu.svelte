@@ -62,7 +62,7 @@
         <Menu.Item onSelect={onpreview}><PlayIcon />Preview</Menu.Item>
       {/if}
       <Menu.Item onSelect={() => window.location.assign(local.download)}>
-        <SaveIcon />Download to device
+        <SaveIcon />Save to this device
       </Menu.Item>
     {/if}
   </Menu.Content>

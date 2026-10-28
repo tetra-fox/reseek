@@ -178,7 +178,7 @@
           <tr>
             <th class="w-10">
               <Checkbox
-                aria-label="Select every file in the folder and under it"
+                aria-label="Select every file in this folder and its subfolders"
                 checked={allTicked(candidates)}
                 indeterminate={someTicked(candidates)}
                 onCheckedChange={(on) => tick(candidates, on)} />
@@ -213,14 +213,14 @@
                     {child.totalFileCount
                       ? plural(child.totalFileCount, "file", "files")
                       : "0 files"}{child.totalDirectoryCount
-                      ? `, ${plural(child.totalDirectoryCount, "directory", "directories")}`
+                      ? `, ${plural(child.totalDirectoryCount, "folder", "folders")}`
                       : ""}
                   </span>
                   <Button
                     variant="ghost"
                     size="icon-sm"
                     class="ml-auto row-action"
-                    aria-label="Navigate to this directory"
+                    aria-label="Open this folder"
                     onclick={(e) => {
                       e.stopPropagation();
                       onnavigate(child.name);

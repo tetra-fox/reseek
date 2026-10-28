@@ -74,13 +74,9 @@
 <Dialog
   bind:open
   title={folder}
-  description={`Every file under it from ${username}`}
+  description={`Every file in this folder and its subfolders, from ${username}`}
   class="w-[min(56rem,calc(100vw-2rem))]">
-  <Input
-    bind:value={text}
-    type="search"
-    placeholder="Filter, like the search results"
-    aria-label="Filter" />
+  <Input bind:value={text} type="search" placeholder="Filter files" aria-label="Filter" />
   {#if shown.length > CAP}
     <Notice kind="warning">
       {CAP.toLocaleString()} of {shown.length.toLocaleString()} files listed; filter to find the rest.

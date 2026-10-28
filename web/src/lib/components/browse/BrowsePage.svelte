@@ -231,17 +231,14 @@
         </ul>
       </section>
     {:else}
-      <EmptyState
-        icon={FolderOpenIcon}
-        title="Browse someone's shares"
-        description="Type a username above and press Enter to see every folder they share; the users you browse are listed here next time." />
+      <EmptyState icon={FolderOpenIcon} title="Browse a user's shares" />
     {/if}
   {/if}
 
   {#if browser.phase === "pending"}
     {@const percent = Math.round(browser.progress?.percentComplete ?? 0)}
     <div class="flex flex-col items-center gap-3 py-10" role="status">
-      <p class="text-lg">Downloaded {percent}% of Response</p>
+      <p class="text-lg">Loading shares... {percent}%</p>
       <div
         class="h-1.5 w-64 overflow-hidden rounded-full bg-surface-muted ring-1 ring-border"
         role="progressbar"
@@ -262,17 +259,17 @@
     </div>
   {:else if browser.phase === "error"}
     <div class="mt-12 flex flex-col items-center gap-1 text-center">
-      <p class="text-lg">Failed to browse {browser.username}</p>
+      <p class="text-lg">Couldn't browse {browser.username}</p>
       {#if browser.errorMessage}<p class="text-sm text-fg-muted">{browser.errorMessage}</p>{/if}
     </div>
   {:else if !browser.tree.roots.length}
     {#if browser.restoring}
       <div class="flex flex-col items-center gap-3 py-10" role="status">
         <Spinner class="size-6" />
-        <p class="text-lg">Loading saved results</p>
+        <p class="text-lg">Loading saved shares...</p>
       </div>
     {:else if browser.phase === "complete"}
-      <EmptyState icon={FolderOpenIcon} title="User is not sharing any files" />
+      <EmptyState icon={FolderOpenIcon} title={`${browser.username} isn't sharing any files`} />
     {/if}
   {:else}
     <section class="flex flex-col rounded-card border bg-surface shadow-card">
@@ -282,8 +279,9 @@
           <span class="text-sm text-fg-muted">
             {(info.files + info.lockedFiles).toLocaleString()} files in {(
               info.directories + info.lockedDirectories
-            ).toLocaleString()} directories (including {info.lockedFiles.toLocaleString()} files in
-            {info.lockedDirectories.toLocaleString()} locked directories), {formatBytes(info.bytes)}
+            ).toLocaleString()} folders, {formatBytes(info.bytes)}{info.lockedFiles
+              ? ` (${info.lockedFiles.toLocaleString()} files in ${info.lockedDirectories.toLocaleString()} folders are locked)`
+              : ""}
           </span>
         {/if}
         {#if canWrite}
@@ -292,7 +290,7 @@
             size="sm"
             class="ml-auto"
             href={href(`/searches?user=${encodeURIComponent(browser.username)}`)}>
-            <SearchIcon />Search this user
+            <SearchIcon />Search this user's shares
           </Button>
         {/if}
       </header>
@@ -319,7 +317,7 @@
             query = "";
             if (browser.directory) void tree?.navigate(browser.directory);
           }}>
-          <CrosshairIcon />Show selected directory
+          <CrosshairIcon />Show selected folder
         </Button>
       </div>
       <div class="border-t">

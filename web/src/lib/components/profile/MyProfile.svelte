@@ -84,7 +84,7 @@
       return;
     }
     if (file.size > MAX_PICTURE) {
-      error = "Choose a picture of at most 1 MiB";
+      error = "Choose a picture no larger than 1 MiB";
       return;
     }
     error = "";
@@ -124,7 +124,7 @@
     for (const step of steps) {
       const outcome = await step();
       if (!outcome.ok) {
-        error = outcome.error ?? "Not saved";
+        error = outcome.error ?? "Couldn't save the profile";
         break;
       }
     }
@@ -166,12 +166,12 @@
   <Skeleton class="h-80" />
 {:else}
   <div class="grid gap-section md:grid-cols-2">
-    <Card title="Edit">
+    <Card title="Edit profile">
       <div class="flex items-center gap-4">
         <!-- a picture dropped here is taken like one picked -->
         <div
           role="region"
-          aria-label="Picture, drop one here"
+          aria-label="Picture: drop an image here"
           class={["rounded-full", over && "ring-2 ring-accent"]}
           ondragover={(e) => {
             if (!canPicture) return;

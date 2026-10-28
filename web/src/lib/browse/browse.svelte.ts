@@ -152,10 +152,7 @@ class Browse {
     if (on) {
       const added = filenames.filter((f) => !this.selected.has(f)).length;
       if (this.selected.size + added > MAX_SELECTED_FILES) {
-        toast(
-          "Maximum number of selected files is limited to 5,000. Narrow your selection.",
-          "error"
-        );
+        toast("You can select at most 5,000 files.", "error");
         return false;
       }
     }
@@ -236,7 +233,7 @@ class Browse {
       localStorage.setItem(META_KEY, JSON.stringify(meta));
     } catch (e) {
       if (e instanceof DOMException && e.name === "QuotaExceededError") {
-        toast("Selection is too large to save, try selecting fewer files.", "error");
+        toast("The selection is too large to save. Select fewer files.", "error");
       }
       // other refusals (blocked storage) leave the screen as it is, unsaved
     }
