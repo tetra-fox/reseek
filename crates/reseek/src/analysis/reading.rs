@@ -9,12 +9,12 @@ use std::collections::BTreeMap;
 use api_types::analysis::{AnalysisFlag, AnalysisMeasures, AnalysisVerdict, EncoderGuess};
 
 use super::engine::Measured;
+use super::flags::findings;
 use super::measure::Window;
 use super::thresholds::{
   CLUSTER_HZ, CONFIDENCE_CAP, CONSISTENT_SHARE, FEW_WINDOWS, FRAME_ARTEFACTS_PRESENT, FULL_BAND,
   HIGH_BITRATE_KBPS, HOLES_PRESENT, INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE,
-  MONO_CORRELATION, MONO_SIDE_DB, NATURAL_LIMIT, Profile, QUIET_DBFS, SHARP_SHELF_DB,
-  TRANSCODE_SHARE, UPSAMPLED_BELOW, profile_at,
+  NATURAL_LIMIT, Profile, QUIET_DBFS, SHARP_SHELF_DB, TRANSCODE_SHARE, profile_at,
 };
 
 /// The width of a cutoff histogram bucket, in Hz.
@@ -109,44 +109,10 @@ pub(super) fn read(measured: &Measured) -> Reading {
     .collect();
   let upsample_ratio = (claimed.sample_rate > 48_000).then(|| upsample_ratio(&windows));
   let measures = measures(measured, &windows, upsample_ratio);
-  let mut flags = Vec::new();
-  let mut notes = Vec::new();
-  let upsampled = upsample_ratio.is_some_and(|r| r < UPSAMPLED_BELOW);
-  if upsampled {
-    flags.push(AnalysisFlag::Upsampled);
-    notes.push(format!(
-      "Almost nothing is above {}, so the audio was probably made at a lower sample rate.",
-      khz(nyquist / 2.0)
-    ));
-  }
-  if let (Some(claim), Some(used)) = (claimed.bit_depth, measures.bit_depth_effective)
-    && claim > 16
-    && used <= 16
-  {
-    flags.push(AnalysisFlag::BitPadded);
-    notes.push(format!(
-      "The samples use only {used} of their {claim} bits."
-    ));
-  }
-  if measures
-    .stereo_correlation
-    .is_some_and(|c| c > MONO_CORRELATION)
-    && measures.side_energy_db.is_some_and(|s| s <= MONO_SIDE_DB)
-  {
-    notes.push("The two channels are the same, so the source was probably mono.".to_string());
-  }
   let median = measures.cutoff_median_hz.map(f64::from);
+  let found_beside = findings(claimed, &windows, median, &measures);
   // an upsampled file is judged against the band of the rate it was made at
-  let top = match median {
-    Some(m) if upsampled => {
-      if m <= 22_050.0 + CLUSTER_HZ {
-        22_050.0
-      } else {
-        24_000.0
-      }
-    }
-    _ => nyquist,
-  };
+  let top = found_beside.source_edge.unwrap_or(nyquist);
   let heard = Heard { windows, top };
   let mut limitations = measured.problems.clone();
   if measured.sampled {
@@ -161,7 +127,7 @@ pub(super) fn read(measured: &Measured) -> Reading {
       claimed.channels
     ));
   }
-  let found = verdict(
+  let mut found = verdict(
     &heard,
     median,
     &measures,
@@ -175,14 +141,36 @@ pub(super) fn read(measured: &Measured) -> Reading {
     limitations
       .push("The audio is quiet, which makes the upper band harder to measure.".to_string());
   }
+  if let Some(edge) = found_beside.source_edge
+    && let Some(profile) = profile_at(edge)
+    && found.verdict != AnalysisVerdict::MixedSources
+  {
+    // the edge of the lower rate is also where an encoder cuts: either could be the source
+    found = Verdict {
+      verdict: AnalysisVerdict::Inconclusive,
+      confidence: 0.4,
+      encoder_guess: Some(EncoderGuess {
+        profile: profile.name.to_string(),
+        confidence: 0.4,
+      }),
+      summary: format!(
+        "The content stops at {}, the top of the band a lower sample rate holds and also \
+         where an encoder at {} cuts off; the analyser can not tell which made it.",
+        khz(edge),
+        profile.name
+      ),
+      limitations: Vec::new(),
+      cutoff_hz: Some(edge),
+    };
+  }
   limitations.extend(found.limitations);
   Reading {
     verdict: found.verdict,
     confidence: found.confidence,
-    flags,
+    flags: found_beside.flags,
     encoder_guess: found.encoder_guess,
     summary: std::iter::once(found.summary)
-      .chain(notes)
+      .chain(found_beside.notes)
       .collect::<Vec<_>>()
       .join(" "),
     measures,

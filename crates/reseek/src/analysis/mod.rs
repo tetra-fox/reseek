@@ -7,6 +7,7 @@
 
 mod decode;
 mod engine;
+mod flags;
 mod jobs;
 mod measure;
 mod reading;
