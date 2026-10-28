@@ -79,13 +79,14 @@
 
 <!-- on a wide screen the log is a panel in the shell, above the footer, that takes its height
      from the content area and slides it up as it opens; a phone has no room to spare for one,
-     so there it is a sheet over the bottom of the screen -->
+     so there it is a sheet over the bottom of the screen, standing on the footer at the height
+     the shell measures for it -->
 <section
   aria-label="Activity on the network"
   class={[
     "flex flex-col border-t",
     viewport.phone
-      ? "fixed inset-x-0 bottom-10 z-20 h-72 max-h-[45svh] bg-surface/95 shadow-raised backdrop-blur-md"
+      ? "fixed inset-x-0 bottom-(--bottom-h) z-20 h-72 max-h-[45svh] bg-surface/95 shadow-raised backdrop-blur-md"
       : "relative bg-surface"
   ]}
   style:height={viewport.phone ? undefined : `${height}px`}
