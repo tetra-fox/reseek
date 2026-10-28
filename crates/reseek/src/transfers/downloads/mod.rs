@@ -47,6 +47,7 @@ use crate::files::Files;
 use crate::live::Live;
 use crate::network::Network;
 use crate::paths::Paths;
+use crate::relay::Controller;
 use crate::searches::Searches;
 use crate::sync::lock;
 use crate::telemetry::Telemetry;
@@ -86,6 +87,8 @@ pub struct Downloads {
   events: EventBus,
   live: Live,
   telemetry: Arc<Telemetry>,
+  /// the relay controller, told of every finished download, in controller and debug mode
+  relay: Option<Arc<Controller>>,
   incomplete: PathBuf,
   downloads: PathBuf,
   shutdown: CancellationToken,
@@ -106,8 +109,8 @@ impl Downloads {
   /// The engine over `transfers.db`, reaching peers through `network`, asking `users` who is
   /// blocked, marking the files it writes in `files`, reading what a batch searched for from
   /// `searches`, raising its events on `events`, pushing
-  /// its records to `live` and counting the downloads that end in `telemetry`. Its tasks end
-  /// when `shutdown` is cancelled.
+  /// its records to `live`, counting the downloads that end in `telemetry` and telling `relay`
+  /// of each that finished. Its tasks end when `shutdown` is cancelled.
   #[allow(
     clippy::too_many_arguments,
     reason = "the engine takes each part of the daemon it uses"
@@ -122,6 +125,7 @@ impl Downloads {
     events: EventBus,
     live: Live,
     telemetry: Arc<Telemetry>,
+    relay: Option<Arc<Controller>>,
     paths: &Paths,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
@@ -136,6 +140,7 @@ impl Downloads {
       events,
       live,
       telemetry,
+      relay,
       incomplete: paths.incomplete.clone(),
       downloads: paths.downloads.clone(),
       shutdown,

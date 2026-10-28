@@ -171,9 +171,7 @@ mod tests {
 
   #[tokio::test]
   async fn a_relay_agent_refuses_exactly_the_network_routes() {
-    let agent = CONFIG.replace("mode = \"debug\"", "mode = \"agent\"")
-      + "[relay.controller]\naddress = \"https://controller.lan:5031\"\n\
-         api_key = \"controller-key-012345\"\nsecret = \"controller-secret-0123\"\n";
+    let agent = CONFIG.replace("mode = \"debug\"", "mode = \"agent\"");
     let app = app(&agent, &[]).await;
     let document = serde_json::to_value(crate::api::openapi()).unwrap();
     let operations = in_order();

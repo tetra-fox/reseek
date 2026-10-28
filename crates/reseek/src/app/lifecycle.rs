@@ -5,8 +5,8 @@
 //! anything can start new ones; then, in the background, the client's events and the options
 //! are followed, whether other users can reach us is judged and the router is asked to forward
 //! our peer port while we are logged in, the release feed is read, the shares are initialized,
-//! the clock starts, and the watchdog connects, unless this is a relay agent, connecting is
-//! turned off or there are no credentials. Stopping, once the HTTP host has stopped: the
+//! the clock starts, a relay agent dials its controller, and the watchdog connects, unless
+//! this is a relay agent, connecting is turned off or there are no credentials. Stopping, once the HTTP host has stopped: the
 //! running searches end as cancelled, the watchdog stops, the port mapping is removed, the
 //! client disconnects and is disposed, the events this raised are handled, the session is
 //! closed, the statistics fetched again and the transfer tasks end, the transfers still
@@ -127,6 +127,9 @@ async fn run(app: AppState) {
   app.clock.start();
 
   let relay = &options.relay;
+  if let Some(agent) = &app.relay.agent {
+    agent.start();
+  }
   if relay.enabled && relay.mode == RelayMode::Agent {
     info!("Running in Agent relay mode; not connecting to the Soulseek server.");
     return;

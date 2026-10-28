@@ -58,9 +58,8 @@ impl Downloads {
     record.local_path = Some(path.display().to_string());
     self.save(&record, false).await;
     info!(path = %path.display(), "download moved into the downloads directory");
-    if options.relay.enabled {
-      // the relay controller learns of finished downloads once the relay runs
-      debug!(path = %path.display(), "relay controller not told of the download; the relay is not running");
+    if let Some(relay) = &self.relay {
+      relay.download_completed(&path).await;
     }
     let ended_at = record.ended_at.unwrap_or_else(Utc::now);
     self.events.raise_at(

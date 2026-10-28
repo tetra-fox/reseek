@@ -17,7 +17,7 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, SemaphorePermit};
 use tracing::{debug, info, trace, warn};
 
 use super::{Uploads, limits};
-use crate::shares::Resolved;
+use crate::shares::{LOCAL_HOST, Resolved};
 use crate::sync::lock;
 use crate::telemetry::millis;
 use crate::users::PRIVILEGED;
@@ -261,8 +261,9 @@ impl Uploads {
   }
 
   /// Where the shared file `filename` is, with its size on disk; `None` when it is not shared
-  /// or is gone from disk. A file gone, or whose size changed, asks the shares for a scan; one
-  /// that changed is taken at its size on disk.
+  /// or is gone from disk. A local file gone, or whose size changed, asks the shares for a
+  /// scan; one that changed is taken at its size on disk. A relay agent's file is taken at its
+  /// indexed size when the options trust agents' listings, else the agent is asked.
   pub(super) async fn locate(&self, filename: &str) -> Result<Option<Located>, ClientError> {
     let resolved =
       self.shares.resolve_file(filename).await.map_err(|e| {
@@ -272,6 +273,9 @@ impl Uploads {
       trace!(filename, "requested file not shared");
       return Ok(None);
     };
+    if resolved.host != LOCAL_HOST {
+      return Ok(self.locate_on_agent(filename, resolved).await);
+    }
     let size = match tokio::fs::metadata(&resolved.path).await {
       Ok(metadata) if metadata.is_file() => metadata.len(),
       found => {
@@ -301,6 +305,42 @@ impl Uploads {
       self.scan_needed().await;
     }
     Ok(Some(Located { resolved, size }))
+  }
+
+  /// The relay agent's file `filename`, `resolved` from its index; `None` when its agent is not
+  /// ready, or says the file is gone, or does not answer in time.
+  async fn locate_on_agent(&self, filename: &str, resolved: Resolved) -> Option<Located> {
+    let relay = self
+      .relay
+      .as_ref()
+      .expect("only a relay controller has agents' shares");
+    let agent = resolved.host.as_str();
+    if !relay.ready(agent) {
+      debug!(agent, filename, "the agent holding the file is not ready");
+      return None;
+    }
+    if self.trusts_agents {
+      let size = resolved.size;
+      return Some(Located { resolved, size });
+    }
+    let (exists, length) = relay.file_info(agent, filename).await?;
+    if !exists || length == 0 {
+      debug!(agent, filename, "The file could not be located on Agent");
+      return None;
+    }
+    if length != resolved.size {
+      warn!(
+        agent,
+        filename,
+        indexed = resolved.size,
+        length,
+        "The file's size differs between the share and disk. A share scan should be performed"
+      );
+    }
+    Some(Located {
+      resolved,
+      size: length,
+    })
   }
 
   /// Asks the shares for a scan, after a shared file was found missing or changed.

@@ -52,6 +52,11 @@ impl ApiError {
     Self::new(StatusCode::UNAUTHORIZED, error, None)
   }
 
+  /// A 426: the request must be a WebSocket upgrade offering a protocol this side speaks.
+  pub fn upgrade_required(error: impl Into<String>) -> Self {
+    Self::new(StatusCode::UPGRADE_REQUIRED, error, None)
+  }
+
   /// A 403: the principal's role or credential may not do this, or the feature is off.
   pub fn forbidden(error: impl Into<String>) -> Self {
     Self::new(StatusCode::FORBIDDEN, error, None)

@@ -38,6 +38,7 @@ use crate::logging::{self, LogBuffer, Logging, Sinks};
 use crate::messaging::Messaging;
 use crate::network::Network;
 use crate::paths::{Defaults, InstanceLock, Paths};
+use crate::relay::Relay;
 use crate::scripts::{self, Scripts};
 use crate::searches::Searches;
 use crate::services::Services;
@@ -121,6 +122,8 @@ pub struct AppState {
   pub files: Arc<Files>,
   /// what we share, with the queries other users are answered from
   pub shares: Arc<Shares>,
+  /// the relay controller and the connection to a controller, as relay mode asks
+  pub relay: Arc<Relay>,
   /// the Soulseek client and what keeps it connected
   pub network: Arc<Network>,
   /// the searches we start
@@ -216,6 +219,7 @@ impl AppState {
     let shares = Shares::open(config.clone(), &paths, state.clone(), shutdown.clone())
       .await
       .map_err(|e| StartError::Open(format!("shares.local.db: {e}")))?;
+    let relay = Relay::new(&config, &shares, &events, &state, &paths, &shutdown);
     let network = Network::new(
       &config,
       users.clone(),
@@ -262,6 +266,7 @@ impl AppState {
       events.clone(),
       live.clone(),
       telemetry.clone(),
+      relay.controller.clone(),
       &paths,
       shutdown.clone(),
     );
@@ -274,6 +279,7 @@ impl AppState {
       events.clone(),
       live.clone(),
       telemetry.clone(),
+      relay.controller.clone(),
       shutdown.clone(),
     );
     network.attach_uploads(uploads.clone());
@@ -298,6 +304,7 @@ impl AppState {
       crate::api::agent::is_agent(&startup.values),
     ));
     services.blocking = users.clone();
+    services.relay = relay.clone();
     let databases = Arc::new(Databases::new(vec![
       auth.db.clone(),
       event_log_db,
@@ -334,6 +341,7 @@ impl AppState {
       users,
       files,
       shares,
+      relay,
       network,
       searches,
       messaging,

@@ -22,6 +22,7 @@ pub mod messaging;
 pub mod network;
 pub mod paths;
 pub mod profile;
+pub mod relay;
 pub mod safety;
 pub mod scripts;
 pub mod searches;

@@ -8,8 +8,9 @@
 
 use api_types::auth::{Principal, Via};
 use api_types::relay::{RelayAgentState, RelayFileUploadResult, RelayState};
+use axum::Extension;
 use axum::extract::multipart::MultipartRejection;
-use axum::extract::{Multipart, Request, State};
+use axum::extract::{DefaultBodyLimit, Multipart, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use base64::Engine;
@@ -21,7 +22,7 @@ use uuid::Uuid;
 use super::error::ApiError;
 use super::extract::{Json, Path};
 use crate::app::AppState;
-use crate::auth::{Administrator, AnyRole, Authorized, ReadWrite, require_interactive};
+use crate::auth::{Administrator, AnyRole, Authorized, Client, ReadWrite, require_interactive};
 use crate::config::Options;
 use crate::config::enums::RelayMode;
 use crate::safety::traverses;
@@ -39,6 +40,9 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(receive_file))
     .routes(routes!(serve_download))
     .routes(routes!(socket))
+    // an agent's share database and its files are as large as they are; the share upload
+    // caps its database itself
+    .layer(DefaultBodyLimit::disable())
 }
 
 /// The side of a relay a route is for.
@@ -82,9 +86,9 @@ fn stored_credential(principal: &Principal, options: &Options) -> Result<(), Api
   }
 }
 
-/// The agent a request names in `X-Relay-Agent` with its `X-Relay-Credential`; a request
-/// missing either is refused with 401.
-fn agent_credential(headers: &HeaderMap) -> Result<AgentCredential, ApiError> {
+/// The agent a request from `client` names in `X-Relay-Agent` with its `X-Relay-Credential`; a
+/// request missing either is refused with 401.
+fn agent_credential(headers: &HeaderMap, client: &Client) -> Result<AgentCredential, ApiError> {
   let header = |name: &str| {
     headers
       .get(name)
@@ -93,7 +97,11 @@ fn agent_credential(headers: &HeaderMap) -> Result<AgentCredential, ApiError> {
       .map(str::to_string)
   };
   match (header("x-relay-agent"), header("x-relay-credential")) {
-    (Some(agent), Some(credential)) => Ok(AgentCredential { agent, credential }),
+    (Some(agent), Some(credential)) => Ok(AgentCredential {
+      agent,
+      credential,
+      address: client.ip,
+    }),
     _ => Err(ApiError::unauthorized(
       "X-Relay-Agent and X-Relay-Credential are required",
     )),
@@ -253,6 +261,7 @@ async fn receive_shares(
   State(app): State<AppState>,
   caller: Authorized<ReadWrite>,
   Path(text): Path<String>,
+  Extension(client): Extension<Client>,
   headers: HeaderMap,
   upload: Result<Multipart, MultipartRejection>,
 ) -> Result<StatusCode, ApiError> {
@@ -261,7 +270,7 @@ async fn receive_shares(
   stored_credential(&caller.principal, options)?;
   let token = token(&text, "Token is not a valid Guid")?;
   let upload = form(upload)?;
-  let agent = agent_credential(&headers)?;
+  let agent = agent_credential(&headers, &client)?;
   app
     .services
     .relay
@@ -292,6 +301,7 @@ async fn receive_file(
   State(app): State<AppState>,
   caller: Authorized<ReadWrite>,
   Path(text): Path<String>,
+  Extension(client): Extension<Client>,
   headers: HeaderMap,
   upload: Result<Multipart, MultipartRejection>,
 ) -> Result<Json<RelayFileUploadResult>, ApiError> {
@@ -300,7 +310,7 @@ async fn receive_file(
   stored_credential(&caller.principal, options)?;
   let token = token(&text, "Token is not a valid Guid")?;
   let upload = form(upload)?;
-  let agent = agent_credential(&headers)?;
+  let agent = agent_credential(&headers, &client)?;
   app
     .services
     .relay
@@ -330,13 +340,14 @@ async fn serve_download(
   State(app): State<AppState>,
   caller: Authorized<AnyRole>,
   Path(text): Path<String>,
+  Extension(client): Extension<Client>,
   headers: HeaderMap,
 ) -> Result<Response, ApiError> {
   let options = &app.startup.values;
   mode(options, Some(Side::Controller))?;
   stored_credential(&caller.principal, options)?;
   let token = token(&text, "Token is not in a valid format")?;
-  let agent = agent_credential(&headers)?;
+  let agent = agent_credential(&headers, &client)?;
   let filename = download_filename(&headers)?;
   app
     .services

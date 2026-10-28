@@ -13,13 +13,15 @@ use crate::api::error::ApiError;
 const DOMAIN: &str = "relay";
 
 /// Who an agent's request says it is: its instance name and the credential it made for the
-/// request's token.
+/// request's token, with the address the request came from.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AgentCredential {
   /// the agent's instance name, from `X-Relay-Agent`
   pub agent: String,
   /// the credential for the token, from `X-Relay-Credential`
   pub credential: String,
+  /// the address the request came from
+  pub address: std::net::IpAddr,
 }
 
 /// The agents connected to this controller with what they send it, and this agent's own

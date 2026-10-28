@@ -40,6 +40,7 @@ use crate::db::Database;
 use crate::events::EventBus;
 use crate::live::Live;
 use crate::network::Network;
+use crate::relay::Controller;
 use crate::shares::Shares;
 use crate::sync::lock;
 use crate::telemetry::Telemetry;
@@ -80,6 +81,10 @@ pub struct Uploads {
   events: EventBus,
   live: Live,
   telemetry: Arc<Telemetry>,
+  /// the relay controller, which serves the files of its agents, in controller and debug mode
+  relay: Option<Arc<Controller>>,
+  /// an agent's file is taken as its index has it, without asking the agent
+  trusts_agents: bool,
   shutdown: CancellationToken,
   /// every upload task, so the stop waits for them
   tasks: TaskTracker,
@@ -92,8 +97,8 @@ pub struct Uploads {
 impl Uploads {
   /// The engine over `transfers.db`, uploading through `network`'s client, finding files in
   /// `shares` and users' groups in `users`, raising its events on `events`, pushing its
-  /// records to `live` and counting in `telemetry`. It follows the options until `shutdown`,
-  /// which also ends its tasks.
+  /// records to `live`, counting in `telemetry` and getting relay agents' files from `relay`. It
+  /// follows the options until `shutdown`, which also ends its tasks.
   #[allow(
     clippy::too_many_arguments,
     reason = "the engine takes each part of the daemon it uses"
@@ -107,6 +112,7 @@ impl Uploads {
     events: EventBus,
     live: Live,
     telemetry: Arc<Telemetry>,
+    relay: Option<Arc<Controller>>,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
     let options = config.current().values.clone();
@@ -121,6 +127,8 @@ impl Uploads {
       events,
       live,
       telemetry,
+      relay,
+      trusts_agents: options.flags.optimistic_relay_file_info,
       shutdown,
       tasks: TaskTracker::new(),
       in_flight: Mutex::new(HashMap::new()),

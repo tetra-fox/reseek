@@ -100,8 +100,9 @@ pub struct RelayController {
   /// Fetches finished downloads from the controller.
   #[cascade(env = "RESEEK_CONTROLLER_DOWNLOADS", cli = "--controller-downloads")]
   pub downloads: bool,
-  /// Glob patterns on a finished download's path under the controller's downloads directory;
-  /// only the downloads one matches are fetched, every one when empty.
+  /// Glob patterns on a finished download's path under the controller's downloads directory,
+  /// written with `/` between its parts; only the downloads one matches are fetched, every one
+  /// when empty.
   #[cascade(env = "RESEEK_CONTROLLER_DOWNLOADS_FILTER")]
   pub downloads_filter: Vec<String>,
 }

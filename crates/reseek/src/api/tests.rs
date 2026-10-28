@@ -102,7 +102,7 @@ fn answered_here(operation: &Operation) -> bool {
     || under("/api/v0/tokens")
     || under("/api/v0/auth")
     || route == "/api/v0/live"
-    || (route == "/api/v0/relay" && operation.method == Method::GET)
+    || under("/api/v0/relay")
     || under("/api/v0/events")
     || under("/api/v0/activity")
     || under("/api/v0/telemetry")

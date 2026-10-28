@@ -9,11 +9,12 @@ use std::time::Duration;
 
 use api_types::events::{Event, UploadFileComplete};
 use api_types::live::LiveFrame;
+use api_types::relay::RelayUploadOutcome;
 use api_types::transfers::{TransferDirection, TransferStates};
 use chrono::Utc;
 use soulseek_client::{
-  ClientError, LogLimiter, ProgressUpdated, SlotAwaiter, SlotReleased, StateChanged,
-  Transfer as Snapshot, TransferOptions, UploadInput, UploadRequest,
+  ClientError, InputFactory, LogLimiter, ProgressUpdated, SlotAwaiter, SlotReleased, StateChanged,
+  Transfer as Snapshot, TransferOptions, UploadInput, UploadRequest, UploadSource,
 };
 use tokio::sync::{mpsc, watch};
 use tokio::time::Instant;
@@ -23,6 +24,8 @@ use uuid::Uuid;
 
 use super::Uploads;
 use super::intake::Located;
+use crate::relay::Controller;
+use crate::shares::LOCAL_HOST;
 use crate::sync::lock;
 use crate::transfers::{Record, removal, store};
 
@@ -38,6 +41,18 @@ const FILE_GONE: &str = "File could not be found";
 /// Progress not written, which a failing database would repeat four times a second.
 static PROGRESS_UNWRITTEN: LogLimiter = LogLimiter::new();
 
+/// The kind of the input error `error` ended with, when it ended with one: a relay agent's
+/// file that is not there, or did not come in time, fails its upload as such.
+fn input_error(error: &ClientError) -> Option<&std::io::Error> {
+  match error {
+    ClientError::Io {
+      source: Some(source),
+      ..
+    } => source.downcast_ref::<std::io::Error>(),
+    _ => None,
+  }
+}
+
 /// The outcome flag an upload that ended with `error` is written with.
 fn outcome(error: &ClientError) -> TransferStates {
   match error {
@@ -45,16 +60,32 @@ fn outcome(error: &ClientError) -> TransferStates {
     ClientError::Timeout(_) => TransferStates::TimedOut,
     ClientError::TransferRejected(_) => TransferStates::Rejected,
     ClientError::NotFound(_) => TransferStates::Aborted,
-    _ => TransferStates::Errored,
+    other => match input_error(other).map(std::io::Error::kind) {
+      Some(std::io::ErrorKind::NotFound) => TransferStates::Aborted,
+      Some(std::io::ErrorKind::TimedOut) => TransferStates::TimedOut,
+      _ => TransferStates::Errored,
+    },
   }
 }
 
 /// Why an upload that ended with `error` failed, as its record shows it: the peer's refusal as
-/// it sent it, else the error's text.
+/// it sent it, why a relay agent's file did not come, else the error's text.
 fn reason(error: &ClientError) -> String {
   match error {
     ClientError::TransferRejected(reason) | ClientError::NotFound(reason) => reason.clone(),
-    other => other.to_string(),
+    other => match input_error(other) {
+      Some(input) => input.to_string(),
+      None => other.to_string(),
+    },
+  }
+}
+
+/// How the relay controller tells the agent an upload of its file ended.
+fn relayed(result: &Result<Snapshot, ClientError>, record: &Record) -> (RelayUploadOutcome, u64) {
+  match result {
+    Ok(transfer) => (RelayUploadOutcome::Succeeded, transfer.bytes_transferred),
+    Err(ClientError::Cancelled) => (RelayUploadOutcome::Cancelled, record.bytes_transferred),
+    Err(_) => (RelayUploadOutcome::Failed, record.bytes_transferred),
   }
 }
 
@@ -121,12 +152,15 @@ impl Uploads {
     let username = record.username.clone();
     let users = self.users.clone();
     let (governor, reporter) = self.governor.pace(Arc::new(move || users.group(&username)));
+    let (input, relay) = self.input(&record, &located);
     let request = UploadRequest {
       username: record.username.clone(),
       filename: record.filename.clone().into(),
-      input: UploadInput::File(located.resolved.path.clone()),
+      input,
       token: None,
       options: TransferOptions {
+        // an agent sends its file from the offset already
+        seek_input_stream_automatically: relay.is_none(),
         governor: Some(governor),
         reporter: Some(reporter),
         state_changed: Some(state_changed),
@@ -160,6 +194,10 @@ impl Uploads {
     while let Ok(snapshot) = states.try_recv() {
       self.state_changed(&mut record, snapshot, &mut ended).await;
     }
+    if let Some(relay) = relay {
+      let (outcome, bytes) = relayed(&result, &record);
+      relay.finished(record.id, outcome, bytes);
+    }
     if self.shutdown.is_cancelled() {
       return debug!("upload left for the stop to end");
     }
@@ -167,6 +205,37 @@ impl Uploads {
       Ok(transfer) => self.succeeded(&mut record, &transfer, &located).await,
       Err(error) => self.fail(&mut record, &error, ended.as_ref()).await,
     }
+  }
+
+  /// What the upload of `record` reads: the local file, or the bytes the relay agent holding it
+  /// sends from the offset the peer asks for, with the controller then.
+  fn input(&self, record: &Record, located: &Located) -> (UploadInput, Option<Arc<Controller>>) {
+    if located.resolved.host == LOCAL_HOST {
+      return (UploadInput::File(located.resolved.path.clone()), None);
+    }
+    let relay = self
+      .relay
+      .clone()
+      .expect("only a relay controller has agents' shares");
+    let (agent, filename, transfer) = (
+      located.resolved.host.clone(),
+      record.filename.clone(),
+      record.id,
+    );
+    let opening = relay.clone();
+    let open: InputFactory = Box::new(move |start| {
+      Box::pin(async move {
+        let stream = opening
+          .open_stream(&agent, &filename, start, transfer)
+          .await?;
+        Ok(Box::new(stream) as Box<dyn UploadSource>)
+      })
+    });
+    let input = UploadInput::Stream {
+      size: located.size,
+      open,
+    };
+    (input, Some(relay))
   }
 
   /// What the client waits on for the upload `id`'s slot: the queue's start, or the cancel.
