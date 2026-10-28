@@ -118,7 +118,9 @@
 
 <section
   class={["flex flex-col rounded-card border bg-surface shadow-card", node.locked && "opacity-50"]}>
-  <header class="flex flex-wrap items-center gap-2 px-4 py-3">
+  <!-- the folder's name and its download stay in view while its files scroll -->
+  <header
+    class="sticky top-14 z-[4] flex flex-wrap items-center gap-2 rounded-t-card border-b bg-surface/95 px-4 py-3 backdrop-blur-md">
     {#if node.locked}
       <span title={LOCKED_HINT}><LockIcon class="size-5 text-fg-muted" /></span>
     {:else}
@@ -138,7 +140,10 @@
           size="sm"
           disabled={!connected || downloading || !node.totalFileCount}
           onclick={() => void downloadFolder()}>
-          <DownloadIcon />Download folder
+          <DownloadIcon />Download this folder
+          <span class="font-normal text-fg-muted">
+            {plural(node.totalFileCount, "file", "files")}, {formatBytes(node.totalBytes)}
+          </span>
         </Button>
       {/if}
       <Button variant="ghost" size="sm" onclick={() => (flatOpen = true)}>
