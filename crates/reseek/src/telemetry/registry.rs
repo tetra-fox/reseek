@@ -1,6 +1,6 @@
-//! The metric primitives and the registry that holds them: counters, gauges and histograms
-//! with fixed buckets, written out in the Prometheus text format 0.0.4 or as the JSON object
-//! the telemetry API returns.
+//! The metric primitives and the registry that holds them: counters, counters kept apart by
+//! labels, gauges and histograms with fixed buckets, written out in the Prometheus text format
+//! 0.0.4 or as the JSON object the telemetry API returns.
 //!
 //! Names are exposed exactly as registered: a counter gets no `_total` added.
 
@@ -31,6 +31,30 @@ impl Counter {
   /// The value.
   pub fn get(&self) -> f64 {
     f64::from_bits(self.0.load(Ordering::Relaxed))
+  }
+}
+
+/// Values that only go up, one for each set of label values counted. Cloning gives another
+/// handle to the same values.
+#[derive(Clone, Debug, Default)]
+pub struct LabelledCounter(Arc<Mutex<BTreeMap<Labels, f64>>>);
+
+impl LabelledCounter {
+  /// Adds one to the value of `labels`, which starts at zero.
+  pub fn inc(&self, labels: &[(&str, &str)]) {
+    let labels: Labels = labels
+      .iter()
+      .map(|(name, value)| (name.to_string(), value.to_string()))
+      .collect();
+    *lock(&self.0).entry(labels).or_default() += 1.0;
+  }
+
+  /// Every value with its labels, ordered by their label values.
+  fn samples(&self) -> Vec<(Labels, f64)> {
+    lock(&self.0)
+      .iter()
+      .map(|(labels, value)| (labels.clone(), *value))
+      .collect()
   }
 }
 
@@ -172,6 +196,7 @@ pub type Labels = BTreeMap<String, String>;
 #[derive(Clone, Debug)]
 enum Metric {
   Counter(Counter),
+  LabelledCounter(LabelledCounter),
   Gauge(Gauge),
   Histogram(Histogram),
 }
@@ -189,6 +214,21 @@ impl Registry {
     self
       .entries
       .push((name.into(), help.into(), Metric::Counter(counter.clone())));
+    counter
+  }
+
+  /// Registers a counter kept apart by its labels.
+  pub fn labelled_counter(
+    &mut self,
+    name: impl Into<String>,
+    help: impl Into<String>,
+  ) -> LabelledCounter {
+    let counter = LabelledCounter::default();
+    self.entries.push((
+      name.into(),
+      help.into(),
+      Metric::LabelledCounter(counter.clone()),
+    ));
     counter
   }
 
@@ -227,6 +267,7 @@ impl Registry {
         help: help.clone(),
         values: match metric {
           Metric::Counter(c) => Values::Counter(vec![(Labels::new(), c.get())]),
+          Metric::LabelledCounter(c) => Values::Counter(c.samples()),
           Metric::Gauge(g) => Values::Gauge(vec![(Labels::new(), g.get())]),
           Metric::Histogram(h) => {
             let (buckets, sum, count) = h.snapshot();
@@ -405,6 +446,25 @@ mod tests {
     assert_eq!(buckets["0.2"].labels.as_ref().unwrap()["le"], "0.2");
     assert_eq!(json["lat"].count, Some(4.0));
     assert_eq!(json["lat"].samples, None);
+  }
+
+  #[test]
+  fn a_labelled_counter_has_a_sample_per_label_set() {
+    let mut registry = Registry::default();
+    let requests = registry.labelled_counter("reseek_requests_total", "requests");
+    assert_eq!(
+      text(&registry.families()),
+      "# HELP reseek_requests_total requests\n# TYPE reseek_requests_total counter\n"
+    );
+    requests.inc(&[("type", "file"), ("outcome", "streamed")]);
+    requests.inc(&[("outcome", "streamed"), ("type", "file")]);
+    requests.inc(&[("type", "login"), ("outcome", "refused")]);
+    assert_eq!(
+      text(&registry.families()),
+      "# HELP reseek_requests_total requests\n# TYPE reseek_requests_total counter\n\
+       reseek_requests_total{outcome=\"refused\",type=\"login\"} 1\n\
+       reseek_requests_total{outcome=\"streamed\",type=\"file\"} 2\n"
+    );
   }
 
   #[test]
