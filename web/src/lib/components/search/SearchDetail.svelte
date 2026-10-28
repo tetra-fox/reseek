@@ -242,7 +242,7 @@
       {search.searchText}
     </h2>
     {#if scopeLabel(search.scope)}<Badge tone="accent">{scopeLabel(search.scope)}</Badge>{/if}
-    <div class="flex gap-inline">
+    <div class="flex flex-wrap gap-inline">
       <Button
         variant="ghost"
         size="icon"

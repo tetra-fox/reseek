@@ -72,13 +72,13 @@
       {/each}
     </div>
     {#if searchOptions.view === "cards"}
-      <div class="flex items-center gap-2">
-        <ArrowUpDownIcon class="size-4 text-fg-muted" />
+      <div class="flex max-w-full min-w-0 items-center gap-2">
+        <ArrowUpDownIcon class="size-4 shrink-0 text-fg-muted" />
         <Select
           bind:value={searchOptions.sort}
           options={SORTS}
           aria-label="Sort"
-          class="w-64"
+          class="w-64 min-w-0"
           disabled={!sortable} />
       </div>
     {/if}
