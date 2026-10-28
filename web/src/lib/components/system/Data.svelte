@@ -10,6 +10,7 @@
   import Card from "#lib/components/ui/Card.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import { sections, valueAt } from "#lib/config/sections.js";
   import { confirmation } from "#lib/confirm.svelte.js";
   import { formatBytes, parseDuration, sayDuration } from "#lib/format.js";
   import { ListControl } from "#lib/list.svelte.js";
@@ -69,12 +70,12 @@
         )
     });
 
-  /** The retention options as dotted keys and their values, for a table */
-  const flatten = (value: unknown, prefix: string): [string, unknown][] =>
-    value && typeof value === "object" && !Array.isArray(value)
-      ? Object.entries(value).flatMap(([k, v]) => flatten(v, `${prefix}.${k}`))
-      : [[prefix, value]];
-  const retention = $derived(flatten(fields(app.options).retention, "retention"));
+  /** The retention options as the settings page names and orders them, with their values */
+  const retention = $derived(
+    sections
+      .find((s) => s.id === "retention")!
+      .fields.map((f) => ({ key: f.key, label: f.label, value: valueAt(app.options, f.key) }))
+  );
   /** a retention option's value as people say it: an age, a count, or kept forever */
   const retentionText = (value: unknown) => {
     if (value === null || value === undefined) return "Kept forever";
@@ -145,11 +146,9 @@
 <Card title="Retention">
   <dl
     class="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-1 text-sm md:grid-cols-[auto_minmax(0,1fr)]">
-    {#each retention as [key, value] (key)}
-      <dt class="font-mono text-xs wrap-anywhere text-fg-muted">{key}</dt>
-      <dd class="max-md:mb-1">
-        {retentionText(value)}
-      </dd>
+    {#each retention as r (r.key)}
+      <dt class="text-fg-muted" title={r.key}>{r.label}</dt>
+      <dd class="max-md:mb-1">{retentionText(r.value)}</dd>
     {/each}
   </dl>
   <a href={href("/system/settings")} class="text-sm text-accent hover:underline"
