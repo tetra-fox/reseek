@@ -9,11 +9,11 @@
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
-  import PinIcon from "@lucide/svelte/icons/pin";
-  import PinOffIcon from "@lucide/svelte/icons/pin-off";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
+  import UserCheckIcon from "@lucide/svelte/icons/user-check";
+  import UserPlusIcon from "@lucide/svelte/icons/user-plus";
 
   import { api, byUser, type Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
@@ -32,6 +32,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
+  import { BUDDY } from "#lib/wording.js";
 
   import { assignGroup, links, pin, userGroups } from "./actions";
   import Avatar from "./Avatar.svelte";
@@ -126,7 +127,7 @@
             {/snippet}
           </Tooltip>
         {/if}
-        {#if p.pinned}<Badge tone="info">pinned</Badge>{/if}
+        {#if p.pinned}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
         {#each p.tags as tag (tag)}
           <a href={href(`/users?tag=${encodeURIComponent(tag)}`)}>
             <Badge tone="outline">{tag}</Badge>
@@ -179,7 +180,7 @@
           ><BanIcon />Block</Button>
       {/if}
       <Button variant="outline" size="sm" onclick={() => void run(() => pin(name, !p.pinned))}>
-        {#if p.pinned}<PinOffIcon />Unpin{:else}<PinIcon />Pin{/if}
+        {#if p.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
       </Button>
       <Button variant="outline" size="sm" onclick={() => void run(() => mute(!p.muted))}>
         {#if p.muted}<BellIcon />Unmute{:else}<BellOffIcon />Mute{/if}

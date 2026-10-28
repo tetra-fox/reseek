@@ -8,6 +8,8 @@
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import SearchIcon from "@lucide/svelte/icons/search";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
+  import UserCheckIcon from "@lucide/svelte/icons/user-check";
+  import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import UsersIcon from "@lucide/svelte/icons/users";
   import XIcon from "@lucide/svelte/icons/x";
   import { untrack } from "svelte";
@@ -35,6 +37,7 @@
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
   import { type UserSummary, users as usersStore } from "#lib/users.svelte.js";
+  import { BUDDY } from "#lib/wording.js";
 
   import { links, pin, userGroups } from "./actions";
   import Avatar from "./Avatar.svelte";
@@ -321,7 +324,7 @@
           <span role="gridcell" class="flex min-w-0 items-center gap-2">
             <Avatar name={u.username} pictureUrl={u.info?.pictureUrl} class="size-7 text-xs" />
             <Username name={u.username} />
-            {#if u.pinned}<Badge tone="info">pinned</Badge>{/if}
+            {#if u.pinned}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
             {#if u.block}<Badge tone="danger">blocked</Badge>{/if}
           </span>
           <span role="gridcell" class="flex items-center gap-1.5 text-xs">
@@ -359,6 +362,17 @@
               <Button
                 variant="ghost"
                 size="icon-sm"
+                aria-label={u.pinned ? BUDDY.remove : BUDDY.add}
+                title={u.pinned ? BUDDY.remove : BUDDY.add}
+                aria-pressed={u.pinned}
+                onclick={() => void togglePin(u)}>
+                {#if u.pinned}<UserCheckIcon class="text-accent" />{:else}<UserPlusIcon />{/if}
+              </Button>
+            {/if}
+            {#if write}
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 aria-label={u.block ? "Unblock" : "Block"}
                 onclick={() => (u.block ? void unblock(u.username) : blocking.ask(u.username))}>
                 {#if u.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
@@ -378,11 +392,6 @@
               </Menu.Trigger>
               <Menu.Content align="end">
                 <Menu.Item onSelect={() => goto(userHref(u.username))}>View profile</Menu.Item>
-                {#if write}
-                  <Menu.Item onSelect={() => void togglePin(u)}>
-                    {u.pinned ? "Unpin" : "Pin"}
-                  </Menu.Item>
-                {/if}
                 <Menu.Item onSelect={() => void copyText(u.username)}>Copy username</Menu.Item>
               </Menu.Content>
             </Menu.Root>

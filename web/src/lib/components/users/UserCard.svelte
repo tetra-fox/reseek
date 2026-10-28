@@ -4,8 +4,11 @@
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
   import UserIcon from "@lucide/svelte/icons/user";
+  import UserCheckIcon from "@lucide/svelte/icons/user-check";
+  import UserPlusIcon from "@lucide/svelte/icons/user-plus";
 
   import { app } from "#lib/app.svelte.js";
+  import { Busy } from "#lib/busy.svelte.js";
   import { clock } from "#lib/clock.svelte.js";
   import { nameColour } from "#lib/colours.js";
   import Badge from "#lib/components/ui/Badge.svelte";
@@ -16,9 +19,11 @@
   import { userHref } from "#lib/nav.js";
   import { firstLines, ownProfile } from "#lib/profile.svelte.js";
   import { session } from "#lib/session.svelte.js";
-  import type { UserSummary } from "#lib/users.svelte.js";
+  import { toast } from "#lib/toast.svelte.js";
+  import { type UserSummary, users } from "#lib/users.svelte.js";
+  import { BUDDY } from "#lib/wording.js";
 
-  import { links } from "./actions";
+  import { links, pin } from "./actions";
   import Avatar from "./Avatar.svelte";
   import GroupBadge from "./GroupBadge.svelte";
   import { flag } from "./hover.svelte";
@@ -48,7 +53,10 @@
         text: user?.presenceAt ? `Away ${ago(user.presenceAt, clock.now)}` : "Away"
       };
     }
-    return { dot: "bg-fg-subtle", text: "Offline" };
+    return {
+      dot: "bg-fg-subtle",
+      text: user?.presenceAt ? `Offline, last seen ${ago(user.presenceAt, clock.now)}` : "Offline"
+    };
   });
   const stats = $derived(
     own && app.state
@@ -69,6 +77,14 @@
   });
   const country = $derived(flag(user?.countryCode));
   const readWrite = $derived(session.can("ReadWrite"));
+  const pinning = new Busy();
+  const togglePin = () =>
+    pinning.run(async () => {
+      const outcome = await pin(name, !user?.pinned);
+      if (outcome.ok) await users.load(name, { fresh: true });
+      else toast(outcome.error, "error");
+      return outcome;
+    });
 </script>
 
 <div class="flex flex-col gap-3 text-sm">
@@ -108,7 +124,7 @@
           </Tooltip>
         {/if}
         {#if user.isPrivileged}<Badge tone="warning">privileged</Badge>{/if}
-        {#if user.pinned}<Badge tone="info">pinned</Badge>{/if}
+        {#if user.pinned}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
         {#each tags.slice(0, 3) as tag (tag)}
           <Badge tone="outline">{tag}</Badge>
         {/each}
@@ -142,53 +158,48 @@
     {/if}
   {/if}
 
-  <div class="flex gap-1 border-t pt-2">
-    {#if readWrite}
-      <Tooltip text="Message">
-        {#snippet child({ props })}
-          <Button {...props} variant="ghost" size="icon-sm" href={to.message} aria-label="Message">
-            <MessageSquareIcon />
-          </Button>
-        {/snippet}
-      </Tooltip>
-    {/if}
-    <Tooltip text="Browse shares">
-      {#snippet child({ props })}
-        <Button
-          {...props}
-          variant="ghost"
-          size="icon-sm"
-          href={to.browse}
-          aria-label="Browse shares">
-          <FolderOpenIcon />
-        </Button>
-      {/snippet}
-    </Tooltip>
+  <div class="flex flex-wrap items-center gap-1 border-t pt-2">
     {#if readWrite && !own}
-      <Tooltip text={user?.block ? "Unblock" : "Block"}>
+      <Button size="sm" href={to.message}><MessageSquareIcon />Message</Button>
+    {/if}
+    <Button size="sm" variant="outline" href={to.browse}><FolderOpenIcon />Browse</Button>
+    {#if readWrite && !own}
+      <Button
+        size="sm"
+        variant="outline"
+        aria-pressed={!!user?.pinned}
+        disabled={pinning.running}
+        onclick={togglePin}>
+        {#if user?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
+      </Button>
+    {/if}
+    <span class="ml-auto flex">
+      {#if readWrite && !own}
+        <Tooltip text={user?.block ? "Unblock" : "Block"}>
+          {#snippet child({ props })}
+            <Button
+              {...props}
+              variant="ghost"
+              size="icon-sm"
+              aria-label={user?.block ? "Unblock" : "Block"}
+              onclick={onblock}>
+              {#if user?.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
+            </Button>
+          {/snippet}
+        </Tooltip>
+      {/if}
+      <Tooltip text="Profile">
         {#snippet child({ props })}
           <Button
             {...props}
             variant="ghost"
             size="icon-sm"
-            aria-label={user?.block ? "Unblock" : "Block"}
-            onclick={onblock}>
-            {#if user?.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
+            href={userHref(name)}
+            aria-label="Profile">
+            <UserIcon />
           </Button>
         {/snippet}
       </Tooltip>
-    {/if}
-    <Tooltip text="Profile">
-      {#snippet child({ props })}
-        <Button
-          {...props}
-          variant="ghost"
-          size="icon-sm"
-          href={userHref(name)}
-          aria-label="Profile">
-          <UserIcon />
-        </Button>
-      {/snippet}
-    </Tooltip>
+    </span>
   </div>
 </div>
