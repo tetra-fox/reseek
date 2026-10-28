@@ -44,6 +44,8 @@
   /** messages that arrived while scrolled up, for the pill */
   let fresh = $state(0);
   let loadingOlder = $state(false);
+  /** the scrollbar is held down: a press on the list beside its content */
+  let gripped = $state(false);
   let placed = false;
   /** the newest message when the list was placed or last followed a new one */
   let seenNewest: number | null = null;
@@ -89,9 +91,10 @@
       estimateSize: (index) => guess(lines[index]),
       overscan: 12,
       paddingEnd: 8,
-      anchor: (line) => line.kind === "message",
+      // while the scrollbar is held at the top, older pages go above it rather than keep the view
+      anchor: gripped ? undefined : (line) => line.kind === "message",
       followOnAppend: !interaction.frozen,
-      anchorTo: "end",
+      anchorTo: gripped ? "start" : "end",
       scrollEndThreshold: NEAR,
       rangeExtractor: (range) => {
         const drawn = defaultRangeExtractor(range);
@@ -196,8 +199,6 @@
     }
   };
 
-  /** the scrollbar is held down: a press on the list beside its content */
-  let gripped = false;
   const grip = (e: PointerEvent) => {
     if (box && e.target === box && e.offsetX >= box.clientWidth) gripped = true;
   };
