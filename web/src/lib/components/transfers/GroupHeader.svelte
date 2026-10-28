@@ -75,50 +75,6 @@
   });
   const usage = $derived(waiting && waits.get(waiting.id) ? quota(waits.get(waiting.id)!) : null);
 
-  /** One of the group's actions; `text` shows its label beside the icon on a wide screen */
-  type Action = { label: string; icon: Component; run: () => void; text?: boolean };
-
-  const actions: Action[] = $derived.by(() => {
-    const out: Action[] = [];
-    const retryable = list.filter((t) => isRetryable(t.state));
-    if (write && direction === "download" && retryable.length > 0) {
-      const ids = retryable.map((t) => t.id);
-      out.push({
-        label: "Retry the group",
-        icon: RotateCwIcon,
-        run: () => void act(store, "retry", ids)
-      });
-    }
-    if (write && list.some((t) => isCancellable(t.state)))
-      out.push({ label: "Cancel the group", icon: XIcon, run: oncancel });
-    if (write) out.push({ label: "Remove the group", icon: Trash2Icon, run: onremove });
-    if (direction === "download" && group.kind === "folder") {
-      const browse = group.folder
-        ? folderLinks(group.username, group.folder).browse
-        : remoteFolder(group.username, list[0].filename).browse;
-      out.push({
-        label: "Download more from this folder",
-        icon: FolderSearchIcon,
-        run: () => void goto(browse)
-      });
-      if (local !== null)
-        out.push({ label: "Open folder", icon: FolderOpenIcon, run: () => openFolder(list) });
-      // files directly in the downloads directory have no folder to zip
-      if (local) out.push({ label: "Download folder", icon: FileArchiveIcon, run: zip });
-    }
-    if (write && direction === "upload" && group.kind === "user") {
-      const queued = list.filter((t) => t.state.includes("Queued")).map((t) => t.id);
-      out.push({
-        label: "Deny queued uploads",
-        icon: UserXIcon,
-        run: () => void act(store, "cancel", queued),
-        text: true
-      });
-      out.push({ label: `Block ${group.username}`, icon: BanIcon, run: () => onblock(false) });
-    }
-    return out;
-  });
-
   /** Saves the group's local folder as a zip; only finished files are in it */
   const zip = () => {
     if (!local) return;
@@ -128,6 +84,87 @@
       `${root()}/api/v0/files/downloads/directories/${encodePath(local)}/archive?name=${encodeURIComponent(name)}`
     );
   };
+
+  const folderActions = () => direction === "download" && group.kind === "folder";
+  const userUploads = () => write && direction === "upload" && group.kind === "user";
+
+  /**
+   * One of the group's actions: `shown` says whether it applies now, and `run` reads the group
+   * when it is chosen. `text` shows its label beside the icon on a wide screen
+   */
+  type Action = {
+    label: string;
+    icon: Component;
+    shown: () => boolean;
+    run: () => void;
+    text?: boolean;
+  };
+
+  const ACTIONS: Action[] = [
+    {
+      label: "Retry the group",
+      icon: RotateCwIcon,
+      shown: () => write && direction === "download" && list.some((t) => isRetryable(t.state)),
+      run: () =>
+        void act(
+          store,
+          "retry",
+          list.filter((t) => isRetryable(t.state)).map((t) => t.id)
+        )
+    },
+    {
+      label: "Cancel the group",
+      icon: XIcon,
+      shown: () => write && list.some((t) => isCancellable(t.state)),
+      run: () => oncancel()
+    },
+    { label: "Remove the group", icon: Trash2Icon, shown: () => write, run: () => onremove() },
+    {
+      label: "Download more from this folder",
+      icon: FolderSearchIcon,
+      shown: folderActions,
+      run: () =>
+        void goto(
+          group.folder
+            ? folderLinks(group.username, group.folder).browse
+            : remoteFolder(group.username, list[0].filename).browse
+        )
+    },
+    {
+      label: "Open folder",
+      icon: FolderOpenIcon,
+      shown: () => folderActions() && local !== null,
+      run: () => openFolder(list)
+    },
+    // files directly in the downloads directory have no folder to zip
+    {
+      label: "Download folder",
+      icon: FileArchiveIcon,
+      shown: () => folderActions() && !!local,
+      run: zip
+    },
+    {
+      label: "Deny queued uploads",
+      icon: UserXIcon,
+      shown: userUploads,
+      run: () =>
+        void act(
+          store,
+          "cancel",
+          list.filter((t) => t.state.includes("Queued")).map((t) => t.id)
+        ),
+      text: true
+    },
+    {
+      get label() {
+        return `Block ${group.username}`;
+      },
+      icon: BanIcon,
+      shown: userUploads,
+      run: () => onblock(false)
+    }
+  ];
+  const actions = $derived(ACTIONS.filter((a) => a.shown()));
 </script>
 
 <div
