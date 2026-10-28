@@ -53,6 +53,22 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
     return null;
   });
   expect(cut, `${what} cuts off ${cut}`).toBeNull();
+  // the status bar under the content area holds all it shows within the screen, on more lines if
+  // it must, and never scrolls sideways
+  const bar = await page.evaluate(() => {
+    const footer = [...document.querySelectorAll("footer")].find((f) => !f.closest("main"))!;
+    const { left, right } = footer.getBoundingClientRect();
+    if (footer.scrollWidth > footer.clientWidth)
+      return `is ${footer.scrollWidth - footer.clientWidth}px too wide`;
+    for (const e of footer.querySelectorAll("*")) {
+      const box = e.getBoundingClientRect();
+      if (box.width && (box.left < left - 0.5 || box.right > right + 0.5)) {
+        return `cuts off ${e.tagName.toLowerCase()} "${e.textContent?.trim().slice(0, 40)}"`;
+      }
+    }
+    return right > innerWidth + 0.5 ? "runs off the screen" : null;
+  });
+  expect(bar, `${what}: the status bar ${bar}`).toBeNull();
   // a figure is never cut or painted over its neighbour, a line of a list fits the height it is
   // placed at, a header's label stays in its cell, and a name keeps room for a few letters
   const cells = await page.locator("[data-content]").evaluate((area) => {
@@ -64,7 +80,7 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
         return `the figure "${e.textContent?.trim()}" needs ${e.scrollWidth}px of ${e.clientWidth}px`;
       }
     }
-    for (const e of area.querySelectorAll<HTMLElement>("[role=row]")) {
+    for (const e of area.querySelectorAll<HTMLElement>("[role=row], [role=treeitem]")) {
       if (shown(e) && e.style.height && e.scrollHeight > e.clientHeight + 1) {
         return `the line "${e.textContent?.trim().slice(0, 40)}" is taller than its place`;
       }
@@ -249,15 +265,20 @@ test.describe("at a large text size", () => {
       await fakeReports(page);
       await fakeSearch(page);
       await fakeDownloads(page);
+      await fakeBrowse(page);
+      await fakeFolder(page);
       await login(page, "/dashboard");
       await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
-      // TODO: the cards too, once their folder rows keep a name's room at these sizes; the dense
-      // results scroll sideways on their own
-      await page.goto(`./#/searches/${SEARCH_ID}`);
+      await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
       await page.getByRole("radio", { name: "Dense" }).click();
       await holds(page, `the dense results at ${root} px`, shows("02 Two.flac"));
       await page.getByRole("radio", { name: "Cards" }).click();
       await fits(page, "/downloads", shows("3.flac"));
+      await fits(page, "/browse", shows("Browse a user's shares"));
+      await page.getByLabel("Username").fill("carol");
+      await page.getByLabel("Username").press("Enter");
+      await page.getByRole("treeitem", { name: /Bootlegs/ }).click();
+      await holds(page, `a browse with a folder open at ${root} px`, shows("2.flac"));
     });
   }
 });
