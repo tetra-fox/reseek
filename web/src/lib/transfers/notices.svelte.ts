@@ -25,8 +25,8 @@ export const transferNoticeOptions = () => {
 export const QUEUED_GATHER_MS = 2_000;
 
 /**
- * Turns transfer frames into notifications: a download finished, every download of a batch
- * (an album) finished, and another user queued uploads from us, those gathered per user for a
+ * Turns transfer frames into notifications: a download finished, every download of a batch of
+ * several (an album) finished, and another user queued uploads from us, those gathered per user for a
  * moment. Each transfer and batch is told of once
  */
 class TransferNotices {
@@ -37,12 +37,6 @@ class TransferNotices {
     live.on("transfers.updated", (t) => void this.#updated(t));
     live.on("transfers.added", (t) => this.#added(t));
     live.on("transfers.removed", (t) => this.#told.delete(t.id));
-  }
-
-  /** Whether any of them is on, so the app follows the transfers topic for them */
-  get wanted(): boolean {
-    const o = transferNoticeOptions();
-    return o.downloadFinished || o.batchFinished || o.uploadQueued;
   }
 
   async #updated(t: Transfer) {
@@ -63,8 +57,10 @@ class TransferNotices {
     const batch = await call(() =>
       api.GET("/api/v0/transfers/downloads/batches/{id}", { params: { path: { id: t.batchId! } } })
     );
-    // a batch that can't be read is only not told of; its files were
-    if (!batch.ok || batch.data.completedCount < batch.data.fileCount) return;
+    // a batch that can't be read is only not told of; its files were. A batch of one file is
+    // that file, already told of
+    if (!batch.ok || batch.data.fileCount < 2) return;
+    if (batch.data.completedCount < batch.data.fileCount) return;
     if (this.#told.has(`batch:${t.batchId}`)) return;
     this.#told.add(`batch:${t.batchId}`);
     const failed = batch.data.failedCount ? `, ${batch.data.failedCount} failed` : "";
