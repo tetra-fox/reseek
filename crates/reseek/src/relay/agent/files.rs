@@ -7,7 +7,7 @@
 use std::io::SeekFrom;
 use std::sync::Arc;
 
-use api_types::relay::{FileFailure, RelayFileUploadResult, RelayMessage};
+use api_types::relay::{FileFailure, RelayFileUploadResult, RelayMessage, RelayUploadOutcome};
 use reqwest::multipart::{Form, Part};
 use tokio::io::AsyncSeekExt;
 use tokio_util::io::ReaderStream;
@@ -120,12 +120,16 @@ impl AgentClient {
       outcome = self.upload(&link, token, &filename, start) => outcome,
     };
     match outcome {
+      Ok(result) if result.outcome == RelayUploadOutcome::Succeeded => {
+        info!(filename, %token, bytes = result.bytes, "Upload of file succeeded.")
+      }
+      // the peer's transfer ended otherwise; the controller records how
       Ok(result) => info!(
         filename,
         %token,
         outcome = ?result.outcome,
         bytes = result.bytes,
-        "Upload of file succeeded."
+        "upload of file ended without the peer receiving it whole"
       ),
       Err(refusal) => {
         warn!(
