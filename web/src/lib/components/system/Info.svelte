@@ -140,7 +140,7 @@
 {#if !s}
   <Skeleton class="h-64" />
 {:else}
-  <div class="grid gap-section md:grid-cols-2 xl:grid-cols-3">
+  <div class="grid grid-cols-[minmax(0,1fr)] gap-section md:grid-cols-2 xl:grid-cols-3">
     <Card title="Version">
       <dl class="info">
         <dt>Running</dt>
@@ -308,11 +308,16 @@
 {/if}
 
 <style>
+  /* a value too long for its card, an address or a version, wraps rather than being cut or
+     widening the card */
   .info {
     display: grid;
-    grid-template-columns: auto 1fr;
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
     gap: 0.25rem 1rem;
     font-size: 0.875rem;
+  }
+  .info :global(dd) {
+    overflow-wrap: anywhere;
   }
   .info :global(dt) {
     color: var(--color-fg-muted);

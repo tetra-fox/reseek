@@ -133,7 +133,7 @@
   {#if types.length}
     <Button variant="ghost" size="sm" onclick={() => to({ page: 1, types: [] })}>All types</Button>
   {/if}
-  <div class="ml-auto flex items-center gap-inline">
+  <div class="ml-auto flex flex-wrap items-center justify-end gap-inline">
     <Select
       class="h-control-sm w-32"
       aria-label="Events per page"
