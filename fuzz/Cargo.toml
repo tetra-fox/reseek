@@ -12,6 +12,7 @@ api-types = { path = "../crates/api-types" }
 cascade = { path = "../crates/cascade" }
 flate2 = "1"
 libfuzzer-sys = "0.4"
+reseek = { path = "../crates/reseek", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 soulseek-proto = { path = "../crates/soulseek-proto" }
@@ -94,6 +95,13 @@ bench = false
 [[bin]]
 name = "relay_message"
 path = "fuzz_targets/relay_message.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "audio_analysis"
+path = "fuzz_targets/audio_analysis.rs"
 test = false
 doc = false
 bench = false
