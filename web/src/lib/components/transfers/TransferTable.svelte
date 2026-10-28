@@ -191,7 +191,7 @@
 
 <div
   class="relative overflow-auto rounded-card border bg-surface text-sm shadow-card outline-none [overflow-anchor:auto]"
-  style:height="max(20rem, calc(100svh - 20rem))"
+  style:height="max(20rem, calc(var(--content-h) - 14rem))"
   role="grid"
   aria-label={direction === "download" ? "Downloads" : "Uploads"}
   aria-rowcount={items.length}

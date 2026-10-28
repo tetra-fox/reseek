@@ -298,7 +298,7 @@
   title={section.title}
   id={section.id}
   data-section={section.id}
-  class="scroll-mt-20"
+  class="scroll-mt-gutter"
   hidden={!found.length}>
   {#snippet action()}
     <Button variant="ghost" size="sm" class="text-fg-muted" onclick={copyNix}>

@@ -161,6 +161,13 @@
   }
 }
 
+/* the shell measures these: the content area's height, which screens fill, and the height of
+   the panels and footer below it, which fixed layers keep clear of. Until it has, a guess */
+:root {
+  --content-h: calc(100svh - 6rem);
+  --bottom-h: 2.5rem;
+}
+
 .dark {
   --color-page: oklch(0.135 0.006 255);
   --color-surface: oklch(0.168 0.007 255);

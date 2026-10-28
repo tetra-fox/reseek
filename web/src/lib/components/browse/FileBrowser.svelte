@@ -122,7 +122,7 @@
   class={["flex flex-col rounded-card border bg-surface shadow-card", node.locked && "opacity-50"]}>
   <!-- the folder's name and its download stay in view while its files scroll -->
   <header
-    class="sticky top-14 z-[4] flex flex-wrap items-center gap-2 rounded-t-card border-b bg-surface/95 px-4 py-3 backdrop-blur-md">
+    class="sticky top-0 z-[4] flex flex-wrap items-center gap-2 rounded-t-card border-b bg-surface/95 px-4 py-3 backdrop-blur-md">
     {#if node.locked}
       <span title={LOCKED_HINT}><LockIcon class="size-5 text-fg-muted" /></span>
     {:else}

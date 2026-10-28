@@ -46,6 +46,16 @@ export const layerOpen = () =>
     ["menu", "dialog", "alertdialog"].map((r) => `[role=${r}]:not([data-state=closed])`).join(",")
   );
 
+/** Whether the keyboard is a Mac's, whose shortcuts take Cmd where others take Ctrl */
+export const mac = typeof navigator !== "undefined" && /mac|iphone|ipad/i.test(navigator.platform);
+
+/** Ctrl+J, or Cmd+J on a Mac: opens or closes the activity log from anywhere */
+export const togglesActivity = (e: KeyboardEvent) =>
+  (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "j";
+
+/** The activity log's shortcut as the keyboard in use names it */
+export const ACTIVITY_KEYS = mac ? "⌘J" : "Ctrl+J";
+
 /**
  * Ctrl+K, or Cmd+K on a Mac: opens the command palette from anywhere, a text field included,
  * since no field takes it for itself

@@ -10,6 +10,7 @@
   import Overview from "#lib/components/settings/Overview.svelte";
   import RawFile from "#lib/components/settings/RawFile.svelte";
   import Section from "#lib/components/settings/Section.svelte";
+  import { content } from "#lib/components/shell/content.svelte.js";
   import Crumbs from "#lib/components/shell/Crumbs.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
@@ -85,7 +86,8 @@
       .map((s) => ({ id: s.id, el: document.getElementById(s.id) }))
       .filter((s): s is { id: string; el: HTMLElement } => !!s.el && !s.el.hidden)
       .map((s) => ({ id: s.id, top: s.el.getBoundingClientRect().top }));
-    const end = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+    const box = content.scroller;
+    const end = !!box && box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
     current = currentSection(tops, LINE, end);
   };
   let frame = 0;
@@ -99,6 +101,13 @@
     if (!view.data || raw) return;
     void tick().then(spy);
   });
+  // the shell's content area scrolls, not the window
+  $effect(() => {
+    const box = content.scroller;
+    if (!box) return;
+    box.addEventListener("scroll", scrolled, { passive: true });
+    return () => box.removeEventListener("scroll", scrolled);
+  });
 
   const jump = (id: string) => {
     current = id;
@@ -106,7 +115,7 @@
   };
 </script>
 
-<svelte:window onscroll={scrolled} onresize={scrolled} />
+<svelte:window onresize={scrolled} />
 
 {#if raw}<Crumbs steps={[{ label: "Raw file" }]} />{/if}
 
@@ -133,7 +142,8 @@
     <div
       class="grid grid-cols-[minmax(0,1fr)] gap-section lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
       <!-- the categories, the one in view marked; on a wide screen they stay beside the page -->
-      <aside class="flex flex-col gap-2 lg:sticky lg:top-20 lg:max-h-[calc(100svh-7rem)]">
+      <aside
+        class="flex flex-col gap-2 lg:sticky lg:top-gutter lg:max-h-[calc(var(--content-h)-2*var(--spacing-gutter))]">
         <Input
           type="search"
           icon={SearchIcon}
@@ -193,7 +203,7 @@
       <div
         role="region"
         aria-label="Unsaved changes"
-        class="sticky bottom-12 z-20 flex flex-wrap items-center gap-inline rounded-card border border-accent/40 bg-overlay px-4 py-2 shadow-raised"
+        class="sticky bottom-2 z-20 flex flex-wrap items-center gap-inline rounded-card border border-accent/40 bg-overlay px-4 py-2 shadow-raised"
         transition:fly={{ y: 16, duration: motionFast() }}>
         <span class="text-sm font-medium tabular-nums">
           {plural(total, "unsaved change", "unsaved changes")}

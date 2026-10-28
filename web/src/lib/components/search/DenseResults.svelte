@@ -141,7 +141,7 @@
 <div class="flex flex-col gap-2">
   <div
     class="relative overflow-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    style:height="max(20rem, calc(100svh - 22rem))"
+    style:height="max(20rem, calc(var(--content-h) - 16rem))"
     role="grid"
     aria-label="Search results"
     aria-rowcount={sorted.length}
@@ -298,7 +298,7 @@
   </div>
   {#if chosen.length}
     <div
-      class="sticky bottom-12 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised"
+      class="sticky bottom-2 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised"
       role="toolbar"
       aria-label="Selected files">
       <span class="text-sm"

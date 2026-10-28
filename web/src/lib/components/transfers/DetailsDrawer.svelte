@@ -123,7 +123,7 @@
   }} />
 
 <aside
-  class="fixed top-0 right-0 bottom-10 z-30 flex w-[min(28rem,100vw)] flex-col border-l bg-surface shadow-raised"
+  class="fixed top-0 right-0 bottom-(--bottom-h) z-30 flex w-[min(28rem,100vw)] flex-col border-l bg-surface shadow-raised"
   aria-label="Transfer details"
   transition:fly|global={{ x: 32, duration: motionFast(), easing: cubicOut }}>
   <header class="flex items-center gap-2 border-b px-4 py-3">

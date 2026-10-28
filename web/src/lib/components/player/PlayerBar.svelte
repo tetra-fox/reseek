@@ -28,7 +28,7 @@
 
 {#if track && player.src}
   <div
-    class="fixed inset-x-0 bottom-10 z-20 flex flex-wrap items-center gap-inline border-t bg-surface/95 px-gutter py-2 shadow-raised backdrop-blur-md"
+    class="relative z-20 flex flex-wrap items-center gap-inline border-t bg-surface/95 px-gutter py-2 shadow-raised backdrop-blur-md"
     role="region"
     aria-label="Player">
     <audio

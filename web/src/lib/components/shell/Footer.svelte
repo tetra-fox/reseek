@@ -6,6 +6,7 @@
   import { activityPrefs } from "#lib/activity/activity.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import { formatSpeedPadded } from "#lib/format.js";
+  import { ACTIVITY_KEYS, mac } from "#lib/keys.js";
   import { REPOSITORY } from "#lib/project.js";
 
   const connected = $derived(app.isServerConnected);
@@ -26,7 +27,7 @@
 
 <!-- the server connection and the transfer figures, always in view -->
 <footer
-  class="fixed inset-x-0 bottom-0 z-20 flex h-10 items-center gap-4 overflow-x-auto border-t bg-surface/90 px-gutter text-xs backdrop-blur-md">
+  class="relative z-20 flex h-10 items-center gap-4 overflow-x-auto border-t bg-surface/90 px-gutter text-xs backdrop-blur-md">
   <span class="flex shrink-0 items-center gap-1.5">
     <span class={["size-2 rounded-full", connected ? "bg-success" : "bg-danger"]}></span>
     <span class="font-medium">{connected && username ? username : "Disconnected"}</span>
@@ -46,7 +47,8 @@
       type="button"
       aria-pressed={activityPrefs.open}
       class="flex shrink-0 items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg"
-      title="Who is browsing, searching and downloading from you"
+      title={`Who is browsing, searching and downloading from you (${ACTIVITY_KEYS})`}
+      aria-keyshortcuts={mac ? "Meta+J" : "Control+J"}
       onclick={() => (activityPrefs.open = !activityPrefs.open)}>
       <ActivityIcon class="size-3.5" />Activity
     </button>

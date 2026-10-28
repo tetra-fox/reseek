@@ -13,6 +13,7 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { trail } from "#lib/crumbs.svelte.js";
   import { listText } from "#lib/format.js";
+  import { mac } from "#lib/keys.js";
   import { baseCrumbs, href, route } from "#lib/nav.js";
 
   import NewVersion from "./NewVersion.svelte";
@@ -21,7 +22,6 @@
 
   const crumbs = $derived([...baseCrumbs(route(page.url).path), ...trail.page]);
   const copier = new CopyButton();
-  const mac = typeof navigator !== "undefined" && /mac|iphone|ipad/i.test(navigator.platform);
 
   const pending = $derived.by(() => {
     const s = app.state;

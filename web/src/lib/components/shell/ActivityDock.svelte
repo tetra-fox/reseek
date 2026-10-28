@@ -10,13 +10,15 @@
   import LockIcon from "@lucide/svelte/icons/lock";
   import SearchIcon from "@lucide/svelte/icons/search";
   import XIcon from "@lucide/svelte/icons/x";
-  import { fly } from "svelte/transition";
+  import { fly, slide } from "svelte/transition";
 
   import {
     activity,
     activityPrefs,
     type ActivityEntry,
-    type ActivityType
+    type ActivityType,
+    DOCK_MIN,
+    dockMax
   } from "#lib/activity/activity.svelte.js";
   import { activityParts, activityText, baseName, KINDS, kindOf } from "#lib/activity/text.js";
   import { clock } from "#lib/clock.svelte.js";
@@ -26,14 +28,27 @@
   import Username from "#lib/components/users/Username.svelte";
   import { ago, formatBytes, formatDate, shortTime } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
+  import { withModifier } from "#lib/keys.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { motionFast } from "#lib/motion.js";
   import { roomHref, userHref } from "#lib/nav.js";
 
-  // what other users do with us on the network: a panel over the bottom of every screen, opened
-  // from the footer, so it stays in view whatever screen is open
+  import { sidebar } from "./sidebar.svelte";
+
+  // what other users do with us on the network: a panel at the bottom of every screen, opened
+  // from the footer or with Ctrl+J, so it stays in view whatever screen is open
   $effect(() => activity.follow());
+
+  /** the docked height: the remembered one, or less in a window too short for it */
+  let height = $state(Math.min(activityPrefs.height, dockMax()));
+  let dragging: { y: number; height: number } | null = null;
+  const clampHeight = (h: number) => Math.round(Math.min(dockMax(), Math.max(DOCK_MIN, h)));
+  /** docked it opens and closes by its height, which moves the content with it; a sheet rises */
+  const drawer = (node: Element) =>
+    sidebar.phone
+      ? fly(node, { y: 24, duration: motionFast() })
+      : slide(node, { duration: motionFast() });
   keepCurrent(() => void activity.load());
 
   const hidden = $derived(new Set(activityPrefs.hidden));
@@ -65,10 +80,51 @@
   } as const;
 </script>
 
+<!-- on a wide screen the log is a panel in the shell, above the footer, that takes its height
+     from the content area and slides it up as it opens; a phone has no room to spare for one,
+     so there it is a sheet over the bottom of the screen -->
 <section
   aria-label="Activity on the network"
-  class="fixed inset-x-0 bottom-10 z-20 flex h-72 max-h-[45svh] flex-col border-t bg-surface/95 shadow-raised backdrop-blur-md"
-  transition:fly={{ y: 24, duration: motionFast() }}>
+  class={[
+    "flex flex-col border-t",
+    sidebar.phone
+      ? "fixed inset-x-0 bottom-10 z-20 h-72 max-h-[45svh] bg-surface/95 shadow-raised backdrop-blur-md"
+      : "relative bg-surface"
+  ]}
+  style:height={sidebar.phone ? undefined : `${height}px`}
+  transition:drawer|global>
+  {#if !sidebar.phone}
+    <div
+      role="slider"
+      tabindex="0"
+      aria-orientation="vertical"
+      aria-label="Height of the activity log"
+      aria-valuemin={DOCK_MIN}
+      aria-valuemax={dockMax()}
+      aria-valuenow={height}
+      title="Drag or use the arrow keys to resize"
+      class="absolute inset-x-0 -top-1 z-10 h-2 cursor-row-resize"
+      onpointerdown={(e) => {
+        dragging = { y: e.clientY, height };
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onpointermove={(e) => {
+        if (dragging) height = clampHeight(dragging.height + dragging.y - e.clientY);
+      }}
+      onpointerup={() => {
+        if (dragging) activityPrefs.height = height;
+        dragging = null;
+      }}
+      onkeydown={(e) => {
+        if (withModifier(e)) return;
+        if (e.key === "ArrowUp") height = clampHeight(height + 20);
+        else if (e.key === "ArrowDown") height = clampHeight(height - 20);
+        else return;
+        e.preventDefault();
+        activityPrefs.height = height;
+      }}>
+    </div>
+  {/if}
   <header class="flex flex-wrap items-center gap-2 border-b px-gutter py-1.5">
     <h2 class="text-sm font-semibold">Activity</h2>
     <div class="ml-auto flex flex-wrap items-center gap-1" role="group" aria-label="Activity types">

@@ -52,7 +52,7 @@
 
 <!-- stays in view over the results, so the filter is always at hand -->
 <div
-  class="sticky top-14 z-[5] flex flex-col gap-2.5 rounded-card border bg-surface/95 p-3 shadow-card backdrop-blur-md">
+  class="sticky top-0 z-[5] flex flex-col gap-2.5 rounded-card border bg-surface/95 p-3 shadow-card backdrop-blur-md">
   <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
     <div class="inline-flex rounded-control border p-0.5" role="radiogroup" aria-label="View">
       {#each VIEWS as v (v.id)}

@@ -7,11 +7,20 @@ import { fields, stored } from "#lib/stored.svelte.js";
 export type ActivityEntry = Schemas["ActivityEntry"];
 export type ActivityType = Schemas["ActivityKind"]["type"];
 
-/** Whether the activity dock is open and the kinds it hides, kept in this browser */
+/** The docked activity log's least height, in pixels */
+export const DOCK_MIN = 120;
+/** The docked activity log's default height, in pixels */
+const DOCK_HEIGHT = 288;
+
+/** The docked activity log's greatest height: most of the window, the screen above keeping some */
+export const dockMax = () => Math.max(DOCK_MIN, Math.round(window.innerHeight * 0.6));
+
+/** Whether the activity log is open, its height when docked and the kinds it hides, kept in this browser */
 export const activityPrefs = stored("reseek.activity", (saved) => {
   const s = fields(saved);
   return {
     open: s.open === true,
+    height: typeof s.height === "number" && s.height >= DOCK_MIN ? s.height : DOCK_HEIGHT,
     hidden: Array.isArray(s.hidden) ? s.hidden.filter((t) => typeof t === "string") : []
   };
 });

@@ -82,3 +82,43 @@ test("the activity log opens from the footer and lists what others did", async (
   await page.getByRole("button", { name: "Close the activity log" }).click();
   await expect(log).toBeHidden();
 });
+
+test("the activity log docks under the screen, keeps its height and opens with a key", async ({
+  page
+}) => {
+  await login(page, "/browse");
+  const area = page.locator("[data-content]");
+  const dock = page.getByRole("region", { name: "Activity on the network" });
+  const height = () => dock.evaluate((e) => e.getBoundingClientRect().height);
+  const before = await area.evaluate((e) => e.clientHeight);
+
+  // Ctrl+J opens it while a field has focus, and the field keeps it
+  const field = page.getByLabel("Username");
+  await field.fill("car");
+  await page.keyboard.press("Control+j");
+  await expect(dock).toBeVisible();
+  await expect.poll(height).toBe(288);
+  await expect(field).toBeFocused();
+  // the screen above gives up exactly the panel's height: nothing is covered
+  expect(before - (await area.evaluate((e) => e.clientHeight))).toBe(288);
+
+  // its top edge drags it taller, and the height and the open state survive a reload
+  const edge = (await page
+    .getByRole("slider", { name: "Height of the activity log" })
+    .boundingBox())!;
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2 - 100, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(height).toBe(388);
+  await page.reload();
+  await expect(dock).toBeVisible();
+  await expect.poll(height).toBe(388);
+
+  // with reduced motion it opens at its full height at once
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.keyboard.press("Control+j");
+  await expect(dock).toBeHidden();
+  await page.keyboard.press("Control+j");
+  expect(await height()).toBe(388);
+});

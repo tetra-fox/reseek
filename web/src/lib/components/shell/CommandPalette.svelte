@@ -8,7 +8,7 @@
   import { chat } from "#lib/chat/chat.svelte.js";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import { sections } from "#lib/config/sections.js";
-  import { opensPalette } from "#lib/keys.js";
+  import { ACTIVITY_KEYS, opensPalette } from "#lib/keys.js";
   import {
     chatHref,
     href,
@@ -65,6 +65,7 @@
               id: "activity",
               group: "Screens",
               label: activityPrefs.open ? "Close the activity log" : "Activity log",
+              hint: ACTIVITY_KEYS,
               keywords: "browsing searches queued uploads log network",
               run: () => (activityPrefs.open = !activityPrefs.open)
             }

@@ -13,7 +13,7 @@
 
 <!-- bottom centre, newest on top, above the footer -->
 <div
-  class="pointer-events-none fixed inset-x-4 bottom-14 z-50 mx-auto flex max-w-md flex-col items-center gap-2"
+  class="pointer-events-none fixed inset-x-4 bottom-[calc(var(--bottom-h)+1rem)] z-50 mx-auto flex max-w-md flex-col items-center gap-2"
   aria-live="polite">
   {#each toasts as t (t.id)}
     <div
