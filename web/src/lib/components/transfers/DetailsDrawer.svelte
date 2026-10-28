@@ -2,6 +2,8 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import XIcon from "@lucide/svelte/icons/x";
+  import { cubicOut } from "svelte/easing";
+  import { fly } from "svelte/transition";
 
   import type { Schemas } from "#lib/api/client.js";
   import { copyText } from "#lib/clipboard.svelte.js";
@@ -17,6 +19,7 @@
     getFileName
   } from "#lib/format.js";
   import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
+  import { motionFast } from "#lib/motion.js";
   import { stateChip, type Direction, type Transfer } from "#lib/transfers/states.js";
   import { endpoint, type Transfers } from "#lib/transfers/transfers.svelte.js";
   import { users } from "#lib/users.svelte.js";
@@ -121,7 +124,8 @@
 
 <aside
   class="fixed top-0 right-0 bottom-10 z-30 flex w-[min(28rem,100vw)] flex-col border-l bg-surface shadow-raised"
-  aria-label="Transfer details">
+  aria-label="Transfer details"
+  transition:fly|global={{ x: 32, duration: motionFast(), easing: cubicOut }}>
   <header class="flex items-center gap-2 border-b px-4 py-3">
     <h2 class="min-w-0 flex-1 truncate font-semibold" title={t.filename}>
       {getFileName(t.filename)}

@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
+  import { goto, onNavigate } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount, untrack } from "svelte";
+  import { prefersReducedMotion } from "svelte/motion";
 
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
@@ -23,6 +24,20 @@
   const at = $derived(route(page.url));
 
   onMount(() => void app.bootstrap());
+
+  // moving to another screen cross-fades the page; a new query on the same screen changes in place
+  onNavigate((navigation) => {
+    if (prefersReducedMotion.current || typeof document.startViewTransition !== "function") return;
+    const from = navigation.from ? route(navigation.from.url).path : null;
+    const to = navigation.to ? route(navigation.to.url).path : null;
+    if (from === to) return;
+    return new Promise((ready) => {
+      document.startViewTransition(async () => {
+        ready();
+        await navigation.complete;
+      });
+    });
+  });
 
   // a session that is gone goes to the login, which comes back here afterwards
   $effect(() => {
@@ -77,6 +92,7 @@
       <Header />
       <LostBanner />
       <main
+        style:view-transition-name="page"
         class="mx-auto flex w-full max-w-page min-w-0 flex-1 flex-col gap-section p-gutter pb-16">
         <svelte:boundary>
           {@render children()}

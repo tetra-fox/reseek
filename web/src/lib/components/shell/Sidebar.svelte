@@ -6,12 +6,14 @@
   import UserSearchIcon from "@lucide/svelte/icons/user-search";
   import { Dialog } from "bits-ui";
   import { toggleMode } from "mode-watcher";
+  import { tick } from "svelte";
 
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { crossFade } from "#lib/motion.js";
   import { href, navCurrent, navItems, type NavItem, route, systemItem } from "#lib/nav.js";
 
   import AccountMenu from "./AccountMenu.svelte";
@@ -105,7 +107,11 @@
                 type="button"
                 class={itemClass}
                 aria-label="Toggle dark and light theme"
-                onclick={toggleMode}>
+                onclick={() =>
+                  void crossFade(async () => {
+                    toggleMode();
+                    await tick();
+                  })}>
                 <SunMoonIcon class="size-4 shrink-0" />
                 <span class={["truncate", sidebar.collapsed && "hidden"]}>Theme</span>
               </button>
