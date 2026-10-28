@@ -117,13 +117,13 @@
   // the user, then each folder down to the one open; a step that is a listed folder opens it
   useCrumbs(() => {
     if (!browser.username || browser.phase === "idle") return [];
-    const user = { label: browser.username, onclick: () => browser.select(null) };
+    const owner = { label: browser.username, onclick: () => browser.select(null) };
     const directory = browser.directory;
-    if (!directory) return [user];
+    if (!directory) return [owner];
     const sep = browser.separator;
     const parts = directory.split(sep);
     return [
-      user,
+      owner,
       ...parts.map((part, i) => {
         const path = parts.slice(0, i + 1).join(sep);
         const last = i === parts.length - 1;
