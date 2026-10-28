@@ -1,3 +1,5 @@
+import { columnPx, WIDEST } from "#lib/format.js";
+
 import type { Direction } from "./states";
 import type { SortKey } from "./view";
 
@@ -40,10 +42,10 @@ export const COLUMNS: Column[] = [
   { id: "select", label: "Select", visible: true, width: 40, fixed: true },
   { id: "file", label: "File", visible: true, width: 240, sort: "file", fixed: true },
   { id: "user", label: "User", visible: true, width: 150, sort: "user" },
-  { id: "size", label: "Size", visible: true, width: 90, sort: "size" },
+  { id: "size", label: "Size", visible: true, width: columnPx(WIDEST.size), sort: "size" },
   { id: "progress", label: "Progress", visible: true, width: 180, sort: "progress" },
   { id: "speed", label: "Speed", visible: true, width: 130, sort: "speed" },
-  { id: "eta", label: "ETA", visible: true, width: 80, sort: "eta" },
+  { id: "eta", label: "ETA", visible: true, width: columnPx(WIDEST.duration), sort: "eta" },
   { id: "transferred", label: "Transferred", visible: false, width: 120, sort: "size" },
   { id: "queue", label: "Queue", visible: false, width: 120 },
   { id: "requested", label: "Requested", visible: false, width: 130, sort: "requested" },

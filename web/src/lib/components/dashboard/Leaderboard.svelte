@@ -11,7 +11,7 @@
   import { links } from "#lib/components/users/actions.js";
   import Username from "#lib/components/users/Username.svelte";
   import { type RangeLabel, reports, type Window } from "#lib/dashboard/reports.js";
-  import { formatBytes, formatSpeed } from "#lib/format.js";
+  import { columnPx, formatBytes, formatSpeed, WIDEST } from "#lib/format.js";
 
   // who moved the most with us each way, by count, bytes or speed
   let { span, range }: { span: Window; range: RangeLabel } = $props();
@@ -51,11 +51,38 @@
     });
   });
 
-  // short headers and fixed widths keep the figures in view on a phone; the name gives way
-  const COLUMNS: { by: Sort; label: string; title: string; width: string }[] = [
-    { by: "Count", label: "Files", title: "Files", width: "w-14" },
-    { by: "TotalBytes", label: "Size", title: "Total size", width: "w-18" },
-    { by: "AverageSpeed", label: "Speed", title: "Average speed", width: "w-22" }
+  // each figure's column holds the widest value its formatter writes, and the name gives way;
+  // a phone has no room for the speed as well, so it leaves that column out
+  const COLUMNS: {
+    by: Sort;
+    label: string;
+    title: string;
+    widest: string;
+    value: (e: Entry) => string;
+    phone?: false;
+  }[] = [
+    {
+      by: "Count",
+      label: "Files",
+      title: "Files",
+      widest: WIDEST.count,
+      value: (e) => e.count.toLocaleString()
+    },
+    {
+      by: "TotalBytes",
+      label: "Size",
+      title: "Total size",
+      widest: WIDEST.size,
+      value: (e) => formatBytes(e.totalBytes)
+    },
+    {
+      by: "AverageSpeed",
+      label: "Speed",
+      title: "Average speed",
+      widest: WIDEST.speed,
+      value: (e) => formatSpeed(e.averageSpeed),
+      phone: false
+    }
   ];
 </script>
 
@@ -74,7 +101,8 @@
             <th class="px-2 py-1 text-left font-medium">Username</th>
             {#each COLUMNS as c (c.by)}
               <th
-                class={["px-2 py-1 text-right font-medium", c.width]}
+                class={["px-2 py-1 text-right font-medium", c.phone === false && "max-sm:hidden"]}
+                style:width={`${columnPx(c.widest)}px`}
                 aria-sort={sortBy === c.by ? "descending" : "none"}>
                 <button
                   type="button"
@@ -95,11 +123,13 @@
             <tr class="border-b last:border-b-0">
               <td class="py-1 text-right text-fg-muted tabular-nums">{i + 1}</td>
               <td class="overflow-hidden px-2 py-1"><Username name={entry.username} /></td>
-              <td class="px-2 py-1 text-right tabular-nums">{entry.count.toLocaleString()}</td>
-              <td class="px-2 py-1 text-right whitespace-nowrap tabular-nums"
-                >{formatBytes(entry.totalBytes)}</td>
-              <td class="px-2 py-1 text-right whitespace-nowrap tabular-nums"
-                >{formatSpeed(entry.averageSpeed)}</td>
+              {#each COLUMNS as c (c.by)}
+                <td
+                  class={[
+                    "px-2 py-1 text-right whitespace-nowrap tabular-nums",
+                    c.phone === false && "max-sm:hidden"
+                  ]}>{c.value(entry)}</td>
+              {/each}
               <td class="max-sm:hidden">
                 <Button
                   variant="ghost"

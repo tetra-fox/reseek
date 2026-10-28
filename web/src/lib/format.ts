@@ -245,3 +245,20 @@ export const downloadFile = (
   link.remove();
   URL.revokeObjectURL(url);
 };
+
+/** The widest text each formatter writes, which a column of its values must hold */
+export const WIDEST = {
+  size: formatBytes(1023.99 * 1024 ** 3),
+  speed: formatSpeed(1023.9 * 1024 ** 2),
+  count: (99_999).toLocaleString(),
+  length: formatSeconds(99 * 3600 + 59 * 60 + 59),
+  duration: formatDuration(23 * 3600 + 59 * 60)
+};
+
+// a 14 px tabular digit is about 8.4 px wide; letters and spaces vary around it, so a column
+// allows 1.15 digits for each character of the widest value it shows
+const CHAR_PX = 8.4 * 1.15;
+
+/** The width in pixels a column of 14 px text needs to show `widest` whole, with the padding of its cells */
+export const columnPx = (widest: string, padding = 16): number =>
+  Math.ceil(widest.length * CHAR_PX + padding);

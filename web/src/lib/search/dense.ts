@@ -1,4 +1,4 @@
-import { getDirectoryName, getFileName } from "#lib/format.js";
+import { columnPx, getDirectoryName, getFileName, WIDEST } from "#lib/format.js";
 import { fields, stored } from "#lib/stored.svelte.js";
 
 import { type Result, type ResultFile, resultFiles } from "./results";
@@ -45,13 +45,13 @@ export type DenseColumn =
 /** The dense view's columns in order, with their default widths in pixels */
 export const DENSE_COLUMNS: { id: DenseColumn; label: string; width: number; end?: boolean }[] = [
   { id: "user", label: "User", width: 140 },
-  { id: "speed", label: "Speed", width: 100, end: true },
-  { id: "queue", label: "Queue", width: 64, end: true },
+  { id: "speed", label: "Speed", width: columnPx(WIDEST.speed), end: true },
+  { id: "queue", label: "Queue", width: columnPx(WIDEST.count), end: true },
   { id: "free", label: "Free slot", width: 72 },
   { id: "file", label: "File", width: 280 },
-  { id: "size", label: "Size", width: 84, end: true },
+  { id: "size", label: "Size", width: columnPx(WIDEST.size), end: true },
   { id: "bitrate", label: "Bitrate", width: 110 },
-  { id: "length", label: "Length", width: 70, end: true },
+  { id: "length", label: "Length", width: columnPx(WIDEST.length), end: true },
   { id: "folder", label: "Folder", width: 260 }
 ];
 
