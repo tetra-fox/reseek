@@ -51,7 +51,7 @@ describe("the join dialog", () => {
     field.value = "club";
     field.dispatchEvent(new Event("input", { bubbles: true }));
     [...document.querySelectorAll("label")]
-      .find((l) => l.textContent?.includes("Private"))!
+      .find((l) => l.textContent?.includes("private room"))!
       .querySelector<HTMLElement>("[role=checkbox]")!
       .click();
     flushSync();

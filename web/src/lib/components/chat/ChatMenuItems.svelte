@@ -37,7 +37,7 @@
       : `${root()}/api/v0/rooms/history/${segment(target.name)}/export?format=${format}`;
 
   const report = (outcome: { ok: boolean; error?: string }) => {
-    if (!outcome.ok) toast(outcome.error ?? "Failed", "error");
+    if (!outcome.ok) toast(outcome.error ?? "Something went wrong", "error");
   };
   const markRead = async () =>
     report(user ? await chat.acknowledge(target.name) : await chat.markRoomReadNewest(target.name));
@@ -65,7 +65,7 @@
       title: "Clear history",
       body: user
         ? `Delete every stored message with ${target.name}? The conversation closes too.`
-        : `Delete every stored message of ${target.name}?`,
+        : `Delete every stored message in ${target.name}?`,
       confirm: "Delete",
       run: async () =>
         report(user ? await chat.close(target.name, true) : await chat.clearRoom(target.name))
@@ -95,7 +95,7 @@
   <Menu.Separator />
 {/if}
 <Menu.CheckboxItem checked={chatLayout.emoji} onCheckedChange={(on) => (chatLayout.emoji = on)}
-  >Suggest emoji for :name</Menu.CheckboxItem>
+  >Suggest emoji after a colon</Menu.CheckboxItem>
 <Menu.Separator />
 {#if user}
   <Menu.Item onSelect={() => goto(userHref(target.name))}><UserIcon />View profile</Menu.Item>

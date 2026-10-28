@@ -76,10 +76,11 @@
   const disabled = $derived.by(() => {
     if (!write) return "Read-only accounts can't send messages";
     if (target.kind === "user" && target.name === "server")
-      return "The server's notices can't be answered";
+      return "You can't reply to server notices";
     if (!joined) return "Join the room to send messages";
-    if (!app.isServerConnected) return "Not connected to Soulseek";
-    if (summary?.block?.scopes.includes("messages")) return "You blocked them from messaging";
+    if (!app.isServerConnected) return "Connect to the Soulseek server to send messages";
+    if (summary?.block?.scopes.includes("messages"))
+      return "You blocked this user from messaging you";
     return null;
   });
   /** the words marked in messages: our name and the watched words from the options */
@@ -134,7 +135,7 @@
           variant="ghost"
           size="icon-sm"
           class="max-md:hidden"
-          aria-label={layout.users ? "Hide the side panel" : "Show the users and the wall"}
+          aria-label={layout.users ? "Hide the side panel" : "Show users and wall"}
           aria-pressed={layout.users}
           onclick={() => (layout.users = !layout.users)}><PanelRightIcon /></Button>
       {/if}
@@ -186,7 +187,7 @@
       {/if}
       {#if target.kind === "room" && !joined && !write}
         <p class="border-t px-3 py-2 text-xs text-fg-muted">
-          This is the stored history of a room you are not in.
+          You're not in this room. This is its stored history.
         </p>
       {:else}
         <Composer bind:this={composer} {pane} {disabled} {names} />

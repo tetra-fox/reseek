@@ -38,7 +38,7 @@
     const outcome = await members.setTicker(value.trim());
     saving = false;
     if (!outcome.ok) return void toast(outcome.error, "error");
-    toast(value.trim() ? "Your ticker is on the wall" : "Your ticker is off the wall");
+    toast(value.trim() ? "Ticker set" : "Ticker removed");
   };
 </script>
 
@@ -58,7 +58,7 @@
       <div class="flex justify-end gap-1">
         {#if mine}
           <Button size="sm" variant="ghost" disabled={saving} onclick={() => void save("")}
-            >Take down</Button>
+            >Remove</Button>
         {/if}
         <Button size="sm" type="submit" disabled={saving || text.trim() === mine}>Set</Button>
       </div>
@@ -93,12 +93,7 @@
       </div>
     {:else}
       <div>
-        <EmptyState
-          icon={MessageSquareDashedIcon}
-          title="Nothing on the wall"
-          description={write
-            ? "Members' tickers show here; set yours above."
-            : "Members' tickers show here."} />
+        <EmptyState icon={MessageSquareDashedIcon} title="No tickers yet" />
       </div>
     {/each}
   </div>

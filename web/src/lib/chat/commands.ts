@@ -62,9 +62,10 @@ export const parseCommand = (input: string, place: Place): Parsed => {
   const name = match?.[1].toLowerCase() ?? "";
   const rest = match?.[2].trim() ?? "";
   const command = COMMANDS.find((c) => c.name === name);
-  if (!command) return { kind: "error", message: `/${name} is not a command; /help lists them` };
+  if (!command)
+    return { kind: "error", message: `/${name} isn't a command. Type /help to see the list.` };
   if (command.roomOnly && place !== "room") {
-    return { kind: "error", message: `/${name} works in a room` };
+    return { kind: "error", message: `/${name} only works in a room` };
   }
   const needs = command.args.startsWith("<");
   if (needs && !rest) return { kind: "error", message: `Usage: ${usage(command)}` };

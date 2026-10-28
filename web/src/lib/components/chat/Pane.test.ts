@@ -300,10 +300,10 @@ describe("a chat pane", () => {
         new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
       );
       await step();
-      expect(document.body.textContent).not.toContain("not sent");
+      expect(document.body.textContent).not.toContain("Not sent");
       await vi.advanceTimersByTimeAsync(ECHO_WAIT);
       flushSync();
-      expect(document.body.textContent).toContain("not sent");
+      expect(document.body.textContent).toContain("Not sent");
       expect(ids()).toHaveLength(2);
       // the echo came after all: it takes the row's place
       net.frame("rooms.message", {
@@ -312,7 +312,7 @@ describe("a chat pane", () => {
       });
       await step();
       expect(ids()).toEqual(["1", "2"]);
-      expect(document.body.textContent).not.toContain("not sent");
+      expect(document.body.textContent).not.toContain("Not sent");
     } finally {
       vi.useRealTimers();
     }

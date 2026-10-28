@@ -10,7 +10,7 @@ export const copyText = async (text: string): Promise<boolean> => {
     const why = isSecureContext
       ? "the browser didn't allow it"
       : "the browser only copies over https or localhost";
-    toast(`Couldn't copy, ${why}`, "error");
+    toast(`Couldn't copy: ${why}`, "error");
     return false;
   }
 };

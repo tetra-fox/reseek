@@ -31,7 +31,7 @@
       class="text-accent underline-offset-2 hover:underline">{part.text}</a
     >{:else if part.kind === "slsk"}<a
       href={slskBrowse(part.link)}
-      title={`${part.link.folder ? "Browse the folder" : "Browse to the file"} from ${part.link.username}`}
+      title={`${part.link.folder ? "Browse this folder" : "Show this file"} in ${part.link.username}'s shares`}
       class="text-accent underline-offset-2 hover:underline">{part.text}</a
     >{#if write && !part.link.folder}<button
         type="button"

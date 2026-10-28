@@ -138,10 +138,7 @@
         <Pane {target} {at} {lead} />
       {/key}
     {:else if wide.current}
-      <EmptyState
-        icon={MessagesSquareIcon}
-        title="No chat open"
-        description="Pick a room or a conversation, join a room, or write to someone." />
+      <EmptyState icon={MessagesSquareIcon} title="No chat selected" />
     {:else}
       {@render list()}
     {/if}

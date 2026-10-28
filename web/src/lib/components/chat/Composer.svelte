@@ -283,7 +283,7 @@
         ? "Commands"
         : word?.kind === "emoji"
           ? "Emoji"
-          : "Names"}
+          : "Usernames"}
       class="absolute bottom-full left-2 z-20 mb-1 min-w-48 rounded-control border bg-overlay p-1 text-sm shadow-raised">
       {#each suggestions as s, i (s.key)}
         <li

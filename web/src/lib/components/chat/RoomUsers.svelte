@@ -115,7 +115,7 @@
   const remove = (name: string) =>
     confirmation.ask({
       title: "Remove from the room",
-      body: `Take ${name} out of ${members.name}? They can't join again until someone adds them.`,
+      body: `Remove ${name} from ${members.name}? They can't rejoin until someone adds them again.`,
       confirm: "Remove",
       run: () => void members.removeMember(name).then(report(`${name} was removed`))
     });
@@ -129,7 +129,7 @@
   const quit = () =>
     confirmation.ask({
       title: "Leave the private room",
-      body: `Stop being a member of ${members.name}? Someone has to add you again to come back.`,
+      body: `Leave ${members.name}? You can only come back if someone adds you again.`,
       confirm: "Leave",
       run: () => void members.dropMembership().then(report(`You left ${members.name}`))
     });
@@ -154,8 +154,8 @@
         </Menu.Trigger>
         <Menu.Content align="end" class="min-w-52">
           <Menu.Label>
-            {#if role === "owner"}You own this room{:else if role === "operator"}You operate this
-              room{:else}You are a member{/if}
+            {#if role === "owner"}You own this room{:else if role === "operator"}You're an operator
+              of this room{:else}You're a member{/if}
           </Menu.Label>
           {#if role === "owner"}
             <Menu.Item onSelect={giveUp}><CrownIcon />Give up ownership</Menu.Item>

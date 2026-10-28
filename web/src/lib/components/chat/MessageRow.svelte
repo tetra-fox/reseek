@@ -116,7 +116,7 @@
         ><ClockIcon class="size-3" />sending</span>
     {:else if m.sending === "failed"}
       <span class="flex items-center gap-1 text-xs text-danger">
-        not sent
+        Not sent
         <Button variant="link" class="text-xs" onclick={onretry}>retry</Button>
       </span>
     {/if}
