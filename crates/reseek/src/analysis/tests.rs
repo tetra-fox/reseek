@@ -278,3 +278,28 @@ proptest::proptest! {
     reading::read(&measured);
   }
 }
+
+#[test]
+fn a_cut_where_the_highest_bitrates_cut_reads_alike_at_44_1_and_48_khz() {
+  let dir = tempfile::tempdir().unwrap();
+  for rate in [44_100, 48_000] {
+    for hz in [20_000.0, 20_500.0] {
+      let audio = music(1, rate, fixtures::cut_at(hz));
+      let reading = analysed(&flac(dir.path(), "cut.flac", &audio, 16));
+      assert_eq!(
+        reading.verdict,
+        AnalysisVerdict::Inconclusive,
+        "{rate} {hz}: {reading:#?}"
+      );
+      assert!(reading.encoder_guess.is_some(), "{rate} {hz}");
+    }
+    // a cut where a lower bitrate cuts is still a transcode at either rate
+    let audio = music(1, rate, fixtures::cut_at(17_000.0));
+    let reading = analysed(&flac(dir.path(), "cut.flac", &audio, 16));
+    assert_eq!(
+      reading.verdict,
+      AnalysisVerdict::LikelyTranscode,
+      "{rate}: {reading:#?}"
+    );
+  }
+}

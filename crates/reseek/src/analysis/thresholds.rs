@@ -74,6 +74,10 @@ pub(super) struct Profile {
   pub kbps: u32,
 }
 
+/// Profiles at this bitrate and above cut where some recordings are filtered when they are
+/// made, so a sharp shelf there is a transcode only with frame artefacts or gaps beside it.
+pub(super) const HIGH_BITRATE_KBPS: u32 = 320;
+
 /// The cutoffs of common lossy encoder settings, lowest first. LAME's defaults are the
 /// commonest; other MP3 encoders and AAC cut a little lower at the same bitrate.
 pub(super) const PROFILES: &[Profile] = &[

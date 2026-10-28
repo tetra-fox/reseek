@@ -12,9 +12,9 @@ use super::engine::Measured;
 use super::measure::Window;
 use super::thresholds::{
   CLUSTER_HZ, CONFIDENCE_CAP, CONSISTENT_SHARE, FEW_WINDOWS, FRAME_ARTEFACTS_PRESENT, FULL_BAND,
-  HOLES_PRESENT, INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE, MONO_CORRELATION,
-  MONO_SIDE_DB, NATURAL_LIMIT, Profile, QUIET_DBFS, SHARP_SHELF_DB, TRANSCODE_SHARE,
-  UPSAMPLED_BELOW, profile_at,
+  HIGH_BITRATE_KBPS, HOLES_PRESENT, INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE,
+  MONO_CORRELATION, MONO_SIDE_DB, NATURAL_LIMIT, Profile, QUIET_DBFS, SHARP_SHELF_DB,
+  TRANSCODE_SHARE, UPSAMPLED_BELOW, profile_at,
 };
 
 /// The width of a cutoff histogram bucket, in Hz.
@@ -230,21 +230,22 @@ fn verdict(
         .cutoff_hz
         .is_some_and(|c| (c - median).abs() <= CLUSTER_HZ)
   }) / clustered.max(f64::EPSILON);
-  let near_top = median >= FULL_BAND * heard.top;
   // a lossy file's own encoder cuts off too: only a cutoff well below its bitrate's counts
   let below_claim =
     |profile: &Profile| lossless || bitrate.is_some_and(|kbps| profile.kbps * 3 / 2 <= kbps);
 
+  // a cutoff where the highest bitrates cut is also where some recordings are filtered
+  let high = |profile: &Profile| profile.kbps >= HIGH_BITRATE_KBPS;
   if let Some(profile) = profile_at(median).filter(|p| below_claim(p))
     && clustered >= TRANSCODE_SHARE
     && (sharp_share >= 0.5 || artefacts)
-    && (!near_top || artefacts || holes)
+    && (!high(profile) || artefacts || holes)
   {
     let evidence = 0.5 * ((clustered - TRANSCODE_SHARE) / (1.0 - TRANSCODE_SHARE)).clamp(0.0, 1.0)
       + 0.25 * sharp_share
       + if artefacts || holes { 0.25 } else { 0.0 };
     let mut confidence = 0.6 + 0.38 * evidence;
-    if near_top {
+    if high(profile) {
       confidence = confidence.min(0.75);
       reading.limitations.push(
         "A transcode from a high bitrate is the hardest case: the reading rests on frame \
@@ -293,7 +294,8 @@ fn verdict(
       );
       return reading;
     }
-    // past the transcode rule, this is a sharp cutoff near the top without other signs
+    // past the transcode rule, this is a sharp cutoff where the highest bitrates cut, without
+    // other signs
     reading.encoder_guess = Some(EncoderGuess {
       profile: profile.name.to_string(),
       confidence: 0.4,

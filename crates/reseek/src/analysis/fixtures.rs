@@ -64,6 +64,11 @@ pub fn pink(hz: f64) -> f64 {
   if hz < 20.0 { 0.0 } else { (100.0 / hz).sqrt() }
 }
 
+/// [`pink`] with nothing above `hz`: an encoder's low-pass, or a filter applied when mastering.
+pub fn cut_at(hz: f64) -> impl Fn(f64) -> f64 + Copy {
+  move |f| if f < hz { pink(f) } else { 0.0 }
+}
+
 /// [`pink`] rolling off gently from 3.5 kHz, 24 dB an octave, as a lo-fi recording does.
 pub fn lo_fi(hz: f64) -> f64 {
   pink(hz) / (1.0 + (hz / 3_500.0).powi(8)).sqrt()
