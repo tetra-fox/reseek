@@ -17,29 +17,29 @@ export const SCOPES = {
     { id: "errored", label: "Retry all failed", test: (s: string) => ERRORED.includes(s) },
     {
       id: "cancelled",
-      label: "Retry All Cancelled",
+      label: "Retry all cancelled",
       test: (s: string) => s === "Completed, Cancelled"
     },
-    { id: "all", label: "Retry All", test: isRetryable }
+    { id: "all", label: "Retry all", test: isRetryable }
   ],
   cancel: [
-    { id: "all", label: "Cancel All", test: isCancellable },
+    { id: "all", label: "Cancel all", test: isCancellable },
     {
       id: "queued",
-      label: "Cancel All Queued",
+      label: "Cancel all queued",
       test: (s: string) => s === "Queued, Locally" || s === "Queued, Remotely" || s === "Queued"
     },
-    { id: "inProgress", label: "Cancel All In Progress", test: (s: string) => s === "InProgress" }
+    { id: "inProgress", label: "Cancel all in progress", test: (s: string) => s === "InProgress" }
   ],
   remove: [
-    { id: "succeeded", label: "Remove All Succeeded", test: isSucceeded },
-    { id: "errored", label: "Remove All Errored", test: (s: string) => ERRORED.includes(s) },
+    { id: "succeeded", label: "Remove all succeeded", test: isSucceeded },
+    { id: "errored", label: "Remove all errored", test: (s: string) => ERRORED.includes(s) },
     {
       id: "cancelled",
-      label: "Remove All Cancelled",
+      label: "Remove all cancelled",
       test: (s: string) => s === "Completed, Cancelled"
     },
-    { id: "completed", label: "Remove All Completed", test: isRemovable }
+    { id: "completed", label: "Remove all completed", test: isRemovable }
   ]
 } as const;
 
