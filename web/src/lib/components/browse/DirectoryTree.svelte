@@ -42,6 +42,7 @@
     type TreeNode
   } from "#lib/browse/tree.js";
   import { TYPE_AHEAD_MS, typeAhead } from "#lib/browse/typeahead.js";
+  import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
   import { formatBytes } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepsKey, withModifier } from "#lib/keys.js";
@@ -129,8 +130,6 @@
     await tick();
     centre(rows.findIndex((r) => r.node.name === name));
   };
-
-  let dragging: { y: number; height: number } | null = null;
 </script>
 
 <div
@@ -193,32 +192,12 @@
     {/each}
   </div>
 </div>
-<div
-  role="slider"
-  tabindex="0"
-  aria-label="Height of the folder list"
-  aria-valuemin={MIN_HEIGHT}
-  aria-valuenow={height}
-  title="Drag or use arrow keys to resize"
-  class="flex h-4 cursor-row-resize items-center justify-center border-t"
-  onpointerdown={(e) => {
-    dragging = { y: e.clientY, height: height };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }}
-  onpointermove={(e) => {
-    if (dragging) height = Math.max(MIN_HEIGHT, dragging.height + e.clientY - dragging.y);
-  }}
-  onpointerup={() => {
-    if (dragging) saveHeight(height);
-    dragging = null;
-  }}
-  onkeydown={(e) => {
-    if (withModifier(e)) return;
-    if (e.key === "ArrowUp") height = Math.max(MIN_HEIGHT, height - 20);
-    else if (e.key === "ArrowDown") height += 20;
-    else return;
-    e.preventDefault();
-    saveHeight(height);
-  }}>
+<ResizeHandle
+  bind:value={height}
+  min={MIN_HEIGHT}
+  edge="bottom"
+  label="Height of the folder list"
+  onchange={saveHeight}
+  class="flex h-4 items-center justify-center border-t">
   <span class="h-1 w-8 rounded-full bg-border"></span>
-</div>
+</ResizeHandle>
