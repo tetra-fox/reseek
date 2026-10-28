@@ -29,10 +29,10 @@ export type Column = {
   /** shown until the user hides it */
   visible: boolean;
   /**
-   * pixels, or for a column of figures a length that holds its widest value; the file column
-   * takes what is left on top of it
+   * the default width as a CSS length that grows with the text: a column of figures holds its
+   * widest value, the others are in rem; the file column takes what is left on top of it
    */
-  width: number | string;
+  width: string;
   /** what sorting by it orders by, none for the selector and the actions */
   sort?: SortKey;
   /** the only direction it is offered in */
@@ -43,11 +43,11 @@ export type Column = {
 
 /** The table's columns in order, with their defaults */
 export const COLUMNS: Column[] = [
-  { id: "select", label: "Select", visible: true, width: 40, fixed: true },
-  { id: "file", label: "File", visible: true, width: 240, sort: "file", fixed: true },
-  { id: "user", label: "User", visible: true, width: 150, sort: "user" },
+  { id: "select", label: "Select", visible: true, width: "2.5rem", fixed: true },
+  { id: "file", label: "File", visible: true, width: "15rem", sort: "file", fixed: true },
+  { id: "user", label: "User", visible: true, width: "9.5rem", sort: "user" },
   { id: "size", label: "Size", visible: true, width: columnWidth(WIDEST.size), sort: "size" },
-  { id: "progress", label: "Progress", visible: true, width: 180, sort: "progress" },
+  { id: "progress", label: "Progress", visible: true, width: "11.25rem", sort: "progress" },
   {
     id: "speed",
     label: "Speed",
@@ -64,15 +64,15 @@ export const COLUMNS: Column[] = [
     width: columnWidth(WIDEST.transferred),
     sort: "size"
   },
-  { id: "queue", label: "Queue", visible: false, width: 120 },
-  { id: "requested", label: "Requested", visible: false, width: 130, sort: "requested" },
-  { id: "started", label: "Started", visible: false, width: 130, sort: "started" },
-  { id: "ended", label: "Ended", visible: false, width: 130, sort: "ended" },
+  { id: "queue", label: "Queue", visible: false, width: "7.5rem" },
+  { id: "requested", label: "Requested", visible: false, width: "8.25rem", sort: "requested" },
+  { id: "started", label: "Started", visible: false, width: "8.25rem", sort: "started" },
+  { id: "ended", label: "Ended", visible: false, width: "8.25rem", sort: "ended" },
   { id: "elapsed", label: "Elapsed", visible: false, width: columnWidth(WIDEST.duration) },
-  { id: "attempts", label: "Attempts", visible: false, width: 80, sort: "attempts" },
-  { id: "batch", label: "Batch", visible: false, width: 100, only: "download" },
-  { id: "group", label: "Group", visible: false, width: 110, only: "upload" },
-  { id: "actions", label: "Actions", visible: true, width: 160, fixed: true }
+  { id: "attempts", label: "Attempts", visible: false, width: "5.5rem", sort: "attempts" },
+  { id: "batch", label: "Batch", visible: false, width: "6.25rem", only: "download" },
+  { id: "group", label: "Group", visible: false, width: "7rem", only: "upload" },
+  { id: "actions", label: "Actions", visible: true, width: "10rem", fixed: true }
 ];
 
 /** The columns a direction offers */

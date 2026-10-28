@@ -43,24 +43,24 @@ export type DenseColumn =
   | "folder";
 
 /**
- * The dense view's columns in order, with their default widths: pixels, or for a column of
- * figures a length that holds its widest value
+ * The dense view's columns in order, with their default widths as CSS lengths that grow with the
+ * text: a column of figures holds its widest value, the others are in rem
  */
 export const DENSE_COLUMNS: {
   id: DenseColumn;
   label: string;
-  width: number | string;
+  width: string;
   end?: boolean;
 }[] = [
-  { id: "user", label: "User", width: 140 },
+  { id: "user", label: "User", width: "8.75rem" },
   { id: "speed", label: "Speed", width: columnWidth(WIDEST.speed), end: true },
   { id: "queue", label: "Queue", width: columnWidth(WIDEST.count), end: true },
-  { id: "free", label: "Free slot", width: 72 },
-  { id: "file", label: "File", width: 280 },
+  { id: "free", label: "Free slot", width: "5.5rem" },
+  { id: "file", label: "File", width: "17.5rem" },
   { id: "size", label: "Size", width: columnWidth(WIDEST.size), end: true },
-  { id: "bitrate", label: "Bitrate", width: 110 },
+  { id: "bitrate", label: "Bitrate", width: "7rem" },
   { id: "length", label: "Length", width: columnWidth(WIDEST.length), end: true },
-  { id: "folder", label: "Folder", width: 260 }
+  { id: "folder", label: "Folder", width: "16.25rem" }
 ];
 
 const VALUE: Record<DenseColumn, (row: DenseRow) => number | string> = {
