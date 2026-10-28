@@ -31,7 +31,7 @@
   type Props = {
     /** the username, shown exactly as it is */
     name: string;
-    /** the folder the name was shown with, which "Search their files" starts from */
+    /** the folder the name was shown with, which "Search their shares" starts from */
     folder?: string;
     /**
      * a click opens the card and keeps it open, and a double click opens a private chat, as
@@ -138,9 +138,11 @@
   };
 </script>
 
+<!-- the menu button sits over what follows the name and only while it is hovered or focused,
+     so a name takes its text's width; the keyboard opens the menu from the link -->
 <span
   class={cn(
-    "group/username inline-flex max-w-full items-center gap-0.5 align-baseline",
+    "group/username relative inline-flex max-w-full items-center align-baseline",
     className
   )}>
   <a
@@ -177,7 +179,7 @@
     type="button"
     tabindex="-1"
     aria-label={`Menu for ${name}`}
-    class="rounded-badge text-fg-muted opacity-0 transition-opacity group-focus-within/username:opacity-100 group-hover/username:opacity-100 hover:bg-hover"
+    class="pointer-events-none absolute top-1/2 left-full z-10 ml-0.5 -translate-y-1/2 rounded-badge bg-overlay text-fg-muted opacity-0 shadow-xs transition-opacity group-focus-within/username:pointer-events-auto group-focus-within/username:opacity-100 group-hover/username:pointer-events-auto group-hover/username:opacity-100 hover:bg-hover"
     onclick={() => show("menu")}>
     <ChevronDownIcon class="size-3.5" />
   </button>

@@ -124,6 +124,14 @@ test("a room reads like a chat: names, actions, links and the wall", async ({ pa
     .evaluate((a) => getComputedStyle(a).color);
   const listed = page.getByRole("grid", { name: "Users in the room" });
   await expect(listed.getByRole("link", { name: "bob", exact: true })).toHaveCSS("color", colour);
+  // a name takes only its text's width: its menu button takes no room until it shows
+  const widths = await log
+    .getByRole("link", { name: "bob", exact: true })
+    .evaluate((a) => [
+      a.getBoundingClientRect().width,
+      a.parentElement!.getBoundingClientRect().width
+    ]);
+  expect(widths[1]).toBeCloseTo(widths[0], 0);
   // a /me message is an action, a slsk:// link opens Browse, a mention is marked
   await expect(log.getByText("waves at everyone")).toBeVisible();
   await expect(log.getByRole("link", { name: /^slsk:\/\/bob/ })).toHaveAttribute(

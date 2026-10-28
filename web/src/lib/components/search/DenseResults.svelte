@@ -233,7 +233,7 @@
               onCheckedChange={(on) => on !== selected.has(row.key) && list.toggle(row.key)} />
           </span>
           <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
-            <span class="min-w-0 truncate"><Username name={row.username} /></span>
+            <span class="flex min-w-0"><Username name={row.username} /></span>
             {#if row.country}<Country code={row.country} />{/if}
           </span>
           <span role="gridcell" class="px-2 text-right tabular-nums"

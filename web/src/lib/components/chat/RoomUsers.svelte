@@ -237,7 +237,7 @@
             <Presence presence={u.status} />
             <span class="w-5 shrink-0 text-center" title={u.countryCode ?? "?"}
               >{country ?? "?"}</span>
-            <span class={["min-w-0 truncate", blocked(u.username) && "line-through"]}>
+            <span class={["flex min-w-0", blocked(u.username) && "line-through"]}>
               <Username name={u.username} card />
             </span>
             {#if u.username === room?.owner}<CrownIcon
