@@ -287,6 +287,19 @@ pub struct RoomUserJoined {
   pub user: RoomUser,
 }
 
+/// A member of a room we are in went away or came back, the data of a `rooms.user_status`
+/// frame; sent once for each room they are in with us.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomUserStatus {
+  /// the room
+  pub room_name: String,
+  /// the member
+  pub username: String,
+  /// their presence now
+  pub status: crate::users::UserPresence,
+}
+
 /// A user left a room we are in, the data of a `rooms.user_left` frame.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

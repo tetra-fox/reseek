@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use api_types::rooms::{Room, RoomTicker, RoomUser};
 use api_types::state::UserStatistics;
+use api_types::users::UserPresence;
 use soulseek_proto::server::{RoomData, UserData};
 
 /// A room we are in, or were in before the connection was lost.
@@ -169,6 +170,21 @@ impl Tracker {
     }
   }
 
+  /// `username` is `status` now; the rooms we are in where their presence changed, in the order
+  /// joined.
+  pub fn status(&mut self, username: &str, status: UserPresence) -> Vec<String> {
+    let mut changed = Vec::new();
+    for room in self.rooms.iter_mut().filter(|room| room.joined) {
+      if let Some(user) = room.users.get_mut(username)
+        && user.status != status
+      {
+        user.status = status;
+        changed.push(room.name.clone());
+      }
+    }
+    changed
+  }
+
   /// Changes `room`'s tickers with `change`; false when the room is not tracked.
   pub fn tickers(
     &mut self,
@@ -313,5 +329,26 @@ mod tests {
     assert_eq!(room.operator_count, Some(1));
     assert!(tracker.drop_private("club"));
     assert!(tracker.room("club").is_none());
+  }
+
+  #[test]
+  fn a_presence_change_names_each_joined_room_it_changes() {
+    let mut tracker = Tracker::default();
+    for name in ["indie", "jazz", "folk"] {
+      let data = RoomData {
+        name: name.into(),
+        users: vec![user("me"), user("alice")],
+        private: None,
+      };
+      tracker.joined(&data, "me");
+    }
+    tracker.user_left("folk", "alice");
+    let away = api_types::users::UserPresence::Away;
+    assert_eq!(tracker.status("alice", away), ["indie", "jazz"]);
+    assert!(
+      tracker.status("alice", away).is_empty(),
+      "no change, no news"
+    );
+    assert!(tracker.status("nobody", away).is_empty());
   }
 }

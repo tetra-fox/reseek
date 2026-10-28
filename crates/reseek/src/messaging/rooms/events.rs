@@ -8,7 +8,8 @@ use std::collections::BTreeMap;
 use api_types::blocking::BlockScope;
 use api_types::events::{Event as BusEvent, RoomMessageReceivedEvent};
 use api_types::live::LiveFrame;
-use api_types::rooms::{RoomMessageReceived, RoomUserJoined, RoomUserLeft};
+use api_types::rooms::{RoomMessageReceived, RoomUserJoined, RoomUserLeft, RoomUserStatus};
+use api_types::users::UserPresence;
 use chrono::Utc;
 use soulseek_client::{Event, RoomMembers};
 use soulseek_proto::server::UserData;
@@ -195,6 +196,27 @@ impl Messaging {
         room_name: room,
         user: member,
       }));
+  }
+
+  /// A member of the rooms we are in is `status` now: pushed for each room where that changes
+  /// their presence, so a pane can say they went away or came back.
+  pub fn member_status(&self, username: &str, status: UserPresence) {
+    let rooms = self.rooms.tracker().status(username, status);
+    for room_name in rooms {
+      trace!(
+        room = room_name,
+        username,
+        ?status,
+        "room member's presence changed"
+      );
+      self
+        .live
+        .publish(LiveFrame::RoomsUserStatus(RoomUserStatus {
+          room_name,
+          username: username.to_string(),
+          status,
+        }));
+    }
   }
 
   /// `username` left `room`. Our own leave is the one we asked for, which has taken the room

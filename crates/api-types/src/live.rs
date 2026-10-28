@@ -14,7 +14,7 @@ use crate::events::EventRecord;
 use crate::logs::LogRecord;
 use crate::options::OptionsDocument;
 use crate::rooms::{
-  HistoryGap, JoinedRoom, Room, RoomMessageReceived, RoomUserJoined, RoomUserLeft,
+  HistoryGap, JoinedRoom, Room, RoomMessageReceived, RoomUserJoined, RoomUserLeft, RoomUserStatus,
 };
 use crate::search::{Search, SearchResponseReceived};
 use crate::state::{State, VersionInfo};
@@ -106,6 +106,9 @@ pub enum LiveFrame {
   /// a user left a room we are in
   #[serde(rename = "rooms.user_left")]
   RoomsUserLeft(RoomUserLeft),
+  /// a member of a room we are in went away or came back
+  #[serde(rename = "rooms.user_status")]
+  RoomsUserStatus(RoomUserStatus),
   /// room history has a gap, from a time reseek was not connected
   #[serde(rename = "rooms.gap")]
   RoomsGap(HistoryGap),
@@ -224,6 +227,7 @@ mod tests {
     "rooms.message",
     "rooms.user_joined",
     "rooms.user_left",
+    "rooms.user_status",
     "rooms.gap",
     "users.status",
     "users.browse_progress",

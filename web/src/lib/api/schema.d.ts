@@ -4644,6 +4644,11 @@ export interface components {
             /** @enum {string} */
             type: "rooms.user_left";
         } | {
+            /** @description a member of a room we are in went away or came back */
+            data: components["schemas"]["RoomUserStatus"];
+            /** @enum {string} */
+            type: "rooms.user_status";
+        } | {
             /** @description room history has a gap, from a time reseek was not connected */
             data: components["schemas"]["HistoryGap"];
             /** @enum {string} */
@@ -5717,6 +5722,18 @@ export interface components {
             /** @description the room */
             roomName: string;
             /** @description the user who left */
+            username: string;
+        };
+        /**
+         * @description A member of a room we are in went away or came back, the data of a `rooms.user_status`
+         *     frame; sent once for each room they are in with us.
+         */
+        RoomUserStatus: {
+            /** @description the room */
+            roomName: string;
+            /** @description their presence now */
+            status: components["schemas"]["UserPresence"];
+            /** @description the member */
             username: string;
         };
         /** @description The data of `ScriptRunCompleted`: how one run of a script went. */

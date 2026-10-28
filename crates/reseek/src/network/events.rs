@@ -207,6 +207,7 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
   let username = &status.username;
   let presence = UserPresence::from(status.presence);
   trace!(username, ?presence, "user status changed");
+  app.messaging.member_status(username, presence);
   let asked = app
     .users
     .status_received(username, presence, status.is_privileged);

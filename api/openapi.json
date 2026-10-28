@@ -18233,6 +18233,26 @@
           },
           {
             "type": "object",
+            "description": "a member of a room we are in went away or came back",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/RoomUserStatus",
+                "description": "a member of a room we are in went away or came back"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "rooms.user_status"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "room history has a gap, from a time reseek was not connected",
             "required": [
               "data",
@@ -20518,6 +20538,29 @@
           "username": {
             "type": "string",
             "description": "the user who left"
+          }
+        }
+      },
+      "RoomUserStatus": {
+        "type": "object",
+        "description": "A member of a room we are in went away or came back, the data of a `rooms.user_status`\nframe; sent once for each room they are in with us.",
+        "required": [
+          "roomName",
+          "username",
+          "status"
+        ],
+        "properties": {
+          "roomName": {
+            "type": "string",
+            "description": "the room"
+          },
+          "status": {
+            "$ref": "#/components/schemas/UserPresence",
+            "description": "their presence now"
+          },
+          "username": {
+            "type": "string",
+            "description": "the member"
           }
         }
       },
