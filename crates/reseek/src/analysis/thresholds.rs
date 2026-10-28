@@ -46,10 +46,10 @@ pub(super) const TRANSCODE_SHARE: f64 = 0.85;
 pub(super) const CLUSTER_HZ: f64 = 500.0;
 /// The share of windows each of two sources must have for mixed sources.
 pub(super) const MIXED_SHARE: f64 = 0.15;
-/// The tops of the bands of the sample rates below 48 kHz that audio is commonly made at:
-/// 32, 44.1 and 48 kHz. Content that stops with a cliff at one, in a file at a higher rate,
-/// was made at that rate.
-pub(super) const LOWER_RATE_EDGES: [f64; 3] = [16_000.0, 22_050.0, 24_000.0];
+/// The tops of the bands of the sample rates audio is commonly made at: 22.05, 32, 44.1 and
+/// 48 kHz. Content that stops with a cliff at one, in a file whose band reaches past it, was
+/// made at that rate.
+pub(super) const LOWER_RATE_EDGES: [f64; 4] = [11_025.0, 16_000.0, 22_050.0, 24_000.0];
 /// Fewer non-silent windows than this give a reading little to go on, which it says.
 pub(super) const FEW_WINDOWS: usize = 60;
 /// Channels correlated above this, with the side channel at or below [`MONO_SIDE_DB`], hold

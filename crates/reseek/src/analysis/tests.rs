@@ -396,17 +396,25 @@ fn hi_res_with_a_natural_roll_off_is_not_flagged_as_upsampled() {
 #[test]
 fn a_cutoff_at_a_lower_rates_band_edge_is_not_read_as_a_transcode() {
   let dir = tempfile::tempdir().unwrap();
-  // made at 32 kHz, so it stops at 16 kHz, where a 128 kbps MP3 cuts too
-  let audio = music(1, 32_000, pink).resampled(96_000);
-  let reading = analysed(&flac(dir.path(), "up32.flac", &audio, 24));
-  assert_eq!(reading.flags, [AnalysisFlag::Upsampled], "{reading:#?}");
-  assert_eq!(
-    reading.verdict,
-    AnalysisVerdict::Inconclusive,
-    "{reading:#?}"
-  );
-  assert_eq!(
-    reading.encoder_guess.as_ref().unwrap().profile,
-    "mp3 ~128 kbps"
-  );
+  // made at 32 kHz, so it stops at 16 kHz, where older 128 kbps MP3 encoders cut too; made at
+  // 22.05 kHz, so it stops at 11.025 kHz, where a 64 kbps MP3 cuts
+  for (from, to, profile) in [
+    (32_000, 96_000, "mp3 ~128 kbps"),
+    (32_000, 44_100, "mp3 ~128 kbps"),
+    (22_050, 44_100, "mp3 ~64 kbps"),
+  ] {
+    let audio = music(1, from, pink).resampled(to);
+    let reading = analysed(&flac(dir.path(), "up.flac", &audio, 24));
+    assert_eq!(
+      reading.flags,
+      [AnalysisFlag::Upsampled],
+      "{from} to {to}: {reading:#?}"
+    );
+    assert_eq!(
+      reading.verdict,
+      AnalysisVerdict::Inconclusive,
+      "{from} to {to}: {reading:#?}"
+    );
+    assert_eq!(reading.encoder_guess.as_ref().unwrap().profile, profile);
+  }
 }

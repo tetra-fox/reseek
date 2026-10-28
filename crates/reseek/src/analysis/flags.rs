@@ -33,9 +33,8 @@ pub(super) fn findings(
     notes: Vec::new(),
     source_edge: None,
   };
-  if claimed.sample_rate > 48_000
-    && let Some(edge) = median.and_then(|m| source_edge(windows, m))
-  {
+  let nyquist = f64::from(claimed.sample_rate) / 2.0;
+  if let Some(edge) = median.and_then(|m| source_edge(windows, m, nyquist)) {
     found.flags.push(AnalysisFlag::Upsampled);
     found.notes.push(format!(
       "The content stops sharply at {:.2} kHz, the top of the band a lower sample rate holds, \
@@ -65,13 +64,14 @@ pub(super) fn findings(
   found
 }
 
-/// The lower rate's band edge the content stops at with a cliff: the median cutoff is at the
-/// edge and most windows near it have a sharp shelf there. A natural roll-off, however little
-/// it leaves above, has no cliff.
-fn source_edge(windows: &[&Window], median: f64) -> Option<f64> {
+/// The band edge of a rate lower than the file's (whose band ends at `nyquist`) the content
+/// stops at with a cliff: the median cutoff is at the edge and most windows near it have a
+/// sharp shelf there. A natural roll-off, however little it leaves above, has no cliff.
+fn source_edge(windows: &[&Window], median: f64, nyquist: f64) -> Option<f64> {
   let edge = LOWER_RATE_EDGES
     .iter()
     .copied()
+    .filter(|edge| *edge < nyquist - CLUSTER_HZ)
     .find(|edge| (median - edge).abs() <= CLUSTER_HZ)?;
   let near: Vec<&&Window> = windows
     .iter()
