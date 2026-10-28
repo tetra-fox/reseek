@@ -3,6 +3,7 @@
   import BrowsePage from "#lib/components/browse/BrowsePage.svelte";
   import Pane from "#lib/components/chat/Pane.svelte";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
+  import Crumbs from "#lib/components/shell/Crumbs.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
@@ -73,6 +74,15 @@
     { id: "activity", title: "Activity" }
   ];
 </script>
+
+<!-- the Shares tab is the Browse screen, whose own steps name the folders -->
+{#if tab !== "shares"}
+  <Crumbs
+    steps={[
+      { label: username, href: userHref(username) },
+      ...(tab === "overview" ? [] : [{ label: TABS.find((t) => t.id === tab)?.title ?? tab }])
+    ]} />
+{/if}
 
 {#if profile}
   <ProfileHeader
