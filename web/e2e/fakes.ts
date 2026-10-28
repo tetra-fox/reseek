@@ -334,3 +334,46 @@ export const fakeFiles = async (page: Page) => {
     })
   );
 };
+
+const transfer = (
+  filename: string,
+  state = "Completed, Succeeded",
+  size = 1000,
+  username = "alice"
+) => ({
+  id: crypto.randomUUID(),
+  username,
+  direction: "Download",
+  filename,
+  size,
+  state,
+  requestedAt: "2026-10-26T10:00:00Z",
+  bytesTransferred: state === "InProgress" ? size * 0.4 : size,
+  bytesRemaining: 0,
+  averageSpeed: state === "InProgress" ? 100 : 0,
+  percentComplete: state === "InProgress" ? 40 : 100,
+  attempts: 1,
+  removed: false
+});
+
+/**
+ * Answers the downloads list with alice's two folders, one download running and one done, and
+ * one of bob's as large as a size gets
+ */
+export const fakeDownloads = async (page: Page) => {
+  const files = [
+    transfer("@@a\\Music\\One\\1.flac", "InProgress"),
+    transfer("@@a\\Music\\Two\\2.flac")
+  ];
+  const large = [transfer("@@b\\Big\\3.flac", "Completed, Succeeded", 1023.99 * 1024 ** 3, "bob")];
+  await page.route(
+    (url) => url.pathname.endsWith("/api/v0/transfers/downloads"),
+    (route) =>
+      route.fulfill({
+        json: [
+          { username: "alice", directories: [{ directory: "d", fileCount: 2, files }] },
+          { username: "bob", directories: [{ directory: "b", fileCount: 1, files: large }] }
+        ]
+      })
+  );
+};

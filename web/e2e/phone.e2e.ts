@@ -1,8 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { WIDEST } from "../src/lib/format";
 import {
   fakeBrowse,
   fakeChat,
+  fakeDownloads,
   fakeFiles,
   fakeFolder,
   fakeReports,
@@ -89,6 +91,7 @@ test("every screen fits a phone's width", async ({ page }) => {
   await fakeBrowse(page);
   await fakeFolder(page);
   await fakeFiles(page);
+  await fakeDownloads(page);
   await login(page, "/dashboard");
 
   await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
@@ -115,7 +118,7 @@ test("every screen fits a phone's width", async ({ page }) => {
   await page.getByRole("radio", { name: "Dense" }).click();
   await holds(page, "the dense results", shows("02 Two.flac"));
   await page.getByRole("radio", { name: "Cards" }).click();
-  await fits(page, "/downloads", shows("No downloads yet"));
+  await fits(page, "/downloads", shows("3.flac"));
   await fits(page, "/uploads", shows("No uploads yet"));
   await fits(page, "/chat", shows("indie"));
   await fits(page, "/chat/rooms/indie", shows("anyone have the new boards of canada rip?"));
@@ -165,5 +168,51 @@ test.describe("on a wide screen", () => {
     await page.getByRole("radio", { name: "Dense" }).click();
     await holds(page, "the dense results", shows("02 Two.flac"));
     await page.getByRole("radio", { name: "Cards" }).click();
+  });
+
+  test("the widest figures fit their width in ch", async ({ page }) => {
+    // a tabular digit is wider than 1ch, the plain zero; the narrower point, space and
+    // separators of each formatter's widest value make up for it
+    await login(page, "/dashboard");
+    const over = await page.evaluate((widest) => {
+      const span = (text: string, width?: string) => {
+        const el = document.createElement("span");
+        el.className = "text-sm whitespace-pre tabular-nums";
+        el.textContent = text;
+        if (width) Object.assign(el.style, { display: "inline-block", width });
+        document.body.append(el);
+        const w = el.getBoundingClientRect().width;
+        el.remove();
+        return w;
+      };
+      return widest
+        .map((text) => ({ text, need: span(text), room: span("", `${text.length}ch`) }))
+        .filter((f) => f.need > f.room);
+    }, Object.values(WIDEST));
+    expect(over).toEqual([]);
+  });
+});
+
+test.describe("at a large text size", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("the figure columns grow with the text", async ({ page }) => {
+    // a browser's "Large" font size: the root 20 px, so the app's 14 px text is 17.5 px; set
+    // before every page, since a navigation may load a new one
+    await page.addInitScript(() =>
+      document.addEventListener("DOMContentLoaded", () => {
+        document.documentElement.style.fontSize = "20px";
+      })
+    );
+    await fakeReports(page);
+    await fakeSearch(page);
+    await fakeDownloads(page);
+    await login(page, "/dashboard");
+    await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
+    await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
+    await page.getByRole("radio", { name: "Dense" }).click();
+    await holds(page, "the dense results at 20 px", shows("02 Two.flac"));
+    await page.getByRole("radio", { name: "Cards" }).click();
+    await fits(page, "/downloads", shows("3.flac"));
   });
 });

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { fakeBrowse, fakeSearch, SEARCH_ID } from "./fakes";
+import { fakeBrowse, fakeDownloads, fakeSearch, SEARCH_ID } from "./fakes";
 import { login } from "./login";
 
 test("shows search results as cards and as dense rows walked by key", async ({ page }) => {
@@ -78,32 +78,7 @@ test("cross-fades between screens", async ({ page }) => {
 });
 
 test("groups downloads by user and a tree of folders", async ({ page }) => {
-  const transfer = (filename: string, state = "Completed, Succeeded") => ({
-    id: crypto.randomUUID(),
-    username: "alice",
-    direction: "Download",
-    filename,
-    size: 1000,
-    state,
-    requestedAt: "2026-10-26T10:00:00Z",
-    bytesTransferred: state === "InProgress" ? 400 : 1000,
-    bytesRemaining: 0,
-    averageSpeed: state === "InProgress" ? 100 : 0,
-    percentComplete: state === "InProgress" ? 40 : 100,
-    attempts: 1,
-    removed: false
-  });
-  const files = [
-    transfer("@@a\\Music\\One\\1.flac", "InProgress"),
-    transfer("@@a\\Music\\Two\\2.flac")
-  ];
-  await page.route(
-    (url) => url.pathname.endsWith("/api/v0/transfers/downloads"),
-    (route) =>
-      route.fulfill({
-        json: [{ username: "alice", directories: [{ directory: "d", fileCount: 2, files }] }]
-      })
-  );
+  await fakeDownloads(page);
   await login(page, "/downloads");
   const grid = page.getByRole("grid", { name: "Downloads" });
   await expect(grid.getByRole("button", { name: "Close @@a\\Music" })).toBeVisible();
