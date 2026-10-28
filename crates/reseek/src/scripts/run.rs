@@ -47,7 +47,7 @@ pub struct Job {
   /// the script's name
   pub name: String,
   /// what it runs
-  pub script: Script,
+  pub script: Box<Script>,
   /// the event it runs for
   pub record: Arc<EventRecord>,
 }

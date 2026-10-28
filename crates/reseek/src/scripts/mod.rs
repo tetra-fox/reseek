@@ -13,7 +13,7 @@ mod run;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::OsString;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use api_types::events::{Event, EventRecord, EventType};
@@ -112,38 +112,43 @@ impl Scripts {
   }
 
   /// Queues a run of every script `record` is for. A script no longer in the options gets no
-  /// more runs; those it has waiting still run.
+  /// more runs; those it has waiting still run, and its queue is kept until its task ends, so a
+  /// script added back meanwhile still runs one at a time.
   fn take(&self, record: Arc<EventRecord>) {
     let kind = record.event.event_type();
     let options = self.config.current();
     let scripts = &options.values.integrations.scripts;
     let mut queues = lock(&self.queues);
     queues.retain(|name, queue| {
-      let kept = scripts.contains_key(name);
-      if !kept {
+      if !scripts.contains_key(name) {
         queue.close();
       }
-      kept
+      !queue.ended()
     });
     for (name, script) in scripts {
       if !runs_on(&script.on, kind) {
         continue;
       }
       self.advise(name, &script.run);
-      let queue = queues
-        .entry(name.clone())
-        .or_insert_with(|| self.queue(name));
-      queue.push(Job {
+      let job = Job {
         name: name.clone(),
-        script: script.clone(),
+        script: Box::new(script.clone()),
         record: record.clone(),
-      });
+      };
+      let refused = match queues.get(name) {
+        Some(queue) => queue.push(job),
+        None => Err(job),
+      };
+      // none yet, or the task of one closed and emptied ended since it was last looked at
+      if let Err(job) = refused {
+        queues.insert(name.clone(), self.run_queue(name, Queue::holding(job)));
+      }
     }
   }
 
-  /// A new queue for the script `name`, with the task that runs what it holds.
-  fn queue(&self, name: &str) -> Arc<Queue> {
-    let queue = Arc::new(Queue::default());
+  /// `queue`, of the script `name`, with the task that runs what it holds.
+  fn run_queue(&self, name: &str, queue: Queue) -> Arc<Queue> {
+    let queue = Arc::new(queue);
     tokio::spawn(
       work(
         queue.clone(),
@@ -175,20 +180,49 @@ impl Scripts {
 /// One script's runs waiting their turn.
 #[derive(Default)]
 struct Queue {
-  jobs: Mutex<VecDeque<Job>>,
+  waiting: Mutex<Waiting>,
   /// a run was added or the queue closed
   ready: Notify,
-  /// the script left the options; its task ends once the queue is empty
-  closed: AtomicBool,
   /// runs dropped because too many waited
   dropped: AtomicU64,
   crowded: LogLimiter,
 }
 
+/// The runs waiting, and where the queue's task stands, changed together.
+#[derive(Default)]
+struct Waiting {
+  jobs: VecDeque<Job>,
+  stage: Stage,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Stage {
+  /// the script is in the options
+  #[default]
+  Open,
+  /// the script left the options; the task ends once the queue is empty
+  Closed,
+  /// the task ended; the queue takes no more runs
+  Ended,
+}
+
 impl Queue {
-  /// Adds a run, dropping the oldest waiting one when too many wait.
-  fn push(&self, job: Job) {
-    let mut jobs = lock(&self.jobs);
+  /// A queue holding `job`.
+  fn holding(job: Job) -> Self {
+    let queue = Self::default();
+    lock(&queue.waiting).jobs.push_back(job);
+    queue
+  }
+
+  /// Adds a run, opening the queue again when it was closed and dropping the oldest waiting run
+  /// when too many wait; gives the run back when the queue's task has ended.
+  fn push(&self, job: Job) -> Result<(), Job> {
+    let mut waiting = lock(&self.waiting);
+    if waiting.stage == Stage::Ended {
+      return Err(job);
+    }
+    waiting.stage = Stage::Open;
+    let jobs = &mut waiting.jobs;
     if jobs.len() >= WAITING
       && let Some(oldest) = jobs.pop_front()
     {
@@ -205,14 +239,46 @@ impl Queue {
       }
     }
     jobs.push_back(job);
-    drop(jobs);
+    drop(waiting);
     self.ready.notify_one();
+    Ok(())
   }
 
   fn close(&self) {
-    self.closed.store(true, Ordering::Release);
+    let mut waiting = lock(&self.waiting);
+    if waiting.stage == Stage::Open {
+      waiting.stage = Stage::Closed;
+    }
+    drop(waiting);
     self.ready.notify_one();
   }
+
+  fn ended(&self) -> bool {
+    lock(&self.waiting).stage == Stage::Ended
+  }
+
+  /// What the queue's task does next; ending marks the queue so it takes no more runs.
+  fn next(&self) -> Next {
+    let mut waiting = lock(&self.waiting);
+    match waiting.jobs.pop_front() {
+      Some(job) => Next::Run(job),
+      None if waiting.stage == Stage::Closed => {
+        waiting.stage = Stage::Ended;
+        Next::End
+      }
+      None => Next::Wait,
+    }
+  }
+}
+
+/// What a queue's task does next.
+enum Next {
+  /// runs this
+  Run(Job),
+  /// waits for a run
+  Wait,
+  /// ends: the script left the options and nothing waits
+  End,
 }
 
 /// Runs what `queue` holds, one run at a time, raising `ScriptRunCompleted` after each, until
@@ -224,17 +290,16 @@ async fn work(
   shutdown: CancellationToken,
 ) {
   while !shutdown.is_cancelled() {
-    let job = lock(&queue.jobs).pop_front();
-    match job {
-      Some(job) => {
+    match queue.next() {
+      Next::Run(job) => {
         let completed = run::run(&job, &context, &shutdown).await;
         events.raise(Event::ScriptRunCompleted(completed));
       }
-      None if queue.closed.load(Ordering::Acquire) => return,
-      None => tokio::select! {
+      Next::Wait => tokio::select! {
         () = queue.ready.notified() => {}
         () = shutdown.cancelled() => return,
       },
+      Next::End => return,
     }
   }
 }

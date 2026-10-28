@@ -208,25 +208,54 @@ async fn a_script_that_cannot_start_is_recorded_with_why() {
   assert!(runs.try_recv().is_err(), "its own record runs no script");
 }
 
-#[test]
-fn a_full_queue_drops_the_oldest_run() {
-  let queue = Queue::default();
-  let record = |n: u32| {
-    Arc::new(EventRecord {
+/// A run of nothing for the event numbered `n`.
+fn job(n: u32) -> Job {
+  Job {
+    name: "busy".into(),
+    script: Box::default(),
+    record: Arc::new(EventRecord {
       id: uuid::Uuid::from_u128(n.into()),
       timestamp: chrono::Utc::now(),
       event: Event::Noop(api_types::events::NoFields { version: 0 }),
-    })
-  };
-  for n in 0..=WAITING as u32 {
-    queue.push(Job {
-      name: "busy".into(),
-      script: crate::config::Script::default(),
-      record: record(n),
-    });
+    }),
   }
-  let jobs = lock(&queue.jobs);
-  assert_eq!(jobs.len(), WAITING);
-  assert_eq!(jobs.front().unwrap().record.id, uuid::Uuid::from_u128(1));
+}
+
+#[test]
+fn a_full_queue_drops_the_oldest_run() {
+  let queue = Queue::default();
+  for n in 0..=WAITING as u32 {
+    assert!(queue.push(job(n)).is_ok());
+  }
+  let waiting = lock(&queue.waiting);
+  assert_eq!(waiting.jobs.len(), WAITING);
+  assert_eq!(
+    waiting.jobs.front().unwrap().record.id,
+    uuid::Uuid::from_u128(1)
+  );
   assert_eq!(queue.dropped.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn a_closed_queue_takes_its_script_back_until_its_task_ends() {
+  let queue = Queue::holding(job(1));
+  queue.close();
+  assert!(
+    queue.push(job(2)).is_ok(),
+    "added back before its task ended"
+  );
+  for n in [1, 2] {
+    assert!(matches!(queue.next(), Next::Run(job) if job.record.id == uuid::Uuid::from_u128(n)));
+  }
+  assert!(
+    matches!(queue.next(), Next::Wait),
+    "open again, so its task waits"
+  );
+  queue.close();
+  assert!(matches!(queue.next(), Next::End));
+  assert!(queue.ended());
+  assert!(
+    queue.push(job(3)).is_err(),
+    "a queue whose task ended takes no run"
+  );
 }
