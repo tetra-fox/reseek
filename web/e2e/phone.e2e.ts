@@ -244,19 +244,21 @@ test.describe("at a large text size", () => {
   test.describe("on a wide screen", () => {
     test.use({ viewport: { width: 1280, height: 800 } });
 
-    test("the figure columns grow with the text", async ({ page }) => {
-      await textSize(page, 20);
-      await fakeReports(page);
-      await fakeSearch(page);
-      await fakeDownloads(page);
-      await login(page, "/dashboard");
-      await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
-      await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
-      await page.getByRole("radio", { name: "Dense" }).click();
-      await holds(page, "the dense results at 20 px", shows("02 Two.flac"));
-      await page.getByRole("radio", { name: "Cards" }).click();
-      await fits(page, "/downloads", shows("3.flac"));
-    });
+    for (const root of [20, 24]) {
+      test(`the figure columns grow with the text at ${root} px`, async ({ page }) => {
+        await textSize(page, root);
+        await fakeReports(page);
+        await fakeSearch(page);
+        await fakeDownloads(page);
+        await login(page, "/dashboard");
+        await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
+        await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
+        await page.getByRole("radio", { name: "Dense" }).click();
+        await holds(page, `the dense results at ${root} px`, shows("02 Two.flac"));
+        await page.getByRole("radio", { name: "Cards" }).click();
+        await fits(page, "/downloads", shows("3.flac"));
+      });
+    }
   });
 
   for (const root of [20, 24]) {
@@ -269,6 +271,19 @@ test.describe("at a large text size", () => {
       await fakeFolder(page);
       await login(page, "/dashboard");
       await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
+      // the activity log's sheet stands on the status bar, however many lines that has
+      const bar = page.locator("footer:not(main footer)");
+      const toggle = bar.getByRole("button", { name: "Activity" });
+      await toggle.click();
+      // polled, as the sheet slides up as it opens
+      const gap = async () => {
+        const sheet = (await page
+          .getByRole("region", { name: "Activity on the network" })
+          .boundingBox())!;
+        return Math.round(sheet.y + sheet.height - (await bar.boundingBox())!.y);
+      };
+      await expect.poll(gap, { message: "the sheet's foot is off the bar" }).toBe(0);
+      await toggle.click();
       await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
       await page.getByRole("radio", { name: "Dense" }).click();
       await holds(page, `the dense results at ${root} px`, shows("02 Two.flac"));
