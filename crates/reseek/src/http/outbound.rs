@@ -1,5 +1,5 @@
-//! The HTTP client for the calls the daemon makes itself: to OpenID Connect providers and to the
-//! release feed.
+//! The HTTP client for the calls the daemon makes itself: to OpenID Connect providers, to the
+//! release feed and to Grafana Loki.
 
 use std::path::Path;
 use std::sync::Arc;

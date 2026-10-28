@@ -16,6 +16,8 @@ pub enum Clock {
   Time,
   /// `yyyy-MM-ddTHH:mm:ss.fff`, for the files
   DateTime,
+  /// no time, for a sink that times each line itself
+  Off,
 }
 
 /// The line format.
@@ -62,20 +64,17 @@ where
     event: &Event<'_>,
   ) -> fmt::Result {
     let now = Local::now();
-    let time = match self.clock {
-      Clock::Time => now.format("%H:%M:%S"),
-      Clock::DateTime => now.format("%Y-%m-%dT%H:%M:%S%.3f"),
-    };
+    write!(writer, "[")?;
+    match self.clock {
+      Clock::Time => write!(writer, "{} ", now.format("%H:%M:%S"))?,
+      Clock::DateTime => write!(writer, "{} ", now.format("%Y-%m-%dT%H:%M:%S%.3f"))?,
+      Clock::Off => {}
+    }
     let level = *event.metadata().level();
     if self.colour {
-      write!(
-        writer,
-        "[{time} {}{}\x1b[0m] ",
-        colour(level),
-        abbreviation(level)
-      )?;
+      write!(writer, "{}{}\x1b[0m] ", colour(level), abbreviation(level))?;
     } else {
-      write!(writer, "[{time} {}] ", abbreviation(level))?;
+      write!(writer, "{}] ", abbreviation(level))?;
     }
     if self.module {
       write!(writer, "[{}] ", event.metadata().target())?;

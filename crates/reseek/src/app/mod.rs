@@ -492,6 +492,7 @@ fn run(invocation: Invocation, bundle: Bundle) -> u8 {
     Sinks {
       files: (!options.logger.no_disk).then(|| paths.logs.clone()),
       no_color_env,
+      loki: options.logger.loki.clone(),
     },
   ) {
     Ok(logging) => logging,
@@ -539,8 +540,25 @@ fn run(invocation: Invocation, bundle: Bundle) -> u8 {
   runtime.block_on(serve(sources, defaults, paths, logging, bundle).instrument(process.clone()))
 }
 
-/// Loads the configuration for good, binds the listeners and serves until a signal.
+/// Forwards the logs to Grafana Loki when it is configured, and serves until a signal; the last
+/// lines are pushed to Loki before it returns.
 async fn serve(
+  sources: Sources,
+  defaults: Defaults,
+  paths: Paths,
+  logging: Logging,
+  bundle: Bundle,
+) -> u8 {
+  let loki = logging.start_loki();
+  let code = host(sources, defaults, paths, logging, bundle).await;
+  if let Some(loki) = loki {
+    loki.finish().await;
+  }
+  code
+}
+
+/// Loads the configuration for good, binds the listeners and serves until a signal.
+async fn host(
   sources: Sources,
   defaults: Defaults,
   paths: Paths,

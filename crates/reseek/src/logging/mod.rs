@@ -5,9 +5,10 @@
 mod buffer;
 mod file;
 mod format;
+mod loki;
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use tracing_appender::non_blocking::{NonBlockingBuilder, WorkerGuard};
 use tracing_subscriber::fmt::format::{DefaultFields, Writer};
@@ -21,6 +22,7 @@ pub use file::DailyFile;
 
 use crate::config::Options;
 use crate::config::enums::{DiagnosticLevel, LogLevel};
+use crate::sync::lock;
 use format::{Clock, Line};
 
 /// The name of the span every event of the process is in, which carries the instance name,
@@ -51,6 +53,8 @@ pub struct Logging {
   from_env: bool,
   /// flushes the log file when the process ends
   _file: Option<WorkerGuard>,
+  /// the Loki sink until it is started, with the address it pushes to
+  loki: Mutex<Option<(loki::Sink, String)>>,
 }
 
 /// Where the logs go besides the console.
@@ -59,6 +63,8 @@ pub struct Sinks {
   pub files: Option<PathBuf>,
   /// whether `NO_COLOR` is set to anything
   pub no_color_env: bool,
+  /// the Grafana Loki instance to push to, `None` for none
+  pub loki: Option<String>,
 }
 
 /// The field formatter of the console, a type of its own so a span's fields formatted with
@@ -114,12 +120,22 @@ pub fn init(options: &Options, sinks: Sinks) -> Result<Logging, String> {
     }
     None => (None, None),
   };
+  let (loki_labels, loki_lines, loki) = match sinks.loki {
+    Some(url) => {
+      let labels = loki::Labels::default();
+      let (queue, sink) = loki::channel(&url, labels.clone(), loki::CAPACITY);
+      (Some(labels), Some(loki::lines(queue)), Some((sink, url)))
+    }
+    None => (None, None, None),
+  };
   let buffer = Arc::new(LogBuffer::default());
   tracing_subscriber::registry()
     .with(filter)
     .with(console)
     .with(file)
     .with(BufferLayer(buffer.clone()))
+    .with(loki_labels)
+    .with(loki_lines)
     .try_init()
     .map_err(|e| e.to_string())?;
   Ok(Logging {
@@ -128,6 +144,7 @@ pub fn init(options: &Options, sinks: Sinks) -> Result<Logging, String> {
     buffer,
     from_env,
     _file: guard,
+    loki: Mutex::new(loki),
   })
 }
 
@@ -158,6 +175,28 @@ impl Logging {
   /// The last log records and the stream of new ones.
   pub fn buffer(&self) -> &Arc<LogBuffer> {
     &self.buffer
+  }
+
+  /// Starts pushing to Grafana Loki, when `logger.loki` names an instance; the lines logged
+  /// before were queued for it.
+  pub fn start_loki(&self) -> Option<loki::Running> {
+    let (sink, url) = lock(&self.loki).take()?;
+    match crate::http::outbound::client(None) {
+      Ok(client) => {
+        tracing::info!(
+          url = crate::config::redact::url(&url),
+          "Forwarding logs to Grafana Loki instance"
+        );
+        Some(sink.start(client))
+      }
+      Err(e) => {
+        tracing::error!(
+          error = e,
+          "logs not forwarded to Grafana Loki: no HTTP client"
+        );
+        None
+      }
+    }
   }
 }
 
