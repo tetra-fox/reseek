@@ -94,25 +94,13 @@ e2e:
     cargo nextest run -p soulseek-client --test interop --run-ignored only
     cargo nextest run -p reseek --test smoke --run-ignored only -E "test(soulseek_rs)"
 
-# the live smoke example against a local soulfind, with other users sharing the file it fetches
-live-smoke-local:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    soulfind="$({{ just_executable() }} --justfile {{ justfile() }} soulfind-bin)"
-    if [ -z "$soulfind" ]; then
-      echo "live-smoke-local skipped: soulfind (SOULFIND_BIN or PATH) not found"
-      exit 0
-    fi
-    cargo build -p soulseek-client --example live_smoke
-    SOULFIND_BIN="$soulfind" \
-      cargo nextest run -p soulseek-client --test live_smoke --run-ignored only
-
-# Run by hand only, never from ci or by an agent: it logs in to the real Soulseek server with
-# the throwaway account in RESEEK_TEST_USERNAME and RESEEK_TEST_PASSWORD. --help lists the rest
-[doc("the live smoke example against the real Soulseek server, run by hand only")]
-[positional-arguments]
-live-smoke *ARGS:
-    cargo run -p soulseek-client --example live_smoke -- "$@"
+# Run by hand only, never from ci or by an agent: the daemon logs in to the real Soulseek server
+# with the throwaway account in RESEEK_TEST_USERNAME and RESEEK_TEST_PASSWORD, searches, browses
+# and downloads one small file. RESEEK_TEST_QUERY, _MAX_SIZE, _LISTEN_PORT and _SERVER change
+# what it looks for and where
+[doc("the daemon's smoke run against the real Soulseek server, run by hand only")]
+live-smoke:
+    cargo nextest run -p reseek --test smoke --run-ignored only --no-capture -E "test(real_network)"
 
 # Prints the soulfind to test against: SOULFIND_BIN, else soulfind on PATH, else nothing, which
 # the callers take as a skip. With SOULFIND_REQUIRED=1 a missing soulfind fails instead
@@ -128,7 +116,7 @@ soulfind-bin:
     echo "$soulfind"
 
 # the gate for every push
-ci: lint test api-check web-smoke e2e live-smoke-local
+ci: lint test api-check web-smoke e2e
 
 # soulfind on its default port 2242 with its data under target/soulfind, for trying things by hand
 soulfind:
