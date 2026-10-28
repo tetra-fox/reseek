@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import { Command, Dialog } from "bits-ui";
 
+  import { activityPrefs } from "#lib/activity/activity.svelte.js";
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
@@ -57,6 +58,17 @@
     const entries: PaletteEntry[] = [
       ...screens.map((s) => ({ id: s.path, group: "Screens", label: s.title, run: go(s.path) })),
       { id: systemItem.path, group: "Screens", label: "System", run: go(systemItem.path) },
+      ...(agent
+        ? []
+        : [
+            {
+              id: "activity",
+              group: "Screens",
+              label: activityPrefs.open ? "Close the activity log" : "Activity log",
+              keywords: "browsing searches queued uploads log network",
+              run: () => (activityPrefs.open = !activityPrefs.open)
+            }
+          ]),
       ...systemTabs.map((t) => ({
         id: `/system/${t.tab}`,
         group: "System",

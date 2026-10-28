@@ -1,7 +1,9 @@
 <script lang="ts">
+  import ActivityIcon from "@lucide/svelte/icons/activity";
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
 
+  import { activityPrefs } from "#lib/activity/activity.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import { formatSpeedPadded } from "#lib/format.js";
   import { REPOSITORY } from "#lib/project.js";
@@ -39,6 +41,16 @@
     <span class="font-mono whitespace-pre tabular-nums">{uploads.speed}</span>
     <span class="text-fg-muted">{uploads.active} active · {uploads.queued} queued</span>
   </span>
+  {#if app.mode !== "agent"}
+    <button
+      type="button"
+      aria-pressed={activityPrefs.open}
+      class="flex shrink-0 items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg"
+      title="What other users do with you: browses, searches, queued files, uploads"
+      onclick={() => (activityPrefs.open = !activityPrefs.open)}>
+      <ActivityIcon class="size-3.5" />Activity
+    </button>
+  {/if}
   <a
     href={REPOSITORY}
     target="_blank"

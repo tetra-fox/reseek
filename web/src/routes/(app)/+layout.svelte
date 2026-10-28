@@ -4,11 +4,13 @@
   import { onMount, untrack } from "svelte";
   import { prefersReducedMotion } from "svelte/motion";
 
+  import { activityPrefs } from "#lib/activity/activity.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
   import ConfirmHost from "#lib/components/ConfirmHost.svelte";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import PlayerBar from "#lib/components/player/PlayerBar.svelte";
+  import ActivityDock from "#lib/components/shell/ActivityDock.svelte";
   import CommandPalette from "#lib/components/shell/CommandPalette.svelte";
   import Footer from "#lib/components/shell/Footer.svelte";
   import Header from "#lib/components/shell/Header.svelte";
@@ -107,7 +109,10 @@
       <LostBanner />
       <main
         style:view-transition-name="page"
-        class="mx-auto flex w-full max-w-page min-w-0 flex-1 flex-col gap-section p-gutter pb-16">
+        class={[
+          "mx-auto flex w-full max-w-page min-w-0 flex-1 flex-col gap-section p-gutter",
+          activityPrefs.open && app.mode !== "agent" ? "pb-80" : "pb-16"
+        ]}>
         <svelte:boundary>
           {@render children()}
           {#snippet failed(error, reset)}
@@ -121,6 +126,7 @@
     </div>
   </div>
   <PlayerBar />
+  {#if activityPrefs.open && app.mode !== "agent"}<ActivityDock />{/if}
   <Footer />
   <BlockDialog />
   <ConfirmHost />
