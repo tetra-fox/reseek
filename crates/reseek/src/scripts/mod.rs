@@ -20,6 +20,7 @@ use api_types::events::{Event, EventRecord, EventType};
 use cascade::Watcher;
 use soulseek_client::LogLimiter;
 use tokio::sync::Notify;
+use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{Instrument, info, info_span, warn};
@@ -84,7 +85,7 @@ pub struct Scripts {
   queues: Mutex<HashMap<String, Arc<Queue>>>,
   /// the scripts told once that an argument list is the safer form
   advised: Mutex<HashSet<String>>,
-  /// the queues' tasks
+  /// the queues' tasks and the one following the options
   tasks: TaskTracker,
   shutdown: CancellationToken,
 }
@@ -114,6 +115,9 @@ impl Scripts {
       taker.take(record);
       async { Ok(()) }
     });
+    scripts
+      .tasks
+      .spawn(follow_options(scripts.clone()).instrument(info_span!("script_options")));
     scripts
   }
 
@@ -287,6 +291,22 @@ impl Queue {
         Next::End
       }
       None => Next::Wait,
+    }
+  }
+}
+
+/// Closes the queues of removed scripts as soon as the options change, until the daemon stops.
+async fn follow_options(scripts: Arc<Scripts>) {
+  let mut changes = scripts.config.changes();
+  loop {
+    let change = tokio::select! {
+      () = scripts.shutdown.cancelled() => return,
+      change = changes.recv() => change,
+    };
+    match change {
+      // a missed change is caught up by reading the options in effect
+      Ok(_) | Err(RecvError::Lagged(_)) => scripts.close_removed(&mut lock(&scripts.queues)),
+      Err(RecvError::Closed) => return,
     }
   }
 }

@@ -290,3 +290,31 @@ async fn a_run_the_shutdown_kills_is_in_the_event_log() {
   assert_eq!(run.error.as_deref(), Some("stopped with the daemon"));
   assert_eq!(run.output, "started");
 }
+
+#[tokio::test]
+async fn a_script_taken_out_of_the_options_lets_its_task_end_at_once() {
+  let (app, mut runs) = with_scripts(&script("gone", r#""Noop""#, "true", "")).await;
+  raise(&app, "Noop", "").await;
+  next(&mut runs).await;
+  std::fs::write(
+    app.dir.path().join("config.toml"),
+    "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
+  )
+  .unwrap();
+  app.state.config.reload().await.unwrap();
+  let started = std::time::Instant::now();
+  // no event comes after the change, so only the options' own change can close the queue
+  loop {
+    let ended = lock(&app.state.scripts.queues)
+      .get("gone")
+      .is_none_or(|queue| queue.ended());
+    if ended {
+      break;
+    }
+    assert!(
+      started.elapsed() < Duration::from_secs(10),
+      "its task still waits"
+    );
+    tokio::time::sleep(Duration::from_millis(20)).await;
+  }
+}
