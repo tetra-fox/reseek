@@ -159,13 +159,15 @@
         <dd title={formatDate(s.startedAt)}>
           {formatDuration((clock.now - Date.parse(s.startedAt)) / 1000)}
         </dd>
-        <dt>Process</dt>
-        <dd>{s.process.pid} on {s.process.os} ({s.process.arch})</dd>
+        <dt>Process ID</dt>
+        <dd>{s.process.pid}</dd>
+        <dt>Platform</dt>
+        <dd>{s.process.os} ({s.process.arch})</dd>
         <dt>Memory</dt>
-        <dd>{s.process.memoryBytes ? formatBytes(s.process.memoryBytes) : "not known yet"}</dd>
-        <dt>Web</dt>
+        <dd>{s.process.memoryBytes ? formatBytes(s.process.memoryBytes) : "Not known yet"}</dd>
+        <dt>Web addresses</dt>
         <dd class="font-mono">
-          {#each s.listeners as url (url)}<span class="block">{url}</span>{:else}none{/each}
+          {#each s.listeners as url (url)}<span class="block">{url}</span>{:else}None{/each}
         </dd>
       </dl>
     </Card>
@@ -209,11 +211,11 @@
           )},
           {s.user.statistics.uploadCount.toLocaleString()} uploads
         </dd>
-        <dt>Searches</dt>
+        <dt>Incoming searches</dt>
         <dd>
           {s.health.search.incoming.queueDepth} waiting, {Math.round(
             s.health.search.incoming.latency
-          )} ms,
+          )} ms to answer,
           {s.health.search.incoming.dropRate} dropped this minute
         </dd>
       </dl>

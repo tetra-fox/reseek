@@ -134,10 +134,10 @@ describe("the dashboard", () => {
     component = mount(Dashboard, { target: document.body });
     await flush();
     const now = document
-      .querySelector('[aria-label="Right now"]')
+      .querySelector('[aria-label="Current activity"]')
       ?.textContent?.replace(/\s+/g, " ");
     expect(now).toContain("2 active5 queued 4 KB/s");
-    expect(now).toContain("1 active0 waiting 2 KB/s");
+    expect(now).toContain("1 active0 queued 2 KB/s");
     const summaries = () => net.requests.filter((r) => r.url.pathname.endsWith("/summary")).length;
     const loaded = summaries();
     app.metrics = { downloads: direction(1, 5, 1), uploads: direction(1, 0, 0) };
