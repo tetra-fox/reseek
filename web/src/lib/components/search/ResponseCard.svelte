@@ -57,9 +57,10 @@
   let { result, searchId, cards, siblings, connected, canWrite, ondismiss }: Props = $props();
 
   /** the file table's columns: tick, name, size, attributes, length, menu */
-  // the figures hold their widest value in the rows' own font, which the cells share. A phone's
+  // the figures hold their widest value in the rows' own font, which the cells share, and the name
+  // takes what is left, so a large text size never pushes the menu out of the card. A phone's
   // rows show the tick, the name with its size under it, and the menu
-  const COLUMNS = `2.25rem minmax(12rem, 1fr) ${columnWidth(WIDEST.size)} 9rem ${columnWidth(WIDEST.length)} 2.5rem`;
+  const COLUMNS = `2.25rem minmax(0, 1fr) ${columnWidth(WIDEST.size)} 9rem ${columnWidth(WIDEST.length)} 2.5rem`;
   const PHONE_COLUMNS = "2.25rem minmax(0, 1fr) 2.5rem";
 
   const response = $derived(result.response);
