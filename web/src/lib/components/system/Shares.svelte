@@ -98,7 +98,7 @@
         variant="danger"
         disabled={busy.running}
         onclick={() => void busy.run(() => call(() => api.DELETE("/api/v0/shares")))}
-        ><XIcon />Cancel Scan</Button>
+        ><XIcon />Cancel the scan</Button>
     {:else}
       <Button
         variant={scan.scanPending ? "secondary" : "primary"}
@@ -106,7 +106,7 @@
         disabled={busy.running}
         onclick={() =>
           void busy.run(() => call(() => api.PUT("/api/v0/shares", { params: { query: {} } })))}>
-        {#if busy.running}<Spinner class="size-4" />{:else}<RefreshCwIcon />{/if}Rescan Shares
+        {#if busy.running}<Spinner class="size-4" />{:else}<RefreshCwIcon />{/if}Rescan now
       </Button>
     {/if}
   {/if}
@@ -120,19 +120,35 @@
 <LoadError loader={shares} />
 
 {#if scan?.scanning}
-  <Card>
-    <div class="flex flex-col items-center gap-2 py-6">
-      <Spinner class="size-6" />
-      <span class="text-2xl font-semibold tabular-nums"
-        >{Math.round(scan.scanProgress * 100)}%</span>
-      <span class="text-sm text-fg-muted"
-        >Found {scan.files.toLocaleString()} files in {scan.directories.toLocaleString()} directories</span>
+  {@const percent = Math.round(scan.scanProgress * 100)}
+  <div
+    class="flex flex-col gap-2 rounded-card border bg-surface p-4 shadow-card"
+    role="status"
+    aria-live="polite">
+    <div class="flex items-baseline gap-3">
+      <span class="text-sm font-medium">Scanning the shares</span>
+      <span class="ml-auto text-sm font-semibold tabular-nums">{percent}%</span>
     </div>
-  </Card>
-{:else if shares.loading}
+    <div
+      class="h-1.5 overflow-hidden rounded-full bg-surface-muted"
+      role="progressbar"
+      aria-label="Scan progress"
+      aria-valuenow={percent}
+      aria-valuemin={0}
+      aria-valuemax={100}>
+      <div
+        class="h-full rounded-full bg-accent transition-[width] duration-(--motion-slow)"
+        style:width={`${percent}%`}>
+      </div>
+    </div>
+    <span class="text-xs text-fg-muted tabular-nums"
+      >Found {scan.files.toLocaleString()} files in {scan.directories.toLocaleString()} folders so far</span>
+  </div>
+{/if}
+{#if shares.loading && !rows.size}
   <Skeleton class="h-40" />
 {:else}
-  <Card title="Shares">
+  <Card title="Shares" class={scan?.scanning ? "opacity-60" : undefined}>
     {#snippet flush()}
       <div
         class="overflow-x-auto border-t text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
