@@ -17,8 +17,10 @@ describe("the composer", () => {
     document.body.innerHTML = "";
   });
 
+  let fetchCalls: () => { method: string }[] = () => [];
   const open = () => {
-    fakeNetwork(() => undefined);
+    const net = fakeNetwork(() => undefined);
+    fetchCalls = () => net.requests;
     const pane = new MessagePane({ kind: "room", name: "indie" }, () => "me");
     component = mount(Composer, {
       target: document.body,
@@ -51,6 +53,18 @@ describe("the composer", () => {
     expect(errors).toEqual([]);
     expect(box.value).toBe("hi 😄  there");
     expect(box.selectionStart).toBe("hi 😄 ".length);
+  });
+
+  it("completes an emoji or a name typed in full on Enter, sending nothing", () => {
+    const { box, type, press } = open();
+    const sent = () => fetchCalls().filter((r) => r.method === "POST");
+    type(":smile");
+    press("Enter");
+    expect(box.value).toBe("😄 ");
+    type("@alice");
+    press("Enter");
+    expect(box.value).toBe("@alice ");
+    expect(sent()).toEqual([]);
   });
 
   it("runs a command typed in full on Enter, and completes a partial one", () => {
