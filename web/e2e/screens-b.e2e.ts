@@ -19,7 +19,7 @@ test("opens the dashboard, chat, rooms, users, a profile and your profile", asyn
   await page.goto("./#/nowhere");
   await expect(page).toHaveURL(/#\/dashboard$/);
 
-  await page.getByRole("link", { name: "Users" }).click();
+  await page.getByRole("link", { name: "Users", exact: true }).click();
   await expect(page).toHaveURL(/#\/users$/);
   await expect(page.getByText("No users yet")).toBeVisible();
   await page.getByRole("link", { name: "Blocked users" }).click();
@@ -53,7 +53,7 @@ test("opens each System tab", async ({ page }) => {
   await expect(page.getByRole("link", { name: "/downloads" })).toBeVisible();
 
   await tabs.getByRole("link", { name: "Data" }).click();
-  await expect(page.getByText("Finished transfers")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Finished transfers" })).toBeVisible();
 
   await tabs.getByRole("link", { name: "Events" }).click();
   await expect(page.getByRole("button", { name: "All types" })).toBeVisible();
