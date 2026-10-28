@@ -94,6 +94,7 @@ export const sections: Section[] = [
       { key: "soulseek.picture", label: "Profile picture" },
       { key: "soulseek.listen_ip_address", label: "Listen address" },
       { key: "soulseek.listen_port", label: "Listen port", min: 1024, max: 65535 },
+      { key: "soulseek.port_mapping", label: "Ask the router to forward the port" },
       { key: "rooms", label: "Rooms to join" },
       {
         key: "soulseek.diagnostic_level",

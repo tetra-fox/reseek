@@ -31,6 +31,7 @@
 
   import FieldRow from "./FieldRow.svelte";
   import OidcTest from "./OidcTest.svelte";
+  import PortMapping from "./PortMapping.svelte";
 
   type Props = {
     section: Section;
@@ -251,6 +252,7 @@
       {copying.copied ? "Copied" : "Copy as Nix"}
     </Button>
   {/snippet}
+  {#if section.id === "soulseek"}<PortMapping />{/if}
   {#if nix}
     <div class="flex flex-col gap-1">
       <p class="text-xs text-fg-muted">

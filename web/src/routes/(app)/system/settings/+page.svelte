@@ -29,6 +29,12 @@
   const all = $derived(view.data ? [...sections, leftovers(view.data)] : []);
   // ?tab=raw shows the configuration file as text
   const raw = $derived(route(page.url).query.get("tab") === "raw");
+  // ?section=<id> scrolls to that section once the page has drawn it, as links from elsewhere ask
+  const wanted = $derived(route(page.url).query.get("section"));
+  $effect(() => {
+    if (!wanted || !view.data || raw) return;
+    requestAnimationFrame(() => document.getElementById(wanted)?.scrollIntoView());
+  });
 </script>
 
 {#if !admin}

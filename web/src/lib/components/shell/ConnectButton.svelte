@@ -3,12 +3,14 @@
   import PlugIcon from "@lucide/svelte/icons/plug";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import StarIcon from "@lucide/svelte/icons/star";
+  import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
   import XIcon from "@lucide/svelte/icons/x";
 
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import { Busy } from "#lib/busy.svelte.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { unreachable } from "#lib/reachability.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
 
@@ -36,10 +38,15 @@
     const server = state?.server;
     const watchdog = state?.connectionWatchdog;
     if (server?.isConnected) {
+      const cut = server.listen.reachable === "no";
       return {
-        label: "Connected",
-        plug: state?.pendingReconnect ? "text-warning" : "text-success",
-        badge: state?.user.privileges.isPrivileged ? ("privileged" as const) : null,
+        label: cut ? "Connected, unreachable" : "Connected",
+        plug: state?.pendingReconnect || cut ? "text-warning" : "text-success",
+        badge: cut
+          ? ("unreachable" as const)
+          : state?.user.privileges.isPrivileged
+            ? ("privileged" as const)
+            : null,
         connected: true
       };
     }
@@ -70,12 +77,18 @@
 
   // connecting and disconnecting need ReadWrite; a ReadOnly user sees the state only
   const allowed = $derived(session.can("ReadWrite"));
+  const listen = $derived(app.state?.server.listen);
   const hint = $derived(
-    allowed ? (view.connected ? "Click to disconnect" : "Click to connect") : undefined
+    [
+      view.badge === "unreachable" && listen ? unreachable(listen.port) : null,
+      allowed ? (view.connected ? "Click to disconnect" : "Click to connect") : null
+    ]
+      .filter(Boolean)
+      .join(" ") || undefined
   );
 </script>
 
-<Tooltip text={collapsed ? view.label : hint} side="right">
+<Tooltip text={collapsed ? [view.label, hint].filter(Boolean).join(". ") : hint} side="right">
   {#snippet child({ props })}
     <button
       {...props}
@@ -83,10 +96,12 @@
       onclick={toggle}
       disabled={!allowed || busy.running}
       aria-label={view.label}
-      class="flex h-control w-full items-center gap-2.5 rounded-control px-2 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) select-none not-disabled:hover:bg-hover not-disabled:hover:text-fg">
+      class="flex h-control w-full items-center gap-2.5 rounded-control px-2 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) not-disabled:hover:bg-hover not-disabled:hover:text-fg">
       <span class="relative shrink-0">
         <PlugIcon class={["size-4", view.plug]} />
-        {#if view.badge === "privileged"}
+        {#if view.badge === "unreachable"}
+          <TriangleAlertIcon class="absolute -top-1 -right-1 size-2.5 fill-warning text-warning" />
+        {:else if view.badge === "privileged"}
           <StarIcon class="absolute -top-1 -right-1 size-2.5 fill-warning text-warning" />
         {:else if view.badge === "connecting"}
           <RefreshCwIcon
