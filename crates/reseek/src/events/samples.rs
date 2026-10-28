@@ -19,6 +19,7 @@ use api_types::events::{
   SessionCreated, SessionRevokeReason, SessionRevoked, SoulseekClientDisconnected, TokenChanged,
   UnblockReason, UploadFileComplete, UserBlocked, UserUnblocked,
 };
+use api_types::files::FileRoot;
 use api_types::rooms::RoomMessage;
 use api_types::transfers::{Transfer, TransferDirection, TransferStates};
 use chrono::{DateTime, NaiveDate, Utc};
@@ -206,6 +207,9 @@ fn blank_analysis(d: &str, now: DateTime<Utc>) -> AudioAnalysis {
   let text = |field: &str| format!("{d}{field}");
   AudioAnalysis {
     path: text("path"),
+    root: FileRoot::Downloads,
+    relative_path: text("relativePath"),
+    transfer_id: Some(Uuid::nil()),
     size: 0,
     analysed_at: now,
     duration_seconds: 0.0,

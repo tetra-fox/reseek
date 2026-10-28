@@ -2859,6 +2859,10 @@ export interface components {
              * @description when it was queued
              */
             queuedAt: string;
+            /** @description the file's path under its root, `/`-separated, as the files endpoints take it */
+            relativePath: string;
+            /** @description the directory the file is under, as the files endpoints name it */
+            root: components["schemas"]["FileRoot"];
             /**
              * Format: date-time
              * @description when the worker took it, null while queued
@@ -2868,7 +2872,7 @@ export interface components {
             state: components["schemas"]["AnalysisJobState"];
             /**
              * Format: uuid
-             * @description the download the file belongs to, null when it was queued by path
+             * @description the download the file belongs to, null when it is no download's
              */
             transferId?: string | null;
         };
@@ -3043,6 +3047,10 @@ export interface components {
             override?: null | components["schemas"]["AnalysisOverride"];
             /** @description the file's local path */
             path: string;
+            /** @description the file's path under its root, `/`-separated, as the files endpoints take it */
+            relativePath: string;
+            /** @description the directory the file is under, as the files endpoints name it */
+            root: components["schemas"]["FileRoot"];
             /**
              * Format: int64
              * @description the file's size in bytes when it was analysed
@@ -3056,6 +3064,11 @@ export interface components {
              * @example 68% of the time is full-band; 32% shows a 16 kHz cutoff concentrated in vocal content.
              */
             summary: string;
+            /**
+             * Format: uuid
+             * @description the download the file belongs to, null when it is no download's
+             */
+            transferId?: string | null;
             /** @description the analyser's reading */
             verdict: components["schemas"]["AnalysisVerdict"];
             /** @description the measures of each analysed window, null where the per-window list was left out */

@@ -4,7 +4,6 @@
 use api_types::analysis::{AnalysisListQuery, AnalysisOverride, AudioAnalysis, Judgement};
 use chrono::{DateTime, Utc};
 use rusqlite::{OptionalExtension, params};
-use uuid::Uuid;
 
 use crate::db::{self, Database, DbError, Schema};
 
@@ -24,13 +23,10 @@ pub(super) struct Stored {
   pub image: String,
 }
 
-/// A report to store.
+/// A report to store, which names its file.
 pub(super) struct NewReport<'a> {
   pub report: &'a AudioAnalysis,
-  pub root: &'a str,
-  pub relative: &'a str,
   pub modified: &'a str,
-  pub transfer_id: Option<Uuid>,
   pub image: &'a str,
 }
 
@@ -39,13 +35,24 @@ fn spelled(value: &impl serde::Serialize) -> String {
   serde_plain::to_string(value).expect("the analysis enums are plain names")
 }
 
-/// The report of a row read with [`JUDGED`]: its JSON in column 0, and the judgement beside
-/// it in columns 4 to 7, which are null when there is none.
+/// The report of a row read with [`JUDGED`]: its JSON in column 0, the judgement beside it in
+/// columns 4 to 7, which are null when there is none, and the file's root, path under it and
+/// download in columns 8 to 10, which name the file whatever the JSON holds.
 fn judged_report(row: &rusqlite::Row<'_>) -> rusqlite::Result<AudioAnalysis> {
   let json: String = row.get(0)?;
-  let mut report: AudioAnalysis = serde_json::from_str(&json).map_err(|e| {
-    rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, e.into())
-  })?;
+  let unreadable = |column: usize, e: serde_json::Error| {
+    rusqlite::Error::FromSqlConversionFailure(column, rusqlite::types::Type::Text, e.into())
+  };
+  let mut fields: serde_json::Map<String, serde_json::Value> =
+    serde_json::from_str(&json).map_err(|e| unreadable(0, e))?;
+  fields.insert("root".into(), row.get::<_, String>(8)?.into());
+  fields.insert("relativePath".into(), row.get::<_, String>(9)?.into());
+  fields.insert(
+    "transferId".into(),
+    row.get::<_, Option<String>>(10)?.into(),
+  );
+  let mut report: AudioAnalysis =
+    serde_json::from_value(fields.into()).map_err(|e| unreadable(0, e))?;
   let verdict: Option<String> = row.get(4)?;
   report.judgement = match verdict {
     Some(verdict) => Some(AnalysisOverride {
@@ -61,7 +68,8 @@ fn judged_report(row: &rusqlite::Row<'_>) -> rusqlite::Result<AudioAnalysis> {
   Ok(report)
 }
 
-const JUDGED: &str = "SELECT r.report, r.size, r.modified, r.image, j.verdict, j.note, j.by, j.at \
+const JUDGED: &str = "SELECT r.report, r.size, r.modified, r.image, j.verdict, j.note, j.by, j.at, \
+                      r.root, r.relative, r.transfer_id \
                       FROM reports r LEFT JOIN judgements j ON j.path = r.path";
 
 /// Stores `new` as the newest report of its file.
@@ -74,11 +82,11 @@ pub(super) async fn save(db: &Database, new: NewReport<'_>) -> Result<(), DbErro
   .expect("a report serialises");
   let row = (
     new.report.path.clone(),
-    new.root.to_string(),
-    new.relative.to_string(),
+    new.report.root.to_string(),
+    new.report.relative_path.clone(),
     i64::try_from(new.report.size).unwrap_or(i64::MAX),
     new.modified.to_string(),
-    new.transfer_id.map(|id| id.to_string()),
+    new.report.transfer_id.map(|id| id.to_string()),
     db::timestamp(new.report.analysed_at),
     spelled(&new.report.verdict),
     new.image.to_string(),

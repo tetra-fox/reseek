@@ -108,6 +108,10 @@ async fn a_download_is_analysed_reported_drawn_and_announced_once() {
   assert_eq!(status, 200, "{report}");
   assert_eq!(report["verdict"], "consistent");
   assert_eq!(report["path"], local.to_string_lossy().as_ref());
+  // named as the files endpoints and the transfers name it, for a client to find its rows by
+  assert_eq!(report["root"], "downloads");
+  assert_eq!(report["relativePath"], "Album/01.flac");
+  assert_eq!(report["transferId"], json!(id));
   assert_eq!(report["claimed"]["codec"], "flac");
   assert_eq!(report["claimed"]["bitDepth"], 16);
   assert!(report["windows"].as_array().unwrap().len() >= 30);
@@ -119,6 +123,9 @@ async fn a_download_is_analysed_reported_drawn_and_announced_once() {
   assert_eq!(status, 200);
   assert_eq!(same["windows"], Value::Null);
   assert_eq!(same["analysedAt"], report["analysedAt"]);
+  let (_, listed) = send(&app, "GET", "/api/v0/analysis", None).await;
+  assert_eq!(listed[0]["relativePath"], "Album/01.flac");
+  assert_eq!(listed[0]["transferId"], json!(id));
 
   let guided = app.send(request("GET", url, None)).await;
   assert_eq!(guided.status, 200);
@@ -389,6 +396,15 @@ async fn a_queued_analysis_can_be_cancelled_and_a_window_read() {
     .map(|j| j["id"].as_str().unwrap())
     .collect();
   assert!(!listed.contains(&ids[2].as_str()), "{jobs}");
+  // a job names its file as the request did, so any client can find the file's job
+  let waiting = jobs
+    .as_array()
+    .unwrap()
+    .iter()
+    .find(|j| j["id"] == ids[1].as_str())
+    .unwrap();
+  assert_eq!(waiting["root"], "downloads");
+  assert_eq!(waiting["relativePath"], "b.flac");
   let unknown = format!("/api/v0/analysis/jobs/{}", uuid::Uuid::new_v4());
   assert_eq!(send(&app, "DELETE", &unknown, None).await.0, 404);
   settled(&app).await;

@@ -14450,6 +14450,8 @@
         "required": [
           "id",
           "path",
+          "root",
+          "relativePath",
           "state",
           "queuedAt"
         ],
@@ -14476,6 +14478,14 @@
             "format": "date-time",
             "description": "when it was queued"
           },
+          "relativePath": {
+            "type": "string",
+            "description": "the file's path under its root, `/`-separated, as the files endpoints take it"
+          },
+          "root": {
+            "$ref": "#/components/schemas/FileRoot",
+            "description": "the directory the file is under, as the files endpoints name it"
+          },
           "startedAt": {
             "type": [
               "string",
@@ -14494,7 +14504,7 @@
               "null"
             ],
             "format": "uuid",
-            "description": "the download the file belongs to, null when it was queued by path"
+            "description": "the download the file belongs to, null when it is no download's"
           }
         }
       },
@@ -14735,6 +14745,8 @@
         "description": "The analysis of one audio file.",
         "required": [
           "path",
+          "root",
+          "relativePath",
           "size",
           "analysedAt",
           "durationSeconds",
@@ -14811,6 +14823,14 @@
             "type": "string",
             "description": "the file's local path"
           },
+          "relativePath": {
+            "type": "string",
+            "description": "the file's path under its root, `/`-separated, as the files endpoints take it"
+          },
+          "root": {
+            "$ref": "#/components/schemas/FileRoot",
+            "description": "the directory the file is under, as the files endpoints name it"
+          },
           "size": {
             "type": "integer",
             "format": "int64",
@@ -14836,6 +14856,14 @@
             "type": "string",
             "description": "one sentence saying what the analyser found and where",
             "example": "68% of the time is full-band; 32% shows a 16 kHz cutoff concentrated in vocal content."
+          },
+          "transferId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the download the file belongs to, null when it is no download's"
           },
           "verdict": {
             "$ref": "#/components/schemas/AnalysisVerdict",

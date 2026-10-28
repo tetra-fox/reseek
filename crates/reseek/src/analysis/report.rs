@@ -78,6 +78,9 @@ pub(super) fn assemble(
     .collect();
   AudioAnalysis {
     path: file.path.to_string_lossy().into_owned(),
+    root: file.root,
+    relative_path: file.relative.clone(),
+    transfer_id: file.transfer_id,
     size: file.size,
     analysed_at,
     duration_seconds: measured.duration,

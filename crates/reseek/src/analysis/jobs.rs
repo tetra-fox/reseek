@@ -50,6 +50,8 @@ impl Job {
     AnalysisJob {
       id: self.id,
       path: self.file.path.to_string_lossy().into_owned(),
+      root: self.file.root,
+      relative_path: self.file.relative.clone(),
       transfer_id: self.file.transfer_id,
       state: if self.started_at.is_some() {
         AnalysisJobState::Running
@@ -236,10 +238,7 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
     &analysis.db,
     store::NewReport {
       report: &report,
-      root: &job.file.root.to_string(),
-      relative: &job.file.relative,
       modified: &modified,
-      transfer_id: job.file.transfer_id,
       image: &name,
     },
   )

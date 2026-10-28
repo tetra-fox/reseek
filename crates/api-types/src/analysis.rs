@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
+use crate::files::FileRoot;
+
 /// The analyser's reading of whether the audio matches the format the file claims.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -52,6 +54,12 @@ pub enum Judgement {
 pub struct AudioAnalysis {
   /// the file's local path
   pub path: String,
+  /// the directory the file is under, as the files endpoints name it
+  pub root: FileRoot,
+  /// the file's path under its root, `/`-separated, as the files endpoints take it
+  pub relative_path: String,
+  /// the download the file belongs to, null when it is no download's
+  pub transfer_id: Option<Uuid>,
   /// the file's size in bytes when it was analysed
   pub size: u64,
   /// when the analysis finished
@@ -343,7 +351,11 @@ pub struct AnalysisJob {
   pub id: Uuid,
   /// the file's local path
   pub path: String,
-  /// the download the file belongs to, null when it was queued by path
+  /// the directory the file is under, as the files endpoints name it
+  pub root: FileRoot,
+  /// the file's path under its root, `/`-separated, as the files endpoints take it
+  pub relative_path: String,
+  /// the download the file belongs to, null when it is no download's
   pub transfer_id: Option<Uuid>,
   /// where the job is
   pub state: AnalysisJobState,
