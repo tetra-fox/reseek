@@ -171,7 +171,10 @@ async fn an_event_too_large_for_the_environment_is_handed_over_in_a_file() {
   assert_eq!(envelope["id"], id.to_string());
   assert_eq!(envelope["type"], "DownloadFileFailed");
   assert_eq!(
-    (envelope["version"].clone(), envelope["truncated"].clone()),
+    (
+      envelope["data"]["version"].clone(),
+      envelope["data"]["truncated"].clone()
+    ),
     (0.into(), true.into())
   );
   let size: usize = lines.next().unwrap().trim().parse().unwrap();

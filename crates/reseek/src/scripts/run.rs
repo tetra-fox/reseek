@@ -190,7 +190,8 @@ fn variables(
 }
 
 /// The event as a script reads it, and the file it is in when it is too large for the
-/// environment, where the variable then holds only its envelope.
+/// environment, where the variable then holds the record with only the data's version and a
+/// truncated mark.
 async fn data(
   record: &EventRecord,
   directory: &Path,
@@ -212,8 +213,7 @@ async fn data(
     "id": json["id"],
     "timestamp": json["timestamp"],
     "type": json["type"],
-    "version": json["data"]["version"],
-    "truncated": true,
+    "data": { "version": json["data"]["version"], "truncated": true },
   });
   Ok((envelope.to_string(), Some(file)))
 }
