@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { WIDEST } from "../src/lib/format";
 import {
+  fakeAnalysis,
   fakeBrowse,
   fakeChat,
   fakeDownloads,
@@ -105,6 +106,31 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
   expect(cells, `${what}: ${cells}`).toBeNull();
 };
 
+/**
+ * Checks a drawer at the side holds what it shows: it stays on the screen and nothing in it runs
+ * past its right edge, but in a box that scrolls sideways on its own
+ */
+const drawerHolds = async (page: Page, name: string) => {
+  const drawer = page.getByRole("complementary", { name });
+  await expect(drawer.getByText(/This is a tool to help you judge, not proof/)).toBeVisible();
+  const cut = await drawer.evaluate((aside) => {
+    const { left, right } = aside.getBoundingClientRect();
+    if (left < -0.5 || right > innerWidth + 0.5) return "the drawer runs off the screen";
+    const scrolls = (e: Element) => ["auto", "scroll"].includes(getComputedStyle(e).overflowX);
+    for (const e of aside.querySelectorAll("*")) {
+      const box = e.getBoundingClientRect();
+      if (!box.width || box.right <= right + 0.5) continue;
+      let inside = false;
+      for (let a = e.parentElement; a && a !== aside; a = a.parentElement) {
+        if (scrolls(a)) inside = true;
+      }
+      if (!inside) return `${e.tagName.toLowerCase()} "${e.textContent?.trim().slice(0, 40)}"`;
+    }
+    return null;
+  });
+  expect(cut, `the ${name} drawer cuts off ${cut}`).toBeNull();
+};
+
 /** Opens `path` and checks it fits */
 const fits = async (page: Page, path: string, ready: (page: Page) => Promise<void>) => {
   await page.goto(`./#${path}`);
@@ -123,6 +149,7 @@ const everyScreen = async (page: Page) => {
   await fakeFolder(page);
   await fakeFiles(page);
   await fakeDownloads(page);
+  await fakeAnalysis(page);
   await login(page, "/dashboard");
 
   await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
@@ -156,6 +183,12 @@ const everyScreen = async (page: Page) => {
   await page.getByRole("menuitemradio", { name: "Speed" }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Sort: Speed" })).toBeVisible();
+  // a finished download's analysis, with its reading open, fits the drawer
+  await page.getByRole("button", { name: "More for 2.flac" }).click();
+  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await page.getByText("The analyser's reading").click();
+  await drawerHolds(page, "Transfer details");
+  await page.keyboard.press("Escape");
   await fits(page, "/uploads", shows("No uploads yet"));
   await fits(page, "/chat", shows("indie"));
   await fits(page, "/chat/rooms/indie", shows("anyone have the new boards of canada rip?"));
@@ -255,6 +288,7 @@ test.describe("at a large text size", () => {
         await fakeReports(page);
         await fakeSearch(page);
         await fakeDownloads(page);
+        await fakeAnalysis(page);
         await login(page, "/dashboard");
         await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
         await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
@@ -262,6 +296,11 @@ test.describe("at a large text size", () => {
         await holds(page, `the dense results at ${root} px`, shows("02 Two.flac"));
         await page.getByRole("radio", { name: "Cards" }).click();
         await fits(page, "/downloads", shows("3.flac"));
+        await page.getByRole("button", { name: "More for 2.flac" }).click();
+        await page.getByRole("menuitem", { name: "Analyse" }).click();
+        await page.getByText("The analyser's reading").click();
+        await drawerHolds(page, "Transfer details");
+        await page.keyboard.press("Escape");
         await fits(page, "/system/info", shows("Process ID"));
       });
     }

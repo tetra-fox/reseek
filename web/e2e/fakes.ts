@@ -363,7 +363,7 @@ const transfer = (
 export const fakeDownloads = async (page: Page) => {
   const files = [
     transfer("@@a\\Music\\One\\1.flac", "InProgress"),
-    transfer("@@a\\Music\\Two\\2.flac")
+    { ...transfer("@@a\\Music\\Two\\2.flac"), localPath: "/downloads/alice/Two/2.flac" }
   ];
   const large = [transfer("@@b\\Big\\3.flac", "Completed, Succeeded", 1023.99 * 1024 ** 3, "bob")];
   await page.route(
@@ -505,4 +505,115 @@ export const longRoom = async (page: Page, n: number) => {
         })
   );
   await page.route("**/api/v0/conversations**", (route) => route.fulfill({ json: [] }));
+};
+
+/** A one-pixel PNG, standing in for a spectrogram the browser scales to its layout */
+const PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64"
+);
+
+/** A report of a 128 kbps transcode, thirty seconds long, with the judgement `override` */
+const report = (override: unknown) => ({
+  path: "/downloads/alice/Two/2.flac",
+  size: 1000,
+  analysedAt: "2026-10-28T12:00:00Z",
+  durationSeconds: 30.5,
+  claimed: { codec: "flac", sampleRate: 44100, bitDepth: 16, channels: 2, bitrateKbps: null },
+  verdict: "likely_transcode",
+  confidence: 0.89,
+  flags: [],
+  encoderGuess: { profile: "mp3 ~128 kbps", confidence: 0.95 },
+  summary:
+    "100% of the time stops at 16.8 kHz with a sharp shelf, where an encoder at mp3 ~128 kbps cuts off.",
+  measures: {
+    cutoffHzHistogram: [[17000, 30]],
+    cutoffMedianHz: 16774,
+    shelfSharpnessDbP95: 61.8,
+    sfb21Holes: null,
+    frameArtefactScore: 0.02,
+    upsampleRatio: null,
+    bitDepthEffective: 16,
+    noiseFloorDbfs: -25,
+    stereoCorrelation: 0.6,
+    sideEnergyDb: -6,
+    dcOffset: 0,
+    clippedSamplesPct: 0
+  },
+  windows: Array.from({ length: 30 }, (_, t) => ({
+    t,
+    cutoffHz: 16774,
+    shelfDb: 61.8,
+    rmsDbfs: -20
+  })),
+  spectrogramUrl: "/api/v0/files/downloads/files/x/analysis/spectrogram.png",
+  spectrogram: {
+    width: 300,
+    height: 556,
+    plotX: 48,
+    plotY: 14,
+    plotWidth: 30,
+    plotHeight: 512,
+    scale: "linear",
+    minHz: 0,
+    maxHz: 22050,
+    sampled: false,
+    guides: [
+      { hz: 16000, label: "MP3 128k", kind: "encoder" },
+      { hz: 16774, label: "analyser's cutoff", kind: "cutoff" },
+      { hz: 19000, label: "MP3 192k", kind: "encoder" },
+      { hz: 19500, label: "MP3 256k", kind: "encoder" },
+      { hz: 20000, label: "MP3 320k / AAC", kind: "encoder" },
+      { hz: 22050, label: "file limit", kind: "file_limit" }
+    ]
+  },
+  override,
+  limitations: ["Two or more lossy generations show as the lowest cutoff among them."]
+});
+
+/**
+ * Answers every file's and download's analysis with the report of a transcode, its image, its
+ * windows' spectra and an empty queue; a judgement put is kept and read back
+ */
+export const fakeAnalysis = async (page: Page) => {
+  let override: unknown = null;
+  await page.route(
+    (url) => /\/analysis(\/|$)/.test(url.pathname),
+    (route) => {
+      const { pathname } = new URL(route.request().url());
+      const method = route.request().method();
+      if (pathname.endsWith("/analysis/jobs")) return route.fulfill({ json: [] });
+      if (pathname.endsWith("/spectrogram.png")) {
+        return route.fulfill({ body: PIXEL, contentType: "image/png" });
+      }
+      const window = pathname.match(/\/windows\/(\d+)$/);
+      if (window) {
+        const hz = Array.from({ length: 512 }, (_, i) => Math.round(22050 * (1 - (i + 0.5) / 512)));
+        return route.fulfill({
+          json: {
+            index: Number(window[1]),
+            t: Number(window[1]),
+            hz,
+            db: hz.map((f) => (f > 16800 ? -160 : -40 - f / 1000))
+          }
+        });
+      }
+      if (pathname.endsWith("/override")) {
+        if (method === "PUT") {
+          const body = route.request().postDataJSON() as { verdict: string; note: string | null };
+          override = { ...body, by: "local:reseek", at: "2026-10-28T12:05:00Z" };
+        } else {
+          override = null;
+        }
+        return route.fulfill({ status: 204 });
+      }
+      if (method === "POST") {
+        return route.fulfill({
+          status: 409,
+          json: { error: "the file has been analysed already" }
+        });
+      }
+      return route.fulfill({ json: report(override) });
+    }
+  );
 };
