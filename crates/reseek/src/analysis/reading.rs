@@ -11,7 +11,7 @@ use super::engine::Measured;
 use super::flags::findings;
 use super::measure::{Step, Window};
 use super::thresholds::{
-  CLEAR_DB, CLUSTER_HZ, CONFIDENCE_CAP, CONSISTENT_SHARE, FEW_WINDOWS, FULL_BAND,
+  CLEAR_DB, CLUSTER_HZ, CONFIDENCE_CAP, CONSISTENT_SHARE, FEW_SECONDS, FULL_BAND,
   HIGH_BITRATE_KBPS, HIGH_STEP_DB, INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE,
   NATURAL_LIMIT, OTHER_RATE_EDGES, Profile, QUIET_DBFS, TRANSCODE_SHARE, profile_at,
 };
@@ -102,6 +102,11 @@ struct Heard {
 }
 
 impl Heard {
+  /// How many seconds of audio the windows hold, a short last one by its length.
+  fn seconds(&self) -> f64 {
+    self.windows.iter().map(|w| w.seconds).sum()
+  }
+
   fn share(&self, keep: impl Fn(&Seen) -> bool) -> f64 {
     let kept = self.windows.iter().filter(|w| keep(w)).count();
     kept as f64 / self.windows.len().max(1) as f64
@@ -190,10 +195,11 @@ pub(super) fn read(measured: &Measured) -> Reading {
     ));
   }
   let mut found = verdict(&heard, median, claimed.lossless, measured.bitrate_kbps);
-  if heard.windows.len() < FEW_WINDOWS {
+  let heard_seconds = heard.seconds();
+  if heard_seconds < FEW_SECONDS {
     limitations.push(format!(
-      "Only {} seconds of the audio are above silence, which leaves few to judge from.",
-      heard.windows.len()
+      "Only {heard_seconds:.1} s of the audio is above silence, which leaves little to judge \
+       from."
     ));
   }
   if quiet(&heard) {
@@ -261,7 +267,7 @@ pub(super) fn read(measured: &Measured) -> Reading {
 /// Reads the cutoff of the non-silent windows, whose median cutoff is `median`.
 fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u32>) -> Verdict {
   let count = heard.windows.len();
-  let seconds: f64 = heard.windows.iter().map(|w| w.seconds).sum();
+  let seconds = heard.seconds();
   let mut reading = Verdict {
     verdict: AnalysisVerdict::Inconclusive,
     confidence: 0.3,
