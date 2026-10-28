@@ -1,0 +1,44 @@
+<script lang="ts">
+  import DownloadIcon from "@lucide/svelte/icons/download";
+
+  import { richText } from "#lib/chat/rich.js";
+  import { enqueue } from "#lib/downloads.js";
+  import { session } from "#lib/session.svelte.js";
+  import { slskBrowse, type SlskLink } from "#lib/slsk.js";
+  import { toast } from "#lib/toast.svelte.js";
+
+  // a chat message's text, shown as text: web links open in a new tab, slsk:// links open the
+  // folder in Browse with a download button for a file, and the watched words are marked
+  let { text, watch }: { text: string; watch: string[] } = $props();
+
+  const parts = $derived(richText(text, watch));
+  const write = $derived(session.can("ReadWrite"));
+
+  const download = async (link: SlskLink) => {
+    // the size is not in the link; the daemon learns it from the peer
+    const done = await enqueue({
+      username: link.username,
+      files: [{ filename: link.path, size: 0 }]
+    });
+    toast(done.text, done.kind === "done" ? "info" : "error");
+  };
+</script>
+
+{#each parts as part (part.at)}{#if part.kind === "url"}<a
+      href={part.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      class="text-accent underline-offset-2 hover:underline">{part.text}</a
+    >{:else if part.kind === "slsk"}<a
+      href={slskBrowse(part.link)}
+      title={`${part.link.folder ? "Browse the folder" : "Browse to the file"} from ${part.link.username}`}
+      class="text-accent underline-offset-2 hover:underline">{part.text}</a
+    >{#if write && !part.link.folder}<button
+        type="button"
+        class="mx-0.5 inline-flex translate-y-0.5 items-center rounded-badge p-0.5 text-fg-muted hover:bg-hover hover:text-fg"
+        aria-label={`Download ${part.link.path}`}
+        title="Download"
+        onclick={() => void download(part.link)}><DownloadIcon class="size-3.5" /></button
+      >{/if}{:else if part.kind === "mark"}<mark
+      class="rounded-[3px] bg-warning-soft px-0.5 text-warning-soft-fg">{part.text}</mark
+    >{:else}{part.text}{/if}{/each}
