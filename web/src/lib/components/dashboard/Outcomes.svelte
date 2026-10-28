@@ -4,7 +4,7 @@
 
   import type { Schemas } from "#lib/api/client.js";
   import DitherFill, { type BarFill } from "#lib/components/charts/DitherFill.svelte";
-  import { axisPadding, LABEL_REM } from "#lib/dashboard/chart.js";
+  import { axisPadding, tickLabel } from "#lib/dashboard/chart.js";
   import { outcomes } from "#lib/dashboard/reports.js";
   import { href } from "#lib/nav.js";
   import { rem } from "#lib/viewport.svelte.js";
@@ -21,7 +21,6 @@
   ] as const;
   type Row = (typeof data)[number];
   const total = $derived(data.reduce((n, d) => n + d.succeeded + d.failed + d.cancelled, 0));
-  const tickLabel = { class: "fill-fg-muted tabular-nums", style: `font-size: ${LABEL_REM}rem` };
   // the directions' names on the left, the counts below
   const padding = $derived({
     ...axisPadding(["Downloads", "Uploads"], rem.px),

@@ -3,7 +3,7 @@
   import { SvelteSet } from "svelte/reactivity";
 
   import DitherFill, { type AreaFill } from "#lib/components/charts/DitherFill.svelte";
-  import { axisPadding, LABEL_REM, timeLabel, valueLabel } from "#lib/dashboard/chart.js";
+  import { axisPadding, tickLabel, timeLabel, valueLabel } from "#lib/dashboard/chart.js";
   import type { Point } from "#lib/dashboard/reports.js";
   import type { Series } from "#lib/dashboard/series.js";
   import { rem } from "#lib/viewport.svelte.js";
@@ -28,7 +28,6 @@
   const top = $derived(Math.max(0, ...data.flatMap((p) => shown.map((s) => p[s.key]))));
   // the axis labels' room, from the longest one they can show at the text size in use
   const padding = $derived(axisPadding([format(top), format(top * 1.25), format(0)], rem.px));
-  const tickLabel = { class: "fill-fg-muted tabular-nums", style: `font-size: ${LABEL_REM}rem` };
   const toggle = (key: string) => (visible.has(key) ? visible.delete(key) : visible.add(key));
 
   /** What the chart says to a screen reader: each series' peak and when it was */

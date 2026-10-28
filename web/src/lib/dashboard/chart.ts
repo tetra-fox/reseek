@@ -17,7 +17,13 @@ export const timeLabel = (min: number, max: number) => {
 };
 
 /** The size of a chart's axis labels, in rem */
-export const LABEL_REM = 0.6875;
+const LABEL_REM = 0.6875;
+
+/** How a chart's axis labels are drawn: small, muted, with figures of one width */
+export const tickLabel = {
+  class: "fill-fg-muted",
+  style: `font-size: ${LABEL_REM}rem; font-variant-numeric: tabular-nums`
+};
 
 /**
  * Room around a chart's plot for its axes, in pixels at `remPx` to the rem: on the left the
