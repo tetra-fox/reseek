@@ -107,7 +107,7 @@ pub(super) fn measure(
   let claimed = decoder.claimed.clone();
   let rate = claimed.sample_rate as usize;
   let stated = claimed.frames.map(|frames| frames as f64 / rate as f64);
-  let mut analyser = Analyser::new(claimed.sample_rate, settings.scale);
+  let mut analyser = Analyser::new(claimed.sample_rate, settings.scale, claimed.bit_depth);
   let mut buffer = vec![Vec::with_capacity(rate); decoder.channels];
   let mut measured = Measured {
     duration: stated.unwrap_or(0.0),

@@ -10,8 +10,8 @@ use realfft::num_complex::Complex;
 use realfft::{RealFftPlanner, RealToComplex};
 
 use super::thresholds::{
-  CUTOFF_RANGE_DB, FULL_BAND, HOLE_DEPTH_DB, HOLES_FROM_HZ, HOLES_TO_HZ, INNER_SHELF_FROM_HZ,
-  SHARP_SHELF_DB, SHELF_GAP_HZ, SHELF_SPAN_HZ, SILENCE_DBFS,
+  CUTOFF_RANGE_DB, FLOOR_MARGIN_DB, FULL_BAND, HOLE_DEPTH_DB, HOLES_FROM_HZ, HOLES_TO_HZ,
+  INNER_SHELF_FROM_HZ, SHARP_SHELF_DB, SHELF_GAP_HZ, SHELF_SPAN_HZ, SILENCE_DBFS,
 };
 use super::totals::Totals;
 
@@ -81,8 +81,9 @@ pub(super) struct Step {
   pub hz: f64,
   /// how much quieter the band above it is than the band below, in dB
   pub drop: f64,
-  /// how far the band above it is over the cutoff line, the loudest band less
-  /// [`CUTOFF_RANGE_DB`], in dB: a few dB is a noise floor that only just reaches the line
+  /// how far the band above it is over the cutoff line (the loudest band less
+  /// [`CUTOFF_RANGE_DB`], or the quantisation noise plus [`FLOOR_MARGIN_DB`] when that is
+  /// higher), in dB: a few dB is a noise floor that only just reaches the line
   pub clearance: f64,
 }
 
@@ -140,11 +141,14 @@ pub(super) struct Analyser {
   rows: Vec<(usize, usize)>,
   /// scratch spectra: per frame, the power of every bin over the channels
   frames: Vec<Vec<f64>>,
+  /// the level of one bin of the quantisation noise integer samples carry, when they are
+  /// integers
+  quantisation_db: Option<f64>,
 }
 
 impl Analyser {
   /// An analyser for audio at `rate` samples per second, drawing columns on `scale`.
-  pub fn new(rate: u32, scale: Scale) -> Self {
+  pub fn new(rate: u32, scale: Scale, bits: Option<u32>) -> Self {
     let fft = RealFftPlanner::<f32>::new().plan_fft_forward(FFT_SIZE);
     let hann = (0..FFT_SIZE)
       .map(|i| {
@@ -184,6 +188,7 @@ impl Analyser {
       bin_hz,
       rows,
       frames: Vec::new(),
+      quantisation_db: bits.map(quantisation_db),
     }
   }
 
@@ -223,9 +228,15 @@ impl Analyser {
     }
     let smoothed = smooth_db(&power, (SMOOTH_HZ / self.bin_hz).round() as usize);
     let peak = smoothed[1..].iter().copied().fold(FLOOR_DB, f64::max);
+    // in a quiet passage the range would reach the quantisation noise, which is no content
+    let line = self
+      .quantisation_db
+      .map_or(peak - CUTOFF_RANGE_DB, |floor| {
+        (peak - CUTOFF_RANGE_DB).max(floor + FLOOR_MARGIN_DB)
+      });
     let top = smoothed
       .iter()
-      .rposition(|level| *level >= peak - CUTOFF_RANGE_DB)
+      .rposition(|level| *level >= line)
       .unwrap_or(0);
     let cutoff = top as f64 * self.bin_hz;
     window.cutoff_hz = Some(cutoff);
@@ -235,7 +246,7 @@ impl Analyser {
     window.holes = self.holes(cutoff);
     window.frame_score = frame_score;
     if cutoff >= FULL_BAND * self.rate / 2.0 {
-      window.inner_shelf = self.inner_shelf(&smoothed, cutoff, peak - CUTOFF_RANGE_DB);
+      window.inner_shelf = self.inner_shelf(&smoothed, cutoff, line);
     }
     window
   }
@@ -379,6 +390,14 @@ impl Analyser {
     }
     Some(ratios / self.frames.len() as f64)
   }
+}
+
+/// The level of one bin of the noise `bits`-bit samples carry, on the scale a full-scale sine
+/// reads 0 dB: dithered quantisation adds a quarter of a step squared per sample, and the
+/// windowed transform puts 6 / [`FFT_SIZE`] of a sample's noise power in each bin.
+fn quantisation_db(bits: u32) -> f64 {
+  let step = 2f64.powi(1 - bits.clamp(2, 32) as i32);
+  10.0 * (step * step / 4.0 * 6.0 / FFT_SIZE as f64).log10()
 }
 
 /// A power as dB, no lower than [`FLOOR_DB`].

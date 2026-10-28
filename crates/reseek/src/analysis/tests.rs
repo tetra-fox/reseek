@@ -495,3 +495,19 @@ fn a_cutoff_at_a_lower_rates_band_edge_is_not_read_as_a_transcode() {
     assert_eq!(reading.encoder_guess.as_ref().unwrap().profile, profile);
   }
 }
+
+#[test]
+fn quiet_tails_of_dynamic_music_do_not_reach_the_quantisation_noise() {
+  let dir = tempfile::tempdir().unwrap();
+  let honest = fixtures::classical(90);
+  let reading = analysed(&flac(dir.path(), "classical.flac", &honest, 16));
+  assert_eq!(reading.verdict, AnalysisVerdict::Consistent, "{reading:#?}");
+  // its quiet tails would otherwise reach the 16-bit noise and read as full-band windows
+  let through = fixtures::through_mp3(&honest, Bitrate::Kbps192, dir.path());
+  let reading = analysed(&flac(dir.path(), "classical192.flac", &through, 16));
+  assert_eq!(
+    reading.verdict,
+    AnalysisVerdict::LikelyTranscode,
+    "{reading:#?}"
+  );
+}

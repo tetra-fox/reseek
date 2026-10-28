@@ -6,7 +6,7 @@ use std::path::Path;
 
 use flacenc::component::BitRepr;
 use flacenc::error::Verify;
-use mp3lame_encoder::{Bitrate, Builder, DualPcm, FlushNoGap};
+use mp3lame_encoder::{Bitrate, Builder, DualPcm, FlushNoGap, Quality};
 use realfft::RealFftPlanner;
 use realfft::num_complex::Complex;
 
@@ -103,6 +103,27 @@ pub fn combed(hz: f64) -> f64 {
   } else {
     pink(hz)
   }
+}
+
+/// `seconds` of orchestral-like stereo at 44.1 kHz: falling 6 dB an octave from 2 kHz and
+/// 36 dB an octave from 15 kHz, notes every 3 s decaying over 2.5 s, phrases swelling from -45
+/// to -15 dBFS over 40 s, so its tails sit near the quantisation noise.
+pub fn classical(seconds: usize) -> Audio {
+  let rate = 44_100u32;
+  let spectrum =
+    |hz: f64| pink(hz) / (1.0 + hz / 2_000.0).sqrt() / (1.0 + (hz / 15_000.0).powi(6)).sqrt();
+  let mut audio = music_for(seconds, 21, rate, spectrum);
+  for channel in &mut audio.channels {
+    for (i, sample) in channel.iter_mut().enumerate() {
+      let t = i as f64 / f64::from(rate);
+      let phrase = 0.5 + 0.5 * (t / 20.0 * std::f64::consts::PI).sin();
+      let level = 10f64.powf((-45.0 + 30.0 * phrase) / 20.0);
+      let decay = (-(t % 3.0) / 2.5 * 3.0).exp().max(0.02);
+      *sample *= (level * decay) as f32;
+    }
+  }
+  audio.set_level(-24.0);
+  audio
 }
 
 /// [`pink`] rolling off gently from 3.5 kHz, 24 dB an octave, as a lo-fi recording does.
@@ -329,9 +350,14 @@ pub fn write_flac(audio: &Audio, bits: u32, padded: bool, path: &Path) {
 
 /// Writes `audio`, two channels at 44.1 kHz, as a constant-bitrate MP3 at `path`.
 pub fn write_mp3(audio: &Audio, bitrate: Bitrate, path: &Path) {
-  let planes = audio.quantised(16, 11);
-  let left: Vec<i16> = planes[0].iter().map(|s| *s as i16).collect();
-  let right: Vec<i16> = planes[1].iter().map(|s| *s as i16).collect();
+  // rounded to 16 bits without dither
+  let rounded = |channel: &Vec<f32>| -> Vec<i16> {
+    channel
+      .iter()
+      .map(|s| (f64::from(*s) * 32768.0).round().clamp(-32768.0, 32767.0) as i16)
+      .collect()
+  };
+  let (left, right) = (rounded(&audio.channels[0]), rounded(&audio.channels[1]));
   let mut encoder = Builder::new()
     .unwrap()
     .with_num_channels(2)
@@ -339,6 +365,8 @@ pub fn write_mp3(audio: &Audio, bitrate: Bitrate, path: &Path) {
     .with_sample_rate(audio.rate)
     .unwrap()
     .with_brate(bitrate)
+    .unwrap()
+    .with_quality(Quality::Good)
     .unwrap()
     .build()
     .unwrap();

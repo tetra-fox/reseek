@@ -6,6 +6,9 @@
 pub(super) const SILENCE_DBFS: f64 = -70.0;
 /// The cutoff is the highest band within this many dB of a window's loudest band.
 pub(super) const CUTOFF_RANGE_DB: f64 = 60.0;
+/// The cutoff line never sits less than this many dB over the noise of the samples' bit
+/// depth, so a quiet passage's quantisation noise does not read as content.
+pub(super) const FLOOR_MARGIN_DB: f64 = 10.0;
 /// How far from a frequency the bands compared across it start, in Hz.
 pub(super) const SHELF_GAP_HZ: f64 = 100.0;
 /// How wide the bands compared across a frequency are, in Hz.
