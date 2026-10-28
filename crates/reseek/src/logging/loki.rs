@@ -146,6 +146,8 @@ impl Visit for Fields {
 /// One line as the format writes it, queued when it is done.
 pub struct Writer {
   queue: Queue,
+  /// when the event was logged, before its line was formatted
+  at: SystemTime,
   level: Level,
   line: Vec<u8>,
 }
@@ -166,6 +168,7 @@ impl Queue {
   fn writer(&self, level: Level) -> Writer {
     Writer {
       queue: self.clone(),
+      at: SystemTime::now(),
       level,
       line: Vec::new(),
     }
@@ -187,7 +190,7 @@ impl Drop for Writer {
   fn drop(&mut self) {
     let line = String::from_utf8_lossy(&self.line).trim_end().to_string();
     let entry = Entry {
-      at: SystemTime::now(),
+      at: self.at,
       level: self.level,
       line,
     };
