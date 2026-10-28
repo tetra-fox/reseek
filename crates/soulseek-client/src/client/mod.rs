@@ -262,12 +262,11 @@ impl Client {
   /// Our username, for the operation `verb` that needs it; fails with `InvalidOperation`
   /// naming `verb` while not logged in.
   pub fn own_username(&self, verb: &str) -> Result<String, ClientError> {
-    self.username().ok_or_else(|| {
-      ClientError::InvalidOperation(format!(
-        "The server connection must be connected and logged in to {verb} (currently: {})",
-        self.state()
-      ))
-    })
+    self.require_logged_in(verb)?;
+    // a disconnect between the two reads leaves no username
+    self
+      .username()
+      .ok_or_else(|| request::not_logged_in(verb, self.state()))
   }
 
   /// writes one message to the server and waits until it is on the socket

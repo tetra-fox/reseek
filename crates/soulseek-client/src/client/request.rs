@@ -20,9 +20,7 @@ impl Client {
     if state == ClientState::READY {
       return Ok(());
     }
-    Err(ClientError::InvalidOperation(format!(
-      "The server connection must be connected and logged in to {verb} (currently: {state})"
-    )))
+    Err(not_logged_in(verb, state))
   }
 
   /// Writes `request` and returns the reply that completes the wait under `key`, which is in
@@ -129,6 +127,13 @@ pub(super) fn non_empty(name: &str, value: &str) -> Result<(), ClientError> {
     )));
   }
   Ok(())
+}
+
+/// The refusal of the operation `verb` while the session is in `state`, short of logged in.
+pub(super) fn not_logged_in(verb: &str, state: ClientState) -> ClientError {
+  ClientError::InvalidOperation(format!(
+    "The server connection must be connected and logged in to {verb} (currently: {state})"
+  ))
 }
 
 #[cfg(test)]
