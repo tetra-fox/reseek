@@ -128,6 +128,16 @@
     })
   );
   const hiddenCount = $derived(results.results.length - view.length);
+
+  /** Empties the filter and turns off every toggle that hides results */
+  const clearFilters = () => {
+    typed = "";
+    filterText = "";
+    searchOptions.hideLocked = false;
+    searchOptions.hideNoFreeSlots = false;
+    searchOptions.hideOffline = false;
+    searchOptions.hideLongQueues = false;
+  };
   const remaining = $derived(Math.max(view.length - shown, 0));
   const cardKeys = $derived(view.slice(0, shown).map((r) => r.key));
   const rows = $derived(searchOptions.view === "dense" ? denseRows(view) : []);
@@ -192,7 +202,10 @@
   <div
     class="flex flex-wrap items-center gap-inline rounded-card border bg-surface p-4 shadow-card">
     <StatusIcon state={search.state} />
-    <h2 class="min-w-0 flex-1 text-lg font-semibold wrap-anywhere">{search.searchText}</h2>
+    <!-- the buttons go under the title rather than squeeze it below a word's width -->
+    <h2 class="min-w-0 flex-1 basis-40 truncate text-lg font-semibold" title={search.searchText}>
+      {search.searchText}
+    </h2>
     {#if scopeLabel(search.scope)}<Badge tone="accent">{scopeLabel(search.scope)}</Badge>{/if}
     <div class="flex gap-inline">
       <Button
@@ -273,16 +286,18 @@
           </Button>
         </div>
       {:else if hiddenCount > 0}
-        <Button variant="secondary" class="h-11 w-full" disabled>
-          All results shown, {plural(hiddenCount, "result", "results")} hidden by filters
-        </Button>
+        <p class="text-center text-sm text-fg-muted">
+          All results shown, {plural(hiddenCount, "result", "results")} hidden by filters.
+          <Button variant="link" onclick={clearFilters}>Clear filters</Button>
+        </p>
       {/if}
     {/if}
     {#if !view.length}
-      <EmptyState
-        icon={SearchXIcon}
-        title="All results are hidden by filters"
-        description="Clear the filter or turn off a toggle to see them." />
+      <EmptyState icon={SearchXIcon} title="All results are hidden by filters">
+        {#snippet action()}
+          <Button variant="outline" onclick={clearFilters}>Clear filters</Button>
+        {/snippet}
+      </EmptyState>
     {/if}
   {:else if !complete}
     <div class="flex items-center gap-2 text-sm text-fg-muted" role="status">

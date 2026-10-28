@@ -7,7 +7,7 @@
   import LockIcon from "@lucide/svelte/icons/lock";
   import SearchIcon from "@lucide/svelte/icons/search";
   import XIcon from "@lucide/svelte/icons/x";
-  import { SvelteMap, SvelteSet } from "svelte/reactivity";
+  import { SvelteSet } from "svelte/reactivity";
 
   import type { Schemas } from "#lib/api/client.js";
   import FileMenu from "#lib/components/files/FileMenu.svelte";
@@ -26,7 +26,6 @@
     formatAttributes,
     formatBytes,
     formatSeconds,
-    getDirectoryName,
     getFileName,
     plural
   } from "#lib/format.js";
@@ -36,6 +35,7 @@
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, folderTree, treeLines } from "#lib/tree/folders.js";
   import { users } from "#lib/users.svelte.js";
+  import { viewport } from "#lib/viewport.svelte.js";
 
   import Country from "./Country.svelte";
 
@@ -55,7 +55,9 @@
   let { result, searchId, cards, siblings, connected, canWrite, ondismiss }: Props = $props();
 
   /** the file table's columns: tick, name, size, attributes, length, menu */
+  // a phone's rows have no room for a file's quality and length, so they are left out there
   const COLUMNS = "2.25rem minmax(12rem, 1fr) 6rem 9rem 4.5rem 2.5rem";
+  const PHONE_COLUMNS = "2.25rem minmax(0, 1fr) 5rem 2.5rem";
 
   const response = $derived(result.response);
   const name = $derived(response.username);
@@ -64,8 +66,6 @@
 
   const selected = new SvelteSet<string>();
   const folders = new Expansion(true);
-  /** folders replaced by what the user sent when asked for the whole folder */
-  const fetched = new SvelteMap<string, ResultFile[]>();
   let asking = $state<string | null>(null);
   let downloading = $state(false);
   let status = $state<Enqueued | null>(null);
@@ -74,21 +74,7 @@
 
   $effect(() => void users.load(name));
 
-  // a folder the user was asked for again lists what they sent, where its first file was
-  const files = $derived.by(() => {
-    const list: ResultFile[] = [];
-    const placed = new Set<string>();
-    for (const f of resultFiles(response)) {
-      const folder = getDirectoryName(f.filename);
-      const replaced = fetched.get(folder);
-      if (!replaced) list.push(f);
-      else if (!placed.has(folder)) {
-        placed.add(folder);
-        list.push(...replaced);
-      }
-    }
-    return list;
-  });
+  const files = $derived(resultFiles(response));
   const roots = $derived(
     folderTree(
       files,
@@ -116,23 +102,8 @@
     toast(status.text, status.kind === "done" ? "info" : "error");
   };
 
-  /** Asks the user for the whole folder and lists what they send in place of the results */
-  const askFolder = async (folder: string) => {
-    asking = folder;
-    const outcome = await fetchFolder(name, folder);
-    asking = null;
-    if (!outcome.ok) {
-      toast(`Couldn't load the folder: ${outcome.error}`, "error");
-      return;
-    }
-    fetched.set(
-      folder,
-      outcome.data[0].files.map((f) => ({ ...f, locked: false }))
-    );
-  };
-
   /** Lists every file under the folder, asked of the user so files the search missed are in */
-  const viewAll = async (folder: string) => {
+  const showFolder = async (folder: string) => {
     asking = folder;
     const outcome = await fetchFolder(name, folder);
     asking = null;
@@ -187,7 +158,7 @@
         ? "free slot"
         : "no free slot"} · {response.queueLength} queued · {plural(files.length, "file", "files")}
     </span>
-    <div class="ml-auto flex items-center gap-1">
+    <div class="ml-auto flex flex-wrap items-center justify-end gap-1">
       <Button variant="ghost" size="sm" href={href(`/browse?user=${encodeURIComponent(name)}`)}>
         <FolderOpenIcon />Browse
       </Button>
@@ -216,7 +187,7 @@
       {lines}
       expansion={folders}
       label={`Files from ${name}`}
-      columns={COLUMNS}
+      columns={viewport.phone ? PHONE_COLUMNS : COLUMNS}
       {selected}
       idOf={(f) => f.filename}
       onopen={write ? (f) => void download([f]) : undefined}
@@ -248,32 +219,23 @@
               size="sm"
               class="h-7"
               disabled={!connected || downloading}
+              aria-label={`Download folder, ${plural(node.count, "file", "files")}, ${formatBytes(node.bytes)}`}
               onclick={() => void download(inside)}>
-              <DownloadIcon />Download folder
-              <span class="font-normal text-fg-muted">
+              <!-- a phone shows the icon alone, the row having no room for the words -->
+              <DownloadIcon /><span class="max-sm:hidden">Download folder</span>
+              <span class="font-normal text-fg-muted max-sm:hidden">
                 {node.count}, {formatBytes(node.bytes)}
               </span>
-            </Button>
-          {/if}
-          {#if node.items.length}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Add the folder's other files to this result"
-              title="Add the folder's other files to this result"
-              disabled={asking !== null}
-              onclick={() => void askFolder(node.path)}>
-              {#if asking === node.path}<Spinner class="size-4" />{:else}<SearchIcon />{/if}
             </Button>
           {/if}
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Open the folder's full file list"
-            title="Open the folder's full file list"
+            aria-label="Show whole folder"
+            title="Show whole folder"
             disabled={asking !== null}
-            onclick={() => void viewAll(node.path)}>
-            <ListIcon />
+            onclick={() => void showFolder(node.path)}>
+            {#if asking === node.path}<Spinner class="size-4" />{:else}<ListIcon />{/if}
           </Button>
         </div>
       {/snippet}
@@ -293,11 +255,13 @@
           <span class="truncate">{getFileName(file.filename)}</span>
         </span>
         <span role="gridcell" class="pr-3 text-right tabular-nums">{formatBytes(file.size)}</span>
-        <span role="gridcell" class="flex min-w-0 items-center gap-1 truncate text-fg-muted">
+        <span
+          role="gridcell"
+          class="flex min-w-0 items-center gap-1 truncate text-fg-muted max-md:hidden">
           {#if file.suspect}<Suspect suspect={file.suspect} />{/if}
           {formatAttributes(file)}
         </span>
-        <span role="gridcell" class="pr-3 text-right text-fg-muted tabular-nums"
+        <span role="gridcell" class="pr-3 text-right text-fg-muted tabular-nums max-md:hidden"
           >{formatSeconds(file.length)}</span>
         <span role="gridcell" class="flex justify-end pr-1">
           <FileMenu
