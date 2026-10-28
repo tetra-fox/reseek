@@ -70,12 +70,15 @@
   let contentHeight = $state(0);
   let dockHeight = $state(0);
   let bottomHeight = $state(0);
+  let topHeight = $state(0);
   $effect(() => {
     const root = document.documentElement.style;
     if (contentHeight) root.setProperty("--content-h", `${contentHeight}px`);
+    if (topHeight) root.setProperty("--top-h", `${topHeight}px`);
     if (bottomHeight) root.setProperty("--bottom-h", `${dockHeight + bottomHeight}px`);
     return () => {
       root.removeProperty("--content-h");
+      root.removeProperty("--top-h");
       root.removeProperty("--bottom-h");
     };
   });
@@ -150,8 +153,10 @@
     <div class="flex min-h-0">
       <Sidebar />
       <div class="flex min-w-0 flex-1 flex-col">
-        <Header />
-        <LostBanner />
+        <div bind:clientHeight={topHeight}>
+          <Header />
+          <LostBanner />
+        </div>
         <!-- relative, so what is placed absolutely inside, such as a screen reader's hidden label,
              is held and clipped here rather than stretching the window past the shell -->
         <div
