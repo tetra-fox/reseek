@@ -12,8 +12,8 @@ use super::flags::findings;
 use super::measure::{Step, Window};
 use super::thresholds::{
   CLEAR_DB, CLUSTER_HZ, CONFIDENCE_CAP, CONSISTENT_SHARE, FEW_WINDOWS, FULL_BAND,
-  HIGH_BITRATE_KBPS, INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE, NATURAL_LIMIT, Profile,
-  QUIET_DBFS, TRANSCODE_SHARE, profile_at,
+  HIGH_BITRATE_KBPS, INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE, NATURAL_LIMIT,
+  OTHER_RATE_EDGES, Profile, QUIET_DBFS, TRANSCODE_SHARE, profile_at,
 };
 
 /// The top of the band of a 48 kHz recording; a file whose band goes past it is hi-res.
@@ -219,6 +219,18 @@ pub(super) fn read(measured: &Measured) -> Reading {
       limitations: Vec::new(),
       cutoff_hz: Some(edge),
     };
+  }
+  if found.verdict != AnalysisVerdict::Consistent
+    && let Some(cut) = found.cutoff_hz
+    && let Some((edge, rate)) = OTHER_RATE_EDGES
+      .iter()
+      .find(|(edge, _)| (cut - edge).abs() <= CLUSTER_HZ)
+  {
+    limitations.push(format!(
+      "Audio recorded at {rate} and converted to this rate stops with the same sharp cliff, \
+       at {}.",
+      khz(*edge)
+    ));
   }
   limitations.extend(found.limitations);
   Reading {

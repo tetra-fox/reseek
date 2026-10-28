@@ -538,3 +538,21 @@ fn quiet_tails_of_dynamic_music_do_not_reach_the_quantisation_noise() {
     "{reading:#?}"
   );
 }
+
+#[test]
+fn a_cliff_at_an_old_equipment_rate_reads_as_its_encoder_and_says_so() {
+  let dir = tempfile::tempdir().unwrap();
+  // made at 37.8 kHz, as PlayStation and CD-i audio was: its cliff at 18.9 kHz is where a
+  // 192 kbps MP3 cuts, and the reading can not tell them apart
+  let audio = music(1, 37_800, pink).resampled(44_100);
+  let reading = analysed(&flac(dir.path(), "xa.flac", &audio, 16));
+  assert_eq!(
+    reading.verdict,
+    AnalysisVerdict::LikelyTranscode,
+    "{reading:#?}"
+  );
+  assert!(
+    reading.limitations.iter().any(|l| l.contains("37.8 kHz")),
+    "{reading:#?}"
+  );
+}

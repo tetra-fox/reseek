@@ -52,6 +52,14 @@ pub(super) const MIXED_SHARE: f64 = 0.15;
 /// 48 kHz. Content that stops with a cliff at one, in a file whose band reaches past it, was
 /// made at that rate.
 pub(super) const LOWER_RATE_EDGES: [f64; 4] = [11_025.0, 16_000.0, 22_050.0, 24_000.0];
+/// Band edges of rates some old equipment recorded at, with who used them. They are left out
+/// of [`LOWER_RATE_EDGES`] because they sit on encoder cutoffs (18.9 kHz beside 192 kbps
+/// MP3's): a cliff at one reads as that encoder, with a limitation naming the rate.
+pub(super) const OTHER_RATE_EDGES: [(f64, &str); 3] = [
+  (18_900.0, "37.8 kHz (PlayStation and CD-i audio)"),
+  (15_000.0, "30 kHz (some older samplers)"),
+  (13_020.0, "26.04 kHz (some older samplers)"),
+];
 /// Fewer non-silent windows than this give a reading little to go on, which it says.
 pub(super) const FEW_WINDOWS: usize = 60;
 /// Channels correlated above this, with the side channel at or below [`MONO_SIDE_DB`], hold
