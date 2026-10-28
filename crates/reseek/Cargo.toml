@@ -108,6 +108,8 @@ rustix = { version = "1", features = ["fs", "process"] }
 api-client.workspace = true
 # make the lossless and lossy audio the analyser is tested on
 flacenc = { version = "0.5", default-features = false }
+# builds the LAME source it carries with autotools (`configure`, `make`, a C compiler), for
+# the test fixtures only; nothing of it is in the program
 mp3lame-encoder = "0.2"
 proptest.workspace = true
 # turns a generated key into the PKCS#1 form the test identity provider signs with
