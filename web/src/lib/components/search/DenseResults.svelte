@@ -198,7 +198,7 @@
               if (!resizing) return;
               denseView.dragged[resizing.id] = Math.max(
                 40,
-                resizing.width + e.clientX - resizing.x
+                Math.round(resizing.width + e.clientX - resizing.x)
               );
             }}
             onpointerup={() => (resizing = null)}></span>

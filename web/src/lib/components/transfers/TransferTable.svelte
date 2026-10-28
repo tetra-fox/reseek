@@ -259,7 +259,7 @@
               onpointermove={(e) => {
                 if (!resizing) return;
                 const column = view.columns.find((c) => c.id === resizing!.id)!;
-                column.dragged = Math.max(40, resizing.width + e.clientX - resizing.x);
+                column.dragged = Math.max(40, Math.round(resizing.width + e.clientX - resizing.x));
               }}
               onpointerup={() => (resizing = null)}></span>
           {/if}
