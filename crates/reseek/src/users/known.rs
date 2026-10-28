@@ -3,9 +3,11 @@
 //! database read. The row writes keep it: a changed row is known, a removed one forgotten.
 
 use std::collections::HashMap;
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, MutexGuard};
 
 use rusqlite::Connection;
+
+use crate::sync::lock;
 
 /// Every user with a row, and the country code stored for them.
 #[derive(Default)]
@@ -22,8 +24,7 @@ impl Known {
   }
 
   fn users(&self) -> MutexGuard<'_, HashMap<String, Option<String>>> {
-    // every change under the lock is one insert or removal
-    self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.0)
   }
 
   /// The country stored for `username`, when they have a row and one was seen.
