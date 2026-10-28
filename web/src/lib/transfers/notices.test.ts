@@ -42,7 +42,7 @@ describe("transfer notifications", () => {
       "Download finished",
       "Download finished",
       "Download finished",
-      "Album finished"
+      "Folder finished: Album"
     ]);
   });
 });
