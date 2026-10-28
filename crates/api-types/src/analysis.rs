@@ -29,7 +29,8 @@ pub enum AnalysisVerdict {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AnalysisFlag {
-  /// a file claiming more than 48 kHz has essentially nothing above half its band
+  /// the content stops with a cliff at the top of a lower sample rate's band (11.025, 16,
+  /// 22.05 or 24 kHz), so the audio was made at that rate and converted up
   Upsampled,
   /// a file claiming 24 bits carries no more than 16
   BitPadded,
