@@ -505,17 +505,30 @@ export const sections: Section[] = [
       { key: "relay.agents", label: "Agents" },
       ...(
         [
+          ["controller_timeouts.file_info", "Wait for a file's details"],
+          ["controller_timeouts.file_ack", "Wait for a file to be acknowledged"],
+          ["controller_timeouts.file_stream", "Wait for a file's bytes"],
+          ["limits.share_database_max", "Largest share database"]
+        ] as const
+      ).map(([part, label]): Field => ({
+        key: `relay.${part}`,
+        label,
+        enabledWhen: { key: "relay.mode", values: ["controller", "debug"] }
+      })),
+      ...(
+        [
           ["address", "Controller URL"],
           ["api_key", "Controller API key"],
           ["secret", "Controller secret"],
           ["ignore_certificate_errors", "Accept any certificate"],
-          ["downloads", "Fetch finished downloads"]
+          ["downloads", "Fetch finished downloads"],
+          ["downloads_filter", "Only downloads matching"]
         ] as const
       ).map(([part, label]): Field => ({
         key: `relay.controller.${part}`,
         label,
         ...(part === "api_key" || part === "secret" ? { control: "secret" as const } : {}),
-        enabledWhen: { key: "relay.mode", values: ["agent"] }
+        enabledWhen: { key: "relay.mode", values: ["agent", "debug"] }
       }))
     ]
   },

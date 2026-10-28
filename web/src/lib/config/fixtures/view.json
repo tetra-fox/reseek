@@ -99,10 +99,19 @@
         "address": null,
         "api_key": null,
         "downloads": false,
+        "downloads_filter": [],
         "ignore_certificate_errors": false,
         "secret": null
       },
+      "controller_timeouts": {
+        "file_ack": "5s",
+        "file_info": "3s",
+        "file_stream": "30s"
+      },
       "enabled": false,
+      "limits": {
+        "share_database_max": "2.0 GiB"
+      },
       "mode": "controller"
     },
     "remote_configuration": false,
@@ -1308,6 +1317,23 @@
       "secret": false,
       "notApplied": null
     },
+    "relay.controller.downloads_filter": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_CONTROLLER_DOWNLOADS_FILTER",
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Glob patterns on a finished download's path under the controller's downloads directory, written with `/` between its parts; only the downloads one matches are fetched, every one when empty.",
+      "choices": null,
+      "default": [],
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
     "relay.controller.ignore_certificate_errors": {
       "source": {
         "layer": "default"
@@ -1338,6 +1364,51 @@
       "secret": true,
       "notApplied": null
     },
+    "relay.controller_timeouts.file_ack": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_ACK",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "For an agent to acknowledge that it is sending a file a peer downloads.",
+      "choices": null,
+      "default": "5s",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "relay.controller_timeouts.file_info": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_INFO",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "For an agent to say whether a file a peer asked for exists and how long it is.",
+      "choices": null,
+      "default": "3s",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "relay.controller_timeouts.file_stream": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_STREAM",
+      "cliFlag": null,
+      "kind": "duration",
+      "doc": "After the acknowledgement, for the file's bytes to start arriving.",
+      "choices": null,
+      "default": "30s",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
     "relay.enabled": {
       "source": {
         "layer": "default"
@@ -1350,6 +1421,21 @@
       "choices": null,
       "default": false,
       "apply": "restart",
+      "secret": false,
+      "notApplied": null
+    },
+    "relay.limits.share_database_max": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_RELAY_LIMITS_SHARE_DATABASE_MAX",
+      "cliFlag": null,
+      "kind": "size",
+      "doc": "The largest share database an agent may upload.",
+      "choices": null,
+      "default": "2.0 GiB",
+      "apply": "live",
       "secret": false,
       "notApplied": null
     },
