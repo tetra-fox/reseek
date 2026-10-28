@@ -1,6 +1,11 @@
+<script lang="ts" module>
+  import { gridView } from "#lib/table.svelte.js";
+
+  /** the log files' sort and column widths, kept in this browser */
+  const view = gridView("reseek.logs.files", ["name", "date"], { id: "date", dir: "desc" });
+</script>
+
 <script lang="ts">
-  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
-  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import DownloadIcon from "@lucide/svelte/icons/download";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import FileIcon from "@lucide/svelte/icons/file";
@@ -10,11 +15,13 @@
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { dateTime, formatBytes } from "#lib/format.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
+  import { Grid, keptIn } from "#lib/table.svelte.js";
 
   // the log files on disk, newest first, to read in a tab or save
   /** files larger than this are offered for saving only */
@@ -27,22 +34,25 @@
   });
   void files.load();
 
-  let sort = $state<{ by: "name" | "date"; dir: "asc" | "desc" }>({ by: "date", dir: "desc" });
-  const rows = $derived(
-    (files.data ?? []).toSorted((a, b) => {
-      const sign = sort.dir === "asc" ? 1 : -1;
-      return sort.by === "name"
-        ? sign * a.name.localeCompare(b.name, undefined, { numeric: true })
-        : sign * (Date.parse(a.modifiedAt) - Date.parse(b.modifiedAt));
-    })
-  );
+  type File = Schemas["FilesystemFile"];
+  const grid = new Grid<File>({
+    columns: () => [
+      { id: "name", label: "Name", width: "14rem", grow: true, value: (f) => f.name.toLowerCase() },
+      { id: "date", label: "Modified", width: "10rem", value: (f) => Date.parse(f.modifiedAt) },
+      { id: "size", label: "Size", width: "6rem", end: true, value: (f) => f.length },
+      { id: "actions", label: "Actions", width: "5rem", quiet: true, fixed: true }
+    ],
+    data: () => files.data ?? [],
+    ...keptIn(view)
+  });
+  const rows = $derived(grid.rows);
   const url = (f: Schemas["FilesystemFile"]) =>
     `${root()}/api/v0/logs/files/${encodeURIComponent(f.name)}`;
 
-  let grid = $state<HTMLElement | null>(null);
+  let box = $state<HTMLElement | null>(null);
   // Enter follows the row's own link: a view in a new tab, or the save of a file too big to show
   const open = (f: Schemas["FilesystemFile"]) =>
-    grid?.querySelector<HTMLAnchorElement>(`a[data-open="${CSS.escape(f.name)}"]`)?.click();
+    box?.querySelector<HTMLAnchorElement>(`a[data-open="${CSS.escape(f.name)}"]`)?.click();
 
   const list = new ListControl<Schemas["FilesystemFile"]>({
     lines: () => rows,
@@ -50,19 +60,7 @@
     id: (f) => f.name,
     onopen: open
   });
-  const sortBy = (by: "name" | "date") =>
-    (sort = { by, dir: sort.by === by ? (sort.dir === "asc" ? "desc" : "asc") : "asc" });
 </script>
-
-{#snippet header(label: string, by: "name" | "date")}
-  <button type="button" class="flex items-center gap-1" onclick={() => sortBy(by)}>
-    {label}
-    {#if sort.by === by}
-      {#if sort.dir === "asc"}<ArrowUpIcon class="size-3" />{:else}<ArrowDownIcon
-          class="size-3" />{/if}
-    {/if}
-  </button>
-{/snippet}
 
 {#if files.loading}
   <Skeleton class="h-40" />
@@ -79,30 +77,30 @@
     aria-multiselectable="true"
     aria-activedescendant={list.activeId}
     tabindex="0"
-    bind:this={grid}
+    bind:this={box}
     {@attach list.attach}>
-    <div
-      role="row"
-      class="grid min-w-max grid-cols-[minmax(14rem,1fr)_10rem_6rem_5rem] gap-2 border-b bg-surface-muted px-2 py-1.5 text-xs font-medium text-fg-muted">
-      <span role="columnheader">{@render header("Name", "name")}</span>
-      <span role="columnheader">{@render header("Modified", "date")}</span>
-      <span role="columnheader" class="text-right">Size</span>
-      <span role="columnheader" class="sr-only">Actions</span>
+    <div style:min-width={grid.width}>
+      <GridHeader {grid} class="h-8 border-b bg-surface-muted font-medium text-fg-muted" />
     </div>
     {#each rows as f, i (f.name)}
       <div
         role="row"
         {...list.line(f, i)}
         class={[
-          "grid min-w-max grid-cols-[minmax(14rem,1fr)_10rem_6rem_5rem] items-center gap-2 border-b px-2 py-1 last:border-b-0 hover:bg-hover",
+          "grid items-center border-b py-1 last:border-b-0 hover:bg-hover",
           list.selected.has(f.name) && "bg-accent-soft/60",
           list.isFocused(f) && "ring-1 ring-accent ring-inset"
-        ]}>
-        <span role="gridcell" class="flex items-center gap-1.5"
-          ><FileIcon class="size-4 text-fg-muted" />{f.name}</span>
-        <span role="gridcell" class="text-xs text-fg-muted">{dateTime(f.modifiedAt)}</span>
-        <span role="gridcell" class="text-right tabular-nums">{formatBytes(f.length)}</span>
-        <span role="gridcell" class="flex justify-end">
+        ]}
+        style:grid-template-columns={grid.template}
+        style:min-width={grid.width}>
+        <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2"
+          ><FileIcon class="size-4 shrink-0 text-fg-muted" /><span class="truncate">{f.name}</span
+          ></span>
+        <span role="gridcell" class="truncate px-2 text-xs text-fg-muted"
+          >{dateTime(f.modifiedAt)}</span>
+        <span role="gridcell" class="truncate px-2 text-right tabular-nums"
+          >{formatBytes(f.length)}</span>
+        <span role="gridcell" class="flex justify-end px-1">
           {#if f.length <= MAX_VIEW}
             <Button
               variant="ghost"
