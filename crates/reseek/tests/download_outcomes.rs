@@ -1,8 +1,8 @@
 //! Downloads by the daemon from scripted peers logged in to soulfind, for what a real client
 //! does not do on cue: a refusal, a failure tried again after its wait, a size that differs
 //! with and without a partial file, a resumed partial, a partial as long as the file, a peer
-//! that never answers the request or the question of its queue, and the place in its queue a
-//! peer gives when asked or on its own.
+//! that never answers the request or the question of its queue, the place in its queue a peer
+//! gives when asked or on its own, and a script told how each download ended.
 
 mod support;
 
@@ -463,5 +463,87 @@ async fn a_peer_that_never_answers_times_out() {
     unanswered.status().map(|s| s.as_u16()),
     Some(504),
     "{unanswered:?}"
+  );
+}
+
+#[tokio::test]
+async fn a_script_learns_how_each_download_ended_and_its_runs_are_recorded() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let dir = tempfile::tempdir().unwrap();
+  let config = r#"
+[integrations.scripts.outcome]
+on = ["DownloadFileComplete", "DownloadFileFailed"]
+[integrations.scripts.outcome.run]
+executable = "/bin/sh"
+arglist = ["-c", 'echo "$RESEEK_SCRIPT_RESULT: $RESEEK_SCRIPT_REASON"; test "$RESEEK_SCRIPT_RESULT" = succeeded']
+"#;
+  let (_daemon, api, listen) = started(dir.path(), &server, config).await;
+
+  let refusing = Scripted::start(&server).await;
+  let refused = "@@share\\e\\no.flac";
+  let id = enqueue(&api, refusing.name(), refused, 10).await;
+  let mut side = refusing.connected().await;
+  queued(&mut side, refused).await;
+  let denied = PeerMessage::UploadDenied(UploadDenied {
+    filename: refused.into(),
+    reason: "File not shared.".into(),
+  });
+  side.send(&denied.encode()).await;
+  download_when(&api, refusing.name(), id, "rejected", ended).await;
+
+  let sending = Scripted::start(&server).await;
+  let sent = "@@share\\e\\yes.flac";
+  let id = enqueue(&api, sending.name(), sent, 20).await;
+  let mut side = sending.connected().await;
+  queued(&mut side, sent).await;
+  offer(&mut side, sent, 9, 20).await;
+  send_from(listen, sending.name(), 9, 0, 20).await;
+  download_when(&api, sending.name(), id, "moved", |t| {
+    t.local_path.is_some()
+  })
+  .await;
+
+  let query: EventsQuery = serde_json::from_value(json!({ "type": "ScriptRunCompleted" })).unwrap();
+  let started = Instant::now();
+  let runs = loop {
+    let runs = api.events(&query).await.unwrap().items;
+    if runs.len() >= 2 {
+      break runs;
+    }
+    assert!(started.elapsed() < PATIENCE, "{runs:?}");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  };
+  let mut runs: Vec<serde_json::Value> = runs
+    .iter()
+    .map(|e| serde_json::to_value(e).unwrap()["data"].clone())
+    .collect();
+  runs.sort_by_key(|run| run["eventType"].as_str().unwrap().to_string());
+  let outcome = |run: &serde_json::Value| {
+    (
+      run["eventType"].clone(),
+      run["succeeded"].clone(),
+      run["exitCode"].clone(),
+      run["output"].clone(),
+    )
+  };
+  assert_eq!(
+    outcome(&runs[0]),
+    (
+      json!("DownloadFileComplete"),
+      json!(true),
+      json!(0),
+      json!("succeeded: ")
+    )
+  );
+  assert_eq!(
+    outcome(&runs[1]),
+    (
+      json!("DownloadFileFailed"),
+      json!(false),
+      json!(1),
+      json!("failed: File not shared.")
+    )
   );
 }
