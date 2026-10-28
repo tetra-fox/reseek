@@ -41,7 +41,7 @@ use cascade::Watcher;
 use chrono::Utc;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::api::error::ApiError;
@@ -227,7 +227,7 @@ impl AnalysisService for Analysis {
       }
     };
     if let Err(e) = store::used_image(&self.db, &stored.image, None, Utc::now()).await {
-      debug!(error = %e, "spectrogram view not recorded");
+      warn!(error = %e, "spectrogram view not recorded");
     }
     let mut response = (StatusCode::OK, bytes).into_response();
     let headers = response.headers_mut();
