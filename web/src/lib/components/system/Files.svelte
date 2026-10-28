@@ -421,7 +421,9 @@
   </FolderTree>
   {#if !lines.length}
     <p class="px-4 py-6 text-center text-sm text-fg-subtle">
-      Nothing here yet; finished downloads land in this folder.
+      {root === "downloads" && !path
+        ? "Nothing here yet; finished downloads land in this folder."
+        : "This folder is empty."}
     </p>
   {/if}
 {/if}
