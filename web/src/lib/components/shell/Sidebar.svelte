@@ -15,6 +15,7 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { crossFade } from "#lib/motion.js";
   import { href, navCurrent, navItems, type NavItem, route, systemItem } from "#lib/nav.js";
+  import { unseen } from "#lib/transfers/unseen.svelte.js";
 
   import AccountMenu from "./AccountMenu.svelte";
   import ConnectButton from "./ConnectButton.svelte";
@@ -33,6 +34,9 @@
 </script>
 
 {#snippet link(item: NavItem)}
+  {@const direction =
+    item.path === "/downloads" ? "download" : item.path === "/uploads" ? "upload" : null}
+  {@const fresh = direction && current !== item.path ? unseen.of(direction) : null}
   <li>
     <Tooltip text={sidebar.collapsed ? item.title : undefined} side="right">
       {#snippet child({ props })}
@@ -41,7 +45,7 @@
           href={href(item.path)}
           aria-label={sidebar.collapsed ? item.title : undefined}
           aria-current={current === item.path ? "page" : undefined}
-          class={itemClass}>
+          class={[itemClass, "relative"]}>
           <span class="relative shrink-0">
             <item.icon class={["size-4", current === item.path && "text-accent"]} />
             {#if item.path === "/chat" && chat.total && sidebar.collapsed}
@@ -53,6 +57,16 @@
             {/if}
           </span>
           <span class={["truncate", sidebar.collapsed && "hidden"]}>{item.title}</span>
+          {#if fresh && (fresh.failed || fresh.succeeded)}
+            <Badge
+              tone={fresh.failed ? "danger" : "success"}
+              class={sidebar.collapsed
+                ? "absolute top-0.5 right-0.5 px-1 py-0 text-[0.625rem]"
+                : "ml-auto"}
+              title={`${fresh.succeeded} finished, ${fresh.failed} failed since you last looked`}
+              aria-label={`${fresh.succeeded} finished, ${fresh.failed} failed`}
+              >{fresh.failed || fresh.succeeded}</Badge>
+          {/if}
           {#if item.path === "/chat" && chat.total && !sidebar.collapsed}
             <Badge
               tone={chat.totalMentions ? "accent" : "danger"}
