@@ -86,24 +86,59 @@ export const formatDuration = (seconds: number): string => {
   return parts.join(" ");
 };
 
-const UNIT_MS: Record<string, number> = {
-  ms: 1,
-  s: 1_000,
-  m: 60_000,
-  h: 3_600_000,
-  d: 86_400_000
-};
+const DAY_MS = 86_400_000;
+const MONTH_MS = 2_630_016_000;
+const YEAR_MS = 31_557_600_000;
+
+// the units an option's duration is written with, as the daemon's humantime reads and writes
+// them; "m" is minutes and "M" months
+const UNIT_MS: Record<string, number> = Object.fromEntries(
+  (
+    [
+      [1, ["ms", "msec"]],
+      [1_000, ["s", "sec", "secs", "second", "seconds"]],
+      [60_000, ["m", "min", "mins", "minute", "minutes"]],
+      [3_600_000, ["h", "hr", "hrs", "hour", "hours"]],
+      [DAY_MS, ["d", "day", "days"]],
+      [7 * DAY_MS, ["w", "week", "weeks"]],
+      [MONTH_MS, ["M", "month", "months"]],
+      [YEAR_MS, ["y", "year", "years"]]
+    ] as const
+  ).flatMap(([ms, names]) => names.map((n) => [n, ms]))
+);
 
 /**
- * A duration the way options write them, "2m" or "1h 30m", in milliseconds; null for anything
- * else
+ * A duration the way options write them, "2m", "1h 30m" or "5months 27days", in milliseconds;
+ * null for anything else
  */
 export const parseDuration = (text: unknown): number | null => {
   if (typeof text !== "string") return null;
   const trimmed = text.trim();
-  const parts = [...trimmed.matchAll(/(\d+)\s*(ms|s|m|h|d)\s*/g)];
+  const parts = [...trimmed.matchAll(/(\d+)\s*([a-zA-Z]+)\s*/g)];
   if (!parts.length || parts.map((p) => p[0]).join("") !== trimmed) return null;
+  if (parts.some(([, , unit]) => !(unit in UNIT_MS))) return null;
   return parts.reduce((sum, [, n, unit]) => sum + Number(n) * UNIT_MS[unit], 0);
+};
+
+// the units a duration is said in, largest first, with their lengths in milliseconds
+const SAID: [string, number][] = [
+  ["year", YEAR_MS],
+  ["month", MONTH_MS],
+  ["day", DAY_MS],
+  ["hour", 3_600_000],
+  ["minute", 60_000],
+  ["second", 1_000]
+];
+
+/**
+ * A length of time as a person says it, in its largest unit: "30 days", "1 hour", and "about 6
+ * months" for 5 months 27 days 19 hours
+ */
+export const sayDuration = (ms: number): string => {
+  const [unit, size] = SAID.find(([, s]) => ms >= s) ?? ["second", 1_000];
+  const n = Math.round(ms / size);
+  const words = plural(n, unit, `${unit}s`);
+  return n * size === ms ? words : `about ${words}`;
 };
 
 /** A fraction as a percentage to one decimal, 0.256 as "25.6%" */

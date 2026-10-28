@@ -11,7 +11,7 @@
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
-  import { formatBytes } from "#lib/format.js";
+  import { formatBytes, parseDuration, sayDuration } from "#lib/format.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
@@ -75,6 +75,13 @@
       ? Object.entries(value).flatMap(([k, v]) => flatten(v, `${prefix}.${k}`))
       : [[prefix, value]];
   const retention = $derived(flatten(fields(app.options).retention, "retention"));
+  /** a retention option's value as people say it: an age, a count, or kept forever */
+  const retentionText = (value: unknown) => {
+    if (value === null || value === undefined) return "Kept forever";
+    if (typeof value === "number") return value.toLocaleString();
+    const ms = parseDuration(value);
+    return ms === null ? String(value) : sayDuration(ms);
+  };
   const chosen = $derived(rows.filter((d) => list.selected.has(d.name)).map((d) => d.name));
 </script>
 
@@ -141,7 +148,7 @@
     {#each retention as [key, value] (key)}
       <dt class="font-mono text-xs wrap-anywhere text-fg-muted">{key}</dt>
       <dd class="max-md:mb-1">
-        {value === null || value === undefined ? "Kept forever" : String(value)}
+        {retentionText(value)}
       </dd>
     {/each}
   </dl>

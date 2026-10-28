@@ -12,6 +12,7 @@ import {
   formatSpeedPadded,
   formatWait,
   parseDuration,
+  sayDuration,
   getDirectoryName,
   getFileName,
   truncate
@@ -123,7 +124,18 @@ describe("durations from options", () => {
     expect(parseDuration("2m")).toBe(120_000);
     expect(parseDuration("1h 30m")).toBe(5_400_000);
     expect(parseDuration("30s")).toBe(30_000);
-    expect(parseDuration("2 weeks")).toBeNull();
+    expect(parseDuration("2 weeks")).toBe(14 * 86_400_000);
+    expect(parseDuration("5months 27days 19h 12m")).toBe(
+      5 * 2_630_016_000 + 27 * 86_400_000 + 19 * 3_600_000 + 12 * 60_000
+    );
+    expect(parseDuration("2 fortnights")).toBeNull();
     expect(parseDuration(5)).toBeNull();
+  });
+
+  it("says a duration in its largest unit, rounded with about", () => {
+    expect(sayDuration(30 * 86_400_000)).toBe("30 days");
+    expect(sayDuration(3_600_000)).toBe("1 hour");
+    expect(sayDuration(parseDuration("5months 27days 19h 12m")!)).toBe("about 6 months");
+    expect(sayDuration(90_000)).toBe("about 2 minutes");
   });
 });
