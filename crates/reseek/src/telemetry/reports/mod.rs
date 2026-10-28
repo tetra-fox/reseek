@@ -154,6 +154,9 @@ impl Filter {
 }
 
 #[cfg(test)]
+mod parity;
+
+#[cfg(test)]
 pub(super) mod tests {
   use api_types::transfers::TransferDirection::{Download, Upload};
   use chrono::{DateTime, TimeZone, Utc};
