@@ -87,7 +87,7 @@ impl Ended {
 }
 
 /// `value` when it holds more than blanks.
-fn given(value: &Option<String>) -> Option<&str> {
+pub(super) fn given(value: &Option<String>) -> Option<&str> {
   value.as_deref().filter(|v| !v.trim().is_empty())
 }
 

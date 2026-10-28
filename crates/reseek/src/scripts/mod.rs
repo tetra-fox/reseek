@@ -159,7 +159,9 @@ impl Scripts {
   /// Says once per script that one passing its arguments as a string would be better off with
   /// a list.
   fn advise(&self, name: &str, run: &ScriptRun) {
-    if run.arglist.is_some() || !lock(&self.advised).insert(name.to_string()) {
+    let one_string = run::given(&run.command).is_some()
+      || (run.arglist.is_none() && run::given(&run.args).is_some());
+    if !one_string || !lock(&self.advised).insert(name.to_string()) {
       return;
     }
     info!(
