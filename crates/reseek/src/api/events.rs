@@ -135,6 +135,91 @@ mod tests {
     panic!("the sample was never logged");
   }
 
+  /// The types of the events the log holds, oldest first, once `count` are there.
+  async fn logged(app: &crate::testing::TestApp, count: usize) -> Vec<String> {
+    for _ in 0..200 {
+      let listed = app
+        .send(request("GET", "/api/v0/events?limit=100", None))
+        .await
+        .json();
+      let mut types: Vec<String> = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|record| record["type"].as_str().unwrap().to_string())
+        .collect();
+      if types.len() >= count {
+        types.reverse();
+        return types;
+      }
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("fewer than {count} events were logged");
+  }
+
+  #[tokio::test]
+  async fn the_api_s_own_actions_each_raise_their_event_once() {
+    let app = app(
+      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
+      &[],
+    )
+    .await;
+    let outside = "192.0.2.1:1";
+    let login = |password: &str| {
+      request(
+        "POST",
+        "/api/v0/session",
+        Some(serde_json::json!({ "username": "reseek", "password": password })),
+      )
+    };
+    assert_eq!(app.send_from(outside, login("wrong")).await.status, 401);
+    let signed_in = app.send_from(outside, login("reseek")).await;
+    let cookie = crate::testing::set_cookie(&signed_in.headers, "reseek_session").unwrap();
+    let logout = crate::testing::with(
+      crate::testing::with(
+        request("POST", "/api/v0/session/logout", None),
+        "cookie",
+        &cookie,
+      ),
+      "origin",
+      "http://localhost",
+    );
+    assert_eq!(app.send_from(outside, logout).await.status, 200);
+    let created = app
+      .send(request(
+        "POST",
+        "/api/v0/tokens",
+        Some(serde_json::json!({ "name": "script", "role": "ReadOnly" })),
+      ))
+      .await
+      .json();
+    let token = created["token"]["id"].as_str().unwrap().to_string();
+    app
+      .send(request("DELETE", &format!("/api/v0/tokens/{token}"), None))
+      .await;
+    let block = serde_json::json!({ "reason": "spam" });
+    let blocked = app
+      .send(request("PUT", "/api/v0/users/mallory/block", Some(block)))
+      .await;
+    assert!(blocked.status.is_success(), "{:?}", blocked.body);
+    let unblocked = app
+      .send(request("DELETE", "/api/v0/users/mallory/block", None))
+      .await;
+    assert!(unblocked.status.is_success(), "{:?}", unblocked.body);
+    assert_eq!(
+      logged(&app, 7).await,
+      [
+        "LoginFailed",
+        "SessionCreated",
+        "SessionRevoked",
+        "TokenCreated",
+        "TokenRevoked",
+        "UserBlocked",
+        "UserUnblocked"
+      ]
+    );
+  }
+
   #[test]
   fn samples_are_made_of_known_types_but_not_the_pseudo_types() {
     assert_eq!(

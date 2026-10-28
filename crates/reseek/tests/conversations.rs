@@ -1,7 +1,7 @@
 //! Private messages over soulfind between the daemon and another user's client: a message sent
 //! while the daemon was away arrives at its login, is stored once however often the server
 //! delivers it again, and is delivered again only until it is read; the unread counts follow a
-//! read, a message sent and a purge.
+//! read, a message sent and a purge; and each delivery, connect and disconnect is one event.
 
 mod support;
 
@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use api_client::Client;
 use api_types::conversations::{ConversationListQuery, MessageDirection, PrivateMessage};
 use support::soulfind::{self, User};
-use support::{PATIENCE, daemon, logged_in, quiet, signed_in, until};
+use support::{PATIENCE, daemon, events, logged_in, quiet, signed_in, until};
 
 /// The messages of the conversation with `peer` once `ready` holds for them.
 async fn messages_when(
@@ -125,4 +125,31 @@ async fn a_message_from_while_we_were_away_is_stored_once_until_it_is_read() {
       .is_empty(),
     "a closed conversation is listed only when asked"
   );
+
+  // every delivery is an event, the ones the server kept for us marked as replayed
+  let delivered = events(&api, "PrivateMessageReceived", 4).await;
+  let seen: Vec<(String, bool)> = delivered
+    .iter()
+    .map(|data| {
+      let message = &data["message"];
+      (
+        message["message"].as_str().unwrap().to_string(),
+        message["wasReplayed"].as_bool().unwrap(),
+      )
+    })
+    .collect();
+  assert_eq!(
+    seen,
+    [
+      ("hello while you were away".to_string(), true),
+      ("hello while you were away".to_string(), true),
+      ("and now".to_string(), false),
+      ("third".to_string(), false)
+    ]
+  );
+  assert_eq!(events(&api, "SoulseekClientConnected", 4).await.len(), 4);
+  let disconnects = events(&api, "SoulseekClientDisconnected", 3).await;
+  assert_eq!(disconnects.len(), 3);
+  assert_eq!(disconnects[0]["message"], "away");
+  assert_eq!(disconnects[0]["exception"]["type"], "IntentionalDisconnect");
 }

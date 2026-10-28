@@ -44,6 +44,26 @@ pub async fn next_event<T>(
   .expect("the event is raised")
 }
 
+/// The data of the events of `kind` in the daemon's event log, oldest first, once there are at
+/// least `count`.
+pub async fn events(api: &Client, kind: &str, count: usize) -> Vec<serde_json::Value> {
+  let query: api_types::events::EventsQuery =
+    serde_json::from_value(serde_json::json!({ "type": kind })).unwrap();
+  let started = Instant::now();
+  loop {
+    let items = api.events(&query).await.unwrap().items;
+    if items.len() >= count {
+      return items
+        .iter()
+        .rev()
+        .map(|record| serde_json::to_value(record).unwrap()["data"].clone())
+        .collect();
+    }
+    assert!(started.elapsed() < PATIENCE, "{kind}: {items:?}");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  }
+}
+
 /// The headless daemon program.
 pub const PROGRAM: &str = env!("CARGO_BIN_EXE_reseek-headless");
 

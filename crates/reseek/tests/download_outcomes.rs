@@ -25,7 +25,7 @@ use soulseek_proto::{InitMessage, PeerConnectionType, PeerMessage, TransferDirec
 use support::peer::PeerSide;
 use support::soulfind::{self, Soulfind, User};
 use support::transfers::content;
-use support::{PATIENCE, daemon_listening, free_port, logged_in, signed_in, until};
+use support::{PATIENCE, daemon_listening, events, free_port, logged_in, signed_in, until};
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
@@ -546,4 +546,11 @@ arglist = ["-c", 'echo "$RESEEK_SCRIPT_RESULT: $RESEEK_SCRIPT_REASON"; test "$RE
       json!("failed: File not shared.")
     )
   );
+  for kind in [
+    "DownloadFileComplete",
+    "DownloadDirectoryComplete",
+    "DownloadFileFailed",
+  ] {
+    assert_eq!(events(&api, kind, 1).await.len(), 1, "{kind} once");
+  }
 }

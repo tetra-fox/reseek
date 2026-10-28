@@ -4,8 +4,8 @@
 //! restart until we leave them, and one taken by a private room is forgotten, while a room
 //! joined only because the configuration listed it is not; a room joined
 //! twice is joined once, left and
-//! joined again, and refused while logged out; and the server's room list is asked for once a
-//! minute at most.
+//! joined again, and refused while logged out; the server's room list is asked for once a
+//! minute at most; and each message said is one event.
 
 mod support;
 
@@ -15,7 +15,7 @@ use api_client::Client;
 use api_types::rooms::{GapReason, RoomHistory, RoomMessagesQuery};
 use soulseek_proto::RoomType;
 use support::soulfind::{self, User};
-use support::{PATIENCE, daemon, logged_in, quiet, signed_in, until};
+use support::{PATIENCE, daemon, events, logged_in, quiet, signed_in, until};
 
 fn newest() -> RoomMessagesQuery {
   RoomMessagesQuery {
@@ -81,6 +81,11 @@ async fn a_configured_room_keeps_its_history_and_its_gaps_across_a_restart() {
   let mention = &first.messages[0];
   assert_eq!(mention.username, peer.username);
   assert!(mention.is_mention && !mention.is_self);
+  let said = events(&api, "RoomMessageReceived", 1).await;
+  assert_eq!(said.len(), 1);
+  assert_eq!(said[0]["message"]["roomName"], room.as_str());
+  assert_eq!(said[0]["message"]["username"], peer.username.as_str());
+  assert_eq!(said[0]["message"]["message"], mention.message.as_str());
   let joined = api.joined_rooms().await.unwrap();
   assert_eq!((joined[0].unread, joined[0].mentions), (1, 1));
   api.mark_room_read(&room, mention.local_id).await.unwrap();
