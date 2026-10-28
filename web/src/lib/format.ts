@@ -71,8 +71,11 @@ const SPANS: [Intl.RelativeTimeFormatUnit, number, string][] = [
   ["second", 1, "s"]
 ];
 
-/** A length of time in its two largest non-zero units: 5400 as "1h 30m", 90061 as "1d 1h" */
-export const formatDuration = (seconds: number): string => {
+/**
+ * A length of time in its largest non-zero units, two unless `units` says: 5400 as "1h 30m",
+ * 90061 as "1d 1h", and with three 11525 as "3h 12m 5s"
+ */
+export const formatDuration = (seconds: number, units = 2): string => {
   let left = Math.floor(seconds);
   if (!Number.isFinite(left) || left <= 0) return "0s";
   const parts: string[] = [];
@@ -81,7 +84,7 @@ export const formatDuration = (seconds: number): string => {
       parts.push(`${Math.floor(left / size)}${letter}`);
       left %= size;
     }
-    if (parts.length === 2) break;
+    if (parts.length === units) break;
   }
   return parts.join(" ");
 };

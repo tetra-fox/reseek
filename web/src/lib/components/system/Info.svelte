@@ -17,14 +17,7 @@
   import Card from "#lib/components/ui/Card.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
-  import {
-    ago,
-    formatBytes,
-    formatDate,
-    formatDuration,
-    formatSpeed,
-    plural
-  } from "#lib/format.js";
+  import { ago, formatBytes, formatDuration, formatSpeed, plural } from "#lib/format.js";
   import { serverStateText } from "#lib/reachability.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
@@ -32,6 +25,7 @@
   import { RESTART } from "#lib/wording.js";
 
   import { diagnostics, latestProblems } from "./diagnostics";
+  import Uptime from "./Uptime.svelte";
 
   // the daemon's state at a glance, its whole state document, and the process controls
   const s = $derived(app.state);
@@ -171,9 +165,7 @@
     <Card title="Process">
       <dl class="info">
         <dt>Running for</dt>
-        <dd title={formatDate(s.startedAt)}>
-          {formatDuration((clock.now - Date.parse(s.startedAt)) / 1000)}
-        </dd>
+        <dd><Uptime since={s.startedAt} /></dd>
         <dt>Process ID</dt>
         <dd>{s.process.pid}</dd>
         <dt>Platform</dt>
