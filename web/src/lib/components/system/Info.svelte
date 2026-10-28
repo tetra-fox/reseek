@@ -29,6 +29,13 @@
   const write = $derived(session.can("ReadWrite"));
   const control = $derived(session.can("Administrator") && session.canSignOut);
   const busy = new Busy();
+  const admin = $derived(session.can("Administrator"));
+
+  // the agent's socket closes and its shares go; it connects again unless its configuration went
+  const disconnectAgent = (name: string) =>
+    busy.run(() =>
+      call(() => api.DELETE("/api/v0/relay/agents/{name}", { params: { path: { name } } }))
+    );
 
   const checkVersion = () =>
     busy.run(async () => {
@@ -243,6 +250,36 @@
       <dl class="info">
         <dt>Mode</dt>
         <dd>{s.relay.mode}</dd>
+        {#if s.relay.mode !== "Controller"}
+          <dt>Controller</dt>
+          <dd>
+            <span class="font-mono">{s.relay.controller.address ?? "?"}</span>,
+            {s.relay.controller.state}
+          </dd>
+        {/if}
+        {#if s.relay.mode !== "Agent"}
+          <dt>Agents</dt>
+          <dd>
+            {#each s.relay.agents as agent (agent.name)}
+              <span class="flex flex-wrap items-center gap-inline">
+                <span title={`${agent.ipAddress}, version ${agent.version}`}>{agent.name}</span>
+                <span class="text-fg-muted">
+                  {agent.ipAddress}, since {ago(agent.connectedAt, clock.now)},
+                  {agent.ready
+                    ? `shares from ${agent.sharesUpdatedAt ? ago(agent.sharesUpdatedAt, clock.now) : "?"}`
+                    : "sending its shares"}
+                </span>
+                {#if admin}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy.running}
+                    onclick={() => void disconnectAgent(agent.name)}>Disconnect</Button>
+                {/if}
+              </span>
+            {:else}none connected{/each}
+          </dd>
+        {/if}
       </dl>
     </Card>
   </div>

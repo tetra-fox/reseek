@@ -22,17 +22,15 @@
   const view = $derived.by(() => {
     const state = app.state;
     if (app.mode === "agent") {
+      // serving only once its shares reached the controller; on the way there it is started
       const controller = state?.relay.controller.state ?? "Disconnected";
-      const connected = controller === "Connected";
+      const ready = controller === "Ready";
+      const started = controller !== "Disconnected";
       return {
         label: `Controller ${controller}`,
-        plug: connected
-          ? "text-success"
-          : controller === "Connecting" || controller === "Reconnecting"
-            ? "text-warning"
-            : "text-fg-subtle",
-        badge: connected ? null : ("closed" as const),
-        connected
+        plug: ready ? "text-success" : started ? "text-warning" : "text-fg-subtle",
+        badge: ready ? null : ("closed" as const),
+        connected: started
       };
     }
     const server = state?.server;

@@ -44,8 +44,11 @@
   void shares.load();
 
   const scan = $derived(app.state?.shares);
+  // a relay agent's shares come and go with it
+  const hosts = $derived(scan?.hosts?.join("\u0000") ?? "");
   // a scan that starts or ends changes the counts; they are written just after the state flips
   $effect(() => {
+    void hosts;
     const pending = scan?.scanPending;
     const scanning = scan?.scanning;
     if (pending === undefined) return;
