@@ -12,7 +12,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
 use super::decode::{Claimed, Decoder, Filled};
-use super::measure::{Analyser, FFT_SIZE, Scale, Totals, Window};
+use super::measure::{Analyser, FFT_SIZE, Scale, Window};
+use super::totals::Totals;
 
 /// How one analysis runs.
 #[derive(Clone, Debug)]

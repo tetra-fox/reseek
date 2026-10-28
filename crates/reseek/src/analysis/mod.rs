@@ -15,6 +15,7 @@ mod render;
 mod report;
 mod store;
 mod thresholds;
+mod totals;
 
 #[cfg(test)]
 mod fixtures;

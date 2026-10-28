@@ -1,8 +1,8 @@
 //! What the analyser measures in each one-second window: its loudness, its spectrum averaged
 //! over short overlapping frames, where that spectrum stops (the cutoff) and how steeply, gaps
 //! in the band just below the cutoff, a step inside a full band, and how strongly the noise
-//! repeats at a lossy codec's frame length. Running totals over the windows give the
-//! file-wide figures: DC offset, clipping, how alike the channels are and the quietest level.
+//! repeats at a lossy codec's frame length. Each window's samples are also added to the
+//! file-wide totals.
 
 use std::sync::Arc;
 
@@ -13,6 +13,7 @@ use super::thresholds::{
   CUTOFF_RANGE_DB, FULL_BAND, HOLE_DEPTH_DB, HOLES_FROM_HZ, HOLES_TO_HZ, INNER_SHELF_FROM_HZ,
   SHELF_GAP_HZ, SHELF_SPAN_HZ, SILENCE_DBFS,
 };
+use super::totals::Totals;
 
 /// The length of one spectrum frame in samples.
 pub(super) const FFT_SIZE: usize = 4096;
@@ -37,8 +38,6 @@ const CODEC_PERIODS: [usize; 3] = [
   1152 / ENVELOPE_BLOCK,
   2048 / ENVELOPE_BLOCK,
 ];
-/// The length of the blocks the quietest level is measured in, in samples.
-const LEVEL_BLOCK: usize = 1024;
 
 /// How a spectrogram's rows map to frequencies.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -108,77 +107,6 @@ impl Window {
   }
 }
 
-/// The running figures over every analysed sample.
-#[derive(Clone, Debug, Default)]
-pub(super) struct Totals {
-  samples: u64,
-  sum: f64,
-  clipped: u64,
-  /// frames of two channels, with the sums correlation and the side energy need
-  pairs: u64,
-  left: f64,
-  right: f64,
-  left_squared: f64,
-  right_squared: f64,
-  product: f64,
-  /// the count of level blocks per whole dB from -160 dBFS
-  levels: Vec<u64>,
-}
-
-impl Totals {
-  /// The mean sample value, relative to full scale.
-  pub fn dc_offset(&self) -> Option<f64> {
-    (self.samples > 0).then(|| self.sum / self.samples as f64)
-  }
-
-  /// The percentage of samples at full scale.
-  pub fn clipped_pct(&self) -> Option<f64> {
-    (self.samples > 0).then(|| 100.0 * self.clipped as f64 / self.samples as f64)
-  }
-
-  /// The correlation between the two channels, from -1 to 1; `None` for mono or when either
-  /// channel is constant.
-  pub fn stereo_correlation(&self) -> Option<f64> {
-    if self.pairs == 0 {
-      return None;
-    }
-    let n = self.pairs as f64;
-    let covariance = self.product - self.left * self.right / n;
-    let left = self.left_squared - self.left * self.left / n;
-    let right = self.right_squared - self.right * self.right / n;
-    let spread = (left * right).sqrt();
-    (spread > 0.0).then(|| (covariance / spread).clamp(-1.0, 1.0))
-  }
-
-  /// The side channel's energy relative to the mid channel's, in dB, at least -120 dB.
-  pub fn side_energy_db(&self) -> Option<f64> {
-    if self.pairs == 0 {
-      return None;
-    }
-    let mid = self.left_squared + self.right_squared + 2.0 * self.product;
-    let side = self.left_squared + self.right_squared - 2.0 * self.product;
-    (mid > 0.0).then(|| (10.0 * (side.max(0.0) / mid).log10()).max(-120.0))
-  }
-
-  /// The level of the quietest passages, in dBFS: the second percentile of the loudness of
-  /// short blocks, leaving out blocks of digital silence.
-  pub fn noise_floor_dbfs(&self) -> Option<f64> {
-    let total: u64 = self.levels.iter().sum();
-    if total == 0 {
-      return None;
-    }
-    let wanted = total.div_ceil(50);
-    let mut seen = 0;
-    for (index, count) in self.levels.iter().enumerate() {
-      seen += count;
-      if seen >= wanted {
-        return Some(COLUMN_FLOOR_DB + index as f64);
-      }
-    }
-    None
-  }
-}
-
 /// The spectrum analyser for one sample rate: the frame transform, the window function, and
 /// where each spectrogram row's bins are.
 pub(super) struct Analyser {
@@ -245,7 +173,7 @@ impl Analyser {
   /// adds its samples to `totals`.
   pub fn measure(&mut self, t: f64, channels: &[Vec<f32>], totals: &mut Totals) -> Window {
     let length = channels[0].len();
-    add_totals(channels, totals);
+    totals.add(channels);
     let squares: f64 = channels
       .iter()
       .flat_map(|c| c.iter())
@@ -512,48 +440,4 @@ fn frame_score(channels: &[Vec<f32>]) -> Option<f64> {
     })
     .fold(0.0, f64::max);
   Some(excess.clamp(0.0, 1.0))
-}
-
-/// Adds a window's samples to the running figures.
-fn add_totals(channels: &[Vec<f32>], totals: &mut Totals) {
-  if totals.levels.is_empty() {
-    totals.levels = vec![0; -COLUMN_FLOOR_DB as usize + 1];
-  }
-  for channel in channels {
-    for sample in channel {
-      let value = f64::from(*sample);
-      totals.samples += 1;
-      totals.sum += value;
-      if value.abs() >= 0.9999 {
-        totals.clipped += 1;
-      }
-    }
-  }
-  if let [left, right] = channels {
-    for (l, r) in left.iter().zip(right) {
-      let (l, r) = (f64::from(*l), f64::from(*r));
-      totals.pairs += 1;
-      totals.left += l;
-      totals.right += r;
-      totals.left_squared += l * l;
-      totals.right_squared += r * r;
-      totals.product += l * r;
-    }
-  }
-  for start in (0..channels[0].len()).step_by(LEVEL_BLOCK) {
-    let end = (start + LEVEL_BLOCK).min(channels[0].len());
-    let squares: f64 = channels
-      .iter()
-      .flat_map(|c| &c[start..end])
-      .map(|s| f64::from(*s) * f64::from(*s))
-      .sum();
-    if squares == 0.0 {
-      continue;
-    }
-    let level = 10.0 * (squares / ((end - start) * channels.len()) as f64).log10();
-    let index = (level - COLUMN_FLOOR_DB)
-      .floor()
-      .clamp(0.0, -COLUMN_FLOOR_DB) as usize;
-    totals.levels[index] += 1;
-  }
 }

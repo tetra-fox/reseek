@@ -385,7 +385,10 @@ fn hi_res_with_a_natural_roll_off_is_not_flagged_as_upsampled() {
   // falling 24 dB an octave from 8 kHz: almost no energy above 24 kHz, and no cliff anywhere
   let audio = music(1, 96_000, |hz| pink(hz) / (1.0 + (hz / 8_000.0).powi(4)));
   let reading = analysed(&flac(dir.path(), "hires.flac", &audio, 24));
-  assert!(reading.measures.upsample_ratio.unwrap() < 0.001, "{reading:#?}");
+  assert!(
+    reading.measures.upsample_ratio.unwrap() < 0.001,
+    "{reading:#?}"
+  );
   assert!(reading.flags.is_empty(), "{reading:#?}");
   not_fake(&reading);
 }
@@ -397,6 +400,13 @@ fn a_cutoff_at_a_lower_rates_band_edge_is_not_read_as_a_transcode() {
   let audio = music(1, 32_000, pink).resampled(96_000);
   let reading = analysed(&flac(dir.path(), "up32.flac", &audio, 24));
   assert_eq!(reading.flags, [AnalysisFlag::Upsampled], "{reading:#?}");
-  assert_eq!(reading.verdict, AnalysisVerdict::Inconclusive, "{reading:#?}");
-  assert_eq!(reading.encoder_guess.as_ref().unwrap().profile, "mp3 ~128 kbps");
+  assert_eq!(
+    reading.verdict,
+    AnalysisVerdict::Inconclusive,
+    "{reading:#?}"
+  );
+  assert_eq!(
+    reading.encoder_guess.as_ref().unwrap().profile,
+    "mp3 ~128 kbps"
+  );
 }
