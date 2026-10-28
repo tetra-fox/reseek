@@ -3,7 +3,8 @@
 //! bytes intact; a kicked agent's shares go with it and it comes back on its own, as it does
 //! after its controller restarts; an agent that stops takes its shares with it. The controller
 //! refuses a wrong secret, an unknown name, a replayed credential and an address outside the
-//! agent's networks.
+//! agent's networks. A controller's finished download is copied to an agent that asks for
+//! them, and a stopping controller tells its agents before it stops listening.
 
 mod support;
 
@@ -15,10 +16,11 @@ use api_types::relay::{
   LoginFailure, RELAY_PROTOCOL, RelayConnectionState, RelayEnvelope, RelayMessage,
 };
 use api_types::state::State;
+use api_types::transfers::{QueueDownloadRequest, TransferDirection, TransferStates};
 use reseek::relay::credential::{Key, Purpose};
-use soulseek_client::{ClientOptions, DownloadOutput, DownloadRequest};
+use soulseek_client::{ClientOptions, DownloadOutput, DownloadRequest, UploadInput, UploadRequest};
 use support::soulfind::{self, Soulfind};
-use support::transfers::{content, file, scratch};
+use support::transfers::{self, asked, content, file, scratch};
 use support::{ACCOUNT, Daemon, PATIENCE, daemon_on, free_port, signed_in, until};
 use tokio_util::sync::CancellationToken;
 
@@ -39,12 +41,13 @@ fn controller(dir: &Path, server: &Soulfind, name: &str, port: u16) -> Daemon {
   daemon_on(port, dir, server, name, free_port(), &[])
 }
 
-/// The agent `nas` in `dir`, sharing `dir/share`, connecting to the controller on `port`.
-fn agent(dir: &Path, port: u16) -> Daemon {
+/// The agent `nas` in `dir`, sharing `dir/share`, connecting to the controller on `port`, with
+/// `extra` in its `[relay.controller]` table.
+fn agent(dir: &Path, port: u16, extra: &str) -> Daemon {
   let config = format!(
     "instance_name = \"nas\"\n[relay]\nenabled = true\nmode = \"agent\"\n\
      [relay.controller]\naddress = \"http://127.0.0.1:{port}/\"\napi_key = \"{KEY}\"\n\
-     secret = \"{SECRET}\"\n[shares]\ndirectories = [\"{}\"]\n",
+     secret = \"{SECRET}\"\n{extra}[shares]\ndirectories = [\"{}\"]\n",
     dir.join("share").display()
   );
   std::fs::write(dir.join("config.toml"), config).unwrap();
@@ -90,7 +93,7 @@ async fn an_agents_file_is_downloaded_through_its_controller() {
   let controller = controller(controller_dir.path(), &server, &name, port);
   let api = signed_in(&controller).await;
   until(&api, "logged in", support::logged_in).await;
-  let agent = agent(agent_dir.path(), port);
+  let agent = agent(agent_dir.path(), port, "");
   let agent_api = signed_in(&agent).await;
   let state = until(&api, "serving the agent", |s| serving(s, 1)).await;
   assert_eq!(
@@ -179,7 +182,7 @@ async fn an_agent_comes_back_after_its_controller_restarts_and_leaves_with_its_s
   let port = free_port();
   let first = controller(controller_dir.path(), &server, &name, port);
   let api = signed_in(&first).await;
-  let mut agent = agent(agent_dir.path(), port);
+  let mut agent = agent(agent_dir.path(), port, "");
   let agent_api = signed_in(&agent).await;
   until(&api, "serving the agent", |s| serving(s, 2)).await;
 
@@ -220,7 +223,7 @@ async fn a_stopping_controller_tells_its_agents_before_it_stops_listening() {
   let port = free_port();
   let mut stopping = controller(controller_dir.path(), &server, &name, port);
   let api = signed_in(&stopping).await;
-  let agent = agent(agent_dir.path(), port);
+  let agent = agent(agent_dir.path(), port, "");
   until(&api, "serving the agent", |s| serving(s, 0)).await;
   let pid = stopping.child.id().to_string();
   let signalled = std::process::Command::new("kill")
@@ -232,6 +235,86 @@ async fn a_stopping_controller_tells_its_agents_before_it_stops_listening() {
     .printed_line(&["relay controller connection lost", "code=4010"])
     .await;
   assert!(stopping.child.wait().unwrap().success());
+}
+
+#[tokio::test]
+async fn a_finished_download_is_copied_to_an_agent_that_asks_for_them() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let (controller_dir, agent_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+  std::fs::create_dir_all(agent_dir.path().join("share")).unwrap();
+  let name = soulfind::username("controller");
+  let port = free_port();
+  let controller = controller(controller_dir.path(), &server, &name, port);
+  let api = signed_in(&controller).await;
+  until(&api, "logged in", support::logged_in).await;
+  let agent = agent(
+    agent_dir.path(),
+    port,
+    "downloads = true\ndownloads_filter = [\"**/*.flac\"]\n",
+  );
+  until(&api, "serving the agent", |s| serving(s, 0)).await;
+
+  let mut options = ClientOptions {
+    listen_port: free_port(),
+    ..ClientOptions::default()
+  };
+  let mut requests = transfers::queueing(&mut options);
+  let uploader = server.login("up", options).await;
+  let size = 120_000;
+  let source = scratch().join("song.flac");
+  std::fs::write(&source, content(size)).unwrap();
+  let remote = "@@share\\album\\01 song.flac";
+  let files = [QueueDownloadRequest {
+    filename: remote.to_string(),
+    size: size as u64,
+  }];
+  let enqueued = api.enqueue(&uploader.username, &files).await.unwrap();
+  let id = enqueued.enqueued[0].id;
+  let (username, filename) = asked(&mut requests).await;
+  let client = uploader.client.clone();
+  tokio::spawn(async move {
+    let request = UploadRequest::new(username, filename, UploadInput::File(source));
+    client.upload(request, &CancellationToken::new()).await
+  });
+  let started = Instant::now();
+  let finished = loop {
+    let transfer = api
+      .transfer(TransferDirection::Download, &uploader.username, id, true)
+      .await
+      .unwrap();
+    if transfer.state == TransferStates::Completed | TransferStates::Succeeded {
+      break transfer;
+    }
+    assert!(
+      started.elapsed() < PATIENCE,
+      "never downloaded: {transfer:?}"
+    );
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  };
+  let local = Path::new(finished.local_path.as_deref().unwrap());
+  let downloads = controller_dir.path().join("data").join("downloads");
+  let relative = local
+    .strip_prefix(&downloads)
+    .unwrap_or_else(|_| panic!("{} is not under {}", local.display(), downloads.display()));
+  let copy = agent_dir
+    .path()
+    .join("data")
+    .join("downloads")
+    .join(relative);
+  let started = Instant::now();
+  while std::fs::read(&copy).ok() != Some(content(size)) {
+    assert!(
+      started.elapsed() < PATIENCE,
+      "the agent never copied {}:\n{}",
+      copy.display(),
+      agent.printed()
+    );
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  }
+  let partial = copy.with_extension("flac.part");
+  assert!(!partial.exists(), "the partial copy is renamed into place");
 }
 
 /// The next message on `socket`.
