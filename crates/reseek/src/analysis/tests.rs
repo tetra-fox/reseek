@@ -208,22 +208,53 @@ fn a_filtered_synth_line_is_not_read_as_fake() {
   not_fake(&reading);
 }
 
+/// White noise at `dbfs`, a stand-in for tape hiss.
+fn hiss(dbfs: f64) -> Audio {
+  let mut floor = music(9, 44_100, |_| 1.0);
+  floor.set_level(dbfs);
+  floor
+}
+
 #[test]
-fn a_noise_floor_over_a_filtered_recording_is_not_read_as_fake() {
+fn a_noise_floor_over_a_cutoff_neither_hides_nor_fakes_it() {
   let dir = tempfile::tempdir().unwrap();
+  let reads = |name: &str, audio: &Audio, verdict: AnalysisVerdict| {
+    let reading = analysed(&flac(dir.path(), "floor.flac", audio, 16));
+    assert_eq!(reading.verdict, verdict, "{name}: {reading:#?}");
+    reading
+  };
   // a recording filtered at 20 kHz with hiss over it, or so quiet that 16-bit dither is its
-  // floor: the floor sits near the cutoff line and must not read as a full-band layer
-  for hiss in [-55.0, -60.0] {
-    let mut floor = music(9, 44_100, |_| 1.0);
-    floor.set_level(hiss);
-    let hissy = music(1, 44_100, fixtures::cut_at(20_000.0)).mixed(&floor, 1.0);
-    not_fake(&analysed(&flac(dir.path(), "hiss.flac", &hissy, 16)));
+  // floor: it stops where the highest bitrates cut, which is all the analyser can say
+  for db in [-55.0, -60.0] {
+    let hissy = music(1, 44_100, fixtures::cut_at(20_000.0)).mixed(&hiss(db), 1.0);
+    let reading = reads(&format!("hiss {db}"), &hissy, AnalysisVerdict::Inconclusive);
+    assert!(reading.encoder_guess.is_some());
   }
   for level in [-50.0, -55.0] {
     let mut quiet = music(1, 44_100, fixtures::cut_at(20_000.0));
     quiet.set_level(level);
-    not_fake(&analysed(&flac(dir.path(), "quiet.flac", &quiet, 16)));
+    reads(
+      &format!("quiet {level}"),
+      &quiet,
+      AnalysisVerdict::Inconclusive,
+    );
   }
+  // a 128 kbps transcode laid down with hiss over its cutoff is still a transcode
+  let through = fixtures::through_mp3(&music(1, 44_100, pink), Bitrate::Kbps128, dir.path());
+  let hissy = through.mixed(&hiss(-56.0), 1.0);
+  reads(
+    "transcode under hiss",
+    &hissy,
+    AnalysisVerdict::LikelyTranscode,
+  );
+  // so is a 128 kbps stem under a full-band bed 30 dB down, too quiet to count as content
+  let stem = fixtures::through_mp3(&music(3, 44_100, pink), Bitrate::Kbps128, dir.path());
+  let bedded = stem.mixed(&music(4, 44_100, pink), 0.0316);
+  reads(
+    "stem over a quiet bed",
+    &bedded,
+    AnalysisVerdict::LikelyTranscode,
+  );
 }
 
 #[test]

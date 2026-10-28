@@ -13,7 +13,7 @@ use super::measure::{Step, Window};
 use super::thresholds::{
   CLEAR_DB, CLUSTER_HZ, CONFIDENCE_CAP, CONSISTENT_SHARE, FEW_WINDOWS, FULL_BAND,
   HIGH_BITRATE_KBPS, INNER_SHELF_DB, MIN_SECONDS, MIN_WINDOWS, MIXED_SHARE, NATURAL_LIMIT, Profile,
-  QUIET_DBFS, SHARP_SHELF_DB, TRANSCODE_SHARE, profile_at,
+  QUIET_DBFS, TRANSCODE_SHARE, profile_at,
 };
 
 /// The top of the band of a 48 kHz recording; a file whose band goes past it is hi-res.
@@ -75,7 +75,9 @@ impl Seen {
     match floor {
       Some(step) => Self {
         cutoff_hz: Some(step.hz),
-        sharp: step.drop >= SHARP_SHELF_DB,
+        // a drop of this size to the floor within a few hundred hertz is a wall, not a
+        // roll-off, whatever the floor's level makes the number
+        sharp: true,
         inner_shelf: None,
         rms_dbfs: window.rms_dbfs,
       },
