@@ -42,7 +42,7 @@
           key: s.key,
           label: s.label,
           color: s.color,
-          props: { strokeWidth: 0 }
+          props: { strokeWidth: 0, class: "cursor-pointer" }
         }))}
         seriesLayout="stack"
         bandPadding={0.35}

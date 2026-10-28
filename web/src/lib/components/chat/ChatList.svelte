@@ -236,7 +236,7 @@
           {...list.line(line, i)}
           aria-current={current === line.key ? "page" : undefined}
           class={[
-            "group/row flex cursor-default items-center gap-2 rounded-control px-2 py-1.5 hover:bg-hover",
+            "group/row flex items-center gap-2 rounded-control px-2 py-1.5 hover:bg-hover",
             current === line.key && "bg-hover",
             list.selected.has(line.key) && "bg-accent-soft/60",
             list.isFocused(line) && "ring-1 ring-accent ring-inset"

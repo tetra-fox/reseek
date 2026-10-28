@@ -88,7 +88,7 @@
                 >{ago(new Date(line.at).toISOString(), clock.now)}</span
               >{/if}
           </div>
-          <p class="text-sm wrap-anywhere">{line.ticker}</p>
+          <p class="cursor-text text-sm wrap-anywhere">{line.ticker}</p>
         </div>
       </div>
     {:else}

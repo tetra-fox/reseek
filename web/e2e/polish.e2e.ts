@@ -86,6 +86,12 @@ test("shows search results as cards and as dense rows walked by key", async ({ p
   const filter = page.getByLabel("Filter", { exact: true });
   await filter.fill("type:mp3");
   await expect(alice.getByText("03 Three.mp3")).toBeVisible();
+  // a result's row acts on a click and shows it; the count above them is plain text
+  await expect(alice.locator("[role=row][data-line]").last()).toHaveCSS("cursor", "pointer");
+  await expect(page.getByRole("status").filter({ hasText: "files from" })).toHaveCSS(
+    "cursor",
+    "default"
+  );
   await expect(page.locator('section[data-key="0:bob"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(filter).toHaveValue("");
@@ -95,6 +101,7 @@ test("shows search results as cards and as dense rows walked by key", async ({ p
   await page.getByRole("radio", { name: "Dense" }).click();
   const grid = page.getByRole("grid", { name: "Search results" });
   await expect(grid.locator("[role=row][data-line]")).toHaveCount(5);
+  await expect(grid.locator("[role=row][data-line]").first()).toHaveCSS("cursor", "pointer");
   await grid.focus();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
@@ -196,6 +203,8 @@ test("browses a user, finds a folder by typing and shows where it is", async ({ 
   await page.getByLabel("Username").press("Enter");
   const tree = page.getByRole("tree", { name: "Shared folders" });
   await expect(tree.getByText("Bootlegs")).toBeVisible();
+  // a folder is a pointer target, not text to select
+  await expect(tree.getByRole("treeitem", { name: /Bootlegs/ })).toHaveCSS("cursor", "pointer");
   await tree.focus();
   await page.keyboard.type("bo");
   await expect(tree.getByRole("treeitem", { name: /Bootlegs/ })).toHaveAttribute(

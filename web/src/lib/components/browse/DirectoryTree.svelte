@@ -200,7 +200,7 @@
   aria-valuemin={MIN_HEIGHT}
   aria-valuenow={height}
   title="Drag or use arrow keys to resize"
-  class="flex h-4 cursor-ns-resize items-center justify-center border-t"
+  class="flex h-4 cursor-row-resize items-center justify-center border-t"
   onpointerdown={(e) => {
     dragging = { y: e.clientY, height: height };
     e.currentTarget.setPointerCapture(e.pointerId);

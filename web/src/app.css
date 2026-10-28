@@ -229,19 +229,42 @@
     background: var(--color-selection);
   }
 
-  /* tailwind v4's preflight no longer gives buttons a pointer, and :where keeps the disabled rule below winning */
+  /* the app reads as controls, not a page of text: the arrow by default, and the I-beam only
+     where text is typed or meant to be copied (pre, code, and `cursor-text` where a screen says so) */
+  body {
+    cursor: default;
+  }
+
+  :where(
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"]),
+    textarea,
+    [contenteditable="true"],
+    pre,
+    code
+  ) {
+    cursor: text;
+  }
+
+  /* tailwind v4's preflight no longer gives buttons a pointer, and :where keeps the disabled rule
+     below winning. A list's rows select or open on click: the list controller marks each with
+     aria-selected, which is what gives them the pointer here */
   :where(
     button:not(:disabled),
     a[href],
     [role="button"],
     [role="menuitem"],
     [role="menuitemradio"],
+    [role="menuitemcheckbox"],
     [role="option"],
     [role="tab"],
     [role="switch"],
     [role="radio"],
+    [role="checkbox"],
+    [role="treeitem"],
+    [data-line][aria-selected],
     label:has(> [role="switch"]),
     label:has(> [role="radio"]),
+    label:has(> [role="checkbox"]),
     summary
   ) {
     cursor: pointer;

@@ -209,7 +209,7 @@
       <dt class="text-fg-muted">Direction</dt>
       <dd>{d.direction}</dd>
       <dt class="text-fg-muted">File</dt>
-      <dd class="font-mono text-xs wrap-anywhere">{d.filename}</dd>
+      <dd class="cursor-text font-mono text-xs wrap-anywhere">{d.filename}</dd>
       <dt class="text-fg-muted">Size</dt>
       <dd>{formatBytes(d.size)}, {formatBytes(d.bytesTransferred)} transferred</dd>
       <dt class="text-fg-muted">State</dt>
@@ -225,7 +225,7 @@
       <dt class="text-fg-muted">Speed</dt>
       <dd>{formatSpeed(d.averageSpeed)}</dd>
       <dt class="text-fg-muted">Error</dt>
-      <dd class="font-mono text-xs wrap-anywhere">{d.exception ?? ""}</dd>
+      <dd class="cursor-text font-mono text-xs wrap-anywhere">{d.exception ?? ""}</dd>
     </dl>
   {/if}
 </Dialog>

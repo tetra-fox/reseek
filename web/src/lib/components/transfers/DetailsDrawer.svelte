@@ -146,7 +146,7 @@
     <section class="flex flex-col gap-1">
       <h3 class="text-xs font-medium text-fg-muted uppercase">File</h3>
       <p>{getFileName(t.filename)}</p>
-      <p class="flex items-start gap-1 font-mono text-xs wrap-anywhere">
+      <p class="flex cursor-text items-start gap-1 font-mono text-xs wrap-anywhere">
         {t.filename}
         <button
           type="button"
@@ -156,7 +156,7 @@
         </button>
       </p>
       {#if t.localPath}
-        <p class="flex items-start gap-1 font-mono text-xs wrap-anywhere">
+        <p class="flex cursor-text items-start gap-1 font-mono text-xs wrap-anywhere">
           {t.localPath}
           <button
             type="button"

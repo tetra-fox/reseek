@@ -26,6 +26,10 @@ test("the dashboard shows more at a glance, each figure a link to its list", asy
   await expect(now).toContainText("Downloading");
   await expect(now).toContainText("Sharing");
   await expect(page.getByRole("img", { name: "Transfer outcomes" })).toBeVisible();
+  // the chart's bars open their lists, so they take the pointer
+  await expect(
+    page.getByRole("img", { name: "Transfer outcomes" }).locator("rect.cursor-pointer").first()
+  ).toHaveCSS("cursor", "pointer");
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/dashboard.png` });
 
   // a figure opens the list behind it, filtered
