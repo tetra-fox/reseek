@@ -112,15 +112,16 @@
     }
   }
 
+  /* a sheet slides in from the left unless it sets --sheet-from to 100% for the right */
   @keyframes sheet-in {
     from {
-      translate: -100% 0;
+      translate: var(--sheet-from, -100%) 0;
     }
   }
 
   @keyframes sheet-out {
     to {
-      translate: -100% 0;
+      translate: var(--sheet-from, -100%) 0;
     }
   }
 

@@ -57,21 +57,4 @@ describe("the message list's lines", () => {
     );
     expect(kinds(lines)).toEqual(["day", "1*", "day", "2*", "unread", "3*"]);
   });
-
-  it("places presence lines in time order, breaking a group, and later ones last", () => {
-    const burst = (key: string, at: string) => ({
-      key,
-      at,
-      kind: "joined" as const,
-      names: ["bob"]
-    });
-    const lines = layout(
-      [message(1, "2026-10-26T10:00:00Z"), message(2, "2026-10-26T10:01:00Z")],
-      [],
-      null,
-      [burst("p2", "2026-10-26T10:05:00Z"), burst("p1", "2026-10-26T10:00:30Z")]
-    );
-    expect(kinds(lines)).toEqual(["day", "1*", "presence", "2*", "presence"]);
-    expect(lines.map((l) => l.key)).toEqual(["day:1", "m:1", "p1", "m:2", "p2"]);
-  });
 });

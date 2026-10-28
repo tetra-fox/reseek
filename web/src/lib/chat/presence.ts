@@ -1,4 +1,4 @@
-/** What happened to a member of a room, as the room's muted lines say it */
+/** What happened to a member of a room, as the room's activity pane says it */
 export type PresenceKind =
   | "joined"
   | "left"
@@ -12,8 +12,11 @@ export type PresenceKind =
 /** One member's change, as it arrived */
 export type PresenceEvent = { id: number; at: string; kind: PresenceKind; username: string };
 
-/** Changes of one kind close together, shown as one line at the time of the first */
-export type Burst = { key: string; at: string; kind: PresenceKind; names: string[] };
+/**
+ * Changes of one kind close together, shown as one line at the time of the first; `last` is
+ * when its latest change came
+ */
+export type Burst = { key: string; at: string; last: string; kind: PresenceKind; names: string[] };
 
 /** Changes of the same kind this close to the one before fold into one line */
 export const FOLD_MS = 10_000;
@@ -22,24 +25,25 @@ export const FOLD_MS = 10_000;
 export const NAMED = 3;
 
 /**
- * Folds changes, in the order they arrived, into bursts: a change joins the burst before it
- * when it is of the same kind and comes within `FOLD_MS` of that burst's last change. A name
- * shows once in a burst. A burst is keyed by its first change, so it keeps its line as it grows
+ * Adds a change to the bursts it follows, oldest first, in place: it joins the last burst when
+ * it is of the same kind and comes within `FOLD_MS` of that burst's last change, and starts a
+ * new one otherwise. A name shows once in a burst. A burst is keyed by its first change, so it
+ * keeps its line as it grows
  */
+export const addChange = (bursts: Burst[], e: PresenceEvent) => {
+  const open = bursts.at(-1);
+  if (open && open.kind === e.kind && Date.parse(e.at) - Date.parse(open.last) <= FOLD_MS) {
+    if (!open.names.includes(e.username)) open.names.push(e.username);
+    open.last = e.at;
+    return;
+  }
+  bursts.push({ key: `presence:${e.id}`, at: e.at, last: e.at, kind: e.kind, names: [e.username] });
+};
+
+/** Changes, in the order they arrived, folded into bursts */
 export const fold = (events: PresenceEvent[]): Burst[] => {
   const bursts: Burst[] = [];
-  let open: { burst: Burst; last: number } | null = null;
-  for (const e of events) {
-    const at = Date.parse(e.at);
-    if (open && open.burst.kind === e.kind && at - open.last <= FOLD_MS) {
-      if (!open.burst.names.includes(e.username)) open.burst.names.push(e.username);
-      open.last = at;
-      continue;
-    }
-    const burst: Burst = { key: `presence:${e.id}`, at: e.at, kind: e.kind, names: [e.username] };
-    bursts.push(burst);
-    open = { burst, last: at };
-  }
+  for (const e of events) addChange(bursts, e);
   return bursts;
 };
 

@@ -5,8 +5,10 @@ import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { chat } from "#lib/chat/chat.svelte.js";
 import { ECHO_WAIT } from "#lib/chat/pane.svelte.js";
+import { chatLayout } from "#lib/chat/prefs.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
+import { setMedia } from "#lib/testing/media.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import Pane from "./Pane.svelte";
@@ -184,6 +186,56 @@ describe("a chat pane", () => {
     expect(ids()).toEqual(["1", "10", "11", "12"]);
     expect(row(10)).toBe(ten);
     expect(document.body.textContent).toContain("(disconnected from Soulseek)");
+  });
+
+  it("keeps joins and leaves out of the messages and folds them in the room's activity", async () => {
+    const net = fakeNetwork((url) => {
+      if (url.pathname.endsWith("/rooms/joined/indie/messages")) {
+        return { messages: [roomMessage(1)], hasMore: false, gaps: [] };
+      }
+      if (url.pathname.endsWith("/rooms/joined/indie")) {
+        return { name: "indie", isPrivate: false, users: [], tickers: [], messages: null };
+      }
+      return undefined;
+    });
+    chat.rooms.upsert({
+      name: "indie",
+      unread: 0,
+      mentions: 0,
+      notify: "mentions",
+      userCount: 2,
+      lastReadId: 1
+    });
+    setMedia("min-width: 768px", true);
+    chatLayout.users = true;
+    chatLayout.side = "activity";
+    live.start();
+    component = mount(Pane, {
+      target: document.body,
+      props: { target: { kind: "room", name: "indie" } }
+    });
+    await flush();
+    const joined = (username: string) =>
+      net.frame("rooms.user_joined", {
+        roomName: "indie",
+        user: { username, status: "Online" } as Schemas["RoomUser"]
+      });
+    joined("carol");
+    await flush();
+    const grid = () => document.querySelector("[aria-label='Joins, leaves and status changes']")!;
+    const lines = () => [...grid().querySelectorAll("[role=row]")].map((r) => r.ariaLabel);
+    expect(lines()).toEqual(["carol joined the room"]);
+    const first = grid().querySelector("[role=row]");
+    // a second join soon after folds into the same row; a leave starts a new one above it
+    joined("dave");
+    net.frame("rooms.user_left", { roomName: "indie", username: "carol" });
+    await flush();
+    expect(lines()).toEqual(["carol left the room", "carol and dave joined"]);
+    expect(grid().querySelectorAll("[role=row]")[1]).toBe(first);
+    const log = document.querySelector("[role=log]")!;
+    expect(ids()).toEqual(["1"]);
+    expect(log.textContent).not.toMatch(/joined|left the room/);
+    setMedia("min-width: 768px", false);
   });
 
   it("doesn't count messages read when the pane opens away from the bottom", async () => {

@@ -6,10 +6,11 @@
   import SunIcon from "@lucide/svelte/icons/sun";
 
   import { type Burst, burstLine } from "#lib/chat/presence.js";
+  import { clock } from "#lib/clock.svelte.js";
   import Username from "#lib/components/users/Username.svelte";
-  import { formatDate, shortTime } from "#lib/format.js";
+  import { ago, formatDate, shortTime } from "#lib/format.js";
 
-  // members coming and going, one muted line for a burst of the same change
+  // the cells of one line of a room's activity: a burst of the same change by its members
   let { burst }: { burst: Burst } = $props();
 
   const line = $derived(burstLine(burst));
@@ -27,15 +28,18 @@
   );
 </script>
 
-<p role="note" class="flex items-center justify-center gap-1.5 px-3 py-1 text-xs text-fg-muted">
-  <Icon class="size-3 shrink-0 text-fg-subtle" aria-hidden="true" />
-  <span class="min-w-0 truncate">
-    {#each line.shown as name, i (name)}{#if i > 0}{i === line.shown.length - 1 && !line.others
-          ? " and "
-          : ", "}{/if}<Username {name} card class="font-normal" />{/each}{#if line.others}
-      and {line.others} others{/if}
-    {line.verb}
-  </span>
-  <time class="shrink-0 text-fg-subtle" datetime={burst.at} title={formatDate(burst.at)}
-    >{shortTime(burst.at)}</time>
-</p>
+<span role="gridcell" class="pt-0.5 text-xs text-fg-subtle tabular-nums"
+  ><time datetime={burst.at} title={`${formatDate(burst.at)}, ${ago(burst.at, clock.now)}`}
+    >{shortTime(burst.at)}</time
+  ></span>
+<span role="gridcell" class="flex justify-center pt-1">
+  <Icon class="size-3.5 text-fg-muted" aria-hidden="true" />
+</span>
+<span role="gridcell" class="min-w-0 wrap-anywhere">
+  {#each line.shown as name, i (name)}{#if i > 0}{i === line.shown.length - 1 && !line.others
+        ? " and "
+        : ", "}{/if}<Username {name} card />{/each}{#if line.others}
+    and <span title={burst.names.slice(line.shown.length).join(", ")}>{line.others} others</span
+    >{/if}
+  <span class="text-fg-muted">{line.verb}</span>
+</span>

@@ -3,18 +3,20 @@
   import HashIcon from "@lucide/svelte/icons/hash";
   import LockIcon from "@lucide/svelte/icons/lock";
   import PanelRightIcon from "@lucide/svelte/icons/panel-right";
+  import { Dialog } from "bits-ui";
   import type { Snippet } from "svelte";
+  import { MediaQuery } from "svelte/reactivity";
 
   import { app } from "#lib/app.svelte.js";
   import { chat, paneKey } from "#lib/chat/chat.svelte.js";
   import type { Message } from "#lib/chat/messages.js";
   import { MessagePane, type Target } from "#lib/chat/pane.svelte.js";
-  import { chatLayout as layout, showsPresence } from "#lib/chat/prefs.svelte.js";
-  import { fold } from "#lib/chat/presence.js";
+  import { chatLayout as layout, SIDE_TABS } from "#lib/chat/prefs.svelte.js";
   import { RoomMembers } from "#lib/chat/room.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import Scrim from "#lib/components/ui/Scrim.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
@@ -28,6 +30,7 @@
   import ChatMenuItems from "./ChatMenuItems.svelte";
   import Composer from "./Composer.svelte";
   import MessageList from "./MessageList.svelte";
+  import RoomActivity from "./RoomActivity.svelte";
   import RoomUsers from "./RoomUsers.svelte";
   import RoomWall from "./RoomWall.svelte";
 
@@ -93,7 +96,9 @@
       ...(Array.isArray(watched) ? watched.filter((w) => typeof w === "string") : [])
     ];
   });
-  const bursts = $derived(members && showsPresence(target.name) ? fold(members.presence) : []);
+  // the side panel sits beside the messages on a wide screen and in a sheet on a narrow one
+  const wide = new MediaQuery("min-width: 768px");
+  let sheet = $state(false);
 
   let composer = $state<Composer | null>(null);
   const reply = (message: Message) => composer?.quote(message);
@@ -108,6 +113,33 @@
       ? members!.users.rows.map((u) => u.username)
       : [target.name, ...chat.conversations.rows.map((c) => c.username)];
 </script>
+
+{#snippet side(members: RoomMembers)}
+  <div role="tablist" aria-label="Side panel" class="flex gap-1 border-b p-1.5">
+    {#each SIDE_TABS as t (t.id)}
+      <button
+        type="button"
+        role="tab"
+        aria-selected={layout.side === t.id}
+        class="flex h-control-sm flex-1 items-center justify-center rounded-control text-sm text-fg-muted hover:bg-hover hover:text-fg aria-selected:nav-current"
+        onclick={() => (layout.side = t.id)}>
+        {t.title}
+        {#if t.id === "wall" && members.wall.length}
+          <span class="ml-1 text-xs text-fg-subtle tabular-nums">{members.wall.length}</span>
+        {/if}
+      </button>
+    {/each}
+  </div>
+  <div role="tabpanel" class="flex min-h-0 flex-1">
+    {#if layout.side === "wall"}
+      <RoomWall {members} />
+    {:else if layout.side === "activity"}
+      <RoomActivity {members} />
+    {:else}
+      <RoomUsers {members} />
+    {/if}
+  </div>
+{/snippet}
 
 <section class="flex min-h-0 min-w-0 flex-1 flex-col" aria-label={`Chat with ${target.name}`}>
   <header class="flex min-h-12 items-center gap-2 border-b px-3 py-2">
@@ -131,13 +163,20 @@
         <Button size="sm" onclick={() => void join()}>Join</Button>
       {/if}
       {#if target.kind === "room" && joined}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          class="max-md:hidden"
-          aria-label={layout.users ? "Hide the side panel" : "Show users and wall"}
-          aria-pressed={layout.users}
-          onclick={() => (layout.users = !layout.users)}><PanelRightIcon /></Button>
+        {#if wide.current}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={layout.users ? "Hide the side panel" : "Show the side panel"}
+            aria-pressed={layout.users}
+            onclick={() => (layout.users = !layout.users)}><PanelRightIcon /></Button>
+        {:else}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Show the side panel"
+            onclick={() => (sheet = true)}><PanelRightIcon /></Button>
+        {/if}
       {/if}
       <Menu.Root>
         <Menu.Trigger>
@@ -180,7 +219,6 @@
         <MessageList
           {pane}
           {at}
-          {bursts}
           {watch}
           onreply={disabled ? undefined : reply}
           onread={() => write && void pane.markRead()} />
@@ -193,32 +231,24 @@
         <Composer bind:this={composer} {pane} {disabled} {names} />
       {/if}
     </div>
-    {#if members && joined && layout.users}
+    {#if members && joined && wide.current && layout.users}
       <!-- the side panel scrolls inside its own column, never past the pane -->
-      <div class="hidden min-h-0 w-64 shrink-0 flex-col border-l md:flex">
-        <div role="tablist" aria-label="Side panel" class="flex gap-1 border-b p-1.5">
-          {#each [{ id: "users", title: "Users" }, { id: "wall", title: "Wall" }] as t (t.id)}
-            <button
-              type="button"
-              role="tab"
-              aria-selected={layout.side === t.id}
-              class="flex h-control-sm flex-1 items-center justify-center rounded-control text-sm text-fg-muted hover:bg-hover hover:text-fg aria-selected:nav-current"
-              onclick={() => (layout.side = t.id as "users" | "wall")}>
-              {t.title}
-              {#if t.id === "wall" && members.wall.length}
-                <span class="ml-1 text-xs text-fg-subtle tabular-nums">{members.wall.length}</span>
-              {/if}
-            </button>
-          {/each}
-        </div>
-        <div role="tabpanel" class="flex min-h-0 flex-1">
-          {#if layout.side === "wall"}
-            <RoomWall {members} />
-          {:else}
-            <RoomUsers {members} />
-          {/if}
-        </div>
+      <div class="flex min-h-0 w-64 shrink-0 flex-col border-l">
+        {@render side(members)}
       </div>
     {/if}
   </div>
 </section>
+
+{#if members && joined && !wide.current}
+  <Dialog.Root bind:open={sheet}>
+    <Dialog.Portal>
+      <Scrim />
+      <Dialog.Content
+        class="fixed inset-y-0 right-0 z-50 flex w-80 max-w-[90vw] flex-col bg-surface shadow-raised [--sheet-from:100%] data-[state=closed]:animate-sheet-out data-[state=open]:animate-sheet-in">
+        <Dialog.Title class="sr-only">{`#${target.name}`}</Dialog.Title>
+        {@render side(members)}
+      </Dialog.Content>
+    </Dialog.Portal>
+  </Dialog.Root>
+{/if}

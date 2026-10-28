@@ -150,13 +150,53 @@ test("a room reads like a chat: names, actions, links and the wall", async ({ pa
   await page.waitForTimeout(400);
   await expect(page.getByRole("dialog", { name: "Profile of alice" })).toBeVisible();
   await page.keyboard.press("Escape");
+});
 
-  // joins and leaves can be turned off from the room menu
-  await page.getByRole("button", { name: "Room menu" }).click();
-  await expect(
-    page.getByRole("menuitemcheckbox", { name: "Show joins and leaves" })
-  ).toHaveAttribute("aria-checked", "true");
-  await page.keyboard.press("Escape");
+/** One event stream frame as the daemon writes it */
+const frame = (id: number, event: string, data: unknown) =>
+  `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+
+test("a busy room's comings and goings stay out of its messages", async ({ page }) => {
+  await fakeChat(page);
+  // the first stream that carries the room's frames is a burst of 120 members joining and
+  // leaving; every later one is the daemon's own
+  let served = false;
+  await page.route("**/api/v0/live**", (route) => {
+    const topics = new URL(route.request().url()).searchParams.get("topics") ?? "";
+    if (served || !topics.split(",").includes("rooms")) return route.continue();
+    served = true;
+    const hello = {
+      principal: { name: "reseek", role: "Administrator" },
+      resumed: false,
+      serverTime: at(30),
+      topics: topics.split(","),
+      version: { current: "0.0.0", full: "0.0.0", latest: null, isUpdateAvailable: false }
+    };
+    const churn = Array.from({ length: 120 }, (_, n) =>
+      n % 2
+        ? frame(n + 2, "rooms.user_left", { roomName: "indie", username: `guest${n - 1}` })
+        : frame(n + 2, "rooms.user_joined", {
+            roomName: "indie",
+            user: { username: `guest${n}`, status: "Online", self: false }
+          })
+    );
+    return route.fulfill({
+      headers: { "content-type": "text/event-stream" },
+      body: frame(1, "hello", hello) + churn.join("")
+    });
+  });
+  await login(page, "/chat");
+  await page.goto("./#/chat/rooms/indie");
+  const log = page.getByRole("log");
+  await expect(log.getByText("anyone have the new boards of canada rip?")).toBeVisible();
+  await page.getByRole("tab", { name: "Activity" }).click();
+  const activity = page.getByRole("grid", { name: "Joins, leaves and status changes" });
+  await expect(activity.getByRole("row").first()).toContainText("left the room");
+  await expect(activity.getByRole("row")).toHaveCount(120);
+  // the message list holds the six messages and nothing else
+  await expect(log.locator("[data-message]")).toHaveCount(6);
+  await expect(log).not.toContainText("joined");
+  await expect(log).not.toContainText("left the room");
 });
 
 test("a private chat shows both sides with their actions", async ({ page }) => {

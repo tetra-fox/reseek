@@ -13,7 +13,7 @@
   import { root, type Schemas } from "#lib/api/client.js";
   import { chat } from "#lib/chat/chat.svelte.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
-  import { chatLayout, setPresence, showsPresence } from "#lib/chat/prefs.svelte.js";
+  import { chatLayout } from "#lib/chat/prefs.svelte.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { links, pin } from "#lib/components/users/actions.js";
   import { confirmation } from "#lib/confirm.svelte.js";
@@ -84,14 +84,9 @@
   </Menu.RadioGroup>
   <Menu.Separator />
 {/if}
-{#if !user && row}
-  <Menu.CheckboxItem
-    checked={showsPresence(target.name)}
-    onCheckedChange={(on) => setPresence(target.name, on)}>Show joins and leaves</Menu.CheckboxItem>
-  {#if admin}
-    <Menu.Item onSelect={() => goto(href("/system/settings?q=highlight_words"))}
-      ><HighlighterIcon />Watched words</Menu.Item>
-  {/if}
+{#if !user && row && admin}
+  <Menu.Item onSelect={() => goto(href("/system/settings?q=highlight_words"))}
+    ><HighlighterIcon />Watched words</Menu.Item>
   <Menu.Separator />
 {/if}
 <Menu.CheckboxItem checked={chatLayout.emoji} onCheckedChange={(on) => (chatLayout.emoji = on)}
