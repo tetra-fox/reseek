@@ -8,7 +8,6 @@ import { ECHO_WAIT } from "#lib/chat/pane.svelte.js";
 import { chatLayout } from "#lib/chat/prefs.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
-import { setMedia } from "#lib/testing/media.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import Pane from "./Pane.svelte";
@@ -206,7 +205,6 @@ describe("a chat pane", () => {
       userCount: 2,
       lastReadId: 1
     });
-    setMedia("min-width: 768px", true);
     chatLayout.users = true;
     chatLayout.side = "activity";
     live.start();
@@ -235,7 +233,6 @@ describe("a chat pane", () => {
     const log = document.querySelector("[role=log]")!;
     expect(ids()).toEqual(["1"]);
     expect(log.textContent).not.toMatch(/joined|left the room/);
-    setMedia("min-width: 768px", false);
   });
 
   it("doesn't count messages read when the pane opens away from the bottom", async () => {

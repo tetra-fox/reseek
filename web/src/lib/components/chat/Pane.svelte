@@ -5,7 +5,6 @@
   import PanelRightIcon from "@lucide/svelte/icons/panel-right";
   import { Dialog } from "bits-ui";
   import type { Snippet } from "svelte";
-  import { MediaQuery } from "svelte/reactivity";
 
   import { app } from "#lib/app.svelte.js";
   import { chat, paneKey } from "#lib/chat/chat.svelte.js";
@@ -26,6 +25,7 @@
   import { fields } from "#lib/stored.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
+  import { viewport } from "#lib/viewport.svelte.js";
 
   import ChatMenuItems from "./ChatMenuItems.svelte";
   import Composer from "./Composer.svelte";
@@ -96,8 +96,7 @@
       ...(Array.isArray(watched) ? watched.filter((w) => typeof w === "string") : [])
     ];
   });
-  // the side panel sits beside the messages on a wide screen and in a sheet on a narrow one
-  const wide = new MediaQuery("min-width: 768px");
+  // the side panel sits beside the messages on a wide screen and in a sheet on a phone
   let sheet = $state(false);
 
   let composer = $state<Composer | null>(null);
@@ -163,7 +162,7 @@
         <Button size="sm" onclick={() => void join()}>Join</Button>
       {/if}
       {#if target.kind === "room" && joined}
-        {#if wide.current}
+        {#if !viewport.phone}
           <Button
             variant="ghost"
             size="icon-sm"
@@ -231,7 +230,7 @@
         <Composer bind:this={composer} {pane} {disabled} {names} />
       {/if}
     </div>
-    {#if members && joined && wide.current && layout.users}
+    {#if members && joined && !viewport.phone && layout.users}
       <!-- the side panel scrolls inside its own column, never past the pane -->
       <div class="flex min-h-0 w-64 shrink-0 flex-col border-l">
         {@render side(members)}
@@ -240,7 +239,7 @@
   </div>
 </section>
 
-{#if members && joined && !wide.current}
+{#if members && joined && viewport.phone}
   <Dialog.Root bind:open={sheet}>
     <Dialog.Portal>
       <Scrim />
