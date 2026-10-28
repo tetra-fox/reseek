@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use api_types::live::{Bye, ByeReason, LiveFrame};
@@ -17,6 +17,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, trace, warn};
 
 use super::{Published, Registered, Topic, render};
+use crate::sync::lock;
 
 /// How many frames a stream may fall behind by before it is closed as lagging.
 const QUEUE: usize = 1024;
@@ -139,8 +140,7 @@ impl Queue {
   }
 
   fn lock(&self) -> MutexGuard<'_, Pending> {
-    // every change is made whole before the lock is let go
-    self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.inner)
   }
 }
 

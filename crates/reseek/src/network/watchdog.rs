@@ -20,10 +20,10 @@ use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
-use super::lock;
 use crate::config::Options;
 use crate::shares::Shares;
 use crate::state::StateOwner;
+use crate::sync::lock;
 
 /// How often the timer starts a loop while the watchdog is on and no loop runs.
 const BACKSTOP: Duration = Duration::from_millis(100);

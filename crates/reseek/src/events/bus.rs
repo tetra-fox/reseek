@@ -21,6 +21,8 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info_span, warn};
 
+use crate::sync::lock;
+
 /// How many events a slow subscriber may fall behind by before it misses some.
 const BACKLOG: usize = 1024;
 
@@ -101,12 +103,7 @@ impl EventBus {
       )
       .instrument(span),
     );
-    let replaced = self
-      .inner
-      .subscribers
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
-      .insert((name.to_string(), only), task);
+    let replaced = lock(&self.inner.subscribers).insert((name.to_string(), only), task);
     if let Some(earlier) = replaced {
       earlier.abort();
       debug!(
@@ -118,12 +115,7 @@ impl EventBus {
 
   /// Removes the subscriber `name` for `only`; nothing happens when there is none.
   pub fn unsubscribe(&self, name: &str, only: Option<EventType>) {
-    let removed = self
-      .inner
-      .subscribers
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
-      .remove(&(name.to_string(), only));
+    let removed = lock(&self.inner.subscribers).remove(&(name.to_string(), only));
     if let Some(task) = removed {
       task.abort();
     }

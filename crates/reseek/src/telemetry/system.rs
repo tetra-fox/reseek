@@ -1,7 +1,7 @@
 //! The families read from the system each time the metrics are asked for: this process, the
 //! host's memory, fixed filesystems and network devices, and the async runtime.
 
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use sysinfo::{
   Disks, MemoryRefreshKind, Networks, Pid, ProcessRefreshKind, ProcessesToUpdate, System,
@@ -9,6 +9,7 @@ use sysinfo::{
 use tokio::runtime::Handle;
 
 use super::registry::{Family, Labels, Values};
+use crate::sync::lock;
 
 /// Filesystems that live in memory or are layered over others, which are left out.
 const NOT_FIXED: &[&str] = &["tmpfs", "overlay", "devtmpfs", "ramfs", "squashfs"];
@@ -44,8 +45,7 @@ impl Default for SystemProbe {
 impl SystemProbe {
   /// The system families as they are now. Reads `/proc` and the like, so it blocks.
   pub fn families(&self) -> Vec<Family> {
-    // each read refreshes the whole state before the lock is let go
-    let mut probed = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut probed = lock(&self.state);
     let Probed {
       system,
       disks,

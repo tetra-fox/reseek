@@ -12,8 +12,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 use uuid::Uuid;
 
-use super::{Downloads, lock};
+use super::Downloads;
 use crate::api::error::ApiError;
+use crate::sync::lock;
 use crate::transfers::store;
 
 /// How long a place a peer gave is answered again without asking it.

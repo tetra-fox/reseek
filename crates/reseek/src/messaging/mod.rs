@@ -19,7 +19,7 @@ mod sessions;
 mod unread;
 
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use api_types::chat::NotifyLevel;
@@ -39,6 +39,7 @@ use crate::events::EventBus;
 use crate::live::Live;
 use crate::network::Network;
 use crate::state::StateOwner;
+use crate::sync::lock;
 use crate::users::Directory;
 use rooms::Rooms;
 
@@ -84,11 +85,6 @@ fn notify_level(text: &str) -> rusqlite::Result<NotifyLevel> {
       format!("not a notification level: {other}").into(),
     )),
   }
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-  // every change under these locks is made whole before the lock is let go
-  mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// The messaging engine.

@@ -5,7 +5,7 @@
 //! check takes does not tell whether the account exists.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use api_types::auth::Role;
 use argon2::Argon2;
@@ -16,6 +16,7 @@ use tracing::warn;
 
 use crate::config::{Authentication, LocalUser};
 use crate::crypto;
+use crate::sync::lock;
 
 /// A local account that a password matched.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -99,8 +100,7 @@ impl Accounts {
   }
 
   fn lock(&self) -> std::sync::MutexGuard<'_, Option<(Settings, Arc<Hashed>)>> {
-    // the value is replaced whole, so a panic elsewhere leaves it usable
-    self.loaded.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.loaded)
   }
 }
 

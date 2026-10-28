@@ -7,7 +7,7 @@
 //! `State.server.listen.reachable`.
 
 use std::collections::HashSet;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use api_types::state::Reachable;
@@ -17,6 +17,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::state::StateOwner;
+use crate::sync::lock;
 
 /// How long we stay logged in before nobody connecting to us says they cannot.
 pub const WAITED: Duration = Duration::from_secs(600);
@@ -73,8 +74,7 @@ impl Reachability {
   }
 
   fn evidence(&self) -> std::sync::MutexGuard<'_, Evidence> {
-    // every change under the lock is made whole before it is let go
-    self.evidence.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.evidence)
   }
 
   /// We logged in: the judgement starts over.

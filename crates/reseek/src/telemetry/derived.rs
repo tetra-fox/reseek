@@ -1,10 +1,11 @@
 //! Gauges fed by a helper rather than set directly: a count over the last whole minute, and a
 //! moving average.
 
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, PoisonError};
 
 use super::registry::Gauge;
+use crate::sync::lock;
 
 /// Counts over a window; when the window ends the count is published to its gauge and starts
 /// again from zero, so the gauge shows the count of the last whole window. The window is a
@@ -63,8 +64,7 @@ impl Ema {
 
   /// Moves the average towards `x` and returns it; the first value is the average.
   pub fn update(&self, x: f64) -> f64 {
-    // the value is replaced whole before the lock is let go
-    let mut value = self.value.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut value = lock(&self.value);
     let next = value.map_or(x, |v| v + (x - v) * ALPHA);
     *value = Some(next);
     self.gauge.set(next);
@@ -73,7 +73,7 @@ impl Ema {
 
   /// Empties the average and publishes 0.
   pub fn reset(&self) {
-    *self.value.lock().unwrap_or_else(PoisonError::into_inner) = None;
+    *lock(&self.value) = None;
     self.gauge.set(0.0);
   }
 }

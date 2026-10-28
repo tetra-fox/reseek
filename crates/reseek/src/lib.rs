@@ -27,6 +27,7 @@ pub mod searches;
 pub mod services;
 pub mod shares;
 pub mod state;
+pub mod sync;
 pub mod telemetry;
 pub mod transfers;
 pub mod turns;

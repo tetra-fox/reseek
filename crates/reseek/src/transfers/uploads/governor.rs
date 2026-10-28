@@ -15,6 +15,7 @@ use soulseek_client::{Governor as ChunkGovernor, Reporter, TokenBucket};
 use tracing::debug;
 
 use crate::config::{Groups, Options};
+use crate::sync::lock;
 use crate::users::{DEFAULT_GROUP, LEECHERS, PRIVILEGED};
 
 /// Looks up the group an upload's user is in now.
@@ -74,11 +75,7 @@ impl Governor {
 
   /// Makes every bucket again, full, when a group or the global speed changed.
   pub fn configure(&self, options: &Options) {
-    // the pair is replaced whole under the lock
-    let mut built_from = self
-      .built_from
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner);
+    let mut built_from = lock(&self.built_from);
     let wanted = made_from(options);
     if *built_from == wanted {
       return;
@@ -114,7 +111,7 @@ impl Governor {
       Box::pin(async move {
         match bucket.get(want, &cancel).await {
           Ok(granted) => {
-            *last.lock().unwrap_or_else(PoisonError::into_inner) = Some((bucket, granted));
+            *lock(&last) = Some((bucket, granted));
             granted
           }
           // the client sees the cancel and ends the upload
@@ -123,7 +120,7 @@ impl Governor {
       })
     });
     let reporter: Reporter = Arc::new(move |_, _, _, moved| {
-      let taken = last.lock().unwrap_or_else(PoisonError::into_inner).take();
+      let taken = lock(&last).take();
       if let Some((bucket, granted)) = taken {
         bucket.give_back(granted.saturating_sub(moved));
       }

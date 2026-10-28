@@ -8,7 +8,7 @@ pub mod flow;
 pub mod logout;
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use openidconnect::core::{
@@ -28,6 +28,7 @@ use tracing::{Instrument, debug, error, info, info_span, warn};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::{Oidc, Options};
+use crate::sync::lock;
 
 /// A provider's discovery document with its signing keys.
 pub type Metadata = ProviderMetadataWithLogout;
@@ -120,7 +121,7 @@ impl Providers {
     let Some(configured) = options.web.authentication.oidc.get(name) else {
       return Ok(None);
     };
-    let mut known = self.known.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut known = lock(&self.known);
     if let Some(provider) = known.get(name)
       && provider.options == *configured
     {

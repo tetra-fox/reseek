@@ -3,11 +3,12 @@
 //! network. The engines hold the handles and update them where things happen; until then every
 //! value is zero. None of these carries labels.
 
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, MutexGuard};
 
 use super::derived::{Ema, TimedCounter};
 use super::registry::{Counter, Gauge, Histogram, Registry, exponential};
 use super::transfers::{TransferFamily, TransferMetrics};
+use crate::sync::lock;
 
 /// The prefix of every metric of the daemon's own.
 pub(super) const PREFIX: &str = "reseek";
@@ -306,11 +307,7 @@ impl Catalogue {
   /// The metrics of both directions of transfers, held until the guard is dropped, so the
   /// figures one update changes together are seen together.
   pub fn transfers(&self) -> MutexGuard<'_, TransferFamily> {
-    // every update is made whole before the lock is let go
-    self
-      .transfers
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
+    lock(&self.transfers)
   }
 
   /// Ends the minute of every per-minute count, publishing each to its gauge.

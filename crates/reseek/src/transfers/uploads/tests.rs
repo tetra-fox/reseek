@@ -13,9 +13,10 @@ use soulseek_proto::RemoteFilename;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use super::{InFlight, OVERWHELMED, lock};
+use super::{InFlight, OVERWHELMED};
 use crate::network::resolvers::tests::{edges, exposed, from};
 use crate::network::resolvers::{enqueue_download, place_in_queue};
+use crate::sync::lock;
 use crate::testing::{TestApp, app, request};
 use crate::transfers::fixtures::{Row, insert};
 use crate::transfers::{Record, store};

@@ -12,7 +12,6 @@ use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
-use std::sync::PoisonError;
 use tracing::debug;
 
 use super::store::{self, Change};
@@ -20,6 +19,7 @@ use super::{Directory, SUMMARY_FOR, blocking, groups, profile, transfers};
 use crate::api::error::ApiError;
 use crate::db::shifted;
 use crate::services::{BlockImport, BlockingService};
+use crate::sync::lock;
 
 fn internal(error: impl std::fmt::Display) -> ApiError {
   ApiError::internal(error)
@@ -130,10 +130,7 @@ impl Directory {
 impl Directory {
   /// What is stored about `username`, kept a minute.
   pub(crate) async fn summary(&self, username: &str) -> Result<UserSummary, ApiError> {
-    let cached = self
-      .summaries
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
+    let cached = lock(&self.summaries)
       .get(username)
       .filter(|(at, _)| at.elapsed() < SUMMARY_FOR)
       .map(|(_, summary)| summary.clone());

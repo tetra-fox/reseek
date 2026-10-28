@@ -2,7 +2,9 @@
 //! leaves it alone, until the download lets go of it.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
+
+use crate::sync::lock;
 
 /// The paths being written, each by every spelling it was marked with, shared by every handle.
 #[derive(Clone, Default)]
@@ -26,11 +28,6 @@ impl Drop for WriteGuard {
       }
     }
   }
-}
-
-fn lock(paths: &Mutex<Vec<PathBuf>>) -> MutexGuard<'_, Vec<PathBuf>> {
-  // every holder of the lock changes the list whole
-  paths.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl Writing {

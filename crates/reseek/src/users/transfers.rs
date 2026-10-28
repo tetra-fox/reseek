@@ -2,7 +2,7 @@
 //! sorts and filters by, a user's transfers page by page, and removing them from the listings.
 
 use std::collections::HashMap;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use api_types::transfers::TransferDirection;
@@ -11,6 +11,7 @@ use rusqlite::params_from_iter;
 use rusqlite::types::Value;
 
 use crate::db::{Database, DbError, read_timestamp};
+use crate::sync::lock;
 use crate::transfers::categories::{FAILED, IN_PROGRESS, QUEUED, SUCCESSFUL, condition};
 use crate::transfers::{COLUMNS, direction_text, transfer};
 
@@ -76,10 +77,7 @@ impl FigureCache {
     messaging: &Database,
     username: &str,
   ) -> Result<UserFigures, DbError> {
-    let kept = self
-      .entries
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
+    let kept = lock(&self.entries)
       .get(username)
       .filter(|(at, _)| at.elapsed() < FIGURES_FOR)
       .map(|(_, figures)| figures.clone());
@@ -91,7 +89,7 @@ impl FigureCache {
     (fresh.messages, fresh.last_message_at) = messaging
       .read(move |conn| crate::messaging::message_figures(conn, &name))
       .await?;
-    let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut entries = lock(&self.entries);
     entries.retain(|_, (at, _)| at.elapsed() < FIGURES_FOR);
     entries.insert(username.to_string(), (Instant::now(), fresh.clone()));
     Ok(fresh)
@@ -99,11 +97,7 @@ impl FigureCache {
 
   /// Forgets `username`'s figures.
   pub fn forget(&self, username: &str) {
-    self
-      .entries
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
-      .remove(username);
+    lock(&self.entries).remove(username);
   }
 }
 

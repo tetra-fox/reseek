@@ -17,7 +17,7 @@ mod position;
 
 use std::cmp::Reverse;
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, MutexGuard};
 
 use tokio::sync::oneshot;
 use tracing::{debug, warn};
@@ -27,6 +27,7 @@ pub use position::Forecast;
 
 use crate::config::enums::QueueStrategy;
 use crate::config::{GroupUpload, Groups, Options};
+use crate::sync::lock;
 use crate::users::{DEFAULT_GROUP, LEECHERS, PRIVILEGED};
 
 /// Looks up the group a user is in, without waiting.
@@ -187,8 +188,7 @@ impl UploadQueue {
   }
 
   fn lock(&self) -> MutexGuard<'_, State> {
-    // every change is made whole before the lock is let go
-    self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.state)
   }
 
   /// The group `username` is queued in now: their group, or the default group when the queue

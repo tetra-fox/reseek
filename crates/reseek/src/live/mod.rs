@@ -10,7 +10,7 @@ mod stream;
 pub mod topics;
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use api_types::live::LiveFrame;
@@ -23,6 +23,8 @@ pub use snapshots::frames as snapshot;
 use stream::Queue;
 pub use stream::{Revalidate, body};
 pub use topics::Topic;
+
+use crate::sync::lock;
 
 /// How many published frames are kept for streams that reconnect.
 const RING_FRAMES: usize = 4096;
@@ -235,8 +237,7 @@ impl Live {
 
 impl Hub {
   fn lock(&self) -> MutexGuard<'_, HubState> {
-    // every change to the state is made whole before the lock is let go
-    self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.state)
   }
 }
 

@@ -19,6 +19,7 @@ use super::store::ensure;
 use crate::config::Options;
 use crate::config::cidr::IpRange;
 use crate::db::{read_timestamp, timestamp};
+use crate::sync::lock;
 
 /// How long an answer is remembered.
 const DECISION_FOR: Duration = Duration::from_secs(600);
@@ -278,11 +279,7 @@ impl Blocks {
   /// Takes the configuration's blacklist from `options` and forgets every remembered answer.
   pub fn configure(&self, options: &Options) {
     *self.rules.write().unwrap_or_else(PoisonError::into_inner) = Arc::new(Rules::of(options));
-    self
-      .decisions
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
-      .clear();
+    lock(&self.decisions).clear();
   }
 
   /// Takes the blocklist file loaded from `path`, `None` for none.
@@ -294,11 +291,7 @@ impl Blocks {
       path,
       list: Arc::new(list),
     });
-    self
-      .decisions
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
-      .clear();
+    lock(&self.decisions).clear();
   }
 
   /// Takes our block of a user, new or replaced.
@@ -329,19 +322,11 @@ impl Blocks {
 
   /// Drops the remembered answers older than they are kept for.
   pub fn forget_stale(&self) {
-    self
-      .decisions
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
-      .retain(|_, decision| decision.fresh());
+    lock(&self.decisions).retain(|_, decision| decision.fresh());
   }
 
   fn forget(&self, username: &str) {
-    self
-      .decisions
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
-      .retain(|(name, _, _), _| name != username);
+    lock(&self.decisions).retain(|(name, _, _), _| name != username);
   }
 
   /// Whether the configuration blocks `username` by name or pattern.
@@ -382,10 +367,7 @@ impl Blocks {
   /// it was worked out for; nothing is worked out, so a user without one is taken as not
   /// blocked. For a check that must stay cheap and is followed by the full one.
   pub fn remembers_blocked(&self, username: &str, scope: BlockScope) -> bool {
-    self
-      .decisions
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
+    lock(&self.decisions)
       .iter()
       .any(|((name, _, remembered), decision)| {
         name == username && *remembered == scope && decision.blocked && decision.fresh()
@@ -409,10 +391,7 @@ impl Blocks {
   pub fn is_blocked(&self, username: &str, ip: Option<IpAddr>, scope: BlockScope) -> bool {
     let key = (username.to_string(), ip, scope);
     {
-      let mut decisions = self
-        .decisions
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
+      let mut decisions = lock(&self.decisions);
       let mut remembered = |key: &DecisionKey| {
         let decision = decisions.get_mut(key).filter(|d| d.fresh())?;
         decision.used = Instant::now();
@@ -443,10 +422,7 @@ impl Blocks {
         .unwrap_or_else(PoisonError::into_inner);
       rules.blocks(username, ip, blocklist.as_ref().map(|loaded| &*loaded.list))
     };
-    let mut decisions = self
-      .decisions
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner);
+    let mut decisions = lock(&self.decisions);
     if decisions.len() >= DECISIONS {
       decisions.retain(|_, decision| decision.fresh());
     }

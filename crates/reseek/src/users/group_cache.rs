@@ -24,6 +24,7 @@ use tracing::{Instrument, debug, info, trace, warn};
 
 use super::groups::{self, Facts};
 use super::{Directory, Touch};
+use crate::sync::lock;
 use crate::turns::Turns;
 
 /// How old a user's statistics may be when their group is worked out before they are asked
@@ -45,11 +46,6 @@ pub struct GroupCache {
   asked: Mutex<HashMap<String, u32>>,
   /// the users whose statistics are being asked for again
   refetching: Mutex<HashSet<String>>,
-}
-
-fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-  // every change under these locks is made whole before the lock is let go
-  mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl GroupCache {
@@ -95,7 +91,7 @@ impl GroupCache {
   }
 
   fn watched(&self) -> MutexGuard<'_, HashSet<String>> {
-    locked(&self.watched)
+    lock(&self.watched)
   }
 }
 
@@ -186,7 +182,7 @@ impl Directory {
     client: &Client,
     username: &str,
   ) -> Result<UserStatus, ClientError> {
-    *locked(&self.groups.asked)
+    *lock(&self.groups.asked)
       .entry(username.to_string())
       .or_default() += 1;
     let fetched = client.get_user_status(username).await;
@@ -194,7 +190,7 @@ impl Directory {
       Ok(status) => status,
       Err(e) => {
         // no reply comes that would be counted off
-        let mut asked = locked(&self.groups.asked);
+        let mut asked = lock(&self.groups.asked);
         if let Some(count) = asked.get_mut(username) {
           *count = count.saturating_sub(1);
           if *count == 0 {
@@ -242,7 +238,7 @@ impl Directory {
     username: &str,
     again: bool,
   ) -> Result<(), ClientError> {
-    let completed = |groups: &GroupCache| locked(&groups.watches).get(username).copied();
+    let completed = |groups: &GroupCache| lock(&groups.watches).get(username).copied();
     let before = completed(&self.groups);
     let _turn = self.groups.watching.take(username).await;
     if completed(&self.groups) != before || (!again && self.is_watched(username)) {
@@ -254,7 +250,7 @@ impl Directory {
       warn!(username, error = %e, "status of a watched user not fetched");
     }
     self.groups.watched().insert(username.to_string());
-    *locked(&self.groups.watches)
+    *lock(&self.groups.watches)
       .entry(username.to_string())
       .or_default() += 1;
     info!(username, "Added user to watch list");
@@ -276,7 +272,7 @@ impl Directory {
     let Some(client) = self.client.get().cloned() else {
       return;
     };
-    if !locked(&self.groups.refetching).insert(username.to_string()) {
+    if !lock(&self.groups.refetching).insert(username.to_string()) {
       return;
     }
     let (this, username) = (self.clone(), username.to_string());
@@ -287,7 +283,7 @@ impl Directory {
         {
           warn!(username, suppressed, error = %e, "statistics of a user not fetched again");
         }
-        locked(&this.groups.refetching).remove(&username);
+        lock(&this.groups.refetching).remove(&username);
       }
       .in_current_span(),
     );
@@ -315,7 +311,7 @@ impl Directory {
       facts.presence = Some(presence);
       facts.privileged = is_privileged;
     });
-    let mut asked = locked(&self.groups.asked);
+    let mut asked = lock(&self.groups.asked);
     match asked.get_mut(username) {
       Some(count) => {
         *count -= 1;
@@ -374,7 +370,7 @@ impl Directory {
   /// The server session ended, and with it the server's watching of every user.
   pub fn session_ended(&self) {
     self.groups.watched().clear();
-    locked(&self.groups.asked).clear();
+    lock(&self.groups.asked).clear();
   }
 
   /// `username` is in the user-defined group `group` we put them in from now on, or in none.

@@ -1,7 +1,7 @@
 //! The last log records kept in memory, for the live log view, and the stream of new ones.
 
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use api_types::logs::{LogLevel, LogRecord};
 use chrono::Utc;
@@ -9,6 +9,8 @@ use tokio::sync::broadcast;
 use tracing::field::{Field, Visit};
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::layer::{Context, Layer};
+
+use crate::sync::lock;
 
 /// How many records the buffer keeps.
 pub const CAPACITY: usize = 100;
@@ -64,8 +66,7 @@ impl LogBuffer {
   }
 
   fn lock(&self) -> std::sync::MutexGuard<'_, VecDeque<Arc<LogRecord>>> {
-    // a push is one step, so a panic while holding the lock leaves the buffer whole
-    self.records.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.records)
   }
 }
 

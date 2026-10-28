@@ -8,7 +8,7 @@
 mod migrate;
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDate, NaiveTime, SecondsFormat, Utc};
@@ -16,6 +16,8 @@ use rusqlite::trace::{TraceEvent, TraceEventCodes};
 use rusqlite::{Connection, OpenFlags};
 use tokio::sync::Semaphore;
 use tracing::{debug, info, trace, warn};
+
+use crate::sync::lock;
 
 pub(crate) use migrate::schema;
 pub use migrate::{Migration, Schema};
@@ -148,17 +150,12 @@ impl Database {
       .await
       .map_err(|e| DbError::Task(e.to_string()))?;
     let idle = readers.idle.clone();
-    let conn = idle
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
+    let conn = lock(&idle)
       .pop()
       .ok_or_else(|| DbError::Task("no idle reader although a permit was free".to_string()))?;
     let result = tokio::task::spawn_blocking(move || {
       let result = f(&conn);
-      idle
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .push(conn);
+      lock(&idle).push(conn);
       result
     })
     .await;

@@ -4,12 +4,14 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::net::{IpAddr, Ipv6Addr};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use soulseek_client::LogLimiter;
 use tokio::time::Instant;
 use tracing::warn;
+
+use crate::sync::lock;
 
 /// How long a failure counts.
 pub const WINDOW: Duration = Duration::from_secs(60);
@@ -62,7 +64,7 @@ impl Window {
   pub fn blocked(&self, ip: IpAddr) -> bool {
     let now = Instant::now();
     let key = counted_as(ip);
-    let mut failures = self.failures.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut failures = lock(&self.failures);
     let Some(times) = failures.get_mut(&key) else {
       return false;
     };
@@ -81,7 +83,7 @@ impl Window {
   pub fn failed(&self, ip: IpAddr) {
     let now = Instant::now();
     let ip = counted_as(ip);
-    let mut failures = self.failures.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut failures = lock(&self.failures);
     if failures.len() >= TRACKED && !failures.contains_key(&ip) {
       failures.retain(|_, times| {
         forget_old(times, now);

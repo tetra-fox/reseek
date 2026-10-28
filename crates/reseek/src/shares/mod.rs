@@ -23,7 +23,7 @@ mod watcher;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use api_types::state::SharesState;
@@ -39,6 +39,7 @@ use crate::config::Options;
 use crate::db::{Database, DbError};
 use crate::paths::Paths;
 use crate::state::StateOwner;
+use crate::sync::lock;
 use scanner::{Outcome, Settings};
 use share::Share;
 
@@ -167,11 +168,6 @@ pub struct Shares {
   watches: Mutex<Option<watcher::Watching>>,
   browse_throttle: Throttle,
   counts_throttle: Throttle,
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-  // every change under these locks is made whole before the lock is let go
-  mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl Shares {

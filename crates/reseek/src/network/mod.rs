@@ -15,7 +15,7 @@ mod reachability;
 pub mod resolvers;
 pub mod watchdog;
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use api_types::state::UserStatistics;
@@ -32,6 +32,7 @@ use crate::config::Options;
 use crate::services::Connected;
 use crate::shares::Shares;
 use crate::state::StateOwner;
+use crate::sync::lock;
 use crate::telemetry::Telemetry;
 use crate::users::Directory;
 pub use changes::follow_changes;
@@ -117,11 +118,6 @@ pub struct Network {
   mapper: PortMapper,
   /// whether other users can connect to us
   reachability: Arc<Reachability>,
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-  // every change under these locks is made whole before the lock is let go
-  mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl Network {

@@ -9,7 +9,7 @@ mod natpmp;
 mod upnp;
 
 use std::net::IpAddr;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use api_types::state::{PortMappingMethod, PortMappingState, PortMappingStatus};
@@ -24,6 +24,7 @@ pub use upnp::Upnp;
 
 use super::reachability::Reachability;
 use crate::state::StateOwner;
+use crate::sync::lock;
 
 /// How long one request to a router may take before it counts as unanswered.
 const ASKING: Duration = Duration::from_secs(15);
@@ -89,11 +90,6 @@ pub struct PortMapper {
   gateways: Mutex<Option<Vec<Box<dyn Gateway>>>>,
   stop: CancellationToken,
   task: Mutex<Option<JoinHandle<()>>>,
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-  // every change under these locks is a single take or put
-  mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl PortMapper {

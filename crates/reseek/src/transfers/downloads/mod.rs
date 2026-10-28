@@ -22,7 +22,7 @@ mod tests;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use api_types::live::LiveFrame;
@@ -48,6 +48,7 @@ use crate::live::Live;
 use crate::network::Network;
 use crate::paths::Paths;
 use crate::searches::Searches;
+use crate::sync::lock;
 use crate::telemetry::Telemetry;
 use crate::turns::{Turn, Turns};
 use crate::users::Directory;
@@ -99,11 +100,6 @@ pub struct Downloads {
   resumed: AtomicBool,
   /// when each running download last asked its peer for its place in the queue
   asked: Mutex<HashMap<Uuid, Instant>>,
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-  // every change under these locks is made whole before the lock is let go
-  mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl Downloads {

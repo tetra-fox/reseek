@@ -21,8 +21,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, trace, warn};
 use uuid::Uuid;
 
+use super::Uploads;
 use super::intake::Located;
-use super::{Uploads, lock};
+use crate::sync::lock;
 use crate::transfers::{Record, removal, store};
 
 /// More states than one upload reports.

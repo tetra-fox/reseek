@@ -18,13 +18,14 @@ use soulseek_client::LogLimiter;
 use tokio::sync::mpsc;
 use tracing::{Instrument, debug, info, warn};
 
+use super::Shares;
 use super::repository::{self, DirectoryRows};
 use super::scanner::{self, Settings};
 use super::share::{self, Share};
 use super::walk;
-use super::{Shares, lock};
 use crate::db::DbError;
 use crate::entries;
+use crate::sync::lock;
 
 /// How many notifications wait to be sorted at most; past it the notifying thread waits.
 const BACKLOG: usize = 4096;

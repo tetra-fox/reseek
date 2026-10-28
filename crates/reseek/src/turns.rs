@@ -3,9 +3,11 @@
 //! waits for their turn.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::OwnedMutexGuard;
+
+use crate::sync::lock;
 
 type Map = HashMap<String, Arc<tokio::sync::Mutex<()>>>;
 
@@ -13,11 +15,6 @@ type Map = HashMap<String, Arc<tokio::sync::Mutex<()>>>;
 #[derive(Clone, Default)]
 pub struct Turns {
   map: Arc<Mutex<Map>>,
-}
-
-fn lock(map: &Mutex<Map>) -> MutexGuard<'_, Map> {
-  // the map is changed in single inserts and removals
-  map.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl Turns {

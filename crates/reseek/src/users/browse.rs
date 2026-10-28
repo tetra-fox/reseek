@@ -4,7 +4,7 @@
 //! always once at 100 %. A new browse of the same user takes the place of the last.
 
 use std::collections::HashMap;
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use api_types::live::LiveFrame;
@@ -12,6 +12,7 @@ use api_types::users::BrowseProgress;
 use tokio::time::Instant;
 
 use crate::live::Live;
+use crate::sync::lock;
 
 /// How long a browse's progress is kept after it ended.
 const KEPT: Duration = Duration::from_secs(5);
@@ -56,14 +57,13 @@ impl Browses {
   }
 
   fn entries(&self) -> MutexGuard<'_, HashMap<String, Entry>> {
-    // every change under the lock is made whole before it is let go
-    self.entries.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.entries)
   }
 
   /// A browse of `username` starts; returns its number, which its progress and its end name.
   pub fn started(&self, username: &str) -> u64 {
     let browse = {
-      let mut next = self.next.lock().unwrap_or_else(PoisonError::into_inner);
+      let mut next = lock(&self.next);
       *next += 1;
       *next
     };

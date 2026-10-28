@@ -300,7 +300,7 @@ mod tests {
   use soulseek_proto::server::RoomData;
 
   use super::history;
-  use crate::messaging::lock;
+  use crate::sync::lock;
   use crate::testing::app;
 
   #[tokio::test]

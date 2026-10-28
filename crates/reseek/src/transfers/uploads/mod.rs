@@ -20,7 +20,7 @@ mod task;
 mod tests;
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use api_types::live::LiveFrame;
@@ -41,6 +41,7 @@ use crate::events::EventBus;
 use crate::live::Live;
 use crate::network::Network;
 use crate::shares::Shares;
+use crate::sync::lock;
 use crate::telemetry::Telemetry;
 use crate::users::Directory;
 use governor::Governor;
@@ -86,11 +87,6 @@ pub struct Uploads {
   queue: UploadQueue,
   governor: Arc<Governor>,
   intake: Intake,
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-  // every change under these locks is made whole before the lock is let go
-  mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl Uploads {

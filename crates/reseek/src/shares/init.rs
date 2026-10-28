@@ -9,9 +9,10 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
 use super::scanner::{self, Settings};
-use super::{Shares, lock, repository, share, storage};
+use super::{Shares, repository, share, storage};
 use crate::config::Options;
 use crate::config::enums::StorageMode;
+use crate::sync::lock;
 
 /// How often the scheduled rescan checks whether one is due, and how soon after startup it
 /// first does.

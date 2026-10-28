@@ -4,7 +4,7 @@
 
 use std::net::IpAddr;
 use std::num::NonZeroU16;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use api_types::state::PortMappingMethod;
@@ -15,6 +15,7 @@ use crab_nat::{
 use tracing::debug;
 
 use super::{Gateway, Mapped, local_toward};
+use crate::sync::lock;
 
 /// How long each request waits for the router, doubling on each of the retries: about four
 /// seconds for each protocol in all.
@@ -28,13 +29,6 @@ const TIMEOUTS: TimeoutConfig = TimeoutConfig {
 #[derive(Default)]
 pub struct NatPmp {
   held: Mutex<Option<(PortMapping, Mapped)>>,
-}
-
-fn held(
-  held: &Mutex<Option<(PortMapping, Mapped)>>,
-) -> std::sync::MutexGuard<'_, Option<(PortMapping, Mapped)>> {
-  // every change under the lock is a single take or put
-  held.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// The address of the default gateway.
@@ -106,12 +100,12 @@ impl Gateway for NatPmp {
       ));
     }
     let made = mapped(&mapping, router).await;
-    *held(&self.held) = Some((mapping, made.clone()));
+    *lock(&self.held) = Some((mapping, made.clone()));
     Ok(made)
   }
 
   async fn renew(&self) -> Result<Mapped, String> {
-    let (mut mapping, made) = held(&self.held).clone().ok_or("nothing is mapped")?;
+    let (mut mapping, made) = lock(&self.held).clone().ok_or("nothing is mapped")?;
     mapping
       .renew()
       .await
@@ -120,12 +114,12 @@ impl Gateway for NatPmp {
       lifetime: Some(Duration::from_secs(mapping.lifetime().into())),
       ..made
     };
-    *held(&self.held) = Some((mapping, renewed.clone()));
+    *lock(&self.held) = Some((mapping, renewed.clone()));
     Ok(renewed)
   }
 
   async fn unmap(&self) -> Result<(), String> {
-    let (mapping, _) = held(&self.held).take().ok_or("nothing is mapped")?;
+    let (mapping, _) = lock(&self.held).take().ok_or("nothing is mapped")?;
     mapping
       .try_drop()
       .await

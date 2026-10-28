@@ -16,9 +16,10 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use super::batches::{self, BatchRow, InsertError};
-use super::{Downloads, InFlight, lock};
+use super::{Downloads, InFlight};
 use crate::api::error::ApiError;
 use crate::safety::traverses;
+use crate::sync::lock;
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::removal::{self, Removed};
 use crate::transfers::{Record, direction_text, store};

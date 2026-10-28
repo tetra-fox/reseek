@@ -11,7 +11,7 @@ pub mod tracker;
 
 pub use events::room_of;
 
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use api_types::chat::NotifyLevel;
@@ -30,6 +30,7 @@ use super::conversations::unsent;
 use crate::api::error::ApiError;
 use crate::db::DbError;
 use crate::services::Joined;
+use crate::sync::lock;
 use tracker::{Tracker, country_of};
 
 /// How long the server's room list is served again before it is asked for anew.
@@ -47,8 +48,7 @@ pub struct Rooms {
 
 impl Rooms {
   pub(in crate::messaging) fn tracker(&self) -> MutexGuard<'_, Tracker> {
-    // every change under the lock is made whole before it is let go
-    self.tracker.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.tracker)
   }
 }
 

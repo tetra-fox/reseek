@@ -12,7 +12,7 @@ mod suspect;
 
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::Duration;
 
 use api_types::live::LiveFrame;
@@ -36,6 +36,7 @@ use crate::db::{Database, DbError, Location, shifted};
 use crate::live::Live;
 use crate::network::Network;
 use crate::services::{Cancelled, SearchService};
+use crate::sync::lock;
 use crate::users::Directory;
 use running::Running;
 
@@ -158,8 +159,7 @@ impl Searches {
   }
 
   fn running(&self) -> MutexGuard<'_, HashMap<Uuid, Arc<Running>>> {
-    // the map is changed in single inserts and removals
-    self.running.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.running)
   }
 
   fn this(&self) -> Arc<Self> {

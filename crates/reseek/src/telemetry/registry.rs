@@ -7,9 +7,11 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use api_types::telemetry::{MetricSample, MetricType, PrometheusMetric};
+
+use crate::sync::lock;
 
 /// A value that only goes up. Cloning gives another handle to the same value.
 #[derive(Clone, Debug, Default)]
@@ -118,8 +120,7 @@ impl Histogram {
   }
 
   fn lock(&self) -> std::sync::MutexGuard<'_, Observed> {
-    // an observation is made whole before the lock is let go
-    self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.0)
   }
 }
 

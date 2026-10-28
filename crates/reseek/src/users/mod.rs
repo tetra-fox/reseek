@@ -31,7 +31,7 @@ pub use groups::{DEFAULT as DEFAULT_GROUP, LEECHERS, PRIVILEGED};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use api_types::blocking::{Block, BlockScope};
@@ -55,6 +55,7 @@ use crate::config::{Options, RETENTION_SWEEP};
 use crate::db::{Database, DbError, Location};
 use crate::events::EventBus;
 use crate::live::Live;
+use crate::sync::lock;
 use blocking::Blocks;
 use blocklist::Blocklist;
 use group_cache::GroupCache;
@@ -336,10 +337,7 @@ impl Directory {
     let user = profile::known(&options, username, row.as_ref(), block);
     let user = self.with_network_and_conversation(user).await;
     let summary = profile::summary(user, row.as_ref(), &figures);
-    let mut summaries = self
-      .summaries
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner);
+    let mut summaries = lock(&self.summaries);
     summaries.retain(|_, (at, _)| at.elapsed() < SUMMARY_FOR);
     summaries.insert(username.to_string(), (Instant::now(), summary.clone()));
     Ok(summary)
@@ -375,11 +373,7 @@ impl Directory {
   /// Forgets what is cached about `username`.
   fn forget(&self, username: &str) {
     self.figures.forget(username);
-    self
-      .summaries
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
-      .remove(username);
+    lock(&self.summaries).remove(username);
   }
 
   /// Writes the touches as they come, pushing the users whose row changed.
@@ -498,11 +492,7 @@ impl Directory {
         }
         Err(RecvError::Closed) => return,
       }
-      self
-        .summaries
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .clear();
+      lock(&self.summaries).clear();
     }
   }
 

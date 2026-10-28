@@ -9,8 +9,9 @@ use chrono::{DateTime, Utc};
 use rusqlite::{Connection, Row, params};
 use tracing::{debug, warn};
 
-use super::{Messaging, lock};
+use super::Messaging;
 use crate::db::{read_timestamp, timestamp};
+use crate::sync::lock;
 
 /// The shortest gap reported.
 const SHORTEST: chrono::Duration = chrono::Duration::seconds(1);

@@ -18,9 +18,10 @@ use chrono::{DateTime, Utc};
 use soulseek_client::ClientError;
 use tracing::{debug, info, trace, warn};
 
-use super::{Messaging, export, lock};
+use super::{Messaging, export};
 use crate::api::error::ApiError;
 use crate::db::DbError;
+use crate::sync::lock;
 use crate::users::Touch;
 use store::{Inbound, SERVER};
 

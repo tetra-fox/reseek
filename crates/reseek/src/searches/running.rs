@@ -4,7 +4,7 @@
 //! completed.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use api_types::live::LiveFrame;
@@ -19,6 +19,7 @@ use tracing::{debug, error, trace, warn};
 
 use super::{Searches, store, suspect};
 use crate::live::{Live, Topic};
+use crate::sync::lock;
 use crate::users::Directory;
 
 /// How often the counts of a running search are written and pushed at most.
@@ -44,11 +45,6 @@ struct Progress {
   moved: bool,
   /// told once the client took the search, or with the error it refused it with
   accepted: Option<oneshot::Sender<Result<(), ClientError>>>,
-}
-
-fn lock(progress: &Mutex<Progress>) -> MutexGuard<'_, Progress> {
-  // every change under the lock is made whole before it is let go
-  progress.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// The search's state as the API writes it, from the client's.

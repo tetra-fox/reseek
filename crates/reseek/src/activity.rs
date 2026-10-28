@@ -4,7 +4,7 @@
 //! happen. Nothing is stored; a restart starts an empty log.
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use api_types::activity::{ActivityEntry, ActivityKind};
@@ -14,6 +14,7 @@ use tokio::time::Instant;
 use tracing::trace;
 
 use crate::live::Live;
+use crate::sync::lock;
 
 /// How many entries are kept; the oldest go first.
 pub const KEPT: usize = 500;
@@ -65,8 +66,7 @@ impl Activity {
   }
 
   fn lock(&self) -> MutexGuard<'_, Ring> {
-    // every change to the ring is made whole before the lock is let go
-    self.ring.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.ring)
   }
 
   /// The entries kept, oldest first.

@@ -5,12 +5,14 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info_span};
+
+use crate::sync::lock;
 
 /// How often a job runs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -99,12 +101,7 @@ impl Clock {
     Fut: Future<Output = ()> + Send + 'static,
   {
     let job: Job = Arc::new(move |first_run| Box::pin(job(first_run)));
-    self
-      .inner
-      .jobs
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
-      .push((every, name, job));
+    lock(&self.inner.jobs).push((every, name, job));
   }
 
   /// Starts every interval: each job runs at once, then on its interval.
@@ -121,10 +118,7 @@ impl Clock {
               () = inner.shutdown.cancelled() => return,
               _ = ticks.tick() => {}
             }
-            let due: Vec<(&'static str, Job)> = inner
-              .jobs
-              .lock()
-              .unwrap_or_else(PoisonError::into_inner)
+            let due: Vec<(&'static str, Job)> = lock(&inner.jobs)
               .iter()
               .filter(|(at, _, _)| *at == every)
               .map(|(_, name, job)| (*name, job.clone()))

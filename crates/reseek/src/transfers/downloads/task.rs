@@ -16,10 +16,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 use uuid::Uuid;
 
+use super::Downloads;
 use super::attempt::{Attempted, Failure};
 use super::destination::incomplete_path;
-use super::{Downloads, lock};
 use crate::safety::Os;
+use crate::sync::lock;
 use crate::transfers::{Record, removal, store};
 
 /// How long a download may hold its turn among the files of its request before its peer has

@@ -13,7 +13,8 @@ use soulseek_client::ClientError;
 use tracing::info;
 
 use super::intake::Located;
-use super::{InFlight, Uploads, lock};
+use super::{InFlight, Uploads};
+use crate::sync::lock;
 use crate::transfers::categories::UNFINISHED;
 use crate::transfers::removal::{self, Removed};
 use crate::transfers::{Record, direction_text, store};

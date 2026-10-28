@@ -2,7 +2,7 @@
 //! a lease of an hour, or a permanent mapping when it takes no other kind.
 
 use std::net::{IpAddr, SocketAddr};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use api_types::state::PortMappingMethod;
@@ -13,6 +13,7 @@ use igd_next::{AddPortError, PortMappingProtocol, SearchOptions};
 use tracing::debug;
 
 use super::{DESCRIPTION, Gateway, Mapped, local_toward};
+use crate::sync::lock;
 
 /// Where SSDP searches go: every UPnP device on the local network listens there.
 const DISCOVERY: &str = "239.255.255.250:1900";
@@ -55,8 +56,7 @@ impl Upnp {
   }
 
   fn held(&self) -> std::sync::MutexGuard<'_, Option<Held>> {
-    // every change under the lock is a single take or put
-    self.held.lock().unwrap_or_else(PoisonError::into_inner)
+    lock(&self.held)
   }
 
   /// Asks `router` to forward `local`'s port to it, for `lease` seconds, or for good when it

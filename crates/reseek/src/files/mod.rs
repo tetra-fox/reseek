@@ -22,7 +22,7 @@ mod writing;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use api_types::auth::Principal;
 use api_types::files::{FileRoot, FileToken, FilesystemDirectory, FilesystemFile};
@@ -47,6 +47,7 @@ use crate::db::Database;
 use crate::paths::Paths;
 use crate::safety::{self, Os};
 use crate::services::{ContentRequest, FileService, FileTarget};
+use crate::sync::lock;
 use delete::Kind;
 pub use placing::{create_file, move_file};
 use roots::{Refused, locate};
@@ -260,11 +261,7 @@ struct ArchiveSlot {
 
 impl Drop for ArchiveSlot {
   fn drop(&mut self) {
-    self
-      .archives
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
-      .remove(&self.subject);
+    lock(&self.archives).remove(&self.subject);
   }
 }
 
@@ -406,7 +403,7 @@ impl FileService for Files {
       )));
     }
     let slot = {
-      let mut archives = self.archives.lock().unwrap_or_else(PoisonError::into_inner);
+      let mut archives = lock(&self.archives);
       if !archives.insert(principal.subject.clone()) {
         return Err(ApiError::too_many(
           "an archive is being sent to you already",

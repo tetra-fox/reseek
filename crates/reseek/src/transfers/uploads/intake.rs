@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use chrono::Utc;
@@ -18,6 +18,7 @@ use tracing::{debug, info, trace, warn};
 
 use super::{Uploads, limits};
 use crate::shares::Resolved;
+use crate::sync::lock;
 use crate::telemetry::millis;
 use crate::users::PRIVILEGED;
 
@@ -85,10 +86,7 @@ impl Intake {
     self.waiting.fetch_add(1, Ordering::AcqRel);
     let waiting = Waiting(&self.waiting);
     // taken under the lock, so the collection never drops a turn a request is about to wait on
-    let user = self
-      .turns
-      .lock()
-      .unwrap_or_else(PoisonError::into_inner)
+    let user = lock(&self.turns)
       .entry(username.to_string())
       .or_insert_with(|| Arc::new(Semaphore::new(1)))
       .clone();
