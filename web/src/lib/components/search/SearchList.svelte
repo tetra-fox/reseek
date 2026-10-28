@@ -1,21 +1,25 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import CircleStopIcon from "@lucide/svelte/icons/circle-stop";
   import LockIcon from "@lucide/svelte/icons/lock";
+  import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import SearchIcon from "@lucide/svelte/icons/search";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import { SvelteSet } from "svelte/reactivity";
 
+  import { app } from "#lib/app.svelte.js";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
-  import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
-  import { dateTime } from "#lib/format.js";
+  import Time from "#lib/components/ui/Time.svelte";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { href } from "#lib/nav.js";
+  import { remember } from "#lib/search/recent.svelte.js";
   import { isDone, scopeLabel, searches } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
@@ -33,45 +37,46 @@
   void searches.load();
 
   let shown = $state(PAGE);
-  let confirming = $state(false);
-  let clearing = $state(false);
   const working = new SvelteSet<string>();
 
   const canWrite = $derived(session.can("ReadWrite"));
   // newest first; a search's start never changes, so a row never moves once it is placed
   const rows = $derived(
-    searches.list.rows.toSorted((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+    searches.list.rows
+      .filter((s) => !searches.hidden.has(s.id))
+      .toSorted((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
   );
   const completed = $derived(rows.filter((s) => isDone(s.state)));
 
-  const act = async (id: string, done: boolean) => {
+  const stop = async (id: string) => {
     if (working.has(id)) return;
     working.add(id);
-    const outcome = done ? await searches.remove(id) : await searches.stop(id);
+    const outcome = await searches.stop(id);
     working.delete(id);
     if (!outcome.ok) toast(outcome.error, "error");
   };
 
-  /** Deletes every completed search, one after another; there is no call for several at once */
-  const clearCompleted = async () => {
-    clearing = true;
-    for (const search of completed) {
-      const outcome = await searches.remove(search.id);
-      if (!outcome.ok) {
-        toast(outcome.error, "error");
-        break;
-      }
-    }
-    clearing = false;
+  /** Runs a search again and opens it */
+  const again = (text: string, scope: (typeof rows)[number]["scope"]) => {
+    const { id } = searches.start(text, scope);
+    remember(text);
+    void goto(href(`/searches/${id}`));
   };
 </script>
 
 {#if !searches.loaded && searches.error}
   <ErrorSegment caption={searches.error} retry={() => void searches.load()} retryLabel="Retry" />
 {:else if !searches.loaded}
-  <div class="flex justify-center py-10"><Spinner class="size-8" /></div>
+  <div
+    class="flex flex-col gap-2 rounded-card border bg-surface p-4 shadow-card"
+    aria-hidden="true">
+    {#each [0, 1, 2, 3] as n (n)}<Skeleton class="h-6" />{/each}
+  </div>
 {:else if rows.length === 0}
-  <EmptyState icon={SearchIcon} title="No searches to display" />
+  <EmptyState
+    icon={SearchIcon}
+    title="No searches to display"
+    description="Type what you're looking for in the box above and press Enter; the results open as they arrive." />
 {:else}
   <Card title="Searches" description={`${rows.length} kept`}>
     {#snippet action()}
@@ -79,8 +84,8 @@
         <Button
           variant="outline"
           size="sm"
-          disabled={!completed.length || clearing}
-          onclick={() => (confirming = true)}>
+          disabled={!completed.length}
+          onclick={() => searches.removeLater(completed.map((c) => c.id))}>
           <Trash2Icon />Delete all completed
         </Button>
       {/if}
@@ -96,7 +101,7 @@
               <th class="text-right">Locked</th>
               <th class="text-right">Responses</th>
               <th>Ended</th>
-              <th class="w-12"><span class="sr-only">Actions</span></th>
+              <th class="w-20"><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody {@attach freezesWhileUsed}>
@@ -120,20 +125,32 @@
                 </td>
                 <td class="text-right tabular-nums">{search.responseCount.toLocaleString()}</td>
                 <td class="text-fg-muted tabular-nums">
-                  {search.endedAt ? dateTime(search.endedAt) : "-"}
+                  {#if search.endedAt}<Time at={search.endedAt} />{:else}-{/if}
                 </td>
                 <td class="text-right">
                   {#if working.has(search.id)}
                     <Spinner class="size-4" />
                   {:else if canWrite}
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      class="text-danger row-action"
-                      aria-label={done ? "Delete" : "Stop"}
-                      onclick={() => void act(search.id, done)}>
-                      {#if done}<Trash2Icon />{:else}<CircleStopIcon />{/if}
-                    </Button>
+                    <span class="inline-flex row-action">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Search again"
+                        title="Search again"
+                        disabled={!app.isServerConnected}
+                        onclick={() => again(search.searchText, search.scope)}>
+                        <RefreshCwIcon />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        class="text-danger"
+                        aria-label={done ? "Delete" : "Stop"}
+                        onclick={() =>
+                          done ? searches.removeLater([search.id]) : void stop(search.id)}>
+                        {#if done}<Trash2Icon />{:else}<CircleStopIcon />{/if}
+                      </Button>
+                    </span>
                   {/if}
                 </td>
               </tr>
@@ -146,16 +163,9 @@
           <Button variant="outline" onclick={() => (shown += PAGE)}>
             Show {Math.min(PAGE, rows.length - shown)} more ({rows.length - shown} not shown)
           </Button>
+          <Button variant="ghost" onclick={() => (shown = rows.length)}>Show all</Button>
         </div>
       {/if}
     {/snippet}
   </Card>
 {/if}
-
-<ConfirmDialog
-  bind:open={confirming}
-  title="Delete all completed searches?"
-  body={`The ${completed.length} completed searches and their results are deleted. Running searches stay.`}
-  confirm="Delete"
-  danger
-  onconfirm={() => void clearCompleted()} />
