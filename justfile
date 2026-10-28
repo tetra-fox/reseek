@@ -15,6 +15,52 @@ dev: web-install
 build: web-build
     cargo build --release
 
+# the static release binaries for linux x86_64 and aarch64 into dist/, with the ui built in
+release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p dist
+    for arch in amd64 arm64; do
+      out="$(nix build --no-link --print-out-paths ".#release-$arch")"
+      install -m755 "$out/bin/reseek" "dist/reseek-linux-$arch"
+    done
+
+# the container image `reseek` from the release binaries, with podman or docker
+docker: release
+    #!/usr/bin/env bash
+    set -euo pipefail
+    runtime="$(command -v podman || command -v docker)"
+    context="$(mktemp -d)"
+    trap 'rm -rf "$context"' EXIT
+    for arch in amd64 arm64; do cp "dist/reseek-linux-$arch" "$context/reseek-$arch"; done
+    cp docker/entrypoint.sh "$context/"
+    # podman writes OCI images by default, which have no HEALTHCHECK
+    format=()
+    if [ "$(basename "$runtime")" = podman ]; then format=(--format docker); fi
+    "$runtime" build "${format[@]}" -f docker/Dockerfile -t reseek "$context"
+
+# the image booted with a volume for /app: it answers on its web port, then is removed
+docker-smoke: docker
+    #!/usr/bin/env bash
+    set -euo pipefail
+    runtime="$(command -v podman || command -v docker)"
+    name="reseek-smoke-$$"
+    "$runtime" volume create "$name" > /dev/null
+    trap '"$runtime" rm -f "$name" > /dev/null; "$runtime" volume rm "$name" > /dev/null' EXIT
+    "$runtime" run -d --name "$name" -v "$name:/app" -p 127.0.0.1::5030 \
+      -e RESEEK_NO_CONNECT=true -e RESEEK_NO_VERSION_CHECK=true reseek > /dev/null
+    port="$("$runtime" port "$name" 5030 | head -1 | cut -d: -f2)"
+    for _ in $(seq 60); do
+      if curl -sf "http://127.0.0.1:$port/health" > /dev/null; then
+        echo "the image answers on its web port"
+        exit 0
+      fi
+      sleep 1
+    done
+    "$runtime" logs "$name"
+    echo "the image never answered on its web port" >&2
+    exit 1
+
 # only the ui into web/build
 web-build: web-install
     pnpm --dir web build
