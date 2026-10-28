@@ -1,5 +1,7 @@
 <script lang="ts">
+  import BrushCleaningIcon from "@lucide/svelte/icons/brush-cleaning";
   import Columns3Icon from "@lucide/svelte/icons/columns-3";
+  import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
@@ -7,6 +9,7 @@
 
   import { app } from "#lib/app.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import SplitButton from "#lib/components/ui/SplitButton.svelte";
   import { formatBytes, formatSpeed } from "#lib/format.js";
@@ -27,9 +30,20 @@
     disabled: boolean;
     onbulk: (action: BulkAction, test: (state: string) => boolean, scope: string) => void;
     onadd: () => void;
+    /** opens the message to every user in the list, on the uploads screen */
+    onmessage: () => void;
   };
 
-  let { direction, view, counts, text = $bindable(), disabled, onbulk, onadd }: Props = $props();
+  let {
+    direction,
+    view,
+    counts,
+    text = $bindable(),
+    disabled,
+    onbulk,
+    onadd,
+    onmessage
+  }: Props = $props();
 
   let retry = $state<string>(SCOPES.retry[0].id);
   let cancel = $state<string>(SCOPES.cancel[0].id);
@@ -77,21 +91,12 @@
       {/each}
     </div>
     <div class="relative min-w-48 flex-1">
-      <input
+      <Input
         bind:value={text}
         type="search"
         aria-label="Filter"
         placeholder="Filter: name, user:alice folder:album ext:flac"
-        class="h-control-sm w-full rounded-control border border-input bg-surface pr-8 pl-3 text-sm placeholder:text-fg-subtle focus-visible:border-accent" />
-      {#if text}
-        <button
-          type="button"
-          class="absolute top-1/2 right-2 -translate-y-1/2"
-          aria-label="Clear the filter"
-          onclick={() => (text = "")}>
-          <XIcon class="size-4 text-fg-muted" />
-        </button>
-      {/if}
+        class="h-control-sm" />
     </div>
   </div>
   <div class="flex flex-wrap items-center gap-inline">
@@ -171,13 +176,27 @@
           icon={Trash2Icon}
           {disabled}
           onclick={(id) => scoped("remove", id)} />
+        {#if direction === "download"}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={disabled || !app.isServerConnected || !counts.errored}
+            onclick={() => scoped("retry", "errored")}>
+            <RotateCwIcon />Retry all failed
+          </Button>
+        {/if}
         <Button
           variant="outline"
           size="sm"
-          {disabled}
+          disabled={disabled || !counts.completed}
           onclick={() => scoped("remove", "succeeded")}>
-          Clear completed
+          <BrushCleaningIcon />Clear finished
         </Button>
+        {#if direction === "upload"}
+          <Button variant="outline" size="sm" {disabled} onclick={onmessage}>
+            <MessageSquareIcon />Message all
+          </Button>
+        {/if}
         {#if direction === "download"}
           <Button size="sm" onclick={onadd}><PlusIcon />Add</Button>
         {/if}

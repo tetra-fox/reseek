@@ -13,14 +13,40 @@ describe("the transfers view", () => {
     expect(textFilter("  ")).toBeNull();
   });
 
-  it("groups by user then folder, and folds a group to its header", () => {
+  it("groups by user then a tree of folders, and closes a group to its header", () => {
     const a = transfer({ filename: "x\\A\\1.flac" });
     const b = transfer({ filename: "x\\B\\1.flac" });
     const c = transfer({ username: "bob", filename: "y\\1.flac" });
-    const lines = (folded: Set<string>) =>
-      layout([a, b, c], "user", folded).map((i) => (i.type === "group" ? i.group.label : i.key));
-    expect(lines(new Set())).toEqual(["alice", "x\\A", a.id, "x\\B", b.id, "bob", "y", c.id]);
-    expect(lines(new Set(["user:alice"]))).toEqual(["alice", "bob", "y", c.id]);
-    expect(layout([a, c], "flat", new Set()).map((i) => i.key)).toEqual([a.id, c.id]);
+    const lines = (closed: string[] = []) =>
+      layout([a, b, c], "user", (key) => !closed.includes(key)).map((i) =>
+        i.type === "group" ? `${i.group.depth}:${i.group.label}` : i.key
+      );
+    expect(lines()).toEqual(["0:alice", "1:x", "2:A", a.id, "2:B", b.id, "0:bob", "1:y", c.id]);
+    expect(lines(["user:alice"])).toEqual(["0:alice", "0:bob", "1:y", c.id]);
+    expect(lines(["folder:alice\u0000x\\A"])).toEqual([
+      "0:alice",
+      "1:x",
+      "2:A",
+      "2:B",
+      b.id,
+      "0:bob",
+      "1:y",
+      c.id
+    ]);
+    expect(layout([a, c], "flat", () => true).map((i) => i.key)).toEqual([a.id, c.id]);
+  });
+
+  it("gives a folder every transfer below it, and its siblings for Alt-click", () => {
+    const a = transfer({ filename: "x\\A\\1.flac" });
+    const b = transfer({ filename: "x\\B\\1.flac" });
+    const groups = layout([a, b], "folder", () => true).flatMap((i) =>
+      i.type === "group" ? [i.group] : []
+    );
+    expect(groups.map((g) => [g.label, g.transfers.length, g.siblings.length])).toEqual([
+      ["x", 2, 1],
+      ["A", 1, 2],
+      ["B", 1, 2]
+    ]);
+    expect(groups[1].folder).toBe("x\\A");
   });
 });

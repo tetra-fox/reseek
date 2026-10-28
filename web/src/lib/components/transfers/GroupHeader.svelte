@@ -1,8 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import BanIcon from "@lucide/svelte/icons/ban";
-  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
-  import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import FileArchiveIcon from "@lucide/svelte/icons/file-archive";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
@@ -13,15 +11,17 @@
   import XIcon from "@lucide/svelte/icons/x";
 
   import { root } from "#lib/api/client.js";
-  import { remoteFolder } from "#lib/components/files/links.js";
+  import { folderLinks, remoteFolder } from "#lib/components/files/links.js";
+  import TreeToggle from "#lib/components/tree/TreeToggle.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { formatBytes, plural } from "#lib/format.js";
+  import { formatBytes, formatDuration, plural } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
   import { act, folderOf, openFolder } from "#lib/transfers/actions.js";
   import { encodePath } from "#lib/transfers/content.js";
+  import { groupProgress } from "#lib/transfers/progress.js";
   import {
     isCancellable,
     isRetryable,
@@ -31,14 +31,15 @@
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Group } from "#lib/transfers/view.js";
   import { quota, waits } from "#lib/transfers/why.svelte.js";
+  import type { Expansion } from "#lib/tree/expansion.svelte.js";
 
   type Props = {
     group: Group;
     store: Transfers;
     direction: Direction;
-    folded: boolean;
+    /** which groups are open */
+    expansion: Expansion;
     ticked: number;
-    ontoggle: () => void;
     onselect: (on: boolean) => void;
     /** removes the group's transfers, asking first for many or running ones */
     onremove: () => void;
@@ -48,24 +49,16 @@
     onblock: (deny: boolean) => void;
   };
 
-  let {
-    group,
-    store,
-    direction,
-    folded,
-    ticked,
-    ontoggle,
-    onselect,
-    onremove,
-    oncancel,
-    onblock
-  }: Props = $props();
+  let { group, store, direction, expansion, ticked, onselect, onremove, oncancel, onblock }: Props =
+    $props();
 
   const write = $derived(session.can("ReadWrite"));
   const list = $derived(group.transfers);
   const bytes = $derived(list.reduce((n, t) => n + t.size, 0));
   const done = $derived(list.filter((t) => t.state.includes("Completed")).length);
   const failed = $derived(list.filter((t) => isRetryable(t.state)).length);
+  const progress = $derived(groupProgress(list));
+  const folded = $derived(!expansion.isOpen(group.key));
   const local = $derived(direction === "download" ? folderOf(list) : null);
   // a user's quota, from why the first of their queued uploads waits
   const waiting = $derived(
@@ -98,13 +91,7 @@
     checked={ticked > 0 && ticked === list.length}
     indeterminate={ticked > 0 && ticked < list.length}
     onCheckedChange={onselect} />
-  <button
-    type="button"
-    aria-label={folded ? "Unfold" : "Fold"}
-    aria-expanded={!folded}
-    onclick={ontoggle}>
-    {#if folded}<ChevronRightIcon class="size-4" />{:else}<ChevronDownIcon class="size-4" />{/if}
-  </button>
+  <TreeToggle {expansion} key={group.key} siblings={group.siblings} name={group.label} />
   {#if group.kind === "user"}
     <Username name={group.username} />
   {:else if group.kind === "folder"}
@@ -119,6 +106,18 @@
       ? ` · ${done} done, ${failed} failed`
       : ""}
   </span>
+  {#if progress.running || (progress.moved > 0 && progress.moved < progress.size)}
+    <span
+      class="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted tabular-nums"
+      title={`${formatBytes(progress.moved)} of ${formatBytes(progress.size)}`}>
+      <span class="h-1.5 w-16 overflow-hidden rounded-full bg-surface-muted ring-1 ring-border">
+        <span class="block h-full bg-accent" style:width={`${progress.percent}%`}></span>
+      </span>
+      {Math.floor(progress.percent)}%{progress.eta !== null
+        ? ` · ${formatDuration(progress.eta)} left`
+        : ""}
+    </span>
+  {/if}
   {#if usage}
     <span class={["shrink-0 text-xs", usage.exhausted ? "text-danger" : "text-fg-muted"]}
       >{usage.text}</span>
@@ -154,7 +153,12 @@
         size="icon-sm"
         aria-label="Download more from this folder"
         title="Download more from this folder"
-        onclick={() => goto(remoteFolder(group.username, list[0].filename).browse)}>
+        onclick={() =>
+          goto(
+            group.folder
+              ? folderLinks(group.username, group.folder).browse
+              : remoteFolder(group.username, list[0].filename).browse
+          )}>
         <FolderSearchIcon />
       </Button>
       {#if local !== null}

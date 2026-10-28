@@ -4,6 +4,7 @@
   import { SvelteSet } from "svelte/reactivity";
 
   import { app } from "#lib/app.svelte.js";
+  import { Arrivals } from "#lib/arrivals.svelte.js";
   import { parseDuration } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
@@ -14,6 +15,7 @@
   import type { Direction, Transfer } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Group, Item } from "#lib/transfers/view.js";
+  import type { Expansion } from "#lib/tree/expansion.svelte.js";
 
   import GroupHeader from "./GroupHeader.svelte";
   import TransferRow from "./TransferRow.svelte";
@@ -23,7 +25,8 @@
     store: Transfers;
     direction: Direction;
     view: ViewSettings;
-    folded: SvelteSet<string>;
+    /** which groups are open */
+    expansion: Expansion;
     /** the selected transfers' ids, which the page acts on */
     selected: SvelteSet<string>;
     ondetails: (t: Transfer) => void;
@@ -43,7 +46,7 @@
     store,
     direction,
     view,
-    folded,
+    expansion,
     selected,
     ondetails,
     onremove,
@@ -96,39 +99,36 @@
   const ticked = (group: Group) => group.transfers.filter((t) => selected.has(t.id)).length;
   const label = (id: ColumnId) => COLUMNS.find((c) => c.id === id)?.label ?? id;
 
-  // the visible remotely queued downloads ask the peer for their place now and then, spread
-  // over the period so they don't all ask at once
+  // the visible remotely queued downloads ask the peer for their place, each once a period and
+  // the first time as soon as it shows; one ask a second at most, so a screenful doesn't ask at once
   const refreshMs = $derived(
     parseDuration(fields(fields(fields(app.options).transfers).ui).queue_refresh) ?? 120_000
   );
-  // as one string, so the timers below start over only when the set of rows changes
-  const queued = $derived(
-    direction === "download"
-      ? items
-          .slice(start, end)
-          .flatMap((i) =>
-            i.type === "row" && i.transfer.state === "Queued, Remotely" ? [i.transfer.id] : []
-          )
-          .join(" ")
-      : ""
-  );
+  /** when each download was last asked for its place; read by the timer only, never shown */
+  const asked = new Map<string, number>();
+  const ASK_EVERY_MS = 1_000;
   $effect(() => {
-    const due = queued ? queued.split(" ") : [];
-    const period = refreshMs;
-    if (!due.length) return;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const ask = (id: string) => {
-      const t = store.list.get(id);
-      if (t?.state === "Queued, Remotely") void store.placeInQueue(t);
-    };
-    const round = setInterval(() => {
-      due.forEach((id, n) => timers.push(setTimeout(() => ask(id), (n * period) / due.length)));
-    }, period);
-    return () => {
-      clearInterval(round);
-      for (const timer of timers) clearTimeout(timer);
-    };
+    if (direction !== "download") return;
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const due = items
+        .slice(start, end)
+        .find(
+          (i) =>
+            i.type === "row" &&
+            i.transfer.state === "Queued, Remotely" &&
+            now - (asked.get(i.transfer.id) ?? 0) >= refreshMs
+        );
+      if (due?.type !== "row") return;
+      asked.set(due.transfer.id, now);
+      void store.placeInQueue(due.transfer);
+    }, ASK_EVERY_MS);
+    return () => clearInterval(timer);
   });
+
+  // rows that arrive while the table is on screen make an entrance
+  const arrivals = new Arrivals();
+  $effect(() => arrivals.see(items.map((i) => i.key)));
 
   const sortBy = (id: ColumnId) => {
     const key = COLUMNS.find((c) => c.id === id)?.sort;
@@ -150,7 +150,12 @@
       const key = e.key.toLowerCase();
       if (!session.can("ReadWrite") && ["delete", "r", "c"].includes(key)) return false;
       if (key === "delete") {
-        ondelete(selected.size > 1 ? store.list.rows.filter((r) => selected.has(r.id)) : [t]);
+        // the selection when the focused row is in it, else the focused row alone
+        ondelete(
+          selected.size > 1 && selected.has(t.id)
+            ? store.list.rows.filter((r) => selected.has(r.id))
+            : [t]
+        );
       } else if (key === "r") onkey("retry", t);
       else if (key === "c") onkey("cancel", t);
       else if (key === "o") onkey("open", t);
@@ -259,10 +264,8 @@
           group={sticky.group}
           {store}
           {direction}
-          folded={folded.has(sticky.key)}
+          {expansion}
           ticked={ticked(sticky.group)}
-          ontoggle={() =>
-            folded.has(sticky.key) ? folded.delete(sticky.key) : folded.add(sticky.key)}
           onselect={(on) => list.setAll(ids(sticky.group), on)}
           onremove={() => onremove(sticky.group.transfers)}
           oncancel={() => oncancel(sticky.group.transfers)}
@@ -288,7 +291,8 @@
               item.transfer.state !== "Completed, Cancelled" &&
               "bg-danger-soft/40",
             selected.has(item.transfer.id) && "bg-accent-soft/60",
-            store.list.removed.has(item.transfer.id) && "opacity-40"
+            store.list.removed.has(item.transfer.id) && "opacity-40",
+            arrivals.isFresh(item.key) && "animate-row-in"
           ]
         ]}
         style:top={`${(start + i) * row}px`}
@@ -302,9 +306,8 @@
             group={item.group}
             {store}
             {direction}
-            folded={folded.has(item.key)}
+            {expansion}
             ticked={ticked(item.group)}
-            ontoggle={() => (folded.has(item.key) ? folded.delete(item.key) : folded.add(item.key))}
             onselect={(on) => list.setAll(ids(item.group), on)}
             onremove={() => onremove(item.group.transfers)}
             oncancel={() => oncancel(item.group.transfers)}

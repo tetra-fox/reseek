@@ -7,9 +7,11 @@ import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { transfer } from "#lib/testing/fixtures.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { toasts } from "#lib/toast.svelte.js";
 import { defaults, views } from "#lib/transfers/settings.svelte.js";
 import type { Transfer } from "#lib/transfers/states.js";
 import { downloads } from "#lib/transfers/transfers.svelte.js";
+import { UNDO_MS } from "#lib/undo.js";
 
 import TransfersPage from "./TransfersPage.svelte";
 
@@ -47,6 +49,7 @@ describe("the transfers table", () => {
     if (component) unmount(component);
     live.stop();
     downloads.clear();
+    toasts.splice(0);
     vi.useRealTimers();
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
@@ -203,7 +206,34 @@ describe("the transfers table", () => {
       expect(ticked()).toEqual([a.id, b.id]);
       expect(press(box, "Delete").defaultPrevented).toBe(true);
       await flush();
-      expect(document.body.textContent).toContain("Remove 2 transfers?");
+      // removed from the screen at once, from the daemon once the undo has passed
+      expect(toasts[0].text).toBe("Removed 2 transfers");
+      expect([row(a.id), row(b.id)]).toEqual([null, null]);
+    });
+
+    it("remove the focused row alone when it is outside the selection, and undo it", async () => {
+      signIn();
+      const a = transfer({ filename: "x\\a.flac", state: "Completed, Succeeded" });
+      const b = transfer({ filename: "x\\b.flac", state: "Completed, Succeeded" });
+      const c = transfer({ filename: "x\\c.flac", state: "Completed, Succeeded" });
+      listing = [a, b, c];
+      const net = await start();
+      press(grid(), "ArrowDown");
+      press(grid(), " ");
+      press(grid(), "ArrowDown");
+      press(grid(), " ");
+      press(grid(), "ArrowDown");
+      expect(ticked()).toEqual([a.id, b.id]);
+      press(grid(), "Delete");
+      await flush();
+      expect(row(c.id)).toBeNull();
+      expect(row(a.id)).not.toBeNull();
+      // Undo brings the row back and nothing is asked of the daemon
+      toasts[0].action!.run();
+      await vi.advanceTimersByTimeAsync(UNDO_MS);
+      flushSync();
+      expect(row(c.id)).not.toBeNull();
+      expect(bulk(net)).toEqual([]);
     });
 
     it("select a group from its header with Ctrl+A and Space, and nothing else", async () => {
@@ -288,7 +318,7 @@ describe("the transfers table", () => {
       const c = transfer({ username: "carol" });
       listing = [a, b, c];
       await start();
-      const fold = row("user:bob")!.querySelector('button[aria-label="Fold"]')!;
+      const fold = row("user:bob")!.querySelector('button[aria-label="Close bob"]')!;
       fold.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       (fold as HTMLButtonElement).click();
       flushSync();
@@ -311,7 +341,8 @@ describe("the transfers table", () => {
       press(grid(), "ArrowDown");
       press(grid(), "ArrowDown");
       press(grid(), "Delete");
-      await flush();
+      await vi.advanceTimersByTimeAsync(UNDO_MS);
+      flushSync();
       expect(bulk(net).map((r) => r.body)).toEqual([{ action: "remove", ids: [b.id] }]);
       net.frame("transfers.removed", { id: b.id, username: b.username, direction: "Download" });
       await flush();
@@ -351,13 +382,15 @@ describe("the transfers table", () => {
       await flush();
       // b1 is the first row after a2's place, beyond bob's headers
       press(grid(), "Delete");
-      await flush();
+      await vi.advanceTimersByTimeAsync(UNDO_MS);
+      flushSync();
       expect(bulk(net).map((r) => r.body)).toEqual([
         { action: "remove", ids: [a2.id] },
         { action: "remove", ids: [b1.id] }
       ]);
+      // b1 left the screen with its Delete, so the row before it has the focus
       press(grid(), " ");
-      expect(ticked()).toEqual([b1.id]);
+      expect(ticked()).toEqual([a1.id]);
     });
 
     it("pass the last row's place to the row before it", async () => {
@@ -402,31 +435,38 @@ describe("the transfers table", () => {
       expect(document.activeElement).toBe(grid());
 
       press(document.activeElement!, "Delete");
-      await flush();
+      await vi.advanceTimersByTimeAsync(UNDO_MS);
+      flushSync();
       expect(bulk(net).map((r) => r.body)).toEqual([
         { action: "remove", ids: [a.id] },
         { action: "remove", ids: [b.id] }
       ]);
     });
 
-    it("give focus to the table when a confirm closes onto a row that left", async () => {
+    it("give focus to the table when a confirm closes onto a control that left", async () => {
       signIn();
+      Object.assign(views.download, { groupBy: "user" });
       const a = transfer({ filename: "x\\a.flac", state: "InProgress", percentComplete: 5 });
       const b = transfer({ filename: "x\\b.flac", state: "InProgress", percentComplete: 5 });
-      listing = [a, b];
+      const other = transfer({ username: "bob", filename: "y\\c.flac" });
+      listing = [a, b, other];
       const net = await start();
-      const box = row(a.id)!.querySelector<HTMLElement>('[role="checkbox"]')!;
-      box.focus();
-      // a running row asks before it is removed
-      press(box, "Delete");
+      const cancelGroup = row("user:alice")!.querySelector<HTMLButtonElement>(
+        'button[aria-label="Cancel the group"]'
+      )!;
+      cancelGroup.focus();
+      // a group with running transfers asks before it is cancelled
+      cancelGroup.click();
       await flush();
-      const cancel = [...document.querySelectorAll("button")].find(
+      expect(document.body.textContent).toContain("Cancel 2 active transfers?");
+      const dismiss = [...document.querySelectorAll("button")].find(
         (x) => x.textContent === "Cancel"
       )!;
-      expect(cancel).toBeDefined();
-      net.frame("transfers.removed", { id: a.id, username: a.username, direction: "Download" });
+      for (const t of [a, b]) {
+        net.frame("transfers.removed", { id: t.id, username: t.username, direction: "Download" });
+      }
       await flush();
-      cancel.click();
+      dismiss.click();
       await vi.advanceTimersByTimeAsync(500);
       flushSync();
       expect(document.activeElement).toBe(grid());

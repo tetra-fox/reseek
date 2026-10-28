@@ -1,4 +1,5 @@
 import { getDirectoryName, getFileName } from "#lib/format.js";
+import { type FolderNode, folderTree } from "#lib/tree/folders.js";
 
 import { type ChipId, STATE_CHIPS, type Transfer } from "./states";
 
@@ -38,9 +39,14 @@ export type Group = {
   key: string;
   label: string;
   username: string;
-  /** 1 for a folder under a user header */
+  /** how far it is nested: under a user, under a folder */
   depth: number;
+  /** every transfer under it, in subfolders too */
   transfers: Transfer[];
+  /** a folder's remote path */
+  folder?: string;
+  /** the keys of the groups beside it, itself included, which Alt-click opens or closes with it */
+  siblings: string[];
 };
 
 export type Item =
@@ -99,11 +105,16 @@ const bucket = <K>(rows: Transfer[], key: (t: Transfer) => K) => {
 };
 
 /**
- * The table's lines: group headers each followed by their rows, or the rows alone when flat.
- * Groups keep the order their first transfer has in `sorted`, and the rows inside a group keep
- * the sort. A folded group shows its header only
+ * The table's lines: group headers each followed by their rows, or the rows alone when flat. A
+ * user's folders are a tree, a folder nested under the folder it is in. Groups keep the order
+ * their first transfer has in `sorted`, and the rows inside a group keep the sort. A closed
+ * group shows its header only
  */
-export const layout = (sorted: Transfer[], groupBy: GroupBy, folded: Set<string>): Item[] => {
+export const layout = (
+  sorted: Transfer[],
+  groupBy: GroupBy,
+  isOpen: (key: string) => boolean
+): Item[] => {
   const items: Item[] = [];
   const rows = (group: Group | null, list: Transfer[]) => {
     for (const t of list) items.push({ type: "row", key: t.id, transfer: t, group });
@@ -114,56 +125,74 @@ export const layout = (sorted: Transfer[], groupBy: GroupBy, folded: Set<string>
   }
   const add = (group: Group, children?: () => void) => {
     items.push({ type: "group", key: group.key, group });
-    if (folded.has(group.key)) return;
+    if (!isOpen(group.key)) return;
     if (children) children();
     else rows(group, group.transfers);
   };
+  /** a user's folders as nested groups, from `depth` down */
+  const folders = (username: string, list: Transfer[], depth: number) => {
+    const key = (node: FolderNode<Transfer>) => `folder:${username}\u0000${node.path}`;
+    const under = (node: FolderNode<Transfer>): Transfer[] => [
+      ...node.items,
+      ...node.children.flatMap(under)
+    ];
+    const walk = (nodes: FolderNode<Transfer>[], at: number) => {
+      const siblings = nodes.map(key);
+      for (const node of nodes) {
+        const group: Group = {
+          kind: "folder",
+          key: key(node),
+          label: node.label,
+          username,
+          depth: at,
+          transfers: under(node),
+          folder: node.path,
+          siblings
+        };
+        add(group, () => {
+          rows(group, node.items);
+          walk(node.children, at + 1);
+        });
+      }
+    };
+    walk(
+      folderTree(
+        list,
+        (t) => t.filename,
+        (t) => t.size
+      ),
+      depth
+    );
+  };
   if (groupBy === "user") {
-    for (const [username, list] of bucket(sorted, (t) => t.username)) {
+    const byUser = [...bucket(sorted, (t) => t.username)];
+    const siblings = byUser.map(([username]) => `user:${username}`);
+    for (const [username, list] of byUser) {
       const user: Group = {
         kind: "user",
         key: `user:${username}`,
         label: username,
         username,
         depth: 0,
-        transfers: list
+        transfers: list,
+        siblings
       };
-      add(user, () => {
-        for (const [folder, inFolder] of bucket(list, (t) => getDirectoryName(t.filename))) {
-          add({
-            kind: "folder",
-            key: `folder:${username}\u0000${folder}`,
-            label: folder,
-            username,
-            depth: 1,
-            transfers: inFolder
-          });
-        }
-      });
+      add(user, () => folders(username, list, 1));
     }
   } else if (groupBy === "folder") {
-    for (const [key, list] of bucket(
-      sorted,
-      (t) => `${t.username}\u0000${getDirectoryName(t.filename)}`
-    )) {
-      add({
-        kind: "folder",
-        key: `folder:${key}`,
-        label: getDirectoryName(list[0].filename),
-        username: list[0].username,
-        depth: 0,
-        transfers: list
-      });
-    }
+    for (const [username, list] of bucket(sorted, (t) => t.username)) folders(username, list, 0);
   } else {
-    for (const [batch, list] of bucket(sorted, (t) => t.batchId ?? null)) {
+    const batches = [...bucket(sorted, (t) => t.batchId ?? null)];
+    const siblings = batches.map(([batch]) => `batch:${batch ?? "none"}`);
+    for (const [batch, list] of batches) {
       add({
         kind: "batch",
         key: `batch:${batch ?? "none"}`,
         label: batch ? `Batch ${batch.slice(0, 8)}` : "Not in a batch",
         username: list[0].username,
         depth: 0,
-        transfers: list
+        transfers: list,
+        siblings
       });
     }
   }

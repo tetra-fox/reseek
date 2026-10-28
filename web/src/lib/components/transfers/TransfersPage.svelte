@@ -7,9 +7,10 @@
   import Button from "#lib/components/ui/Button.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
-  import Spinner from "#lib/components/ui/Spinner.svelte";
+  import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { blocking } from "#lib/components/users/block.svelte.js";
-  import { formatBytes, getDirectoryName, plural } from "#lib/format.js";
+  import { useCrumbs } from "#lib/crumbs.svelte.js";
+  import { formatBytes, getDirectoryName, getFileName, plural } from "#lib/format.js";
   import { heldOrder } from "#lib/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { session } from "#lib/session.svelte.js";
@@ -25,11 +26,14 @@
     type Transfer
   } from "#lib/transfers/states.js";
   import { downloads, uploads } from "#lib/transfers/transfers.svelte.js";
+  import { unseen } from "#lib/transfers/unseen.svelte.js";
   import { inStates, type Item, layout, sortTransfers, textFilter } from "#lib/transfers/view.js";
+  import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { users } from "#lib/users.svelte.js";
 
   import AddDownload from "./AddDownload.svelte";
   import DetailsDrawer from "./DetailsDrawer.svelte";
+  import MessageAll from "./MessageAll.svelte";
   import Toolbar from "./Toolbar.svelte";
   import TransferTable from "./TransferTable.svelte";
 
@@ -45,14 +49,17 @@
     () => void store.load(),
     () => "transfers"
   );
+  // what finishes while the screen is open is seen, so the navigation shows no badge for it
+  $effect(() => unseen.seen(direction));
   void store.load();
 
   let typed = $state("");
   let text = $state("");
   let working = $state(false);
   let adding = $state(false);
+  let messaging = $state(false);
   let detailId = $state<string | null>(null);
-  const folded = new SvelteSet<string>();
+  const folds = new Expansion(true);
   const selected = new SvelteSet<string>();
   let confirm = $state<{ title: string; body: string; label: string; run: () => void } | null>(
     null
@@ -66,7 +73,8 @@
     return () => clearTimeout(timer);
   });
 
-  const all = $derived(store.list.rows);
+  // a removal that can still be undone has taken its rows off the screen already
+  const all = $derived(store.list.rows.filter((t) => !store.hidden.has(t.id)));
   const counts = $derived.by(() => {
     const result = { all: all.length } as Record<ChipId | "all", number>;
     for (const chip of STATE_CHIPS) result[chip.id] = all.filter((t) => chip.test(t.state)).length;
@@ -81,11 +89,13 @@
   // while the user holds the table still, rows keep their places and new ones go below
   const hold = heldOrder<Item>((item) => item.key);
   const items = $derived(
-    hold(layout(sortTransfers(filtered, view.sort.id, view.sort.dir), view.groupBy, folded))
+    hold(layout(sortTransfers(filtered, view.sort.id, view.sort.dir), view.groupBy, folds.isOpen))
   );
   const rows = $derived(items.flatMap((i) => (i.type === "row" ? [i.transfer] : [])));
   const chosen = $derived(all.filter((t) => selected.has(t.id)));
-  const detail = $derived(detailId ? store.list.get(detailId) : undefined);
+  const detail = $derived(
+    detailId && !store.hidden.has(detailId) ? store.list.get(detailId) : undefined
+  );
   const detailAround = $derived(
     detail
       ? all.filter(
@@ -107,16 +117,21 @@
   /** Asks first when `when` holds, then runs */
   const ask = (when: boolean, title: string, body: string, label: string, run: () => void) => {
     if (!when) return run();
-    opener = table?.has(document.activeElement) ? document.activeElement : null;
+    opener = document.activeElement;
     confirm = { title, body, label, run };
     confirmOpen = true;
   };
 
-  /** A confirm closing onto a control whose row left the list gives focus to the table */
+  /**
+   * A confirm closing onto a control that is gone, as a row that left the list, or disabled, as a
+   * toolbar button while its action runs, gives focus to the table instead of the page
+   */
   const closeFocus = (e: Event) => {
-    if (opener && !opener.isConnected) {
+    const gone =
+      !!opener && (!opener.isConnected || (opener instanceof HTMLButtonElement && opener.disabled));
+    if (gone && table) {
       e.preventDefault();
-      table?.focus();
+      table.focus();
     }
     opener = null;
   };
@@ -130,27 +145,16 @@
     if (action === "remove") for (const id of request.ids) selected.delete(id);
   };
 
-  /** A header button: its scope over the filtered transfers, asking first where it should */
+  /** A header button: its scope over the filtered transfers */
   const bulk = (action: BulkAction, test: (state: string) => boolean, scope: string) => {
     const targets = filtered.filter((t) => test(t.state));
-    if (
-      action === "remove" &&
-      scope === "completed" &&
-      targets.length === all.filter((t) => test(t.state)).length
-    ) {
-      // nothing filtered out: the daemon removes every completed transfer in one call
-      return void (async () => {
-        working = true;
-        const outcome = await store.removeCompleted();
-        working = false;
-        toast(
-          outcome.ok ? "Completed transfers removed" : outcome.error,
-          outcome.ok ? "info" : "error"
-        );
-      })();
-    }
     if (action === "cancel") return cancel(targets);
-    if (action === "remove") return remove(targets);
+    if (action === "remove") {
+      // nothing filtered out: the daemon removes every completed transfer in one call
+      const everything =
+        scope === "completed" && targets.length === all.filter((t) => test(t.state)).length;
+      return remove(targets, everything);
+    }
     void runBulk(action, targets);
   };
 
@@ -166,18 +170,11 @@
     );
   };
 
-  /** Removes transfers, asking first for more than `many` or any still running */
-  const remove = (transfers: Transfer[], many = 10) => {
-    const running = activeAmong(transfers);
-    ask(
-      transfers.length > many || running > 0,
-      `Remove ${plural(transfers.length, "transfer", "transfers")}?`,
-      running
-        ? `${running} still running ${running === 1 ? "is" : "are"} cancelled first.`
-        : "They leave the list; their files stay.",
-      "Remove",
-      () => void runBulk("remove", transfers)
-    );
+  /** Removes transfers from the screen at once, and from the daemon once its Undo has passed */
+  const remove = (transfers: Transfer[], everything = false) => {
+    const ids = transfers.map((t) => t.id);
+    for (const id of ids) selected.delete(id);
+    store.removeLater(ids, { all: everything });
   };
 
   /** Opens the block dialog; Deny and block cancels the user's unfinished uploads first */
@@ -202,6 +199,16 @@
   );
   const oneUser = $derived(new Set(chosen.map((t) => t.username)).size === 1);
   const write = $derived(session.can("ReadWrite"));
+
+  // with the details open, the breadcrumb names the transfer and goes back to the list
+  useCrumbs(() =>
+    detail
+      ? [
+          { label: detail.username, onclick: () => (detailId = null) },
+          { label: getFileName(detail.filename), copy: detail.filename }
+        ]
+      : []
+  );
 </script>
 
 <Toolbar
@@ -211,16 +218,26 @@
   bind:text={typed}
   disabled={working || !filtered.length}
   onbulk={bulk}
-  onadd={() => (adding = true)} />
+  onadd={() => (adding = true)}
+  onmessage={() => (messaging = true)} />
 
 {#if !store.loaded && store.error}
   <ErrorSegment caption={store.error} retry={() => void store.load()} retryLabel="Retry" />
 {:else if !store.loaded}
-  <div class="flex justify-center py-10"><Spinner class="size-8" /></div>
+  <div class="flex flex-col gap-px overflow-hidden rounded-card border bg-surface shadow-card">
+    {#each [0, 1, 2, 3, 4, 5] as n (n)}
+      <div class="flex h-9 items-center gap-3 px-3" aria-hidden="true">
+        <Skeleton class="size-4" /><Skeleton class="h-3 flex-1" /><Skeleton class="h-3 w-24" />
+      </div>
+    {/each}
+  </div>
 {:else if !all.length}
   <EmptyState
     icon={direction === "download" ? DownloadIcon : UploadIcon}
-    title={direction === "download" ? "No downloads to display" : "No uploads to display"} />
+    title={direction === "download" ? "No downloads to display" : "No uploads to display"}
+    description={direction === "download"
+      ? "Search for something, or browse a user's shares, and download from there; Add takes a path or a link."
+      : "Uploads show here when other users download what you share."} />
 {:else}
   <TransferTable
     bind:this={table}
@@ -228,11 +245,11 @@
     {store}
     {direction}
     {view}
-    {folded}
+    expansion={folds}
     {selected}
     ondetails={(t) => (detailId = t.id)}
     onremove={remove}
-    ondelete={(transfers) => remove(transfers, 1)}
+    ondelete={remove}
     oncancel={cancel}
     onblock={blockUser}
     {onkey}
@@ -286,6 +303,9 @@
 {/if}
 
 <AddDownload bind:open={adding} />
+{#if direction === "upload"}
+  <MessageAll bind:open={messaging} usernames={[...new Set(filtered.map((t) => t.username))]} />
+{/if}
 
 {#if confirm}
   <ConfirmDialog
