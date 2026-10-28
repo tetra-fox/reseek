@@ -53,7 +53,8 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
     return null;
   });
   expect(cut, `${what} cuts off ${cut}`).toBeNull();
-  // a figure is never cut or painted over its neighbour, and a name never shrinks to nothing
+  // a figure is never cut or painted over its neighbour, a line of a list fits the height it is
+  // placed at, a header's label stays in its cell, and a name keeps room for a few letters
   const cells = await page.locator("[data-content]").evaluate((area) => {
     const shown = (e: Element) => e.getClientRects().length > 0;
     for (const e of area.querySelectorAll<HTMLElement>(".tabular-nums")) {
@@ -63,10 +64,23 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
         return `the figure "${e.textContent?.trim()}" needs ${e.scrollWidth}px of ${e.clientWidth}px`;
       }
     }
+    for (const e of area.querySelectorAll<HTMLElement>("[role=row]")) {
+      if (shown(e) && e.style.height && e.scrollHeight > e.clientHeight + 1) {
+        return `the line "${e.textContent?.trim().slice(0, 40)}" is taller than its place`;
+      }
+    }
+    for (const e of area.querySelectorAll<HTMLElement>("th, [role=columnheader]")) {
+      const spills = getComputedStyle(e).overflowX === "visible";
+      if (shown(e) && spills && e.scrollWidth > e.clientWidth + 1) {
+        return `the header "${e.textContent?.trim()}" spills out of its cell`;
+      }
+    }
     for (const e of area.querySelectorAll<HTMLElement>(
-      "[role=row] .truncate, [role=treeitem] .truncate"
+      "[role=row] .truncate, [role=treeitem] .truncate, tbody tr .truncate"
     )) {
-      if (shown(e) && e.textContent?.trim() && e.getBoundingClientRect().width < 8) {
+      // three letters' worth, or the whole of a shorter name
+      const room = Math.min(3 * parseFloat(getComputedStyle(e).fontSize), e.scrollWidth);
+      if (shown(e) && e.textContent?.trim() && e.getBoundingClientRect().width < room - 1) {
         return `the name "${e.textContent.trim()}" has no room`;
       }
     }
@@ -119,6 +133,12 @@ test("every screen fits a phone's width", async ({ page }) => {
   await holds(page, "the dense results", shows("02 Two.flac"));
   await page.getByRole("radio", { name: "Cards" }).click();
   await fits(page, "/downloads", shows("3.flac"));
+  // a phone shows no Columns menu, and sorts by any column from the Sort menu
+  await expect(page.getByRole("button", { name: "Columns" })).toHaveCount(0);
+  await page.getByRole("button", { name: /^Sort:/ }).click();
+  await page.getByRole("menuitemradio", { name: "Speed" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Sort: Speed" })).toBeVisible();
   await fits(page, "/uploads", shows("No uploads yet"));
   await fits(page, "/chat", shows("indie"));
   await fits(page, "/chat/rooms/indie", shows("anyone have the new boards of canada rip?"));
@@ -193,26 +213,51 @@ test.describe("on a wide screen", () => {
   });
 });
 
-test.describe("at a large text size", () => {
-  test.use({ viewport: { width: 1280, height: 800 } });
+/**
+ * A browser's larger font sizes: at a root of 20 px, "Large", the app's 14 px text is 17.5 px.
+ * Set before every page, since a navigation may load a new one
+ */
+const textSize = (page: Page, root: number) =>
+  page.addInitScript((px) => {
+    document.addEventListener("DOMContentLoaded", () => {
+      document.documentElement.style.fontSize = `${px}px`;
+    });
+  }, root);
 
-  test("the figure columns grow with the text", async ({ page }) => {
-    // a browser's "Large" font size: the root 20 px, so the app's 14 px text is 17.5 px; set
-    // before every page, since a navigation may load a new one
-    await page.addInitScript(() =>
-      document.addEventListener("DOMContentLoaded", () => {
-        document.documentElement.style.fontSize = "20px";
-      })
-    );
-    await fakeReports(page);
-    await fakeSearch(page);
-    await fakeDownloads(page);
-    await login(page, "/dashboard");
-    await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
-    await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
-    await page.getByRole("radio", { name: "Dense" }).click();
-    await holds(page, "the dense results at 20 px", shows("02 Two.flac"));
-    await page.getByRole("radio", { name: "Cards" }).click();
-    await fits(page, "/downloads", shows("3.flac"));
+test.describe("at a large text size", () => {
+  test.describe("on a wide screen", () => {
+    test.use({ viewport: { width: 1280, height: 800 } });
+
+    test("the figure columns grow with the text", async ({ page }) => {
+      await textSize(page, 20);
+      await fakeReports(page);
+      await fakeSearch(page);
+      await fakeDownloads(page);
+      await login(page, "/dashboard");
+      await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
+      await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
+      await page.getByRole("radio", { name: "Dense" }).click();
+      await holds(page, "the dense results at 20 px", shows("02 Two.flac"));
+      await page.getByRole("radio", { name: "Cards" }).click();
+      await fits(page, "/downloads", shows("3.flac"));
+    });
   });
+
+  for (const root of [20, 24]) {
+    test(`a phone at ${root} px keeps names and figures whole`, async ({ page }) => {
+      await textSize(page, root);
+      await fakeReports(page);
+      await fakeSearch(page);
+      await fakeDownloads(page);
+      await login(page, "/dashboard");
+      await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
+      // TODO: the cards too, once their folder rows keep a name's room at these sizes; the dense
+      // results scroll sideways on their own
+      await page.goto(`./#/searches/${SEARCH_ID}`);
+      await page.getByRole("radio", { name: "Dense" }).click();
+      await holds(page, `the dense results at ${root} px`, shows("02 Two.flac"));
+      await page.getByRole("radio", { name: "Cards" }).click();
+      await fits(page, "/downloads", shows("3.flac"));
+    });
+  }
 });
