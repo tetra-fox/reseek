@@ -149,8 +149,7 @@
           {/if}
         {/each}
         <Menu.Separator />
-        <Menu.Item onSelect={() => Object.assign(view, defaults(direction))}
-          >Reset the view</Menu.Item>
+        <Menu.Item onSelect={() => Object.assign(view, defaults(direction))}>Reset view</Menu.Item>
       </Menu.Content>
     </Menu.Root>
     {#if write}
@@ -181,7 +180,7 @@
           size="sm"
           disabled={disabled || !counts.completed}
           onclick={() => scoped("remove", "succeeded")}>
-          <BrushCleaningIcon />Clear finished
+          <BrushCleaningIcon />Clear succeeded
         </Button>
         {#if direction === "upload"}
           <Button variant="outline" size="sm" {disabled} onclick={onmessage}>
@@ -197,9 +196,9 @@
   {#if metrics}
     <p class="text-xs text-fg-muted tabular-nums">
       {metrics.inProgress.files} active · {formatSpeed(metrics.inProgress.totalSpeed)} ·
-      {metrics.queued.files} queued · {metrics.completed.failed} errored · {formatBytes(
+      {metrics.queued.files} queued · {metrics.completed.failed} failed · {formatBytes(
         metrics.completed.bytes
-      )} since start
+      )} since reseek started
     </p>
   {/if}
 </div>

@@ -49,10 +49,11 @@ export const enqueue = async ({
       text: `${files.length} ${files.length === 1 ? "file" : "files"} queued`
     };
   }
-  if (failures.length >= files.length) return { kind: "none", text: `Nothing queued: ${why}` };
+  if (failures.length >= files.length)
+    return { kind: "none", text: `Couldn't queue anything: ${why}` };
   return {
     kind: "partial",
-    text: `${files.length - failures.length} of ${files.length} queued, not queued: ${why}`
+    text: `Queued ${files.length - failures.length} of ${files.length} files. Couldn't queue ${why}`
   };
 };
 

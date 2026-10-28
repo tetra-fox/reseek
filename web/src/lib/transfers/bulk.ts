@@ -33,13 +33,13 @@ export const SCOPES = {
   ],
   remove: [
     { id: "succeeded", label: "Remove all succeeded", test: isSucceeded },
-    { id: "errored", label: "Remove all errored", test: (s: string) => ERRORED.includes(s) },
+    { id: "errored", label: "Remove all failed", test: (s: string) => ERRORED.includes(s) },
     {
       id: "cancelled",
       label: "Remove all cancelled",
       test: (s: string) => s === "Completed, Cancelled"
     },
-    { id: "completed", label: "Remove all completed", test: isRemovable }
+    { id: "completed", label: "Remove all finished", test: isRemovable }
   ]
 } as const;
 

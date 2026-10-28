@@ -52,11 +52,11 @@ describe("state chips", () => {
     expect(
       stateChip(transfer({ state: "Completed, Errored", exception: "Connection refused" }))
     ).toMatchObject({
-      text: "Errored: Connection refused",
+      text: "Failed: Connection refused",
       tone: "danger",
       title: "Connection refused"
     });
-    expect(stateChip(transfer({ state: "Completed, TimedOut" })).text).toBe("TimedOut");
+    expect(stateChip(transfer({ state: "Completed, TimedOut" })).text).toBe("Timed out");
     expect(stateChip(transfer({ state: "InProgress", percentComplete: 41.6 })).text).toBe("42%");
   });
 });

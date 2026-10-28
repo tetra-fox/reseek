@@ -1,5 +1,7 @@
 import { SvelteMap } from "svelte/reactivity";
 
+import { plural } from "#lib/format.js";
+
 import type { Transfer } from "./states";
 import { type UploadQueueStatus, why } from "./transfers.svelte";
 
@@ -34,18 +36,18 @@ export const waits = new Waits();
 /** The queue cell's text: the place among the group's uploads, counted from 1 */
 export const placeText = (s: UploadQueueStatus) =>
   s.position === null || s.position === undefined
-    ? `In ${s.group}`
-    : `Queued (#${s.position + 1} in ${s.group})`;
+    ? `Queued in group ${s.group}`
+    : `Queued (#${s.position + 1} in group ${s.group})`;
 
 /** Why an upload waits, in a line per reason */
 export const whyText = (s: UploadQueueStatus): string => {
   const lines = [
-    `${s.groupSlotsUsed} of ${s.groupSlots} slots for group ${s.group} in use`,
+    `${s.groupSlotsUsed} of ${s.groupSlots} upload slots for group ${s.group} in use`,
     `${s.globalSlotsUsed} of ${s.globalSlots} upload slots in use overall`
   ];
-  if (s.globalSlotsUsed >= s.globalSlots) lines.push(`global limit ${s.globalSlots} reached`);
+  if (s.globalSlotsUsed >= s.globalSlots) lines.push("Every upload slot is in use");
   if (s.userActive)
-    lines.push(`user has ${s.userActive} active upload${s.userActive === 1 ? "" : "s"}`);
+    lines.push(`This user already has ${plural(s.userActive, "active upload", "active uploads")}`);
   return lines.join("\n");
 };
 
@@ -68,7 +70,7 @@ export const quota = (s: UploadQueueStatus) => {
       (w.bytes.limit !== null && w.bytes.limit !== undefined && w.bytes.used >= w.bytes.limit)
   );
   return {
-    text: `${part("today", s.limits.daily)} · ${part("this week", s.limits.weekly)}`,
+    text: `${part("Today:", s.limits.daily)} · ${part("This week:", s.limits.weekly)}`,
     exhausted
   };
 };

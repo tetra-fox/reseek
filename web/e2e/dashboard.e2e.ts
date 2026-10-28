@@ -34,7 +34,7 @@ test("the dashboard shows more at a glance, each figure a link to its list", asy
     .first()
     .click();
   await expect(page).toHaveURL(/#\/downloads\?state=errored$/);
-  await expect(page.getByRole("button", { name: /^Errored/ })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: /^Failed/ })).toHaveAttribute(
     "aria-pressed",
     "true"
   );

@@ -14,11 +14,11 @@ test("opens search, browse and both transfer screens", async ({ page }) => {
   await expect(page.getByLabel("Username")).toBeEnabled();
 
   await page.getByRole("link", { name: "Downloads" }).click();
-  await expect(page.getByText("No downloads to display")).toBeVisible();
+  await expect(page.getByText("No downloads yet")).toBeVisible();
   await expect(page.getByRole("radiogroup", { name: "Group by" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add" })).toBeVisible();
 
   await page.getByRole("link", { name: "Uploads" }).click();
-  await expect(page.getByText("No uploads to display")).toBeVisible();
+  await expect(page.getByText("No uploads yet")).toBeVisible();
   await expect(page.getByRole("button", { name: "Add" })).toHaveCount(0);
 });

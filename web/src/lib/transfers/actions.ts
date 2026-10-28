@@ -66,7 +66,7 @@ export const folderOf = (transfers: Transfer[]) =>
 /** Shows the local folder of some finished downloads on the Files screen */
 export const openFolder = (transfers: Transfer[]) => {
   const folder = folderOf(transfers);
-  if (folder === null) return toast("None of these is a finished download", "error");
+  if (folder === null) return toast("None of these downloads has finished", "error");
   void goto(href(`/system/files?root=downloads&path=${encodeURIComponent(folder)}`));
 };
 
@@ -96,7 +96,7 @@ export const queuePosition = async (t: Transfer) => {
 export const bumpUpload = async (t: Transfer) => {
   const outcome = await bump(t);
   toast(
-    outcome.ok ? "Bumped to the front of its group" : outcome.error,
+    outcome.ok ? "Moved to the front of its group's queue" : outcome.error,
     outcome.ok ? "info" : "error"
   );
 };

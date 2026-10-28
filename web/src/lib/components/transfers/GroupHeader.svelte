@@ -74,7 +74,7 @@
   /** Saves the group's local folder as a zip; only finished files are in it */
   const zip = () => {
     if (!local) return;
-    if (list.some((t) => !isSucceeded(t.state))) toast("Only completed files are included");
+    if (list.some((t) => !isSucceeded(t.state))) toast("The zip includes only the finished files");
     const name = local.split("/").pop() || "downloads";
     window.location.assign(
       `${root()}/api/v0/files/downloads/directories/${encodePath(local)}/archive?name=${encodeURIComponent(name)}`
@@ -193,7 +193,7 @@
             "cancel",
             list.filter((t) => t.state.includes("Queued")).map((t) => t.id)
           )}>
-        <UserXIcon />Deny all
+        <UserXIcon />Deny queued uploads
       </Button>
       <Button
         variant="ghost"

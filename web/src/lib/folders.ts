@@ -30,7 +30,7 @@ export const fetchFolder = async (
   if (!folders.length) {
     return {
       ok: false,
-      error: "No directories were included in the response",
+      error: "The user sent back no folder",
       status: 200
     };
   }

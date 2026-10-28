@@ -67,7 +67,7 @@
     {#if isAudio(t.filename)}
       <Menu.Item onSelect={() => preview(t, around)}><PlayIcon />Preview</Menu.Item>
     {/if}
-    <Menu.Item onSelect={() => void saveToDevice(t)}><SaveIcon />Download to device</Menu.Item>
+    <Menu.Item onSelect={() => void saveToDevice(t)}><SaveIcon />Save to this device</Menu.Item>
     <Menu.Item onSelect={() => openFolder([t])}><FolderOpenIcon />Open containing folder</Menu.Item>
   {/if}
   {#if t.localPath}
@@ -76,7 +76,7 @@
   <Menu.Item onSelect={() => copyPath(t.filename)}><CopyIcon />Copy remote path</Menu.Item>
   <Menu.Separator />
   <Menu.Item onSelect={() => goto(folder.browse)}>
-    <FolderOpenIcon />Browse this folder on {t.username}
+    <FolderOpenIcon />Browse this folder in {t.username}'s shares
   </Menu.Item>
   <Menu.Item onSelect={() => goto(folder.flat)}
     ><ListIcon />View all files in this folder</Menu.Item>
@@ -97,10 +97,12 @@
     {/if}
   {/if}
   {#if can.queuePosition}
-    <Menu.Item onSelect={() => void queuePosition(t)}><ListOrderedIcon />Queue position</Menu.Item>
+    <Menu.Item onSelect={() => void queuePosition(t)}
+      ><ListOrderedIcon />Check queue position</Menu.Item>
   {/if}
   {#if can.bump && admin}
-    <Menu.Item onSelect={() => void bumpUpload(t)}><ChevronsUpIcon />Bump</Menu.Item>
+    <Menu.Item onSelect={() => void bumpUpload(t)}
+      ><ChevronsUpIcon />Move to front of queue</Menu.Item>
   {/if}
   <Menu.Separator />
   {#if write}
