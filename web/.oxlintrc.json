@@ -15,5 +15,5 @@
     "tailwindcss/no-deprecated-classes": "error",
     "tailwindcss/no-contradicting-variants": "error"
   },
-  "ignorePatterns": ["src/lib/api/schema.d.ts", "build", ".svelte-kit"]
+  "ignorePatterns": ["src/lib/api/schema.d.ts", "build", ".svelte-kit", "src/lib/vendor"]
 }
