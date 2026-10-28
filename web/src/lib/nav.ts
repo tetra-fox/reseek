@@ -83,6 +83,13 @@ export const navCurrent = (path: string): NavItem | undefined =>
   );
 
 /**
+ * Whether going from one path to another changes the screen, a different destination of the
+ * navigation, rather than a tab, a sub-page or a query within the same one
+ */
+export const changesScreen = (from: string, to: string): boolean =>
+  navCurrent(from) !== navCurrent(to);
+
+/**
  * One step of the header's breadcrumb: a link back to it, or an action for a step that is the
  * same route (closing a drawer). The last step is where the user is. `copy` gives the step a
  * copy button for its text, such as a folder's full path

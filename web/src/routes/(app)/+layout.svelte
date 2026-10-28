@@ -22,7 +22,7 @@
   import { trail } from "#lib/crumbs.svelte.js";
   import { togglesActivity } from "#lib/keys.js";
   import { live } from "#lib/live/live.svelte.js";
-  import { baseCrumbs, href, redirectFor, route, titleOf } from "#lib/nav.js";
+  import { baseCrumbs, changesScreen, href, redirectFor, route, titleOf } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   // listens for transfer frames from the start, so its notifications follow every screen
   import "#lib/transfers/notices.svelte.js";
@@ -33,12 +33,12 @@
 
   onMount(() => void app.bootstrap());
 
-  // moving to another screen cross-fades the page; a new query on the same screen changes in place
+  // moving to another screen cross-fades the page; a tab, a sub-page or a new query within the
+  // same screen changes in place
   onNavigate((navigation) => {
     if (prefersReducedMotion.current || typeof document.startViewTransition !== "function") return;
-    const from = navigation.from ? route(navigation.from.url).path : null;
-    const to = navigation.to ? route(navigation.to.url).path : null;
-    if (from === to) return;
+    const { from, to } = navigation;
+    if (!from?.url || !to?.url || !changesScreen(route(from.url).path, route(to.url).path)) return;
     return new Promise((ready) => {
       document.startViewTransition(async () => {
         ready();

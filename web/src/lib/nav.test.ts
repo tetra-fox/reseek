@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { redirectFor, route, safeReturn, title, userHref } from "./nav";
+import { changesScreen, redirectFor, route, safeReturn, title, userHref } from "./nav";
 
 describe("routes after the hash", () => {
   it("read the path and the query from the hash", () => {
@@ -42,5 +42,28 @@ describe("titles", () => {
     expect(title("/searches/1")).toBe("Search - reseek");
     expect(title("/system/settings")).toBe("Settings - System - reseek");
     expect(title("/login")).toBe("Log in - reseek");
+  });
+});
+
+describe("screen changes", () => {
+  it("count only a move to another destination of the navigation", () => {
+    const moves: [string, string, boolean][] = [
+      ["/dashboard", "/searches", true],
+      ["/searches", "/searches/42", false],
+      ["/searches/42", "/downloads", true],
+      ["/downloads", "/uploads", true],
+      ["/users/alice", "/users/alice/shares", false],
+      ["/users/alice/shares", "/users/bob", false],
+      ["/users", "/users/alice", false],
+      ["/chat/alice", "/chat/rooms/indie", false],
+      ["/chat", "/users", true],
+      ["/system/info", "/system/settings", false],
+      ["/system/settings", "/system/logs", false],
+      ["/system/info", "/dashboard", true],
+      ["/browse", "/browse", false],
+      ["/profile", "/users", true]
+    ];
+    for (const [from, to, changes] of moves)
+      expect([from, to, changesScreen(from, to)]).toEqual([from, to, changes]);
   });
 });
