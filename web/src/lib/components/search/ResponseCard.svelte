@@ -278,26 +278,28 @@
         </div>
       {/snippet}
       {#snippet item(file)}
-        <span class="flex justify-center">
+        <span role="gridcell" class="flex justify-center">
           <Checkbox
             aria-label={`Select ${getFileName(file.filename)}`}
             checked={selected.has(file.filename)}
             onCheckedChange={(on) => tick([file.filename], on)} />
         </span>
         <span
+          role="gridcell"
           class="flex min-w-0 items-center gap-1 pr-2"
           style:padding-left="calc((var(--depth) - 1) * 1.25rem + 0.25rem)"
           title={file.filename}>
           {#if file.locked}<LockIcon class="size-3.5 shrink-0 text-fg-muted" />{/if}
           <span class="truncate">{getFileName(file.filename)}</span>
         </span>
-        <span class="pr-3 text-right tabular-nums">{formatBytes(file.size)}</span>
-        <span class="flex min-w-0 items-center gap-1 truncate text-fg-muted">
+        <span role="gridcell" class="pr-3 text-right tabular-nums">{formatBytes(file.size)}</span>
+        <span role="gridcell" class="flex min-w-0 items-center gap-1 truncate text-fg-muted">
           {#if file.suspect}<Suspect suspect={file.suspect} />{/if}
           {formatAttributes(file)}
         </span>
-        <span class="pr-3 text-right text-fg-muted tabular-nums">{formatSeconds(file.length)}</span>
-        <span class="flex justify-end pr-1">
+        <span role="gridcell" class="pr-3 text-right text-fg-muted tabular-nums"
+          >{formatSeconds(file.length)}</span>
+        <span role="gridcell" class="flex justify-end pr-1">
           <FileMenu
             path={file.filename}
             username={name}

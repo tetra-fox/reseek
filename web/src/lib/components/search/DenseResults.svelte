@@ -222,7 +222,7 @@
           onauxclick={(e) => {
             if (e.button === 1 && canDownload) void download([row]);
           }}>
-          <span class="flex justify-center">
+          <span role="gridcell" class="flex justify-center">
             <Checkbox
               aria-label={`Select ${name}`}
               checked={selected.has(row.key)}
@@ -232,31 +232,39 @@
               }}
               onCheckedChange={(on) => on !== selected.has(row.key) && list.toggle(row.key)} />
           </span>
-          <span class="flex min-w-0 items-center gap-1.5 px-2">
+          <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
             <span class="min-w-0 truncate"><Username name={row.username} /></span>
             {#if row.country}<Country code={row.country} />{/if}
           </span>
-          <span class="px-2 text-right tabular-nums">{formatBytes(row.speed, 1)}/s</span>
-          <span class="px-2 text-right tabular-nums">{row.queue}</span>
-          <span class={["px-2", row.free ? "text-success" : "text-fg-muted"]}>
+          <span role="gridcell" class="px-2 text-right tabular-nums"
+            >{formatBytes(row.speed, 1)}/s</span>
+          <span role="gridcell" class="px-2 text-right tabular-nums">{row.queue}</span>
+          <span role="gridcell" class={["px-2", row.free ? "text-success" : "text-fg-muted"]}>
             {row.free ? "Yes" : "No"}
           </span>
-          <span class="flex min-w-0 items-center gap-1 px-2" title={row.file.filename}>
+          <span
+            role="gridcell"
+            class="flex min-w-0 items-center gap-1 px-2"
+            title={row.file.filename}>
             {#if row.file.locked}<LockIcon class="size-3.5 shrink-0 text-fg-muted" />{/if}
             <span class="truncate">{name}</span>
           </span>
-          <span class="px-2 text-right tabular-nums">{formatBytes(row.file.size)}</span>
-          <span class="flex min-w-0 items-center gap-1 truncate px-2 text-fg-muted">
+          <span role="gridcell" class="px-2 text-right tabular-nums"
+            >{formatBytes(row.file.size)}</span>
+          <span role="gridcell" class="flex min-w-0 items-center gap-1 truncate px-2 text-fg-muted">
             {#if row.file.suspect}<Suspect suspect={row.file.suspect} />{/if}
             {formatAttributes(row.file)}
           </span>
-          <span class="px-2 text-right text-fg-muted tabular-nums">
+          <span role="gridcell" class="px-2 text-right text-fg-muted tabular-nums">
             {formatSeconds(row.file.length)}
           </span>
-          <span class="truncate px-2 font-mono text-xs text-fg-muted" title={row.folder}>
+          <span
+            role="gridcell"
+            class="truncate px-2 font-mono text-xs text-fg-muted"
+            title={row.folder}>
             {row.folder}
           </span>
-          <span class="flex items-center justify-end gap-0.5 pr-1 row-action">
+          <span role="gridcell" class="flex items-center justify-end gap-0.5 pr-1 row-action">
             {#if canDownload}
               <Button
                 variant="ghost"

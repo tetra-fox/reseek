@@ -39,7 +39,10 @@
     ontoggle?: (open: boolean, paths: string[]) => void;
     /** a folder line after its toggle: its name, counts, actions */
     folder: Snippet<[FolderNode<T>, number]>;
-    /** an item line's cells, its depth as `--depth` on the row for the first cell's indent */
+    /**
+     * An item line's cells, each a `gridcell`, its depth as `--depth` on the row for the first
+     * cell's indent
+     */
     item: Snippet<[T, number]>;
     /** the column headers over the item rows */
     header?: Snippet;
@@ -114,7 +117,7 @@
 
 <div
   class={["text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent", className]}
-  role="grid"
+  role="treegrid"
   aria-label={label}
   aria-multiselectable="true"
   aria-activedescendant={list.activeId}
@@ -134,14 +137,18 @@
             : "bg-surface-muted/50",
           list.isFocused(line) && "ring-1 ring-accent ring-inset"
         ]}
+        aria-level={line.depth + 1}
+        aria-expanded={expansion.isOpen(line.node.path)}
         style:padding-left={`calc(${line.depth} * 1.25rem + 0.5rem)`}>
-        <TreeToggle
-          {expansion}
-          key={line.node.path}
-          siblings={line.siblings}
-          name={line.node.label}
-          {ontoggle} />
-        {@render folder(line.node, line.depth)}
+        <div role="gridcell" class="flex min-w-0 flex-1 items-center gap-1.5">
+          <TreeToggle
+            {expansion}
+            key={line.node.path}
+            siblings={line.siblings}
+            name={line.node.label}
+            {ontoggle} />
+          {@render folder(line.node, line.depth)}
+        </div>
       </div>
     {:else}
       <div
@@ -152,6 +159,7 @@
           selected.has(idOf(line.item)) && "bg-accent-soft/60",
           list.isFocused(line) && "ring-1 ring-accent ring-inset"
         ]}
+        aria-level={line.depth + 1}
         style:grid-template-columns={columns}
         style:--depth={line.depth}
         onmousedown={(e) => {

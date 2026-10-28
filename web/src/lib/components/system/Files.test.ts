@@ -46,7 +46,7 @@ describe("the file explorer", () => {
       props: { root: "downloads", path: "Album" }
     });
     await flush();
-    const grid = document.querySelector("[role=grid]")!;
+    const grid = document.querySelector("[role=treegrid]")!;
     press(grid, "ArrowDown");
     expect(active(grid)).toBe("..");
     press(grid, "ArrowDown");
@@ -92,7 +92,7 @@ describe("the file explorer", () => {
       props: { root: "downloads", path: "Album" }
     });
     await flush();
-    const grid = document.querySelector("[role=grid]")!;
+    const grid = document.querySelector("[role=treegrid]")!;
     const rows = () =>
       [...grid.querySelectorAll("[role=row][data-line]")].map((r) => r.getAttribute("data-line"));
     expect(rows()).toEqual(["..", "folder:Album/CD1"]);
@@ -101,6 +101,18 @@ describe("the file explorer", () => {
     press(grid, "ArrowRight");
     await flush();
     expect(rows()).toEqual(["..", "folder:Album/CD1", "f:Album/CD1/1.flac"]);
+    // every row has its cells, and a folder its level and whether it is open
+    for (const row of grid.querySelectorAll("[role=row][data-line]")) {
+      expect(row.querySelector("[role=gridcell]")).not.toBeNull();
+    }
+    const folder = grid.querySelector('[data-line="folder:Album/CD1"]')!;
+    expect([folder.getAttribute("aria-level"), folder.getAttribute("aria-expanded")]).toEqual([
+      "1",
+      "true"
+    ]);
+    expect(grid.querySelector('[data-line="f:Album/CD1/1.flac"]')!.getAttribute("aria-level")).toBe(
+      "2"
+    );
     expect(net.requests).toHaveLength(2);
     press(grid, "ArrowLeft");
     expect(rows()).toEqual(["..", "folder:Album/CD1"]);

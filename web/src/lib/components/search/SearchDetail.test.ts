@@ -170,6 +170,7 @@ describe("search results", () => {
     const grid = document.querySelector('[role=grid][aria-label^="Search results"]')!;
     const rows = () => [...grid.querySelectorAll("[role=row][data-line]")];
     expect(rows()).toHaveLength(4);
+    expect(rows()[0].querySelectorAll(":scope > [role=gridcell]")).toHaveLength(11);
     const [first, , third] = rows();
     const selection = document.getSelection()!;
     selection.setBaseAndExtent(first, 0, third, third.childNodes.length);

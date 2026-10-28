@@ -396,10 +396,11 @@
       {#if e}<span class="row-action">{@render menu(e)}</span>{/if}
     {/snippet}
     {#snippet item(e)}
-      <span class="flex justify-center">
+      <span role="gridcell" class="flex justify-center">
         {#if e.kind !== "up"}{@render tick(e)}{/if}
       </span>
       <span
+        role="gridcell"
         class="flex min-w-0 items-center gap-1.5"
         style:padding-left="calc(var(--depth) * 1.25rem)">
         {#if e.kind === "file"}
@@ -413,9 +414,11 @@
             onclick={() => void open(e)}>{e.name}</button>
         {/if}
       </span>
-      <span class="text-xs text-fg-muted">{e.modifiedAt ? dateTime(e.modifiedAt) : ""}</span>
-      <span class="pr-3 text-right tabular-nums">{e.size ? formatBytes(e.size) : ""}</span>
-      <span class="flex justify-end"
+      <span role="gridcell" class="text-xs text-fg-muted"
+        >{e.modifiedAt ? dateTime(e.modifiedAt) : ""}</span>
+      <span role="gridcell" class="pr-3 text-right tabular-nums"
+        >{e.size ? formatBytes(e.size) : ""}</span>
+      <span role="gridcell" class="flex justify-end"
         >{#if e.kind !== "up"}{@render menu(e)}{/if}</span>
     {/snippet}
   </FolderTree>
