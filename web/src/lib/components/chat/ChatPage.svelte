@@ -106,7 +106,7 @@
 {/snippet}
 
 <div
-  class="flex h-[calc(var(--content-h)-2*var(--spacing-gutter))] min-h-96 overflow-hidden rounded-card border bg-surface shadow-card">
+  class="flex h-[calc(var(--content-h)-2*var(--spacing-gutter))] overflow-hidden rounded-card border bg-surface shadow-card">
   {#if wide.current}
     <div class="flex w-72 shrink-0 flex-col border-r">
       {@render list()}
