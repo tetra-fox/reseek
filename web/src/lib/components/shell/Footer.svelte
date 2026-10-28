@@ -26,24 +26,27 @@
 </script>
 
 <!-- the server connection and the transfer figures, always in view. A phone keeps the speeds
-     and the activity log's button and leaves out the counts and the project link -->
+     and the activity log's button and leaves out the counts and the project link. Where a large
+     text size leaves no room, the speeds move to a second line together -->
 <footer
-  class="relative z-20 flex h-10 items-center gap-3 overflow-x-auto border-t bg-surface/90 px-gutter text-xs backdrop-blur-md md:gap-4">
-  <span class="flex shrink-0 items-center gap-1.5">
-    <span class={["size-2 rounded-full", connected ? "bg-success" : "bg-danger"]}></span>
-    <span class="font-medium">{connected && username ? username : "Disconnected"}</span>
+  class="relative z-20 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 border-t bg-surface/90 px-gutter py-1.5 text-xs backdrop-blur-md md:gap-x-4">
+  <span class="flex min-w-0 items-center gap-1.5">
+    <span class={["size-2 shrink-0 rounded-full", connected ? "bg-success" : "bg-danger"]}></span>
+    <span class="truncate font-medium">{connected && username ? username : "Disconnected"}</span>
   </span>
-  <span class="flex shrink-0 items-center gap-1.5" aria-label="Downloads">
-    <ArrowDownIcon class="size-3.5 text-info" />
-    <span class="font-mono whitespace-pre tabular-nums">{downloads.speed}</span>
-    <span class="text-fg-muted max-md:hidden"
-      >{downloads.active} active · {downloads.queued} queued</span>
-  </span>
-  <span class="flex shrink-0 items-center gap-1.5" aria-label="Uploads">
-    <ArrowUpIcon class="size-3.5 text-success" />
-    <span class="font-mono whitespace-pre tabular-nums">{uploads.speed}</span>
-    <span class="text-fg-muted max-md:hidden"
-      >{uploads.active} active · {uploads.queued} queued</span>
+  <span class="flex shrink-0 items-center gap-3 md:gap-4">
+    <span class="flex shrink-0 items-center gap-1.5" aria-label="Downloads">
+      <ArrowDownIcon class="size-3.5 text-info" />
+      <span class="font-mono whitespace-pre tabular-nums">{downloads.speed}</span>
+      <span class="text-fg-muted max-md:hidden"
+        >{downloads.active} active · {downloads.queued} queued</span>
+    </span>
+    <span class="flex shrink-0 items-center gap-1.5" aria-label="Uploads">
+      <ArrowUpIcon class="size-3.5 text-success" />
+      <span class="font-mono whitespace-pre tabular-nums">{uploads.speed}</span>
+      <span class="text-fg-muted max-md:hidden"
+        >{uploads.active} active · {uploads.queued} queued</span>
+    </span>
   </span>
   {#if app.mode !== "agent"}
     <button
