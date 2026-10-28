@@ -14,7 +14,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
-  import { ago, dateTime, listText } from "#lib/format.js";
+  import { ago, dateTime, listText, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -113,10 +113,10 @@
     The configuration also blocks
     {listText(
       [
-        rules.patterns.length && `${rules.patterns.length} name patterns`,
-        rules.cidrs.length && `${rules.cidrs.length} address ranges`,
+        rules.patterns.length && plural(rules.patterns.length, "name pattern", "name patterns"),
+        rules.cidrs.length && plural(rules.cidrs.length, "address range", "address ranges"),
         rules.blocklistFile &&
-          `${rules.blocklistFile.entries} entries from ${rules.blocklistFile.path}`
+          `${plural(rules.blocklistFile.entries, "entry", "entries")} from ${rules.blocklistFile.path}`
       ].filter((p): p is string => !!p)
     )}. You can change these in Settings, under Groups.
   </Notice>

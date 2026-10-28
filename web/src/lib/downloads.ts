@@ -1,4 +1,5 @@
 import { api, type Schemas } from "#lib/api/client.js";
+import { plural } from "#lib/format.js";
 import { call } from "#lib/request.js";
 
 export type EnqueueItem = Schemas["EnqueueDownloadBatchItem"];
@@ -46,14 +47,14 @@ export const enqueue = async ({
   if (failures.length === 0) {
     return {
       kind: "done",
-      text: `${files.length} ${files.length === 1 ? "file" : "files"} queued`
+      text: `${plural(files.length, "file", "files")} queued`
     };
   }
   if (failures.length >= files.length)
     return { kind: "none", text: `Couldn't queue anything: ${why}` };
   return {
     kind: "partial",
-    text: `Queued ${files.length - failures.length} of ${files.length} files. Couldn't queue ${why}`
+    text: `Queued ${files.length - failures.length} of ${plural(files.length, "file", "files")}. Couldn't queue ${why}`
   };
 };
 

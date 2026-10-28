@@ -18,7 +18,8 @@
     formatDuration,
     formatSpeed,
     getFileName,
-    NONE
+    NONE,
+    plural
   } from "#lib/format.js";
   import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
   import { motionFast } from "#lib/motion.js";
@@ -208,7 +209,9 @@
       </p>
       {#if user?.statistics}
         <p class="text-fg-muted">
-          {user.statistics.fileCount?.toLocaleString() ?? "?"} files · {formatSpeed(
+          {user.statistics.fileCount === null || user.statistics.fileCount === undefined
+            ? "? files"
+            : plural(user.statistics.fileCount, "file", "files")} · {formatSpeed(
             user.statistics.averageSpeed
           )}
         </p>
@@ -242,7 +245,9 @@
         <h3 class="text-xs font-medium text-fg-muted uppercase">Batch</h3>
         <p class="font-mono text-xs">{t.batchId}</p>
         <p class="text-fg-muted">
-          {batch.length} files · {formatBytes(batch.reduce((n, o) => n + o.size, 0))} ·
+          {plural(batch.length, "file", "files")} · {formatBytes(
+            batch.reduce((n, o) => n + o.size, 0)
+          )} ·
           {batch.filter((o) => o.state === "Completed, Succeeded").length} succeeded
         </p>
       </section>

@@ -16,6 +16,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import { plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { Keyed } from "#lib/keyed.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
@@ -142,7 +143,11 @@
       </div>
     </div>
     <span class="text-xs text-fg-muted tabular-nums"
-      >Found {scan.files.toLocaleString()} files in {scan.directories.toLocaleString()} folders so far</span>
+      >Found {plural(scan.files, "file", "files")} in {plural(
+        scan.directories,
+        "folder",
+        "folders"
+      )} so far</span>
   </div>
 {/if}
 {#if shares.loading && !rows.size}

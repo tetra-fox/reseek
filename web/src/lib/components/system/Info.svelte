@@ -17,7 +17,15 @@
   import Card from "#lib/components/ui/Card.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
-  import { ago, formatBytes, formatDate, formatDuration, formatSpeed } from "#lib/format.js";
+  import {
+    ago,
+    formatBytes,
+    formatDate,
+    formatDuration,
+    formatSpeed,
+    plural
+  } from "#lib/format.js";
+  import { serverStateText } from "#lib/reachability.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
@@ -174,7 +182,7 @@
     <Card title="Soulseek">
       <dl class="info">
         <dt>State</dt>
-        <dd>{s.server.state}</dd>
+        <dd>{serverStateText(s.server)}</dd>
         <dt>Server</dt>
         <dd class="font-mono">
           {s.server.address ?? "?"}
@@ -202,11 +210,15 @@
       <dl class="info">
         <dt>Shares</dt>
         <dd>
-          {s.shares.files.toLocaleString()} files in {s.shares.directories.toLocaleString()} folders
+          {plural(s.shares.files, "file", "files")} in {plural(
+            s.shares.directories,
+            "folder",
+            "folders"
+          )}
         </dd>
         <dt>As others see you</dt>
         <dd>
-          {s.user.statistics.fileCount.toLocaleString()} files, {formatSpeed(
+          {plural(s.user.statistics.fileCount, "file", "files")}, {formatSpeed(
             s.user.statistics.averageSpeed
           )},
           {s.user.statistics.uploadCount.toLocaleString()} uploads

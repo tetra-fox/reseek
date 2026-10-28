@@ -36,7 +36,7 @@
     sending = false;
     if (failed.length) {
       toast(
-        `Sent to ${sent} of ${usernames.length} users. Couldn't send to ${failed.join("; ")}`,
+        `Sent to ${sent} of ${plural(usernames.length, "user", "users")}. Couldn't send to ${failed.join("; ")}`,
         "error"
       );
       return;

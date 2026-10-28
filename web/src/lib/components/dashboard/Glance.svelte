@@ -85,11 +85,14 @@
     "Sharing",
     [
       {
-        text: `${(s?.shares.files ?? 0).toLocaleString()} files`,
+        text: plural(s?.shares.files ?? 0, "file", "files"),
         to: "/system/shares",
         strong: true
       },
-      { text: `in ${(s?.shares.directories ?? 0).toLocaleString()} folders`, to: "/system/shares" }
+      {
+        text: `in ${plural(s?.shares.directories ?? 0, "folder", "folders")}`,
+        to: "/system/shares"
+      }
     ],
     s?.shares.scanning ? "Scanning" : s?.shares.scanPending ? "Rescan pending" : undefined
   )}

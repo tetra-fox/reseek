@@ -27,7 +27,8 @@
     formatSpeed,
     getDirectoryName,
     getFileName,
-    NONE
+    NONE,
+    plural
   } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
   import {
@@ -127,7 +128,7 @@
       <Username name={t.username} folder={leaf(getDirectoryName(t.filename))} />
       {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
     {:else if column === "size"}
-      <span title={`${t.size.toLocaleString()} bytes`}>{formatBytes(t.size)}</span>
+      <span title={plural(t.size, "byte", "bytes")}>{formatBytes(t.size)}</span>
     {:else if column === "progress"}
       {#if t.state === "InProgress"}
         <div

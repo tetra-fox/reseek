@@ -2,6 +2,18 @@ import type { Schemas } from "#lib/api/client.js";
 
 export type Listen = Schemas["ListenState"];
 
+/** Where the connection to the Soulseek server stands, as a word or two */
+export const serverStateText = (s: Schemas["ServerState"]): string =>
+  s.isLoggedIn
+    ? "Logged in"
+    : s.isLoggingIn
+      ? "Logging in"
+      : s.isConnected
+        ? "Connected"
+        : s.isConnecting
+          ? "Connecting"
+          : "Disconnected";
+
 /** Where the port and its mapping are set */
 export const SOULSEEK_SETTINGS = "/system/settings?section=soulseek";
 

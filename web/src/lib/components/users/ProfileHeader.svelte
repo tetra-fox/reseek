@@ -27,7 +27,7 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { ago, formatBytes, formatSpeed } from "#lib/format.js";
+  import { ago, formatBytes, formatSpeed, plural } from "#lib/format.js";
   import { href, userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
@@ -135,10 +135,10 @@
         {/each}
       </div>
       <p class="flex items-center gap-1.5 text-sm">
-        {stats ? stats.fileCount.toLocaleString() : "?"} files ·
-        {stats ? stats.directoryCount.toLocaleString() : "?"} folders ·
+        {stats ? plural(stats.fileCount, "file", "files") : "? files"} ·
+        {stats ? plural(stats.directoryCount, "folder", "folders") : "? folders"} ·
         {stats ? formatSpeed(stats.averageSpeed) : "?"} ·
-        {stats ? stats.uploadCount.toLocaleString() : "?"} uploads
+        {stats ? plural(stats.uploadCount, "upload", "uploads") : "? uploads"}
         {#if refreshing}
           <Spinner class="size-3.5" label="Refreshing" />
         {:else if stats}
@@ -147,11 +147,19 @@
       </p>
       {#if p.known}
         <p class="text-xs text-fg-muted">
-          {#if p.firstSeenAt}first seen {ago(p.firstSeenAt, clock.now)},{/if}
-          {#if p.lastSeenAt}last seen {ago(p.lastSeenAt, clock.now)},{/if}
-          {p.figures.downloads.succeeded} downloads ({formatBytes(p.figures.downloads.bytes)}) /
-          {p.figures.uploads.succeeded} uploads ({formatBytes(p.figures.uploads.bytes)}),
-          {p.figures.messages.in + p.figures.messages.out} messages
+          {[
+            p.firstSeenAt && `First seen ${ago(p.firstSeenAt, clock.now)}`,
+            p.lastSeenAt && `last seen ${ago(p.lastSeenAt, clock.now)}`
+          ]
+            .filter(Boolean)
+            .join(", ")}
+        </p>
+        <p class="text-xs text-fg-muted">
+          {plural(p.figures.downloads.succeeded, "download", "downloads")} ({formatBytes(
+            p.figures.downloads.bytes
+          )}) · {plural(p.figures.uploads.succeeded, "upload", "uploads")} ({formatBytes(
+            p.figures.uploads.bytes
+          )}) · {plural(p.figures.messages.in + p.figures.messages.out, "message", "messages")}
         </p>
       {/if}
     </div>

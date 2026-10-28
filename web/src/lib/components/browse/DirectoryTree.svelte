@@ -43,7 +43,7 @@
   } from "#lib/browse/tree.js";
   import { TYPE_AHEAD_MS, typeAhead } from "#lib/browse/typeahead.js";
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
-  import { formatBytes } from "#lib/format.js";
+  import { formatBytes, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepsKey, withModifier } from "#lib/keys.js";
   import { Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
@@ -83,8 +83,8 @@
 
   const caption = (files: number, folders: number) =>
     [
-      files ? `${files} file${files === 1 ? "" : "s"}` : "",
-      folders ? `${folders} director${folders === 1 ? "y" : "ies"}` : ""
+      files ? plural(files, "file", "files") : "",
+      folders ? plural(folders, "folder", "folders") : ""
     ]
       .filter(Boolean)
       .join(", ");

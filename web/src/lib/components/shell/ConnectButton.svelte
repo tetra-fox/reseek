@@ -40,7 +40,7 @@
     if (server?.isConnected) {
       const cut = server.listen.reachable === "no";
       return {
-        label: cut ? "Connected, unreachable" : "Connected",
+        label: cut ? "Connected, port blocked" : "Connected",
         plug: state?.pendingReconnect || cut ? "text-warning" : "text-success",
         badge: cut
           ? ("unreachable" as const)

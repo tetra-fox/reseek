@@ -57,7 +57,7 @@ export const quota = (s: UploadQueueStatus) => {
   const part = (name: string, w: UploadQueueStatus["limits"]["daily"]) => {
     const files = w.files.limit
       ? `${w.files.used}/${w.files.limit} files`
-      : `${w.files.used} files`;
+      : plural(w.files.used, "file", "files");
     const bytes = w.bytes.limit
       ? `${mb(w.bytes.used)}/${mb(w.bytes.limit)} MB`
       : `${mb(w.bytes.used)} MB`;

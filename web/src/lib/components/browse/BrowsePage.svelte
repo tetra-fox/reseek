@@ -22,7 +22,7 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { useCrumbs } from "#lib/crumbs.svelte.js";
-  import { formatBytes } from "#lib/format.js";
+  import { formatBytes, plural } from "#lib/format.js";
   import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
@@ -277,10 +277,12 @@
         <Username name={browser.username} />
         {#if info}
           <span class="text-sm text-fg-muted">
-            {(info.files + info.lockedFiles).toLocaleString()} files in {(
-              info.directories + info.lockedDirectories
-            ).toLocaleString()} folders, {formatBytes(info.bytes)}{info.lockedFiles
-              ? ` (${info.lockedFiles.toLocaleString()} files in ${info.lockedDirectories.toLocaleString()} folders are locked)`
+            {plural(info.files + info.lockedFiles, "file", "files")} in {plural(
+              info.directories + info.lockedDirectories,
+              "folder",
+              "folders"
+            )}, {formatBytes(info.bytes)}{info.lockedFiles
+              ? ` (${plural(info.lockedFiles, "file", "files")} in ${plural(info.lockedDirectories, "folder", "folders")} ${info.lockedFiles === 1 ? "is" : "are"} locked)`
               : ""}
           </span>
         {/if}

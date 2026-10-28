@@ -16,7 +16,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { ago, formatSpeed } from "#lib/format.js";
+  import { ago, formatSpeed, plural } from "#lib/format.js";
   import { userHref } from "#lib/nav.js";
   import { firstLines, ownProfile } from "#lib/profile.svelte.js";
   import { session } from "#lib/session.svelte.js";
@@ -136,8 +136,8 @@
     {/if}
 
     <p class="text-xs">
-      {stats ? stats.fileCount.toLocaleString() : "?"} files ·
-      {stats ? stats.directoryCount.toLocaleString() : "?"} folders ·
+      {stats ? plural(stats.fileCount, "file", "files") : "? files"} ·
+      {stats ? plural(stats.directoryCount, "folder", "folders") : "? folders"} ·
       {stats ? formatSpeed(stats.averageSpeed) : "?"}
       {#if stats?.fetchedAt}<span class="text-fg-subtle">· {ago(stats.fetchedAt, clock.now)}</span
         >{/if}
@@ -145,11 +145,11 @@
 
     {#if user && figures}
       <p class="text-xs text-fg-muted">
-        {figures.uploads.succeeded + figures.uploads.active} uploads ·
-        {figures.downloads.succeeded + figures.downloads.active} downloads ·
-        {figures.messages.in + figures.messages.out} messages
+        {plural(figures.uploads.succeeded + figures.uploads.active, "upload", "uploads")} ·
+        {plural(figures.downloads.succeeded + figures.downloads.active, "download", "downloads")} ·
+        {plural(figures.messages.in + figures.messages.out, "message", "messages")}
         {#if figures.messages.unread}({figures.messages.unread} unread){/if}
-        {#if user.firstSeenAt}<br />first seen {ago(user.firstSeenAt, clock.now)}{/if}
+        {#if user.firstSeenAt}<br />First seen {ago(user.firstSeenAt, clock.now)}{/if}
       </p>
     {/if}
 
