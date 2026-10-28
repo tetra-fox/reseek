@@ -206,44 +206,47 @@
       {user?.group.name ?? ""}
     {:else if column === "actions"}
       <div class="ml-auto flex items-center row-action">
-        {#if write && can.retry}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Retry"
-            onclick={() => void act(storeOf(t), "retry", [t.id])}>
-            <RotateCwIcon />
-          </Button>
-        {/if}
-        {#if write && can.cancel}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Cancel"
-            onclick={() => void act(storeOf(t), "cancel", [t.id])}>
-            <XIcon />
-          </Button>
-        {/if}
-        {#if write}
-          <Button variant="ghost" size="icon-sm" aria-label="Remove" onclick={onremove}>
-            <Trash2Icon />
-          </Button>
-        {/if}
-        {#if can.open}
-          <Button variant="ghost" size="icon-sm" aria-label="Open" onclick={() => void open(t)}>
-            <ExternalLinkIcon />
-          </Button>
-        {/if}
-        {#if can.openFolder}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Open folder"
-            title="Open folder"
-            onclick={() => openFolder([t])}>
-            <FolderOpenIcon />
-          </Button>
-        {/if}
+        <!-- a phone shows only the menu, which holds every one of these too -->
+        <span class="contents max-md:hidden">
+          {#if write && can.retry}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Retry"
+              onclick={() => void act(storeOf(t), "retry", [t.id])}>
+              <RotateCwIcon />
+            </Button>
+          {/if}
+          {#if write && can.cancel}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Cancel"
+              onclick={() => void act(storeOf(t), "cancel", [t.id])}>
+              <XIcon />
+            </Button>
+          {/if}
+          {#if write}
+            <Button variant="ghost" size="icon-sm" aria-label="Remove" onclick={onremove}>
+              <Trash2Icon />
+            </Button>
+          {/if}
+          {#if can.open}
+            <Button variant="ghost" size="icon-sm" aria-label="Open" onclick={() => void open(t)}>
+              <ExternalLinkIcon />
+            </Button>
+          {/if}
+          {#if can.openFolder}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Open folder"
+              title="Open folder"
+              onclick={() => openFolder([t])}>
+              <FolderOpenIcon />
+            </Button>
+          {/if}
+        </span>
         <Menu.Root>
           <Menu.Trigger>
             {#snippet child({ props })}

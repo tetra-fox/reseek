@@ -10,12 +10,13 @@
   import { ListControl } from "#lib/list.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
-  import { COLUMNS, type ColumnId } from "#lib/transfers/columns.js";
+  import { COLUMNS, type ColumnId, PHONE_COLUMNS } from "#lib/transfers/columns.js";
   import type { ViewSettings } from "#lib/transfers/settings.svelte.js";
   import type { Direction, Transfer } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Group, Item } from "#lib/transfers/view.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
+  import { viewport } from "#lib/viewport.svelte.js";
 
   import GroupHeader from "./GroupHeader.svelte";
   import TransferRow from "./TransferRow.svelte";
@@ -71,16 +72,20 @@
   const columns = $derived(
     view.columns
       .filter((c) => c.visible && !(c.id === "user" && view.groupBy === "user"))
+      .filter((c) => !viewport.phone || c.id in PHONE_COLUMNS)
       .map((c) => c.id)
   );
+  /** a column's width: a phone's own for the few it shows, else the one set */
+  const widthOf = (c: { id: ColumnId; width: number | string }) =>
+    (viewport.phone && PHONE_COLUMNS[c.id]) || c.width;
   const template = $derived(
     view.columns
       .filter((c) => columns.includes(c.id))
-      .map((c) => (c.id === "file" ? `minmax(${cssWidth(c.width)}, 1fr)` : cssWidth(c.width)))
+      .map((c) => (c.id === "file" ? `minmax(${cssWidth(widthOf(c))}, 1fr)` : cssWidth(widthOf(c))))
       .join(" ")
   );
   const width = $derived(
-    sumWidths(view.columns.filter((c) => columns.includes(c.id)).map((c) => c.width))
+    sumWidths(view.columns.filter((c) => columns.includes(c.id)).map(widthOf))
   );
   const start = $derived(Math.max(0, Math.floor(scrollTop / row) - OVERSCAN));
   const end = $derived(Math.min(items.length, Math.ceil((scrollTop + height) / row) + OVERSCAN));
