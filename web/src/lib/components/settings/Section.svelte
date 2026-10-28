@@ -3,6 +3,7 @@
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import { untrack } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
 
   import { api } from "#lib/api/client.js";
   import { Busy } from "#lib/busy.svelte.js";
@@ -21,6 +22,7 @@
     REDACTED,
     toDraft
   } from "#lib/config/fields.js";
+  import { fieldMatches } from "#lib/config/find.js";
   import { asNixSettings } from "#lib/config/nix.js";
   import { type Field, type Section, valueAt } from "#lib/config/sections.js";
   import { plural } from "#lib/format.js";
@@ -38,11 +40,17 @@
     view: ConfigView;
     /** reloads the view after a write, or after a write was refused because the file changed */
     onchanged: () => Promise<void>;
+    /** what the settings search holds: only the options it finds show */
+    query?: string;
+    /** how many of the section's options differ from what runs, for the page's bar */
+    changes?: number;
   };
 
-  let { section, view, onchanged }: Props = $props();
+  let { section, view, onchanged, query = "", changes = $bindable(0) }: Props = $props();
 
   const fields = $derived(section.fields.filter((f) => f.key in view.fields));
+  /** the options the search finds; every one without a search */
+  const found = $derived(fields.filter((f) => fieldMatches(f, view.fields[f.key], query)));
   const controls = $derived(
     Object.fromEntries(fields.map((f) => [f.key, controlOf(f, view.fields[f.key])]))
   );
@@ -82,6 +90,30 @@
   });
 
   const changed = $derived(fields.filter((f) => !same(draft[f.key], running[f.key])));
+  // the page's bar counts every section's changes
+  $effect(() => {
+    changes = changed.length;
+  });
+
+  /** the drafts put back to the default, which a save writes by taking the key out */
+  const defaulted = new SvelteSet<string>();
+  /** The default of `key` as its control holds it, null for a secret, which shows no value */
+  const defaultDraft = (key: string): Draft | null => {
+    const info = view.fields[key];
+    return info.secret ? null : toDraft(controls[key], info.default ?? null);
+  };
+  /** whether what runs for `key` is not its default, null where that can't be told */
+  const custom = (key: string): boolean | null => {
+    const fallback = defaultDraft(key);
+    return fallback === null ? null : !same(running[key], fallback);
+  };
+  const toDefault = (key: string) => {
+    const fallback = defaultDraft(key);
+    if (fallback === null) return;
+    draft[key] = fallback;
+    defaulted.add(key);
+    written[key] = (written[key] ?? 0) + 1;
+  };
   const enabled = (field: Field) =>
     !field.enabledWhen ||
     field.enabledWhen.values.some((v) => {
@@ -97,6 +129,11 @@
     const found: Record<string, string> = {};
     const out: { field: Field; set?: unknown; unset?: true }[] = [];
     for (const field of changed.filter((f) => edits[f.key].mode === mode)) {
+      // the default put back: the key comes out, so the default applies and stays the default
+      if (defaulted.has(field.key) && same(draft[field.key], defaultDraft(field.key))) {
+        out.push({ field, unset: true });
+        continue;
+      }
       const parsed = fromDraft(
         field,
         controls[field.key],
@@ -122,13 +159,15 @@
       draft[key] = running[key];
       loaded[key] = running[key];
       delete errors[key];
+      defaulted.delete(key);
       written[key] = (written[key] ?? 0) + 1;
     }
     moved = moved.filter((key) => !keys.includes(key));
   };
 
   const saving = new Busy();
-  const save = () =>
+  /** Saves the changed options to their files; the page's bar saves every section with it */
+  export const save = () =>
     saving.run(async () => {
       const writes = collect("save");
       if (!writes) return { ok: true as const, data: null };
@@ -229,11 +268,17 @@
       return { ok: true as const, data: null };
     });
 
-  const reset = () => {
+  /** Puts every draft back to what runs */
+  export const reset = () => {
     draft = { ...running };
     errors = {};
     moved = [];
+    defaulted.clear();
+    for (const f of fields) written[f.key] = (written[f.key] ?? 0) + 1;
   };
+
+  /** Whether every change can be saved to a file, which the page's Save all needs */
+  export const allSaveable = () => changed.every((f) => edits[f.key].mode === "save");
 
   const copying = new CopyButton();
   // shown to copy by hand when the browser won't copy it, as over plain http
@@ -249,7 +294,12 @@
   };
 </script>
 
-<Card title={section.title} id={section.id} class="scroll-mt-20">
+<Card
+  title={section.title}
+  id={section.id}
+  data-section={section.id}
+  class="scroll-mt-20"
+  hidden={!found.length}>
   {#snippet action()}
     <Button variant="ghost" size="sm" class="text-fg-muted" onclick={copyNix}>
       {#if copying.copied}<CheckIcon />{:else}<CopyIcon />{/if}
@@ -268,37 +318,40 @@
   {/if}
   <div class="-mx-5 divide-y border-y">
     {#each fields as field (field.key)}
-      <FieldRow
-        {field}
-        generation={written[field.key] ?? 0}
-        info={view.fields[field.key]}
-        control={controls[field.key]}
-        edit={edits[field.key]}
-        values={view.values}
-        bind:draft={draft[field.key]}
-        changed={changed.includes(field)}
-        moved={moved.includes(field.key)}
-        unused={!enabled(field)}
-        error={errors[field.key]}>
-        {#snippet extra()}
-          {#if field.key === "web.authentication.oidc"}
-            <OidcTest names={Object.keys(valueAt(view.values, field.key) ?? {})} />
-          {:else if field.key === "soulseek.description" || field.key === "soulseek.picture"}
-            <a href={href("/profile")} class="text-xs text-accent hover:underline"
-              >Edit on your profile page</a>
-          {/if}
-        {/snippet}
-      </FieldRow>
+      <!-- the search hides a row rather than unmounting it, so an edit in progress is kept -->
+      <div class={[!found.includes(field) && "hidden"]}>
+        <FieldRow
+          {field}
+          generation={written[field.key] ?? 0}
+          info={view.fields[field.key]}
+          control={controls[field.key]}
+          edit={edits[field.key]}
+          values={view.values}
+          bind:draft={draft[field.key]}
+          changed={changed.includes(field)}
+          moved={moved.includes(field.key)}
+          unused={!enabled(field)}
+          error={errors[field.key]}
+          custom={custom(field.key)}
+          ondefault={() => toDefault(field.key)}>
+          {#snippet extra()}
+            {#if field.key === "web.authentication.oidc"}
+              <OidcTest names={Object.keys(valueAt(view.values, field.key) ?? {})} />
+            {:else if field.key === "soulseek.description" || field.key === "soulseek.picture"}
+              <a href={href("/profile")} class="text-xs text-accent hover:underline"
+                >Edit on your profile page</a>
+            {/if}
+          {/snippet}
+        </FieldRow>
+      </div>
     {/each}
   </div>
   {#if saveable || runtimeable}
-    <!-- pinned to the bottom of the window while the section has unsaved changes -->
+    <!-- the section's own actions; the page's bar, pinned to the window, counts every section -->
     <div
       class={[
-        "-mx-2 -mb-2 flex flex-wrap items-center gap-inline rounded-card border py-2 pr-2 pl-4 transition-[border-color,background-color,box-shadow] duration-(--motion-fast)",
-        changed.length
-          ? "sticky bottom-12 z-10 border-accent/40 bg-surface shadow-raised"
-          : "border-transparent"
+        "-mx-2 -mb-2 flex flex-wrap items-center gap-inline rounded-card border py-2 pr-2 pl-4 transition-[border-color,background-color] duration-(--motion-fast)",
+        changed.length ? "border-accent/40 bg-accent-soft/30" : "border-transparent"
       ]}>
       <span class="text-sm text-fg-muted tabular-nums" aria-live="polite">
         {changed.length ? `${plural(changed.length, "setting", "settings")} changed` : "No changes"}

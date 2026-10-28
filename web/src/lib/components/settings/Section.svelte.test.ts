@@ -149,4 +149,68 @@ describe("a settings section", () => {
     expect(save.disabled).toBe(true);
     vi.unstubAllGlobals();
   });
+
+  it("puts a changed option back to its default by taking it out of the file", async () => {
+    const fetcher = vi.fn<(request: Request) => Promise<Response>>(
+      async () =>
+        new Response(
+          JSON.stringify({
+            revision: "sha256:2",
+            applied: [],
+            reconnectRequired: [],
+            restartRequired: []
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        )
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const v = structuredClone(view);
+    (v.values as { web: { port: number } }).web.port = 6000;
+    v.fields["web.port"].source = { layer: "file", file: "config.toml" };
+    const web = render(
+      sections.find((s) => s.id === "web")!,
+      v
+    );
+    const row = web.querySelector('[id="web.port-help"]')!.parentElement!;
+    const reset = [...row.querySelectorAll("button")].find((b) =>
+      b.title.startsWith("Changed from the default")
+    )!;
+    // a field already at its default has no marker
+    expect(web.querySelector('[id="web.ui-help"]')!.parentElement!.textContent).not.toContain(
+      "default\n"
+    );
+    reset.click();
+    flushSync();
+    expect(web.querySelector<HTMLInputElement>('[id="web.port"]')!.value).toBe("5030");
+    [...web.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Save")!.click();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalled());
+    const body = await fetcher.mock.calls[0][0].json();
+    expect(body).toMatchObject({ set: {}, unset: ["web.port"] });
+    vi.unstubAllGlobals();
+  });
+
+  it("shows only the options the search finds, keeping the others' edits", () => {
+    const target = document.createElement("div");
+    document.body.append(target);
+    const props = $state({
+      section: sections.find((s) => s.id === "web")!,
+      view,
+      onchanged: async () => {},
+      query: ""
+    });
+    mounted.push(mount(Section, { target, props }));
+    flushSync();
+    const port = () => target.querySelector<HTMLInputElement>('[id="web.port"]')!;
+    port().value = "6001";
+    port().dispatchEvent(new Event("input", { bubbles: true }));
+    props.query = "url base";
+    flushSync();
+    const shown = [...target.querySelectorAll("label")].filter((l) => !l.closest(".hidden"));
+    const keys = shown.map((l) => l.getAttribute("for"));
+    expect(keys).toContain("web.url_base");
+    expect(keys).not.toContain("web.port");
+    props.query = "";
+    flushSync();
+    expect(port().value).toBe("6001");
+  });
 });
