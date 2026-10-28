@@ -333,3 +333,35 @@ fn sampled(
   }
   Ok(())
 }
+
+/// What a reading saw, for a failing test to print: the reading, then each window's start,
+/// level, cutoff, shelf and steepest inner step.
+#[cfg(test)]
+pub(super) fn explain(measured: &Measured, reading: &super::reading::Reading) -> String {
+  let mut text = format!(
+    "{:?} at {:.2}, guess {:?}, flags {:?}\n  {}\n  limitations {:?}\n  median {:?} Hz, \
+     bitrate {:?} kbps\n",
+    reading.verdict,
+    reading.confidence,
+    reading.encoder_guess.as_ref().map(|g| &g.profile),
+    reading.flags,
+    reading.summary,
+    reading.limitations,
+    reading.measures.cutoff_median_hz,
+    measured.bitrate_kbps,
+  );
+  for window in &measured.windows {
+    let step = window
+      .inner_shelf
+      .map(|s| format!("{:.0} Hz -{:.0} dB clear {:.0}", s.hz, s.drop, s.clearance));
+    text += &format!(
+      "  t {:>4} {:>6.1} dBFS cutoff {:?} shelf {:?} step {}\n",
+      window.t,
+      window.rms_dbfs,
+      window.cutoff_hz.map(f64::round),
+      window.shelf_db.map(f64::round),
+      step.unwrap_or_default()
+    );
+  }
+  text
+}

@@ -24,8 +24,15 @@ fn settings() -> Settings {
 }
 
 fn analysed(path: &Path) -> Reading {
+  explained(path).0
+}
+
+/// The reading of the file at `path`, with what it saw for an assertion to print.
+fn explained(path: &Path) -> (Reading, String) {
   let measured = engine::run(path, &settings(), &CancellationToken::new()).unwrap();
-  reading::read(&measured)
+  let reading = reading::read(&measured);
+  let why = engine::explain(&measured, &reading);
+  (reading, why)
 }
 
 fn flac(dir: &Path, name: &str, audio: &Audio, bits: u32) -> PathBuf {
@@ -246,8 +253,8 @@ fn hiss(dbfs: f64) -> Audio {
 fn a_noise_floor_over_a_cutoff_neither_hides_nor_fakes_it() {
   let dir = tempfile::tempdir().unwrap();
   let reads = |name: &str, audio: &Audio, verdict: AnalysisVerdict| {
-    let reading = analysed(&flac(dir.path(), "floor.flac", audio, 16));
-    assert_eq!(reading.verdict, verdict, "{name}: {reading:#?}");
+    let (reading, why) = explained(&flac(dir.path(), "floor.flac", audio, 16));
+    assert_eq!(reading.verdict, verdict, "{name}: {why}");
     reading
   };
   // a recording filtered at 20 kHz with hiss over it, or so quiet that 16-bit dither is its
@@ -503,11 +510,11 @@ fn a_cutoff_at_a_lower_rates_band_edge_is_not_read_as_a_transcode() {
     ),
   ];
   for (name, audio, profile, rate) in cases {
-    let reading = analysed(&flac(dir.path(), "up.flac", &audio, 24));
+    let (reading, why) = explained(&flac(dir.path(), "up.flac", &audio, 24));
     assert_eq!(
       reading.verdict,
       AnalysisVerdict::Inconclusive,
-      "{name}: {reading:#?}"
+      "{name}: {why}"
     );
     assert!(reading.flags.is_empty(), "{name}: {reading:#?}");
     assert_eq!(
@@ -545,12 +552,8 @@ fn a_cliff_at_an_old_equipment_rate_reads_as_its_encoder_and_says_so() {
   // made at 37.8 kHz, as PlayStation and CD-i audio was: its cliff at 18.9 kHz is where a
   // 192 kbps MP3 cuts, and the reading can not tell them apart
   let audio = music(1, 37_800, pink).resampled(44_100);
-  let reading = analysed(&flac(dir.path(), "xa.flac", &audio, 16));
-  assert_eq!(
-    reading.verdict,
-    AnalysisVerdict::LikelyTranscode,
-    "{reading:#?}"
-  );
+  let (reading, why) = explained(&flac(dir.path(), "xa.flac", &audio, 16));
+  assert_eq!(reading.verdict, AnalysisVerdict::LikelyTranscode, "{why}");
   assert!(
     reading.limitations.iter().any(|l| l.contains("37.8 kHz")),
     "{reading:#?}"
