@@ -220,7 +220,7 @@
           ><ExternalLinkIcon />Open in new tab</Menu.Item>
         {#if admin && p.known}
           <Menu.Separator />
-          <Menu.Item onSelect={() => (deleting = true)}><Trash2Icon />Delete user</Menu.Item>
+          <Menu.Item onSelect={() => (deleting = true)}><Trash2Icon />Forget user</Menu.Item>
         {/if}
       </Menu.Content>
     </Menu.Root>

@@ -229,7 +229,7 @@
       {#if readWrite}
         <Menu.Item onSelect={() => goto(to.message)}><MessageSquareIcon />Message</Menu.Item>
       {/if}
-      <Menu.Item onSelect={() => goto(to.search)}><SearchIcon />Search their files</Menu.Item>
+      <Menu.Item onSelect={() => goto(to.search)}><SearchIcon />Search their shares</Menu.Item>
       {#if readWrite}
         <Menu.Separator />
         <Menu.Item onSelect={togglePin}>
