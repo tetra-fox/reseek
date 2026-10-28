@@ -53,10 +53,10 @@ test("opens each System tab", async ({ page }) => {
   await expect(page.getByRole("link", { name: "/downloads" })).toBeVisible();
 
   await tabs.getByRole("link", { name: "Data" }).click();
-  await expect(page.getByText("Transfer Data")).toBeVisible();
+  await expect(page.getByText("Finished transfers")).toBeVisible();
 
   await tabs.getByRole("link", { name: "Events" }).click();
-  await expect(page.getByRole("button", { name: "Every type" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "All types" })).toBeVisible();
 
   await tabs.getByRole("link", { name: "Logs" }).click();
   await expect(page.getByRole("grid", { name: "Live log" })).toBeVisible();

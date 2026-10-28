@@ -20,3 +20,10 @@ export const BUDDY = {
   badge: "buddy",
   plural: "Buddies"
 } as const;
+
+/** The confirmation before restarting reseek, the same from Info and from Settings */
+export const RESTART = {
+  title: "Restart reseek?",
+  body: "Transfers in progress stop and resume after the restart.",
+  confirm: "Restart"
+} as const;

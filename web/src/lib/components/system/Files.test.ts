@@ -58,7 +58,7 @@ describe("the file explorer", () => {
     press(grid, " ");
     expect(ticked()).toEqual(["f:Album/a.flac", "f:Album/b.flac"]);
     press(grid, "Delete");
-    expect(confirmation.question?.body).toBe("Delete 2 items? This cannot be undone.");
+    expect(confirmation.question?.title).toBe("Delete 2 items?");
   });
 
   it("opens a folder in place, reading it, and closes it with the keys", async () => {

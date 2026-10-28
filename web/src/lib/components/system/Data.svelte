@@ -54,8 +54,8 @@
 
   const clearCompleted = (direction: "uploads" | "downloads") =>
     confirmation.ask({
-      title: `Clear completed ${direction}`,
-      body: `Remove all completed ${direction} from the list? They stay in the statistics.`,
+      title: `Clear finished ${direction}?`,
+      body: `All finished ${direction} leave the list. They still count in the statistics.`,
       confirm: "Remove",
       run: () =>
         void busy.run(
@@ -65,7 +65,7 @@
                 ? api.DELETE("/api/v0/transfers/uploads/all/completed")
                 : api.DELETE("/api/v0/transfers/downloads/all/completed")
             ),
-          `Completed ${direction} cleared!`
+          `Finished ${direction} cleared`
         )
     });
 
@@ -78,7 +78,7 @@
   const chosen = $derived(rows.filter((d) => list.selected.has(d.name)).map((d) => d.name));
 </script>
 
-<Card title="Databases" description="The daemon's database files and the space they take.">
+<Card title="Databases">
   {#snippet action()}
     {#if admin && chosen.length}
       <Button size="sm" variant="outline" disabled={busy.running} onclick={() => vacuum(chosen)}
@@ -92,7 +92,7 @@
     <EmptyState
       icon={DatabaseIcon}
       title="No database files"
-      description="The daemon keeps its databases in memory." />
+      description="reseek keeps its databases in memory." />
   {:else}
     <div
       class="-mx-5 border-y text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
@@ -132,29 +132,28 @@
   {/if}
 </Card>
 
-<Card title="Retention" description="How long history is kept, as the options say.">
+<Card title="Retention">
   <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
     {#each retention as [key, value] (key)}
       <dt class="font-mono text-xs text-fg-muted">{key}</dt>
-      <dd>{value === null || value === undefined ? "kept forever" : String(value)}</dd>
+      <dd>{value === null || value === undefined ? "Kept forever" : String(value)}</dd>
     {/each}
   </dl>
   <a href={href("/system/settings")} class="text-sm text-accent hover:underline"
     >Change them in Settings</a>
 </Card>
 
-<Card title="Transfer Data">
+<Card title="Finished transfers">
   <p class="text-sm text-fg-muted">
-    The Uploads and Downloads pages can become unresponsive if too many transfers are displayed. If
-    you're having trouble with either page, try using the buttons below to remove completed
-    transfers.
+    Very long lists can slow down the Downloads and Uploads pages. Clearing finished transfers keeps
+    them in the statistics.
   </p>
   {#if write}
     <div class="flex flex-wrap gap-inline">
       <Button disabled={busy.running} onclick={() => clearCompleted("uploads")}
-        ><Trash2Icon />Clear All Completed Uploads</Button>
+        ><Trash2Icon />Clear finished uploads</Button>
       <Button disabled={busy.running} onclick={() => clearCompleted("downloads")}
-        ><Trash2Icon />Clear All Completed Downloads</Button>
+        ><Trash2Icon />Clear finished downloads</Button>
     </div>
   {/if}
 </Card>

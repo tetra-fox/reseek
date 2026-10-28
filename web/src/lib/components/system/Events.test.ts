@@ -74,9 +74,7 @@ describe("the event log", () => {
     expect(ticked()).toEqual(["a"]);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     document
-      .querySelector<HTMLButtonElement>(
-        '[data-line="a"] button[aria-label="Show the whole payload"]'
-      )!
+      .querySelector<HTMLButtonElement>('[data-line="a"] button[aria-label="Show full payload"]')!
       .click();
     await flush();
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("a at");

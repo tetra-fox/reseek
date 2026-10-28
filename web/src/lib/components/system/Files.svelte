@@ -27,7 +27,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
-  import { dateTime, formatBytes } from "#lib/format.js";
+  import { dateTime, formatBytes, plural } from "#lib/format.js";
   import { archiveUrl, fileTrack, fileUrl, joinPath, type Root } from "#lib/localfiles.js";
   import { href } from "#lib/nav.js";
   import { player } from "#lib/player.svelte.js";
@@ -189,14 +189,19 @@
       );
       if (!outcome.ok) {
         failed.push(
-          `${e.name}: ${outcome.status === 403 ? "Remote file management is disabled" : outcome.error}`
+          `${e.name}: ${outcome.status === 403 ? "deleting files from the UI is turned off" : outcome.error}`
         );
       }
     }
     selected.clear();
     load();
-    if (failed.length) toast(`${failed.length} not deleted: ${failed.join("; ")}`, "error");
-    else toast(targets.length === 1 ? `${targets[0].name} deleted` : `${targets.length} deleted`);
+    if (failed.length) toast(`Couldn't delete ${failed.join("; ")}`, "error");
+    else
+      toast(
+        targets.length === 1
+          ? `${targets[0].name} deleted`
+          : `${plural(targets.length, "item", "items")} deleted`
+      );
   };
   const askRemove = (targets: Entry[]) => {
     if (!targets.length || !canDelete) return;
@@ -204,14 +209,14 @@
     confirmation.ask(
       targets.length === 1
         ? {
-            title: one.kind === "directory" ? "Confirm Directory Delete" : "Confirm File Delete",
-            body: `Are you sure you want to delete ${one.kind === "directory" ? "directory" : "file"} '${one.path}'?`,
+            title: one.kind === "directory" ? "Delete folder?" : "Delete file?",
+            body: `${one.path} will be deleted. This can't be undone.`,
             confirm: "Delete",
             run: () => void remove(targets)
           }
         : {
-            title: "Delete items",
-            body: `Delete ${targets.length} items? This cannot be undone.`,
+            title: `Delete ${targets.length} items?`,
+            body: "This can't be undone.",
             confirm: "Delete",
             run: () => void remove(targets)
           }
@@ -252,7 +257,7 @@
   </button>
 {/snippet}
 
-<nav aria-label="Directory" class="flex gap-1">
+<nav aria-label="Location" class="flex gap-1">
   {#each [{ id: "downloads", title: "Downloads" }, { id: "incomplete", title: "Incomplete" }] as t (t.id)}
     <a
       href={href(`/system/files?root=${t.id}`)}
@@ -370,7 +375,7 @@
         style:grid-template-columns={COLUMNS}>
         <span role="columnheader"></span>
         <span role="columnheader">{@render sortable("Name", "name")}</span>
-        <span role="columnheader">{@render sortable("Date Modified", "date")}</span>
+        <span role="columnheader">{@render sortable("Modified", "date")}</span>
         <span role="columnheader" class="pr-3 text-right">Size</span>
         <span role="columnheader" class="sr-only">Actions</span>
       </div>
@@ -424,9 +429,7 @@
   </FolderTree>
   {#if lines.every((l) => l.kind === "item" && l.item.kind === "up")}
     <p class="px-4 py-6 text-center text-sm text-fg-subtle">
-      {root === "downloads" && !path
-        ? "Nothing here yet; finished downloads land in this folder."
-        : "This folder is empty."}
+      {root === "downloads" && !path ? "No finished downloads yet." : "This folder is empty."}
     </p>
   {/if}
 {/if}

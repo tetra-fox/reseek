@@ -13,7 +13,7 @@
   import { valueAt } from "#lib/config/sections.js";
   import { dateTime } from "#lib/format.js";
   import { call } from "#lib/request.js";
-  import { UNTIL_RESTART } from "#lib/wording.js";
+  import { RESTART, UNTIL_RESTART } from "#lib/wording.js";
 
   // what the configuration as a whole says: its files, what was ignored or failed, what waits on
   // a reconnect or a restart, and the runtime overrides in effect
@@ -138,8 +138,8 @@
 
 <ConfirmDialog
   bind:open={restarting}
-  title="Restart reseek"
-  body="Transfers in progress stop and resume after the restart. This page reconnects once reseek is back."
-  confirm="Restart"
+  title={RESTART.title}
+  body={RESTART.body}
+  confirm={RESTART.confirm}
   danger
   onconfirm={restart} />
