@@ -45,3 +45,10 @@ export const layerOpen = () =>
   !!document.querySelector(
     ["menu", "dialog", "alertdialog"].map((r) => `[role=${r}]:not([data-state=closed])`).join(",")
   );
+
+/**
+ * Ctrl+K, or Cmd+K on a Mac: opens the command palette from anywhere, a text field included,
+ * since no field takes it for itself
+ */
+export const opensPalette = (e: KeyboardEvent) =>
+  (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k";

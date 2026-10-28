@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { keepsKey, layerOpen } from "./keys";
+import { keepsKey, layerOpen, opensPalette } from "./keys";
 
 describe("which keys a focused element keeps", () => {
   afterEach(() => (document.body.innerHTML = ""));
@@ -73,5 +73,17 @@ describe("an open layer", () => {
     expect(layerOpen()).toBe(false);
     document.body.innerHTML = `<div role="dialog"></div>`;
     expect(layerOpen()).toBe(true);
+  });
+});
+
+describe("the command palette's key", () => {
+  it("is Ctrl+K or Cmd+K and nothing near it", () => {
+    const press = (init: KeyboardEventInit) => opensPalette(new KeyboardEvent("keydown", init));
+    expect(press({ key: "k", ctrlKey: true })).toBe(true);
+    expect(press({ key: "K", metaKey: true })).toBe(true);
+    expect(press({ key: "k" })).toBe(false);
+    expect(press({ key: "k", ctrlKey: true, shiftKey: true })).toBe(false);
+    expect(press({ key: "k", ctrlKey: true, altKey: true })).toBe(false);
+    expect(press({ key: "j", ctrlKey: true })).toBe(false);
   });
 });

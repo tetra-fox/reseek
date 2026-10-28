@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("logs in, shows the connection live and moves between screens", async ({ page }) => {
+test("logs in, shows where it is and moves between screens", async ({ page }) => {
   await page.goto("./#/downloads");
   await expect(page).toHaveURL(/#\/login\?to=%2Fdownloads$/);
   await expect(page.getByLabel("Username")).toBeFocused();
@@ -14,7 +14,9 @@ test("logs in, shows the connection live and moves between screens", async ({ pa
   await page.getByRole("button", { name: "Login" }).click();
   await expect(page).toHaveURL(/#\/downloads$/);
   await expect(page.getByText("No downloads to display")).toBeVisible();
-  await expect(page.getByRole("status", { name: "Updates: Live" })).toBeVisible();
+  // no badge for the live connection: only its loss is shown
+  await expect(page.getByRole("status", { name: /^Updates/ })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveText("Downloads");
   await expect(page.locator("footer")).toContainText("Disconnected");
 
   await page.getByRole("link", { name: "Search" }).click();

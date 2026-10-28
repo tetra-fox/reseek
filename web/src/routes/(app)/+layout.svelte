@@ -9,14 +9,16 @@
   import ConfirmHost from "#lib/components/ConfirmHost.svelte";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import PlayerBar from "#lib/components/player/PlayerBar.svelte";
+  import CommandPalette from "#lib/components/shell/CommandPalette.svelte";
   import Footer from "#lib/components/shell/Footer.svelte";
   import Header from "#lib/components/shell/Header.svelte";
   import LostBanner from "#lib/components/shell/LostBanner.svelte";
   import Sidebar from "#lib/components/shell/Sidebar.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import BlockDialog from "#lib/components/users/BlockDialog.svelte";
+  import { trail } from "#lib/crumbs.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
-  import { href, redirectFor, route, title } from "#lib/nav.js";
+  import { baseCrumbs, href, redirectFor, route, titleOf } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
 
   let { children } = $props();
@@ -80,7 +82,11 @@
 </script>
 
 <svelte:head>
-  <title>{chat.total ? `(${chat.total}) ` : ""}{title(at.path)}</title>
+  <title
+    >{chat.total ? `(${chat.total}) ` : ""}{titleOf([
+      ...baseCrumbs(at.path),
+      ...trail.page
+    ])}</title>
 </svelte:head>
 
 <svelte:document onvisibilitychange={() => session.visibility(document.hidden)} />
@@ -110,6 +116,7 @@
   <Footer />
   <BlockDialog />
   <ConfirmHost />
+  <CommandPalette />
 {:else if app.phase === "lost"}
   <div class="flex min-h-svh items-center justify-center p-6">
     <ErrorSegment
