@@ -7,6 +7,9 @@ test("analyses a finished download from its row and keeps a judgement", async ({
   await fakeDownloads(page);
   await fakeAnalysis(page);
   await login(page, "/downloads");
+  const table = page.getByRole("grid", { name: "Downloads" });
+  // the analysed download says so in its row, muted, with the reading in its tooltip
+  await expect(table.getByText("Analysed", { exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "More for 2.flac" }).click();
   await page.getByRole("menuitem", { name: "Analyse" }).click();
 
@@ -30,6 +33,8 @@ test("analyses a finished download from its row and keeps a judgement", async ({
   await drawer.getByRole("button", { name: "Save judgement" }).click();
   await expect(drawer.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
   await expect(drawer.getByRole("button", { name: "Save judgement" })).toBeDisabled();
+  // the row now shows the user's own judgement
+  await expect(table.getByText("Fake", { exact: true })).toBeVisible();
 
   // the analyser's reading, folded away and labelled as its own; its window strip picks a
   // window by key and shows that window's spectrum
@@ -53,6 +58,32 @@ test("analyses a finished download from its row and keeps a judgement", async ({
   // the plot's columns start 48 of the image's 300 px in and run 30 px, one a window
   await plot.click({ position: { x: ((48 + 10.5) / 300) * box.width, y: box.height / 2 } });
   await expect(drawer.getByText("Spectrum at 10s")).toBeInViewport();
+});
+
+test("filters downloads by their analysis, by chip and by word", async ({ page }) => {
+  await fakeDownloads(page);
+  await fakeAnalysis(page);
+  await login(page, "/downloads");
+  const table = page.getByRole("grid", { name: "Downloads" });
+  const shown = (name: string) => table.getByRole("button", { name: `More for ${name}` });
+  await expect(shown("3.flac")).toBeVisible();
+
+  const analysis = page.getByRole("group", { name: "Analysis" });
+  await analysis.getByRole("button", { name: /^Analysed/ }).click();
+  await expect(shown("2.flac")).toBeVisible();
+  await expect(shown("3.flac")).toHaveCount(0);
+  // a finished flac without a report is waiting to be analysed; the running one is not
+  await analysis.getByRole("button", { name: /^Not analysed/ }).click();
+  await expect(shown("3.flac")).toBeVisible();
+  await expect(shown("2.flac")).toHaveCount(0);
+  await expect(shown("1.flac")).toHaveCount(0);
+  await analysis.getByRole("button", { name: /^Not analysed/ }).click();
+
+  await page.getByRole("searchbox", { name: "Filter" }).fill("analysed:yes");
+  await expect(shown("2.flac")).toBeVisible();
+  await expect(shown("3.flac")).toHaveCount(0);
+  await page.getByRole("searchbox", { name: "Filter" }).fill("marked:fake");
+  await expect(shown("2.flac")).toHaveCount(0);
 });
 
 test("analyses a file and queues a folder from the Files screen", async ({ page }) => {
@@ -121,18 +152,21 @@ test("analyses a file and queues a folder from the Files screen", async ({ page 
       return route.fallback();
     }
   );
-  // the queue names its files by the daemon's own path
+  // the queue, with track.flac queued from another browser before this page opened
+  const job = (id: string, path: string) => ({
+    id,
+    path: `/srv/downloads/${path}`,
+    root: "downloads",
+    relativePath: path,
+    transferId: null,
+    state: "queued",
+    queuedAt: at,
+    startedAt: null,
+    progress: null
+  });
   await page.route("**/api/v0/analysis/jobs", (route) =>
     route.fulfill({
-      json: queued.map(({ id }, i) => ({
-        id,
-        path: `/srv/downloads/${i}`,
-        transferId: null,
-        state: "waiting",
-        queuedAt: at,
-        startedAt: null,
-        progress: null
-      }))
+      json: [job(crypto.randomUUID(), "track.flac"), ...queued.map((q) => job(q.id, q.path))]
     })
   );
   await login(page, "/system/files");
@@ -141,9 +175,24 @@ test("analyses a file and queues a folder from the Files screen", async ({ page 
   await expect(page.getByRole("menuitem", { name: "Analyse" })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
+  // the analysed file says so, and the filter by the analyser's reading finds it
+  const files = page.getByRole("treegrid");
+  await expect(files.getByText("Analysed", { exact: true })).toBeVisible();
+  const show = page.getByRole("combobox", { name: "Show" });
+  await show.click();
+  await page.getByRole("option", { name: "Analyser: likely a transcode" }).click();
+  await expect(page.getByRole("button", { name: "More for track.flac" })).toBeVisible();
+  await show.click();
+  await page.getByRole("option", { name: "Not analysed" }).click();
+  await expect(page.getByRole("button", { name: "More for track.flac" })).toHaveCount(0);
+  await show.click();
+  await page.getByRole("option", { name: "All files" }).click();
+
   await page.getByRole("button", { name: "More for track.flac" }).click();
   await page.getByRole("menuitem", { name: "Analyse" }).click();
   const drawer = page.getByRole("complementary", { name: "Analysis" });
+  // queued by another browser, it shows its place in the queue
+  await expect(drawer.getByText("Waiting for the analyser")).toBeVisible();
   await expect(drawer.getByRole("img", { name: /^Spectrogram/ })).toBeVisible();
   await expect(drawer.getByText(/This is a tool to help you judge, not proof/)).toBeVisible();
   // the file's own actions sit beside its name

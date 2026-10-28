@@ -356,6 +356,9 @@ const transfer = (
   removed: false
 });
 
+/** The finished download of alice's 2.flac, which `fakeAnalysis` has a report of */
+export const ANALYSED_DOWNLOAD = "2f1ac000-0000-4000-8000-000000000002";
+
 /**
  * Answers the downloads list with alice's two folders, one download running and one done, and
  * one of bob's as large as a size gets
@@ -363,7 +366,11 @@ const transfer = (
 export const fakeDownloads = async (page: Page) => {
   const files = [
     transfer("@@a\\Music\\One\\1.flac", "InProgress"),
-    { ...transfer("@@a\\Music\\Two\\2.flac"), localPath: "/downloads/alice/Two/2.flac" }
+    {
+      ...transfer("@@a\\Music\\Two\\2.flac"),
+      id: ANALYSED_DOWNLOAD,
+      localPath: "/downloads/alice/Two/2.flac"
+    }
   ];
   const large = [transfer("@@b\\Big\\3.flac", "Completed, Succeeded", 1023.99 * 1024 ** 3, "bob")];
   await page.route(
@@ -514,8 +521,13 @@ const PIXEL = Buffer.from(
 );
 
 /** A report of a 128 kbps transcode, thirty seconds long, with the judgement `override` */
-const report = (override: unknown) => ({
-  path: "/downloads/alice/Two/2.flac",
+const report = (
+  override: unknown,
+  file = { relativePath: "alice/Two/2.flac", transferId: ANALYSED_DOWNLOAD as string | null }
+) => ({
+  path: `/downloads/${file.relativePath}`,
+  root: "downloads",
+  ...file,
   size: 1000,
   analysedAt: "2026-10-28T12:00:00Z",
   durationSeconds: 30.5,
@@ -573,7 +585,8 @@ const report = (override: unknown) => ({
 
 /**
  * Answers every file's and download's analysis with the report of a transcode, its image, its
- * windows' spectra and an empty queue; a judgement put is kept and read back
+ * windows' spectra and an empty queue, and the list of reports with 2.flac's and track.flac's; a
+ * judgement put is kept and read back
  */
 export const fakeAnalysis = async (page: Page) => {
   let override: unknown = null;
@@ -583,6 +596,15 @@ export const fakeAnalysis = async (page: Page) => {
       const { pathname } = new URL(route.request().url());
       const method = route.request().method();
       if (pathname.endsWith("/analysis/jobs")) return route.fulfill({ json: [] });
+      // the list the chips and filters read: the download's report, and one of a file in Files
+      if (pathname.endsWith("/api/v0/analysis")) {
+        return route.fulfill({
+          json: [
+            { ...report(override), windows: null },
+            { ...report(null, { relativePath: "track.flac", transferId: null }), windows: null }
+          ]
+        });
+      }
       if (pathname.endsWith("/spectrogram.png")) {
         return route.fulfill({ body: PIXEL, contentType: "image/png" });
       }
