@@ -1,3 +1,7 @@
+import type { Component } from "svelte";
+
+import PortMapping from "#lib/components/settings/PortMapping.svelte";
+
 /**
  * The control an option is edited with. Most follow from the kind the daemon reports for the key;
  * a description names one only where the kind alone can't say (a secret, a list of patterns or
@@ -36,8 +40,8 @@ export type Field = {
   derived?: { from: string; entry: (values: unknown) => string | null; note: string };
 };
 
-/** A form on the settings page */
-export type Section = { id: string; title: string; fields: Field[] };
+/** A form on the settings page; `extra` shows above its fields, such as a state the options set */
+export type Section = { id: string; title: string; fields: Field[]; extra?: Component };
 
 const PORT = { min: 1, max: 65535 };
 const AT_LEAST_1 = { min: 1 };
@@ -85,6 +89,7 @@ export const sections: Section[] = [
   {
     id: "soulseek",
     title: "Soulseek",
+    extra: PortMapping,
     fields: [
       { key: "soulseek.username", label: "Username" },
       { key: "soulseek.password", label: "Password", control: "secret" },
