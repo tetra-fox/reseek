@@ -90,3 +90,10 @@ path = "fuzz_targets/api_request.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "relay_message"
+path = "fuzz_targets/relay_message.rs"
+test = false
+doc = false
+bench = false
