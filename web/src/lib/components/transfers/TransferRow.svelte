@@ -59,7 +59,8 @@
     around: Transfer[];
     /** ticks the row; `range` when shift was held */
     onselect: (range: boolean) => void;
-    ondetails: () => void;
+    /** opens the details drawer, at the file's analysis with `analyse` */
+    ondetails: (analyse?: boolean) => void;
     onremove: () => void;
     onblock: (deny: boolean) => void;
   };
@@ -94,7 +95,7 @@
     type="button"
     class="min-w-0 truncate text-left hover:underline"
     title={t.filename}
-    onclick={ondetails}>
+    onclick={() => ondetails()}>
     {getFileName(t.filename)}
     {#if showFolder}
       <span class="text-fg-muted"> {getDirectoryName(t.filename)}</span>
@@ -278,7 +279,14 @@
               <EllipsisIcon />
             </Button>
           {/snippet}
-          <RowMenu transfer={t} {direction} {around} {onremove} {onblock} {ondetails} />
+          <RowMenu
+            transfer={t}
+            {direction}
+            {around}
+            {onremove}
+            {onblock}
+            ondetails={() => ondetails()}
+            onanalyse={() => ondetails(true)} />
         </Menu.LazyRoot>
       </div>
     {/if}

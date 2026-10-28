@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
   import BanIcon from "@lucide/svelte/icons/ban";
   import ChevronsUpIcon from "@lucide/svelte/icons/chevrons-up";
   import CopyIcon from "@lucide/svelte/icons/copy";
@@ -49,9 +50,11 @@
     onblock: (deny: boolean) => void;
     /** opens the details drawer; without it the menu has no Details */
     ondetails?: () => void;
+    /** opens the file's analysis; without it the menu has no Analyse */
+    onanalyse?: () => void;
   };
 
-  let { transfer: t, direction, around, onremove, onblock, ondetails }: Props = $props();
+  let { transfer: t, direction, around, onremove, onblock, ondetails, onanalyse }: Props = $props();
 
   const can = $derived(rowActions(t, direction));
   const write = $derived(session.can("ReadWrite"));
@@ -120,5 +123,9 @@
   {#if ondetails}
     <Menu.Separator />
     <Menu.Item onSelect={ondetails}><InfoIcon />Details</Menu.Item>
+  {/if}
+  {#if onanalyse && can.open}
+    {#if !ondetails}<Menu.Separator />{/if}
+    <Menu.Item onSelect={onanalyse}><AudioLinesIcon />Analyse</Menu.Item>
   {/if}
 </Menu.Content>

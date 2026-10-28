@@ -2,11 +2,13 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import XIcon from "@lucide/svelte/icons/x";
+  import { untrack } from "svelte";
   import { cubicOut } from "svelte/easing";
   import { fly } from "svelte/transition";
 
   import type { Schemas } from "#lib/api/client.js";
   import { copyText } from "#lib/clipboard.svelte.js";
+  import AnalysisPanel from "#lib/components/analysis/AnalysisPanel.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -23,7 +25,7 @@
   } from "#lib/format.js";
   import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
   import { motionFast } from "#lib/motion.js";
-  import { stateChip, type Direction, type Transfer } from "#lib/transfers/states.js";
+  import { rowActions, stateChip, type Direction, type Transfer } from "#lib/transfers/states.js";
   import { endpoint, type Transfers } from "#lib/transfers/transfers.svelte.js";
   import { users } from "#lib/users.svelte.js";
 
@@ -39,6 +41,10 @@
     onstep: (by: -1 | 1) => void;
     onremove: () => void;
     onblock: (deny: boolean) => void;
+    /** the drawer opened at the file's analysis, which starts one when the file has none */
+    analyse?: boolean;
+    /** moves to the file's analysis and starts one when the file has none */
+    onanalyse: () => void;
   };
 
   let {
@@ -49,7 +55,9 @@
     onclose,
     onstep,
     onremove,
-    onblock
+    onblock,
+    analyse = false,
+    onanalyse
   }: Props = $props();
 
   let history = $state.raw<Schemas["TransferStateChange"][] | null>(null);
@@ -78,6 +86,16 @@
     void endpoint(name).then((o) => {
       if (o.ok && name === t.username) address = `${o.data.address}:${o.data.port}`;
     });
+  });
+
+  let analysis = $state<HTMLElement | null>(null);
+  /** Shows the analysis when the drawer was asked for it, once it is on the page */
+  const reveal = () => {
+    if (analyse) analysis?.scrollIntoView({ block: "start" });
+  };
+  // asked for the analysis while the drawer is open, the drawer moves to it
+  $effect(() => {
+    if (analyse) untrack(reveal);
   });
 
   const user = $derived(users.get(t.username));
@@ -141,7 +159,7 @@
             ><EllipsisIcon /></Button>
         {/snippet}
       </Menu.Trigger>
-      <RowMenu transfer={t} {direction} {around} {onremove} {onblock} />
+      <RowMenu transfer={t} {direction} {around} {onremove} {onblock} {onanalyse} />
     </Menu.Root>
     <Button variant="ghost" size="icon-sm" aria-label="Close details" onclick={onclose}
       ><XIcon /></Button>
@@ -240,6 +258,16 @@
         </ol>
       {/if}
     </section>
+    {#if rowActions(t, direction).open}
+      <section class="flex scroll-mt-4 flex-col gap-2" bind:this={analysis}>
+        <h3 class="text-xs font-medium text-fg-muted uppercase">Analysis</h3>
+        <AnalysisPanel
+          target={{ kind: "download", username: t.username, id: t.id }}
+          transferId={t.id}
+          start={analyse}
+          onshown={reveal} />
+      </section>
+    {/if}
     {#if t.batchId}
       {@const batch = store.list.rows.filter((o) => o.batchId === t.batchId)}
       <section class="flex flex-col gap-1">
