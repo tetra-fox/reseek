@@ -5304,6 +5304,29 @@ export interface components {
              */
             privilegesRemaining: number;
         };
+        /** @description This process and the system it runs on. */
+        ProcessState: {
+            /**
+             * @description the processor architecture
+             * @example x86_64
+             */
+            arch: string;
+            /**
+             * Format: int64
+             * @description the memory the process holds in RAM, in bytes, sampled every 30 seconds
+             */
+            memoryBytes: number;
+            /**
+             * @description the operating system
+             * @example linux
+             */
+            os: string;
+            /**
+             * Format: int32
+             * @description the process id
+             */
+            pid: number;
+        };
         /** @description Where the text and the picture of our profile come from. */
         ProfileSources: {
             /** @description the layer that sets `soulseek.description` */
@@ -6225,10 +6248,20 @@ export interface components {
             distributedNetwork: components["schemas"]["DistributedNetworkState"];
             /** @description sampled health figures */
             health: components["schemas"]["HealthState"];
+            /**
+             * @description where the web UI and the API take requests: a URL per HTTP and HTTPS address, and
+             *     `unix:` with the path of the unix domain socket
+             * @example [
+             *       "http://0.0.0.0:5030/"
+             *     ]
+             */
+            listeners: string[];
             /** @description an option changed that takes effect only after reconnecting to the Soulseek server */
             pendingReconnect: boolean;
             /** @description an option changed that takes effect only after a restart */
             pendingRestart: boolean;
+            /** @description this process and the system it runs on */
+            process: components["schemas"]["ProcessState"];
             /** @description relay mode, the controller connection and the connected agents */
             relay: components["schemas"]["RelayState"];
             /** @description the chat rooms we are in */
@@ -6237,6 +6270,11 @@ export interface components {
             server: components["schemas"]["ServerState"];
             /** @description the share scan and the share cache */
             shares: components["schemas"]["SharesState"];
+            /**
+             * Format: date-time
+             * @description when this process started
+             */
+            startedAt: string;
             /** @description our own Soulseek account */
             user: components["schemas"]["UserState"];
             /** @description the running version and whether a newer one exists */

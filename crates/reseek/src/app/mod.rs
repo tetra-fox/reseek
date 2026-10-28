@@ -2,6 +2,7 @@
 //! directories, logging and the instance lock, opening the databases, serving HTTP until a
 //! signal, and shutting down.
 
+mod figures;
 mod lifecycle;
 mod restart;
 mod service;
@@ -634,6 +635,8 @@ async fn serve(
       return EXIT_FATAL;
     }
   };
+  let urls = listeners.urls();
+  state.state.update(|current| current.listeners = urls);
   state.spawn_tasks();
   state.start().await;
   info!(base = %state.url_base, "Using base url");

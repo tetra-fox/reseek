@@ -381,8 +381,13 @@ mod tests {
     stream.until("application.options").await;
     std::fs::write(app.dir.path().join("config.toml"), "[web\n").unwrap();
     assert!(app.state.config.reload().await.is_err());
-    let state = stream.until("application.state").await.pop().unwrap();
-    assert!(state.data["configuration"]["lastReloadError"].is_string());
+    // other changes, such as the health sampled as the clock starts, are states too
+    loop {
+      let state = stream.until("application.state").await.pop().unwrap();
+      if state.data["configuration"]["lastReloadError"].is_string() {
+        break;
+      }
+    }
     let failed = app
       .send_from(
         "192.0.2.1:1",

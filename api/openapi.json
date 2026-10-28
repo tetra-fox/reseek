@@ -19679,6 +19679,40 @@
           }
         }
       },
+      "ProcessState": {
+        "type": "object",
+        "description": "This process and the system it runs on.",
+        "required": [
+          "pid",
+          "os",
+          "arch",
+          "memoryBytes"
+        ],
+        "properties": {
+          "arch": {
+            "type": "string",
+            "description": "the processor architecture",
+            "example": "x86_64"
+          },
+          "memoryBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the memory the process holds in RAM, in bytes, sampled every 30 seconds",
+            "minimum": 0
+          },
+          "os": {
+            "type": "string",
+            "description": "the operating system",
+            "example": "linux"
+          },
+          "pid": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the process id",
+            "minimum": 0
+          }
+        }
+      },
       "ProfileSources": {
         "type": "object",
         "description": "Where the text and the picture of our profile come from.",
@@ -21425,7 +21459,10 @@
           "shares",
           "rooms",
           "configuration",
-          "directories"
+          "directories",
+          "startedAt",
+          "process",
+          "listeners"
         ],
         "properties": {
           "configuration": {
@@ -21448,6 +21485,16 @@
             "$ref": "#/components/schemas/HealthState",
             "description": "sampled health figures"
           },
+          "listeners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "where the web UI and the API take requests: a URL per HTTP and HTTPS address, and\n`unix:` with the path of the unix domain socket",
+            "example": [
+              "http://0.0.0.0:5030/"
+            ]
+          },
           "pendingReconnect": {
             "type": "boolean",
             "description": "an option changed that takes effect only after reconnecting to the Soulseek server"
@@ -21455,6 +21502,10 @@
           "pendingRestart": {
             "type": "boolean",
             "description": "an option changed that takes effect only after a restart"
+          },
+          "process": {
+            "$ref": "#/components/schemas/ProcessState",
+            "description": "this process and the system it runs on"
           },
           "relay": {
             "$ref": "#/components/schemas/RelayState",
@@ -21474,6 +21525,11 @@
           "shares": {
             "$ref": "#/components/schemas/SharesState",
             "description": "the share scan and the share cache"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "when this process started"
           },
           "user": {
             "$ref": "#/components/schemas/UserState",

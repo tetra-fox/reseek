@@ -75,15 +75,17 @@ pub async fn bind(web: &Web) -> Result<Listeners, String> {
 }
 
 impl Listeners {
-  /// The address each TCP listener is bound to, HTTP first.
-  pub fn local_addrs(&self) -> Vec<SocketAddr> {
+  /// Where requests are taken: the URL of each HTTP listener, then of each HTTPS one, then
+  /// `unix:` and the socket's path.
+  pub fn urls(&self) -> Vec<String> {
     let https = self.https.iter().flat_map(|(listeners, _)| listeners);
-    self
-      .http
-      .iter()
-      .chain(https)
-      .filter_map(|l| l.local_addr().ok())
-      .collect()
+    let mut urls: Vec<String> = self.http.iter().map(|l| url("http", l)).collect();
+    urls.extend(https.map(|l| url("https", l)));
+    #[cfg(unix)]
+    if let Some((_, path)) = &self.unix {
+      urls.push(format!("unix:{}", path.display()));
+    }
+    urls
   }
 
   pub(super) fn into_accepts(self) -> Vec<Accept> {

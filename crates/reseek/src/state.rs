@@ -9,8 +9,8 @@ use api_types::relay::{RelayConnectionState, RelayControllerState, RelayMode, Re
 use api_types::state::{
   ConfigurationState, ConnectionWatchdogState, DirectoriesState, DistributedNetworkState,
   HealthState, IncomingSearchHealth, ListenState, PortMappingState, PortMappingStatus, Privileges,
-  Reachable, SearchHealth, ServerConnectionState, ServerState, SharesState, State, UserState,
-  UserStatistics,
+  ProcessState, Reachable, SearchHealth, ServerConnectionState, ServerState, SharesState, State,
+  UserState, UserStatistics,
 };
 use cascade::Loaded;
 use tokio::sync::watch;
@@ -185,5 +185,13 @@ fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
       downloads: paths.downloads.display().to_string(),
       incomplete: paths.incomplete.display().to_string(),
     },
+    started_at: chrono::Utc::now(),
+    process: ProcessState {
+      pid: std::process::id(),
+      os: std::env::consts::OS.to_string(),
+      arch: std::env::consts::ARCH.to_string(),
+      memory_bytes: 0,
+    },
+    listeners: Vec::new(),
   }
 }

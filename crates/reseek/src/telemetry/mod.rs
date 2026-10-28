@@ -72,6 +72,18 @@ impl Telemetry {
     &self.catalogue
   }
 
+  /// The memory this process holds in RAM, in bytes, when the system says.
+  pub async fn resident_memory(&self) -> Option<u64> {
+    let system = self.system.clone();
+    match tokio::task::spawn_blocking(move || system.resident_memory()).await {
+      Ok(memory) => memory,
+      Err(e) => {
+        error!(error = %e, "the process's memory not read");
+        None
+      }
+    }
+  }
+
   /// Every family: the daemon's own, then those read from the system.
   async fn families(&self) -> Result<Vec<Family>, ApiError> {
     let mut families = self.catalogue.registry.families();

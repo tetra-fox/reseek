@@ -12,13 +12,11 @@
 //! closed, the statistics fetched again and the transfer tasks end, and the transfers still
 //! unfinished are ended as shut down.
 
-use api_types::live::LiveFrame;
 use tracing::{Instrument, debug, info, info_span, warn};
 
-use super::AppState;
+use super::{AppState, figures};
 use crate::clock::Every;
 use crate::config::enums::RelayMode;
-use crate::live::Topic;
 use crate::network;
 use crate::transfers::{cleanup, prune};
 use crate::version::RECHECK;
@@ -77,8 +75,15 @@ async fn run(app: AppState) {
   app
     .clock
     .every(Every::Second, "transfer figures pushed", move |_| {
-      push_figures(&pushed);
+      figures::push_transfers(&pushed);
       async {}
+    });
+  let sampled = app.clone();
+  app
+    .clock
+    .every(Every::ThirtySeconds, "health sample", move |_| {
+      let app = sampled.clone();
+      async move { figures::sample_health(&app).await }
     });
   let pruned = app.clone();
   app
@@ -137,15 +142,6 @@ async fn run(app: AppState) {
     network::warn_no_credentials();
   } else {
     app.network.watchdog().start();
-  }
-}
-
-/// Pushes both directions' transfer figures to the streams that follow them, while one does;
-/// the hub sends them only when they changed.
-fn push_figures(app: &AppState) {
-  if app.live.followed(Topic::Metrics) {
-    let figures = app.telemetry.metrics().transfers().figures();
-    app.live.publish(LiveFrame::MetricsUpdate(figures));
   }
 }
 

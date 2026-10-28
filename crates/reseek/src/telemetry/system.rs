@@ -43,6 +43,19 @@ impl Default for SystemProbe {
 }
 
 impl SystemProbe {
+  /// The memory this process holds in RAM, in bytes, when the system says. Reads `/proc` and
+  /// the like, so it blocks.
+  pub fn resident_memory(&self) -> Option<u64> {
+    let mut probed = lock(&self.state);
+    let pid = probed.pid?;
+    probed.system.refresh_processes_specifics(
+      ProcessesToUpdate::Some(&[pid]),
+      false,
+      ProcessRefreshKind::nothing().with_memory(),
+    );
+    probed.system.process(pid).map(sysinfo::Process::memory)
+  }
+
   /// The system families as they are now. Reads `/proc` and the like, so it blocks.
   pub fn families(&self) -> Vec<Family> {
     let mut probed = lock(&self.state);

@@ -39,6 +39,30 @@ pub struct State {
   pub configuration: ConfigurationState,
   /// where finished and unfinished downloads are kept on this machine
   pub directories: DirectoriesState,
+  /// when this process started
+  pub started_at: DateTime<Utc>,
+  /// this process and the system it runs on
+  pub process: ProcessState,
+  /// where the web UI and the API take requests: a URL per HTTP and HTTPS address, and
+  /// `unix:` with the path of the unix domain socket
+  #[schema(example = json!(["http://0.0.0.0:5030/"]))]
+  pub listeners: Vec<String>,
+}
+
+/// This process and the system it runs on.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessState {
+  /// the process id
+  pub pid: u32,
+  /// the operating system
+  #[schema(example = "linux")]
+  pub os: String,
+  /// the processor architecture
+  #[schema(example = "x86_64")]
+  pub arch: String,
+  /// the memory the process holds in RAM, in bytes, sampled every 30 seconds
+  pub memory_bytes: u64,
 }
 
 /// The running version and whether a newer one exists.
