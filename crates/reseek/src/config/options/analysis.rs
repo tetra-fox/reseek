@@ -14,7 +14,8 @@ pub const MAX_ANALYSIS_WORKERS: u32 = 4;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Analysis {
-  /// File extensions, without the dot, that analysing a folder queues.
+  /// File extensions, without the dot, of the files the UI offers to analyse and queues when
+  /// a whole folder is analysed.
   pub extensions: Vec<String>,
   /// How many files are analysed at the same time, at most 4.
   pub workers: u32,
