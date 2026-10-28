@@ -73,6 +73,7 @@ serde.workspace = true
 serde_html_form = "0.2"
 serde_json.workspace = true
 serde_path_to_error.workspace = true
+serde_plain.workspace = true
 sha1 = "0.10"
 sha2.workspace = true
 subtle = "2"

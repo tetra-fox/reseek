@@ -1,9 +1,7 @@
 //! `analysis.db`: the newest report of each file, the user's judgement of each file, and the
 //! spectrogram images kept on disk with when each was last viewed.
 
-use api_types::analysis::{
-  AnalysisListQuery, AnalysisOverride, AnalysisVerdict, AudioAnalysis, Judgement,
-};
+use api_types::analysis::{AnalysisListQuery, AnalysisOverride, AudioAnalysis, Judgement};
 use chrono::{DateTime, Utc};
 use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
@@ -36,20 +34,9 @@ pub(super) struct NewReport<'a> {
   pub image: &'a str,
 }
 
-fn verdict_text(verdict: AnalysisVerdict) -> &'static str {
-  match verdict {
-    AnalysisVerdict::Consistent => "consistent",
-    AnalysisVerdict::LikelyTranscode => "likely_transcode",
-    AnalysisVerdict::MixedSources => "mixed_sources",
-    AnalysisVerdict::Inconclusive => "inconclusive",
-  }
-}
-
-fn judgement_text(judgement: Judgement) -> &'static str {
-  match judgement {
-    Judgement::Legit => "legit",
-    Judgement::Fake => "fake",
-  }
+/// A value of one of the API's enums as its JSON spells it, which the database stores.
+fn spelled(value: &impl serde::Serialize) -> String {
+  serde_plain::to_string(value).expect("the analysis enums are plain names")
 }
 
 /// The report of a row read with [`JUDGED`]: its JSON in column 0, and the judgement beside
@@ -62,11 +49,9 @@ fn judged_report(row: &rusqlite::Row<'_>) -> rusqlite::Result<AudioAnalysis> {
   let verdict: Option<String> = row.get(4)?;
   report.judgement = match verdict {
     Some(verdict) => Some(AnalysisOverride {
-      verdict: if verdict == judgement_text(Judgement::Fake) {
-        Judgement::Fake
-      } else {
-        Judgement::Legit
-      },
+      verdict: serde_plain::from_str(&verdict).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, e.into())
+      })?,
       note: row.get(5)?,
       by: row.get(6)?,
       at: db::read_timestamp(&row.get::<_, String>(7)?)?,
@@ -95,7 +80,7 @@ pub(super) async fn save(db: &Database, new: NewReport<'_>) -> Result<(), DbErro
     new.modified.to_string(),
     new.transfer_id.map(|id| id.to_string()),
     db::timestamp(new.report.analysed_at),
-    verdict_text(new.report.verdict),
+    spelled(&new.report.verdict),
     new.image.to_string(),
     json,
   );
@@ -137,7 +122,7 @@ pub(super) async fn list(
   db: &Database,
   query: &AnalysisListQuery,
 ) -> Result<Vec<AudioAnalysis>, DbError> {
-  let verdict = query.verdict.map(verdict_text);
+  let verdict = query.verdict.as_ref().map(spelled);
   let since = query.since.map(db::timestamp);
   let (offset, limit) = (query.offset, query.limit);
   db.read(move |conn| {
@@ -166,7 +151,7 @@ pub(super) async fn judge(
 ) -> Result<(), DbError> {
   let row = (
     path.to_string(),
-    judgement_text(verdict),
+    spelled(&verdict),
     note,
     by.to_string(),
     db::timestamp(at),
