@@ -17,6 +17,9 @@ use super::thresholds::{
   QUIET_DBFS, SHARP_SHELF_DB, TRANSCODE_SHARE, profile_at,
 };
 
+/// The top of the band of a 48 kHz recording; a file whose band goes past it is hi-res.
+const HI_RES_TOP_HZ: f64 = 24_000.0;
+
 /// The width of a cutoff histogram bucket, in Hz.
 const HISTOGRAM_HZ: f64 = 500.0;
 
@@ -399,9 +402,15 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
       return reading;
     }
     reading.confidence = 0.4;
+    // a band above what a 48 kHz recording holds is mostly empty in honest hi-res audio too
+    let like = if heard.top > HI_RES_TOP_HZ {
+      "as many hi-res recordings do, whose microphones and instruments give little above 20 kHz"
+    } else {
+      "as test tones, speech, old masters and lo-fi recordings do"
+    };
     reading.summary = format!(
       "The content stops at about {}, well below the top of the band, without an encoder's \
-       sharp shelf, as test tones, speech, old masters and lo-fi recordings do.",
+       sharp shelf, {like}.",
       khz(median)
     );
     return reading;
