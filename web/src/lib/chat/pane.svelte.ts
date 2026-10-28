@@ -84,6 +84,9 @@ export class MessagePane {
 
   /** Reads the newest page; the first time it also finds where the unread messages start */
   load = async () => {
+    // a room's read marker comes with the joined rooms, which a pane opened by a link or a
+    // reload can be quicker than; its first unread message is placed from that marker
+    if (!this.loaded && this.target.kind === "room") await chat.ready();
     const page = await this.#page(undefined);
     if (!page.ok) {
       this.error = page.error;
@@ -187,8 +190,12 @@ export class MessagePane {
       if (outcome.ok) for (const m of this.messages.rows) if (m.unread) m.unread = false;
       return;
     }
+    // read up to the newest message unless the marker is there already; the unread counts can
+    // lag behind the messages shown, so they don't decide it
+    // a room we are not in has no marker to move
+    const room = chat.rooms.get(name);
     const newest = this.ordered.findLast((m) => m.localId > 0)?.localId;
-    if (newest !== undefined && chat.roomUnread(name).unread) {
+    if (room && newest !== undefined && newest > room.lastReadId) {
       await chat.markRoomRead(name, newest);
     }
   }

@@ -124,6 +124,7 @@ class Chat {
   /** Forgets everything held for the session that ended */
   clear() {
     this.stop();
+    this.#loading = null;
     this.conversations.clear();
     this.rooms.clear();
     this.error = "";
@@ -131,8 +132,16 @@ class Chat {
     this.previews.clear();
   }
 
+  /** the read of the conversations and rooms under way, or the last one */
+  #loading: Promise<void> | null = null;
+
+  /** Resolves once the conversations and rooms have been read, reading them if nobody has */
+  ready = (): Promise<void> => this.#loading ?? this.load();
+
   /** Reads the open conversations and the joined rooms */
-  load = async () => {
+  load = (): Promise<void> => (this.#loading = this.#read());
+
+  #read = async () => {
     const [conversations, rooms] = await Promise.all([
       call(() => api.GET("/api/v0/conversations")),
       call(() => api.GET("/api/v0/rooms/joined"))
