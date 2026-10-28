@@ -188,7 +188,7 @@
         <Menu.Content align="start" class="min-w-48">
           {#each view.columns as column (column.id)}
             {@const known = COLUMNS.find((c) => c.id === column.id)}
-            {#if known && !known.fixed}
+            {#if known && !known.always}
               <Menu.Item
                 closeOnSelect={false}
                 onSelect={() => (column.visible = !column.visible)}

@@ -65,34 +65,6 @@ export type SortKey =
   | "ended"
   | "attempts";
 
-const time = (iso: string | null | undefined) => (iso ? Date.parse(iso) : 0);
-
-const VALUE: Record<SortKey, (t: Transfer) => number | string> = {
-  file: (t) => getFileName(t.filename).toLowerCase(),
-  user: (t) => t.username.toLowerCase(),
-  size: (t) => t.size,
-  progress: (t) => t.percentComplete,
-  speed: (t) => t.averageSpeed,
-  eta: (t) => t.remainingTime ?? Number.MAX_SAFE_INTEGER,
-  requested: (t) => time(t.requestedAt),
-  started: (t) => time(t.startedAt),
-  ended: (t) => time(t.endedAt),
-  attempts: (t) => t.attempts
-};
-
-/** Transfers in the order a column says, ties by file name */
-export const sortTransfers = (rows: Transfer[], key: SortKey, dir: "asc" | "desc") => {
-  const sign = dir === "asc" ? 1 : -1;
-  const value = VALUE[key];
-  const name = VALUE.file;
-  return rows.toSorted((a, b) => {
-    const x = value(a);
-    const y = value(b);
-    const by = typeof x === "string" ? x.localeCompare(y as string) : (x as number) - (y as number);
-    return sign * by || (name(a) as string).localeCompare(name(b) as string);
-  });
-};
-
 const bucket = <K>(rows: Transfer[], key: (t: Transfer) => K) => {
   const groups = new Map<K, Transfer[]>();
   for (const t of rows) {

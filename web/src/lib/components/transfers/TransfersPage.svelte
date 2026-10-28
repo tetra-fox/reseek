@@ -18,6 +18,7 @@
   import { toast } from "#lib/toast.svelte.js";
   import { act, denyAndBlock, exportJson, open, openFolder } from "#lib/transfers/actions.js";
   import { activeAmong, type BulkAction, bulkRequest } from "#lib/transfers/bulk.js";
+  import { transferGrid } from "#lib/transfers/grid.svelte.js";
   import { views } from "#lib/transfers/settings.svelte.js";
   import {
     type ChipId,
@@ -28,7 +29,7 @@
   } from "#lib/transfers/states.js";
   import { downloads, uploads } from "#lib/transfers/transfers.svelte.js";
   import { unseen } from "#lib/transfers/unseen.svelte.js";
-  import { inStates, type Item, layout, sortTransfers, textFilter } from "#lib/transfers/view.js";
+  import { inStates, type Item, layout, textFilter } from "#lib/transfers/view.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { users } from "#lib/users.svelte.js";
 
@@ -100,9 +101,9 @@
 
   // while the user holds the table still, rows keep their places and new ones go below
   const hold = heldOrder<Item>((item) => item.key);
-  const items = $derived(
-    hold(layout(sortTransfers(filtered, view.sort.id, view.sort.dir), view.groupBy, folds.isOpen))
-  );
+  // svelte-ignore state_referenced_locally
+  const grid = transferGrid(direction, view, () => filtered);
+  const items = $derived(hold(layout(grid.rows, view.groupBy, folds.isOpen)));
   const rows = $derived(items.flatMap((i) => (i.type === "row" ? [i.transfer] : [])));
   const chosen = $derived(all.filter((t) => selected.has(t.id)));
   const detail = $derived(
@@ -254,6 +255,7 @@
   <TransferTable
     bind:this={table}
     {items}
+    {grid}
     {store}
     {direction}
     {view}
