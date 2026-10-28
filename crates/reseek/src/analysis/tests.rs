@@ -103,6 +103,18 @@ fn an_mp3_is_judged_against_its_own_bitrate() {
   fixtures::write_mp3(&source, Bitrate::Kbps128, &honest);
   let reading = analysed(&honest);
   assert_eq!(reading.verdict, AnalysisVerdict::Consistent, "{reading:#?}");
+  // content that stops at 16 kHz, where older encoders and 32 kHz sources stop too: at 128 kbps
+  // that is the file's own cutoff; at 320 kbps it is not, and either explanation fits
+  let cut = music(1, 44_100, fixtures::cut_at(16_000.0));
+  for (bitrate, verdict) in [
+    (Bitrate::Kbps128, AnalysisVerdict::Consistent),
+    (Bitrate::Kbps320, AnalysisVerdict::Inconclusive),
+  ] {
+    let path = dir.path().join("cut16.mp3");
+    fixtures::write_mp3(&cut, bitrate, &path);
+    let (reading, why) = explained(&path);
+    assert_eq!(reading.verdict, verdict, "{}: {why}", bitrate as u32);
+  }
   // a cover picture larger than the audio does not make it look like a higher bitrate
   fixtures::add_cover(&honest, 2_000_000);
   let measured = engine::run(&honest, &settings(), &CancellationToken::new()).unwrap();

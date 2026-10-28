@@ -200,9 +200,13 @@ pub(super) fn read(measured: &Measured) -> Reading {
     limitations
       .push("The audio is quiet, which makes the upper band harder to measure.".to_string());
   }
+  // a lossy file read as consistent with its own bitrate stops where its own encoder cuts,
+  // which needs no other explanation
+  let own_cutoff = !claimed.lossless && found.verdict == AnalysisVerdict::Consistent;
   if let Some(edge) = found_beside.source_edge
     && let Some(profile) = profile_at(edge)
     && found.verdict != AnalysisVerdict::MixedSources
+    && !own_cutoff
   {
     // the edge of the lower rate is also where an encoder cuts: either could be the source
     found = Verdict {
