@@ -36,6 +36,7 @@
   } from "#lib/search/dense.js";
   import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
+  import { remPx } from "#lib/viewport.svelte.js";
 
   import Country from "./Country.svelte";
 
@@ -49,8 +50,8 @@
 
   let { rows, searchId, canDownload }: Props = $props();
 
-  /** one row's height, and the rows drawn beyond the visible ones */
-  const ROW = 28;
+  /** one row's height, 1.75rem in pixels, and the rows drawn beyond the visible ones */
+  const ROW = 1.75 * remPx();
   const OVERSCAN = 12;
 
   let scrollTop = $state(0);

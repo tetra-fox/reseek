@@ -16,7 +16,7 @@
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Group, Item } from "#lib/transfers/view.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
-  import { viewport } from "#lib/viewport.svelte.js";
+  import { remPx, viewport } from "#lib/viewport.svelte.js";
 
   import GroupHeader from "./GroupHeader.svelte";
   import TransferRow from "./TransferRow.svelte";
@@ -58,6 +58,8 @@
     drawerOpen
   }: Props = $props();
 
+  /** a line's height in rem for each density */
+  const LINES = { comfortable: 2.25, compact: 1.75 };
   /** lines drawn beyond the visible ones, above and below */
   const OVERSCAN = 10;
 
@@ -68,7 +70,8 @@
   let rowsTop = $state(0);
   let resizing: { id: ColumnId; x: number; width: number } | null = null;
 
-  const row = $derived(view.density === "compact" ? 28 : 36);
+  const rem = remPx();
+  const row = $derived(rem * LINES[view.density]);
   const columns = $derived(
     view.columns
       .filter((c) => c.visible && !(c.id === "user" && view.groupBy === "user"))
