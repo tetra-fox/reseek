@@ -268,20 +268,18 @@
             </Button>
           {/if}
         </span>
-        <Menu.Root>
-          <Menu.Trigger>
-            {#snippet child({ props })}
-              <Button
-                {...props}
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`More for ${getFileName(t.filename)}`}>
-                <EllipsisIcon />
-              </Button>
-            {/snippet}
-          </Menu.Trigger>
+        <Menu.LazyRoot>
+          {#snippet trigger({ props })}
+            <Button
+              {...props}
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`More for ${getFileName(t.filename)}`}>
+              <EllipsisIcon />
+            </Button>
+          {/snippet}
           <RowMenu transfer={t} {direction} {around} {onremove} {onblock} {ondetails} />
-        </Menu.Root>
+        </Menu.LazyRoot>
       </div>
     {/if}
   </div>

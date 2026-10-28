@@ -217,24 +217,22 @@
     {#if viewport.phone}
       <!-- a phone keeps the row for the name, so the group's actions sit in a menu -->
       {#if actions.length > 0}
-        <Menu.Root>
-          <Menu.Trigger>
-            {#snippet child({ props })}
-              <Button
-                {...props}
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`More for ${group.label}`}>
-                <EllipsisIcon />
-              </Button>
-            {/snippet}
-          </Menu.Trigger>
+        <Menu.LazyRoot>
+          {#snippet trigger({ props })}
+            <Button
+              {...props}
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`More for ${group.label}`}>
+              <EllipsisIcon />
+            </Button>
+          {/snippet}
           <Menu.Content align="end" class="min-w-56">
             {#each actions as a (a.label)}
               <Menu.Item onSelect={a.run}><a.icon />{a.label}</Menu.Item>
             {/each}
           </Menu.Content>
-        </Menu.Root>
+        </Menu.LazyRoot>
       {/if}
     {:else}
       {#each actions as a (a.label)}
