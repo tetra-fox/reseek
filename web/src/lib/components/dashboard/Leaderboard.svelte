@@ -105,10 +105,10 @@
           <col />
           {#each COLUMNS as c (c.by)}
             <col
-              class={[c.phone === false && "max-sm:hidden"]}
+              class={[c.phone === false && "max-md:hidden"]}
               style:width={columnWidth(c.widest)} />
           {/each}
-          <col class="w-10 max-sm:hidden" />
+          <col class="w-10 max-md:hidden" />
         </colgroup>
         <thead class="text-xs text-fg-muted">
           <tr class="border-b">
@@ -116,7 +116,7 @@
             <th class="px-2 py-1 text-left font-medium">Username</th>
             {#each COLUMNS as c (c.by)}
               <th
-                class={["px-2 py-1 text-right font-medium", c.phone === false && "max-sm:hidden"]}
+                class={["px-2 py-1 text-right font-medium", c.phone === false && "max-md:hidden"]}
                 aria-sort={sortBy === c.by ? "descending" : "none"}>
                 <button
                   type="button"
@@ -128,7 +128,7 @@
                 </button>
               </th>
             {/each}
-            <th class="max-sm:hidden"><span class="sr-only">Browse</span></th>
+            <th class="max-md:hidden"><span class="sr-only">Browse</span></th>
           </tr>
         </thead>
         <tbody>
@@ -140,10 +140,10 @@
                 <td
                   class={[
                     "px-2 py-1 text-right whitespace-nowrap tabular-nums",
-                    c.phone === false && "max-sm:hidden"
+                    c.phone === false && "max-md:hidden"
                   ]}>{c.value(entry)}</td>
               {/each}
-              <td class="max-sm:hidden">
+              <td class="max-md:hidden">
                 <Button
                   variant="ghost"
                   size="icon-sm"
