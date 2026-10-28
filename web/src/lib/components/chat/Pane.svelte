@@ -153,9 +153,11 @@
       {:else}
         <HashIcon class="size-4 text-fg-muted" />
       {/if}
-      <h2 class="truncate font-semibold">{target.name}</h2>
-      <span class="text-xs whitespace-nowrap text-fg-muted"
-        >{plural(members?.users.size ?? 0, "user", "users")}</span>
+      <div class="name-count flex-1 gap-2">
+        <h2 class="truncate font-semibold">{target.name}</h2>
+        <span class="text-xs text-fg-muted"
+          ><span>{plural(members?.users.size ?? 0, "user", "users")}</span></span>
+      </div>
     {/if}
     <div class="ml-auto flex items-center gap-1">
       {#if target.kind === "room" && !joined && write}

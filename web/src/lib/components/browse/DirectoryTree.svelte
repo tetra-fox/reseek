@@ -183,15 +183,13 @@
             <FolderIcon class="size-4 text-fg-muted" />
           {/if}
         </button>
-        <!-- the name's track fills before the caption's, so the caption gives way first -->
-        <span
-          class="grid min-w-0 flex-1 grid-cols-[minmax(0,max-content)_minmax(0,1fr)] items-center gap-1.5">
+        <span class="name-count flex-1 gap-1.5">
           <span class="truncate">{leaf(node.name)}</span>
-          <span
-            class="overflow-hidden text-right text-xs font-normal text-ellipsis whitespace-nowrap text-fg-muted">
-            {caption(node.totalFileCount, node.totalDirectoryCount)}
-            {#if node.totalBytes}· {formatBytes(node.totalBytes)}{/if}
-          </span>
+          <span class="text-right text-xs font-normal text-fg-muted"
+            ><span
+              >{caption(node.totalFileCount, node.totalDirectoryCount)}
+              {#if node.totalBytes}· {formatBytes(node.totalBytes)}{/if}</span
+            ></span>
         </span>
       </div>
     {/each}

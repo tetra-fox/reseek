@@ -210,15 +210,12 @@
               on
             )} />
         {#if locked}<LockIcon class="size-3.5 shrink-0 text-fg-muted" />{/if}
-        <!-- the name's track fills before the count's, so the count gives way first -->
-        <div
-          class="grid min-w-0 grid-cols-[minmax(0,max-content)_minmax(0,1fr)] items-center gap-1.5">
+        <div class="name-count gap-1.5">
           <span
             class={["truncate font-mono text-xs", depth === 0 ? "text-fg" : "text-fg-muted"]}
             title={node.path}>{node.label}</span>
-          <span class="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-fg-subtle">
-            {plural(node.count, "file", "files")} · {formatBytes(node.bytes)}
-          </span>
+          <span class="text-xs text-fg-subtle"
+            ><span>{plural(node.count, "file", "files")} · {formatBytes(node.bytes)}</span></span>
         </div>
         <div class="ml-auto flex shrink-0 items-center gap-0.5 row-action">
           {#if canWrite}
