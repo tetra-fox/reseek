@@ -134,7 +134,8 @@
           </a>
         {/each}
       </div>
-      <p class="flex items-center gap-1.5 text-sm">
+      <!-- wraps as words do, so how long ago moves to the next line whole -->
+      <p class="flex flex-wrap items-center gap-x-1.5 text-sm">
         {stats ? plural(stats.fileCount, "file", "files") : "? files"} ·
         {stats ? plural(stats.directoryCount, "folder", "folders") : "? folders"} ·
         {stats ? formatSpeed(stats.averageSpeed) : "?"} ·
@@ -142,7 +143,8 @@
         {#if refreshing}
           <Spinner class="size-3.5" label="Refreshing" />
         {:else if stats}
-          <span class="text-xs text-fg-subtle">{ago(stats.fetchedAt, clock.now)}</span>
+          <span class="text-xs whitespace-nowrap text-fg-subtle"
+            >{ago(stats.fetchedAt, clock.now)}</span>
         {/if}
       </p>
       {#if p.known}
