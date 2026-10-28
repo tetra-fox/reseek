@@ -40,10 +40,18 @@
     if (prefersReducedMotion.current || typeof document.startViewTransition !== "function") return;
     const { from, to } = navigation;
     if (!from?.url || !to?.url || !changesScreen(route(from.url).path, route(to.url).path)) return;
+    // the page is named only while the transition runs: a name makes the page a stacking
+    // context of its own, which would put the fixed layers drawn in a screen, such as the
+    // transfer details drawer, under the header
+    const page = content.scroller?.querySelector("main");
+    if (page) page.style.viewTransitionName = "page";
     return new Promise((ready) => {
-      document.startViewTransition(async () => {
+      const transition = document.startViewTransition(async () => {
         ready();
         await navigation.complete;
+      });
+      void transition.finished.finally(() => {
+        if (page) page.style.viewTransitionName = "";
       });
     });
   });
@@ -152,7 +160,6 @@
           class="relative min-h-0 flex-1 overflow-y-auto"
           data-content>
           <main
-            style:view-transition-name="page"
             class="mx-auto flex min-h-full w-full max-w-page min-w-0 flex-col gap-section p-gutter">
             <svelte:boundary>
               {@render children()}
