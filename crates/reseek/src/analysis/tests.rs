@@ -303,3 +303,31 @@ fn a_cut_where_the_highest_bitrates_cut_reads_alike_at_44_1_and_48_khz() {
     );
   }
 }
+
+#[test]
+fn a_file_without_a_stated_length_is_read_only_so_far() {
+  let dir = tempfile::tempdir().unwrap();
+  let path = flac(dir.path(), "a.flac", &music(1, 44_100, pink), 16);
+  // the stream information's total sample count is the low 36 bits of bytes 21 to 25
+  let mut bytes = std::fs::read(&path).unwrap();
+  bytes[21] &= 0xf0;
+  bytes[22..26].fill(0);
+  std::fs::write(&path, &bytes).unwrap();
+  let settings = Settings {
+    max_full_seconds: 10.0,
+    ..settings()
+  };
+  let measured = engine::run(&path, &settings, &CancellationToken::new()).unwrap();
+  assert_eq!(measured.claimed.as_ref().unwrap().frames, None);
+  assert!(!measured.sampled);
+  assert_eq!(measured.windows.len(), 10);
+  assert_eq!(measured.duration, 10.0);
+  let reading = reading::read(&measured);
+  assert!(
+    reading
+      .limitations
+      .iter()
+      .any(|l| l.contains("does not state its length") && l.contains("after 10 seconds")),
+    "{reading:#?}"
+  );
+}

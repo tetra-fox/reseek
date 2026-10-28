@@ -149,11 +149,13 @@ pub(super) fn measure(
       )?;
     }
     None => {
+      // a file is read in full only so far, whatever length it states or does not
+      let longest = settings.max_full_seconds.ceil() as u64;
       let decoded = whole(
         &mut decoder,
         &mut analyser,
         &mut buffer,
-        None,
+        Read::Upto(longest),
         settings,
         cancel,
         &mut measured,
@@ -213,6 +215,15 @@ fn stop(
   Ok(false)
 }
 
+/// `seconds` in words, as minutes when they are whole minutes.
+fn minutes(seconds: u64) -> String {
+  match seconds {
+    60 => "a minute".to_string(),
+    s if s % 60 == 0 => format!("{} minutes", s / 60),
+    s => format!("{s} seconds"),
+  }
+}
+
 /// Whether a window filled as `filled` is worth measuring: a whole second, or a last part of at
 /// least half a second and one spectrum frame.
 fn usable(filled: &Filled, rate: usize) -> bool {
@@ -222,13 +233,21 @@ fn usable(filled: &Filled, rate: usize) -> bool {
   }
 }
 
-/// Reads windows one after another from where the decoder is, measuring every one or, with
-/// `only`, those starting at the listed seconds. Returns the seconds read.
+/// Which windows [`whole`] measures.
+enum Read<'a> {
+  /// every window, up to this many
+  Upto(u64),
+  /// the windows starting at these seconds
+  Only(&'a BTreeSet<u64>),
+}
+
+/// Reads windows one after another from where the decoder is and measures those `read` asks
+/// for. Returns the seconds read.
 fn whole(
   decoder: &mut Decoder,
   analyser: &mut Analyser,
   buffer: &mut [Vec<f32>],
-  only: Option<&BTreeSet<u64>>,
+  read: Read<'_>,
   settings: &Settings,
   cancel: &CancellationToken,
   measured: &mut Measured,
@@ -240,11 +259,37 @@ fn whole(
       return Ok(second as f64);
     }
     let filled = decoder.fill(buffer, rate);
+    if let Read::Upto(longest) = read
+      && second >= longest
+    {
+      if filled == Filled::End(0) {
+        return Ok(second as f64);
+      }
+      debug!(
+        seconds = second,
+        "reading in full stopped at the longest file read so"
+      );
+      measured.problems.push(match decoder.claimed.frames {
+        None => format!(
+          "The file does not state its length, so the analysis stopped after {}.",
+          minutes(second)
+        ),
+        Some(_) => format!(
+          "The file runs longer than it states, so the analysis stopped after {}.",
+          minutes(second)
+        ),
+      });
+      return Ok(second as f64);
+    }
     let length = match filled {
       Filled::Full => rate,
       Filled::End(length) => length,
     };
-    if usable(&filled, rate) && only.is_none_or(|only| only.contains(&second)) {
+    let wanted = match read {
+      Read::Upto(_) => true,
+      Read::Only(picks) => picks.contains(&second),
+    };
+    if usable(&filled, rate) && wanted {
       let window = analyser.measure(second as f64, buffer, &mut measured.totals);
       measured.windows.push(window);
     }
@@ -282,7 +327,7 @@ fn sampled(
         decoder,
         analyser,
         buffer,
-        Some(picks),
+        Read::Only(picks),
         settings,
         cancel,
         measured,
