@@ -157,27 +157,31 @@ export const ago = (iso: string, now = Date.now()): string => {
 /** An instant from the API in the browser's time zone, for a details view */
 export const formatDate = (iso: string): string => new Date(iso).toLocaleString();
 
+// made once: a list row formats several instants and numbers, and each toLocaleString call with
+// options builds its formatter anew
+const DATE_TIME = new Intl.DateTimeFormat([], {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit"
+});
+const TIME = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit" });
+const DAY = new Intl.DateTimeFormat([], {
+  weekday: "long",
+  year: "numeric",
+  month: "long",
+  day: "numeric"
+});
+const NUMBER = new Intl.NumberFormat();
+
 /** An instant in the browser's time zone, short, for tables: "Mar 14, 09:05" */
-export const dateTime = (iso: string): string =>
-  new Date(iso).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+export const dateTime = (iso: string): string => DATE_TIME.format(new Date(iso));
 
 /** The time of day of an instant in the browser's time zone: "09:05" */
-export const shortTime = (iso: string): string =>
-  new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+export const shortTime = (iso: string): string => TIME.format(new Date(iso));
 
 /** The day of an instant, written out, for the line between two days of chat */
-export const formatDay = (iso: string): string =>
-  new Date(iso).toLocaleDateString([], {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric"
-  });
+export const formatDay = (iso: string): string => DAY.format(new Date(iso));
 
 /** A chat message's time: the time of day for today, with the date before today */
 export const chatTime = (iso: string, now = Date.now()): string =>
@@ -221,7 +225,7 @@ export const NONE = "—";
 
 /** `n` with the noun for that many, "1 file" or "2,048 files" */
 export const plural = (n: number, one: string, many: string): string =>
-  `${n.toLocaleString()} ${n === 1 ? one : many}`;
+  `${NUMBER.format(n)} ${n === 1 ? one : many}`;
 
 const LIST = new Intl.ListFormat("en", { type: "conjunction" });
 
