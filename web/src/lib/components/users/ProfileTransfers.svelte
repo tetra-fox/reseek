@@ -205,7 +205,7 @@
 <ConfirmDialog
   bind:open={confirmOpen}
   title="Remove a running transfer?"
-  body="It is cancelled first; its file stays."
+  body="The transfer is cancelled first. The file on disk is kept."
   confirm="Remove"
   danger
   onconfirm={() => removing && void act(storeOf(removing), "remove", [removing.id])} />

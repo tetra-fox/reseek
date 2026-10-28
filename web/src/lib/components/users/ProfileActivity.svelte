@@ -15,6 +15,8 @@
   let { username }: { username: string } = $props();
 
   const PAGE = 50;
+  /** how an ended transfer's state reads in a sentence, where its own name doesn't */
+  const ENDINGS: Record<string, string> = { Errored: "failed", TimedOut: "timed out" };
   type Entry = { key: string; at: string; text: string };
 
   let wanted = $state(PAGE);
@@ -34,7 +36,8 @@
   }): Entry => {
     const name = getFileName(t.filename);
     const what = t.direction === "Upload" ? "Upload of" : "Download of";
-    if (!t.endedAt) return { key: `t:${t.id}`, at: t.requestedAt, text: `${what} ${name} asked` };
+    if (!t.endedAt)
+      return { key: `t:${t.id}`, at: t.requestedAt, text: `${what} ${name} requested` };
     if (isSucceeded(t.state)) {
       return {
         key: `t:${t.id}`,
@@ -42,7 +45,8 @@
         text: `${t.direction === "Upload" ? "Uploaded" : "Downloaded"} ${name}`
       };
     }
-    const outcome = t.state.replace("Completed, ", "").toLowerCase();
+    const ending = t.state.replace("Completed, ", "");
+    const outcome = ENDINGS[ending] ?? ending.toLowerCase();
     return {
       key: `t:${t.id}`,
       at: t.endedAt,
@@ -94,7 +98,7 @@
             ? `Blocked by ${e.data.by}${e.data.reason ? `: ${e.data.reason}` : ""}`
             : e.type === "UserUnblocked"
               ? e.data.reason === "expired"
-                ? "The block ended"
+                ? "Block expired"
                 : `Unblocked by ${e.data.by}`
               : e.type;
         found.push({ key: `e:${e.id}`, at: e.timestamp, text });
@@ -121,7 +125,7 @@
 {#if !loaded}
   <Skeleton class="h-40" />
 {:else if !entries.length}
-  <EmptyState icon={HistoryIcon} title="Nothing with this user yet" />
+  <EmptyState icon={HistoryIcon} title="No activity with this user yet" />
 {:else}
   <ol class="flex flex-col rounded-card border bg-surface shadow-card">
     {#each entries as entry (entry.key)}

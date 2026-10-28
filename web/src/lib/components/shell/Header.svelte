@@ -12,6 +12,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { trail } from "#lib/crumbs.svelte.js";
+  import { listText } from "#lib/format.js";
   import { baseCrumbs, href, route } from "#lib/nav.js";
 
   import NewVersion from "./NewVersion.svelte";
@@ -22,7 +23,6 @@
   const copier = new CopyButton();
   const mac = typeof navigator !== "undefined" && /mac|iphone|ipad/i.test(navigator.platform);
 
-  const LIST = new Intl.ListFormat("en", { type: "conjunction" });
   const pending = $derived.by(() => {
     const s = app.state;
     if (!s) return [];
@@ -84,7 +84,7 @@
 
   <div class="ml-auto flex items-center gap-inline">
     {#if pending.length}
-      <Tooltip text={`Some changes take effect after ${LIST.format(pending)}`}>
+      <Tooltip text={`Some changes take effect after ${listText(pending)}`}>
         {#snippet child({ props })}
           <a
             {...props}

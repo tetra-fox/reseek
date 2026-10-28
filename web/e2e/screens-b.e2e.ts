@@ -23,7 +23,7 @@ test("opens the dashboard, chat, rooms, users, a profile and your profile", asyn
   await expect(page).toHaveURL(/#\/users$/);
   await expect(page.getByText("No users yet")).toBeVisible();
   await page.getByRole("link", { name: "Blocked users" }).click();
-  await expect(page.getByText("Nobody is blocked")).toBeVisible();
+  await expect(page.getByText("No blocked users")).toBeVisible();
 
   await page.goto("./#/users/alice");
   await expect(page.getByRole("heading", { name: "alice" })).toBeVisible();

@@ -98,7 +98,7 @@
     </Field>
     {#if duration === "custom"}
       <Field label="Duration" for="block-custom">
-        <Input id="block-custom" placeholder="like 12h or 3d" required bind:value={custom} />
+        <Input id="block-custom" placeholder="For example 12h or 3d" required bind:value={custom} />
       </Field>
     {/if}
     <fieldset class="flex flex-col gap-1.5">
@@ -114,7 +114,7 @@
       {/each}
     </fieldset>
     {#if !scopes.length}
-      <p class="text-xs text-danger">Choose at least one thing the block stops.</p>
+      <p class="text-xs text-danger">Choose at least one thing to block.</p>
     {/if}
     {#if error}<Notice kind="error">{error}</Notice>{/if}
   </Form>

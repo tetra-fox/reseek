@@ -185,6 +185,11 @@ export const truncate = (text: string | null | undefined, max: number): string =
 export const plural = (n: number, one: string, many: string): string =>
   `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
+const LIST = new Intl.ListFormat("en", { type: "conjunction" });
+
+/** Parts joined as a sentence does, "a, b, and c" */
+export const listText = (parts: string[]) => LIST.format(parts);
+
 export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** Hands `data` to the browser as a file to save */

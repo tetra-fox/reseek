@@ -69,7 +69,7 @@
   /** Runs a write and reads the profile again after it, or says why it failed */
   const run = async (write: () => Promise<{ ok: boolean; error?: string }>) => {
     const outcome = await write();
-    if (!outcome.ok) toast(outcome.error ?? "Failed", "error");
+    if (!outcome.ok) toast(outcome.error ?? "Something went wrong", "error");
     onchanged();
   };
   const mute = (on: boolean) =>
@@ -112,8 +112,8 @@
         {#if country}<span title={p.countryCode ?? ""}>{country}</span>{/if}
         <GroupBadge group={p.group} />
         {#if lostGroup}
-          <Badge tone="warning" title={`The override names ${p.groupOverride}`}
-            >group no longer exists</Badge>
+          <Badge tone="warning" title={`This user is assigned to ${p.groupOverride}`}
+            >Group no longer exists</Badge>
         {/if}
         {#if p.block}
           {@const b = p.block}
@@ -188,10 +188,7 @@
     {/if}
     {#if admin && p.known}
       <Menu.Root>
-        <Tooltip
-          text={p.group.source === "config"
-            ? "The configuration puts them in this group"
-            : undefined}>
+        <Tooltip text={p.group.source === "config" ? "Set in the configuration" : undefined}>
           {#snippet child({ props })}
             <span {...props}>
               <Menu.Trigger disabled={p.group.source === "config"}>
@@ -233,13 +230,13 @@
 <Dialog
   bind:open={deleting}
   title={`Forget ${name}?`}
-  description="Their directory entry, notes, tags and block go. They come back when you deal with them again.">
+  description="This removes them from your user list, with your notes, tags and block. They come back if you interact with them again.">
   <label class="flex items-center gap-2 text-sm">
     <Checkbox checked={purge} onCheckedChange={(on) => (purge = on)} />
-    Also remove their transfers from the lists and delete our messages
+    Also remove their transfers and delete your messages with them
   </label>
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (deleting = false)}>Cancel</Button>
-    <Button variant="danger" onclick={() => void remove()}>Delete</Button>
+    <Button variant="danger" onclick={() => void remove()}>Forget</Button>
   {/snippet}
 </Dialog>

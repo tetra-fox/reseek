@@ -263,7 +263,7 @@
     title={filtered ? "No users match" : "No users yet"}
     description={filtered
       ? undefined
-      : "Users appear here once you download from, upload to, message or browse them."} />
+      : "Users you download from, upload to, message or browse appear here."} />
 {:else}
   <div
     class="overflow-x-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -339,7 +339,7 @@
               <button
                 type="button"
                 class="rounded-badge border px-1 text-xs text-fg-muted hover:bg-hover"
-                title={`Only users tagged ${t}`}
+                title={`Show only users tagged ${t}`}
                 onclick={() => refilter(() => (tag = t))}>{t}</button>
             {/each}
           </span>
