@@ -515,6 +515,33 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn filter_presets_are_one_live_list_whose_removed_default_stays_off() {
+    let app = app(TRUSTED, &[]).await;
+    let get = || request("GET", "/api/v0/options", None);
+    let presets = app.send(get()).await.json()["search"]["filter_presets"].clone();
+    assert_eq!(presets.as_array().map(Vec::len), Some(7));
+    assert_eq!(presets[1], json!({ "name": "FLAC", "filter": "type:flac" }));
+
+    let mine = json!([
+      { "name": "FLAC", "filter": "type:flac" },
+      { "name": "Big", "filter": "size:100m" }
+    ]);
+    let answer = app
+      .send(request(
+        "PATCH",
+        "/api/v0/options",
+        Some(json!({ "set": { "search.filter_presets": mine } })),
+      ))
+      .await;
+    assert_eq!(answer.status, 200, "{:?}", answer.body);
+    assert_eq!(answer.json()["applied"], json!(["search.filter_presets"]));
+    assert_eq!(
+      app.send(get()).await.json()["search"]["filter_presets"],
+      mine
+    );
+  }
+
+  #[tokio::test]
   async fn an_override_until_restart_lasts_through_reloads_but_not_a_restart() {
     let app = app(TRUSTED, &[]).await;
     let set = |body| request("PATCH", "/api/v0/options", Some(body));

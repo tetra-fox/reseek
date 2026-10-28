@@ -141,6 +141,38 @@
       "users": null
     },
     "rooms": [],
+    "search": {
+      "filter_presets": [
+        {
+          "filter": "type:flac|alac|ape|wav",
+          "name": "Lossless"
+        },
+        {
+          "filter": "type:flac",
+          "name": "FLAC"
+        },
+        {
+          "filter": "minbd:24",
+          "name": "24-bit"
+        },
+        {
+          "filter": "type:mp3 bitrate:320",
+          "name": "MP3 320"
+        },
+        {
+          "filter": "type:aac|m4a",
+          "name": "AAC/M4A"
+        },
+        {
+          "filter": "type:opus|ogg",
+          "name": "Opus/Vorbis"
+        },
+        {
+          "filter": "size:1m",
+          "name": "No small files"
+        }
+      ]
+    },
     "shares": {
       "cache": {
         "retention": null,
@@ -1698,6 +1730,52 @@
       "doc": "Chat rooms to join after logging in. Rooms taken off the list are not left.",
       "choices": null,
       "default": [],
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "search.filter_presets": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": {
+        "list": "table"
+      },
+      "doc": "Named result filters the search page offers, each a filter string such as `type:flac`. The list replaces the defaults as a whole, so a default taken off it stays off.",
+      "choices": null,
+      "default": [
+        {
+          "filter": "type:flac|alac|ape|wav",
+          "name": "Lossless"
+        },
+        {
+          "filter": "type:flac",
+          "name": "FLAC"
+        },
+        {
+          "filter": "minbd:24",
+          "name": "24-bit"
+        },
+        {
+          "filter": "type:mp3 bitrate:320",
+          "name": "MP3 320"
+        },
+        {
+          "filter": "type:aac|m4a",
+          "name": "AAC/M4A"
+        },
+        {
+          "filter": "type:opus|ogg",
+          "name": "Opus/Vorbis"
+        },
+        {
+          "filter": "size:1m",
+          "name": "No small files"
+        }
+      ],
       "apply": "live",
       "secret": false,
       "notApplied": null

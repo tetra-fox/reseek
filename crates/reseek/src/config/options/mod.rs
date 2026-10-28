@@ -9,6 +9,7 @@ mod logging;
 mod paths;
 mod relay;
 mod retention;
+mod search;
 mod shares;
 mod soulseek;
 mod transfers;
@@ -31,6 +32,7 @@ pub use retention::{
   FileRetention, MessageRetention, RETENTION_SWEEP, Retention, TransferRetention,
   TransfersRetention,
 };
+pub use search::{FilterPreset, Search};
 pub use shares::{MAX_SCAN_WORKERS, ShareCache, Shares};
 pub use soulseek::{
   ConnectionBuffers, ConnectionTimeouts, DistributedNetwork, ServerKeepalive, Soulseek,
@@ -92,6 +94,8 @@ pub struct Options {
   pub blacklist: Blacklist,
   /// Filters on what other users send us.
   pub filters: Filters,
+  /// Searches made from the UI.
+  pub search: Search,
   /// Chat rooms to join after logging in. Rooms taken off the list are not left.
   #[cascade(env = "RESEEK_ROOMS", cli = "--rooms")]
   pub rooms: Vec<String>,
@@ -143,6 +147,7 @@ impl Default for Options {
       transfers: Transfers::default(),
       blacklist: Blacklist::default(),
       filters: Filters::default(),
+      search: Search::default(),
       rooms: Vec::new(),
       web: Web::default(),
       retention: Retention::default(),
