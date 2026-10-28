@@ -15,11 +15,13 @@
   import Username from "#lib/components/users/Username.svelte";
   import { asItem, enqueue } from "#lib/downloads.js";
   import {
+    cssWidth,
     formatAttributes,
     formatBytes,
     formatSeconds,
     getFileName,
-    plural
+    plural,
+    sumWidths
   } from "#lib/format.js";
   import { freezesWhileUsed, heldOrder } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
@@ -64,9 +66,11 @@
   $effect(() => arrivals.see(sorted.map((r) => r.key)));
 
   const template = $derived(
-    `2.5rem ${DENSE_COLUMNS.map((c) => `${denseView.widths[c.id]}px`).join(" ")} 4.5rem`
+    `2.5rem ${DENSE_COLUMNS.map((c) => cssWidth(denseView.widths[c.id])).join(" ")} 4.5rem`
   );
-  const width = $derived(40 + 72 + DENSE_COLUMNS.reduce((n, c) => n + denseView.widths[c.id], 0));
+  const width = $derived(
+    sumWidths(["2.5rem", ...DENSE_COLUMNS.map((c) => denseView.widths[c.id]), "4.5rem"])
+  );
   const start = $derived(Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN));
   const end = $derived(Math.min(sorted.length, Math.ceil((scrollTop + height) / ROW) + OVERSCAN));
   const chosen = $derived(sorted.filter((r) => selected.has(r.key)));
@@ -139,8 +143,10 @@
 </script>
 
 <div class="flex flex-col gap-2">
+  <!-- every row, the header too, has the cells' font with tabular figures, so a column width in
+       ch measures the same in each; the header's labels are smaller inside it -->
   <div
-    class="relative overflow-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    class="relative overflow-auto rounded-card border bg-surface text-sm tabular-nums shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
     style:height="max(20rem, calc(var(--content-h) - 16rem))"
     role="grid"
     aria-label="Search results"
@@ -157,9 +163,9 @@
     {@attach list.attach}>
     <div
       role="row"
-      class="sticky top-0 z-10 grid h-8 items-center border-b bg-surface-muted text-xs font-medium text-fg-muted"
+      class="sticky top-0 z-10 grid h-8 items-center border-b bg-surface-muted text-sm font-medium text-fg-muted"
       style:grid-template-columns={template}
-      style:min-width={`${width}px`}
+      style:min-width={width}
       bind:offsetHeight={headerHeight}>
       <!-- each header holds its cell, so the labels line up with the columns under them -->
       <span role="columnheader"><span class="sr-only">Select</span></span>
@@ -168,7 +174,7 @@
         <span
           role="columnheader"
           aria-sort={sort === "asc" ? "ascending" : sort === "desc" ? "descending" : undefined}
-          class={["relative flex min-w-0 items-center px-2", column.end && "justify-end"]}>
+          class={["relative flex min-w-0 items-center px-2 text-xs", column.end && "justify-end"]}>
           <button
             type="button"
             class="flex min-w-0 items-center gap-1 truncate hover:text-fg"
@@ -183,7 +189,9 @@
             role="separator"
             aria-label={`Width of ${column.label}`}
             onpointerdown={(e) => {
-              resizing = { id: column.id, x: e.clientX, width: denseView.widths[column.id] };
+              // a drag starts from the width the column has on screen, whatever it was set as
+              const cell = e.currentTarget.parentElement!.getBoundingClientRect();
+              resizing = { id: column.id, x: e.clientX, width: cell.width };
               e.currentTarget.setPointerCapture(e.pointerId);
             }}
             onpointermove={(e) => {
@@ -199,7 +207,7 @@
       class="relative"
       role="rowgroup"
       style:height={`${sorted.length * ROW}px`}
-      style:min-width={`${width}px`}
+      style:min-width={width}
       {@attach freezesWhileUsed}>
       {#each sorted.slice(start, end) as row, i (row.key)}
         {@const name = getFileName(row.file.filename)}

@@ -7,7 +7,7 @@ import type { GroupBy, SortKey } from "./view";
 export type ViewSettings = {
   groupBy: GroupBy;
   density: "comfortable" | "compact";
-  columns: { id: ColumnId; width: number; visible: boolean }[];
+  columns: { id: ColumnId; width: number | string; visible: boolean }[];
   sort: { id: SortKey; dir: "asc" | "desc" };
   filters: { states: ChipId[] };
 };

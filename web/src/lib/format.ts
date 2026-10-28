@@ -252,13 +252,24 @@ export const WIDEST = {
   speed: formatSpeed(1023.9 * 1024 ** 2),
   count: (99_999).toLocaleString(),
   length: formatSeconds(99 * 3600 + 59 * 60 + 59),
-  duration: formatDuration(23 * 3600 + 59 * 60)
+  duration: formatDuration(23 * 3600 + 59 * 60),
+  transferred: formatBytesTransferred(1023.9 * 1024 ** 3, 1023.9 * 1024 ** 3)
 };
 
-// a 14 px tabular digit is about 8.4 px wide; letters and spaces vary around it, so a column
-// allows 1.15 digits for each character of the widest value it shows
-const CHAR_PX = 8.4 * 1.15;
+/**
+ * The width a column of figures needs to show `widest` whole, as a CSS length, with `extra` for
+ * anything drawn beside the text: N characters in N ch plus the cells' 1rem of padding. A tabular
+ * digit is a little wider than 1ch, which is the plain zero, but the point, space and separators
+ * each formatter writes are narrower by more, and both scale with the font. It must be set where
+ * the font is the cells', so the ch is theirs
+ */
+export const columnWidth = (widest: string, extra?: string): string =>
+  `calc(${widest.length}ch + 1rem${extra ? ` + ${extra}` : ""})`;
 
-/** The width in pixels a column of 14 px text needs to show `widest` whole, with the padding of its cells */
-export const columnPx = (widest: string, padding = 16): number =>
-  Math.ceil(widest.length * CHAR_PX + padding);
+/** A column's width as CSS: a number is the pixels a user dragged it to, a string a length */
+export const cssWidth = (width: number | string): string =>
+  typeof width === "number" ? `${width}px` : width;
+
+/** The widths of columns side by side, as one CSS length */
+export const sumWidths = (widths: (number | string)[]): string =>
+  `calc(${widths.map(cssWidth).join(" + ")})`;

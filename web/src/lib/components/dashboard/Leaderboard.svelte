@@ -11,7 +11,7 @@
   import { links } from "#lib/components/users/actions.js";
   import Username from "#lib/components/users/Username.svelte";
   import { type RangeLabel, reports, type Window } from "#lib/dashboard/reports.js";
-  import { columnPx, formatBytes, formatSpeed, WIDEST } from "#lib/format.js";
+  import { columnWidth, formatBytes, formatSpeed, WIDEST } from "#lib/format.js";
 
   // who moved the most with us each way, by count, bytes or speed
   let { span, range }: { span: Window; range: RangeLabel } = $props();
@@ -87,22 +87,36 @@
 </script>
 
 {#if error}<p class="text-sm text-danger">{error}</p>{/if}
-<div class="grid grid-cols-[minmax(0,1fr)] gap-section lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+<!-- the two tables sit side by side only where each gets 28rem, room for its figures and a
+     name; in rem, so a larger text size needs a wider screen before they do -->
+<div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,28rem),1fr))] gap-section">
   {#each [{ direction: "Download" as const, title: "Downloads", Icon: DownloadIcon }, { direction: "Upload" as const, title: "Uploads", Icon: UploadIcon }] as table (table.direction)}
     <section class="flex flex-col gap-2">
       <h3 class="flex items-center gap-1.5 text-sm font-semibold">
         <table.Icon class="size-4" />{table.title}
         {#if loading}<Spinner class="size-3.5" />{/if}
       </h3>
-      <table class="w-full table-fixed text-sm">
+      <table class="w-full table-fixed text-sm tabular-nums">
+        <!-- the widths are set here, where the font is the cells', so a width in ch is theirs and
+             not the smaller header's; a phone leaves out the speed and the browse button, the
+             name's menu having Browse, so the name keeps room -->
+        <colgroup>
+          <col class="w-6" />
+          <col />
+          {#each COLUMNS as c (c.by)}
+            <col
+              class={[c.phone === false && "max-sm:hidden"]}
+              style:width={columnWidth(c.widest)} />
+          {/each}
+          <col class="w-10 max-sm:hidden" />
+        </colgroup>
         <thead class="text-xs text-fg-muted">
           <tr class="border-b">
-            <th class="w-6 py-1 text-right font-medium">#</th>
+            <th class="py-1 text-right font-medium">#</th>
             <th class="px-2 py-1 text-left font-medium">Username</th>
             {#each COLUMNS as c (c.by)}
               <th
                 class={["px-2 py-1 text-right font-medium", c.phone === false && "max-sm:hidden"]}
-                style:width={`${columnPx(c.widest)}px`}
                 aria-sort={sortBy === c.by ? "descending" : "none"}>
                 <button
                   type="button"
@@ -114,8 +128,7 @@
                 </button>
               </th>
             {/each}
-            <!-- a phone leaves the browse button out, for the name's sake; the name's menu has it -->
-            <th class="w-10 max-sm:hidden"><span class="sr-only">Browse</span></th>
+            <th class="max-sm:hidden"><span class="sr-only">Browse</span></th>
           </tr>
         </thead>
         <tbody>

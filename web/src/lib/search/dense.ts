@@ -1,4 +1,4 @@
-import { columnPx, getDirectoryName, getFileName, WIDEST } from "#lib/format.js";
+import { columnWidth, getDirectoryName, getFileName, WIDEST } from "#lib/format.js";
 import { fields, stored } from "#lib/stored.svelte.js";
 
 import { type Result, type ResultFile, resultFiles } from "./results";
@@ -42,16 +42,24 @@ export type DenseColumn =
   | "length"
   | "folder";
 
-/** The dense view's columns in order, with their default widths in pixels */
-export const DENSE_COLUMNS: { id: DenseColumn; label: string; width: number; end?: boolean }[] = [
+/**
+ * The dense view's columns in order, with their default widths: pixels, or for a column of
+ * figures a length that holds its widest value
+ */
+export const DENSE_COLUMNS: {
+  id: DenseColumn;
+  label: string;
+  width: number | string;
+  end?: boolean;
+}[] = [
   { id: "user", label: "User", width: 140 },
-  { id: "speed", label: "Speed", width: columnPx(WIDEST.speed), end: true },
-  { id: "queue", label: "Queue", width: columnPx(WIDEST.count), end: true },
+  { id: "speed", label: "Speed", width: columnWidth(WIDEST.speed), end: true },
+  { id: "queue", label: "Queue", width: columnWidth(WIDEST.count), end: true },
   { id: "free", label: "Free slot", width: 72 },
   { id: "file", label: "File", width: 280 },
-  { id: "size", label: "Size", width: columnPx(WIDEST.size), end: true },
+  { id: "size", label: "Size", width: columnWidth(WIDEST.size), end: true },
   { id: "bitrate", label: "Bitrate", width: 110 },
-  { id: "length", label: "Length", width: columnPx(WIDEST.length), end: true },
+  { id: "length", label: "Length", width: columnWidth(WIDEST.length), end: true },
   { id: "folder", label: "Folder", width: 260 }
 ];
 
@@ -103,6 +111,6 @@ export const denseView = stored("reseek.search.dense", (saved) => {
         const w = widths[c.id];
         return [c.id, typeof w === "number" && w >= 40 ? w : c.width];
       })
-    ) as Record<DenseColumn, number>
+    ) as Record<DenseColumn, number | string>
   };
 });

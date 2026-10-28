@@ -5,7 +5,7 @@
 
   import { app } from "#lib/app.svelte.js";
   import { Arrivals } from "#lib/arrivals.svelte.js";
-  import { parseDuration } from "#lib/format.js";
+  import { cssWidth, parseDuration, sumWidths } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
   import { session } from "#lib/session.svelte.js";
@@ -76,11 +76,11 @@
   const template = $derived(
     view.columns
       .filter((c) => columns.includes(c.id))
-      .map((c) => (c.id === "file" ? `minmax(${c.width}px, 1fr)` : `${c.width}px`))
+      .map((c) => (c.id === "file" ? `minmax(${cssWidth(c.width)}, 1fr)` : cssWidth(c.width)))
       .join(" ")
   );
   const width = $derived(
-    view.columns.filter((c) => columns.includes(c.id)).reduce((n, c) => n + c.width, 0)
+    sumWidths(view.columns.filter((c) => columns.includes(c.id)).map((c) => c.width))
   );
   const start = $derived(Math.max(0, Math.floor(scrollTop / row) - OVERSCAN));
   const end = $derived(Math.min(items.length, Math.ceil((scrollTop + height) / row) + OVERSCAN));
@@ -189,8 +189,10 @@
   );
 </script>
 
+<!-- every row, the header too, has the cells' font with tabular figures, so a column width in ch
+     measures the same in each; the header's labels are smaller inside it -->
 <div
-  class="relative overflow-auto rounded-card border bg-surface text-sm shadow-card outline-none [overflow-anchor:auto]"
+  class="relative overflow-auto rounded-card border bg-surface text-sm tabular-nums shadow-card outline-none [overflow-anchor:auto]"
   style:height="max(20rem, calc(var(--content-h) - 14rem))"
   role="grid"
   aria-label={direction === "download" ? "Downloads" : "Uploads"}
@@ -205,14 +207,14 @@
     list.scrolled();
   }}
   {@attach list.attach}>
-  <div class="sticky top-0 z-10" style:min-width={`${width}px`} bind:offsetHeight={rowsTop}>
+  <div class="sticky top-0 z-10" style:min-width={width} bind:offsetHeight={rowsTop}>
     <div
       role="row"
-      class="grid h-9 items-center border-b bg-surface-muted text-xs font-medium text-fg-muted"
+      class="grid h-9 items-center border-b bg-surface-muted text-sm font-medium text-fg-muted"
       style:grid-template-columns={template}>
       {#each columns as id (id)}
         {@const sortable = COLUMNS.find((c) => c.id === id)?.sort}
-        <div role="columnheader" class="relative flex min-w-0 items-center px-2">
+        <div role="columnheader" class="relative flex min-w-0 items-center px-2 text-xs">
           {#if id === "select" || id === "actions"}
             <span class="sr-only">{label(id)}</span>
           {:else if sortable}
@@ -236,8 +238,9 @@
               role="separator"
               aria-label={`Width of ${label(id)}`}
               onpointerdown={(e) => {
-                const column = view.columns.find((c) => c.id === id)!;
-                resizing = { id, x: e.clientX, width: column.width };
+                // a drag starts from the width the column has on screen, whatever it was set as
+                const cell = e.currentTarget.parentElement!.getBoundingClientRect();
+                resizing = { id, x: e.clientX, width: cell.width };
                 e.currentTarget.setPointerCapture(e.pointerId);
               }}
               onpointermove={(e) => {
@@ -276,7 +279,7 @@
   <div
     class="relative"
     style:height={`${items.length * row}px`}
-    style:min-width={`${width}px`}
+    style:min-width={width}
     role="rowgroup"
     {@attach freezesWhileUsed}>
     {#each items.slice(start, end) as item, i (item.key)}
