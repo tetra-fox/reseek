@@ -17,6 +17,10 @@ const flush = async () => {
   flushSync();
 };
 
+/** Answers the screen's reads of the analysis reports and queue with none, and the rest by `listing` */
+const withoutAnalyses = (listing: (url: URL) => unknown) => (url: URL) =>
+  url.pathname.includes("/analysis") ? [] : listing(url);
+
 describe("the file explorer", () => {
   let component: ReturnType<typeof mount> | null = null;
   afterEach(() => {
@@ -32,15 +36,17 @@ describe("the file explorer", () => {
   it("walks the listing by key, opens a directory with Enter and deletes the selection", async () => {
     session.principal = { name: "me", role: "ReadWrite" } as never;
     app.options = { remote_file_management: true } as never;
-    fakeNetwork(() => ({
-      name: "Album",
-      fullName: "",
-      directories: [{ name: "CD1", fullName: "CD1", modifiedAt: "2026-10-26T10:00:00Z" }],
-      files: [
-        { name: "a.flac", fullName: "a.flac", length: 3, modifiedAt: "2026-10-26T10:00:00Z" },
-        { name: "b.flac", fullName: "b.flac", length: 3, modifiedAt: "2026-10-26T10:00:00Z" }
-      ]
-    }));
+    fakeNetwork(
+      withoutAnalyses(() => ({
+        name: "Album",
+        fullName: "",
+        directories: [{ name: "CD1", fullName: "CD1", modifiedAt: "2026-10-26T10:00:00Z" }],
+        files: [
+          { name: "a.flac", fullName: "a.flac", length: 3, modifiedAt: "2026-10-26T10:00:00Z" },
+          { name: "b.flac", fullName: "b.flac", length: 3, modifiedAt: "2026-10-26T10:00:00Z" }
+        ]
+      }))
+    );
     component = mount(Files, {
       target: document.body,
       props: { root: "downloads", path: "Album" }
@@ -78,15 +84,17 @@ describe("the file explorer", () => {
         ]
       }
     };
-    const net = fakeNetwork((url) => {
-      const encoded = url.pathname.split("/directories/")[1];
-      const path = new TextDecoder().decode(
-        Uint8Array.from(atob(encoded.replaceAll("-", "+").replaceAll("_", "/")), (c) =>
-          c.charCodeAt(0)
-        )
-      );
-      return listings[path];
-    });
+    const net = fakeNetwork(
+      withoutAnalyses((url) => {
+        const encoded = url.pathname.split("/directories/")[1];
+        const path = new TextDecoder().decode(
+          Uint8Array.from(atob(encoded.replaceAll("-", "+").replaceAll("_", "/")), (c) =>
+            c.charCodeAt(0)
+          )
+        );
+        return listings[path];
+      })
+    );
     component = mount(Files, {
       target: document.body,
       props: { root: "downloads", path: "Album" }
@@ -120,7 +128,9 @@ describe("the file explorer", () => {
   });
 
   it("says a subfolder holding nothing is empty, its way up shown", async () => {
-    fakeNetwork(() => ({ name: "Empty", fullName: "", directories: [], files: [] }));
+    fakeNetwork(
+      withoutAnalyses(() => ({ name: "Empty", fullName: "", directories: [], files: [] }))
+    );
     component = mount(Files, {
       target: document.body,
       props: { root: "downloads", path: "Album/Empty" }
