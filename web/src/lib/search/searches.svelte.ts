@@ -1,8 +1,11 @@
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
+
 import { api, type Schemas } from "#lib/api/client.js";
 import { Keyed } from "#lib/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
 import { toast } from "#lib/toast.svelte.js";
+import { undoable } from "#lib/undo.js";
 
 export type Search = Schemas["Search"];
 export type SearchScope = Schemas["SearchScope"];
@@ -14,6 +17,23 @@ export const isDone = (state: string) => state.includes("Completed");
 export const scopeLabel = (scope: SearchScope): string | null =>
   scope.type === "network" ? null : `${scope.type}: ${(scope.subjects ?? []).join(", ")}`;
 
+/** The row a search has while the daemon is asked to start it */
+const placeholder = (id: string, text: string, scope?: SearchScope): Search => ({
+  id,
+  searchText: text,
+  token: 0,
+  state: "Requested",
+  isComplete: false,
+  startedAt: new Date().toISOString(),
+  endedAt: null,
+  responseCount: 0,
+  fileCount: 0,
+  lockedFileCount: 0,
+  responseBytes: 0,
+  responses: null,
+  scope: scope ?? { type: "network", subjects: [] }
+});
+
 /**
  * The searches, kept by id: the `search` topic's snapshot sets them, its frames patch them, and
  * a reload reconciles them with `GET /searches`
@@ -24,6 +44,12 @@ class Searches {
   loaded = $state(false);
   /** why the last load failed, empty once one succeeds */
   error = $state("");
+  /** searches asked for whose answer hasn't come, so their page waits rather than looks them up */
+  starting = new SvelteSet<string>();
+  /** why a search could not start, by its id, for its page to say */
+  refused = new SvelteMap<string, string>();
+  /** searches deleted on screen whose delete waits until it can no longer be undone */
+  hidden = new SvelteSet<string>();
 
   constructor() {
     live.on("search.list", (rows) => this.#set(rows));
@@ -40,16 +66,32 @@ class Searches {
     this.error = outcome.error;
   };
 
-  /** Starts a search with a fresh id, so its page can open before any frame arrives */
-  create = async (text: string, scope?: SearchScope): Promise<Outcome<Search>> => {
-    const outcome = await call(() =>
-      api.POST("/api/v0/searches", {
-        body: { id: crypto.randomUUID(), searchText: text, scope }
-      })
-    );
-    if (outcome.ok) this.list.upsert(outcome.data);
-    return outcome;
+  /**
+   * Starts a search and gives its id at once, so its page can open before the daemon answers; a
+   * row stands for it until then. A refused search leaves the list and its reason is kept
+   */
+  start = (text: string, scope?: SearchScope): { id: string; done: Promise<Outcome<Search>> } => {
+    const id = crypto.randomUUID();
+    this.starting.add(id);
+    this.list.upsert(placeholder(id, text, scope));
+    const done = call(() =>
+      api.POST("/api/v0/searches", { body: { id, searchText: text, scope } })
+    ).then((outcome) => {
+      this.starting.delete(id);
+      if (outcome.ok) {
+        this.list.upsert(outcome.data);
+      } else {
+        this.list.remove(id);
+        this.refused.set(id, outcome.error);
+      }
+      return outcome;
+    });
+    return { id, done };
   };
+
+  /** Starts a search and waits for the daemon's answer */
+  create = (text: string, scope?: SearchScope): Promise<Outcome<Search>> =>
+    this.start(text, scope).done;
 
   /** Fetches one search into the list, for a page opened before its frame arrived */
   fetch = async (id: string): Promise<Outcome<Search>> => {
@@ -70,13 +112,45 @@ class Searches {
     return outcome;
   };
 
+  /**
+   * Deletes searches once their Undo has passed; until then they only leave the screen. One
+   * that can't be deleted comes back and says why
+   */
+  removeLater = (ids: string[]) => {
+    if (!ids.length) return;
+    for (const id of ids) this.hidden.add(id);
+    const one = this.list.get(ids[0]);
+    const text =
+      ids.length === 1 && one ? `Deleted '${one.searchText}'` : `Deleted ${ids.length} searches`;
+    undoable(
+      text,
+      async () => {
+        for (const id of ids) {
+          const outcome = await this.remove(id);
+          this.hidden.delete(id);
+          if (!outcome.ok) toast(outcome.error, "error");
+        }
+      },
+      () => {
+        for (const id of ids) this.hidden.delete(id);
+      }
+    );
+  };
+
   clear() {
     this.list.clear();
+    this.hidden.clear();
+    this.refused.clear();
     this.loaded = false;
   }
 
   #set(rows: Search[]) {
-    this.list.reconcile(rows);
+    // a search still being asked for isn't in the daemon's list yet, and keeps its row
+    const asked = [...this.starting].flatMap((id) => {
+      const row = this.list.get(id);
+      return row && !rows.some((r) => r.id === id) ? [row] : [];
+    });
+    this.list.reconcile([...rows, ...asked]);
     this.loaded = true;
     this.error = "";
   }
