@@ -1,11 +1,12 @@
 //! The browse cache: our whole share listing as the encoded message a peer that browses us is
 //! sent, kept in a file so a browse is streamed from it instead of being built each time.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use soulseek_proto::PeerMessage;
-use soulseek_proto::peer::BrowseResponse;
+use soulseek_proto::peer::{BrowseResponse, Directory};
 use tracing::{debug, error, info, warn};
 
 use super::repository;
@@ -36,12 +37,41 @@ pub enum CacheError {
   Task(String),
 }
 
-/// Writes the listing in `db` to the browse cache at `file`, through a file of its own beside
-/// it that replaces it whole, so a peer never reads half of one.
-pub async fn rebuild(db: &Database, file: &Path) -> Result<(), CacheError> {
+/// The listings of several hosts as one: a directory more than one has is listed once with the
+/// files of each, in host order; directories are ordered by name.
+pub fn merge(listings: Vec<Vec<Directory>>) -> Vec<Directory> {
+  let mut tree: BTreeMap<String, Directory> = BTreeMap::new();
+  for directory in listings.into_iter().flatten() {
+    match tree.get_mut(directory.name.as_str()) {
+      Some(listed) => listed.files.extend(directory.files),
+      None => {
+        tree.insert(directory.name.as_str().to_string(), directory);
+      }
+    }
+  }
+  tree.into_values().collect()
+}
+
+/// The listing of every index in `dbs`, or of the share `alias` in each, merged.
+pub async fn listing(dbs: &[Database], alias: Option<String>) -> Result<Vec<Directory>, DbError> {
+  let mut listings = Vec::with_capacity(dbs.len());
+  for db in dbs {
+    let alias = alias.clone();
+    listings.push(
+      db.read(move |conn| repository::browse(conn, alias.as_deref()))
+        .await?,
+    );
+  }
+  Ok(merge(listings))
+}
+
+/// Writes the listing of `dbs`, the local index and the relay agents', to the browse cache at
+/// `file`, through a file of its own beside it that replaces it whole, so a peer never reads
+/// half of one.
+pub async fn rebuild(dbs: &[Database], file: &Path) -> Result<(), CacheError> {
   let started = Instant::now();
   info!("Warming browse response cache...");
-  let directories = db.read(|conn| repository::browse(conn, None)).await?;
+  let directories = listing(dbs, None).await?;
   let file = file.to_path_buf();
   tokio::task::spawn_blocking(move || -> Result<(), std::io::Error> {
     let message = PeerMessage::BrowseResponse(BrowseResponse {
@@ -104,8 +134,8 @@ pub async fn remove_stale(cache: &Path) {
 }
 
 /// [`rebuild`], logging a failure.
-pub async fn refresh(db: &Database, file: &Path) {
-  if let Err(e) = rebuild(db, file).await {
+pub async fn refresh(dbs: &[Database], file: &Path) {
+  if let Err(e) = rebuild(dbs, file).await {
     error!(error = %e, "Error caching browse response");
   }
 }
@@ -114,6 +144,7 @@ pub async fn refresh(db: &Database, file: &Path) {
 mod tests {
   use super::*;
   use crate::shares::repository::tests::{index, write};
+  use soulseek_proto::RemoteFilename;
 
   #[tokio::test]
   async fn the_cache_holds_the_listing_as_one_encoded_message() {
@@ -126,7 +157,7 @@ mod tests {
     .unwrap();
     let dir = tempfile::tempdir().unwrap();
     let file = path(dir.path());
-    rebuild(&db, &file).await.unwrap();
+    rebuild(&[db], &file).await.unwrap();
     let bytes = std::fs::read(&file).unwrap();
     let PeerMessage::BrowseResponse(read) = PeerMessage::decode(&bytes).unwrap() else {
       panic!("not a browse response");
@@ -135,6 +166,44 @@ mod tests {
     assert_eq!(names, ["m", "m\\a"]);
     assert_eq!(read.directories[1].files[0].filename.as_str(), "1.mp3");
     assert!(read.locked_directories.is_empty());
+  }
+
+  #[test]
+  fn hosts_with_the_same_directory_list_it_once_with_both_files() {
+    let directory = |name: &str, files: &[&str]| Directory {
+      name: RemoteFilename::from(name.to_string()),
+      files: files
+        .iter()
+        .map(|f| soulseek_proto::peer::File {
+          code: 1,
+          filename: RemoteFilename::from(f.to_string()),
+          size: 1,
+          extension: String::new(),
+          attributes: Vec::new(),
+        })
+        .collect(),
+    };
+    let merged = merge(vec![
+      vec![directory("b", &["1"]), directory("m", &["local"])],
+      vec![directory("a", &[]), directory("m", &["agent"])],
+    ]);
+    let listed: Vec<(&str, Vec<&str>)> = merged
+      .iter()
+      .map(|d| {
+        (
+          d.name.as_str(),
+          d.files.iter().map(|f| f.filename.as_str()).collect(),
+        )
+      })
+      .collect();
+    assert_eq!(
+      listed,
+      [
+        ("a", vec![]),
+        ("b", vec!["1"]),
+        ("m", vec!["local", "agent"])
+      ]
+    );
   }
 
   #[tokio::test]

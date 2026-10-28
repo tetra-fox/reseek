@@ -156,8 +156,10 @@ impl Shares {
       files = totals.files,
       "Share cache loaded from disk successfully"
     );
-    self.counts.send_replace(totals);
-    super::browse::refresh(&self.db, &self.browse_cache()).await;
+    *lock(&self.local_counts) = totals;
+    self.counts.send_replace(self.with_agents(totals));
+    self.changed.send_modify(|n| *n += 1);
+    super::browse::refresh(&self.databases(), &self.browse_cache()).await;
     Ok(settings)
   }
 

@@ -1,5 +1,5 @@
-//! The shares API: the shares of every host, what they hold as a browsing peer sees it, and
-//! starting and stopping a scan.
+//! The shares API: the shares of every host, the local one and each relay agent's, what they
+//! hold as a browsing peer sees it, and starting and stopping a scan.
 
 use std::collections::BTreeMap;
 
@@ -7,7 +7,7 @@ use api_types::shares::{Share, SharesByHost};
 use api_types::users::Directory;
 use async_trait::async_trait;
 
-use super::{LOCAL_HOST, Shares, repository};
+use super::{LOCAL_HOST, Shares};
 use crate::api::error::ApiError;
 use crate::db::DbError;
 use crate::services::ShareService;
@@ -23,23 +23,22 @@ fn unknown(id: &str) -> ApiError {
 #[async_trait]
 impl ShareService for Shares {
   async fn shares(&self) -> Result<SharesByHost, ApiError> {
-    let local = self
-      .listed()
-      .iter()
-      .map(super::share::Share::to_api)
-      .collect();
-    Ok(SharesByHost(BTreeMap::from([(
-      LOCAL_HOST.to_string(),
-      local,
-    )])))
+    let mut hosts = BTreeMap::from([(LOCAL_HOST.to_string(), self.local_shares())]);
+    hosts.extend(self.agent_shares());
+    Ok(SharesByHost(hosts))
   }
 
   async fn share(&self, id: &str) -> Result<Share, ApiError> {
     self
-      .listed()
-      .iter()
+      .local_shares()
+      .into_iter()
+      .chain(
+        self
+          .agent_shares()
+          .into_iter()
+          .flat_map(|(_, shares)| shares),
+      )
       .find(|share| share.id == id)
-      .map(super::share::Share::to_api)
       .ok_or_else(|| unknown(id))
   }
 
@@ -49,15 +48,8 @@ impl ShareService for Shares {
   }
 
   async fn share_contents(&self, id: &str) -> Result<Vec<Directory>, ApiError> {
-    let alias = self
-      .listed()
-      .iter()
-      .find(|share| share.id == id)
-      .map(|share| share.alias.clone())
-      .ok_or_else(|| unknown(id))?;
-    let listed = self
-      .db
-      .read(move |conn| repository::browse(conn, Some(&alias)))
+    let alias = self.share(id).await?.alias;
+    let listed = super::browse::listing(&self.databases(), Some(alias))
       .await
       .map_err(failed)?;
     Ok(listed.into_iter().map(Directory::from).collect())

@@ -2,13 +2,15 @@
 //! keep it current, and the queries other users' searches, browses and downloads are answered
 //! from.
 //!
-//! [`Shares`] is the engine. It owns the local host's index, runs one scan at a time, keeps
-//! `State.shares` current, and offers the queries the network side calls: [`Shares::search`],
-//! [`Shares::browse`], [`Shares::folder`], [`Shares::resolve_file`], [`Shares::user_info`] and
+//! [`Shares`] is the engine. It owns the local host's index and the indexes relay agents
+//! uploaded, runs one scan at a time, keeps `State.shares` current, and offers the queries the
+//! network side calls over every host: [`Shares::search`], [`Shares::browse`],
+//! [`Shares::folder`], [`Shares::resolve_file`], [`Shares::user_info`] and
 //! [`Shares::shared_counts`].
 
 mod attributes;
 mod browse;
+mod hosts;
 mod init;
 mod repository;
 mod scanner;
@@ -36,10 +38,12 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::config::Options;
+use crate::config::enums::RelayMode;
 use crate::db::{Database, DbError};
 use crate::paths::Paths;
 use crate::state::StateOwner;
 use crate::sync::lock;
+pub use hosts::{HostError, remove_unknown_hosts};
 use scanner::{Outcome, Settings};
 use share::Share;
 
@@ -67,9 +71,9 @@ pub struct SharedCounts {
 /// Where a file a peer asked for is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Resolved {
-  /// the host that has it, `local` for this one
-  pub host: &'static str,
-  /// its local path
+  /// the host that has it, `local` for this one, else the relay agent's instance name
+  pub host: String,
+  /// its path on the host that has it
   pub path: PathBuf,
   /// its size when it was indexed
   pub size: u64,
@@ -112,7 +116,9 @@ struct Status {
 }
 
 impl Status {
-  fn to_api(&self) -> SharesState {
+  /// The state with the hosts of the relay agents `agents` and their totals `added`.
+  fn to_api(&self, agents: Vec<String>, added: SharedCounts) -> SharesState {
+    let listed = self.loaded || !agents.is_empty();
     SharesState {
       scan_pending: self.scan_pending,
       scanning: self.scanning,
@@ -120,9 +126,13 @@ impl Status {
       faulted: self.faulted,
       cancelled: self.cancelled,
       scan_progress: self.progress,
-      hosts: self.loaded.then(|| vec![LOCAL_HOST.to_string()]),
-      directories: self.directories,
-      files: self.files,
+      hosts: listed.then(|| {
+        std::iter::once(LOCAL_HOST.to_string())
+          .chain(agents)
+          .collect()
+      }),
+      directories: self.directories.saturating_add(added.directories),
+      files: self.files.saturating_add(added.files),
     }
   }
 }
@@ -149,6 +159,8 @@ pub struct Shares {
   /// the backup file, `None` when nothing is kept between starts
   backup: Option<PathBuf>,
   in_memory: bool,
+  /// a debug relay serves its own files through itself as an agent
+  relay_debug: bool,
   workers: u32,
   quiet: Duration,
   shutdown: CancellationToken,
@@ -168,6 +180,14 @@ pub struct Shares {
   watches: Mutex<Option<watcher::Watching>>,
   browse_throttle: Throttle,
   counts_throttle: Throttle,
+  /// the relay agents' shares, in the order they were loaded
+  hosts: Mutex<Vec<hosts::Host>>,
+  /// a browse cache rebuild after a host change is waiting
+  hosts_settling: AtomicBool,
+  /// the local shares' totals as last counted
+  local_counts: Mutex<SharedCounts>,
+  /// grows each time the local index changed
+  changed: watch::Sender<u64>,
 }
 
 impl Shares {
@@ -202,6 +222,13 @@ impl Shares {
     )
     .await?;
     browse::remove_stale(&paths.cache).await;
+    let agents = options
+      .relay
+      .agents
+      .values()
+      .filter_map(|agent| agent.instance_name.clone())
+      .collect();
+    remove_unknown_hosts(&paths.cache, agents).await;
     let shares = Arc::new_cyclic(|this| Self {
       this: this.clone(),
       db: storage.db,
@@ -213,6 +240,7 @@ impl Shares {
       downloads: paths.downloads.clone(),
       backup: storage.backup,
       in_memory: storage.in_memory,
+      relay_debug: options.relay.enabled && options.relay.mode == RelayMode::Debug,
       workers: options.shares.cache.workers,
       quiet,
       shutdown,
@@ -224,6 +252,10 @@ impl Shares {
       watches: Mutex::new(None),
       browse_throttle: Throttle::default(),
       counts_throttle: Throttle::default(),
+      hosts: Mutex::new(Vec::new()),
+      hosts_settling: AtomicBool::new(false),
+      local_counts: Mutex::new(SharedCounts::default()),
+      changed: watch::Sender::new(0),
     });
     init::start(&shares, options);
     Ok(shares)
@@ -249,29 +281,32 @@ impl Shares {
     self.counts.subscribe()
   }
 
-  /// The files matching an incoming search, local first, at most `limit` of them; nothing when
-  /// the index is not loaded.
+  /// The files matching an incoming search, the local ones first, then each relay agent's, at
+  /// most `limit` from each host; nothing from a host whose index is not loaded.
   pub async fn search(&self, query: &SearchQuery, limit: Option<usize>) -> Vec<File> {
     let text = query.search_text();
-    let query = query.clone();
-    match self
-      .db
-      .read(move |conn| search::search(conn, &query, limit))
-      .await
-    {
-      Ok(files) => files,
-      Err(e) => {
-        if let Some(suppressed) = QUERY_FAILED.allow() {
-          warn!(query = text, error = %e, suppressed, "Failed to execute shared file query");
+    let mut found = Vec::new();
+    for db in self.databases() {
+      let query = query.clone();
+      match db
+        .read(move |conn| search::search(conn, &query, limit))
+        .await
+      {
+        Ok(files) => found.extend(files),
+        Err(e) => {
+          if let Some(suppressed) = QUERY_FAILED.allow() {
+            warn!(query = text, error = %e, suppressed, "Failed to execute shared file query");
+          }
         }
-        Vec::new()
       }
     }
+    found
   }
 
-  /// Everything we share as a browsing peer sees it, ordered by directory name.
+  /// Everything we share, the relay agents' shares included, as a browsing peer sees it,
+  /// ordered by directory name.
   pub async fn browse(&self) -> Result<Vec<Directory>, DbError> {
-    self.db.read(|conn| repository::browse(conn, None)).await
+    browse::listing(&self.databases(), None).await
   }
 
   /// The browse cache file, the encoded browse response a peer is sent; rebuilt after every
@@ -282,7 +317,7 @@ impl Shares {
 
   /// Writes the browse cache again from the index.
   pub async fn rebuild_browse_cache(&self) -> Result<(), browse::CacheError> {
-    browse::rebuild(&self.db, &self.browse_cache()).await
+    browse::rebuild(&self.databases(), &self.browse_cache()).await
   }
 
   /// The contents of the directory `name` a peer asked `username` for: that directory and each
@@ -296,23 +331,49 @@ impl Shares {
       );
       return Ok(Vec::new());
     }
-    let name = name.to_string();
-    self
-      .db
-      .read(move |conn| repository::folder(conn, &name))
-      .await
+    let mut listings = Vec::new();
+    for db in self.databases() {
+      let name = name.to_string();
+      listings.push(db.read(move |conn| repository::folder(conn, &name)).await?);
+    }
+    // a host without the directory lists it empty, which another host's entry fills
+    Ok(browse::merge(listings))
   }
 
-  /// Where the file a peer asked for by its exact remote name `masked` is, `None` when no
-  /// share has it.
+  /// Where the file a peer asked for by its exact remote name `masked` is: the local shares
+  /// first, then each relay agent's in the order they were loaded; `None` when no host has it.
+  /// A debug relay passes over its local file, to serve it through itself as an agent.
   pub async fn resolve_file(&self, masked: &str) -> Result<Option<Resolved>, DbError> {
+    if let Some(found) = self.resolve_local(masked).await? {
+      if !self.relay_debug {
+        return Ok(Some(found));
+      }
+      warn!(
+        filename = masked,
+        "Ignoring resolved local file to facilitate Relay debugging."
+      );
+    }
+    for (host, db) in self.agent_databases() {
+      let wanted = masked.to_string();
+      if let Some((path, size)) = db
+        .read(move |conn| repository::find_file(conn, &wanted))
+        .await?
+      {
+        return Ok(Some(Resolved { host, path, size }));
+      }
+    }
+    Ok(None)
+  }
+
+  /// Where the file `masked` is among the local shares, `None` when no local share has it.
+  pub async fn resolve_local(&self, masked: &str) -> Result<Option<Resolved>, DbError> {
     let masked = masked.to_string();
     let found = self
       .db
       .read(move |conn| repository::find_file(conn, &masked))
       .await?;
     Ok(found.map(|(path, size)| Resolved {
-      host: LOCAL_HOST,
+      host: LOCAL_HOST.to_string(),
       path,
       size,
     }))
@@ -371,7 +432,8 @@ impl Shares {
   fn publish(&self, change: impl FnOnce(&mut Status)) {
     let mut status = lock(&self.status);
     change(&mut status);
-    let api = status.to_api();
+    let (agents, added) = self.agent_totals();
+    let api = status.to_api(agents, added);
     self.state.update(|state| state.shares = api);
   }
 

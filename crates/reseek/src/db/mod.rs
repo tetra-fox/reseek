@@ -116,6 +116,49 @@ impl Database {
     Ok(opened)
   }
 
+  /// Opens the finished database file at `path`, which nothing writes while it is open, for
+  /// reading only: without locks or journal files, so the file can be replaced under it and
+  /// the connections already open read the file they opened. Writes through it fail.
+  pub async fn open_immutable(
+    schema: &'static Schema,
+    path: &std::path::Path,
+  ) -> Result<Self, DbError> {
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+      let mut uri = url::Url::from_file_path(&path)
+        .map_err(|()| DbError::Create(path.clone(), std::io::ErrorKind::InvalidInput.into()))?;
+      uri.set_query(Some("immutable=1"));
+      let open = || -> Result<Connection, DbError> {
+        let conn = Connection::open_with_flags(
+          uri.as_str(),
+          OpenFlags::SQLITE_OPEN_READ_ONLY
+            | OpenFlags::SQLITE_OPEN_NO_MUTEX
+            | OpenFlags::SQLITE_OPEN_URI,
+        )?;
+        configure(&conn, false)?;
+        Ok(conn)
+      };
+      let writer = open()?;
+      let idle = (0..reader_count())
+        .map(|_| open())
+        .collect::<Result<Vec<_>, DbError>>()?;
+      debug!(database = schema.name, path = %path.display(), "database opened for reading only");
+      Ok(Database {
+        inner: Arc::new(Inner {
+          name: schema.name,
+          path: Some(path),
+          writer: Arc::new(tokio::sync::Mutex::new(writer)),
+          readers: Some(Readers {
+            available: Arc::new(Semaphore::new(idle.len())),
+            idle: Arc::new(Mutex::new(idle)),
+          }),
+        }),
+      })
+    })
+    .await
+    .map_err(|e| DbError::Task(e.to_string()))?
+  }
+
   /// The database's name, the stem of its schema.
   pub fn name(&self) -> &'static str {
     self.inner.name

@@ -108,7 +108,7 @@ fn replace_with_backup(primary: &Path, backup: Option<&Path>) {
 }
 
 /// Removes a database file and its journal files, each when it is there.
-fn remove_database(path: &Path) {
+pub(super) fn remove_database(path: &Path) {
   for suffix in ["", "-wal", "-shm"] {
     let mut file = path.as_os_str().to_owned();
     file.push(suffix);
@@ -143,6 +143,92 @@ pub fn valid(path: &Path) -> Result<(), String> {
   Ok(())
 }
 
+/// The tables, indexes and triggers of a database with the SQL that made each, by name.
+type Objects = Vec<(String, String, Option<String>)>;
+
+/// What `conn` holds besides SQLite's own objects.
+fn objects(conn: &Connection) -> rusqlite::Result<Objects> {
+  let mut statement = conn.prepare(
+    "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY name",
+  )?;
+  statement
+    .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+    .collect()
+}
+
+/// The objects of an index this program writes, read once from one made in memory.
+async fn expected_objects() -> Result<&'static Objects, DbError> {
+  static EXPECTED: tokio::sync::OnceCell<Objects> = tokio::sync::OnceCell::const_new();
+  EXPECTED
+    .get_or_try_init(|| async {
+      let scratch = std::env::temp_dir();
+      let location = Location {
+        data: scratch.clone(),
+        backups: scratch,
+        volatile: true,
+        log_sql: false,
+      };
+      let db = Database::open_as(&SCHEMA, &location, "shares.expected").await?;
+      db.read(objects).await
+    })
+    .await
+}
+
+/// Whether the file at `path`, another instance's index, has exactly the migrations and the
+/// tables, indexes and triggers this program writes. Says each difference when it does not.
+pub async fn check_foreign(path: &Path) -> Result<(), String> {
+  let expected = expected_objects().await.map_err(|e| e.to_string())?;
+  let path = path.to_path_buf();
+  tokio::task::spawn_blocking(move || {
+    valid(&path)?;
+    let conn = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+      .map_err(|e| e.to_string())?;
+    let found = objects(&conn).map_err(|e| e.to_string())?;
+    let mut problems = Vec::new();
+    for (kind, name, sql) in expected {
+      match found.iter().find(|(_, n, _)| n == name) {
+        None => problems.push(format!("{kind} {name} is missing")),
+        Some((_, _, found)) if found != sql => problems.push(format!("{kind} {name} differs")),
+        Some(_) => {}
+      }
+    }
+    for (kind, name, _) in &found {
+      if !expected.iter().any(|(_, n, _)| n == name) {
+        problems.push(format!("{kind} {name} is unexpected"));
+      }
+    }
+    if problems.is_empty() {
+      Ok(())
+    } else {
+      Err(problems.join(", "))
+    }
+  })
+  .await
+  .map_err(|e| e.to_string())?
+}
+
+/// The version of the index's schema: the last migration this program writes.
+pub fn schema_version() -> u32 {
+  SCHEMA
+    .migrations
+    .last()
+    .map(|m| m.version())
+    .expect("the share index has migrations")
+}
+
+/// Writes a consistent copy of `db` to `path`, a file that does not exist yet, and returns its
+/// size.
+pub async fn dump(db: &Database, path: &Path) -> Result<u64, DbError> {
+  let target = path.to_path_buf();
+  db.write(move |conn| {
+    conn.execute("VACUUM INTO ?1", [target.to_string_lossy()])?;
+    std::fs::metadata(&target)
+      .map(|m| m.len())
+      .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))
+  })
+  .await
+}
+
 /// Writes a consistent copy of `db` to `backup`, through a file beside it that replaces it
 /// whole, so a failure leaves the last good backup.
 pub async fn back_up(db: &Database, backup: &Path) -> Result<(), DbError> {
@@ -162,6 +248,25 @@ pub async fn back_up(db: &Database, backup: &Path) -> Result<(), DbError> {
   .await?;
   info!("Shared file cache database backup complete");
   Ok(())
+}
+
+/// Puts a copy of the checked index `from` in place of the host index file `to`: written beside
+/// it without a write-ahead log, then renamed over it, so a reader opens either file whole.
+pub fn replace_host_file(from: &Path, to: &Path) -> Result<(), String> {
+  let mut temporary = to.as_os_str().to_owned();
+  temporary.push(".tmp");
+  let temporary = PathBuf::from(temporary);
+  std::fs::copy(from, &temporary).map_err(|e| format!("{}: {e}", temporary.display()))?;
+  let rolled_back = Connection::open(&temporary)
+    .and_then(|conn| conn.pragma_update(None, "journal_mode", "DELETE"));
+  if let Err(e) = rolled_back {
+    remove_database(&temporary);
+    return Err(format!("{}: {e}", temporary.display()));
+  }
+  std::fs::rename(&temporary, to).map_err(|e| {
+    remove_database(&temporary);
+    format!("{}: {e}", to.display())
+  })
 }
 
 /// Replaces what `db` holds with the backup at `backup`.

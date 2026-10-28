@@ -565,3 +565,98 @@ async fn options_changed_while_a_scan_runs_stay_pending_and_uncounted() {
   assert!(!app.state.state.current().shares.scan_pending);
   assert_eq!(counts(&shares, "Other"), (Some(1), Some(1)));
 }
+
+#[tokio::test]
+async fn an_agents_index_is_served_beside_the_local_one_until_it_goes() {
+  serves_an_agent("").await;
+}
+
+#[tokio::test]
+async fn an_agents_index_on_disk_is_served_the_same() {
+  serves_an_agent("[shares.cache]\nstorage_mode = \"disk\"\n").await;
+}
+
+/// A controller whose configuration ends in `extra` loads, serves and drops an agent's index.
+async fn serves_an_agent(extra: &str) {
+  let files = tempfile::tempdir().unwrap();
+  let app = app(&(config(files.path()) + extra), &[]).await;
+  // the agent's index is another engine's dump, with a share of its own
+  let (agent_files, agent) = shared_app().await;
+  std::fs::create_dir_all(agent_files.path().join("music/Other")).unwrap();
+  std::fs::write(agent_files.path().join("music/Other/02.flac"), "agent").unwrap();
+  agent.state.shares.scan(false).unwrap();
+  eventually(async || agent.state.state.current().shares.files == 2).await;
+  let dump = agent_files.path().join("dump.db");
+  agent.state.shares.dump(&dump).await.unwrap();
+  let listed = agent.state.shares.local_shares();
+
+  let shares = &app.state.shares;
+  let counted = shares
+    .load_host("nas", listed.clone(), &dump)
+    .await
+    .unwrap();
+  assert_eq!((counted.directories, counted.files), (3, 2));
+  let state = app.state.state.current().shares.clone();
+  assert_eq!(
+    state.hosts.as_deref(),
+    Some(&["local".to_string(), "nas".to_string()][..])
+  );
+  assert_eq!((state.directories, state.files), (5, 3));
+  assert_eq!(shares.shared_counts().borrow().files, 3);
+  assert_eq!(
+    names(shares, "flac").await,
+    ["Music\\Other\\02.flac"],
+    "the agent's files are searched"
+  );
+  let found = shares
+    .resolve_file("Music\\Other\\02.flac")
+    .await
+    .unwrap()
+    .unwrap();
+  assert_eq!((found.host.as_str(), found.size), ("nas", 5));
+  let local = shares
+    .resolve_file("Music\\Album\\01.mp3")
+    .await
+    .unwrap()
+    .unwrap();
+  assert_eq!(
+    local.host, "local",
+    "a file both hosts have is the local one"
+  );
+  let browsed = shares.browse().await.unwrap();
+  let album = browsed
+    .iter()
+    .find(|d| d.name.as_str() == "Music\\Album")
+    .unwrap();
+  assert_eq!(
+    album.files.len(),
+    2,
+    "a directory both hosts have lists both files"
+  );
+  let by_host = app
+    .send(request("GET", "/api/v0/shares", None))
+    .await
+    .json();
+  assert_eq!(by_host["nas"][0]["alias"], listed[0].alias);
+
+  std::fs::write(&dump, b"not a database").unwrap();
+  let refused = shares.load_host("nas", listed, &dump).await.unwrap_err();
+  assert!(matches!(refused, HostError::Invalid(_)), "{refused}");
+  assert_eq!(
+    names(shares, "flac").await.len(),
+    1,
+    "a refused upload keeps the host"
+  );
+  if extra.contains("disk") {
+    assert!(app.state.paths.cache.join("shares.nas.db").exists());
+  }
+
+  assert!(shares.remove_host("nas"));
+  assert!(!shares.remove_host("nas"));
+  assert!(names(shares, "flac").await.is_empty());
+  assert_eq!(shares.shared_counts().borrow().files, 1);
+  assert_eq!(
+    app.state.state.current().shares.hosts.as_deref(),
+    Some(&["local".to_string()][..])
+  );
+}

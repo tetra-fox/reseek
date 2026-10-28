@@ -130,8 +130,10 @@ impl Shares {
               ms = started.elapsed().as_millis() as u64,
               "Shares scanned successfully"
             );
-            self.counts.send_replace(totals);
+            *lock(&self.local_counts) = totals;
+            self.counts.send_replace(self.with_agents(totals));
             *lock(&self.counts_throttle.last) = Some(Instant::now());
+            self.changed.send_modify(|n| *n += 1);
             true
           }
           Err(e) => {
@@ -158,7 +160,7 @@ impl Shares {
         false
       }
     };
-    browse::refresh(&self.db, &self.browse_cache()).await;
+    browse::refresh(&self.databases(), &self.browse_cache()).await;
     *lock(&self.browse_throttle.last) = Some(Instant::now());
     if completed {
       self.watch_shares(settings).await;

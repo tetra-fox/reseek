@@ -401,7 +401,9 @@ async fn counted(shares: &Arc<Shares>) -> Result<(), DbError> {
     |shares| async move {
       // counted when the throttled send runs, so the changes since it was armed are in it
       match shares.count_shares(&shares.filled_from().shares).await {
-        Ok(now) => {
+        Ok(local) => {
+          *lock(&shares.local_counts) = local;
+          let now = shares.with_agents(local);
           shares.counts.send_if_modified(|sent| {
             let changed = *sent != now;
             *sent = now;
@@ -415,7 +417,8 @@ async fn counted(shares: &Arc<Shares>) -> Result<(), DbError> {
   shares.throttled(
     |s| &s.browse_throttle,
     |shares| async move {
-      super::browse::refresh(&shares.db, &shares.browse_cache()).await;
+      super::browse::refresh(&shares.databases(), &shares.browse_cache()).await;
+      shares.changed.send_modify(|n| *n += 1);
     },
   );
   Ok(())
