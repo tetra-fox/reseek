@@ -377,3 +377,132 @@ export const fakeDownloads = async (page: Page) => {
       })
   );
 };
+
+/** `n` downloads from users of a hundred files each, ten to a folder, every one finished */
+export const manyDownloads = async (page: Page, n: number) => {
+  const users = Array.from({ length: Math.ceil(n / 100) }, (_, u) => ({
+    username: `user${String(u).padStart(3, "0")}`,
+    directories: Array.from({ length: 10 }, (_, d) => ({
+      directory: `Album ${d}`,
+      fileCount: 10,
+      files: Array.from({ length: 10 }, (_, f) => {
+        const k = u * 100 + d * 10 + f;
+        return {
+          ...transfer(`@@u${u}\\Music\\Album ${d}\\${String(k).padStart(5, "0")} Track.flac`),
+          id: `00000000-0000-4000-8000-${String(k).padStart(12, "0")}`,
+          username: `user${String(u).padStart(3, "0")}`
+        };
+      })
+    }))
+  }));
+  await page.route(
+    (url) => url.pathname.endsWith("/api/v0/transfers/downloads"),
+    (route) => route.fulfill({ json: users })
+  );
+};
+
+/** The search `fakeSearch` answers for, with `n` files from ten to a user */
+export const manyResults = async (page: Page, n: number) => {
+  const responses = Array.from({ length: n / 10 }, (_, r) =>
+    response(
+      `peer${String(r).padStart(4, "0")}`,
+      100_000 + r,
+      Array.from(
+        { length: 10 },
+        (_, f) => `@@p${r}\\Music\\${String(r * 10 + f).padStart(5, "0")} Song.flac`
+      )
+    )
+  );
+  await page.route(`**/api/v0/searches/${SEARCH_ID}**`, (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/responses")) return route.fulfill({ json: responses });
+    return route.fulfill({
+      json: {
+        id: SEARCH_ID,
+        searchText: "song",
+        token: 1,
+        state: "Completed, TimedOut",
+        isComplete: true,
+        startedAt: "2026-10-26T10:00:00Z",
+        endedAt: "2026-10-26T10:00:15Z",
+        responseCount: responses.length,
+        fileCount: n,
+        lockedFileCount: 0,
+        responseBytes: 0,
+        responses: null,
+        scope: { type: "network", subjects: [] }
+      }
+    });
+  });
+};
+
+/** A browse of carol's shares with `n` folders, fifty to an artist */
+export const wideBrowse = async (page: Page, n: number) => {
+  const directories = [dir("@@c\\Music", [])];
+  for (let a = 0; directories.length < n; a++) {
+    directories.push(dir(`@@c\\Music\\Artist ${String(a).padStart(3, "0")}`, []));
+    for (let b = 0; b < 49 && directories.length < n; b++) {
+      directories.push(
+        dir(
+          `@@c\\Music\\Artist ${String(a).padStart(3, "0")}\\Album ${String(b).padStart(2, "0")}`,
+          ["1.flac"]
+        )
+      );
+    }
+  }
+  await page.route(
+    (url) => url.pathname.includes("/api/v0/users/carol/"),
+    (route) =>
+      !new URL(route.request().url()).pathname.endsWith("/carol/browse")
+        ? route.fulfill({ status: 404, json: { error: "not found" } })
+        : route.fulfill({
+            json: {
+              directories,
+              directoryCount: directories.length,
+              lockedDirectories: [],
+              lockedDirectoryCount: 0
+            }
+          })
+  );
+};
+
+/** Room "indie" with `n` messages in its history, all in one page */
+export const longRoom = async (page: Page, n: number) => {
+  const messages = Array.from({ length: n }, (_, k) => ({
+    localId: k + 1,
+    timestamp: new Date(Date.UTC(2026, 9, 27, 10) + k * 37_000).toISOString(),
+    username: MEMBERS[k % 5],
+    message: k % 9 === 0 ? `a longer message, number ${k}, `.repeat(6) : `message number ${k}`,
+    roomName: "indie",
+    self: false,
+    isMention: false,
+    hidden: false
+  }));
+  const history = { messages, hasMore: false, gaps: [] };
+  await page.route("**/api/v0/rooms/joined", (route) =>
+    route.fulfill({
+      json: [
+        {
+          name: "indie",
+          unread: 0,
+          mentions: 0,
+          notify: "mentions",
+          userCount: 5,
+          lastMessageAt: messages.at(-1)!.timestamp,
+          lastReadId: n
+        }
+      ]
+    })
+  );
+  await page.route("**/api/v0/rooms/history/indie/messages**", (route) =>
+    route.fulfill({ json: history })
+  );
+  await page.route("**/api/v0/rooms/joined/indie**", (route) =>
+    new URL(route.request().url()).pathname.endsWith("/messages")
+      ? route.fulfill({ json: history })
+      : route.fulfill({
+          json: { name: "indie", isPrivate: false, users: [], tickers: [], messages: null }
+        })
+  );
+  await page.route("**/api/v0/conversations**", (route) => route.fulfill({ json: [] }));
+};

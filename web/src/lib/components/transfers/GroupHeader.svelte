@@ -167,9 +167,10 @@
   const actions = $derived(ACTIONS.filter((a) => a.shown()));
 </script>
 
+<!-- a phone indents each level less, so a nested folder keeps room for its name -->
 <div
   class="flex h-full items-center gap-2 border-b bg-surface-muted/80 px-2 text-sm"
-  style:padding-left={`${0.5 + group.depth * 1.5}rem`}
+  style:padding-left={`${0.5 + group.depth * (viewport.phone ? 0.75 : 1.5)}rem`}
   role="rowheader">
   <Checkbox
     aria-label={`Select every transfer in ${group.label}`}
@@ -181,8 +182,7 @@
     {#if folded}<FolderIcon class="size-4 shrink-0 text-fg-muted" />{:else}<FolderOpenIcon
         class="size-4 shrink-0 text-fg-muted" />{/if}
   {/if}
-  <!-- the name's track fills before the count's, so the count gives way first -->
-  <div class="grid min-w-0 grid-cols-[minmax(0,max-content)_minmax(0,1fr)] items-center gap-2">
+  <div class="name-count gap-2">
     {#if group.kind === "user"}
       <Username name={group.username} />
     {:else if group.kind === "folder"}
@@ -190,11 +190,12 @@
     {:else}
       <span class="truncate font-medium">{group.label}</span>
     {/if}
-    <span class="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-fg-muted">
-      {plural(list.length, "file", "files")} · {formatBytes(bytes)}{group.kind === "batch"
-        ? ` · ${done} done, ${failed} failed`
-        : ""}
-    </span>
+    <span class="text-xs text-fg-muted"
+      ><span
+        >{plural(list.length, "file", "files")} · {formatBytes(bytes)}{group.kind === "batch"
+          ? ` · ${done} done, ${failed} failed`
+          : ""}</span
+      ></span>
   </div>
   <!-- a phone leaves the progress to the file rows, which show it too -->
   {#if !viewport.phone && (progress.running || (progress.moved > 0 && progress.moved < progress.size))}
@@ -217,24 +218,22 @@
     {#if viewport.phone}
       <!-- a phone keeps the row for the name, so the group's actions sit in a menu -->
       {#if actions.length > 0}
-        <Menu.Root>
-          <Menu.Trigger>
-            {#snippet child({ props })}
-              <Button
-                {...props}
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`More for ${group.label}`}>
-                <EllipsisIcon />
-              </Button>
-            {/snippet}
-          </Menu.Trigger>
+        <Menu.LazyRoot>
+          {#snippet trigger({ props })}
+            <Button
+              {...props}
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`More for ${group.label}`}>
+              <EllipsisIcon />
+            </Button>
+          {/snippet}
           <Menu.Content align="end" class="min-w-56">
             {#each actions as a (a.label)}
               <Menu.Item onSelect={a.run}><a.icon />{a.label}</Menu.Item>
             {/each}
           </Menu.Content>
-        </Menu.Root>
+        </Menu.LazyRoot>
       {/if}
     {:else}
       {#each actions as a (a.label)}

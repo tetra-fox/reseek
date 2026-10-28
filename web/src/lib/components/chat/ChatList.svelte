@@ -320,10 +320,11 @@
   {/if}
 
   {#if write}
-    <div class="flex gap-1">
-      <Button variant="outline" size="sm" class="flex-1" onclick={() => onjoin()}
+    <!-- side by side while both fit, one over the other at a large text size -->
+    <div class="flex flex-wrap gap-1">
+      <Button variant="outline" size="sm" class="flex-auto" onclick={() => onjoin()}
         ><UsersRoundIcon />Join a room</Button>
-      <Button variant="outline" size="sm" class="flex-1" onclick={() => onnew()}
+      <Button variant="outline" size="sm" class="flex-auto" onclick={() => onnew()}
         ><MessageSquarePlusIcon />New message</Button>
     </div>
   {/if}

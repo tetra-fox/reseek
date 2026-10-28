@@ -17,14 +17,7 @@
   import Card from "#lib/components/ui/Card.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
-  import {
-    ago,
-    formatBytes,
-    formatDate,
-    formatDuration,
-    formatSpeed,
-    plural
-  } from "#lib/format.js";
+  import { ago, formatBytes, formatDuration, formatSpeed, plural } from "#lib/format.js";
   import { serverStateText } from "#lib/reachability.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
@@ -32,6 +25,7 @@
   import { RESTART } from "#lib/wording.js";
 
   import { diagnostics, latestProblems } from "./diagnostics";
+  import Uptime from "./Uptime.svelte";
 
   // the daemon's state at a glance, its whole state document, and the process controls
   const s = $derived(app.state);
@@ -140,7 +134,7 @@
 {#if !s}
   <Skeleton class="h-64" />
 {:else}
-  <div class="grid gap-section md:grid-cols-2 xl:grid-cols-3">
+  <div class="grid grid-cols-[minmax(0,1fr)] gap-section md:grid-cols-2 xl:grid-cols-3">
     <Card title="Version">
       <dl class="info">
         <dt>Running</dt>
@@ -171,9 +165,7 @@
     <Card title="Process">
       <dl class="info">
         <dt>Running for</dt>
-        <dd title={formatDate(s.startedAt)}>
-          {formatDuration((clock.now - Date.parse(s.startedAt)) / 1000)}
-        </dd>
+        <dd><Uptime since={s.startedAt} /></dd>
         <dt>Process ID</dt>
         <dd>{s.process.pid}</dd>
         <dt>Platform</dt>
@@ -308,11 +300,16 @@
 {/if}
 
 <style>
+  /* a value too long for its card, an address or a version, wraps rather than being cut or
+     widening the card */
   .info {
     display: grid;
-    grid-template-columns: auto 1fr;
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
     gap: 0.25rem 1rem;
     font-size: 0.875rem;
+  }
+  .info :global(dd) {
+    overflow-wrap: anywhere;
   }
   .info :global(dt) {
     color: var(--color-fg-muted);

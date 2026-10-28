@@ -245,10 +245,11 @@
   const sortBy = (by: SortBy) => {
     sort = { by, dir: sort.by === by && sort.dir === "asc" ? "desc" : "asc" };
   };
-  // a phone leaves out the modified date, so a name keeps the room it needs
+  // a phone leaves out the modified date and indents less, so a name keeps the room it needs
   const COLUMNS = $derived(
-    viewport.phone ? "2.5rem minmax(0,1fr) 5rem 3rem" : "2.5rem minmax(14rem,1fr) 10rem 7rem 3rem"
+    viewport.phone ? "2rem minmax(0,1fr) 5rem 2.5rem" : "2.5rem minmax(14rem,1fr) 10rem 7rem 3rem"
   );
+  const indent = $derived(viewport.phone ? "0.75rem" : "1.25rem");
 </script>
 
 {#snippet sortable(label: string, by: SortBy)}
@@ -412,7 +413,7 @@
       <span
         role="gridcell"
         class="flex min-w-0 items-center gap-1.5"
-        style:padding-left="calc(var(--depth) * 1.25rem)">
+        style:padding-left={`calc(var(--depth) * ${indent})`}>
         {#if e.kind === "file"}
           <FileIcon class="size-4 shrink-0 text-fg-muted" />
           <span class="truncate" title={e.path}>{e.name}</span>

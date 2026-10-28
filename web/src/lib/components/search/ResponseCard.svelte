@@ -56,13 +56,6 @@
 
   let { result, searchId, cards, siblings, connected, canWrite, ondismiss }: Props = $props();
 
-  /** the file table's columns: tick, name, size, attributes, length, menu */
-  // the figures hold their widest value in the rows' own font, which the cells share, and the name
-  // takes what is left, so a large text size never pushes the menu out of the card. A phone's
-  // rows show the tick, the name with its size under it, and the menu
-  const COLUMNS = `2.25rem minmax(0, 1fr) ${columnWidth(WIDEST.size)} 9rem ${columnWidth(WIDEST.length)} 2.5rem`;
-  const PHONE_COLUMNS = "2.25rem minmax(0, 1fr) 2.5rem";
-
   const response = $derived(result.response);
   const name = $derived(response.username);
   const user = $derived(users.get(name));
@@ -79,6 +72,17 @@
   $effect(() => void users.load(name));
 
   const files = $derived(resultFiles(response));
+  const attributed = $derived(files.some((f) => f.suspect || formatAttributes(f)));
+
+  /** the file table's columns: tick, name, size, attributes, length, menu */
+  // the figures hold their widest value in the rows' own font, which the cells share, and the name
+  // takes what is left, so a large text size never pushes the menu out of the card. A card whose
+  // files say nothing of their quality has no attributes column. A phone's rows show the tick, the
+  // name with its size under it, and the menu
+  const columns = $derived(
+    `2.25rem minmax(0, 1fr) ${columnWidth(WIDEST.size)} ${attributed ? "9rem " : ""}${columnWidth(WIDEST.length)} 2.5rem`
+  );
+  const PHONE_COLUMNS = "2.25rem minmax(0, 1fr) 2.5rem";
   const roots = $derived(
     folderTree(
       files,
@@ -191,7 +195,7 @@
       {lines}
       expansion={folders}
       label={`Files from ${name}`}
-      columns={viewport.phone ? PHONE_COLUMNS : COLUMNS}
+      columns={viewport.phone ? PHONE_COLUMNS : columns}
       {selected}
       idOf={(f) => f.filename}
       onopen={write ? (f) => void download([f]) : undefined}
@@ -210,15 +214,12 @@
               on
             )} />
         {#if locked}<LockIcon class="size-3.5 shrink-0 text-fg-muted" />{/if}
-        <!-- the name's track fills before the count's, so the count gives way first -->
-        <div
-          class="grid min-w-0 grid-cols-[minmax(0,max-content)_minmax(0,1fr)] items-center gap-1.5">
+        <div class="name-count gap-1.5">
           <span
             class={["truncate font-mono text-xs", depth === 0 ? "text-fg" : "text-fg-muted"]}
             title={node.path}>{node.label}</span>
-          <span class="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-fg-subtle">
-            {plural(node.count, "file", "files")} · {formatBytes(node.bytes)}
-          </span>
+          <span class="text-xs text-fg-subtle"
+            ><span>{plural(node.count, "file", "files")} · {formatBytes(node.bytes)}</span></span>
         </div>
         <div class="ml-auto flex shrink-0 items-center gap-0.5 row-action">
           {#if canWrite}
@@ -275,12 +276,14 @@
           <span role="gridcell" class="pr-3 text-right whitespace-nowrap tabular-nums"
             >{formatBytes(file.size)}</span>
         {/if}
-        <span
-          role="gridcell"
-          class="flex min-w-0 items-center gap-1 truncate text-fg-muted max-md:hidden">
-          {#if file.suspect}<Suspect suspect={file.suspect} />{/if}
-          {formatAttributes(file)}
-        </span>
+        {#if attributed}
+          <span
+            role="gridcell"
+            class="flex min-w-0 items-center gap-1 truncate text-fg-muted max-md:hidden">
+            {#if file.suspect}<Suspect suspect={file.suspect} />{/if}
+            {formatAttributes(file)}
+          </span>
+        {/if}
         <span
           role="gridcell"
           class="pr-3 text-right whitespace-nowrap text-fg-muted tabular-nums max-md:hidden"

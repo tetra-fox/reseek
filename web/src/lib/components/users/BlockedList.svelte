@@ -83,7 +83,8 @@
 
 <div class="flex flex-wrap items-center gap-inline">
   <span class="text-sm text-fg-muted">{entries.length} blocked</span>
-  <div class="ml-auto flex gap-inline">
+  <!-- the buttons wrap onto a second line where large text leaves no room for all three -->
+  <div class="ml-auto flex flex-wrap justify-end gap-inline">
     {#if admin}
       <Button variant="outline" size="sm" onclick={() => (importing = true)}>
         <UploadIcon />Import

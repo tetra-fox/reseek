@@ -36,10 +36,7 @@
 </script>
 
 <!-- the actions every file row offers, wherever the file is listed -->
-<Menu.Root>
-  <Menu.Trigger>
-    {#snippet child({ props })}{@render trigger({ props })}{/snippet}
-  </Menu.Trigger>
+<Menu.LazyRoot {trigger}>
   <Menu.Content align="end" class="min-w-48">
     {#if ondownload}
       <Menu.Item onSelect={ondownload}><DownloadIcon />Download</Menu.Item>
@@ -66,4 +63,4 @@
       </Menu.Item>
     {/if}
   </Menu.Content>
-</Menu.Root>
+</Menu.LazyRoot>

@@ -67,12 +67,12 @@
 <!-- one setting: what it is on the left, its control on the right, stacked on phones -->
 <div
   class={[
-    "grid gap-x-8 gap-y-2 px-5 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:items-start",
+    "grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-2 px-5 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:items-start",
     unused && "opacity-60"
   ]}>
   <div class="flex min-w-0 flex-col gap-1 md:pt-1.5">
     <div class="flex flex-wrap items-center gap-inline">
-      <label for={field.key} class="text-sm font-medium">{field.label}</label>
+      <label for={field.key} class="min-w-0 text-sm font-medium wrap-anywhere">{field.label}</label>
       {#if changed}
         <span class="size-1.5 rounded-full bg-accent" title="Not saved yet"></span>
         <span class="sr-only">not saved yet</span>
@@ -95,7 +95,7 @@
       {info.doc}
       {#if info.default !== null && info.default !== undefined && !(Array.isArray(info.default) && !info.default.length)}
         <span class="text-fg-subtle"
-          >Default <code class="font-mono">{shown(info.default)}</code>.</span>
+          >Default <code class="font-mono wrap-anywhere">{shown(info.default)}</code>.</span>
       {/if}
     </p>
     {#if info.envVar || info.cliFlag}
@@ -122,7 +122,8 @@
             </p>
             {#each [info.envVar && `${info.envVar}=…`, info.cliFlag && `${info.cliFlag} …`].filter((t): t is string => !!t) as text (text)}
               <span class="flex items-center gap-2">
-                <code class="flex-1 rounded-badge bg-surface-muted px-1.5 py-0.5 font-mono"
+                <code
+                  class="min-w-0 flex-1 rounded-badge bg-surface-muted px-1.5 py-0.5 font-mono wrap-anywhere"
                   >{text}</code>
                 <Button
                   variant="ghost"
@@ -148,14 +149,15 @@
         invalid={!!error} />
     {/key}
     {#if entry}
-      <p class="font-mono text-xs text-fg-subtle">{entry}</p>
+      <p class="font-mono text-xs wrap-anywhere text-fg-subtle">{entry}</p>
       <p class="text-xs text-fg-subtle">{field.derived?.note}</p>
     {/if}
     {#if error}<p class="text-xs text-danger" role="alert">{error}</p>{/if}
     {#if edit.notice}<p class="text-xs text-fg-muted">{edit.notice}</p>{/if}
     {#if notApplied}
       <p class="text-xs text-danger">
-        The value <code>{JSON.stringify(notApplied.value)}</code> in the file isn't in effect: {notApplied.reason}
+        The value <code class="wrap-anywhere">{JSON.stringify(notApplied.value)}</code> in the file
+        isn't in effect: {notApplied.reason}
       </p>
     {/if}
     {@render extra?.()}

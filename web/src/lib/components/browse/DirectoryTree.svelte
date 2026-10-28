@@ -1,6 +1,4 @@
 <script lang="ts" module>
-  /** the rows drawn beyond the visible ones, above and below */
-  const OVERSCAN = 15;
   const HEIGHT_KEY = "reseek-browse-tree-height";
 
   /** The tree's height saved in this browser, 300 px when none or nothing usable is */
@@ -45,7 +43,8 @@
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepsKey, withModifier } from "#lib/keys.js";
   import { Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
-  import { remPx } from "#lib/viewport.svelte.js";
+  import { rem } from "#lib/viewport.svelte.js";
+  import { ListWindow } from "#lib/virtual.svelte.js";
 
   import { LOCKED_HINT } from "./locked";
 
@@ -62,10 +61,10 @@
 
   const expansion = new Expansion(false);
   let scroller = $state<HTMLDivElement | null>(null);
-  let scrollTop = $state(0);
   /** one row's height, 2.0625rem in pixels; the tree is never shorter than a row */
-  const ROW = 2.0625 * remPx();
-  let height = $state(savedHeight(ROW));
+  const row = $derived(2.0625 * rem.px);
+  // svelte-ignore state_referenced_locally
+  let height = $state(savedHeight(row));
 
   // a new listing starts with its first folder open, a hint that folders open
   $effect(() => {
@@ -73,14 +72,16 @@
     untrack(() => {
       expansion.reset(false);
       if (first?.children.length) expansion.set(first.name, true);
-      scrollTop = 0;
       if (scroller) scroller.scrollTop = 0;
     });
   });
 
   const rows = $derived(flatten(tree.roots, expansion.isOpen, filter?.folder));
-  const start = $derived(Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN));
-  const end = $derived(Math.min(rows.length, Math.ceil((scrollTop + height) / ROW) + OVERSCAN));
+  const lines = new ListWindow(
+    () => rows,
+    (r) => r.node.name,
+    () => ({ estimateSize: () => row, overscan: 15, sizes: row })
+  );
 
   const caption = (files: number, folders: number) =>
     [
@@ -99,9 +100,7 @@
 
   /** Scrolls the row at `index` to the middle of the list */
   const centre = (index: number) => {
-    if (scroller && index !== -1) {
-      scroller.scrollTop = Math.max(0, index * ROW - height / 2 + ROW / 2);
-    }
+    if (index !== -1) lines.scrollTo(index, "center");
   };
 
   // letters typed with the list focused select the next folder starting with them
@@ -137,15 +136,15 @@
   bind:this={scroller}
   class="relative overflow-y-auto outline-none [overflow-anchor:auto] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
   style:height={`${height}px`}
-  onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
   role="tree"
   aria-label="Shared folders"
   tabindex="0"
   title="Type a folder's first letters to go to it"
   onkeydown={typeToFind}
+  {@attach lines.attach}
   {@attach freezesWhileUsed}>
-  <div style:height={`${rows.length * ROW}px`} class="relative">
-    {#each rows.slice(start, end) as { node, depth }, i (node.name)}
+  <div style:height={`${lines.total}px`} class="relative">
+    {#each lines.drawn as { line: { node, depth }, start, size } (node.name)}
       {@const open = !!filter || expansion.isOpen(node.name)}
       <div
         role="treeitem"
@@ -153,12 +152,12 @@
         aria-expanded={node.children.length ? open : undefined}
         tabindex="-1"
         class={[
-          "absolute inset-x-0 flex items-center gap-1.5 pr-3 text-sm hover:bg-hover",
+          "absolute inset-x-0 top-0 flex items-center gap-1.5 pr-3 text-sm hover:bg-hover",
           node.locked && "opacity-50",
           node.name === selected && "font-semibold text-accent"
         ]}
-        style:top={`${(start + i) * ROW}px`}
-        style:height={`${ROW}px`}
+        style:transform={`translateY(${start}px)`}
+        style:height={`${size}px`}
         style:padding-left={`calc(${depth * 2}em + 0.75rem)`}
         onclick={() => onselect(node.name)}
         onkeydown={(e) => {
@@ -184,15 +183,13 @@
             <FolderIcon class="size-4 text-fg-muted" />
           {/if}
         </button>
-        <!-- the name's track fills before the caption's, so the caption gives way first -->
-        <span
-          class="grid min-w-0 flex-1 grid-cols-[minmax(0,max-content)_minmax(0,1fr)] items-center gap-1.5">
+        <span class="name-count flex-1 gap-1.5">
           <span class="truncate">{leaf(node.name)}</span>
-          <span
-            class="overflow-hidden text-right text-xs font-normal text-ellipsis whitespace-nowrap text-fg-muted">
-            {caption(node.totalFileCount, node.totalDirectoryCount)}
-            {#if node.totalBytes}· {formatBytes(node.totalBytes)}{/if}
-          </span>
+          <span class="text-right text-xs font-normal text-fg-muted"
+            ><span
+              >{caption(node.totalFileCount, node.totalDirectoryCount)}
+              {#if node.totalBytes}· {formatBytes(node.totalBytes)}{/if}</span
+            ></span>
         </span>
       </div>
     {/each}
@@ -200,7 +197,7 @@
 </div>
 <ResizeHandle
   bind:value={height}
-  min={ROW}
+  min={row}
   edge="bottom"
   label="Height of the folder list"
   onchange={saveHeight}

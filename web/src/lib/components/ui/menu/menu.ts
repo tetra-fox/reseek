@@ -4,6 +4,7 @@ import { DropdownMenu } from "bits-ui";
 export const Root = DropdownMenu.Root;
 export const Trigger = DropdownMenu.Trigger;
 export { default as Content } from "./Content.svelte";
+export { default as LazyRoot } from "./LazyRoot.svelte";
 export const RadioGroup = DropdownMenu.RadioGroup;
 export { default as Item } from "./Item.svelte";
 export { default as CheckboxItem } from "./CheckboxItem.svelte";

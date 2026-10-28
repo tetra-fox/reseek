@@ -70,8 +70,11 @@ describe("the dashboard", () => {
     expect(text()).toContain("1.5GB Uploaded · 6 files");
     expect(text()).toContain("0.50 Share ratio");
     expect(text()).toContain("5 Users transferred with");
-    // two series drawn by default, each an area and its edge
-    expect(document.querySelectorAll('svg[aria-label="Transfers over time"] path')).toHaveLength(4);
+    // two series drawn by default, which the chart names with their peaks
+    const history = document.querySelector('[role=img][aria-label^="Transfers over time"]')!;
+    expect(history.getAttribute("aria-label")).toMatch(
+      /Upload size peaks at .*; Download size peaks/
+    );
     expect(text()).toContain("alice");
 
     [...document.querySelectorAll("button")].find((b) => b.textContent === "Folders")!.click();

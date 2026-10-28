@@ -165,9 +165,10 @@
 {#if !profile}
   <Skeleton class="h-80" />
 {:else}
-  <div class="grid gap-section md:grid-cols-2">
+  <!-- the column never takes its content's width, so large text wraps rather than widens it -->
+  <div class="grid grid-cols-[minmax(0,1fr)] gap-section md:grid-cols-2">
     <Card title="Edit profile">
-      <div class="flex items-center gap-4">
+      <div class="flex flex-wrap items-center gap-4">
         <!-- a picture dropped here is taken like one picked -->
         <div
           role="region"

@@ -4,29 +4,43 @@
 </script>
 
 <script lang="ts">
-  // the last speeds a transfer reported, as a small line; nothing until there are two
+  import { Chart, Html } from "layerchart";
+
+  import DitherFill from "#lib/components/charts/DitherFill.svelte";
+
+  // the last speeds a transfer reported, as a small dithered area on LayerChart, still and
+  // without axes; nothing until there are two
   let { points }: { points: number[] } = $props();
 
-  const H = 14;
-  const path = $derived.by(() => {
-    if (points.length < 2) return "";
-    const top = Math.max(...points) || 1;
-    return points
-      .map(
-        (p, i) =>
-          `${((i / (points.length - 1)) * SPARKLINE_WIDTH).toFixed(1)},${(H - (p / top) * H).toFixed(1)}`
-      )
-      .join(" ");
-  });
+  const HEIGHT = 14;
+  const data = $derived(points.map((speed, i) => ({ i, speed })));
 </script>
 
-{#if path}
-  <svg
-    width={SPARKLINE_WIDTH}
-    height={H}
-    viewBox={`0 0 ${SPARKLINE_WIDTH} ${H}`}
-    class="shrink-0 text-accent"
+{#if points.length >= 2}
+  <div
+    class="relative shrink-0"
+    style:width={`${SPARKLINE_WIDTH}px`}
+    style:height={`${HEIGHT}px`}
     aria-hidden="true">
-    <polyline points={path} fill="none" stroke="currentColor" stroke-width="1.25" />
-  </svg>
+    <Chart {data} x="i" y="speed" yDomain={[0, null]} padding={0} tooltipContext={false}>
+      {#snippet children({ context })}
+        <Html pointerEvents={false}>
+          <DitherFill
+            width={context.width}
+            height={context.height}
+            areas={[
+              {
+                key: "speed",
+                color: "var(--color-accent)",
+                x: data.map((d) => context.xScale(d.i)),
+                top: data.map((d) => context.yScale(d.speed)),
+                floor: data.map(() => context.yScale(0))
+              }
+            ]}
+            animate={false}
+            bloom={false} />
+        </Html>
+      {/snippet}
+    </Chart>
+  </div>
 {/if}

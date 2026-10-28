@@ -23,7 +23,8 @@
   )}
   {...rest}>
   {#if title || description || action}
-    <div class="flex items-start justify-between gap-inline px-5">
+    <!-- the action goes under the title when large text leaves no room beside it -->
+    <div class="flex flex-wrap items-start justify-between gap-inline px-5">
       <div class="flex min-w-0 flex-col gap-1">
         {#if title}
           <h3 class="text-sm leading-tight font-semibold select-none">{title}</h3>

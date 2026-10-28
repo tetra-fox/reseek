@@ -2,9 +2,8 @@
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import XIcon from "@lucide/svelte/icons/x";
+  import { defaultRangeExtractor } from "@tanstack/virtual-core";
   import { tick, untrack } from "svelte";
-  import { on } from "svelte/events";
-  import { SvelteMap } from "svelte/reactivity";
   import { fly } from "svelte/transition";
 
   import { type Line, layout, LONG, type Message } from "#lib/chat/messages.js";
@@ -15,6 +14,7 @@
   import { formatDay, plural } from "#lib/format.js";
   import { freezesWhileUsed, interaction } from "#lib/interaction.svelte.js";
   import { motionFast } from "#lib/motion.js";
+  import { ListWindow } from "#lib/virtual.svelte.js";
 
   import GapRow from "./GapRow.svelte";
   import MessageRow from "./MessageRow.svelte";
@@ -35,38 +35,34 @@
 
   /** this close to the bottom counts as at the bottom */
   const NEAR = 48;
-  /** lines drawn beyond the visible ones, above and below, in pixels */
-  const OVERSCAN = 800;
+
+  /** the line at the top of a history read back to its start */
+  type Start = { kind: "start"; key: "start" };
 
   let box = $state<HTMLDivElement | null>(null);
-  /** the spacer above the drawn lines, where `tops` starts in the box */
-  let head = $state<HTMLDivElement | null>(null);
   let atBottom = $state(true);
   /** messages that arrived while scrolled up, for the pill */
   let fresh = $state(0);
   let loadingOlder = $state(false);
-  let scrollTop = $state(0);
-  let view = $state(0);
+  /** the scrollbar is held down: a press on the list beside its content */
+  let gripped = $state(false);
   let placed = false;
   /** the newest message when the list was placed or last followed a new one */
   let seenNewest: number | null = null;
 
-  const lines = $derived(layout(pane.ordered, pane.gaps, pane.unreadFrom));
+  const lines = $derived<(Line | Start)[]>([
+    ...(!pane.hasMore && pane.loaded && pane.ordered.length
+      ? [{ kind: "start", key: "start" } as const]
+      : []),
+    ...layout(pane.ordered, pane.gaps, pane.unreadFrom)
+  ]);
   const newest = $derived(pane.ordered.at(-1)?.localId ?? null);
 
-  /*
-   * The list is windowed: only the lines near the view are in the page, between two spacers as
-   * tall as the lines above and below. A line's height is measured once it is drawn and guessed
-   * before; the browser's scroll anchoring keeps the view still as guesses become measures. While
-   * the user holds the list (a selection, a press), the window only grows, so nothing selected
-   * leaves the page
-   */
-  const heights = new SvelteMap<string, number>();
   /**
    * A line's height before it is drawn. A message counts one 20 px line per 80 characters of
    * each line of its text, plus 2 px of padding, or 32 px with the header of a group's first
    */
-  const guess = (line: Line) => {
+  const guess = (line: Line | Start) => {
     if (line.kind === "unread") return 24;
     if (line.kind !== "message") return 36;
     const { message: m, head } = line;
@@ -78,123 +74,51 @@
           .reduce((n, text) => n + Math.max(1, Math.ceil(text.length / 80)), 0);
     return (head ? 32 : 2) + 20 * rows;
   };
-  const tops = $derived.by(() => {
-    const at = [0];
-    for (const line of lines) at.push(at.at(-1)! + (heights.get(line.key) ?? guess(line)));
-    return at;
-  });
-  /** the first index whose line ends below `y` */
-  const indexAt = (y: number) => {
-    let low = 0;
-    let high = lines.length;
-    while (low < high) {
-      const mid = (low + high) >> 1;
-      if (tops[mid + 1] <= y) low = mid + 1;
-      else high = mid;
-    }
-    return low;
-  };
-  let heldKeys: string[] = [];
-  const range = $derived.by(() => {
-    let start = indexAt(scrollTop - OVERSCAN);
-    let end = Math.min(lines.length, indexAt(scrollTop + view + OVERSCAN) + 1);
-    if (interaction.frozen && heldKeys.length) {
-      const first = lines.findIndex((l) => l.key === heldKeys[0]);
-      const last = lines.findIndex((l) => l.key === heldKeys.at(-1));
-      if (first !== -1) start = Math.min(start, first);
-      if (last !== -1) end = Math.max(end, last + 1);
-    }
-    return { start, end };
-  });
-  const shown = $derived(lines.slice(range.start, range.end));
-  $effect(() => {
-    heldKeys = shown.map((l) => l.key);
-  });
 
-  const observer = new ResizeObserver((entries) => {
-    for (const entry of entries) remember(entry.target as HTMLElement);
-    // the lines got their real heights: a view kept at the bottom stays there, one kept on a
-    // line stays on it
-    if (stick && !interaction.frozen) void tick().then(toBottom);
-    // while the page loads, the line in view is read again from the real heights
-    else if (loadingOlder) void tick().then(() => (anchor = anchorOf()));
-    else if (anchor) void tick().then(toAnchor);
-  });
-  $effect(() => () => observer.disconnect());
-  const remember = (node: HTMLElement) => {
-    if (node.dataset.key) heights.set(node.dataset.key, node.offsetHeight);
-  };
-  const measure = (node: HTMLElement) => {
-    observer.observe(node);
-    return () => observer.unobserve(node);
-  };
-
-  /** Reads where the view is, which decides what is drawn and whether it is at the bottom */
-  const seen = () => {
-    if (!box) return;
-    scrollTop = box.scrollTop;
-    view = box.clientHeight;
-    atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < NEAR;
-  };
-  /**
-   * the view is kept at the bottom: set when it is scrolled there by the list, kept while the
-   * lines measured on the way grow the content, and given up when the user scrolls up
+  /** the lines drawn when the user took hold of the list, which stay drawn while it is held */
+  let held: string[] = [];
+  /*
+   * The list is windowed: only the lines near the view are in the page. A line's height is
+   * guessed before it is drawn and measured once it is. Older messages arriving above leave the
+   * first message in view where it was; at the bottom, new ones are followed unless the user
+   * holds the list. While the user holds it (a selection, a press), the lines drawn when they
+   * took hold stay drawn, so nothing selected leaves the page
    */
-  let stick = false;
-  /** where the list last scrolled the view to */
-  let setTop = 0;
-  /**
-   * the line the view is kept on while older messages load above it and the lines drawn after
-   * get their real heights, with how far below the view's top it was. A scroll while the page
-   * loads moves it; one after the page is placed lets it go
-   */
-  let anchor: { key: string; offset: number } | null = null;
-  /**
-   * The first message the list puts at least partly in view, and how far below the view's top
-   * it starts, both from the list's own line positions rather than the drawn lines, which can
-   * still be those from before a long scroll. Only a message: a day line takes the key of the
-   * day's first message, which changes as older ones arrive
-   */
-  const anchorOf = () => {
-    if (!box || !head) return null;
-    const top = box.scrollTop;
-    for (let index = indexAt(top - head.offsetTop); index < lines.length; index++) {
-      const line = lines[index];
-      if (line.kind === "message") {
-        return { key: line.key, offset: head.offsetTop + tops[index] - top };
+  const shown = new ListWindow(
+    () => lines,
+    (line) => line.key,
+    () => ({
+      estimateSize: (index) => guess(lines[index]),
+      overscan: 12,
+      paddingEnd: 8,
+      // while the scrollbar is held at the top, older pages go above it rather than keep the view
+      anchor: gripped ? undefined : (line) => line.kind === "message",
+      followOnAppend: !interaction.frozen,
+      anchorTo: "end",
+      scrollEndThreshold: NEAR,
+      rangeExtractor: (range) => {
+        const drawn = defaultRangeExtractor(range);
+        if (!interaction.frozen || !held.length) return drawn;
+        const keys = new Set(drawn.map((index) => lines[index]?.key));
+        const kept = held.flatMap((key) => {
+          const index = lines.findIndex((l) => l.key === key);
+          return index === -1 || keys.has(key) ? [] : [index];
+        });
+        return [...drawn, ...kept].toSorted((a, b) => a - b);
       }
-    }
-    return null;
-  };
-  const toAnchor = () => {
-    if (!box || !head || !anchor) return;
-    const key = anchor.key;
-    const index = lines.findIndex((l) => l.key === key);
-    if (index === -1) return;
-    box.scrollTop = head.offsetTop + tops[index] - anchor.offset;
-    setTop = box.scrollTop;
-    seen();
-  };
-  /**
-   * Lets go of the line the view was kept on once the page is placed, when the user scrolls by
-   * wheel, touch, key or scrollbar
-   */
-  const releasesOnUse = (node: HTMLElement) => {
-    const release = () => {
-      if (!loadingOlder) anchor = null;
-    };
-    const off = ["wheel", "touchmove", "keydown", "pointerdown"].map((type) =>
-      on(node, type, release, { passive: true })
-    );
-    return () => off.forEach((stop) => stop());
+    })
+  );
+  $effect(() => {
+    const keys = shown.drawn.map((d) => d.key);
+    if (!interaction.frozen) held = keys;
+  });
+
+  /** Reads whether the view is at the bottom */
+  const seen = () => {
+    if (box) atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < NEAR;
   };
   const toBottom = () => {
-    if (!box) return;
-    anchor = null;
-    stick = true;
-    box.scrollTop = box.scrollHeight;
-    setTop = box.scrollTop;
-    seen();
+    shown.scrollToEnd();
     fresh = 0;
   };
   /** where the line marking the first unread message is, -1 without one */
@@ -206,14 +130,11 @@
   let unreadDismissed = $state(false);
   /** the unread line is above the view: a pill offers to go up to it */
   const unreadAbove = $derived(
-    !unreadDismissed && unreadAt !== -1 && !!head && tops[unreadAt] + head.offsetTop < scrollTop
+    !unreadDismissed && unreadAt !== -1 && (shown.startOf(unreadAt) ?? 0) < shown.offset
   );
   const toUnread = () => {
-    if (!box || !head || unreadAt === -1) return;
-    stick = false;
-    anchor = null;
-    box.scrollTop = Math.max(0, head.offsetTop + tops[unreadAt] - 8);
-    seen();
+    if (unreadAt === -1) return;
+    shown.scrollTo(unreadAt, "start");
     unreadDismissed = true;
   };
 
@@ -230,22 +151,16 @@
     seenNewest = untrack(() => newest);
     untrack(async () => {
       if (at !== null) await pane.reach(at);
+      await tick();
       const index = at === null ? -1 : lines.findIndex((l) => l.key === `m:${at}`);
-      if (index === -1 || !box) toBottom();
-      else {
-        stick = false;
-        anchor = null;
-        box.scrollTop = Math.max(0, tops[index] - box.clientHeight / 2);
-        seen();
-        await tick();
-        box.querySelector(`[data-message="${at}"]`)?.scrollIntoView({ block: "center" });
-      }
+      if (index === -1) toBottom();
+      else shown.scrollTo(index, "center");
       await tick();
       readIfSeen();
     });
   });
 
-  // a new message keeps the view at the bottom when it was there and nothing holds the list;
+  // a new message is followed at the bottom when the view was there and nothing holds the list;
   // otherwise the pill counts it
   $effect(() => {
     if (newest === null) return;
@@ -253,9 +168,8 @@
       // the first page is placed on its own; this follows the messages after it
       if (!placed || newest === seenNewest) return;
       seenNewest = newest;
-      if ((stick || atBottom) && !interaction.frozen) {
+      if (atBottom && !interaction.frozen) {
         await tick();
-        toBottom();
         readIfSeen();
       } else fresh += 1;
     });
@@ -263,48 +177,28 @@
 
   const scrolled = async () => {
     if (!box) return;
-    // the content grew under a view kept at the bottom: it follows; a scroll up lets it go
-    if (stick && box.scrollTop >= setTop - 1) {
-      if (box.scrollHeight - box.scrollTop - box.clientHeight >= NEAR) return toBottom();
-    } else stick = false;
     seen();
-    if (loadingOlder) return void (anchor = anchorOf());
     if (atBottom) {
       fresh = 0;
       readIfSeen();
     }
     if (box.scrollTop < NEAR * 2 && pane.hasMore && !loadingOlder && placed) {
-      // older messages go above; the view stays on the line it showed, or at the top for as long
-      // as the scrollbar is held there
+      // older messages go above; the view stays on the message it showed, or at the top for as
+      // long as the scrollbar is held there
       loadingOlder = true;
-      anchor = anchorOf();
       await pullOlder({
         older: () => pane.older(),
         more: () => pane.hasMore,
         held: () => gripped && !!box && box.scrollTop < NEAR * 2,
-        settle: async (held) => {
+        settle: async (holding) => {
           await tick();
-          if (held && box) {
-            anchor = null;
-            box.scrollTop = 0;
-            seen();
-            return;
-          }
-          toAnchor();
-          // the lines drawn at the new place are measured now rather than when the observer
-          // runs, so the view never shows them placed by their guessed heights
-          await tick();
-          if (box)
-            for (const node of box.querySelectorAll<HTMLElement>("[data-key]")) remember(node);
-          toAnchor();
+          if (holding && box) box.scrollTop = 0;
         }
       });
       loadingOlder = false;
     }
   };
 
-  /** the scrollbar is held down: a press on the list beside its content */
-  let gripped = false;
   const grip = (e: PointerEvent) => {
     if (box && e.target === box && e.offsetX >= box.clientWidth) gripped = true;
   };
@@ -316,45 +210,49 @@
 <div class="relative flex min-h-0 flex-1 flex-col">
   <div
     bind:this={box}
-    class="relative min-h-0 flex-1 overflow-y-auto pb-2 [overflow-anchor:auto]"
+    class="relative min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
     role="log"
     aria-live="polite"
     onscroll={scrolled}
     onpointerdown={grip}
-    {@attach releasesOnUse}
+    {@attach shown.attach}
     {@attach freezesWhileUsed}>
-    {#if !pane.hasMore && pane.loaded && pane.ordered.length}
-      <p class="py-2 text-center text-xs text-fg-subtle">The start of the stored history</p>
-    {/if}
-    <div bind:this={head} style:height={`${tops[range.start]}px`} aria-hidden="true"></div>
-    {#each shown as line (line.key)}
-      <div data-key={line.key} {@attach measure}>
-        {#if line.kind === "day"}
-          <div class="flex items-center gap-3 px-3 py-2 text-xs text-fg-muted" role="separator">
-            <span class="h-px flex-1 bg-border"></span>
-            {formatDay(line.date)}
-            <span class="h-px flex-1 bg-border"></span>
-          </div>
-        {:else if line.kind === "gap"}
-          <GapRow gap={line.gap} />
-        {:else if line.kind === "unread"}
-          <div class="flex items-center gap-3 px-3 py-1 text-xs text-accent" role="separator">
-            <span class="h-px flex-1 bg-accent"></span>New<span class="h-px flex-1 bg-accent"
-            ></span>
-          </div>
-        {:else}
-          <MessageRow
-            message={line.message}
-            head={line.head}
-            highlight={line.message.localId === at}
-            {watch}
-            room={pane.target.kind === "room"}
-            {onreply}
-            onretry={() => void pane.retry(line.message)} />
-        {/if}
-      </div>
-    {/each}
-    <div style:height={`${tops[lines.length] - tops[range.end]}px`} aria-hidden="true"></div>
+    <div class="relative" style:height={`${shown.total}px`}>
+      {#each shown.drawn as { line, index, start } (line.key)}
+        <div
+          class="absolute inset-x-0 top-0"
+          style:transform={`translateY(${start}px)`}
+          data-index={index}
+          data-key={line.key}
+          {@attach shown.measure}>
+          {#if line.kind === "start"}
+            <p class="py-2 text-center text-xs text-fg-subtle">The start of the stored history</p>
+          {:else if line.kind === "day"}
+            <div class="flex items-center gap-3 px-3 py-2 text-xs text-fg-muted" role="separator">
+              <span class="h-px flex-1 bg-border"></span>
+              {formatDay(line.date)}
+              <span class="h-px flex-1 bg-border"></span>
+            </div>
+          {:else if line.kind === "gap"}
+            <GapRow gap={line.gap} />
+          {:else if line.kind === "unread"}
+            <div class="flex items-center gap-3 px-3 py-1 text-xs text-accent" role="separator">
+              <span class="h-px flex-1 bg-accent"></span>New<span class="h-px flex-1 bg-accent"
+              ></span>
+            </div>
+          {:else}
+            <MessageRow
+              message={line.message}
+              head={line.head}
+              highlight={line.message.localId === at}
+              {watch}
+              room={pane.target.kind === "room"}
+              {onreply}
+              onretry={() => void pane.retry(line.message)} />
+          {/if}
+        </div>
+      {/each}
+    </div>
   </div>
   {#if unreadAbove}
     <div

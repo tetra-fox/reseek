@@ -1,6 +1,4 @@
 <script lang="ts">
-  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
-  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import DownloadIcon from "@lucide/svelte/icons/download";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import FolderDownIcon from "@lucide/svelte/icons/folder-down";
@@ -12,31 +10,24 @@
   import Suspect from "#lib/components/files/Suspect.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
+  import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { asItem, enqueue } from "#lib/downloads.js";
   import {
-    cssWidth,
     formatAttributes,
     formatBytes,
     formatSeconds,
     getFileName,
-    plural,
-    sumWidths
+    plural
   } from "#lib/format.js";
   import { freezesWhileUsed, heldOrder } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
-  import {
-    DENSE_COLUMNS,
-    type DenseColumn,
-    type DenseRow,
-    denseView,
-    denseWidth,
-    nextSort,
-    sortDense
-  } from "#lib/search/dense.js";
+  import { DENSE_COLUMNS, type DenseColumn, type DenseRow, denseView } from "#lib/search/dense.js";
+  import { Grid } from "#lib/table.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
-  import { remPx } from "#lib/viewport.svelte.js";
+  import { rem } from "#lib/viewport.svelte.js";
+  import { ListWindow } from "#lib/virtual.svelte.js";
 
   import Country from "./Country.svelte";
 
@@ -50,29 +41,27 @@
 
   let { rows, searchId, canDownload }: Props = $props();
 
-  /** one row's height, 1.75rem in pixels, and the rows drawn beyond the visible ones */
-  const ROW = 1.75 * remPx();
-  const OVERSCAN = 12;
-
-  let scrollTop = $state(0);
-  let height = $state(600);
-  let grid = $state<HTMLDivElement | null>(null);
   let headerHeight = $state(0);
-  let resizing: { id: DenseColumn; x: number; width: number } | null = null;
   const selected = new SvelteSet<string>();
   const arrivals = new Arrivals();
 
+  const grid = new Grid<DenseRow>({
+    columns: () => DENSE_COLUMNS,
+    data: () => rows,
+    sort: () => denseView.sort,
+    setSort: (sort) => (denseView.sort = sort as typeof denseView.sort),
+    dragged: () => denseView.dragged,
+    drag: (id, width) => (denseView.dragged[id as DenseColumn] = width),
+    clearable: true
+  });
+
   // while the user holds the list still, rows keep their places and new ones go below
   const hold = heldOrder<DenseRow>((r) => r.key);
-  const sorted = $derived(hold(sortDense(rows, denseView.sort)));
+  const sorted = $derived(hold(grid.rows));
   $effect(() => arrivals.see(sorted.map((r) => r.key)));
 
-  const template = $derived(
-    `2.5rem ${DENSE_COLUMNS.map((c) => cssWidth(denseWidth(c))).join(" ")} 4.5rem`
-  );
-  const width = $derived(sumWidths(["2.5rem", ...DENSE_COLUMNS.map(denseWidth), "4.5rem"]));
-  const start = $derived(Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN));
-  const end = $derived(Math.min(sorted.length, Math.ceil((scrollTop + height) / ROW) + OVERSCAN));
+  /** one row's height, 1.75rem in pixels */
+  const rowHeight = $derived(1.75 * rem.px);
   const chosen = $derived(sorted.filter((r) => selected.has(r.key)));
   const chosenBytes = $derived(chosen.reduce((n, r) => n + r.file.size, 0));
 
@@ -91,7 +80,7 @@
 
   // the users on screen are looked up, for their presence and the offline toggle
   $effect(() => {
-    for (const name of new Set(sorted.slice(start, end).map((r) => r.username))) {
+    for (const name of new Set(lines.drawn.map((drawn) => drawn.line.username))) {
       void users.load(name);
     }
   });
@@ -126,17 +115,24 @@
     onopen: (r) => {
       if (canDownload) void download(selected.size > 1 ? chosen : [r]);
     },
-    rendered: (index) => index >= start && index < end,
-    reveal: (index) => {
-      if (!grid) return;
-      const top = index * ROW;
-      if (top < grid.scrollTop) grid.scrollTop = top;
-      else if (top + ROW > grid.scrollTop + height - headerHeight) {
-        grid.scrollTop = top + ROW - height + headerHeight;
-      }
-    },
+    rendered: (index) => lines.isDrawn(index),
+    reveal: (index) => lines.scrollTo(index),
     selected
   });
+
+  const lines: ListWindow<DenseRow> = new ListWindow(
+    () => sorted,
+    (r) => r.key,
+    () => ({
+      estimateSize: () => rowHeight,
+      overscan: 12,
+      scrollMargin: headerHeight,
+      scrollPaddingStart: headerHeight,
+      sizes: rowHeight,
+      // a control in a line that scrolled out of the window gives focus back to the list
+      onchange: () => list.scrolled()
+    })
+  );
 
   /** Gives the grid DOM focus, without scrolling */
   export const focus = list.focus;
@@ -154,79 +150,32 @@
     aria-multiselectable="true"
     aria-activedescendant={list.activeId}
     tabindex="0"
-    bind:this={grid}
-    bind:clientHeight={height}
-    onscroll={(e) => {
-      scrollTop = e.currentTarget.scrollTop;
-      list.scrolled();
-    }}
+    {@attach lines.attach}
     {@attach list.attach}>
-    <div
-      role="row"
-      class="sticky top-0 z-10 grid h-8 items-center border-b bg-surface-muted text-sm font-medium text-fg-muted"
-      style:grid-template-columns={template}
-      style:min-width={width}
-      bind:offsetHeight={headerHeight}>
-      <!-- each header holds its cell, so the labels line up with the columns under them -->
-      <span role="columnheader"><span class="sr-only">Select</span></span>
-      {#each DENSE_COLUMNS as column (column.id)}
-        {@const sort = denseView.sort?.id === column.id ? denseView.sort.dir : null}
-        <span
-          role="columnheader"
-          aria-sort={sort === "asc" ? "ascending" : sort === "desc" ? "descending" : undefined}
-          class={["relative flex min-w-0 items-center px-2 text-xs", column.end && "justify-end"]}>
-          <button
-            type="button"
-            class="flex min-w-0 items-center gap-1 truncate hover:text-fg"
-            onclick={() => (denseView.sort = nextSort(denseView.sort, column.id))}>
-            {column.label}
-            {#if sort === "asc"}<ArrowUpIcon
-                class="size-3" />{:else if sort === "desc"}<ArrowDownIcon class="size-3" />{/if}
-          </button>
-          <!-- dragging the edge sets the column's width, which is kept -->
-          <span
-            class="absolute top-1 right-0 bottom-1 w-1.5 cursor-col-resize border-r"
-            role="separator"
-            aria-label={`Width of ${column.label}`}
-            onpointerdown={(e) => {
-              // a drag starts from the width the column has on screen, whatever it was set as
-              const cell = e.currentTarget.parentElement!.getBoundingClientRect();
-              resizing = { id: column.id, x: e.clientX, width: cell.width };
-              e.currentTarget.setPointerCapture(e.pointerId);
-            }}
-            onpointermove={(e) => {
-              if (!resizing) return;
-              denseView.dragged[resizing.id] = Math.max(
-                40,
-                Math.round(resizing.width + e.clientX - resizing.x)
-              );
-            }}
-            onpointerup={() => (resizing = null)}></span>
-        </span>
-      {/each}
-      <span role="columnheader"><span class="sr-only">Actions</span></span>
+    <div class="sticky top-0 z-10" style:min-width={grid.width} bind:offsetHeight={headerHeight}>
+      <GridHeader {grid} class="h-8 border-b bg-surface-muted text-sm font-medium text-fg-muted" />
     </div>
     <div
       class="relative"
       role="rowgroup"
-      style:height={`${sorted.length * ROW}px`}
-      style:min-width={width}
+      style:height={`${lines.total}px`}
+      style:min-width={grid.width}
       {@attach freezesWhileUsed}>
-      {#each sorted.slice(start, end) as row, i (row.key)}
+      {#each lines.drawn as { line: row, index, start, size } (row.key)}
         {@const name = getFileName(row.file.filename)}
         {@const folder = folderOf(row)}
         <div
           role="row"
-          {...list.line(row, start + i)}
+          {...list.line(row, index)}
           class={[
-            "group absolute inset-x-0 grid items-center border-b hover:bg-hover",
+            "group absolute inset-x-0 top-0 grid items-center border-b hover:bg-hover",
             selected.has(row.key) && "bg-accent-soft/60",
             list.isFocused(row) && "ring-1 ring-accent ring-inset",
             arrivals.isFresh(row.key) && "animate-row-in"
           ]}
-          style:top={`${(start + i) * ROW}px`}
-          style:height={`${ROW}px`}
-          style:grid-template-columns={template}
+          style:transform={`translateY(${start - headerHeight}px)`}
+          style:height={`${size}px`}
+          style:grid-template-columns={grid.template}
           onmousedown={(e) => {
             // the middle button scrolls the page by dragging, unless kept from it
             if (e.button === 1 && canDownload) e.preventDefault();

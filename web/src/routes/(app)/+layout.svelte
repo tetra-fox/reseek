@@ -22,7 +22,15 @@
   import { trail } from "#lib/crumbs.svelte.js";
   import { togglesActivity } from "#lib/keys.js";
   import { live } from "#lib/live/live.svelte.js";
-  import { baseCrumbs, changesScreen, href, redirectFor, route, titleOf } from "#lib/nav.js";
+  import {
+    baseCrumbs,
+    changesScreen,
+    fillsContent,
+    href,
+    redirectFor,
+    route,
+    titleOf
+  } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   // listens for transfer frames from the start, so its notifications follow every screen
   import "#lib/transfers/notices.svelte.js";
@@ -40,10 +48,18 @@
     if (prefersReducedMotion.current || typeof document.startViewTransition !== "function") return;
     const { from, to } = navigation;
     if (!from?.url || !to?.url || !changesScreen(route(from.url).path, route(to.url).path)) return;
+    // the page is named only while the transition runs: a name makes the page a stacking
+    // context of its own, which would put the fixed layers drawn in a screen, such as the
+    // transfer details drawer, under the header
+    const page = content.scroller?.querySelector("main");
+    if (page) page.style.viewTransitionName = "page";
     return new Promise((ready) => {
-      document.startViewTransition(async () => {
+      const transition = document.startViewTransition(async () => {
         ready();
         await navigation.complete;
+      });
+      void transition.finished.finally(() => {
+        if (page) page.style.viewTransitionName = "";
       });
     });
   });
@@ -62,12 +78,15 @@
   let contentHeight = $state(0);
   let dockHeight = $state(0);
   let bottomHeight = $state(0);
+  let topHeight = $state(0);
   $effect(() => {
     const root = document.documentElement.style;
     if (contentHeight) root.setProperty("--content-h", `${contentHeight}px`);
+    if (topHeight) root.setProperty("--top-h", `${topHeight}px`);
     if (bottomHeight) root.setProperty("--bottom-h", `${dockHeight + bottomHeight}px`);
     return () => {
       root.removeProperty("--content-h");
+      root.removeProperty("--top-h");
       root.removeProperty("--bottom-h");
     };
   });
@@ -142,8 +161,10 @@
     <div class="flex min-h-0">
       <Sidebar />
       <div class="flex min-w-0 flex-1 flex-col">
-        <Header />
-        <LostBanner />
+        <div bind:clientHeight={topHeight}>
+          <Header />
+          <LostBanner />
+        </div>
         <!-- relative, so what is placed absolutely inside, such as a screen reader's hidden label,
              is held and clipped here rather than stretching the window past the shell -->
         <div
@@ -152,8 +173,10 @@
           class="relative min-h-0 flex-1 overflow-y-auto"
           data-content>
           <main
-            style:view-transition-name="page"
-            class="mx-auto flex min-h-full w-full max-w-page min-w-0 flex-col gap-section p-gutter">
+            class={[
+              "mx-auto flex min-h-full w-full min-w-0 flex-col",
+              fillsContent(at.path) ? "h-full" : "max-w-page gap-section p-gutter"
+            ]}>
             <svelte:boundary>
               {@render children()}
               {#snippet failed(error, reset)}

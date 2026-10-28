@@ -1,7 +1,12 @@
+<script lang="ts" module>
+  import { gridView } from "#lib/table.svelte.js";
+
+  /** the room list's sort and column widths, kept in this browser */
+  const view = gridView("reseek.rooms.available", ["name", "users"], { id: "users", dir: "desc" });
+</script>
+
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
-  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import CheckIcon from "@lucide/svelte/icons/check";
   import CrownIcon from "@lucide/svelte/icons/crown";
   import GavelIcon from "@lucide/svelte/icons/gavel";
@@ -15,18 +20,22 @@
   import Field from "#lib/components/Field.svelte";
   import Form from "#lib/components/Form.svelte";
   import Button from "#lib/components/ui/Button.svelte";
-  import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
+  import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import Switch from "#lib/components/ui/Switch.svelte";
   import { ListControl } from "#lib/list.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { href, roomHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { fields } from "#lib/stored.svelte.js";
+  import { Grid, keptIn } from "#lib/table.svelte.js";
+  import { rem } from "#lib/viewport.svelte.js";
+  import { ListWindow } from "#lib/virtual.svelte.js";
 
-  // the server's rooms to pick one from, or a name to join or create
+  // two parts: the server's public rooms, each joined from its row, and a room created by name
   let { open = $bindable(), name: start = "" }: { open: boolean; name?: string } = $props();
 
   /** whether we take invitations to private rooms, the daemon's `chat` option; on unless set off */
@@ -34,19 +43,12 @@
     fields(fields(app.options).chat).accept_private_room_invitations !== false
   );
 
-  /** rooms listed at once; the filter narrows the rest */
-  const SHOWN = 300;
-
   const available = new Loader(() => call(() => api.GET("/api/v0/rooms/available")));
   let filter = $state("");
   let name = $state("");
   let isPrivate = $state(false);
-  let sort = $state<{ by: "name" | "userCount"; dir: "asc" | "desc" }>({
-    by: "userCount",
-    dir: "desc"
-  });
   let error = $state("");
-  let joining = $state(false);
+  let creating = $state(false);
 
   // each opening reads the list and starts from the name it was opened with
   $effect(() => {
@@ -58,37 +60,57 @@
     void available.load();
   });
 
-  const rooms = $derived.by(() => {
+  type Room = Schemas["RoomInfo"];
+  const matching = $derived.by(() => {
     const f = filter.trim().toLowerCase();
-    const sign = sort.dir === "asc" ? 1 : -1;
-    return (available.data ?? [])
-      .filter((r) => !f || r.name.toLowerCase().includes(f))
-      .toSorted(
-        (a, b) =>
-          sign * (sort.by === "name" ? a.name.localeCompare(b.name) : a.userCount - b.userCount) ||
-          a.name.localeCompare(b.name)
-      );
+    return (available.data ?? []).filter((r) => !f || r.name.toLowerCase().includes(f));
   });
-  const shown = $derived(rooms.slice(0, SHOWN));
+  const grid = new Grid<Room>({
+    columns: () => [
+      { id: "name", label: "Name", width: "8rem", grow: true, value: (r) => r.name.toLowerCase() },
+      {
+        id: "users",
+        label: "Users",
+        width: "5rem",
+        end: true,
+        descFirst: true,
+        value: (r) => r.userCount
+      },
+      { id: "join", label: "Join", width: "8.5rem", quiet: true, fixed: true }
+    ],
+    data: () => matching,
+    ...keptIn(view),
+    ties: "name"
+  });
+  const rooms = $derived(grid.rows);
+  let headerHeight = $state(0);
 
   const list = new ListControl<Schemas["RoomInfo"]>({
-    lines: () => shown,
+    lines: () => rooms,
     key: (r) => r.name,
     id: (r) => r.name,
     // Enter joins the room on the focused row, or opens it once joined
-    onopen: (r) => (isJoined(r.name) ? enter(r.name) : void joinRow(r.name))
+    onopen: (r) => (isJoined(r.name) ? enter(r.name) : void joinRow(r.name)),
+    rendered: (index) => lines.isDrawn(index),
+    reveal: (index) => lines.scrollTo(index)
   });
+  // the server lists thousands of rooms; the window draws those in view
+  const lines: ListWindow<Room> = new ListWindow(
+    () => rooms,
+    (r) => r.name,
+    () => ({
+      estimateSize: () => 1.75 * rem.px,
+      overscan: 10,
+      scrollMargin: headerHeight,
+      scrollPaddingStart: headerHeight,
+      sizes: rem.px,
+      onchange: () => list.scrolled()
+    })
+  );
   /** joined now, by this page's list, which the server's room list can lag behind */
   const isJoined = (room: string) => !!chat.rooms.get(room);
   /** the rooms whose Join or Leave is under way */
   const busy = new SvelteSet<string>();
-
-  const sortBy = (by: "name" | "userCount") => {
-    sort = {
-      by,
-      dir: sort.by === by ? (sort.dir === "asc" ? "desc" : "asc") : by === "name" ? "asc" : "desc"
-    };
-  };
 
   const enter = (room: string) => {
     open = false;
@@ -110,30 +132,43 @@
     if (!outcome.ok) error = `${room}: ${outcome.error}`;
   };
 
-  const join = async (room: string) => {
-    if (!room.trim() || joining) return;
-    joining = true;
-    const outcome = await chat.join(room.trim(), isPrivate);
-    joining = false;
+  /** a public room already called what the create box holds, which is joined rather than made */
+  const existing = $derived((available.data ?? []).find((r) => r.name === name.trim()));
+
+  /** Creates the room named in the box, private if asked, and opens it */
+  const create = async () => {
+    const room = name.trim();
+    if (!room || existing || creating) return;
+    creating = true;
+    const outcome = await chat.join(room, isPrivate);
+    creating = false;
     if (!outcome.ok) return void (error = outcome.error);
     open = false;
-    void goto(roomHref(room.trim()));
+    void goto(roomHref(room));
+  };
+
+  /** Enter in the filter: joins the focused room, or the first one listed */
+  const joinFocused = () => {
+    const room = list.focused ?? rooms[0];
+    if (!room) return;
+    if (isJoined(room.name)) enter(room.name);
+    else void joinRow(room.name);
   };
 </script>
 
-{#snippet header(label: string, by: "name" | "userCount")}
-  <button type="button" class="flex items-center gap-1" onclick={() => sortBy(by)}>
-    {label}
-    {#if sort.by === by}
-      {#if sort.dir === "asc"}<ArrowUpIcon class="size-3" />{:else}<ArrowDownIcon
-          class="size-3" />{/if}
-    {/if}
-  </button>
-{/snippet}
-
 <Dialog bind:open title="Join a room" class="w-[min(36rem,calc(100vw-2rem))]">
+  <h3 class="text-sm font-semibold">Public rooms</h3>
   <div class="flex gap-2">
-    <Input type="search" placeholder="Filter rooms" aria-label="Filter rooms" bind:value={filter} />
+    <Input
+      type="search"
+      placeholder="Filter rooms"
+      aria-label="Filter rooms"
+      bind:value={filter}
+      onkeydown={(e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        joinFocused();
+      }} />
     <Button
       variant="outline"
       size="icon"
@@ -153,87 +188,104 @@
       aria-label="Rooms"
       aria-activedescendant={list.activeId}
       tabindex="0"
+      aria-rowcount={rooms.length}
+      {@attach lines.attach}
       {@attach list.attach}>
-      <div
-        role="row"
-        class="sticky top-0 z-10 grid grid-cols-[1fr_5rem_8.5rem] border-b bg-surface-muted px-2 py-1 text-xs font-medium text-fg-muted">
-        <span role="columnheader">{@render header("Name", "name")}</span>
-        <span role="columnheader" class="justify-self-end"
-          >{@render header("Users", "userCount")}</span>
-        <span role="columnheader" class="sr-only">Join</span>
+      <div class="sticky top-0 z-10" bind:offsetHeight={headerHeight}>
+        <GridHeader {grid} class="h-7 border-b bg-surface-muted font-medium text-fg-muted" />
       </div>
-      {#each shown as room, i (room.name)}
-        <div
-          role="row"
-          {...list.line(room, i)}
-          class={[
-            "group grid grid-cols-[1fr_5rem_8.5rem] items-center px-2 py-0.5 hover:bg-hover",
-            list.selected.has(room.name) && "bg-accent-soft/60",
-            list.isFocused(room) && "ring-1 ring-accent ring-inset"
-          ]}>
-          <span role="gridcell" class="flex min-w-0 items-center gap-1.5">
-            {#if room.isPrivate}<LockIcon
-                class="size-3.5 text-fg-muted"
-                aria-label="private" />{/if}
-            {#if room.isOwned}<CrownIcon class="size-3.5 text-warning" aria-label="yours" />{/if}
-            {#if room.isModerated}<GavelIcon
-                class="size-3.5 text-fg-muted"
-                aria-label="you're an operator" />{/if}
-            <span class="truncate">{room.name}</span>
-          </span>
-          <span role="gridcell" class="text-right tabular-nums"
-            >{room.userCount.toLocaleString()}</span>
-          <span role="gridcell" class="flex items-center justify-end gap-1">
-            {#if busy.has(room.name)}
-              <Spinner class="size-4" />
-            {:else if isJoined(room.name)}
-              <button
-                type="button"
-                class="flex items-center gap-1 rounded-badge px-1.5 text-xs text-success hover:underline"
-                title={`Open ${room.name}`}
-                onclick={() => enter(room.name)}><CheckIcon class="size-3.5" />Joined</button>
-              <Button
-                variant="ghost"
-                size="sm"
-                class="h-6 px-2 text-xs row-action"
-                aria-label={`Leave ${room.name}`}
-                onclick={() => void leaveRow(room.name)}>Leave</Button>
-            {:else}
-              <Button
-                variant="outline"
-                size="sm"
-                class="h-6 px-2.5 text-xs"
-                aria-label={`Join ${room.name}`}
-                onclick={() => void joinRow(room.name)}>Join</Button>
-            {/if}
-          </span>
-        </div>
-      {/each}
+      <div class="relative" style:height={`${lines.total}px`}>
+        {#each lines.drawn as { line: room, index, start, size } (room.name)}
+          <div
+            role="row"
+            {...list.line(room, index)}
+            style:transform={`translateY(${start - headerHeight}px)`}
+            style:height={`${size}px`}
+            style:grid-template-columns={grid.template}
+            class={[
+              "group absolute inset-x-0 top-0 grid items-center hover:bg-hover",
+              list.selected.has(room.name) && "bg-accent-soft/60",
+              list.isFocused(room) && "ring-1 ring-accent ring-inset"
+            ]}>
+            <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
+              {#if room.isPrivate}<LockIcon
+                  class="size-3.5 text-fg-muted"
+                  aria-label="private" />{/if}
+              {#if room.isOwned}<CrownIcon class="size-3.5 text-warning" aria-label="yours" />{/if}
+              {#if room.isModerated}<GavelIcon
+                  class="size-3.5 text-fg-muted"
+                  aria-label="you're an operator" />{/if}
+              <span class="truncate">{room.name}</span>
+            </span>
+            <span role="gridcell" class="truncate px-2 text-right tabular-nums"
+              >{room.userCount.toLocaleString()}</span>
+            <span role="gridcell" class="flex items-center justify-end gap-1 px-2">
+              {#if busy.has(room.name)}
+                <Spinner class="size-4" />
+              {:else if isJoined(room.name)}
+                <button
+                  type="button"
+                  class="flex items-center gap-1 rounded-badge px-1.5 text-xs text-success hover:underline"
+                  title={`Open ${room.name}`}
+                  onclick={() => enter(room.name)}><CheckIcon class="size-3.5" />Joined</button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="h-6 px-2 text-xs row-action"
+                  aria-label={`Leave ${room.name}`}
+                  onclick={() => void leaveRow(room.name)}>Leave</Button>
+              {:else}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="h-6 px-2.5 text-xs"
+                  aria-label={`Join ${room.name}`}
+                  onclick={() => void joinRow(room.name)}>Join</Button>
+              {/if}
+            </span>
+          </div>
+        {/each}
+      </div>
     </div>
-    {#if rooms.length > shown.length}
-      <p class="text-xs text-fg-muted">
-        {rooms.length - shown.length} more; type in the filter to narrow them.
-      </p>
-    {/if}
   {/if}
+  {#if error}<Notice kind="error">{error}</Notice>{/if}
   <Form
-    id="join-room"
+    id="create-room"
     layout="stacked"
-    class="flex flex-col gap-group"
+    class="flex flex-col gap-group border-t pt-group"
     onsubmit={(e) => {
       e.preventDefault();
-      void join(name);
+      void create();
     }}>
-    <Field label="Join or create by name" for="join-name">
-      <Input id="join-name" maxlength={24} bind:value={name} autocomplete="off" />
+    <h3 class="text-sm font-semibold">Create a room</h3>
+    <Field label="Name" for="create-name">
+      <Input id="create-name" maxlength={24} bind:value={name} autocomplete="off" />
     </Field>
-    <label class="flex items-center gap-2 text-sm">
-      <Checkbox checked={isPrivate} onCheckedChange={(on) => (isPrivate = on)} />
-      Create as a private room if it doesn't exist
-    </label>
-    {#if error}<Notice kind="error">{error}</Notice>{/if}
+    {#if existing}
+      <div class="flex flex-wrap items-center gap-inline text-sm" role="status">
+        <span class="text-fg-muted">There is a public room called {existing.name}.</span>
+        {#if isJoined(existing.name)}
+          <Button size="sm" variant="outline" onclick={() => enter(existing.name)}>Open it</Button>
+        {:else}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy.has(existing.name)}
+            onclick={() => void joinRow(existing.name)}>Join it</Button>
+        {/if}
+      </div>
+    {/if}
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <label class="flex items-center gap-2 text-sm">
+        <Switch bind:checked={isPrivate} />
+        Private
+      </label>
+      <Button type="submit" class="ml-auto" disabled={!name.trim() || !!existing || creating}
+        >Create</Button>
+    </div>
     <p class="text-xs text-fg-muted">
-      Invitations to private rooms are {invitations ? "accepted" : "refused"}.
+      A private room lets in only the members you add. Invitations to private rooms are
+      {invitations ? "accepted" : "refused"}.
       <a
         class="text-accent hover:underline"
         href={href("/system/settings?q=accept_private_room_invitations")}
@@ -241,7 +293,6 @@
     </p>
   </Form>
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
-    <Button type="submit" form="join-room" disabled={!name.trim() || joining}>Join</Button>
+    <Button variant="ghost" onclick={() => (open = false)}>Close</Button>
   {/snippet}
 </Dialog>

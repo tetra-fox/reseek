@@ -86,6 +86,13 @@ export const navCurrent = (path: string): NavItem | undefined =>
  * Whether going from one path to another changes the screen, a different destination of the
  * navigation, rather than a tab, a sub-page or a query within the same one
  */
+/**
+ * Whether a screen fills the content area edge to edge, as chat does like a desktop chat app,
+ * rather than sitting in the page's padded column
+ */
+export const fillsContent = (path: string): boolean =>
+  path === "/chat" || path.startsWith("/chat/");
+
 export const changesScreen = (from: string, to: string): boolean =>
   navCurrent(from) !== navCurrent(to);
 

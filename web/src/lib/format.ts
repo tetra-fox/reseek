@@ -71,8 +71,11 @@ const SPANS: [Intl.RelativeTimeFormatUnit, number, string][] = [
   ["second", 1, "s"]
 ];
 
-/** A length of time in its two largest non-zero units: 5400 as "1h 30m", 90061 as "1d 1h" */
-export const formatDuration = (seconds: number): string => {
+/**
+ * A length of time in its largest non-zero units, two unless `units` says: 5400 as "1h 30m",
+ * 90061 as "1d 1h", and with three 11525 as "3h 12m 5s"
+ */
+export const formatDuration = (seconds: number, units = 2): string => {
   let left = Math.floor(seconds);
   if (!Number.isFinite(left) || left <= 0) return "0s";
   const parts: string[] = [];
@@ -81,7 +84,7 @@ export const formatDuration = (seconds: number): string => {
       parts.push(`${Math.floor(left / size)}${letter}`);
       left %= size;
     }
-    if (parts.length === 2) break;
+    if (parts.length === units) break;
   }
   return parts.join(" ");
 };
@@ -157,27 +160,31 @@ export const ago = (iso: string, now = Date.now()): string => {
 /** An instant from the API in the browser's time zone, for a details view */
 export const formatDate = (iso: string): string => new Date(iso).toLocaleString();
 
+// made once: a list row formats several instants and numbers, and each toLocaleString call with
+// options builds its formatter anew
+const DATE_TIME = new Intl.DateTimeFormat([], {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit"
+});
+const TIME = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit" });
+const DAY = new Intl.DateTimeFormat([], {
+  weekday: "long",
+  year: "numeric",
+  month: "long",
+  day: "numeric"
+});
+const NUMBER = new Intl.NumberFormat();
+
 /** An instant in the browser's time zone, short, for tables: "Mar 14, 09:05" */
-export const dateTime = (iso: string): string =>
-  new Date(iso).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+export const dateTime = (iso: string): string => DATE_TIME.format(new Date(iso));
 
 /** The time of day of an instant in the browser's time zone: "09:05" */
-export const shortTime = (iso: string): string =>
-  new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+export const shortTime = (iso: string): string => TIME.format(new Date(iso));
 
 /** The day of an instant, written out, for the line between two days of chat */
-export const formatDay = (iso: string): string =>
-  new Date(iso).toLocaleDateString([], {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric"
-  });
+export const formatDay = (iso: string): string => DAY.format(new Date(iso));
 
 /** A chat message's time: the time of day for today, with the date before today */
 export const chatTime = (iso: string, now = Date.now()): string =>
@@ -221,7 +228,7 @@ export const NONE = "—";
 
 /** `n` with the noun for that many, "1 file" or "2,048 files" */
 export const plural = (n: number, one: string, many: string): string =>
-  `${n.toLocaleString()} ${n === 1 ? one : many}`;
+  `${NUMBER.format(n)} ${n === 1 ? one : many}`;
 
 const LIST = new Intl.ListFormat("en", { type: "conjunction" });
 

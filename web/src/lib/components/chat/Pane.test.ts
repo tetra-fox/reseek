@@ -19,11 +19,14 @@ const flush = async () => {
   flushSync();
 };
 
+/** A minute past ten on the test day for each id, so ids past 59 are times too */
+const minute = (localId: number) => new Date(Date.UTC(2026, 9, 26, 10, localId)).toISOString();
+
 const privateMessage = (localId: number, fields: Partial<Schemas["PrivateMessage"]> = {}) =>
   ({
     localId,
     id: localId,
-    timestamp: `2026-10-26T10:${String(localId).padStart(2, "0")}:00Z`,
+    timestamp: minute(localId),
     username: "alice",
     direction: "In",
     message: `hello ${localId}`,
@@ -35,7 +38,7 @@ const privateMessage = (localId: number, fields: Partial<Schemas["PrivateMessage
 const roomMessage = (localId: number, fields: Partial<Schemas["RoomMessage"]> = {}) =>
   ({
     localId,
-    timestamp: `2026-10-26T10:${String(localId).padStart(2, "0")}:00Z`,
+    timestamp: minute(localId),
     username: "bob",
     message: `room ${localId}`,
     roomName: "indie",

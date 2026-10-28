@@ -161,10 +161,12 @@
   }
 }
 
-/* the shell measures these: the content area's height, which screens fill, and the height of
-   the panels and footer below it, which fixed layers keep clear of. Until it has, a guess */
+/* the shell measures these: the content area's height, which screens fill, and the heights of
+   the header above it and the panels and footer below it, which fixed layers keep clear of.
+   Until it has, a guess */
 :root {
   --content-h: calc(100svh - 6rem);
+  --top-h: 3.5rem;
   --bottom-h: 2.5rem;
 }
 
@@ -395,6 +397,30 @@
 /* the bar of what is selected in a list, which stays at the bottom of the content area */
 @utility selection-bar {
   @apply sticky bottom-2 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised;
+}
+
+/* a name beside its count or caption: the name's track fills before the count's, so the count gives
+   way first, cut with an ellipsis, and is hidden once it has only a few letters' room. The count
+   is the last child and holds its text in an element of its own */
+@utility name-count {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  align-items: center;
+  & > :last-child {
+    container-type: inline-size;
+  }
+  & > :last-child > * {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  @container (width < 4em) {
+    & > :last-child > * {
+      visibility: hidden;
+    }
+  }
 }
 
 /* a row's buttons, put on an element inside a `group` row. Half shown until the row is hovered or

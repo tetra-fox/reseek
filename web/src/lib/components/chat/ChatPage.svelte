@@ -105,8 +105,9 @@
   {/if}
 {/snippet}
 
-<div
-  class="flex h-[calc(var(--content-h)-2*var(--spacing-gutter))] overflow-hidden rounded-card border bg-surface shadow-card">
+<!-- the whole content area, edge to edge, as a desktop chat app: the list, the conversation and
+     its side panel are columns divided by borders -->
+<div class="flex h-(--content-h) overflow-hidden bg-surface" data-chat>
   {#if wide.current}
     <div class="flex w-72 shrink-0 flex-col border-r">
       {@render list()}
@@ -118,9 +119,12 @@
   {/if}
   <div class="flex min-w-0 flex-1 flex-col">
     {#if asking}
-      <div class="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-fg-muted">
-        <BellRingIcon class="size-3.5" />
-        reseek can tell you about new messages while this tab is in the background.
+      <!-- the text keeps the line's width and the button goes under it when both don't fit -->
+      <div
+        class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-1.5 text-xs text-fg-muted">
+        <span class="flex min-w-[min(100%,16rem)] flex-1 items-center gap-2"
+          ><BellRingIcon class="size-3.5 shrink-0" />reseek can tell you about new messages while
+          this tab is in the background.</span>
         <Button variant="link" class="text-xs" onclick={() => void notifier.ask()}
           >Turn on notifications</Button>
       </div>
