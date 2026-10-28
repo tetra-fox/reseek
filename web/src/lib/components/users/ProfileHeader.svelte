@@ -86,7 +86,7 @@
     );
     if (!outcome.ok) return void toast(outcome.error, "error");
     deleting = false;
-    toast(`${name} is forgotten`);
+    toast(`Removed ${name} from your user list`);
     void goto(href("/users"));
   };
 </script>
