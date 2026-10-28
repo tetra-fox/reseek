@@ -33,7 +33,7 @@
     const index = picked;
     const ask = ++asked;
     error = "";
-    void loadWindow(target, index).then((o) => {
+    void loadWindow(target, index, layout.scale).then((o) => {
       if (ask !== asked) return;
       if (o.ok) spectrum = o.data;
       else error = o.error;
@@ -45,11 +45,14 @@
   const points = $derived(
     spectrum ? spectrum.hz.map((hz, i) => ({ x: across(hz), db: spectrum!.db[i] })) : []
   );
+  /** where the frequency axis is labelled, spread evenly on each scale */
+  const TICKS = {
+    linear: [0, 5_000, 10_000, 15_000, 20_000, 40_000],
+    log: [100, 1_000, 10_000],
+    mel: [0, 1_000, 4_000, 16_000]
+  };
   const ticks = $derived(
-    (layout.scale === "log"
-      ? [100, 1_000, 10_000]
-      : [0, 5_000, 10_000, 15_000, 20_000, 40_000]
-    ).filter((hz) => hz >= layout.minHz && hz <= layout.maxHz)
+    TICKS[layout.scale].filter((hz) => hz >= layout.minHz && hz <= layout.maxHz)
   );
   const label = (x: number) => {
     const hz = ticks.find((t) => Math.abs(across(t) - x) < 1e-9) ?? 0;

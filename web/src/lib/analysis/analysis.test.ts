@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { heightOf, type Layout, windowAt } from "./analysis";
+import { acrossAt, heightOf, type Layout, type Scale, windowAt } from "./analysis";
 
-const layout = (scale: "log" | "linear", plotWidth = 40): Layout => ({
+const layout = (scale: Scale, durationSeconds = 40, plotWidth = 1024): Layout => ({
   width: 48 + plotWidth + 222,
   height: 556,
   plotX: 48,
@@ -12,6 +12,7 @@ const layout = (scale: "log" | "linear", plotWidth = 40): Layout => ({
   scale,
   minHz: scale === "log" ? 20 : 0,
   maxHz: 22_050,
+  durationSeconds,
   sampled: false,
   guides: []
 });
@@ -23,7 +24,11 @@ describe("heightOf", () => {
       ["linear", 16_000, 140],
       ["linear", 20_000, 47],
       ["log", 16_000, 23],
-      ["log", 19_500, 8]
+      ["log", 19_500, 8],
+      ["mel", 16_000, 45],
+      ["mel", 19_000, 21],
+      ["mel", 19_500, 17],
+      ["mel", 20_000, 13]
     ] as const) {
       expect(Math.floor(heightOf(layout(scale), hz) * 512)).toBe(row);
     }
@@ -36,12 +41,18 @@ describe("heightOf", () => {
 });
 
 describe("windowAt", () => {
-  it("finds a window by its column, and by its run of windows past the column count", () => {
-    expect(windowAt(layout("log", 40), 0, 40)).toBe(0);
-    expect(windowAt(layout("log", 40), 0.999, 40)).toBe(39);
-    expect(windowAt(layout("log", 40), 0.5, 40)).toBe(20);
-    // 4000 windows shown as 2000 columns, two to a column
-    expect(windowAt(layout("log", 2000), 0.5, 4000)).toBe(2000);
-    expect(windowAt(layout("log", 2000), 1, 4000)).toBe(3998);
+  it("finds the window at a time across the file's whole length", () => {
+    const every = Array.from({ length: 40 }, (_, t) => t);
+    expect(windowAt(layout("log", 40), 0, every)).toBe(0);
+    expect(windowAt(layout("log", 40), 0.999, every)).toBe(39);
+    expect(windowAt(layout("log", 40), 0.5, every)).toBe(20);
+  });
+
+  it("takes the nearest sample where a file was read in samples", () => {
+    // four one-second samples of a 400-second file
+    const samples = [0, 100, 200, 300];
+    expect(windowAt(layout("log", 400), 0.26, samples)).toBe(1);
+    expect(windowAt(layout("log", 400), 0.9, samples)).toBe(3);
+    expect(acrossAt(layout("log", 400), 200)).toBe(0.5);
   });
 });

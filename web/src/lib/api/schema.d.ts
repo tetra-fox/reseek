@@ -6349,6 +6349,11 @@ export interface components {
          *     a client can draw the guide lines over the image served without them.
          */
         SpectrogramLayout: {
+            /**
+             * Format: double
+             * @description the time at the plot's right edge, in seconds: the file's length, the left edge being 0
+             */
+            durationSeconds: number;
             /** @description the lines drawn across the plot in the image served with guides, lowest first */
             guides: components["schemas"]["GuideLine"][];
             /**
@@ -6373,7 +6378,7 @@ export interface components {
             plotHeight: number;
             /**
              * Format: int32
-             * @description the plot's width in pixels: one column per window, or per run of windows for a long file
+             * @description the plot's width in pixels, which spans the file's whole length in time
              */
             plotWidth: number;
             /**
@@ -6387,8 +6392,8 @@ export interface components {
              */
             plotY: number;
             /**
-             * @description whether the columns are windows sampled from a long file, with gaps between them, rather
-             *     than every second of it
+             * @description whether the windows are samples spread over a long file, the stretches between them drawn
+             *     as unread, rather than every second of it
              */
             sampled: boolean;
             /** @description how the frequency axis runs */
@@ -6403,7 +6408,7 @@ export interface components {
          * @description How a spectrogram's frequency axis runs.
          * @enum {string}
          */
-        SpectrogramScale: "log" | "linear";
+        SpectrogramScale: "log" | "linear" | "mel";
         /**
          * @description The daemon's state, as `GET /application` returns it and `application.state` frames carry
          *     it.
@@ -9137,6 +9142,8 @@ export interface operations {
             query?: {
                 /** @description include the per-window measures, true when left out */
                 windows?: boolean;
+                /** @description the frequency axis the report's spectrogram layout is given on, the option's when left out */
+                scale?: components["schemas"]["SpectrogramScale"];
             };
             header?: never;
             path: {
@@ -9401,6 +9408,8 @@ export interface operations {
             query?: {
                 /** @description draw the encoder cutoff guide lines into the image, true when left out */
                 guides?: boolean;
+                /** @description the frequency axis to draw the image on, the option's when left out */
+                scale?: components["schemas"]["SpectrogramScale"];
             };
             header?: never;
             path: {
@@ -9457,7 +9466,10 @@ export interface operations {
     };
     window_file: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the frequency axis whose rows the spectrum is given at, the option's when left out */
+                scale?: components["schemas"]["SpectrogramScale"];
+            };
             header?: never;
             path: {
                 /** @description the directory root */
@@ -14837,6 +14849,8 @@ export interface operations {
             query?: {
                 /** @description include the per-window measures, true when left out */
                 windows?: boolean;
+                /** @description the frequency axis the report's spectrogram layout is given on, the option's when left out */
+                scale?: components["schemas"]["SpectrogramScale"];
             };
             header?: never;
             path: {
@@ -15101,6 +15115,8 @@ export interface operations {
             query?: {
                 /** @description draw the encoder cutoff guide lines into the image, true when left out */
                 guides?: boolean;
+                /** @description the frequency axis to draw the image on, the option's when left out */
+                scale?: components["schemas"]["SpectrogramScale"];
             };
             header?: never;
             path: {
@@ -15157,7 +15173,10 @@ export interface operations {
     };
     window_download: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the frequency axis whose rows the spectrum is given at, the option's when left out */
+                scale?: components["schemas"]["SpectrogramScale"];
+            };
             header?: never;
             path: {
                 /** @description the peer */

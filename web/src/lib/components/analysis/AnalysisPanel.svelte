@@ -1,7 +1,7 @@
 <script lang="ts">
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import XIcon from "@lucide/svelte/icons/x";
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
 
   import {
     loadReport,
@@ -12,7 +12,9 @@
   } from "#lib/analysis/analysis.js";
   import { jobs } from "#lib/analysis/jobs.svelte.js";
   import { marks } from "#lib/analysis/marks.svelte.js";
+  import { spectrogramView } from "#lib/analysis/view.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import Dialog from "#lib/components/ui/Dialog.svelte";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
 
@@ -46,7 +48,11 @@
   let asked = 0;
   const load = async () => {
     const ask = ++asked;
-    const outcome = await loadReport(target);
+    // the scale is read here but reloads through its own effect, which keeps the picked window
+    const outcome = await loadReport(
+      target,
+      untrack(() => spectrogramView.scale)
+    );
     if (ask !== asked) return;
     if (outcome.ok) {
       report = outcome.data;
@@ -82,6 +88,13 @@
     started = key;
     void analyse(false);
   });
+  // another scale is the same report with its layout on that scale
+  $effect(() => {
+    void spectrogramView.scale;
+    if (untrack(() => report)) void load();
+  });
+  /** the spectrogram shown across the whole screen */
+  let large = $state(false);
   // the report is read again whenever an analysis finishes
   $effect(() => {
     if (jobs.finished) void load();
@@ -140,7 +153,19 @@
         layout={report.spectrogram}
         {starts}
         {picked}
-        onpick={(i) => void pickOnPlot(i)} />
+        onpick={(i) => void pickOnPlot(i)}
+        onlarge={() => (large = true)} />
+      <Dialog
+        bind:open={large}
+        title={report.relativePath.split("/").at(-1) ?? report.relativePath}
+        class="w-[calc(100vw-2rem)] max-w-[120rem]">
+        <Spectrogram
+          {target}
+          layout={report.spectrogram}
+          {starts}
+          {picked}
+          onpick={(i) => (picked = i)} />
+      </Dialog>
     {:else}
       <p class="text-sm">{report.summary}</p>
       <p

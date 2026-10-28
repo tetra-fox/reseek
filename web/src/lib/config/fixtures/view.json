@@ -540,10 +540,11 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "string",
-      "doc": "The frequency axis: `log` or `linear`.",
+      "doc": "The frequency axis the spectrogram is drawn on unless a viewer asks for another: `log`, `linear` or `mel`.",
       "choices": [
         "log",
-        "linear"
+        "linear",
+        "mel"
       ],
       "default": "log",
       "apply": "live",
