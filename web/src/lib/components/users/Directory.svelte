@@ -38,7 +38,7 @@
 
   import { links, pin, userGroups } from "./actions";
   import Avatar from "./Avatar.svelte";
-  import { blocking, unblock } from "./block.svelte";
+  import { blocking, unblock, unblockMany } from "./block.svelte";
   import GroupBadge from "./GroupBadge.svelte";
   import GroupDialog from "./GroupDialog.svelte";
   import Presence from "./Presence.svelte";
@@ -185,11 +185,8 @@
     const outcome = await pin(u.username, !u.pinned);
     if (!outcome.ok) toast(outcome.error, "error");
   };
-  const unblockAll = async (names: string[]) => {
-    for (const name of names) {
-      if ((rows.get(name) ?? usersStore.get(name))?.block) await unblock(name);
-    }
-  };
+  const unblockAll = (names: string[]) =>
+    unblockMany(names.filter((name) => (rows.get(name) ?? usersStore.get(name))?.block));
 
   const COLUMNS = "2rem minmax(11rem,1fr) 5rem 8rem 9rem 7rem 6rem 6rem 4rem 7.5rem";
 </script>

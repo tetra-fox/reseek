@@ -24,7 +24,7 @@
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
 
-  import { unblock } from "./block.svelte";
+  import { unblock, unblockMany } from "./block.svelte";
   import Username from "./Username.svelte";
 
   // the blocks in force: ours, and the configuration's, which only the configuration lifts
@@ -58,7 +58,7 @@
   let importError = $state("");
 
   const unblockChosen = async () => {
-    for (const b of chosen) await unblock(b.username);
+    await unblockMany(chosen.map((b) => b.username));
     list.clear();
     void blocked.load();
   };

@@ -1,5 +1,6 @@
 import { api, byUser, type Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
+import { plural } from "#lib/format.js";
 import { call } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
 import { toast } from "#lib/toast.svelte.js";
@@ -63,28 +64,67 @@ export const block = async (username: string, request: BlockRequest) => {
 };
 
 /**
- * Unblocks `username` in one click; the toast offers to undo it for five seconds, which makes
- * the block again with its reason, scopes and end
+ * Lifts the block on `username`, giving back the request that makes the same block again (its
+ * reason, scopes and end), null when none was held. The failure is toasted
  */
-export const unblock = async (username: string) => {
+const lift = async (username: string): Promise<{ ok: boolean; again: BlockRequest | null }> => {
   await users.load(username);
   const was = users.get(username)?.block;
   const outcome = await call(() =>
     api.DELETE("/api/v0/users/{username}/block", { params: byUser(username) })
   );
-  if (!outcome.ok) return void toast(outcome.error, "error");
+  if (!outcome.ok) {
+    toast(`${username}: ${outcome.error}`, "error");
+    return { ok: false, again: null };
+  }
   await users.load(username, { fresh: true });
   const ends = was?.expiresAt && Date.parse(was.expiresAt) > Date.now() ? was.expiresAt : null;
-  const again: BlockRequest | null = was
-    ? { reason: was.reason, scopes: was.scopes, expiresAt: ends, cancelTransfers: false }
-    : null;
-  toast(`${username} is unblocked`, "info", {
-    ms: 5_000,
-    action: again
-      ? {
-          label: "Undo",
-          run: () => void block(username, again).then((o) => !o.ok && toast(o.error, "error"))
-        }
-      : undefined
-  });
+  return {
+    ok: true,
+    again: was
+      ? { reason: was.reason, scopes: was.scopes, expiresAt: ends, cancelTransfers: false }
+      : null
+  };
 };
+
+/** How long the toast after an unblock offers to undo it */
+export const UNBLOCK_UNDO_MS = 5_000;
+
+/**
+ * Unblocks the users in `usernames` one after another, then says so in one toast whose Undo
+ * makes each block again as it was
+ */
+export const unblockMany = async (usernames: string[]) => {
+  const lifted: { username: string; again: BlockRequest }[] = [];
+  let done = 0;
+  for (const username of usernames) {
+    const { ok, again } = await lift(username);
+    if (ok) done += 1;
+    if (again) lifted.push({ username, again });
+  }
+  if (!done) return;
+  toast(
+    done === 1 && usernames.length === 1
+      ? `${usernames[0]} is unblocked`
+      : `${plural(done, "user", "users")} unblocked`,
+    "info",
+    {
+      ms: UNBLOCK_UNDO_MS,
+      action: lifted.length
+        ? {
+            label: "Undo",
+            run: () =>
+              void (async () => {
+                for (const { username, again } of lifted) {
+                  const o = await block(username, again);
+                  if (!o.ok) toast(`${username}: ${o.error}`, "error");
+                }
+              })()
+          }
+        : undefined
+    }
+  );
+};
+
+/** Unblocks `username` in one click; the toast offers to undo it for a few seconds */
+export const unblock = (username: string) => unblockMany([username]);
