@@ -353,6 +353,28 @@ pub fn write_mp3(audio: &Audio, bitrate: Bitrate, path: &Path) {
   std::fs::write(path, bytes).unwrap();
 }
 
+/// Puts an ID3v2.3 tag holding a cover picture of `bytes` bytes in front of the MP3 at `path`,
+/// as a tagger embeds album art.
+pub fn add_cover(path: &Path, bytes: usize) {
+  let mut picture = vec![0u8; bytes];
+  picture[..4].copy_from_slice(&[0xff, 0xd8, 0xff, 0xe0]);
+  let mut frame = vec![0u8];
+  frame.extend_from_slice(b"image/jpeg\0\x03\0");
+  frame.extend_from_slice(&picture);
+  let mut tag = b"APIC".to_vec();
+  tag.extend_from_slice(&(frame.len() as u32).to_be_bytes());
+  tag.extend_from_slice(&[0, 0]);
+  tag.extend_from_slice(&frame);
+  // the tag's size is written seven bits to a byte
+  let size = tag.len() as u32;
+  let synchsafe = [size >> 21, size >> 14, size >> 7, size].map(|part| (part & 0x7f) as u8);
+  let mut file = b"ID3\x03\0\0".to_vec();
+  file.extend_from_slice(&synchsafe);
+  file.extend_from_slice(&tag);
+  file.extend_from_slice(&std::fs::read(path).unwrap());
+  std::fs::write(path, file).unwrap();
+}
+
 /// The audio of the file at `path`, decoded whole.
 pub fn decoded(path: &Path) -> Audio {
   let mut decoder = Decoder::open(path).unwrap();

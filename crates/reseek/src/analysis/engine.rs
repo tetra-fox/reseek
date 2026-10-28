@@ -35,7 +35,7 @@ pub(super) struct Measured {
   pub claimed: Option<Claimed>,
   /// how long the audio is, in seconds
   pub duration: f64,
-  /// a lossy file's bitrate in kbit/s, its size over its length
+  /// a lossy file's bitrate in kbit/s, from its decoded packets
   pub bitrate_kbps: Option<u32>,
   /// every analysed window, in time order
   pub windows: Vec<Window>,
@@ -62,20 +62,7 @@ pub(super) fn run(
   cancel: &CancellationToken,
 ) -> Result<Measured, Cancelled> {
   match Decoder::open(path) {
-    Ok(decoder) => {
-      let mut measured = measure(decoder, settings, cancel)?;
-      let lossy = measured.claimed.as_ref().is_some_and(|c| !c.lossless);
-      if lossy && measured.duration > 0.0 {
-        match std::fs::metadata(path) {
-          Ok(metadata) => {
-            let kbps = metadata.len() as f64 * 8.0 / measured.duration / 1000.0;
-            measured.bitrate_kbps = Some(kbps.round() as u32);
-          }
-          Err(e) => debug!(path = %path.display(), error = %e, "size not read for the bitrate"),
-        }
-      }
-      Ok(measured)
-    }
+    Ok(decoder) => measure(decoder, settings, cancel),
     Err(problem) => {
       debug!(path = %path.display(), problem, "audio not opened");
       Ok(unreadable(problem))
@@ -167,6 +154,9 @@ pub(super) fn measure(
     }
   }
   measured.bits_used = decoder.bits_used();
+  if measured.claimed.as_ref().is_some_and(|c| !c.lossless) {
+    measured.bitrate_kbps = decoder.bitrate_kbps();
+  }
   if decoder.skipped > 0 {
     measured.problems.push(format!(
       "{} packets could not be decoded and were skipped",

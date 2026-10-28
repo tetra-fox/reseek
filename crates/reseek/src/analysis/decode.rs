@@ -65,6 +65,8 @@ pub(super) struct Decoder {
   scratch: Vec<Vec<f32>>,
   /// the bits set in any integer sample decoded, and the width of the sample type
   bits: Option<(u32, u32)>,
+  /// the bytes and the sample frames of the packets decoded, for the stream's bitrate
+  decoded: (u64, u64),
   /// packets the decoder could not read and skipped
   pub skipped: u32,
   /// why decoding stopped before the end of the file, when it did
@@ -153,6 +155,7 @@ impl Decoder {
       taken: 0,
       scratch: Vec::new(),
       bits: None,
+      decoded: (0, 0),
       skipped: 0,
       stopped: None,
     })
@@ -164,6 +167,16 @@ impl Decoder {
   pub fn bits_used(&self) -> Option<u32> {
     let (set, width) = self.bits?;
     (set != 0).then(|| width - set.trailing_zeros().min(width))
+  }
+
+  /// The audio's bitrate in kbit/s from the packets decoded so far: their bytes over their
+  /// length, so tags and cover art around the stream do not count. `None` before any.
+  pub fn bitrate_kbps(&self) -> Option<u32> {
+    let (bytes, frames) = self.decoded;
+    (frames > 0).then(|| {
+      let seconds = frames as f64 / f64::from(self.claimed.sample_rate);
+      (bytes as f64 * 8.0 / seconds / 1000.0).round() as u32
+    })
   }
 
   /// Fills `window`, one vector per analysed channel, with the next `frames` sample frames.
@@ -261,6 +274,8 @@ impl Decoder {
         continue;
       }
       note_bits(&mut self.bits, &decoded);
+      self.decoded.0 += packet.data.len() as u64;
+      self.decoded.1 += decoded.frames() as u64;
       decoded.copy_to_vecs_planar::<f32>(&mut self.scratch);
       // the analysed channels must stay the same length
       if self.scratch.len() < self.channels {

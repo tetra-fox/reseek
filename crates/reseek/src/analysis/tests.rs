@@ -96,6 +96,13 @@ fn an_mp3_is_judged_against_its_own_bitrate() {
   fixtures::write_mp3(&source, Bitrate::Kbps128, &honest);
   let reading = analysed(&honest);
   assert_eq!(reading.verdict, AnalysisVerdict::Consistent, "{reading:#?}");
+  // a cover picture larger than the audio does not make it look like a higher bitrate
+  fixtures::add_cover(&honest, 2_000_000);
+  let measured = engine::run(&honest, &settings(), &CancellationToken::new()).unwrap();
+  let kbps = measured.bitrate_kbps.unwrap();
+  assert!((120..=136).contains(&kbps), "{kbps} kbps");
+  let reading = reading::read(&measured);
+  assert_eq!(reading.verdict, AnalysisVerdict::Consistent, "{reading:#?}");
   // a 128 kbps MP3 encoded again at 320 kbps keeps the lower cutoff
   let through = fixtures::through_mp3(&source, Bitrate::Kbps128, dir.path());
   let inflated = dir.path().join("inflated.mp3");
