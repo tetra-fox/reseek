@@ -176,15 +176,6 @@
           icon={Trash2Icon}
           {disabled}
           onclick={(id) => scoped("remove", id)} />
-        {#if direction === "download"}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={disabled || !app.isServerConnected || !counts.errored}
-            onclick={() => scoped("retry", "errored")}>
-            <RotateCwIcon />Retry all failed
-          </Button>
-        {/if}
         <Button
           variant="outline"
           size="sm"

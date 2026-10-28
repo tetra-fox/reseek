@@ -14,7 +14,7 @@ export type BulkAction = Schemas["BulkAction"];
 /** The scopes of the three bulk buttons, the first of each the default */
 export const SCOPES = {
   retry: [
-    { id: "errored", label: "Retry All Errored", test: (s: string) => ERRORED.includes(s) },
+    { id: "errored", label: "Retry all failed", test: (s: string) => ERRORED.includes(s) },
     {
       id: "cancelled",
       label: "Retry All Cancelled",
