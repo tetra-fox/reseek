@@ -17,6 +17,7 @@
   import { SERIES } from "#lib/dashboard/series.js";
   import { formatBytes, formatDate, formatSpeed, getFileName, truncate } from "#lib/format.js";
   import { call } from "#lib/request.js";
+  import { endingText } from "#lib/transfers/states.js";
 
   import AreaChart from "./AreaChart.svelte";
 
@@ -83,6 +84,14 @@
   });
 
   const top = $derived(pareto[0]?.count || 1);
+
+  /** the direction toggles' words, the values being the API's directions */
+  const WHICH: Record<Which, string> = { Upload: "Uploads", Download: "Downloads", All: "All" };
+  /** how a failed transfer ended, as the start of its line: "Failed", "Timed out" */
+  const endingWord = (state: string) => {
+    const word = endingText(state);
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  };
 </script>
 
 {#snippet which(value: Which, set: (w: Which) => void, label: string)}
@@ -92,7 +101,7 @@
         size="sm"
         variant={value === w ? "secondary" : "outline"}
         aria-pressed={value === w}
-        onclick={() => set(w)}>{w}</Button>
+        onclick={() => set(w)}>{WHICH[w]}</Button>
     {/each}
   </div>
 {/snippet}
@@ -107,52 +116,55 @@
   {#if paretoError}<p class="text-sm text-danger">
       Couldn't load errors by type: {paretoError}
     </p>{/if}
-  <table class="w-full text-sm">
-    <thead class="text-xs text-fg-muted">
-      <tr class="border-b">
-        <th class="px-2 py-1 text-left font-medium">Direction</th>
-        <th class="px-2 py-1 text-left font-medium">Error</th>
-        <th class="w-24"></th>
-        <th class="px-2 py-1 text-right font-medium">Count</th>
-        <th class="px-2 py-1 text-right font-medium">Users</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each pareto as row (`${row.direction}-${row.exception}`)}
-        <tr
-          class={[
-            "border-b last:border-b-0 hover:bg-hover",
-            exception === row.exception && "bg-accent-soft/60"
-          ]}>
-          <td class="px-2 py-1">{row.direction}</td>
-          <td class="px-2 py-1" title={row.exception ?? ""}>
-            <button
-              type="button"
-              class="text-left hover:underline"
-              title="Show only this error in recent errors"
-              onclick={() =>
-                (exception = exception === row.exception ? null : (row.exception ?? null))}
-              >{truncate(row.exception ?? "(no message)", 80)}</button>
-          </td>
-          <td class="px-2">
-            <div class="h-1.5 rounded-full bg-surface-muted">
-              <div
-                class="h-full rounded-full bg-danger/60"
-                style:width={`${Math.round((row.count / top) * 100)}%`}>
-              </div>
-            </div>
-          </td>
-          <td class="px-2 py-1 text-right font-semibold tabular-nums"
-            >{row.count.toLocaleString()}</td>
-          <td class="px-2 py-1 text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
+  <!-- a phone scrolls the table sideways rather than squeeze the messages into slivers -->
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[36rem] text-sm">
+      <thead class="text-xs text-fg-muted">
+        <tr class="border-b">
+          <th class="px-2 py-1 text-left font-medium">Direction</th>
+          <th class="px-2 py-1 text-left font-medium">Error</th>
+          <th class="w-24"></th>
+          <th class="px-2 py-1 text-right font-medium">Count</th>
+          <th class="px-2 py-1 text-right font-medium">Users</th>
         </tr>
-      {:else}
-        <tr
-          ><td colspan="5" class="py-6 text-center text-fg-subtle">No errors in this range.</td
-          ></tr>
-      {/each}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {#each pareto as row (`${row.direction}-${row.exception}`)}
+          <tr
+            class={[
+              "border-b last:border-b-0 hover:bg-hover",
+              exception === row.exception && "bg-accent-soft/60"
+            ]}>
+            <td class="px-2 py-1">{row.direction}</td>
+            <td class="px-2 py-1" title={row.exception ?? ""}>
+              <button
+                type="button"
+                class="text-left hover:underline"
+                title="Show only this error in recent errors"
+                onclick={() =>
+                  (exception = exception === row.exception ? null : (row.exception ?? null))}
+                >{truncate(row.exception ?? "(no message)", 80)}</button>
+            </td>
+            <td class="px-2">
+              <div class="h-1.5 rounded-full bg-surface-muted">
+                <div
+                  class="h-full rounded-full bg-danger/60"
+                  style:width={`${Math.round((row.count / top) * 100)}%`}>
+                </div>
+              </div>
+            </td>
+            <td class="px-2 py-1 text-right font-semibold tabular-nums"
+              >{row.count.toLocaleString()}</td>
+            <td class="px-2 py-1 text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
+          </tr>
+        {:else}
+          <tr
+            ><td colspan="5" class="py-6 text-center text-fg-subtle">No errors in this range.</td
+            ></tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
 </section>
 
 <section class="flex flex-col gap-2">
@@ -166,35 +178,42 @@
   {#if recentError}<p class="text-sm text-danger">
       Couldn't load recent errors: {recentError}
     </p>{/if}
-  <table class="w-full text-sm">
-    <thead class="text-xs text-fg-muted">
-      <tr class="border-b">
-        <th class="px-2 py-1 text-left font-medium">Time</th>
-        <th class="px-2 py-1 text-left font-medium">Direction</th>
-        <th class="px-2 py-1 text-left font-medium">Username</th>
-        <th class="px-2 py-1 text-left font-medium">Filename</th>
-        <th class="px-2 py-1 text-left font-medium">Error</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each recent as row (row.id)}
-        <tr class="border-b last:border-b-0 hover:bg-hover">
-          <td class="px-2 py-1 whitespace-nowrap">{formatDate(row.endedAt)}</td>
-          <td class="px-2 py-1">{row.direction}</td>
-          <td class="px-2 py-1"><Username name={row.username} /></td>
-          <td class="px-2 py-1" title={row.filename}>
-            <button type="button" class="text-left hover:underline" onclick={() => (detail = row)}
-              >{getFileName(row.filename)}</button>
-          </td>
-          <td class="px-2 py-1" title={row.exception ?? ""}>{truncate(row.exception ?? "", 80)}</td>
+  <!-- a phone scrolls the table sideways rather than squeeze the messages into slivers -->
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[36rem] text-sm">
+      <thead class="text-xs text-fg-muted">
+        <tr class="border-b">
+          <th class="px-2 py-1 text-left font-medium">Time</th>
+          <th class="px-2 py-1 text-left font-medium">Direction</th>
+          <th class="px-2 py-1 text-left font-medium">Username</th>
+          <th class="px-2 py-1 text-left font-medium">Filename</th>
+          <th class="px-2 py-1 text-left font-medium">Error</th>
         </tr>
-      {:else}
-        <tr
-          ><td colspan="5" class="py-6 text-center text-fg-subtle">No errors in this range.</td
-          ></tr>
-      {/each}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {#each recent as row (row.id)}
+          <tr class="border-b last:border-b-0 hover:bg-hover">
+            <td class="px-2 py-1 whitespace-nowrap">{formatDate(row.endedAt)}</td>
+            <td class="px-2 py-1">{row.direction}</td>
+            <td class="px-2 py-1"><Username name={row.username} /></td>
+            <td class="px-2 py-1" title={row.filename}>
+              <button type="button" class="text-left hover:underline" onclick={() => (detail = row)}
+                >{getFileName(row.filename)}</button>
+            </td>
+            <td class="px-2 py-1" title={row.exception ?? ""}>
+              <span class="font-medium">{endingWord(row.state)}</span>
+              {#if row.exception}<span class="text-fg-muted">{truncate(row.exception, 80)}</span
+                >{/if}
+            </td>
+          </tr>
+        {:else}
+          <tr
+            ><td colspan="5" class="py-6 text-center text-fg-subtle">No errors in this range.</td
+            ></tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
 </section>
 
 <Dialog
