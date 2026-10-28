@@ -79,7 +79,8 @@ web-smoke:
 web-install:
     pnpm --dir web install --frozen-lockfile --prefer-offline --silent
 
-# soulfind and the soulseek-rs cli as the other user: search, browse and transfers both ways
+# soulfind and the soulseek-rs cli as the other user: search, browse and transfers both ways, by
+# the client and by the daemon through its api
 e2e:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -89,8 +90,9 @@ e2e:
       echo "e2e skipped: soulfind (SOULFIND_BIN or PATH) or soulseek-rs (SOULSEEK_RS_BIN or PATH) not found"
       exit 0
     fi
-    SOULFIND_BIN="$soulfind" SOULSEEK_RS_BIN="$soulseek_rs" \
-      cargo nextest run -p soulseek-client --test interop --run-ignored only
+    export SOULFIND_BIN="$soulfind" SOULSEEK_RS_BIN="$soulseek_rs"
+    cargo nextest run -p soulseek-client --test interop --run-ignored only
+    cargo nextest run -p reseek --test smoke --run-ignored only -E "test(soulseek_rs)"
 
 # the live smoke example against a local soulfind, with other users sharing the file it fetches
 live-smoke-local:

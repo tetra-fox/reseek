@@ -23,7 +23,10 @@ use tokio::sync::broadcast;
 pub mod client;
 
 #[allow(unused_imports, reason = "each test binary uses a part of it")]
-pub use client::{free_port, peer, soulfind, transfers};
+pub use client::{free_port, peer, soulfind, soulseek_rs, transfers};
+
+/// The smoke run through the API, shared with the smoke program.
+pub mod smoke;
 
 /// How long a test waits for something that should happen promptly.
 pub const PATIENCE: Duration = Duration::from_secs(20);
