@@ -127,7 +127,21 @@
       sort: results.stored ? searchOptions.sort : null
     })
   );
-  const hiddenCount = $derived(results.results.length - view.length);
+  // what keeps results out of view, counted apart since each has its own way back: the ones
+  // dismissed, those from blocked users, and the rest, which the filter and toggles hide
+  const dismissedCount = $derived(
+    results.results.filter((r) => dismissed.has(r.response.username)).length
+  );
+  const fromBlocked = $derived(
+    showBlocked
+      ? 0
+      : results.results.filter(
+          (r) => !dismissed.has(r.response.username) && blocked.has(r.response.username)
+        ).length
+  );
+  const filteredCount = $derived(
+    results.results.length - dismissedCount - fromBlocked - view.length
+  );
 
   /** Empties the filter and turns off every toggle that hides results */
   const clearFilters = () => {
@@ -182,6 +196,27 @@
 
   const motion = () => ({ duration: motionFast(), easing: cubicOut, y: -6 });
 </script>
+
+<!-- what is out of view and how to bring each part back -->
+{#snippet hiddenLine()}
+  <p class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-fg-muted">
+    {#if filteredCount}
+      <span
+        >{plural(filteredCount, "result", "results")} hidden by filters
+        <Button variant="link" onclick={clearFilters}>Clear filters</Button></span>
+    {/if}
+    {#if dismissedCount}
+      <span
+        >{dismissedCount} dismissed
+        <Button variant="link" onclick={() => dismissed.clear()}>Show again</Button></span>
+    {/if}
+    {#if fromBlocked}
+      <span
+        >{fromBlocked} from blocked users
+        <Button variant="link" onclick={() => (showBlocked = true)}>Show</Button></span>
+    {/if}
+  </p>
+{/snippet}
 
 {#if refused}
   <ErrorSegment
@@ -277,27 +312,20 @@
       {#if remaining > 0}
         <div class="flex gap-inline">
           <Button size="default" class="h-11 flex-1" onclick={() => (shown += STEP)}>
-            Show {Math.min(STEP, remaining)} more results ({remaining} left{hiddenCount
-              ? `, ${hiddenCount} hidden by filters`
-              : ""})
+            Show {Math.min(STEP, remaining)} more results ({remaining} left)
           </Button>
           <Button variant="outline" class="h-11" onclick={() => (shown = view.length)}>
             Show all
           </Button>
         </div>
-      {:else if hiddenCount > 0}
-        <p class="text-center text-sm text-fg-muted">
-          All results shown, {plural(hiddenCount, "result", "results")} hidden by filters.
-          <Button variant="link" onclick={clearFilters}>Clear filters</Button>
-        </p>
       {/if}
     {/if}
     {#if !view.length}
-      <EmptyState icon={SearchXIcon} title="All results are hidden by filters">
-        {#snippet action()}
-          <Button variant="outline" onclick={clearFilters}>Clear filters</Button>
-        {/snippet}
+      <EmptyState icon={SearchXIcon} title="All results are hidden">
+        {#snippet action()}{@render hiddenLine()}{/snippet}
       </EmptyState>
+    {:else if filteredCount || dismissedCount || fromBlocked}
+      {@render hiddenLine()}
     {/if}
   {:else if !complete}
     <div class="flex items-center gap-2 text-sm text-fg-muted" role="status">
