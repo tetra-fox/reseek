@@ -233,9 +233,12 @@
         choice = (choice + step + suggestions.length) % suggestions.length;
         return;
       }
-      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+      const picked = suggestions[Math.min(choice, suggestions.length - 1)];
+      // Enter on a word already typed in full, such as `/help`, sends it; Tab still completes
+      const whole = picked.key.toLowerCase() === word?.typed.toLowerCase();
+      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && !whole)) {
         e.preventDefault();
-        complete(suggestions[Math.min(choice, suggestions.length - 1)]);
+        complete(picked);
         return;
       }
     }

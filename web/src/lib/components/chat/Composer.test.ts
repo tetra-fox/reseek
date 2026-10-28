@@ -52,4 +52,15 @@ describe("the composer", () => {
     expect(box.value).toBe("hi 😄  there");
     expect(box.selectionStart).toBe("hi 😄 ".length);
   });
+
+  it("runs a command typed in full on Enter, and completes a partial one", () => {
+    const { box, type, press } = open();
+    type("/hel");
+    press("Enter");
+    expect(box.value).toBe("/help ");
+    type("/help");
+    press("Enter");
+    expect(document.querySelector('[role="dialog"][aria-label="Chat commands"]')).not.toBeNull();
+    expect(box.value).toBe("");
+  });
 });
