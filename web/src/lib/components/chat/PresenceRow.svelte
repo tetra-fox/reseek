@@ -6,9 +6,8 @@
   import SunIcon from "@lucide/svelte/icons/sun";
 
   import { type Burst, burstLine } from "#lib/chat/presence.js";
-  import { clock } from "#lib/clock.svelte.js";
+  import LogTime from "#lib/components/ui/LogTime.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { ago, formatDate, shortTime } from "#lib/format.js";
 
   // the cells of one line of a room's activity: a burst of the same change by its members
   let { burst }: { burst: Burst } = $props();
@@ -28,10 +27,7 @@
   );
 </script>
 
-<span role="gridcell" class="pt-0.5 text-xs text-fg-subtle tabular-nums"
-  ><time datetime={burst.at} title={`${formatDate(burst.at)}, ${ago(burst.at, clock.now)}`}
-    >{shortTime(burst.at)}</time
-  ></span>
+<LogTime at={burst.at} />
 <span role="gridcell" class="flex justify-center pt-1">
   <Icon class="size-3.5 text-fg-muted" aria-hidden="true" />
 </span>

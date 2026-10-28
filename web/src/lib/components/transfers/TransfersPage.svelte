@@ -269,10 +269,7 @@
 {/if}
 
 {#if selected.size}
-  <div
-    class="sticky bottom-2 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised"
-    role="toolbar"
-    aria-label="Selected transfers">
+  <div class="selection-bar" role="toolbar" aria-label="Selected transfers">
     <span class="text-sm">
       {chosen.length} selected · {formatBytes(chosen.reduce((n, t) => n + t.size, 0))}
     </span>

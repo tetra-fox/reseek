@@ -410,10 +410,7 @@
 {/if}
 
 {#if list.selected.size}
-  <div
-    class="sticky bottom-2 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised"
-    role="toolbar"
-    aria-label="Selected users">
+  <div class="selection-bar" role="toolbar" aria-label="Selected users">
     <span class="text-sm">{picked.length} selected</span>
     {#if write}
       <Button size="sm" variant="outline" onclick={() => blocking.ask(picked)}>Block</Button>

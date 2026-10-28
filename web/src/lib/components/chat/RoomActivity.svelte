@@ -37,7 +37,7 @@
         {...list.line(burst, i)}
         aria-label={burstText(burst)}
         class={[
-          "grid grid-cols-[2.75rem_1rem_minmax(0,1fr)] items-start gap-1.5 rounded-badge px-1 py-0.5 hover:bg-hover",
+          "log-row",
           list.selected.has(burst.key) && "bg-accent-soft/60",
           list.isFocused(burst) && "ring-1 ring-accent ring-inset"
         ]}>

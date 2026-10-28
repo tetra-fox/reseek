@@ -233,7 +233,7 @@
               onCheckedChange={(on) => on !== selected.has(row.key) && list.toggle(row.key)} />
           </span>
           <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
-            <span class="flex min-w-0"><Username name={row.username} /></span>
+            <span class="min-w-0 truncate"><Username name={row.username} /></span>
             {#if row.country}<Country code={row.country} />{/if}
           </span>
           <span role="gridcell" class="px-2 text-right tabular-nums"
@@ -297,10 +297,7 @@
     </div>
   </div>
   {#if chosen.length}
-    <div
-      class="sticky bottom-2 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised"
-      role="toolbar"
-      aria-label="Selected files">
+    <div class="selection-bar" role="toolbar" aria-label="Selected files">
       <span class="text-sm"
         >{plural(chosen.length, "file", "files")} · {formatBytes(chosenBytes)}</span>
       {#if canDownload}

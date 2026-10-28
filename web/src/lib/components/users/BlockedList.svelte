@@ -207,10 +207,7 @@
 {/if}
 
 {#if list.selected.size && write}
-  <div
-    class="sticky bottom-2 z-20 mx-auto flex flex-wrap items-center gap-inline rounded-card border bg-overlay px-4 py-2 shadow-raised"
-    role="toolbar"
-    aria-label="Selected blocks">
+  <div class="selection-bar" role="toolbar" aria-label="Selected blocks">
     <span class="text-sm">{chosen.length} selected</span>
     <Button size="sm" variant="outline" onclick={() => void unblockChosen()}>Unblock</Button>
     <Button size="sm" variant="ghost" onclick={() => list.clear()}>Clear</Button>
