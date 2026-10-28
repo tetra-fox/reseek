@@ -1,5 +1,6 @@
 <script lang="ts">
   import BanIcon from "@lucide/svelte/icons/ban";
+  import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
@@ -33,11 +34,13 @@
     /** what the directory holds, undefined until it arrived */
     user: UserSummary | undefined;
     onblock: () => void;
+    /** opens the name's menu, for the actions the card has no room for */
+    onmenu?: () => void;
     /** a profile not saved yet, which the card shows as it would show for us */
     draft?: { description: string; src: string | null; pictureUrl: string | null };
   };
 
-  let { name, user, onblock, draft }: Props = $props();
+  let { name, user, onblock, onmenu, draft }: Props = $props();
 
   const to = $derived(links(name));
   // our own name shows what peers are sent now, from our profile
@@ -200,6 +203,15 @@
           </Button>
         {/snippet}
       </Tooltip>
+      {#if onmenu}
+        <Tooltip text="More">
+          {#snippet child({ props })}
+            <Button {...props} variant="ghost" size="icon-sm" aria-label="More" onclick={onmenu}>
+              <EllipsisIcon />
+            </Button>
+          {/snippet}
+        </Tooltip>
+      {/if}
     </span>
   </div>
 </div>

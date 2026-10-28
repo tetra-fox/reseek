@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import BanIcon from "@lucide/svelte/icons/ban";
-  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
@@ -138,13 +137,9 @@
   };
 </script>
 
-<!-- the menu button sits over what follows the name and only while it is hovered or focused,
-     so a name takes its text's width; the keyboard opens the menu from the link -->
-<span
-  class={cn(
-    "group/username relative inline-flex max-w-full items-center align-baseline",
-    className
-  )}>
+<!-- a name takes only its text's width: its menu opens from a right-click, a long press,
+     Shift+F10 or the card's More button, never from a control beside it -->
+<span class={cn("inline-flex max-w-full items-center align-baseline", className)}>
   <a
     bind:this={link}
     href={userHref(name)}
@@ -175,14 +170,6 @@
       show("menu");
     }}
     onkeydown={keydown}>{name}</a>
-  <button
-    type="button"
-    tabindex="-1"
-    aria-label={`Menu for ${name}`}
-    class="pointer-events-none absolute top-1/2 left-full z-10 ml-0.5 -translate-y-1/2 rounded-badge bg-overlay text-fg-muted opacity-0 shadow-xs transition-opacity group-focus-within/username:pointer-events-auto group-focus-within/username:opacity-100 group-hover/username:pointer-events-auto group-hover/username:opacity-100 hover:bg-hover"
-    onclick={() => show("menu")}>
-    <ChevronDownIcon class="size-3.5" />
-  </button>
 </span>
 
 {#if active === "card"}
@@ -203,7 +190,7 @@
         role="dialog"
         aria-label={`Profile of ${name}`}
         class="z-50 w-80 max-w-[calc(100vw-1rem)] rounded-card border bg-overlay p-3 text-fg shadow-raised outline-none motion-safe:animate-popover-in">
-        <UserCard {name} {user} onblock={blockOrAsk} />
+        <UserCard {name} {user} onblock={blockOrAsk} onmenu={() => show("menu", keyboard)} />
       </Popover.Content>
     </Popover.Portal>
   </Popover.Root>
