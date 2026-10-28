@@ -1,4 +1,5 @@
 import type { EnqueueItem } from "#lib/downloads.js";
+import { parseSlsk } from "#lib/slsk.js";
 
 /** Files to download, by the user they come from */
 export type Wanted = Map<string, EnqueueItem[]>;
@@ -47,18 +48,8 @@ export const parsePaste = (text: string): Wanted => {
     return wanted;
   }
   for (const line of trimmed.split(/\r?\n/)) {
-    const match = /^slsk:\/\/([^/]+)\/(.+)$/.exec(line.trim());
-    if (!match) continue;
-    const [, user, path] = match;
-    let username = user;
-    let filename = path;
-    try {
-      username = decodeURIComponent(user);
-      filename = decodeURIComponent(path);
-    } catch {
-      // a stray % in the link: its text is taken as it is
-    }
-    add(wanted, username, filename.replaceAll("/", "\\"));
+    const link = parseSlsk(line);
+    if (link && !link.folder) add(wanted, link.username, link.path);
   }
   return wanted;
 };

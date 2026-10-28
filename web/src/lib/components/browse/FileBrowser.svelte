@@ -10,6 +10,7 @@
   import FolderIcon from "@lucide/svelte/icons/folder";
   import FolderClosedIcon from "@lucide/svelte/icons/folder-closed";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
+  import LinkIcon from "@lucide/svelte/icons/link";
   import ListIcon from "@lucide/svelte/icons/list";
   import LockIcon from "@lucide/svelte/icons/lock";
   import XIcon from "@lucide/svelte/icons/x";
@@ -33,6 +34,7 @@
     getFileName,
     plural
   } from "#lib/format.js";
+  import { slskLink } from "#lib/slsk.js";
 
   import { LOCKED_HINT } from "./locked";
 
@@ -151,6 +153,14 @@
       </Button>
       <Button variant="ghost" size="sm" onclick={() => void copyText(node.name)}>
         <CopyIcon />Copy path
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Copy the slsk:// link"
+        title="Copy the slsk:// link"
+        onclick={() => void copyText(slskLink(username, node.name, true))}>
+        <LinkIcon />
       </Button>
       <Button
         variant="ghost"

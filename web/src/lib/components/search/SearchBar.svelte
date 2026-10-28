@@ -15,6 +15,7 @@
   import { href } from "#lib/nav.js";
   import { forget, recent, remember, restore, togglePin } from "#lib/search/recent.svelte.js";
   import { type SearchScope, scopeLabel, searches } from "#lib/search/searches.svelte.js";
+  import { parseSlsk, slskBrowse } from "#lib/slsk.js";
   import { toast } from "#lib/toast.svelte.js";
 
   type Props = {
@@ -83,6 +84,13 @@
 
   const submit = (opening: boolean) => {
     const phrase = text.trim();
+    // a pasted slsk:// link opens what it points at rather than searching for its text
+    const link = parseSlsk(phrase);
+    if (link) {
+      text = "";
+      void goto(slskBrowse(link));
+      return;
+    }
     if (!phrase || creating || !connected) return;
     if (opening) open(phrase);
     else void stay(phrase);
