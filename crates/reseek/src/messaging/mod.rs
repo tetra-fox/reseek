@@ -115,6 +115,8 @@ pub struct Messaging {
   session_user: Mutex<Option<String>>,
   /// the work started on the way, so the stop waits for it
   tasks: TaskTracker,
+  /// what a message search is tried against before it runs
+  probe: search::Probe,
   /// cancelled when the daemon shuts down
   shutdown: CancellationToken,
 }
@@ -138,6 +140,7 @@ impl Messaging {
     shutdown: CancellationToken,
   ) -> Result<Arc<Self>, DbError> {
     let active = db.read(conversations::store::active).await?;
+    let probe = db.read(search::Probe::of).await?;
     db.write(sessions::close_crashed).await?;
     let (intake, receiver) = mpsc::channel(INTAKE);
     let messaging = Arc::new_cyclic(|this| Self {
@@ -158,6 +161,7 @@ impl Messaging {
       session: Mutex::new(None),
       session_user: Mutex::new(None),
       tasks: TaskTracker::new(),
+      probe,
       shutdown,
     });
     let worker = tokio::spawn(

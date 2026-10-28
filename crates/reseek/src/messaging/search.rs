@@ -5,12 +5,15 @@
 use api_types::chat::{
   MessageHit, MessageHitKind, MessageSearchKind, MessageSearchQuery, MessageSearchResults,
 };
+use std::sync::{Arc, Mutex};
+
 use rusqlite::types::Value;
 use rusqlite::{Connection, params_from_iter};
 
 use super::Messaging;
 use crate::api::error::ApiError;
 use crate::db::read_timestamp;
+use crate::sync::lock;
 
 /// Where a snippet's match starts and ends before it is escaped; no message holds them.
 const OPEN: &str = "\u{1}";
@@ -122,30 +125,39 @@ fn search(conn: &Connection, query: &MessageSearchQuery) -> rusqlite::Result<Mes
 /// The full-text indexes of the messages.
 const INDEXES: [&str; 2] = ["private_messages_fts", "room_messages_fts"];
 
-/// Runs `q` against empty copies, in memory, of the message indexes as `conn` defines them, so
-/// a failure there is the query's own and never the database's. The outer error is the
-/// database's: the indexes could not be read or copied.
-fn check_query(conn: &Connection, q: &str) -> rusqlite::Result<Result<(), rusqlite::Error>> {
-  let probe = Connection::open_in_memory()?;
-  for index in INDEXES {
-    let definition: String = conn.query_row(
-      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",
-      [index],
-      |row| row.get(0),
-    )?;
-    probe.execute_batch(&definition)?;
-  }
-  for index in INDEXES {
-    let matched = probe.query_row(
-      &format!("SELECT COUNT(*) FROM {index} WHERE {index} MATCH ?1"),
-      [q],
-      |_| Ok(()),
-    );
-    if let Err(e) = matched {
-      return Ok(Err(e));
+/// Empty copies, in memory, of the message indexes as `messaging.db` defines them, made once
+/// when the database opens. A query is run against them before the search, so a failure there
+/// is the query's own and never the database's.
+#[derive(Clone)]
+pub(super) struct Probe(Arc<Mutex<Connection>>);
+
+impl Probe {
+  /// Copies of the indexes `conn` defines; fails when they could not be read or copied.
+  pub(super) fn of(conn: &Connection) -> rusqlite::Result<Self> {
+    let probe = Connection::open_in_memory()?;
+    for index in INDEXES {
+      let definition: String = conn.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",
+        [index],
+        |row| row.get(0),
+      )?;
+      probe.execute_batch(&definition)?;
     }
+    Ok(Self(Arc::new(Mutex::new(probe))))
   }
-  Ok(Ok(()))
+
+  /// Whether SQLite reads `q` as a search of every index; the error says why not. It blocks.
+  fn check(&self, q: &str) -> Result<(), rusqlite::Error> {
+    let probe = lock(&self.0);
+    for index in INDEXES {
+      probe.query_row(
+        &format!("SELECT COUNT(*) FROM {index} WHERE {index} MATCH ?1"),
+        [q],
+        |_| Ok(()),
+      )?;
+    }
+    Ok(())
+  }
 }
 
 impl Messaging {
@@ -153,9 +165,10 @@ impl Messaging {
     &self,
     query: MessageSearchQuery,
   ) -> Result<MessageSearchResults, ApiError> {
+    let probe = self.probe.clone();
     let found = self
       .db
-      .read(move |conn| match check_query(conn, &query.q)? {
+      .read(move |conn| match probe.check(&query.q) {
         Ok(()) => search(conn, &query).map(Ok),
         Err(refused) => Ok(Err(refused)),
       })
@@ -243,16 +256,12 @@ mod tests {
       .await
       .unwrap();
     assert_eq!(rooms_only.total, 1);
-    let checked = db
-      .read(|conn| {
-        Ok([
-          check_query(conn, "\"pink floyd\" OR message:animals")?.is_ok(),
-          check_query(conn, "\"open")?.is_ok(),
-          check_query(conn, "nosuchcolumn:x")?.is_ok(),
-        ])
-      })
-      .await
-      .unwrap();
+    let probe = db.read(Probe::of).await.unwrap();
+    let checked = [
+      probe.check("\"pink floyd\" OR message:animals").is_ok(),
+      probe.check("\"open").is_ok(),
+      probe.check("nosuchcolumn:x").is_ok(),
+    ];
     assert_eq!(
       checked,
       [true, false, false],
