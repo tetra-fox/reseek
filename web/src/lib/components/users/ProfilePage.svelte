@@ -80,7 +80,7 @@
     {refreshing}
     onrefresh={() => void refresh()}
     onchanged={() => void fetch(false)} />
-  <nav aria-label="Profile" class="-mx-1 flex gap-1 overflow-x-auto px-1">
+  <nav aria-label="Profile" class="-mx-1 -my-1 flex gap-1 overflow-x-auto px-1 py-1">
     {#each TABS as t (t.id)}
       <a
         href={userHref(username, t.id === "overview" ? undefined : t.id)}
