@@ -74,7 +74,7 @@
     UserIcon,
     t.peers.toLocaleString(),
     "",
-    "Distinct peers",
+    "Users transferred with",
     "",
     "/users?has=transfers"
   )}

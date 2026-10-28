@@ -12,73 +12,73 @@ export type Series = {
 export const SERIES: Series[] = [
   {
     key: "uploadBytes",
-    name: "Upload Size",
+    name: "Upload size",
     unit: "bytes",
     color: "var(--color-series-upload-bytes)"
   },
   {
     key: "downloadBytes",
-    name: "Download Size",
+    name: "Download size",
     unit: "bytes",
     color: "var(--color-series-download-bytes)"
   },
   {
     key: "uploadCount",
-    name: "Upload Count",
+    name: "Upload count",
     unit: "count",
     color: "var(--color-series-upload-count)"
   },
   {
     key: "downloadCount",
-    name: "Download Count",
+    name: "Download count",
     unit: "count",
     color: "var(--color-series-download-count)"
   },
   {
     key: "uploadSpeed",
-    name: "Upload Speed",
+    name: "Upload speed",
     unit: "speed",
     color: "var(--color-series-upload-speed)"
   },
   {
     key: "downloadSpeed",
-    name: "Download Speed",
+    name: "Download speed",
     unit: "speed",
     color: "var(--color-series-download-speed)"
   },
   {
     key: "uploadErrors",
-    name: "Upload Errors",
+    name: "Upload errors",
     unit: "count",
     color: "var(--color-series-upload-errors)"
   },
   {
     key: "downloadErrors",
-    name: "Download Errors",
+    name: "Download errors",
     unit: "count",
     color: "var(--color-series-download-errors)"
   },
   {
     key: "uploadErrorRate",
-    name: "Upload Error Rate",
+    name: "Upload error rate",
     unit: "rate",
     color: "var(--color-series-upload-error-rate)"
   },
   {
     key: "downloadErrorRate",
-    name: "Download Error Rate",
+    name: "Download error rate",
     unit: "rate",
     color: "var(--color-series-download-error-rate)"
   },
   {
     key: "uploadWait",
-    name: "Upload Queue Wait",
+    name: "Upload queue wait",
     unit: "seconds",
     color: "var(--color-series-upload-wait)"
   },
   {
     key: "shareRatio",
-    name: "Share Ratio",
+    name: "Share ratio",
     unit: "ratio",
     color: "var(--color-series-share-ratio)"
   }

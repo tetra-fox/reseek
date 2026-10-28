@@ -52,9 +52,9 @@
   });
 
   const COLUMNS: { by: Sort; label: string }[] = [
-    { by: "Count", label: "Count" },
-    { by: "TotalBytes", label: "Total Size" },
-    { by: "AverageSpeed", label: "Avg Speed" }
+    { by: "Count", label: "Files" },
+    { by: "TotalBytes", label: "Total size" },
+    { by: "AverageSpeed", label: "Average speed" }
   ];
 </script>
 
@@ -104,7 +104,10 @@
               </td>
             </tr>
           {:else}
-            <tr><td colspan="6" class="py-6 text-center text-fg-subtle">No data to display</td></tr>
+            <tr
+              ><td colspan="6" class="py-6 text-center text-fg-subtle"
+                >No {table.title.toLowerCase()} in this range.</td
+              ></tr>
           {/each}
         </tbody>
       </table>

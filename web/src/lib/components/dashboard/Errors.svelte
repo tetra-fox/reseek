@@ -101,18 +101,20 @@
 
 <section class="flex flex-col gap-2">
   <div class="flex flex-wrap items-center gap-inline">
-    <h3 class="text-sm font-semibold">Error Count By Type</h3>
+    <h3 class="text-sm font-semibold">Errors by type</h3>
     {@render which(paretoWhich, (w) => (paretoWhich = w), "Direction of the error counts")}
   </div>
-  {#if paretoError}<p class="text-sm text-danger">Couldn't load: {paretoError}</p>{/if}
+  {#if paretoError}<p class="text-sm text-danger">
+      Couldn't load errors by type: {paretoError}
+    </p>{/if}
   <table class="w-full text-sm">
     <thead class="text-xs text-fg-muted">
       <tr class="border-b">
         <th class="px-2 py-1 text-left font-medium">Direction</th>
-        <th class="px-2 py-1 text-left font-medium">Exception</th>
+        <th class="px-2 py-1 text-left font-medium">Error</th>
         <th class="w-24"></th>
         <th class="px-2 py-1 text-right font-medium">Count</th>
-        <th class="px-2 py-1 text-right font-medium">Distinct Users</th>
+        <th class="px-2 py-1 text-right font-medium">Users</th>
       </tr>
     </thead>
     <tbody>
@@ -127,10 +129,10 @@
             <button
               type="button"
               class="text-left hover:underline"
-              title="Show only these in the recent errors"
+              title="Show only this error in recent errors"
               onclick={() =>
                 (exception = exception === row.exception ? null : (row.exception ?? null))}
-              >{truncate(row.exception ?? "(none)", 80)}</button>
+              >{truncate(row.exception ?? "(no message)", 80)}</button>
           </td>
           <td class="px-2">
             <div class="h-1.5 rounded-full bg-surface-muted">
@@ -145,7 +147,9 @@
           <td class="px-2 py-1 text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
         </tr>
       {:else}
-        <tr><td colspan="5" class="py-6 text-center text-fg-subtle">No data to display</td></tr>
+        <tr
+          ><td colspan="5" class="py-6 text-center text-fg-subtle">No errors in this range.</td
+          ></tr>
       {/each}
     </tbody>
   </table>
@@ -153,13 +157,15 @@
 
 <section class="flex flex-col gap-2">
   <div class="flex flex-wrap items-center gap-inline">
-    <h3 class="text-sm font-semibold">Recent Errors</h3>
+    <h3 class="text-sm font-semibold">Recent errors</h3>
     {@render which(recentWhich, (w) => (recentWhich = w), "Direction of the recent errors")}
     {#if exception}
-      <Button size="sm" variant="ghost" onclick={() => (exception = null)}>Every error</Button>
+      <Button size="sm" variant="ghost" onclick={() => (exception = null)}>Show all errors</Button>
     {/if}
   </div>
-  {#if recentError}<p class="text-sm text-danger">Couldn't load: {recentError}</p>{/if}
+  {#if recentError}<p class="text-sm text-danger">
+      Couldn't load recent errors: {recentError}
+    </p>{/if}
   <table class="w-full text-sm">
     <thead class="text-xs text-fg-muted">
       <tr class="border-b">
@@ -167,7 +173,7 @@
         <th class="px-2 py-1 text-left font-medium">Direction</th>
         <th class="px-2 py-1 text-left font-medium">Username</th>
         <th class="px-2 py-1 text-left font-medium">Filename</th>
-        <th class="px-2 py-1 text-left font-medium">Exception</th>
+        <th class="px-2 py-1 text-left font-medium">Error</th>
       </tr>
     </thead>
     <tbody>
@@ -183,7 +189,9 @@
           <td class="px-2 py-1" title={row.exception ?? ""}>{truncate(row.exception ?? "", 80)}</td>
         </tr>
       {:else}
-        <tr><td colspan="5" class="py-6 text-center text-fg-subtle">No data to display</td></tr>
+        <tr
+          ><td colspan="5" class="py-6 text-center text-fg-subtle">No errors in this range.</td
+          ></tr>
       {/each}
     </tbody>
   </table>
@@ -203,7 +211,7 @@
       <dt class="text-fg-muted">File</dt>
       <dd class="font-mono text-xs wrap-anywhere">{d.filename}</dd>
       <dt class="text-fg-muted">Size</dt>
-      <dd>{formatBytes(d.size)}, {formatBytes(d.bytesTransferred)} moved</dd>
+      <dd>{formatBytes(d.size)}, {formatBytes(d.bytesTransferred)} transferred</dd>
       <dt class="text-fg-muted">State</dt>
       <dd>{d.state}</dd>
       <dt class="text-fg-muted">Requested</dt>
@@ -216,7 +224,7 @@
       <dd>{formatDate(d.endedAt)}</dd>
       <dt class="text-fg-muted">Speed</dt>
       <dd>{formatSpeed(d.averageSpeed)}</dd>
-      <dt class="text-fg-muted">Exception</dt>
+      <dt class="text-fg-muted">Error</dt>
       <dd class="font-mono text-xs wrap-anywhere">{d.exception ?? ""}</dd>
     </dl>
   {/if}

@@ -101,7 +101,7 @@
 
 <Glance />
 
-<div class="flex flex-wrap items-center gap-1" role="group" aria-label="Range">
+<div class="flex flex-wrap items-center gap-1" role="group" aria-label="Time range">
   {#each RANGES as r (r.label)}
     <button
       type="button"
@@ -122,7 +122,7 @@
 {/if}
 
 <div class="grid gap-section lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-  <Card title="History">
+  <Card title="Transfers over time">
     {#if histogramError}<p class="text-sm text-danger">
         Couldn't load the history: {histogramError}
       </p>{/if}
@@ -132,7 +132,7 @@
       <Skeleton class="h-52" />
     {/if}
   </Card>
-  <Card title="How they ended" description="Click a part for those transfers.">
+  <Card title="Transfer outcomes">
     {#if summary}
       <Outcomes {summary} />
     {:else}
@@ -142,7 +142,7 @@
 </div>
 
 <nav aria-label="Statistics" class="flex gap-1">
-  {#each [{ id: "users", title: "Users" }, { id: "content", title: "Content" }, { id: "errors", title: "Errors" }] as t (t.id)}
+  {#each [{ id: "users", title: "Users" }, { id: "content", title: "Folders" }, { id: "errors", title: "Errors" }] as t (t.id)}
     <button
       type="button"
       aria-current={tab === t.id ? "page" : undefined}
@@ -155,7 +155,9 @@
   {#if tab === "users"}
     <Leaderboard {span} range={dashboardPrefs.range} />
   {:else if tab === "content"}
-    {#if directoriesError}<p class="text-sm text-danger">Couldn't load: {directoriesError}</p>{/if}
+    {#if directoriesError}<p class="text-sm text-danger">
+        Couldn't load the top folders: {directoriesError}
+      </p>{/if}
     <TopDirectories rows={directories} />
   {:else}
     <Errors {span} {data} />

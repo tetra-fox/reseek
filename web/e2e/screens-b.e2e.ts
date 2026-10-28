@@ -4,8 +4,8 @@ import { login } from "./login";
 
 test("opens the dashboard, chat, rooms, users, a profile and your profile", async ({ page }) => {
   await login(page, "/dashboard");
-  await expect(page.getByRole("group", { name: "Range" })).toBeVisible();
-  await expect(page.getByText("Distinct peers")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Time range" })).toBeVisible();
+  await expect(page.getByText("Users transferred with")).toBeVisible();
   await expect(page.getByRole("img", { name: "Transfers over time" })).toBeVisible();
 
   await page.getByRole("link", { name: "Chat" }).click();

@@ -69,12 +69,12 @@ describe("the dashboard", () => {
     expect(text()).toContain("3GB Downloaded · 3 files");
     expect(text()).toContain("1.5GB Uploaded · 6 files");
     expect(text()).toContain("0.50 Share ratio");
-    expect(text()).toContain("5 Distinct peers");
+    expect(text()).toContain("5 Users transferred with");
     // two series drawn by default, each an area and its edge
     expect(document.querySelectorAll('svg[aria-label="Transfers over time"] path')).toHaveLength(4);
     expect(text()).toContain("alice");
 
-    [...document.querySelectorAll("button")].find((b) => b.textContent === "Content")!.click();
+    [...document.querySelectorAll("button")].find((b) => b.textContent === "Folders")!.click();
     flushSync();
     expect(text()).toContain("Music/Album");
     [...document.querySelectorAll("button")].find((b) => b.textContent === "Errors")!.click();
@@ -100,7 +100,7 @@ describe("the dashboard", () => {
         .map((r) => r.url.searchParams.get("sortBy"));
     const button = (label: string) =>
       [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === label)!;
-    button("Total Size").click();
+    button("Total size").click();
     await flush();
     expect(sorts().slice(-2)).toEqual(["TotalBytes", "TotalBytes"]);
     // a background reload a moment later reads the same range again

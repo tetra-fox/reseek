@@ -12,7 +12,7 @@
 
   const data = $derived(outcomes(summary));
   const SERIES = [
-    { key: "succeeded", label: "Done", color: "var(--color-success)", state: "completed" },
+    { key: "succeeded", label: "Succeeded", color: "var(--color-success)", state: "completed" },
     { key: "failed", label: "Failed", color: "var(--color-danger)", state: "errored" },
     { key: "cancelled", label: "Cancelled", color: "var(--color-fg-subtle)", state: "cancelled" }
   ] as const;
@@ -33,7 +33,7 @@
     {/each}
   </div>
   {#if total}
-    <div class="h-28" role="img" aria-label="How the transfers ended">
+    <div class="h-28" role="img" aria-label="Transfer outcomes">
       <BarChart
         {data}
         y="direction"
@@ -49,7 +49,7 @@
         onBarClick={(_, { data: row, series }) => open(row.direction, series.key)} />
     </div>
   {:else}
-    <p class="text-sm text-fg-subtle">No transfer ended in this range.</p>
+    <p class="text-sm text-fg-subtle">No transfers finished in this range.</p>
   {/if}
   <!-- the same figures as links, for the keyboard and for reading exactly -->
   <dl class="grid grid-cols-[auto_repeat(3,minmax(0,1fr))] gap-x-4 gap-y-1 text-sm">

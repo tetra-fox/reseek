@@ -54,7 +54,7 @@
   </div>
 {/snippet}
 
-<section aria-label="Right now" class="grid grid-cols-2 gap-section lg:grid-cols-5">
+<section aria-label="Current activity" class="grid grid-cols-2 gap-section lg:grid-cols-5">
   {@render tile(
     ArrowDownIcon,
     "text-info",
@@ -71,7 +71,7 @@
     "Uploading",
     [
       { text: `${up.active} active`, to: "/uploads?state=active", strong: true },
-      { text: `${up.queued} waiting`, to: "/uploads?state=queued" }
+      { text: `${up.queued} queued`, to: "/uploads?state=queued" }
     ],
     up.active ? formatSpeed(up.speed) : undefined
   )}
@@ -91,20 +91,19 @@
       },
       { text: `in ${(s?.shares.directories ?? 0).toLocaleString()} folders`, to: "/system/shares" }
     ],
-    s?.shares.scanning ? "scanning now" : s?.shares.scanPending ? "a rescan is waiting" : undefined
+    s?.shares.scanning ? "Scanning" : s?.shares.scanPending ? "Rescan pending" : undefined
   )}
   {@render tile(
     RadioTowerIcon,
     reach === "no" ? "text-warning" : reach === "yes" ? "text-success" : "text-fg-muted",
-    "Reachable",
+    "Incoming connections",
     [
       {
-        text:
-          reach === "yes" ? "Peers reach you" : reach === "no" ? "Peers can't" : "Not known yet",
+        text: reach === "yes" ? "Working" : reach === "no" ? "Blocked" : "Unknown",
         to: SOULSEEK_SETTINGS,
         strong: true
       }
     ],
-    s ? `port ${s.server.listen.port}` : undefined
+    s ? `Port ${s.server.listen.port}` : undefined
   )}
 </section>

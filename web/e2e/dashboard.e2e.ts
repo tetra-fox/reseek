@@ -22,10 +22,10 @@ test("the dashboard shows more at a glance, each figure a link to its list", asy
     })
   );
   await login(page, "/dashboard");
-  const now = page.getByRole("region", { name: "Right now" });
+  const now = page.getByRole("region", { name: "Current activity" });
   await expect(now).toContainText("Downloading");
   await expect(now).toContainText("Sharing");
-  await expect(page.getByRole("img", { name: "How the transfers ended" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Transfer outcomes" })).toBeVisible();
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/dashboard.png` });
 
   // a figure opens the list behind it, filtered
@@ -39,7 +39,7 @@ test("the dashboard shows more at a glance, each figure a link to its list", asy
     "true"
   );
   await page.goto("./#/dashboard");
-  await page.getByRole("link", { name: /Distinct peers/ }).click();
+  await page.getByRole("link", { name: /Users transferred with/ }).click();
   await expect(page).toHaveURL(/#\/users\?has=transfers$/);
   await expect(page.getByRole("button", { name: "Has transfers" })).toHaveAttribute(
     "aria-pressed",
