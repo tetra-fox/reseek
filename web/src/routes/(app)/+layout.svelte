@@ -22,7 +22,15 @@
   import { trail } from "#lib/crumbs.svelte.js";
   import { togglesActivity } from "#lib/keys.js";
   import { live } from "#lib/live/live.svelte.js";
-  import { baseCrumbs, changesScreen, href, redirectFor, route, titleOf } from "#lib/nav.js";
+  import {
+    baseCrumbs,
+    changesScreen,
+    fillsContent,
+    href,
+    redirectFor,
+    route,
+    titleOf
+  } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   // listens for transfer frames from the start, so its notifications follow every screen
   import "#lib/transfers/notices.svelte.js";
@@ -165,7 +173,10 @@
           class="relative min-h-0 flex-1 overflow-y-auto"
           data-content>
           <main
-            class="mx-auto flex min-h-full w-full max-w-page min-w-0 flex-col gap-section p-gutter">
+            class={[
+              "mx-auto flex min-h-full w-full min-w-0 flex-col",
+              fillsContent(at.path) ? "h-full" : "max-w-page gap-section p-gutter"
+            ]}>
             <svelte:boundary>
               {@render children()}
               {#snippet failed(error, reset)}

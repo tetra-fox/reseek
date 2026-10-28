@@ -105,8 +105,9 @@
   {/if}
 {/snippet}
 
-<div
-  class="flex h-[calc(var(--content-h)-2*var(--spacing-gutter))] overflow-hidden rounded-card border bg-surface shadow-card">
+<!-- the whole content area, edge to edge, as a desktop chat app: the list, the conversation and
+     its side panel are columns divided by borders -->
+<div class="flex h-(--content-h) overflow-hidden bg-surface" data-chat>
   {#if wide.current}
     <div class="flex w-72 shrink-0 flex-col border-r">
       {@render list()}
