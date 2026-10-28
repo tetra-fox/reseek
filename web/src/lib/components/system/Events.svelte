@@ -18,7 +18,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { dateTime } from "#lib/format.js";
+  import { dateTime, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { Keyed } from "#lib/keyed.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
@@ -117,7 +117,9 @@
     <Menu.Trigger>
       {#snippet child({ props })}
         <Button {...props} variant="outline" size="sm"
-          >{types.length ? `${types.length} types` : "All types"}<ChevronDownIcon /></Button>
+          >{types.length
+            ? plural(types.length, "type", "types")
+            : "All types"}<ChevronDownIcon /></Button>
       {/snippet}
     </Menu.Trigger>
     <Menu.Content align="start" class="max-h-80 overflow-y-auto">
@@ -133,7 +135,7 @@
   {/if}
   <div class="ml-auto flex items-center gap-inline">
     <Select
-      class="h-control-sm w-28"
+      class="h-control-sm w-32"
       aria-label="Events per page"
       bind:value={() => perPage, (v) => to({ page: 1, perPage: v })}
       options={SIZES.map((n) => ({ value: n, label: `${n} per page` }))} />
