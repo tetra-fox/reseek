@@ -56,6 +56,7 @@ struct Seen {
   cutoff_hz: Option<f64>,
   /// it stops with an encoder's low-pass rather than a natural roll-off
   sharp: bool,
+  seconds: f64,
   inner_shelf: Option<Step>,
   rms_dbfs: f64,
 }
@@ -80,12 +81,14 @@ impl Seen {
         sharp: true,
         inner_shelf: None,
         rms_dbfs: window.rms_dbfs,
+        seconds: window.seconds,
       },
       None => Self {
         cutoff_hz: window.cutoff_hz,
         sharp: window.sharp(),
         inner_shelf: window.inner_shelf,
         rms_dbfs: window.rms_dbfs,
+        seconds: window.seconds,
       },
     }
   }
@@ -251,7 +254,7 @@ pub(super) fn read(measured: &Measured) -> Reading {
 /// Reads the cutoff of the non-silent windows, whose median cutoff is `median`.
 fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u32>) -> Verdict {
   let count = heard.windows.len();
-  let seconds = count as f64;
+  let seconds: f64 = heard.windows.iter().map(|w| w.seconds).sum();
   let mut reading = Verdict {
     verdict: AnalysisVerdict::Inconclusive,
     confidence: 0.3,
@@ -263,7 +266,7 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
   let Some(median) = median.filter(|_| count >= MIN_WINDOWS && seconds >= MIN_SECONDS) else {
     reading.confidence = 0.2;
     reading.summary = format!(
-      "Only {seconds:.0} s of the audio is above silence; a reading needs at least {MIN_SECONDS:.0} s."
+      "Only {seconds:.1} s of the audio is above silence; a reading needs at least {MIN_SECONDS:.0} s."
     );
     return reading;
   };

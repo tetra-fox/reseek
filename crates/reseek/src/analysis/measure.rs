@@ -92,6 +92,8 @@ pub(super) struct Step {
 pub(super) struct Window {
   /// where the window starts, in seconds
   pub t: f64,
+  /// how long it is, in seconds: 1 but for a shorter last window
+  pub seconds: f64,
   /// its loudness over every analysed channel, in dBFS
   pub rms_dbfs: f64,
   /// the highest frequency within the measured range of the loudest band, in Hz; `None` for a
@@ -209,6 +211,7 @@ impl Analyser {
     let column = self.column(spectrum.as_deref());
     let mut window = Window {
       t,
+      seconds: length as f64 / self.rate,
       rms_dbfs,
       cutoff_hz: None,
       shelf_db: None,

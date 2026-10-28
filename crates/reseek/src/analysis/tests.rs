@@ -300,7 +300,7 @@ fn too_little_audio_is_inconclusive() {
   );
   assert!(reading.confidence <= 0.5);
   assert!(
-    reading.summary.starts_with("Only 12 s"),
+    reading.summary.starts_with("Only 12.0 s"),
     "{}",
     reading.summary
   );
@@ -553,6 +553,21 @@ fn a_cliff_at_an_old_equipment_rate_reads_as_its_encoder_and_says_so() {
   );
   assert!(
     reading.limitations.iter().any(|l| l.contains("37.8 kHz")),
+    "{reading:#?}"
+  );
+}
+
+#[test]
+fn a_reading_needs_thirty_whole_seconds_of_audio() {
+  let dir = tempfile::tempdir().unwrap();
+  let mut audio = music_for(30, 1, 44_100, pink);
+  for channel in &mut audio.channels {
+    channel.truncate(44_100 * 299 / 10);
+  }
+  let reading = analysed(&flac(dir.path(), "short.flac", &audio, 16));
+  assert_eq!(
+    reading.verdict,
+    AnalysisVerdict::Inconclusive,
     "{reading:#?}"
   );
 }

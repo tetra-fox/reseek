@@ -381,6 +381,7 @@ mod tests {
     (0..count)
       .map(|i| Window {
         t: i as f64,
+        seconds: 1.0,
         rms_dbfs: -20.0,
         cutoff_hz: None,
         shelf_db: None,
