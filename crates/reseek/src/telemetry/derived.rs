@@ -71,6 +71,11 @@ impl Ema {
     next
   }
 
+  /// The average as last published, 0 while empty.
+  pub fn current(&self) -> f64 {
+    self.gauge.get()
+  }
+
   /// Empties the average and publishes 0.
   pub fn reset(&self) {
     *lock(&self.value) = None;

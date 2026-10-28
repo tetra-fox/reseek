@@ -433,4 +433,71 @@ mod tests {
       .await;
     assert!(!check().await, "a revoked token ends the stream");
   }
+
+  #[tokio::test]
+  async fn transfer_figures_go_out_each_second_they_changed_while_a_stream_follows_them() {
+    use std::time::Duration;
+    let app = app(TRUSTED, &[]).await;
+    let succeeded = |app: &TestApp| {
+      app
+        .state
+        .telemetry
+        .metrics()
+        .transfers()
+        .downloads
+        .succeeded(100, 10.0);
+    };
+    let noop = |app: &TestApp| {
+      app.state.events.raise(api_types::events::Event::Noop(
+        api_types::events::NoFields { version: 0 },
+      ))
+    };
+    let mut events = open(&app, "/api/v0/live?topics=events").await;
+    let seen = events.next().await.unwrap().id.unwrap();
+    succeeded(&app);
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    let before = noop(&app);
+    let mut figures = app
+      .stream_from(
+        "127.0.0.1:1",
+        with(
+          request("GET", "/api/v0/live?topics=metrics,events", None),
+          "last-event-id",
+          &seen.to_string(),
+        ),
+      )
+      .await;
+    assert_eq!(figures.next().await.unwrap().data["resumed"], true);
+    let replayed = figures.next().await.unwrap();
+    assert_eq!(
+      (replayed.event.as_str(), replayed.data["id"].clone()),
+      ("events.raised", json!(before.id)),
+      "nothing went out while no stream followed the figures"
+    );
+    let changed = figures.next().await.unwrap();
+    assert_eq!(changed.event, "metrics.update");
+    assert_eq!(changed.data["downloads"]["completed"]["succeeded"], 1);
+    tokio::time::sleep(Duration::from_millis(2500)).await;
+    let after = noop(&app);
+    let next = figures.next().await.unwrap();
+    assert_eq!(
+      (next.event.as_str(), next.data["id"].clone()),
+      ("events.raised", json!(after.id)),
+      "figures that did not change are not sent again"
+    );
+    succeeded(&app);
+    let started = std::time::Instant::now();
+    let again = figures.next().await.unwrap();
+    assert_eq!(again.event, "metrics.update");
+    assert_eq!(again.data["downloads"]["completed"]["succeeded"], 2);
+    assert!(
+      started.elapsed() < Duration::from_millis(1500),
+      "within the second"
+    );
+
+    let mut fresh = open(&app, "/api/v0/live?topics=metrics").await;
+    let frames = fresh.until("metrics.update").await;
+    assert_eq!(frames.len(), 2, "the figures are the topic's snapshot");
+    assert_eq!(frames[1].data["downloads"]["completed"]["bytes"], 200);
+  }
 }

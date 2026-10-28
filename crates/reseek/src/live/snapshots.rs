@@ -55,8 +55,9 @@ pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
       frames.extend(unread(app).await);
       frames
     }
-    // the transfer figures are kept by a service that sends its snapshot here once it exists
-    Topic::Metrics => Vec::new(),
+    Topic::Metrics => vec![LiveFrame::MetricsUpdate(
+      app.telemetry.metrics().transfers().figures(),
+    )],
     // clients fetch these lists themselves
     Topic::SearchResponses(_) | Topic::Transfers | Topic::Users | Topic::Events => Vec::new(),
   }

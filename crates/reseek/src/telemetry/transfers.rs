@@ -5,6 +5,7 @@
 
 use std::collections::HashSet;
 
+use api_types::telemetry as figures;
 use soulseek_client::{Transfer, TransferState};
 
 use super::catalogue::PREFIX;
@@ -74,6 +75,16 @@ pub struct TransferFamily {
   pub uploads: TransferMetrics,
   /// downloads
   pub downloads: TransferMetrics,
+}
+
+impl TransferFamily {
+  /// The figures of both directions as the event stream carries them, taken together.
+  pub fn figures(&self) -> figures::TransferMetrics {
+    figures::TransferMetrics {
+      downloads: self.downloads.figures(),
+      uploads: self.uploads.figures(),
+    }
+  }
 }
 
 /// Whether a transfer in `state` waits: requested, or queued here or at the peer.
@@ -177,6 +188,30 @@ impl TransferMetrics {
     self.in_progress_users.set(users);
     self.in_progress_files.set(files);
     self.in_progress_bytes.set(bytes);
+  }
+
+  /// The figures of this direction as the event stream carries them.
+  pub fn figures(&self) -> figures::DirectionMetrics {
+    // gauges and counters hold whole counts
+    let count = |value: f64| value as u64;
+    figures::DirectionMetrics {
+      in_progress: figures::InProgressMetrics {
+        files: count(self.in_progress_files.get()),
+        users: count(self.in_progress_users.get()),
+        average_speed: self.in_progress_speed_average.current(),
+        total_speed: self.in_progress_speed_total.current(),
+      },
+      queued: figures::QueuedMetrics {
+        files: count(self.queued_files.get()),
+        users: count(self.queued_users.get()),
+        bytes: count(self.queued_bytes.get()),
+      },
+      completed: figures::CompletedMetrics {
+        succeeded: count(self.completed_succeeded.get()),
+        failed: count(self.completed_failed.get()),
+        bytes: count(self.completed_bytes.get()),
+      },
+    }
   }
 
   /// Moves the speed averages towards the summed and the mean speed of the transfers in
