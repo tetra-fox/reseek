@@ -60,8 +60,10 @@ pub(super) const OTHER_RATE_EDGES: [(f64, &str); 3] = [
   (15_000.0, "30 kHz (some older samplers)"),
   (13_020.0, "26.04 kHz (some older samplers)"),
 ];
-/// Fewer non-silent windows than this give a reading little to go on, which it says.
-pub(super) const FEW_WINDOWS: usize = 60;
+/// Fewer non-silent windows than this give a reading little to go on, which it says: under
+/// twice the least it needs, each window moves the shares its rules compare by more than
+/// 2.5 percent, so a few odd seconds can tip it.
+pub(super) const FEW_WINDOWS: usize = 2 * MIN_WINDOWS;
 /// Channels correlated above this, with the side channel at or below [`MONO_SIDE_DB`], hold
 /// the same audio.
 pub(super) const MONO_CORRELATION: f64 = 0.9999;

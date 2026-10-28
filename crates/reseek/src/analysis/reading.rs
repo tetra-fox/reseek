@@ -191,7 +191,10 @@ pub(super) fn read(measured: &Measured) -> Reading {
   }
   let mut found = verdict(&heard, median, claimed.lossless, measured.bitrate_kbps);
   if heard.windows.len() < FEW_WINDOWS {
-    limitations.push("Short or mostly quiet audio gives few windows to judge from.".to_string());
+    limitations.push(format!(
+      "Only {} seconds of the audio are above silence, which leaves few to judge from.",
+      heard.windows.len()
+    ));
   }
   if quiet(&heard) {
     limitations
