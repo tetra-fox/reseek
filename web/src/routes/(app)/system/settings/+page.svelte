@@ -130,7 +130,8 @@
   {#if raw}
     <RawFile view={data} />
   {:else}
-    <div class="grid gap-section lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
+    <div
+      class="grid grid-cols-[minmax(0,1fr)] gap-section lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
       <!-- the categories, the one in view marked; on a wide screen they stay beside the page -->
       <aside class="flex flex-col gap-2 lg:sticky lg:top-20 lg:max-h-[calc(100svh-7rem)]">
         <Input
