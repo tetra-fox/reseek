@@ -122,3 +122,32 @@ test("the activity log docks under the screen, keeps its height and opens with a
   await page.keyboard.press("Control+j");
   expect(await height()).toBe(388);
 });
+
+test("a screen that fails says what went wrong", async ({ page }) => {
+  // two errors with one id break the recent errors' keyed list, which the screen's boundary catches
+  await page.route("**/api/v0/telemetry/reports/transfers/exceptions?**", (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: "0b3c6f9e-1d1e-4c43-9d55-3a1f0b6e7a10",
+          username: "alice",
+          direction: "Download",
+          filename: "@@a\\Music\\01.flac",
+          size: 1,
+          bytesTransferred: 0,
+          state: "Completed, Errored",
+          requestedAt: "2026-10-27T18:00:00Z",
+          endedAt: "2026-10-27T18:01:00Z",
+          averageSpeed: 0,
+          exception: "File not shared."
+        }
+      ]
+    })
+  );
+  await login(page, "/dashboard");
+  await page.getByRole("button", { name: "Errors", exact: true }).click();
+  const main = page.locator("main");
+  await expect(main.getByRole("button", { name: "Reload" })).toBeVisible();
+  await expect(main).toContainText("each_key_duplicate");
+  await expect(main).not.toContainText("[object Object]");
+});

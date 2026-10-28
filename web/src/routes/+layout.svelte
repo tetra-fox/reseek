@@ -18,7 +18,8 @@
   {@render children()}
   {#snippet failed(error)}
     <div class="flex min-h-svh items-center justify-center p-6">
-      <ErrorSegment caption={error instanceof Error ? error.message : String(error)} />
+      <!-- SvelteKit hands a boundary an App.Error, which hooks.client.ts gives the message -->
+      <ErrorSegment caption={(error as App.Error).message} />
     </div>
   {/snippet}
 </svelte:boundary>

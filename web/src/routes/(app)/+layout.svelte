@@ -147,8 +147,9 @@
             <svelte:boundary>
               {@render children()}
               {#snippet failed(error, reset)}
+                <!-- SvelteKit hands a boundary an App.Error, which hooks.client.ts gives the message -->
                 <ErrorSegment
-                  caption={error instanceof Error ? error.message : String(error)}
+                  caption={(error as App.Error).message}
                   retry={reset}
                   retryLabel="Reload" />
               {/snippet}
