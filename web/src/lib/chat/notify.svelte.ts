@@ -137,12 +137,12 @@ class Notifier {
   }
 
   /**
-   * Whether `author` is muted, from their summary, fetched first when none is held so a muted
-   * user stays quiet on a screen that never listed them. Asked only for a message that would
-   * otherwise notify
+   * Whether `author` is muted, from their summary, read again first when none is held or the one
+   * held is over a minute old, so a mute made on a screen that never listed them, or in another
+   * browser, keeps them quiet. Asked only for a message that would otherwise notify
    */
   async #muted(author: string): Promise<boolean> {
-    if (!users.get(author)) await users.load(author);
+    await users.load(author);
     return users.get(author)?.muted ?? false;
   }
 

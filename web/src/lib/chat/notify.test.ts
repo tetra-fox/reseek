@@ -4,7 +4,7 @@ import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { toasts } from "#lib/toast.svelte.js";
-import { users } from "#lib/users.svelte.js";
+import { SUMMARY_TTL_MS, users } from "#lib/users.svelte.js";
 
 import { type Arrival, notifier, type NotifyOptions, shouldNotify } from "./notify.svelte";
 
@@ -105,5 +105,20 @@ describe("the new message toast", () => {
     // held now: not read again
     expect(await toasted("all")).toBe(0);
     expect(asked()).toBe(1);
+  });
+
+  it("reads a summary over a minute old again, so a mute made elsewhere holds", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-10-26T10:00:00Z"), toFake: ["Date"] });
+    let muted = false;
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/users/alice/summary") ? { username: "alice", muted } : undefined
+    );
+    expect(await toasted("all")).toBe(1);
+    // muted from another browser, whose frame this tab doesn't follow
+    muted = true;
+    vi.setSystemTime(Date.now() + SUMMARY_TTL_MS + 1);
+    expect(await toasted("all")).toBe(0);
+    expect(net.requests.filter((r) => r.url.pathname.endsWith("/summary"))).toHaveLength(2);
+    vi.useRealTimers();
   });
 });
