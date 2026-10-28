@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
+  import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
@@ -13,12 +14,15 @@
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import SaveIcon from "@lucide/svelte/icons/save";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
-  import { untrack } from "svelte";
+  import { type Component, untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
+  import { jobs } from "#lib/analysis/jobs.svelte.js";
   import { api, type Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import { copyText } from "#lib/clipboard.svelte.js";
+  import AnalysisDrawer from "#lib/components/analysis/AnalysisDrawer.svelte";
+  import AnalysisJobs from "#lib/components/analysis/AnalysisJobs.svelte";
   import { isAudio } from "#lib/components/files/links.js";
   import FolderTree from "#lib/components/tree/FolderTree.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -26,6 +30,7 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
   import { dateTime, formatBytes, plural } from "#lib/format.js";
   import { archiveUrl, fileTrack, fileUrl, joinPath, type Root } from "#lib/localfiles.js";
@@ -143,6 +148,47 @@
     return map;
   });
   const managed = $derived(fields(app.options).remote_file_management === true);
+  /** the extensions the analyser is offered for, as the options name them */
+  const analysable = $derived.by(() => {
+    const listed = fields(fields(app.options).analysis).extensions;
+    return new Set(Array.isArray(listed) ? listed.map((x) => String(x).toLowerCase()) : []);
+  });
+  const canAnalyse = (name: string) => analysable.has(name.split(".").pop()?.toLowerCase() ?? "");
+  /** the file whose analysis the drawer shows, queued when it has none with `start` */
+  let analysing = $state<{ entry: Entry; start: boolean } | null>(null);
+  $effect(() => {
+    void root;
+    analysing = null;
+  });
+
+  /** Queues every file under a folder whose extension the analyser is offered for */
+  const analyseFolder = async (e: Entry) => {
+    const listing = await call(() =>
+      api.GET("/api/v0/files/{root}/directories/{path}", {
+        params: { path: { root, path: encodePath(e.path) }, query: { recursive: true } }
+      })
+    );
+    if (!listing.ok) return void toast(`Couldn't read ${e.name}: ${listing.error}`, "error");
+    const files = (listing.data.files ?? [])
+      .map((f) => f.fullName.replaceAll("\\", "/"))
+      .filter(canAnalyse);
+    if (!files.length) return void toast(`${e.name} has no files to analyse`);
+    let queued = 0;
+    const failed: string[] = [];
+    for (const file of files) {
+      const outcome = await jobs.queue(
+        { kind: "file", root, path: joinPath([e.path, file]) },
+        false
+      );
+      // a file analysed already or in the queue is left as it is
+      if (outcome.ok) queued++;
+      else if (outcome.status !== 409) failed.push(`${file}: ${outcome.error}`);
+    }
+    void jobs.refresh();
+    if (failed.length) toast(`Couldn't queue ${failed.join("; ")}`, "error");
+    else if (queued) toast(`${plural(queued, "file", "files")} queued for analysis`);
+    else toast(`Every file in ${e.name} has been analysed already`);
+  };
   const write = $derived(session.can("ReadWrite"));
   const canDelete = $derived(managed && write);
 
@@ -195,6 +241,8 @@
       }
     }
     selected.clear();
+    const shown = analysing?.entry.path;
+    if (targets.some((e) => e.path === shown)) analysing = null;
     load();
     if (failed.length) toast(`Couldn't delete ${failed.join("; ")}`, "error");
     else
@@ -316,11 +364,19 @@
         {#if isAudio(e.name)}
           <Menu.Item onSelect={() => preview(e)}><PlayIcon />Preview</Menu.Item>
         {/if}
+        {#if canAnalyse(e.name)}
+          <Menu.Item onSelect={() => (analysing = { entry: e, start: write })}
+            ><AudioLinesIcon />Analyse</Menu.Item>
+        {/if}
         <Menu.Item onSelect={() => void save(e)}><SaveIcon />Download to device</Menu.Item>
       {:else}
         <Menu.Item onSelect={() => void open(e)}><FolderOpenIcon />Open</Menu.Item>
         <Menu.Item onSelect={() => window.location.assign(archiveUrl(root, e.path))}
           ><FileArchiveIcon />Download as zip</Menu.Item>
+        {#if write && analysable.size}
+          <Menu.Item onSelect={() => void analyseFolder(e)}
+            ><AudioLinesIcon />Analyse folder</Menu.Item>
+        {/if}
       {/if}
       <Menu.Item onSelect={() => void copyText(e.path)}><CopyIcon />Copy path</Menu.Item>
       {#if canDelete}
@@ -337,6 +393,8 @@
     checked={selected.has(e.key)}
     onCheckedChange={(on) => (on ? selected.add(e.key) : selected.delete(e.key))} />
 {/snippet}
+
+<AnalysisJobs />
 
 {#if error}
   <Notice kind="error">
@@ -438,4 +496,32 @@
       {root === "downloads" && !path ? "No finished downloads yet." : "This folder is empty."}
     </p>
   {/if}
+{/if}
+
+{#snippet tool(label: string, Icon: Component, run: () => void)}
+  <Tooltip text={label}>
+    {#snippet child({ props })}
+      <Button {...props} variant="ghost" size="icon-sm" aria-label={label} onclick={run}
+        ><Icon /></Button>
+    {/snippet}
+  </Tooltip>
+{/snippet}
+
+{#if analysing}
+  {@const e = analysing.entry}
+  <AnalysisDrawer
+    target={{ kind: "file", root, path: e.path }}
+    name={e.name}
+    start={analysing.start}
+    onclose={() => (analysing = null)}>
+    {#snippet actions()}
+      {#if isAudio(e.name)}
+        {@render tool("Preview", PlayIcon, () => preview(e))}
+      {/if}
+      {@render tool("Download to device", SaveIcon, () => void save(e))}
+      {#if canDelete}
+        {@render tool("Delete", Trash2Icon, () => askRemove([e]))}
+      {/if}
+    {/snippet}
+  </AnalysisDrawer>
 {/if}

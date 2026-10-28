@@ -113,7 +113,8 @@ describe("the file explorer", () => {
     expect(grid.querySelector('[data-line="f:Album/CD1/1.flac"]')!.getAttribute("aria-level")).toBe(
       "2"
     );
-    expect(net.requests).toHaveLength(2);
+    // one listing per folder: the open folder, then the one opened in place
+    expect(net.requests.filter((r) => r.url.pathname.includes("/directories/"))).toHaveLength(2);
     press(grid, "ArrowLeft");
     expect(rows()).toEqual(["..", "folder:Album/CD1"]);
   });
