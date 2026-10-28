@@ -97,6 +97,8 @@ pub struct AppState {
   pub auth: Arc<Auth>,
   /// the event bus
   pub events: EventBus,
+  /// the user's scripts, run on the events
+  pub scripts: Arc<Scripts>,
   /// the event stream's hub
   pub live: Live,
   /// what other users did with us
@@ -165,7 +167,7 @@ impl AppState {
     let live = Live::new(shutdown.clone());
     let activity = Activity::new(live.clone());
     let state = StateOwner::new(&startup, &paths, live.clone());
-    let events = EventBus::new(shutdown.clone());
+    let events = EventBus::new();
     let pushed = live.clone();
     events.subscribe("live", None, move |record| {
       pushed.publish(api_types::live::LiveFrame::EventsRaised(Box::new(
@@ -173,7 +175,7 @@ impl AppState {
       )));
       async { Ok(()) }
     });
-    Scripts::start(
+    let scripts = Scripts::start(
       config.clone(),
       &events,
       paths.scripts.clone(),
@@ -320,6 +322,7 @@ impl AppState {
       url_base,
       auth,
       events,
+      scripts,
       live,
       activity,
       state,

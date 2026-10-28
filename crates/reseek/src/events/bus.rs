@@ -5,6 +5,7 @@
 //! then each subscriber's own task takes it from a broadcast channel. A subscriber that fails
 //! or panics is logged and keeps receiving; a slow one misses events rather than holding up
 //! the others. Subscribers are named, and subscribing a name again replaces the earlier one.
+//! Stopping the bus lets each subscriber take every event raised before, then ends it.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -54,15 +55,38 @@ impl Drop for Inner {
   }
 }
 
+impl Default for EventBus {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 impl EventBus {
-  /// A bus with no subscribers, whose subscriber tasks stop when `cancel` is cancelled.
-  pub fn new(cancel: CancellationToken) -> Self {
+  /// A bus with no subscribers.
+  pub fn new() -> Self {
     Self {
       inner: Arc::new(Inner {
         sender: broadcast::Sender::new(BACKLOG),
         subscribers: Mutex::new(HashMap::new()),
-        cancel,
+        cancel: CancellationToken::new(),
       }),
+    }
+  }
+
+  /// Stops the bus once every subscriber has taken the events raised so far, for the end of a
+  /// shutdown, when nothing raises any more.
+  pub async fn stop(&self) {
+    self.inner.cancel.cancel();
+    let tasks: Vec<JoinHandle<()>> = lock(&self.inner.subscribers)
+      .drain()
+      .map(|(_, task)| task)
+      .collect();
+    for task in tasks {
+      if let Err(e) = task.await
+        && !e.is_cancelled()
+      {
+        error!(error = %e, "an event subscriber ended badly");
+      }
     }
   }
 
@@ -136,9 +160,11 @@ async fn deliver<F, Fut>(
   // a subscriber that keeps falling behind would log on every event
   let behind = LogLimiter::new();
   loop {
+    // what was raised before the stop is taken before the stop is seen
     let record = tokio::select! {
-      () = cancel.cancelled() => return,
+      biased;
       record = receiver.recv() => record,
+      () = cancel.cancelled() => return,
     };
     let record = match record {
       Ok(record) => record,
@@ -190,7 +216,7 @@ mod tests {
 
   #[tokio::test]
   async fn raising_fixes_id_and_time_and_a_failing_subscriber_harms_no_one() {
-    let bus = EventBus::new(CancellationToken::new());
+    let bus = EventBus::new();
     assert!(
       !bus.raise(noop()).id.is_nil(),
       "raising with no subscriber is fine"
@@ -241,7 +267,7 @@ mod tests {
 
   #[tokio::test]
   async fn subscribing_a_name_again_replaces_it() {
-    let bus = EventBus::new(CancellationToken::new());
+    let bus = EventBus::new();
     let (seen, mut received) = mpsc::unbounded_channel();
     for label in ["first", "second"] {
       let seen = seen.clone();
@@ -260,5 +286,26 @@ mod tests {
     assert_eq!(got, Some("second"));
     bus.unsubscribe("scripts", None);
     bus.unsubscribe("never subscribed", None);
+  }
+
+  #[tokio::test]
+  async fn a_stopped_bus_delivers_what_was_raised_before_it_stopped() {
+    let bus = EventBus::new();
+    let (seen, mut received) = mpsc::unbounded_channel();
+    bus.subscribe("slow", None, move |record: Arc<EventRecord>| {
+      let seen = seen.clone();
+      async move {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        seen.send(record.id).unwrap();
+        Ok(())
+      }
+    });
+    let raised: Vec<_> = (0..5).map(|_| bus.raise(noop()).id).collect();
+    bus.stop().await;
+    let mut got = Vec::new();
+    while let Ok(id) = received.try_recv() {
+      got.push(id);
+    }
+    assert_eq!(got, raised, "every one, before the stop returned");
   }
 }

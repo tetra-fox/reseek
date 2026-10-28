@@ -9,8 +9,9 @@
 //! turned off or there are no credentials. Stopping, once the HTTP host has stopped: the
 //! running searches end as cancelled, the watchdog stops, the port mapping is removed, the
 //! client disconnects and is disposed, the events this raised are handled, the session is
-//! closed, the statistics fetched again and the transfer tasks end, and the transfers still
-//! unfinished are ended as shut down.
+//! closed, the statistics fetched again and the transfer tasks end, the transfers still
+//! unfinished are ended as shut down, the scripts' tasks end with the runs the shutdown killed
+//! recorded, and last the event bus delivers what was raised and stops.
 
 use tracing::{Instrument, debug, info, info_span, warn};
 
@@ -174,4 +175,7 @@ pub(super) async fn stop(app: &AppState) {
     Ok(ended) => debug!(ended, "unfinished transfers ended at shutdown"),
     Err(e) => warn!(error = %e, "unfinished transfers not ended at shutdown"),
   }
+  // the runs the shutdown killed are recorded, then the bus delivers what was raised and stops
+  app.scripts.stop().await;
+  app.events.stop().await;
 }

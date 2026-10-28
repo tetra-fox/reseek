@@ -259,3 +259,34 @@ fn a_closed_queue_takes_its_script_back_until_its_task_ends() {
     "a queue whose task ended takes no run"
   );
 }
+
+#[tokio::test]
+async fn a_run_the_shutdown_kills_is_in_the_event_log() {
+  let command = "echo started; touch running; sleep 30";
+  let (app, _runs) = with_scripts(&script("slow", r#""Noop""#, command, "")).await;
+  let id = raise(&app, "Noop", "").await;
+  let running = app.state.paths.scripts.join("running");
+  let started = std::time::Instant::now();
+  while !running.exists() {
+    assert!(
+      started.elapsed() < Duration::from_secs(20),
+      "the script never started"
+    );
+    tokio::time::sleep(Duration::from_millis(20)).await;
+  }
+  app.state.shutdown.cancel();
+  app.state.stop().await;
+  let query: api_types::events::EventsQuery =
+    serde_json::from_value(serde_json::json!({ "type": "ScriptRunCompleted" })).unwrap();
+  let logged = app.state.services.events.list(query).await.unwrap().items;
+  let [record] = &logged[..] else {
+    panic!("one run recorded: {logged:?}");
+  };
+  let Event::ScriptRunCompleted(run) = &record.event else {
+    unreachable!("the query asked for script runs");
+  };
+  assert_eq!(run.event_id, id);
+  assert!(!run.succeeded && !run.timed_out && run.exit_code.is_none());
+  assert_eq!(run.error.as_deref(), Some("stopped with the daemon"));
+  assert_eq!(run.output, "started");
+}

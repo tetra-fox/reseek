@@ -319,7 +319,7 @@ mod tests {
       volatile: true,
       log_sql: false,
     };
-    let bus = EventBus::new(CancellationToken::new());
+    let bus = EventBus::new();
     let log = EventLog::subscribed(&location, &bus).await.unwrap();
     (log, bus)
   }

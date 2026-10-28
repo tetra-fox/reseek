@@ -21,6 +21,7 @@ use cascade::Watcher;
 use soulseek_client::LogLimiter;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use tracing::{Instrument, info, info_span, warn};
 
 pub use run::Shell;
@@ -83,6 +84,8 @@ pub struct Scripts {
   queues: Mutex<HashMap<String, Arc<Queue>>>,
   /// the scripts told once that an argument list is the safer form
   advised: Mutex<HashSet<String>>,
+  /// the queues' tasks
+  tasks: TaskTracker,
   shutdown: CancellationToken,
 }
 
@@ -96,35 +99,52 @@ impl Scripts {
     directory: PathBuf,
     shell: Option<Shell>,
     shutdown: CancellationToken,
-  ) {
+  ) -> Arc<Self> {
     let scripts = Arc::new(Self {
       config,
       events: events.clone(),
       context: Arc::new(Context { directory, shell }),
       queues: Mutex::new(HashMap::new()),
       advised: Mutex::new(HashSet::new()),
+      tasks: TaskTracker::new(),
       shutdown,
     });
+    let taker = scripts.clone();
     events.subscribe("scripts", None, move |record| {
-      scripts.take(record);
+      taker.take(record);
       async { Ok(()) }
     });
+    scripts
   }
 
-  /// Queues a run of every script `record` is for. A script no longer in the options gets no
-  /// more runs; those it has waiting still run, and its queue is kept until its task ends, so a
-  /// script added back meanwhile still runs one at a time.
-  fn take(&self, record: Arc<EventRecord>) {
-    let kind = record.event.event_type();
+  /// Waits, at shutdown, until every script's task has ended: a run under way is killed by the
+  /// shutdown, and its `ScriptRunCompleted` raised before its task ends.
+  pub async fn stop(&self) {
+    self.tasks.close();
+    self.tasks.wait().await;
+  }
+
+  /// Closes the queues of the scripts no longer in the options, so their tasks end once what
+  /// they hold has run, and forgets the queues whose tasks have ended. A queue is kept until its
+  /// task ends, so a script added back meanwhile still runs one at a time.
+  fn close_removed(&self, queues: &mut HashMap<String, Arc<Queue>>) {
     let options = self.config.current();
     let scripts = &options.values.integrations.scripts;
-    let mut queues = lock(&self.queues);
     queues.retain(|name, queue| {
       if !scripts.contains_key(name) {
         queue.close();
       }
       !queue.ended()
     });
+  }
+
+  /// Queues a run of every script `record` is for.
+  fn take(&self, record: Arc<EventRecord>) {
+    let kind = record.event.event_type();
+    let options = self.config.current();
+    let scripts = &options.values.integrations.scripts;
+    let mut queues = lock(&self.queues);
+    self.close_removed(&mut queues);
     for (name, script) in scripts {
       if !runs_on(&script.on, kind) {
         continue;
@@ -149,7 +169,7 @@ impl Scripts {
   /// `queue`, of the script `name`, with the task that runs what it holds.
   fn run_queue(&self, name: &str, queue: Queue) -> Arc<Queue> {
     let queue = Arc::new(queue);
-    tokio::spawn(
+    self.tasks.spawn(
       work(
         queue.clone(),
         self.context.clone(),
