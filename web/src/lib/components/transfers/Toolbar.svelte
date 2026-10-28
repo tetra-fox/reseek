@@ -61,11 +61,14 @@
     { id: "flat", label: "Flat" }
   ]);
 
-  // every order a column header can sort by, named after the first column that sorts by it
+  // every order a column header can sort by, named after the first column that sorts by it; not
+  // the user while each user is a group, inside which their order has no effect, as the table
+  // hides that column then
   const SORTS = $derived(
     columnsFor(direction)
       .flatMap((c) => (c.sort ? [{ id: c.sort, label: c.label }] : []))
       .filter((s, i, all) => all.findIndex((o) => o.id === s.id) === i)
+      .filter((s) => !(s.id === "user" && view.groupBy === "user"))
   );
   const sortLabel = $derived(SORTS.find((s) => s.id === view.sort.id)?.label ?? view.sort.id);
 
