@@ -25,6 +25,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use tracing::{Instrument, debug, info, info_span, warn};
 use uuid::Uuid;
 
@@ -105,6 +106,8 @@ pub struct Controller {
   temporary: PathBuf,
   shutdown: CancellationToken,
   registry: Mutex<Registry>,
+  /// the tasks serving the agents' sockets, which a stop waits for
+  sessions: TaskTracker,
   sockets: AtomicU64,
   /// each configured agent's key, with the secret it was derived from
   keys: Mutex<HashMap<String, (String, Key)>>,
@@ -134,6 +137,7 @@ impl Controller {
       temporary: std::env::temp_dir().join("reseek"),
       shutdown,
       registry: Mutex::new(Registry::default()),
+      sessions: TaskTracker::new(),
       sockets: AtomicU64::new(0),
       keys: Mutex::new(HashMap::new()),
     });
@@ -389,26 +393,34 @@ impl Controller {
   }
 
   /// Disconnects the agents whose configuration was removed or whose instance name or secret
-  /// changed, until the daemon stops; then closes every agent's socket as shutting down.
+  /// changed, until the daemon stops.
   async fn follow_configuration(self: Arc<Self>) {
     let mut changes = self.config.changes();
     loop {
       let change = tokio::select! {
-        () = self.shutdown.cancelled() => break,
+        () = self.shutdown.cancelled() => return,
         change = changes.recv() => change,
       };
       match change {
         Ok(_) | Err(RecvError::Lagged(_)) => self.drop_unconfigured(),
-        Err(RecvError::Closed) => break,
+        Err(RecvError::Closed) => return,
       }
     }
-    let agents: Vec<(String, u64)> = lock(&self.registry)
-      .agents
-      .iter()
-      .map(|(name, r)| (name.clone(), r.socket))
-      .collect();
-    for (name, socket) in agents {
-      self.leave(&name, socket, close::SHUTTING_DOWN, "shutting down");
+  }
+
+  /// Waits, once the daemon is stopping, until every agent's socket was closed as shutting down,
+  /// for at most `wait`; the HTTP host stops accepting after this, so agents learn of the stop
+  /// first.
+  pub async fn closed(&self, wait: std::time::Duration) {
+    self.sessions.close();
+    if tokio::time::timeout(wait, self.sessions.wait())
+      .await
+      .is_err()
+    {
+      warn!(
+        sockets = self.sessions.len(),
+        "agent sockets still open at shutdown"
+      );
     }
   }
 

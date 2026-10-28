@@ -67,6 +67,9 @@ pub const EXIT_LOCKED: u8 = 5;
 pub const EXIT_FATAL: u8 = 1;
 pub use restart::EXIT_RESTART;
 
+/// How long a stop waits for the relay agents' sockets to close before the HTTP host stops.
+const AGENTS_CLOSE: Duration = Duration::from_secs(2);
+
 /// How often the configuration files are read when they are polled.
 const POLL: Duration = Duration::from_secs(4);
 
@@ -672,7 +675,26 @@ async fn host(
   state.start().await;
   info!(base = %state.url_base, "Using base url");
   info!("reseek started");
-  http::serve(listeners, pipeline::app(state.clone(), ui), cancel, grace).await;
+  // agents are told of the stop before the HTTP host stops taking requests
+  let http_stop = CancellationToken::new();
+  tokio::spawn({
+    let (state, stopping) = (state.clone(), http_stop.clone());
+    async move {
+      cancel.cancelled().await;
+      if let Some(controller) = &state.relay.controller {
+        controller.closed(AGENTS_CLOSE).await;
+      }
+      stopping.cancel();
+    }
+    .in_current_span()
+  });
+  http::serve(
+    listeners,
+    pipeline::app(state.clone(), ui),
+    http_stop,
+    grace,
+  )
+  .await;
   state.stop().await;
   state.databases.close().await;
   if state.restart_requested() {

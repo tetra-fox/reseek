@@ -66,6 +66,11 @@ struct Ended {
 impl Controller {
   /// Serves the agent socket `socket`, opened from `address`, until it closes.
   pub(crate) async fn serve_socket(self: Arc<Self>, socket: impl AgentSocket, address: IpAddr) {
+    let sessions = self.sessions.clone();
+    sessions.track_future(self.serve(socket, address)).await;
+  }
+
+  async fn serve(self: Arc<Self>, socket: impl AgentSocket, address: IpAddr) {
     let id = self.next_socket();
     let span = info_span!("relay_agent_socket", socket = id, address = %address);
     async move {

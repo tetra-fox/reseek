@@ -208,6 +208,32 @@ async fn an_agent_comes_back_after_its_controller_restarts_and_leaves_with_its_s
   assert_eq!(left.shares.hosts.unwrap(), ["local"]);
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn a_stopping_controller_tells_its_agents_before_it_stops_listening() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let (controller_dir, agent_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+  std::fs::create_dir_all(agent_dir.path().join("share")).unwrap();
+  let name = soulfind::username("controller");
+  let port = free_port();
+  let mut stopping = controller(controller_dir.path(), &server, &name, port);
+  let api = signed_in(&stopping).await;
+  let agent = agent(agent_dir.path(), port);
+  until(&api, "serving the agent", |s| serving(s, 0)).await;
+  let pid = stopping.child.id().to_string();
+  let signalled = std::process::Command::new("kill")
+    .args(["-TERM", &pid])
+    .status()
+    .unwrap();
+  assert!(signalled.success());
+  agent
+    .printed_line(&["relay controller connection lost", "code=4010"])
+    .await;
+  assert!(stopping.child.wait().unwrap().success());
+}
+
 /// The next message on `socket`.
 async fn message(socket: &mut api_client::RelaySocket) -> RelayMessage {
   let received = tokio::time::timeout(PATIENCE, socket.receive())
