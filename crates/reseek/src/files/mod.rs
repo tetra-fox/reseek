@@ -50,7 +50,7 @@ use crate::safety::{self, Os};
 use crate::services::{ContentRequest, FileService, FileTarget};
 use crate::sync::lock;
 use delete::Kind;
-pub use local::LocalFile;
+pub use local::{LocalFile, LocalPath};
 pub use placing::{create_file, move_file};
 use roots::{Refused, locate};
 use serve::Served;

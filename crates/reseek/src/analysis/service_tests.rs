@@ -276,3 +276,53 @@ async fn spectrograms_beyond_the_cache_limit_go_least_recently_viewed_first() {
   let kept: Vec<_> = std::fs::read_dir(&images).unwrap().collect();
   assert_eq!(kept.len(), 2, "the newest report's two images");
 }
+
+#[tokio::test]
+async fn a_report_and_its_judgement_outlive_the_file() {
+  let app = app(CONFIG, &[]).await;
+  lossless(&app, "Album/02.flac");
+  let mut record = Record::download("alice", "@@share\\Album\\02.flac", 3, None);
+  record.state = TransferStates::Completed | TransferStates::Succeeded;
+  let local = app.state.paths.downloads.join("Album/02.flac");
+  record.local_path = Some(local.to_string_lossy().into_owned());
+  let id = record.id;
+  app
+    .state
+    .transfers
+    .write(move |conn| transfers::insert(conn, &record))
+    .await
+    .unwrap();
+  let by_download = format!("/api/v0/transfers/downloads/alice/{id}/analysis");
+  send(&app, "POST", &by_download, None).await;
+  settled(&app).await;
+  let fake = json!({ "verdict": "fake", "note": "a transcode" });
+  let (status, _) = send(&app, "PUT", &format!("{by_download}/override"), Some(fake)).await;
+  assert_eq!(status, 204);
+
+  std::fs::remove_file(&local).unwrap();
+  let (status, report) = send(&app, "GET", &by_download, None).await;
+  assert_eq!(status, 200, "{report}");
+  assert_eq!(report["override"]["verdict"], "fake");
+  let limitations = report["limitations"].as_array().unwrap();
+  assert!(
+    limitations.contains(&json!("The file is no longer there.")),
+    "{report}"
+  );
+  let (status, _) = send(&app, "GET", &route("Album/02.flac"), None).await;
+  assert_eq!(status, 200, "by its path too");
+  let image = app
+    .send(request(
+      "GET",
+      &format!("{by_download}/spectrogram.png"),
+      None,
+    ))
+    .await;
+  assert_eq!(image.status, 200);
+  let legit = json!({ "verdict": "legit" });
+  let (status, _) = send(&app, "PUT", &format!("{by_download}/override"), Some(legit)).await;
+  assert_eq!(status, 204);
+  let (status, _) = send(&app, "DELETE", &format!("{by_download}/override"), None).await;
+  assert_eq!(status, 204);
+  let (status, _) = send(&app, "POST", &format!("{by_download}?force=true"), None).await;
+  assert_eq!(status, 404, "a file that is gone can not be analysed again");
+}

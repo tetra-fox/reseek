@@ -24,6 +24,7 @@ mod tests;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AudioAnalysis, SetAnalysisOverride,
@@ -44,7 +45,7 @@ use crate::api::error::ApiError;
 use crate::config::Options;
 use crate::db::{Database, DbError, Location};
 use crate::events::EventBus;
-use crate::files::{Files, LocalFile};
+use crate::files::Files;
 use crate::live::Live;
 use crate::services::{AnalysisService, FileTarget};
 use crate::sync::lock;
@@ -101,9 +102,9 @@ impl Analysis {
     &self.db
   }
 
-  /// The stored report of `file`, 404 when it has none.
-  async fn stored(&self, file: &LocalFile) -> Result<store::Stored, ApiError> {
-    let path = file.path.to_string_lossy();
+  /// The stored report of the file at `path`, 404 when it has none.
+  async fn stored(&self, path: &std::path::Path) -> Result<store::Stored, ApiError> {
+    let path = path.to_string_lossy();
     let stored = store::find(&self.db, &path)
       .await
       .map_err(ApiError::internal)?
@@ -129,9 +130,9 @@ pub fn verdict_of(bytes: Vec<u8>) -> api_types::analysis::AnalysisVerdict {
   }
 }
 
-/// Whether `stored` was made from the file as it is now.
-fn current(stored: &store::Stored, file: &LocalFile) -> bool {
-  stored.size == file.size && stored.modified == modified_text(file.modified)
+/// Whether `stored` was made from a file of `size` last changed at `modified`.
+fn current(stored: &store::Stored, size: u64, modified: SystemTime) -> bool {
+  stored.size == size && stored.modified == modified_text(modified)
 }
 
 #[async_trait]
@@ -143,7 +144,7 @@ impl AnalysisService for Analysis {
       let stored = store::find(&self.db, &path)
         .await
         .map_err(ApiError::internal)?;
-      if stored.is_some_and(|stored| current(&stored, &file)) {
+      if stored.is_some_and(|stored| current(&stored, file.size, file.modified)) {
         return Err(ApiError::conflict(
           "the file has been analysed already",
           Some("its report is current; ask with force=true to analyse it again".to_string()),
@@ -177,15 +178,17 @@ impl AnalysisService for Analysis {
   }
 
   async fn report(&self, target: FileTarget, windows: bool) -> Result<AudioAnalysis, ApiError> {
-    let file = self.files.local_file(&target).await?;
-    let stored = self.stored(&file).await?;
-    let fresh = current(&stored, &file);
+    let file = self.files.local_path(&target).await?;
+    let stored = self.stored(&file.path).await?;
+    let note = match file.found {
+      None => Some("The file is no longer there."),
+      Some((size, modified)) if !current(&stored, size, modified) => {
+        Some("The file has changed since it was analysed.")
+      }
+      Some(_) => None,
+    };
     let mut report = stored.report;
-    if !fresh {
-      report
-        .limitations
-        .push("The file has changed since it was analysed.".to_string());
-    }
+    report.limitations.extend(note.map(str::to_string));
     if !windows {
       report.windows = None;
     }
@@ -197,8 +200,8 @@ impl AnalysisService for Analysis {
     target: FileTarget,
     query: SpectrogramQuery,
   ) -> Result<Response, ApiError> {
-    let file = self.files.local_file(&target).await?;
-    let stored = self.stored(&file).await?;
+    let file = self.files.local_path(&target).await?;
+    let stored = self.stored(&file.path).await?;
     if stored.report.spectrogram.is_none() {
       return Err(ApiError::not_found(
         "no spectrogram was drawn for the file; its report's limitations say why",
@@ -243,8 +246,8 @@ impl AnalysisService for Analysis {
     target: FileTarget,
     verdict: SetAnalysisOverride,
   ) -> Result<(), ApiError> {
-    let file = self.files.local_file(&target).await?;
-    let stored = self.stored(&file).await?;
+    let file = self.files.local_path(&target).await?;
+    let stored = self.stored(&file.path).await?;
     let note = verdict.note.filter(|note| !note.trim().is_empty());
     store::judge(
       &self.db,
@@ -261,7 +264,7 @@ impl AnalysisService for Analysis {
   }
 
   async fn clear_override(&self, target: FileTarget) -> Result<(), ApiError> {
-    let file = self.files.local_file(&target).await?;
+    let file = self.files.local_path(&target).await?;
     let path = file.path.to_string_lossy().into_owned();
     let removed = store::unjudge(&self.db, &path)
       .await
