@@ -11,25 +11,30 @@ export const setMedia = (query: string, on: boolean) => {
   for (const list of lists) if (list.media.includes(query)) list.fire();
 };
 
+/** A media query list that is an event target, so a change reaches listeners as a real event */
+class FakeList extends EventTarget {
+  onchange = null;
+  constructor(readonly media: string) {
+    super();
+  }
+  get matches() {
+    return [...matching].some((q) => this.media.includes(q));
+  }
+  addListener(l: (e: Event) => void) {
+    this.addEventListener("change", l);
+  }
+  removeListener(l: (e: Event) => void) {
+    this.removeEventListener("change", l);
+  }
+}
+
 export const installMedia = () => {
   window.matchMedia = (media: string) => {
-    const listeners = new Set<(e: MediaQueryListEvent) => void>();
-    const list = {
-      media,
-      get matches() {
-        return [...matching].some((q) => media.includes(q));
-      },
-      onchange: null,
-      addEventListener: (_: string, l: (e: MediaQueryListEvent) => void) => listeners.add(l),
-      removeEventListener: (_: string, l: (e: MediaQueryListEvent) => void) => listeners.delete(l),
-      addListener: (l: (e: MediaQueryListEvent) => void) => listeners.add(l),
-      removeListener: (l: (e: MediaQueryListEvent) => void) => listeners.delete(l),
-      dispatchEvent: () => true
-    };
+    const list = new FakeList(media);
     lists.add({
       media,
       fire: () => {
-        for (const l of listeners) l({ matches: list.matches, media } as MediaQueryListEvent);
+        list.dispatchEvent(Object.assign(new Event("change"), { matches: list.matches, media }));
       }
     });
     return list as unknown as MediaQueryList;
