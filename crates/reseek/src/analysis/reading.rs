@@ -207,9 +207,13 @@ pub(super) fn read(measured: &Measured) -> Reading {
         confidence: 0.4,
       }),
       summary: format!(
-        "The content stops at {}, the top of the band a lower sample rate holds and also \
-         where an encoder at {} cuts off; the analyser can not tell which made it.",
+        "The content stops sharply at {}: the top of what a {} kHz recording holds, and also \
+         where an encoder at {} cuts off. Either it was made at that rate and converted up, \
+         or it is a transcode from that encoder; the analyser can not tell which.",
         khz(edge),
+        format!("{:.2}", edge * 2.0 / 1000.0)
+          .trim_end_matches('0')
+          .trim_end_matches('.'),
         profile.name
       ),
       limitations: Vec::new(),

@@ -474,25 +474,52 @@ fn hi_res_with_a_natural_roll_off_is_not_flagged_as_upsampled() {
 fn a_cutoff_at_a_lower_rates_band_edge_is_not_read_as_a_transcode() {
   let dir = tempfile::tempdir().unwrap();
   // made at 32 kHz, so it stops at 16 kHz, where older 128 kbps MP3 encoders cut too; made at
-  // 22.05 kHz, so it stops at 11.025 kHz, where a 64 kbps MP3 cuts
-  for (from, to, profile) in [
-    (32_000, 96_000, "mp3 ~128 kbps"),
-    (32_000, 44_100, "mp3 ~128 kbps"),
-    (22_050, 44_100, "mp3 ~64 kbps"),
-  ] {
-    let audio = music(1, from, pink).resampled(to);
+  // 22.05 kHz, so it stops at 11.025 kHz, where a 64 kbps MP3 cuts; and the old encoders' own
+  // cut at 16 kHz: either explanation fits, so neither is claimed
+  let cases = [
+    (
+      "32 to 96",
+      music(1, 32_000, pink).resampled(96_000),
+      "mp3 ~128 kbps",
+      "32 kHz",
+    ),
+    (
+      "32 to 44.1",
+      music(1, 32_000, pink).resampled(44_100),
+      "mp3 ~128 kbps",
+      "32 kHz",
+    ),
+    (
+      "22.05 to 44.1",
+      music(1, 22_050, pink).resampled(44_100),
+      "mp3 ~64 kbps",
+      "22.05 kHz",
+    ),
+    (
+      "cut at 16 kHz",
+      music(1, 44_100, fixtures::cut_at(16_000.0)),
+      "mp3 ~128 kbps",
+      "32 kHz",
+    ),
+  ];
+  for (name, audio, profile, rate) in cases {
     let reading = analysed(&flac(dir.path(), "up.flac", &audio, 24));
-    assert_eq!(
-      reading.flags,
-      [AnalysisFlag::Upsampled],
-      "{from} to {to}: {reading:#?}"
-    );
     assert_eq!(
       reading.verdict,
       AnalysisVerdict::Inconclusive,
-      "{from} to {to}: {reading:#?}"
+      "{name}: {reading:#?}"
     );
-    assert_eq!(reading.encoder_guess.as_ref().unwrap().profile, profile);
+    assert!(reading.flags.is_empty(), "{name}: {reading:#?}");
+    assert_eq!(
+      reading.encoder_guess.as_ref().unwrap().profile,
+      profile,
+      "{name}"
+    );
+    assert!(
+      reading.summary.contains(rate) && reading.summary.contains(profile),
+      "{name}: {}",
+      reading.summary
+    );
   }
 }
 

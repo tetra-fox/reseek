@@ -6,7 +6,7 @@ use api_types::analysis::{AnalysisFlag, AnalysisMeasures};
 
 use super::decode::Claimed;
 use super::measure::Window;
-use super::thresholds::{CLUSTER_HZ, LOWER_RATE_EDGES, MONO_CORRELATION, MONO_SIDE_DB};
+use super::thresholds::{CLUSTER_HZ, LOWER_RATE_EDGES, MONO_CORRELATION, MONO_SIDE_DB, profile_at};
 
 /// What was found beside the reading.
 pub(super) struct Findings {
@@ -14,7 +14,8 @@ pub(super) struct Findings {
   pub flags: Vec<AnalysisFlag>,
   /// a sentence for the summary per finding
   pub notes: Vec<String>,
-  /// the top of the band of the lower rate an upsampled file was made at, in Hz
+  /// the top of the band of a lower rate the content stops at with a cliff, in Hz; flagged
+  /// `upsampled` only where no encoder cuts at the same frequency
   pub source_edge: Option<f64>,
 }
 
@@ -32,14 +33,16 @@ pub(super) fn findings(
     source_edge: None,
   };
   let nyquist = f64::from(claimed.sample_rate) / 2.0;
-  if let Some(edge) = median.and_then(|m| source_edge(windows, m, nyquist)) {
+  found.source_edge = median.and_then(|m| source_edge(windows, m, nyquist));
+  // where an encoder cuts at the same edge the cliff proves nothing on its own, and the
+  // reading names both
+  if let Some(edge) = found.source_edge.filter(|edge| profile_at(*edge).is_none()) {
     found.flags.push(AnalysisFlag::Upsampled);
     found.notes.push(format!(
       "The content stops sharply at {:.2} kHz, the top of the band a lower sample rate holds, \
        so the audio was probably made at that rate.",
       edge / 1000.0
     ));
-    found.source_edge = Some(edge);
   }
   if let (Some(claim), Some(used)) = (claimed.bit_depth, measures.bit_depth_effective)
     && claim > 16
