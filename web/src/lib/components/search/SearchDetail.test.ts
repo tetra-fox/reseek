@@ -2,8 +2,10 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
+import { app } from "#lib/app.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
+import { searchOptions } from "#lib/settings.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import SearchDetail from "./SearchDetail.svelte";
@@ -20,15 +22,19 @@ const file = (filename: string): Schemas["File"] => ({
   attributes: []
 });
 
-const response = (username: string, speed: number): Schemas["SearchResponse"] => ({
+const response = (
+  username: string,
+  speed: number,
+  files = [file(`@@${username}\\Album\\01 One.flac`), file(`@@${username}\\Album\\02 Two.flac`)]
+): Schemas["SearchResponse"] => ({
   username,
   country: null,
   token: 1,
   hasFreeUploadSlot: true,
   uploadSpeed: speed,
   queueLength: 0,
-  fileCount: 2,
-  files: [file(`@@${username}\\Album\\01 One.flac`), file(`@@${username}\\Album\\02 Two.flac`)],
+  fileCount: files.length,
+  files,
   lockedFileCount: 0,
   lockedFiles: []
 });
@@ -61,6 +67,8 @@ describe("search results", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => {
     if (component) unmount(component);
+    searchOptions.view = "cards";
+    app.options = null;
     live.stop();
     searches.clear();
     vi.useRealTimers();
@@ -90,7 +98,8 @@ describe("search results", () => {
     const cards = () => [...document.querySelectorAll("section[data-key]")];
     expect(cards().map((c) => c.getAttribute("data-key"))).toEqual(["0:alice", "0:bob"]);
     const [alice, bob] = cards();
-    const row = alice.querySelector("tbody tr")!;
+    const row = alice.querySelector("[role=row][aria-selected]")!;
+    expect(row.textContent).toContain("01 One.flac");
 
     // a selection across the two cards
     const selection = document.getSelection()!;
@@ -103,7 +112,7 @@ describe("search results", () => {
     expect(cards()).toHaveLength(3);
     expect(cards()[0]).toBe(alice);
     expect(cards()[1]).toBe(bob);
-    expect(alice.querySelector("tbody tr")).toBe(row);
+    expect(alice.querySelector("[role=row][aria-selected]")).toBe(row);
     expect(document.getSelection()!.toString()).toBe(selected);
 
     // completed: the stored responses replace the streamed ones, and the cards stay
@@ -123,7 +132,122 @@ describe("search results", () => {
     expect(cards()).toHaveLength(3);
     expect(cards()[0]).toBe(alice);
     expect(cards()[1]).toBe(bob);
-    expect(alice.querySelector("tbody tr")).toBe(row);
+    expect(alice.querySelector("[role=row][aria-selected]")).toBe(row);
     expect(document.getSelection()!.toString()).toBe(selected);
+  });
+
+  /** Mounts the page on a running search and opens the stream; gives the fake network */
+  const open = async (stored: Schemas["SearchResponse"][]) => {
+    const net = fakeNetwork((url) => {
+      if (url.pathname.endsWith("/api/v0/users")) return { users: [], total: 0 };
+      if (url.pathname.endsWith(`/searches/${ID}/responses`)) return stored;
+      if (url.pathname.endsWith(`/searches/${ID}`)) return search({});
+      return undefined;
+    });
+    searches.list.upsert(search({}));
+    component = mount(SearchDetail, { target: document.body, props: { id: ID } });
+    live.start();
+    net.frame("hello", {
+      principal: { name: "a", role: "ReadOnly" }
+    } as unknown as Schemas["Hello"]);
+    await flush();
+    return net;
+  };
+
+  it("keep the dense rows' nodes and the selection across them as results stream in", async () => {
+    searchOptions.view = "dense";
+    const stored = [response("alice", 300), response("bob", 200), response("carol", 100)];
+    const net = await open(stored);
+    net.frame("search.response", { searchId: ID, response: stored[0] });
+    net.frame("search.response", { searchId: ID, response: stored[1] });
+    await flush();
+    const grid = document.querySelector('[role=grid][aria-label^="Search results"]')!;
+    const rows = () => [...grid.querySelectorAll("[role=row][data-line]")];
+    expect(rows()).toHaveLength(4);
+    const [first, , third] = rows();
+    const selection = document.getSelection()!;
+    selection.setBaseAndExtent(first, 0, third, third.childNodes.length);
+    const selected = selection.toString();
+    expect(selected).toContain("01 One.flac");
+
+    net.frame("search.response", { searchId: ID, response: stored[2] });
+    await flush();
+    expect(rows()).toHaveLength(6);
+    expect(rows()[0]).toBe(first);
+    expect(rows()[2]).toBe(third);
+    expect(selection.toString()).toBe(selected);
+
+    net.frame(
+      "search.update",
+      search({
+        state: "Completed, TimedOut",
+        isComplete: true,
+        endedAt: "2026-10-26T10:00:15Z",
+        responseCount: 3
+      })
+    );
+    await flush();
+    await flush();
+    expect(rows()[0]).toBe(first);
+    expect(rows()[2]).toBe(third);
+    expect(selection.toString()).toBe(selected);
+  });
+
+  it("open and close a folder, and with Alt every folder beside it", async () => {
+    const two = response("alice", 1, [
+      file("@@a\\Music\\One\\1.flac"),
+      file("@@a\\Music\\Two\\2.flac"),
+      file("@@a\\Music\\Three\\3.flac")
+    ]);
+    const net = await open([two]);
+    net.frame("search.response", { searchId: ID, response: two });
+    await flush();
+    const toggle = (name: string) =>
+      document.querySelector<HTMLButtonElement>(`button[aria-label$=" ${name}"][aria-expanded]`)!;
+    const files = () =>
+      [...document.querySelectorAll("section [role=row][aria-selected]")].map(
+        (r) => r.textContent?.match(/\d\.flac/)?.[0]
+      );
+    expect(files()).toEqual(["1.flac", "2.flac", "3.flac"]);
+    toggle("Two").click();
+    await flush();
+    expect(files()).toEqual(["1.flac", "3.flac"]);
+    expect(toggle("Two").getAttribute("aria-expanded")).toBe("false");
+    // Alt on a closed one opens it and every sibling; on an open one closes them all
+    toggle("Two").dispatchEvent(new MouseEvent("click", { bubbles: true, altKey: true }));
+    await flush();
+    expect(files()).toEqual(["1.flac", "2.flac", "3.flac"]);
+    toggle("One").dispatchEvent(new MouseEvent("click", { bubbles: true, altKey: true }));
+    await flush();
+    expect(files()).toEqual([]);
+    expect(toggle("Three").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("put a preset in the filter box, which keeps only what it matches", async () => {
+    app.options = {
+      search: { filter_presets: [{ name: "FLAC", filter: "type:flac" }] }
+    } as unknown as Schemas["OptionsDocument"];
+    const mixed = response("alice", 1, [
+      file("@@a\\x\\1.flac"),
+      { ...file("@@a\\x\\2.mp3"), extension: "mp3" }
+    ]);
+    const net = await open([mixed]);
+    net.frame("search.response", { searchId: ID, response: mixed });
+    await flush();
+    const names = () =>
+      [...document.querySelectorAll("section [role=row][aria-selected]")].map(
+        (r) => r.textContent?.match(/\d\.\w+/)?.[0]
+      );
+    expect(names()).toEqual(["1.flac", "2.mp3"]);
+    const preset = [...document.querySelectorAll("button")].find((b) => b.textContent === "FLAC")!;
+    preset.click();
+    flushSync();
+    await vi.advanceTimersByTimeAsync(200);
+    flushSync();
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="Filter"]')!.value).toBe(
+      "type:flac"
+    );
+    expect(preset.getAttribute("aria-pressed")).toBe("true");
+    expect(names()).toEqual(["1.flac"]);
   });
 });

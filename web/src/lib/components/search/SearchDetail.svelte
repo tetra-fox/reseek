@@ -1,43 +1,50 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import ArrowUpDownIcon from "@lucide/svelte/icons/arrow-up-down";
   import CircleStopIcon from "@lucide/svelte/icons/circle-stop";
-  import FilterIcon from "@lucide/svelte/icons/filter";
+  import PinIcon from "@lucide/svelte/icons/pin";
+  import PinOffIcon from "@lucide/svelte/icons/pin-off";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
+  import SearchXIcon from "@lucide/svelte/icons/search-x";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
-  import XIcon from "@lucide/svelte/icons/x";
   import { untrack } from "svelte";
+  import { cubicOut } from "svelte/easing";
   import { SvelteSet } from "svelte/reactivity";
+  import { fly } from "svelte/transition";
 
   import { app } from "#lib/app.svelte.js";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
-  import Select from "#lib/components/ui/Select.svelte";
+  import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
-  import Switch from "#lib/components/ui/Switch.svelte";
+  import { useCrumbs } from "#lib/crumbs.svelte.js";
   import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
+  import { motionFast } from "#lib/motion.js";
   import { href } from "#lib/nav.js";
-  import { FILTER_PLACEHOLDER, parseFilters } from "#lib/search/filters.js";
+  import { denseRows } from "#lib/search/dense.js";
+  import { parseFilters } from "#lib/search/filters.js";
+  import { recent, remember, togglePin } from "#lib/search/recent.svelte.js";
   import { pipeline } from "#lib/search/results.js";
   import { Results } from "#lib/search/results.svelte.js";
   import { scopeLabel, searches } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
-  import { type ResultSort, searchOptions } from "#lib/settings.svelte.js";
+  import { LONG_QUEUE, searchOptions } from "#lib/settings.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
+  import { Expansion } from "#lib/tree/expansion.svelte.js";
+  import { undoable } from "#lib/undo.js";
   import { users } from "#lib/users.svelte.js";
 
+  import DenseResults from "./DenseResults.svelte";
   import ResponseCard from "./ResponseCard.svelte";
+  import ResultsToolbar from "./ResultsToolbar.svelte";
   import StatusIcon from "./StatusIcon.svelte";
+  import Unreachable from "./Unreachable.svelte";
 
   /** how many results show at first and how many more each press adds */
   const STEP = 5;
-  const SORTS: { value: ResultSort; label: string }[] = [
-    { value: "uploadSpeed", label: "Upload Speed (Fastest to Slowest)" },
-    { value: "queueLength", label: "Queue Depth (Least to Most)" }
-  ];
 
   // one search; the route mounts a fresh one for every id, so nothing here outlives it
   let { id }: { id: string } = $props();
@@ -47,29 +54,37 @@
   $effect(() => () => results.close());
 
   keepCurrent(
-    () => void searches.fetch(id),
+    () => {
+      if (!searches.starting.has(id)) void searches.fetch(id);
+    },
     () => `search:${id}`
   );
   // the counts come with the list's frames
   $effect(() => live.retain("search"));
 
   const search = $derived(searches.list.get(id));
+  const refused = $derived(searches.refused.get(id));
   let missing = $state(false);
   let working = $state(false);
   let shown = $state(STEP);
-  let text = $state("");
   let filterText = $state("");
+  let typed = $state("");
   let showBlocked = $state(false);
   let blocked = $state.raw<Set<string>>(new Set());
   const dismissed = new SvelteSet<string>();
+  const cards = new Expansion(!searchOptions.fold);
+
+  useCrumbs(() => (search ? [{ label: search.searchText }] : []));
 
   const canWrite = $derived(session.can("ReadWrite"));
   const connected = $derived(app.isServerConnected);
   const complete = $derived(!!search?.isComplete && !!search.endedAt);
+  const pinned = $derived(!!search && recent.pinned.includes(search.searchText));
 
-  // a page opened before its frame arrived asks for the search; one that is gone goes back
+  // a page opened before its frame arrived asks for the search; one that is gone goes back. One
+  // still being asked for waits for the daemon's answer
   $effect(() => {
-    if (search || missing) return;
+    if (search || missing || refused || searches.starting.has(id)) return;
     untrack(async () => {
       const outcome = await searches.fetch(id);
       if (outcome.ok) return;
@@ -94,8 +109,8 @@
 
   // the filter applies a moment after typing stops
   $effect(() => {
-    const typed = text;
-    const timer = setTimeout(() => (filterText = typed), 150);
+    const text = typed;
+    const timer = setTimeout(() => (filterText = text), 150);
     return () => clearTimeout(timer);
   });
 
@@ -105,41 +120,72 @@
       filters: parseFilters(filterText),
       hideLocked: searchOptions.hideLocked,
       hideNoFreeSlots: searchOptions.hideNoFreeSlots,
+      offline: searchOptions.hideOffline ? (u) => users.get(u)?.presence === "Offline" : undefined,
+      maxQueue: searchOptions.hideLongQueues ? LONG_QUEUE : null,
       // results stay in the order they came while the search runs, so nothing jumps
       sort: results.stored ? searchOptions.sort : null
     })
   );
   const hiddenCount = $derived(results.results.length - view.length);
   const remaining = $derived(Math.max(view.length - shown, 0));
+  const cardKeys = $derived(view.slice(0, shown).map((r) => r.key));
+  const rows = $derived(searchOptions.view === "dense" ? denseRows(view) : []);
+  const counts = $derived({
+    files: view.reduce((n, r) => n + r.response.fileCount + r.response.lockedFileCount, 0),
+    users: view.length,
+    allUsers: results.results.length,
+    allFiles: results.results.reduce(
+      (n, r) => n + r.response.fileCount + r.response.lockedFileCount,
+      0
+    )
+  });
 
-  const again = async () => {
+  const again = () => {
     if (!search) return;
-    working = true;
-    const outcome = await searches.create(search.searchText, search.scope);
-    working = false;
-    if (outcome.ok) void goto(href(`/searches/${outcome.data.id}`));
-    else toast(outcome.error, "error");
+    const started = searches.start(search.searchText, search.scope);
+    remember(search.searchText);
+    void goto(href(`/searches/${started.id}`));
   };
 
-  const stopOrDelete = async () => {
-    if (!search) return;
+  const stop = async () => {
     working = true;
-    const done = search.isComplete;
-    const outcome = done ? await searches.remove(id) : await searches.stop(id);
+    const outcome = await searches.stop(id);
     working = false;
     if (!outcome.ok) toast(outcome.error, "error");
-    else if (done) void goto(href("/searches"));
   };
+
+  /** Deletes once its undo has passed; the list shows without it meanwhile */
+  const remove = () => {
+    searches.removeLater([id]);
+    void goto(href("/searches"));
+  };
+
+  const dismiss = (username: string) => {
+    dismissed.add(username);
+    undoable(
+      `Hid ${username}'s results`,
+      () => {},
+      () => dismissed.delete(username)
+    );
+  };
+
+  const motion = () => ({ duration: motionFast(), easing: cubicOut, y: -6 });
 </script>
 
-{#if !search}
+{#if refused}
+  <ErrorSegment
+    caption={`The search couldn't start: ${refused}`}
+    retry={again}
+    retryLabel="Try again" />
+{:else if !search}
   {#if missing}
     <ErrorSegment
       caption="This search couldn't be loaded"
       retry={() => (missing = false)}
       retryLabel="Retry" />
   {:else}
-    <div class="flex justify-center py-10"><Spinner class="size-8" /></div>
+    <Skeleton class="h-16" />
+    <Skeleton class="h-28" />
   {/if}
 {:else}
   <div
@@ -147,114 +193,117 @@
     <StatusIcon state={search.state} />
     <h2 class="min-w-0 flex-1 text-lg font-semibold wrap-anywhere">{search.searchText}</h2>
     {#if scopeLabel(search.scope)}<Badge tone="accent">{scopeLabel(search.scope)}</Badge>{/if}
-    {#if canWrite}
-      <div class="flex gap-inline">
-        {#if results.stored}
-          <Button variant="outline" disabled={!connected || working} onclick={() => void again()}>
-            {#if working}<Spinner class="size-4" />{:else}<RefreshCwIcon />{/if}
-            <span class="sm:max-lg:sr-only">Search Again</span>
+    <div class="flex gap-inline">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={pinned ? "Unpin this search" : "Pin this search under the search box"}
+        title={pinned ? "Unpin this search" : "Pin this search under the search box"}
+        aria-pressed={pinned}
+        onclick={() => togglePin(search.searchText)}>
+        {#if pinned}<PinOffIcon />{:else}<PinIcon />{/if}
+      </Button>
+      {#if canWrite}
+        <Button variant="outline" disabled={!connected || working} onclick={again}>
+          <RefreshCwIcon />
+          <span class="sm:max-lg:sr-only">Search Again</span>
+        </Button>
+        {#if search.isComplete}
+          <Button variant="danger" disabled={working} onclick={remove}>
+            <Trash2Icon /><span class="sm:max-lg:sr-only">Delete</span>
+          </Button>
+        {:else}
+          <Button variant="danger" disabled={working} onclick={() => void stop()}>
+            <CircleStopIcon /><span class="sm:max-lg:sr-only">Stop</span>
           </Button>
         {/if}
-        <Button variant="danger" disabled={working} onclick={() => void stopOrDelete()}>
-          {#if search.isComplete}<Trash2Icon />{:else}<CircleStopIcon />{/if}
-          <span class="sm:max-lg:sr-only">{search.isComplete ? "Delete" : "Stop"}</span>
-        </Button>
-      </div>
-    {/if}
-  </div>
-
-  {#if !complete}
-    <div class="flex items-center justify-center gap-2 py-4 text-sm text-fg-muted" role="status">
-      <Spinner class="size-5" />
-      {#if search.state === "InProgress"}
-        Found {search.fileCount.toLocaleString()} files {search.lockedFileCount
-          ? `(plus ${search.lockedFileCount.toLocaleString()} locked) `
-          : ""}from {search.responseCount.toLocaleString()} users
-      {:else}
-        Loading results...
       {/if}
     </div>
-  {:else if results.error}
+  </div>
+
+  <Unreachable />
+
+  {#if complete && results.error}
     <ErrorSegment
       caption={results.error}
       retry={() => void results.fetch(search.responseCount)}
       retryLabel="Retry" />
-  {:else if results.loading && !results.results.length}
-    <div class="flex justify-center py-10"><Spinner class="size-8" /></div>
   {/if}
 
   {#if results.results.length}
-    <div class="flex flex-col gap-3 rounded-card border bg-surface p-4 shadow-card">
-      <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
-        <div class="flex items-center gap-2">
-          <ArrowUpDownIcon class="size-4 text-fg-muted" />
-          <Select bind:value={searchOptions.sort} options={SORTS} aria-label="Sort" class="w-72" />
+    <ResultsToolbar
+      bind:filter={typed}
+      {counts}
+      running={!complete}
+      sortable={results.stored}
+      blockedCount={blocked.size}
+      bind:showBlocked
+      onfold={(fold) => cards.reset(!fold)} />
+
+    {#if searchOptions.view === "dense"}
+      {#if rows.length}
+        <DenseResults {rows} searchId={id} canDownload={canWrite && connected} />
+      {/if}
+    {:else}
+      <div class="flex flex-col gap-3" {@attach freezesWhileUsed}>
+        {#each view.slice(0, shown) as result (result.key)}
+          <div in:fly={motion()} out:fly={motion()}>
+            <ResponseCard
+              {result}
+              searchId={id}
+              {cards}
+              siblings={cardKeys}
+              {connected}
+              {canWrite}
+              ondismiss={() => dismiss(result.response.username)} />
+          </div>
+        {/each}
+      </div>
+
+      {#if remaining > 0}
+        <div class="flex gap-inline">
+          <Button size="default" class="h-11 flex-1" onclick={() => (shown += STEP)}>
+            Show {Math.min(STEP, remaining)} More Results ({remaining} remaining, {hiddenCount} hidden
+            by filter(s))
+          </Button>
+          <Button variant="outline" class="h-11" onclick={() => (shown = view.length)}>
+            Show all
+          </Button>
         </div>
-        <label class="flex items-center gap-2 text-sm">
-          <Switch bind:checked={searchOptions.hideLocked} />Hide Locked Results
-        </label>
-        <label class="flex items-center gap-2 text-sm">
-          <Switch bind:checked={searchOptions.hideNoFreeSlots} />Hide Results with No Free Slots
-        </label>
-        <label class="flex items-center gap-2 text-sm">
-          <Switch bind:checked={searchOptions.fold} />Fold Results
-        </label>
-        {#if blocked.size}
-          <label class="flex items-center gap-2 text-sm">
-            <Switch bind:checked={showBlocked} />Show blocked
-          </label>
-        {/if}
-      </div>
-      <div class="relative">
-        <FilterIcon
-          class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-muted" />
-        <input
-          bind:value={text}
-          type="search"
-          aria-label="Filter"
-          aria-describedby="filter-help"
-          placeholder={FILTER_PLACEHOLDER}
-          class="h-control w-full rounded-control border border-input bg-surface pr-9 pl-9 text-sm placeholder:text-fg-subtle focus-visible:border-accent" />
-        {#if text}
-          <button
-            type="button"
-            class="absolute top-1/2 right-3 -translate-y-1/2"
-            aria-label="Clear the filter"
-            onclick={() => (text = "")}>
-            <XIcon class="size-4 text-danger" />
-          </button>
-        {/if}
-      </div>
-      <p id="filter-help" class="text-xs text-fg-muted">
-        Words a path must have, <code>-word</code> to leave out, and <code>minbitrate:</code>,
-        <code>minbitdepth:</code>, <code>minfilesize:</code> (bytes), <code>minlength:</code>
-        (seconds),
-        <code>minfilesinfolder:</code>, <code>iscbr</code>, <code>isvbr</code>,
-        <code>islossless</code>, <code>islossy</code>. Files without the attribute are not filtered.
-      </p>
-    </div>
-
-    <div class="flex flex-col gap-3" {@attach freezesWhileUsed}>
-      {#each view.slice(0, shown) as result (result.key)}
-        <ResponseCard
-          {result}
-          searchId={id}
-          folded={searchOptions.fold}
-          {connected}
-          {canWrite}
-          ondismiss={() => dismissed.add(result.response.username)} />
-      {/each}
-    </div>
-
-    {#if remaining > 0}
-      <Button size="default" class="h-11 w-full" onclick={() => (shown += STEP)}>
-        Show {Math.min(STEP, remaining)} More Results ({remaining} remaining, {hiddenCount} hidden by
-        filter(s))
-      </Button>
-    {:else if hiddenCount > 0}
-      <Button variant="secondary" class="h-11 w-full" disabled>
-        All results shown. {hiddenCount} results hidden by filter(s)
-      </Button>
+      {:else if hiddenCount > 0}
+        <Button variant="secondary" class="h-11 w-full" disabled>
+          All results shown. {hiddenCount} results hidden by filter(s)
+        </Button>
+      {/if}
     {/if}
+    {#if !view.length}
+      <EmptyState
+        icon={SearchXIcon}
+        title="Every result is hidden"
+        description="The filter or the toggles above leave nothing. Clear the filter or turn a toggle off to see them." />
+    {/if}
+  {:else if !complete}
+    <div class="flex items-center gap-2 text-sm text-fg-muted" role="status">
+      <Spinner class="size-4" />
+      {search.state === "InProgress"
+        ? "Searching, results show as they arrive"
+        : "Starting the search"}
+    </div>
+    {#each [0, 1, 2] as n (n)}
+      <div
+        class="flex flex-col gap-2 rounded-card border bg-surface p-3 shadow-card"
+        aria-hidden="true">
+        <Skeleton class="h-4 w-48" />
+        <Skeleton class="h-3 w-3/4" />
+        <Skeleton class="h-3 w-2/3" />
+      </div>
+    {/each}
+  {:else if results.loading}
+    <Skeleton class="h-28" />
+  {:else if !results.error}
+    <EmptyState
+      icon={SearchXIcon}
+      title="Nobody answered"
+      description="Try fewer or different words, or search again later: users come and go." />
   {/if}
 {/if}

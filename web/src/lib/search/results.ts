@@ -1,5 +1,4 @@
 import type { Schemas } from "#lib/api/client.js";
-import { getDirectoryName } from "#lib/format.js";
 import type { ResultSort } from "#lib/settings.svelte.js";
 
 import { filterResponse, type Filters } from "./filters";
@@ -31,6 +30,10 @@ export type ResultOptions = {
   filters: Filters;
   hideLocked: boolean;
   hideNoFreeSlots: boolean;
+  /** users the directory last saw offline */
+  offline?: (username: string) => boolean;
+  /** the longest queue a user may have and stay; none when null */
+  maxQueue?: number | null;
   /** null keeps the order the responses came in, while a search still runs */
   sort: ResultSort | null;
 };
@@ -38,7 +41,8 @@ export type ResultOptions = {
 /**
  * The results as the page shows them: hidden users dropped, locked files emptied when they are
  * hidden, the filter applied, responses left without files dropped, responses without a free
- * slot dropped when asked, then sorted, ties in the order they came
+ * slot, from users seen offline or with a long queue dropped when asked, then sorted, ties in the
+ * order they came
  */
 export const pipeline = (results: Result[], options: ResultOptions): Result[] => {
   const shown: Result[] = [];
@@ -50,6 +54,10 @@ export const pipeline = (results: Result[], options: ResultOptions): Result[] =>
     const filtered = filterResponse(options.filters, unlocked);
     if (filtered.fileCount + filtered.lockedFileCount === 0) continue;
     if (options.hideNoFreeSlots && !filtered.hasFreeUploadSlot) continue;
+    if (options.offline?.(response.username)) continue;
+    if (options.maxQueue !== null && options.maxQueue !== undefined) {
+      if (filtered.queueLength > options.maxQueue) continue;
+    }
     shown.push({ key, response: filtered });
   }
   if (options.sort === "uploadSpeed") {
@@ -62,28 +70,18 @@ export const pipeline = (results: Result[], options: ResultOptions): Result[] =>
 
 export type ResultFile = SearchFile & { locked: boolean };
 
-/** One folder of a response: its path and its files, locked ones marked */
-export type ResultFolder = { name: string; files: ResultFile[]; locked: boolean };
-
-/**
- * A response's files by folder, in the order the folders first appear. A file listed twice is
- * one file
- */
-export const folders = (response: SearchResponse): ResultFolder[] => {
-  const byName = new Map<string, ResultFolder>();
+/** A response's files and then its locked ones, marked; a file listed twice is one file */
+export const resultFiles = (response: SearchResponse): ResultFile[] => {
   const seen = new Set<string>();
+  const files: ResultFile[] = [];
   const add = (file: SearchFile, locked: boolean) => {
     if (seen.has(file.filename)) return;
     seen.add(file.filename);
-    const name = getDirectoryName(file.filename);
-    const folder = byName.get(name) ?? { name, files: [], locked: false };
-    byName.set(name, folder);
-    folder.files.push({ ...file, locked });
-    folder.locked ||= locked;
+    files.push({ ...file, locked });
   };
   for (const file of response.files) add(file, false);
   for (const file of response.lockedFiles) add(file, true);
-  return [...byName.values()];
+  return files;
 };
 
 /** The separator a remote path uses: `/` when it has one, else `\` */
