@@ -235,21 +235,14 @@ pub async fn back_up(db: &Database, backup: &Path) -> Result<(), DbError> {
   Ok(())
 }
 
-/// Puts a copy of the checked index `from` in place of the host index file `to`: written beside
-/// it without a write-ahead log, then renamed over it, so a reader opens either file whole.
-pub fn replace_host_file(from: &Path, to: &Path) -> Result<(), String> {
-  let mut temporary = to.as_os_str().to_owned();
-  temporary.push(".tmp");
-  let temporary = PathBuf::from(temporary);
-  std::fs::copy(from, &temporary).map_err(|e| format!("{}: {e}", temporary.display()))?;
-  let rolled_back = Connection::open(&temporary)
-    .and_then(|conn| conn.pragma_update(None, "journal_mode", "DELETE"));
-  if let Err(e) = rolled_back {
-    remove_database(&temporary);
-    return Err(format!("{}: {e}", temporary.display()));
-  }
-  std::fs::rename(&temporary, to).map_err(|e| {
-    remove_database(&temporary);
+/// Copies the checked index `from` to the new host index file `to`, without a write-ahead log,
+/// so it can be read with no journal files beside it.
+pub fn copy_host_file(from: &Path, to: &Path) -> Result<(), String> {
+  std::fs::copy(from, to).map_err(|e| format!("{}: {e}", to.display()))?;
+  let rolled_back =
+    Connection::open(to).and_then(|conn| conn.pragma_update(None, "journal_mode", "DELETE"));
+  rolled_back.map_err(|e| {
+    remove_database(to);
     format!("{}: {e}", to.display())
   })
 }

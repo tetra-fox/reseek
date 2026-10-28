@@ -640,19 +640,53 @@ async fn serves_an_agent(extra: &str) {
   assert_eq!(by_host["nas"][0]["alias"], listed[0].alias);
 
   std::fs::write(&dump, b"not a database").unwrap();
-  let refused = shares.load_host("nas", listed, &dump).await.unwrap_err();
+  let refused = shares
+    .load_host("nas", listed.clone(), &dump)
+    .await
+    .unwrap_err();
   assert!(matches!(refused, HostError::Invalid(_)), "{refused}");
   assert_eq!(
     names(shares, "flac").await.len(),
     1,
     "a refused upload keeps the host"
   );
+  let agent_files = || {
+    let mut files: Vec<String> = std::fs::read_dir(&app.state.paths.cache)
+      .unwrap()
+      .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+      .filter(|name| name.starts_with("shares.nas."))
+      .collect();
+    files.sort();
+    files
+  };
+  let first = agent_files();
+  assert_eq!(
+    first.len(),
+    usize::from(extra.contains("disk")),
+    "{first:?}"
+  );
+  agent
+    .state
+    .shares
+    .dump(&dump.with_extension("again"))
+    .await
+    .unwrap();
+  shares
+    .load_host("nas", listed.clone(), &dump.with_extension("again"))
+    .await
+    .unwrap();
+  assert_eq!(names(shares, "flac").await.len(), 1);
   if extra.contains("disk") {
-    assert!(app.state.paths.cache.join("shares.nas.db").exists());
+    eventually(async || {
+      let now = agent_files();
+      now.len() == 1 && now != first
+    })
+    .await;
   }
 
   assert!(shares.remove_host("nas"));
   assert!(!shares.remove_host("nas"));
+  eventually(async || agent_files().is_empty()).await;
   assert!(names(shares, "flac").await.is_empty());
   assert_eq!(shares.shared_counts().borrow().files, 1);
   assert_eq!(

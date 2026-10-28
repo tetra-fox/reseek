@@ -3,14 +3,16 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 
 use soulseek_proto::PeerMessage;
 use soulseek_proto::peer::{BrowseResponse, Directory};
 use tracing::{debug, error, info, warn};
 
+use super::hosts::Index;
 use super::repository;
-use crate::db::{Database, DbError};
+use crate::db::DbError;
 
 /// The name of the browse cache file.
 const FILE: &str = "browse.cache";
@@ -53,7 +55,7 @@ pub fn merge(listings: Vec<Vec<Directory>>) -> Vec<Directory> {
 }
 
 /// The listing of every index in `dbs`, or of the share `alias` in each, merged.
-pub async fn listing(dbs: &[Database], alias: Option<String>) -> Result<Vec<Directory>, DbError> {
+pub async fn listing(dbs: &[Arc<Index>], alias: Option<String>) -> Result<Vec<Directory>, DbError> {
   let mut listings = Vec::with_capacity(dbs.len());
   for db in dbs {
     let alias = alias.clone();
@@ -68,7 +70,7 @@ pub async fn listing(dbs: &[Database], alias: Option<String>) -> Result<Vec<Dire
 /// Writes the listing of `dbs`, the local index and the relay agents', to the browse cache at
 /// `file`, through a file of its own beside it that replaces it whole, so a peer never reads
 /// half of one.
-pub async fn rebuild(dbs: &[Database], file: &Path) -> Result<(), CacheError> {
+pub async fn rebuild(dbs: &[Arc<Index>], file: &Path) -> Result<(), CacheError> {
   let started = Instant::now();
   info!("Warming browse response cache...");
   let directories = listing(dbs, None).await?;
@@ -134,7 +136,7 @@ pub async fn remove_stale(cache: &Path) {
 }
 
 /// [`rebuild`], logging a failure.
-pub async fn refresh(dbs: &[Database], file: &Path) {
+pub async fn refresh(dbs: &[Arc<Index>], file: &Path) {
   if let Err(e) = rebuild(dbs, file).await {
     error!(error = %e, "Error caching browse response");
   }
@@ -157,7 +159,7 @@ mod tests {
     .unwrap();
     let dir = tempfile::tempdir().unwrap();
     let file = path(dir.path());
-    rebuild(&[db], &file).await.unwrap();
+    rebuild(&[Index::kept(db)], &file).await.unwrap();
     let bytes = std::fs::read(&file).unwrap();
     let PeerMessage::BrowseResponse(read) = PeerMessage::decode(&bytes).unwrap() else {
       panic!("not a browse response");
