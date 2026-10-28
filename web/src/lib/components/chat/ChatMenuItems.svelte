@@ -4,6 +4,7 @@
   import DownloadIcon from "@lucide/svelte/icons/download";
   import EraserIcon from "@lucide/svelte/icons/eraser";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
+  import HighlighterIcon from "@lucide/svelte/icons/highlighter";
   import LogOutIcon from "@lucide/svelte/icons/log-out";
   import PinIcon from "@lucide/svelte/icons/pin";
   import UserIcon from "@lucide/svelte/icons/user";
@@ -12,11 +13,11 @@
   import { root, type Schemas } from "#lib/api/client.js";
   import { chat } from "#lib/chat/chat.svelte.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
-  import { setPresence, showsPresence } from "#lib/chat/prefs.svelte.js";
+  import { chatLayout, setPresence, showsPresence } from "#lib/chat/prefs.svelte.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { links, pin } from "#lib/components/users/actions.js";
   import { confirmation } from "#lib/confirm.svelte.js";
-  import { segment, userHref } from "#lib/nav.js";
+  import { href, segment, userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
@@ -25,6 +26,7 @@
   let { target }: { target: Target } = $props();
 
   const write = $derived(session.can("ReadWrite"));
+  const admin = $derived(session.can("Administrator"));
   const user = $derived(target.kind === "user");
   const row = $derived(user ? chat.conversations.get(target.name) : chat.rooms.get(target.name));
   const unread = $derived(user ? chat.unreadOf(target.name) : chat.roomUnread(target.name).unread);
@@ -86,8 +88,15 @@
   <Menu.CheckboxItem
     checked={showsPresence(target.name)}
     onCheckedChange={(on) => setPresence(target.name, on)}>Show joins and leaves</Menu.CheckboxItem>
+  {#if admin}
+    <Menu.Item onSelect={() => goto(href("/system/settings?q=highlight_words"))}
+      ><HighlighterIcon />Watched words</Menu.Item>
+  {/if}
   <Menu.Separator />
 {/if}
+<Menu.CheckboxItem checked={chatLayout.emoji} onCheckedChange={(on) => (chatLayout.emoji = on)}
+  >Suggest emoji for :name</Menu.CheckboxItem>
+<Menu.Separator />
 {#if user}
   <Menu.Item onSelect={() => goto(userHref(target.name))}><UserIcon />View profile</Menu.Item>
   <Menu.Item onSelect={() => goto(links(target.name).browse)}

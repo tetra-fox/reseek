@@ -286,6 +286,12 @@
           </button>
         </li>
       {/each}
+      {#if word?.kind === "emoji"}
+        <li class="mt-1 border-t px-2 pt-1 text-xs text-fg-muted">
+          <button type="button" class="hover:text-fg" onclick={() => (chatLayout.emoji = false)}
+            >Turn off emoji suggestions</button>
+        </li>
+      {/if}
     </ul>
   {/if}
   {#if said?.kind === "help"}
