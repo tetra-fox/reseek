@@ -123,6 +123,20 @@ class Notifier {
   }
 
   /**
+   * Notifies of something besides chat, such as a finished download, under the same switch,
+   * browser permission and hidden-tab rule as chat's notifications
+   */
+  other(title: string, body: string, tag: string, to: string) {
+    const options = notifyOptions();
+    if (!options.enabled) return;
+    if (options.onlyWhenHidden && document.visibilityState === "visible") return;
+    if (options.sound) chime();
+    if (this.permission !== "granted") return;
+    const shown = new Notification(title, { body, tag });
+    shown.onclick = () => this.#go(to);
+  }
+
+  /**
    * Whether `author` is muted, from their summary, fetched first when none is held so a muted
    * user stays quiet on a screen that never listed them. Asked only for a message that would
    * otherwise notify
