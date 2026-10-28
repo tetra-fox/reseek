@@ -33,6 +33,14 @@ export const isQueued = (state: string) => state.includes("Queued");
 
 export const isSucceeded = (state: string) => state === "Completed, Succeeded";
 
+const ENDINGS: Record<string, string> = { Errored: "failed", TimedOut: "timed out" };
+
+/** How an ended transfer's state reads in a sentence: "failed", "timed out", "cancelled" */
+export const endingText = (state: string) => {
+  const word = state.replace("Completed, ", "");
+  return ENDINGS[word] ?? word.toLowerCase();
+};
+
 export const isActive = (state: string) => state === "InProgress" || state === "Initializing";
 
 /** The state chips above the table, each with the states it stands for */

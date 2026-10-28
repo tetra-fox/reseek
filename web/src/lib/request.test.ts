@@ -13,10 +13,10 @@ describe("reason", () => {
   });
 
   it("falls back to words for the status", () => {
-    expect(reason(403)).toBe("Not allowed");
+    expect(reason(403)).toBe("You don't have permission to do that");
     expect(reason(404, {})).toBe("Not found");
-    expect(reason(429)).toBe("Too many tries, wait a moment");
-    expect(reason(502)).toBe("reseek couldn't answer (HTTP 502)");
+    expect(reason(429)).toBe("Too many attempts. Wait a moment and try again");
+    expect(reason(502)).toBe("reseek ran into an error (HTTP 502)");
     expect(reason(418)).toBe("HTTP 418");
   });
 

@@ -96,9 +96,9 @@ describe("files", () => {
   it("formats attributes by what the file is", () => {
     expect(formatAttributes({ bitDepth: 16, sampleRate: 44100 })).toBe("16/44.1kHz");
     expect(formatAttributes({ bitDepth: 24, sampleRate: 96000, bitRate: 4608 })).toBe("24/96kHz");
-    expect(formatAttributes({ bitRate: 245, isVariableBitRate: true })).toBe("245 Kbps, VBR");
+    expect(formatAttributes({ bitRate: 245, isVariableBitRate: true })).toBe("245 kbps, VBR");
     expect(formatAttributes({ isVariableBitRate: true })).toBe("VBR");
-    expect(formatAttributes({ bitRate: 320 })).toBe("320 Kbps");
+    expect(formatAttributes({ bitRate: 320 })).toBe("320 kbps");
     expect(formatAttributes({})).toBe("");
   });
 

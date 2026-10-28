@@ -37,7 +37,7 @@ describe("an activity line", () => {
         }),
         size
       )
-    ).toBe("Upload of b.mp3 to alice ended: Cancelled after 1 B");
+    ).toBe("Upload of b.mp3 to alice cancelled after 1 B");
     expect(
       activityText(entry({ type: "privateRoom", room: "club", change: "added" }, null), size)
     ).toBe("You were added to the private room club");

@@ -178,7 +178,7 @@ export class Live {
       this.principal = frame.data.principal;
       this.#failures = [];
       this.#streak = 0;
-      if (this.#warned) this.#deps.notice("Live connection back", "info");
+      if (this.#warned) this.#deps.notice("Live connection restored", "info");
       this.#warned = false;
       this.status = "connected";
       // the topics changed while this stream was opening
@@ -225,7 +225,7 @@ export class Live {
     this.status = "polling";
     if (!this.#warned) {
       this.#deps.notice(
-        "Couldn't keep a live connection to reseek, polling until it's back",
+        "Lost the live connection to reseek. The page refreshes periodically until it's back.",
         "error"
       );
     }

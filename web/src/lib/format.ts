@@ -148,7 +148,7 @@ export const formatDay = (iso: string): string =>
 export const chatTime = (iso: string, now = Date.now()): string =>
   new Date(iso).toDateString() === new Date(now).toDateString() ? shortTime(iso) : dateTime(iso);
 
-/** What a file's attributes say about its quality: "16/44.1kHz", "320 Kbps", "245 Kbps, VBR" */
+/** What a file's attributes say about its quality: "16/44.1kHz", "320 kbps", "245 kbps, VBR" */
 export const formatAttributes = (file: {
   bitRate?: number | null;
   isVariableBitRate?: boolean | null;
@@ -157,8 +157,8 @@ export const formatAttributes = (file: {
 }): string => {
   const { bitRate, isVariableBitRate, bitDepth, sampleRate } = file;
   if (sampleRate && bitDepth) return `${bitDepth}/${sampleRate / 1000}kHz`;
-  if (isVariableBitRate) return bitRate ? `${bitRate} Kbps, VBR` : "VBR";
-  if (bitRate) return `${bitRate} Kbps`;
+  if (isVariableBitRate) return bitRate ? `${bitRate} kbps, VBR` : "VBR";
+  if (bitRate) return `${bitRate} kbps`;
   return "";
 };
 

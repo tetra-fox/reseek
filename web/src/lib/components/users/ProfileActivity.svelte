@@ -9,14 +9,12 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { formatDate, getFileName, plural } from "#lib/format.js";
   import { call } from "#lib/request.js";
-  import { isSucceeded } from "#lib/transfers/states.js";
+  import { endingText, isSucceeded } from "#lib/transfers/states.js";
 
   // a newest-first timeline of what happened with one user: transfers, messages by day, blocks
   let { username }: { username: string } = $props();
 
   const PAGE = 50;
-  /** how an ended transfer's state reads in a sentence, where its own name doesn't */
-  const ENDINGS: Record<string, string> = { Errored: "failed", TimedOut: "timed out" };
   type Entry = { key: string; at: string; text: string };
 
   let wanted = $state(PAGE);
@@ -45,8 +43,7 @@
         text: `${t.direction === "Upload" ? "Uploaded" : "Downloaded"} ${name}`
       };
     }
-    const ending = t.state.replace("Completed, ", "");
-    const outcome = ENDINGS[ending] ?? ending.toLowerCase();
+    const outcome = endingText(t.state);
     return {
       key: `t:${t.id}`,
       at: t.endedAt,

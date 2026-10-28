@@ -20,7 +20,7 @@ export const mappingText = (listen: Listen): string => {
   const m = listen.portMapping;
   switch (m.state) {
     case "off":
-      return "Port mapping is off: reseek doesn't ask the router to forward the port.";
+      return "Port mapping is off, so reseek doesn't ask the router to forward the port.";
     case "mapping":
       return `Asking the router to forward port ${listen.port}...`;
     case "mapped": {
@@ -38,7 +38,7 @@ export const mappingText = (listen: Listen): string => {
 /** Whether other users can connect to us, in a sentence */
 export const reachableText = (listen: Listen): string =>
   listen.reachable === "yes"
-    ? "Other users connect to you."
+    ? "Other users can connect to you."
     : listen.reachable === "no"
       ? "Other users haven't been able to connect to you."
-      : "Not known yet whether other users can connect to you.";
+      : "It isn't known yet whether other users can connect to you.";

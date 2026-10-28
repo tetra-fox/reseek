@@ -100,7 +100,9 @@ describe("Live", () => {
     server.opened[0].end();
     await settle();
     expect(live.status).toBe("polling");
-    expect(notices).toEqual(["Couldn't keep a live connection to reseek, polling until it's back"]);
+    expect(notices).toEqual([
+      "Lost the live connection to reseek. The page refreshes periodically until it's back."
+    ]);
     await vi.advanceTimersByTimeAsync(999);
     expect(server.opened).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);
@@ -127,7 +129,7 @@ describe("Live", () => {
     server.opened.at(-1)!.send(hello(6, true));
     await settle();
     expect(live.status).toBe("connected");
-    expect(notices.at(-1)).toBe("Live connection back");
+    expect(notices.at(-1)).toBe("Live connection restored");
   });
 
   it("stops for good when the session is gone", async () => {
