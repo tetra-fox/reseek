@@ -6,6 +6,7 @@ export const Trigger = DropdownMenu.Trigger;
 export { default as Content } from "./Content.svelte";
 export const RadioGroup = DropdownMenu.RadioGroup;
 export { default as Item } from "./Item.svelte";
+export { default as CheckboxItem } from "./CheckboxItem.svelte";
 export { default as RadioItem } from "./RadioItem.svelte";
 export { default as Separator } from "./Separator.svelte";
 export { default as Label } from "./Label.svelte";

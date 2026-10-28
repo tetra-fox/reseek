@@ -22,10 +22,13 @@ export type Message = {
 
 export type Gap = Schemas["HistoryGap"];
 
+import type { Burst } from "./presence";
+
 /** A line of the message list */
 export type Line =
   | { kind: "day"; key: string; date: string }
   | { kind: "gap"; key: string; gap: Gap }
+  | { kind: "presence"; key: string; burst: Burst }
   | { kind: "unread"; key: "unread" }
   | { kind: "message"; key: string; message: Message; head: boolean };
 
@@ -65,25 +68,44 @@ const day = (iso: string) => new Date(iso).toDateString();
 
 /**
  * The list's lines for messages in the order they arrived: a day line where the day changes, a
- * gap line where history is missing, in time order, an unread line before `unreadFrom`, and each
- * message with whether it starts a group (a new author, a gap, a new day, or five minutes since
- * the one before). A gap still open, with no end, goes last
+ * gap line where history is missing and a presence line where members came and went, both in
+ * time order, an unread line before `unreadFrom`, and each message with whether it starts a group
+ * (a new author, a line between, a new day, or five minutes since the one before). A gap still
+ * open, with no end, and presence after the last message go last
  */
-export const layout = (messages: Message[], gaps: Gap[], unreadFrom: number | null): Line[] => {
+export const layout = (
+  messages: Message[],
+  gaps: Gap[],
+  unreadFrom: number | null,
+  bursts: Burst[] = []
+): Line[] => {
   const lines: Line[] = [];
-  const pending = gaps.toSorted((a, b) => Date.parse(a.from) - Date.parse(b.from));
+  const pending: (Line & { kind: "gap" | "presence"; at: number })[] = [
+    ...gaps.map((gap) => ({
+      kind: "gap" as const,
+      key: `gap:${gap.from}`,
+      gap,
+      at: Date.parse(gap.from)
+    })),
+    ...bursts.map((burst) => ({
+      kind: "presence" as const,
+      key: burst.key,
+      burst,
+      at: Date.parse(burst.at)
+    }))
+  ].toSorted((a, b) => a.at - b.at);
   let lastDay: string | null = null;
   let previous: Message | null = null;
-  const placeGaps = (before: number) => {
-    while (pending.length && Date.parse(pending[0].from) < before) {
-      const gap = pending.shift()!;
-      lines.push({ kind: "gap", key: `gap:${gap.from}`, gap });
+  const placeBetween = (before: number) => {
+    while (pending.length && pending[0].at < before) {
+      const { at: _at, ...line } = pending.shift()!;
+      lines.push(line);
       previous = null;
     }
   };
   for (const message of messages) {
     const at = Date.parse(message.timestamp);
-    placeGaps(at);
+    placeBetween(at);
     const today = day(message.timestamp);
     if (today !== lastDay) {
       // keyed by the message that starts it: a replayed message dated earlier can start a day
@@ -103,6 +125,6 @@ export const layout = (messages: Message[], gaps: Gap[], unreadFrom: number | nu
     lines.push({ kind: "message", key: `m:${message.localId}`, message, head });
     previous = message;
   }
-  placeGaps(Infinity);
+  placeBetween(Infinity);
   return lines;
 };

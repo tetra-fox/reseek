@@ -12,6 +12,7 @@
   import { root, type Schemas } from "#lib/api/client.js";
   import { chat } from "#lib/chat/chat.svelte.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
+  import { setPresence, showsPresence } from "#lib/chat/prefs.svelte.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { links, pin } from "#lib/components/users/actions.js";
   import { confirmation } from "#lib/confirm.svelte.js";
@@ -79,6 +80,12 @@
     <Menu.RadioItem value="mentions">Mentions</Menu.RadioItem>
     <Menu.RadioItem value="none">Nothing</Menu.RadioItem>
   </Menu.RadioGroup>
+  <Menu.Separator />
+{/if}
+{#if !user && row}
+  <Menu.CheckboxItem
+    checked={showsPresence(target.name)}
+    onCheckedChange={(on) => setPresence(target.name, on)}>Show joins and leaves</Menu.CheckboxItem>
   <Menu.Separator />
 {/if}
 {#if user}

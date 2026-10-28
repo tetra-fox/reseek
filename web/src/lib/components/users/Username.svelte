@@ -33,10 +33,15 @@
     name: string;
     /** the folder the name was shown with, which "Search their files" starts from */
     folder?: string;
+    /**
+     * a click opens the card and keeps it open, and a double click opens a private chat, as
+     * names in a chat do; elsewhere a click goes to the profile
+     */
+    card?: boolean;
     class?: string;
   };
 
-  let { name, folder, class: className }: Props = $props();
+  let { name, folder, card = false, class: className }: Props = $props();
 
   const me = Symbol("username");
   let link = $state<HTMLAnchorElement | null>(null);
@@ -45,6 +50,8 @@
   let keyboard = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pressed = false;
+  /** the card was opened by a click, which keeps it open when the pointer leaves */
+  let clicked = false;
 
   const user = $derived(users.get(name));
   const to = $derived(links(name, folder));
@@ -62,8 +69,9 @@
     return () => window.removeEventListener("scroll", close, { capture: true });
   });
 
-  const show = (what: "card" | "menu", byKeyboard = false) => {
+  const show = (what: "card" | "menu", byKeyboard = false, byClick = false) => {
     clearTimeout(timer);
+    clicked = byClick;
     keyboard = byKeyboard;
     open.owner = me;
     shown = what;
@@ -75,6 +83,7 @@
     if (keyboard && shown === "card") link?.focus();
     shown = null;
     keyboard = false;
+    clicked = false;
   };
 
   const later = (run: () => void, ms: number) => {
@@ -90,7 +99,7 @@
   };
 
   const leave = (e: PointerEvent) => {
-    if (e.pointerType === "touch") return;
+    if (e.pointerType === "touch" || clicked) return;
     if (active === "card") later(hide, CLOSE_DELAY_MS);
     else if (!active) clearTimeout(timer);
   };
@@ -147,6 +156,17 @@
       // the click that ends a long press only opened the menu
       if (pressed) e.preventDefault();
       pressed = false;
+      // a modified click still opens the profile where the browser puts it
+      if (!card || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      if (active === "card" && clicked) hide();
+      else show("card", false, true);
+    }}
+    ondblclick={(e) => {
+      if (!card || !readWrite) return;
+      e.preventDefault();
+      hide();
+      void goto(to.message);
     }}
     oncontextmenu={(e) => {
       e.preventDefault();
@@ -177,7 +197,7 @@
         onCloseAutoFocus={(e) => e.preventDefault()}
         onpointerenter={() => clearTimeout(timer)}
         onpointerleave={(e: PointerEvent) =>
-          e.pointerType !== "touch" && later(hide, CLOSE_DELAY_MS)}
+          e.pointerType !== "touch" && !clicked && later(hide, CLOSE_DELAY_MS)}
         role="dialog"
         aria-label={`Profile of ${name}`}
         class="z-50 w-80 max-w-[calc(100vw-1rem)] rounded-card border bg-overlay p-3 text-fg shadow-raised outline-none motion-safe:animate-popover-in">

@@ -14,6 +14,7 @@
 
   import GapRow from "./GapRow.svelte";
   import MessageRow from "./MessageRow.svelte";
+  import PresenceRow from "./PresenceRow.svelte";
 
   type Props = {
     pane: MessagePane;
@@ -309,6 +310,8 @@
           </div>
         {:else if line.kind === "gap"}
           <GapRow gap={line.gap} />
+        {:else if line.kind === "presence"}
+          <PresenceRow burst={line.burst} />
         {:else if line.kind === "unread"}
           <div class="flex items-center gap-3 px-3 py-1 text-xs text-accent" role="separator">
             <span class="h-px flex-1 bg-accent"></span>New<span class="h-px flex-1 bg-accent"
