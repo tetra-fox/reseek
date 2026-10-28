@@ -160,6 +160,20 @@ describe("a list's selection and focus", () => {
     expect(document.activeElement).toBe(grid());
   });
 
+  it("leaves focus the user put outside the list when the line it was in leaves", () => {
+    const source = start(grouped());
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    const button = line("a1").querySelector<HTMLElement>("button:not([role])")!;
+    button.focus();
+    outside.focus();
+    outside.blur();
+    expect(document.activeElement).toBe(document.body);
+    source.value = source.value.filter((l) => l.key !== "a1");
+    flushSync();
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it("selects a clicked row alone, toggles with Ctrl or Cmd and extends with Shift", () => {
     start(grouped());
     const click = (key: string, mods: MouseEventInit = {}) => {

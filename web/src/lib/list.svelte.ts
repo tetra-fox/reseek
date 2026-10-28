@@ -45,7 +45,8 @@ let lists = 0;
  * focusable. Each line's element carries `list.line(line, index)`. A click, or a focus on a
  * control inside a line, makes that line the focused one. A control inside a line keeps focus
  * while its line is rendered; focus returns to the container when the line scrolls out of the
- * rendered range or leaves the list, where the browser would drop it to the page.
+ * rendered range or leaves the list, where the browser would drop it to the page; not once the
+ * user has put focus elsewhere.
  *
  * The focused line is named by its key and looked up in the lines whenever it is used, so
  * filters, regrouping and new data never leave it pointing at a stale copy. When it leaves the
@@ -212,6 +213,13 @@ export class ListControl<L> {
       on(node, "focusin", (e) => {
         this.#held = e.target === node ? null : (e.target as Element);
         this.#take(e.target);
+      }),
+      // focus the user put elsewhere stays there when a row leaves later. A control taken out of
+      // the page loses focus too, and that one the list still takes back
+      on(node, "focusout", (e) => {
+        const to = e.relatedTarget;
+        if (!(e.target as Element).isConnected) return;
+        if (!(to instanceof Node && node.contains(to))) this.#held = null;
       }),
       on(node, "keydown", this.#keydown),
       on(node, "click", this.#click)
