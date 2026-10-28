@@ -1,8 +1,24 @@
 import type { Page } from "@playwright/test";
 
+import { newId } from "../src/lib/ids";
+
 /** A time on the evening the fakes take place */
 export const at = (minute: number, second = 0) =>
   new Date(Date.UTC(2026, 9, 27, 18, minute, second)).toISOString();
+
+/** One event stream frame as the daemon writes it */
+export const frame = (id: number, event: string, data: unknown) =>
+  `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+
+/** The first frame of a live stream over `topics`, for the built-in administrator */
+export const helloFrame = (topics: string[]) =>
+  frame(1, "hello", {
+    principal: { name: "reseek", role: "Administrator" },
+    resumed: false,
+    serverTime: at(30),
+    topics,
+    version: { current: "0.0.0", full: "0.0.0", latest: null, isUpdateAvailable: false }
+  });
 
 const MEMBERS = ["alice", "bob", "carol", "dave", "erin", "frank", "grace", "heidi"];
 
@@ -341,7 +357,7 @@ const transfer = (
   size = 1000,
   username = "alice"
 ) => ({
-  id: crypto.randomUUID(),
+  id: newId(),
   username,
   direction: "Download",
   filename,

@@ -20,10 +20,28 @@ export default defineConfig({
   retries: 0,
   // the tests share one daemon, and one of them changes its configuration
   workers: 1,
-  use: {
-    baseURL: `http://127.0.0.1:${port}/reseek/`,
-    launchOptions: { executablePath: chromium() }
-  },
+  projects: [
+    {
+      name: "localhost",
+      testIgnore: "**/insecure.e2e.ts",
+      use: {
+        baseURL: `http://127.0.0.1:${port}/reseek/`,
+        launchOptions: { executablePath: chromium() }
+      }
+    },
+    {
+      // plain http on a name that is not localhost, as on a LAN address, is no secure context
+      name: "insecure",
+      testMatch: "**/insecure.e2e.ts",
+      use: {
+        baseURL: `http://reseek.test:${port}/reseek/`,
+        launchOptions: {
+          executablePath: chromium(),
+          args: ["--host-resolver-rules=MAP reseek.test 127.0.0.1"]
+        }
+      }
+    }
+  ],
   webServer: {
     command: "./e2e/serve.sh",
     url: `http://127.0.0.1:${port}/reseek/`,

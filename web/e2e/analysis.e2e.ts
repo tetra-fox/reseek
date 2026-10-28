@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { newId } from "../src/lib/ids";
 import { fakeAnalysis, fakeDownloads } from "./fakes";
 import { login } from "./login";
 
@@ -141,7 +142,7 @@ test("analyses a file and queues a folder from the Files screen", async ({ page 
       const encoded = new URL(route.request().url()).pathname.split("/files/").at(-1) ?? "";
       const path = Buffer.from(encoded.split("/")[0], "base64url").toString();
       if (route.request().method() === "POST") {
-        const id = crypto.randomUUID();
+        const id = newId();
         queued.push({ id, path });
         return route.fulfill({ status: 202, json: { jobId: id } });
       }
@@ -166,7 +167,7 @@ test("analyses a file and queues a folder from the Files screen", async ({ page 
   });
   await page.route("**/api/v0/analysis/jobs", (route) =>
     route.fulfill({
-      json: [job(crypto.randomUUID(), "track.flac"), ...queued.map((q) => job(q.id, q.path))]
+      json: [job(newId(), "track.flac"), ...queued.map((q) => job(q.id, q.path))]
     })
   );
   await login(page, "/system/files");

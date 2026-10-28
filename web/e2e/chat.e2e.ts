@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { at, fakeChat } from "./fakes";
+import { fakeChat, frame, helloFrame } from "./fakes";
 import { login } from "./login";
 
 test("a room reads like a chat: names, actions, links and the wall", async ({ page }) => {
@@ -63,10 +63,6 @@ test("a room reads like a chat: names, actions, links and the wall", async ({ pa
   await page.keyboard.press("Escape");
 });
 
-/** One event stream frame as the daemon writes it */
-const frame = (id: number, event: string, data: unknown) =>
-  `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-
 test("a busy room's comings and goings stay out of its messages", async ({ page }) => {
   await fakeChat(page);
   // the first stream that carries the room's frames is a burst of 120 members joining and
@@ -76,13 +72,7 @@ test("a busy room's comings and goings stay out of its messages", async ({ page 
     const topics = new URL(route.request().url()).searchParams.get("topics") ?? "";
     if (served || !topics.split(",").includes("rooms")) return route.continue();
     served = true;
-    const hello = {
-      principal: { name: "reseek", role: "Administrator" },
-      resumed: false,
-      serverTime: at(30),
-      topics: topics.split(","),
-      version: { current: "0.0.0", full: "0.0.0", latest: null, isUpdateAvailable: false }
-    };
+    const hello = helloFrame(topics.split(","));
     const churn = Array.from({ length: 120 }, (_, n) =>
       n % 2
         ? frame(n + 2, "rooms.user_left", { roomName: "indie", username: `guest${n - 1}` })
@@ -93,7 +83,7 @@ test("a busy room's comings and goings stay out of its messages", async ({ page 
     );
     return route.fulfill({
       headers: { "content-type": "text/event-stream" },
-      body: frame(1, "hello", hello) + churn.join("")
+      body: hello + churn.join("")
     });
   });
   await login(page, "/chat");
@@ -126,12 +116,13 @@ test("a private chat shows both sides with their actions", async ({ page }) => {
 });
 
 test("a toast sits above the docked activity log", async ({ page }) => {
-  // a copy the browser refuses is a toast that needs nothing from the daemon
-  await page.addInitScript(() =>
+  // a copy the browser refuses both ways is a toast that needs nothing from the daemon
+  await page.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: () => Promise.reject(new Error("refused")) }
-    })
-  );
+    });
+    document.execCommand = () => false;
+  });
   await fakeChat(page);
   await login(page, "/chat");
   await page.goto("./#/chat/rooms/indie");
