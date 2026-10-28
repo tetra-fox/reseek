@@ -26,13 +26,24 @@ test("finds options by search, follows the section in view and gathers unsaved c
     "aria-current",
     "location"
   );
-  // a click on a category scrolls there and marks it
+  // scrolling the page marks the section scrolled to, without the side list being touched
+  await page.evaluate(() => document.getElementById("logging")!.scrollIntoView());
+  await expect(side.getByRole("link", { name: "Logging" })).toHaveAttribute(
+    "aria-current",
+    "location"
+  );
+  await page.evaluate(() => document.getElementById("shares")!.scrollIntoView());
+  await expect(side.getByRole("link", { name: "Shares" })).toHaveAttribute(
+    "aria-current",
+    "location"
+  );
+  // a click on a category scrolls there, and the section in view is the one marked
   await side.getByRole("link", { name: "Retention" }).click();
+  await expect(page.locator("#retention")).toBeInViewport();
   await expect(side.getByRole("link", { name: "Retention" })).toHaveAttribute(
     "aria-current",
     "location"
   );
-  await expect(page.locator("#retention")).toBeInViewport();
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/settings.png` });
 
   // the search keeps only what it finds
