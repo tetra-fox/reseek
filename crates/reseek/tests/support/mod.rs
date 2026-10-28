@@ -330,6 +330,16 @@ pub fn logged_in(state: &State) -> bool {
 /// The daemon in `dir` logged in to the client harness's scripted server as its user, with the
 /// server's end of the connection for the test to read and answer.
 pub async fn scripted(dir: &Path) -> (Daemon, Client, client::ServerSide) {
+  let (running, mut server) = scripted_login(dir).await;
+  server.accept_login().await;
+  let api = signed_in(&running).await;
+  until(&api, "logged in", logged_in).await;
+  (running, api, server)
+}
+
+/// The daemon in `dir` connected to the client harness's scripted server as its user, with the
+/// server's end of the connection, whose login is the test's to answer.
+pub async fn scripted_login(dir: &Path) -> (Daemon, client::ServerSide) {
   let fake = client::FakeServer::start().await;
   let port = fake.address().port().to_string();
   let listen = free_port().to_string();
@@ -349,9 +359,6 @@ pub async fn scripted(dir: &Path) -> (Daemon, Client, client::ServerSide) {
     "--slsk-no-port-mapping",
   ];
   let running = Daemon::start(dir, &args, &ACCOUNT);
-  let mut server = fake.accept().await;
-  server.accept_login().await;
-  let api = signed_in(&running).await;
-  until(&api, "logged in", logged_in).await;
-  (running, api, server)
+  let server = fake.accept().await;
+  (running, server)
 }

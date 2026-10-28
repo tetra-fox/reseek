@@ -27,6 +27,18 @@ use crate::app::AppState;
 
 static LAGGED: LogLimiter = LogLimiter::new();
 
+/// Where the session the events are about stands, as far as the events handled so far tell.
+#[derive(Default)]
+struct Session {
+  /// the session that ends next reached the server, so a failed attempt is not reported as a
+  /// lost connection
+  reached: bool,
+  /// its login was handled, and a disconnect has not followed
+  logged_in: bool,
+  /// its login was taken for missed and handled before its event came, which may still come
+  recovered: bool,
+}
+
 /// Handles the client's events in order until `drained` is cancelled and every event raised
 /// before has been handled.
 pub(super) async fn follow(
@@ -34,9 +46,7 @@ pub(super) async fn follow(
   mut events: broadcast::Receiver<Event>,
   drained: CancellationToken,
 ) {
-  // whether the session that ends next reached the server, so a failed attempt is not
-  // reported as a lost connection
-  let mut reached = false;
+  let mut session = Session::default();
   loop {
     let event = tokio::select! {
       biased;
@@ -44,46 +54,70 @@ pub(super) async fn follow(
       () = drained.cancelled() => return,
     };
     match event {
-      Ok(event) => handle(&app, event, &mut reached).await,
-      Err(RecvError::Lagged(missed)) => {
-        if let Some(suppressed) = LAGGED.allow() {
-          warn!(
-            missed,
-            suppressed, "client events missed; the client's state is read again"
-          );
-        }
-        let client = app.network.client();
-        let state = client.state();
-        // a missed StateChanged may have been the one that reached the server
-        reached |= state.contains(ClientState::CONNECTED);
-        server_state(&app, state);
-        distributed_network(&app, &client.distributed_network());
-      }
+      Ok(event) => handle(&app, event, &mut session).await,
+      Err(RecvError::Lagged(missed)) => caught_up(&app, missed, &mut session).await,
       Err(RecvError::Closed) => return,
     }
   }
 }
 
-async fn handle(app: &AppState, event: Event, reached: &mut bool) {
+/// Events were missed: the client's state is read again, and a login among them that nothing
+/// handled is handled now, so what follows a login is not skipped.
+async fn caught_up(app: &AppState, missed: u64, session: &mut Session) {
+  if let Some(suppressed) = LAGGED.allow() {
+    warn!(
+      missed,
+      suppressed, "client events missed; the client's state is read again"
+    );
+  }
+  let client = app.network.client();
+  let state = client.state();
+  // a missed StateChanged may have been the one that reached the server
+  session.reached |= state.contains(ClientState::CONNECTED);
+  server_state(app, state);
+  distributed_network(app, &client.distributed_network());
+  if !state.contains(ClientState::LOGGED_IN) {
+    // the login handled last is over, so the next one is handled when it comes
+    session.logged_in = false;
+    session.recovered = false;
+  } else if !session.logged_in
+    && let Some(username) = client.username()
+  {
+    info!(username, "a missed login is handled now");
+    handle(app, Event::LoggedIn { username }, session).await;
+    session.recovered = true;
+  }
+}
+
+async fn handle(app: &AppState, event: Event, session: &mut Session) {
   match event {
     Event::StateChanged { state, .. } => {
       if state.contains(ClientState::CONNECTED) {
-        *reached = true;
+        session.reached = true;
       }
       server_state(app, state);
     }
     Event::Connected => connected(app).await,
     Event::LoggedIn { username } => {
+      if std::mem::take(&mut session.recovered) {
+        return debug!(
+          username,
+          "login handled already when it was taken for missed"
+        );
+      }
+      session.logged_in = true;
       logged_in(app, &username);
       app.network.mapper.logged_in(true);
       app.network.reachability.logged_in();
       app.messaging.take(Event::LoggedIn { username }).await;
     }
     Event::Disconnected { message, error } => {
-      disconnected(app, &message, error.as_ref(), *reached);
+      disconnected(app, &message, error.as_ref(), session.reached);
       app.network.mapper.logged_in(false);
       app.network.reachability.logged_out();
-      *reached = false;
+      session.reached = false;
+      session.logged_in = false;
+      session.recovered = false;
       app
         .messaging
         .take(Event::Disconnected { message, error })
