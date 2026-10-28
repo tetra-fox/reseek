@@ -1,3 +1,5 @@
+import { plural } from "#lib/format.js";
+
 import type { ActivityEntry, ActivityType } from "./activity.svelte";
 
 /** A file's name without its folders, from a path in either separator */
@@ -29,8 +31,6 @@ export type Part =
   | { kind: "strong" | "failed" | "muted"; text: string };
 
 const t = (text: string): Part => ({ kind: "text", text });
-const count = (n: number, one: string, many: string) =>
-  n === 1 ? `1 ${one}` : `${n.toLocaleString()} ${many}`;
 
 /**
  * An entry's sentence as runs, the one place its words are: the dock renders the runs with the
@@ -50,13 +50,13 @@ export const activityParts = (e: ActivityEntry, size: (bytes: number) => string)
         ...who,
         t(" searched for "),
         { kind: "strong", text: `"${k.query}"` },
-        t(` and got ${count(k.results, "result", "results")}`)
+        t(` and got ${plural(k.results, "result", "results")}`)
       ];
     case "queued":
       return [
         ...who,
         t(" queued "),
-        { kind: "strong", text: count(k.files, "file", "files") },
+        { kind: "strong", text: plural(k.files, "file", "files") },
         { kind: "muted", text: ", the last " },
         { kind: "file", path: k.filename }
       ];
