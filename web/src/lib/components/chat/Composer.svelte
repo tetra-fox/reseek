@@ -143,8 +143,11 @@
 
   const complete = (s: Suggestion) => {
     if (!word) return;
-    text = `${text.slice(0, word.start)}${s.insert}${text.slice(caret)}`;
-    caret = word.start + s.insert.length;
+    // the word is read before the text changes: it is derived from the text, and an emoji put in
+    // its place no longer reads as one
+    const start = word.start;
+    text = `${text.slice(0, start)}${s.insert}${text.slice(caret)}`;
+    caret = start + s.insert.length;
     queueMicrotask(() => field?.setSelectionRange(caret, caret));
   };
 
