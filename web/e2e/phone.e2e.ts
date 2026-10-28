@@ -114,7 +114,8 @@ const fits = async (page: Page, path: string, ready: (page: Page) => Promise<voi
 const shows = (text: string | RegExp) => async (page: Page) =>
   expect(page.locator("main").getByText(text).first()).toBeVisible();
 
-test("every screen fits a phone's width", async ({ page }) => {
+/** Opens every screen in turn, with the data that fills each, and checks each fits */
+const everyScreen = async (page: Page) => {
   await fakeReports(page);
   await fakeSearch(page);
   await fakeChat(page);
@@ -190,6 +191,10 @@ test("every screen fits a phone's width", async ({ page }) => {
   // the activity log's button, its only opener on a phone, is on the screen
   const button = (await page.getByRole("button", { name: "Activity" }).boundingBox())!;
   expect(button.x + button.width).toBeLessThanOrEqual(390);
+};
+
+test("every screen fits a phone's width", async ({ page }) => {
+  await everyScreen(page);
 });
 
 test.describe("on a wide screen", () => {
@@ -257,20 +262,15 @@ test.describe("at a large text size", () => {
         await holds(page, `the dense results at ${root} px`, shows("02 Two.flac"));
         await page.getByRole("radio", { name: "Cards" }).click();
         await fits(page, "/downloads", shows("3.flac"));
+        await fits(page, "/system/info", shows("Process ID"));
       });
     }
   });
 
   for (const root of [20, 24]) {
-    test(`a phone at ${root} px keeps names and figures whole`, async ({ page }) => {
+    test(`every screen fits a phone at ${root} px`, async ({ page }) => {
       await textSize(page, root);
-      await fakeReports(page);
-      await fakeSearch(page);
-      await fakeDownloads(page);
-      await fakeBrowse(page);
-      await fakeFolder(page);
-      await login(page, "/dashboard");
-      await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
+      await everyScreen(page);
       // the activity log's sheet stands on the status bar, however many lines that has
       const bar = page.locator("footer:not(main footer)");
       const toggle = bar.getByRole("button", { name: "Activity" });
@@ -283,17 +283,6 @@ test.describe("at a large text size", () => {
         return Math.round(sheet.y + sheet.height - (await bar.boundingBox())!.y);
       };
       await expect.poll(gap, { message: "the sheet's foot is off the bar" }).toBe(0);
-      await toggle.click();
-      await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
-      await page.getByRole("radio", { name: "Dense" }).click();
-      await holds(page, `the dense results at ${root} px`, shows("02 Two.flac"));
-      await page.getByRole("radio", { name: "Cards" }).click();
-      await fits(page, "/downloads", shows("3.flac"));
-      await fits(page, "/browse", shows("Browse a user's shares"));
-      await page.getByLabel("Username").fill("carol");
-      await page.getByLabel("Username").press("Enter");
-      await page.getByRole("treeitem", { name: /Bootlegs/ }).click();
-      await holds(page, `a browse with a folder open at ${root} px`, shows("2.flac"));
     });
   }
 });
