@@ -45,7 +45,7 @@ export type DenseColumn =
 /** The dense view's columns in order, with their default widths in pixels */
 export const DENSE_COLUMNS: { id: DenseColumn; label: string; width: number; end?: boolean }[] = [
   { id: "user", label: "User", width: 140 },
-  { id: "speed", label: "Speed", width: 90, end: true },
+  { id: "speed", label: "Speed", width: 100, end: true },
   { id: "queue", label: "Queue", width: 64, end: true },
   { id: "free", label: "Free slot", width: 72 },
   { id: "file", label: "File", width: 280 },
