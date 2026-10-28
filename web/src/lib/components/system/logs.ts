@@ -5,14 +5,29 @@ export type LogRecord = Schemas["LogRecord"];
 /** A log record as the live log shows it, numbered in the order the page got it */
 export type Line = { seq: number; record: LogRecord };
 
-/** The levels, their short names and how their rows look */
-export const LEVELS: { level: Schemas["LogLevel"]; short: string; row: string }[] = [
-  { level: "Verbose", short: "VRB", row: "text-fg-subtle" },
-  { level: "Debug", short: "DBG", row: "text-fg-subtle" },
-  { level: "Information", short: "INF", row: "" },
-  { level: "Warning", short: "WRN", row: "bg-warning-soft/50" },
-  { level: "Error", short: "ERR", row: "bg-danger-soft/50" },
-  { level: "Fatal", short: "FTL", row: "bg-danger-soft/50" }
+/** The levels, their short names, how their rows look and how their filter chip looks when on */
+export const LEVELS: { level: Schemas["LogLevel"]; short: string; row: string; chip: string }[] = [
+  { level: "Verbose", short: "VRB", row: "text-fg-subtle", chip: "bg-surface-muted text-fg-muted" },
+  { level: "Debug", short: "DBG", row: "text-fg-subtle", chip: "bg-surface-muted text-fg-muted" },
+  { level: "Information", short: "INF", row: "", chip: "bg-info-soft text-info-soft-fg" },
+  {
+    level: "Warning",
+    short: "WRN",
+    row: "bg-warning-soft/50",
+    chip: "bg-warning-soft text-warning-soft-fg"
+  },
+  {
+    level: "Error",
+    short: "ERR",
+    row: "bg-danger-soft/50",
+    chip: "bg-danger-soft text-danger-soft-fg"
+  },
+  {
+    level: "Fatal",
+    short: "FTL",
+    row: "bg-danger-soft/50",
+    chip: "bg-danger-soft text-danger-soft-fg"
+  }
 ];
 
 let next = 0;

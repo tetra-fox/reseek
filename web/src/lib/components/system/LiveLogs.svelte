@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import EraserIcon from "@lucide/svelte/icons/eraser";
   import PauseIcon from "@lucide/svelte/icons/pause";
@@ -8,6 +9,7 @@
   import { copyText } from "#lib/clipboard.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
   import { freezesWhileUsed, interaction } from "#lib/interaction.svelte.js";
   import { ListControl } from "#lib/list.svelte.js";
@@ -100,14 +102,22 @@
   });
   // the selection counts the rows the filters hide too, as the transfers grid does
   const chosen = $derived(lines.filter((l) => list.selected.has(String(l.seq))));
-  const copyChosen = () =>
-    void copyText(
-      chosen
-        .map(
-          (l) => `${l.record.timestamp} ${l.record.level} ${l.record.context}: ${l.record.message}`
-        )
-        .join("\n")
-    );
+  const asText = (picked: Line[]) =>
+    picked
+      .map(
+        (l) => `${l.record.timestamp} ${l.record.level} ${l.record.context}: ${l.record.message}`
+      )
+      .join("\n");
+  const copyChosen = () => void copyText(asText(chosen));
+  /** Copies the newest `n` lines the filters show, oldest first, as a log file reads */
+  const copyLast = (n: number) => void copyText(asText(shown.slice(0, n).toReversed()));
+  /** how many lines of each level the list holds, for the level chips */
+  const counts = $derived(
+    lines.reduce<Record<string, number>>((all, l) => {
+      all[l.record.level] = (all[l.record.level] ?? 0) + 1;
+      return all;
+    }, {})
+  );
 </script>
 
 <div class="flex flex-wrap items-center gap-inline">
@@ -119,18 +129,30 @@
   {/if}
   <div class="flex flex-wrap gap-1" role="group" aria-label="Levels">
     {#each LEVELS as l (l.level)}
-      <Button
-        size="sm"
-        variant={levels.includes(l.level) ? "secondary" : "outline"}
-        aria-pressed={levels.includes(l.level)}
-        onclick={() =>
-          (levels = levels.includes(l.level)
-            ? levels.filter((x) => x !== l.level)
-            : [...levels, l.level])}>{l.short}</Button>
+      {@const on = levels.includes(l.level)}
+      <button
+        type="button"
+        aria-pressed={on}
+        title={on ? `Hide ${l.level} lines; Alt-click shows only these` : `Show ${l.level} lines`}
+        class={[
+          "flex h-control-sm items-center gap-1.5 rounded-full border px-2.5 font-mono text-xs transition-colors duration-(--motion-fast)",
+          on ? [l.chip, "border-transparent"] : "text-fg-subtle line-through hover:text-fg-muted"
+        ]}
+        onclick={(e) =>
+          (levels = e.altKey
+            ? [l.level]
+            : on
+              ? levels.filter((x) => x !== l.level)
+              : [...levels, l.level])}>
+        {l.short}
+        <span class="tabular-nums opacity-70">{counts[l.level] ?? 0}</span>
+      </button>
     {/each}
   </div>
   <Input
-    class="h-control-sm w-56"
+    type="search"
+    wrapperClass="w-56"
+    class="h-control-sm"
     placeholder="Filter"
     aria-label="Filter the log"
     bind:value={text} />
@@ -139,6 +161,19 @@
       <Button size="sm" variant="outline" onclick={copyChosen}
         ><CopyIcon />Copy {chosen.length}</Button>
     {/if}
+    <Menu.Root>
+      <Menu.Trigger disabled={!shown.length}>
+        {#snippet child({ props })}
+          <Button {...props} size="sm" variant="outline"
+            ><CopyIcon />Copy the last<ChevronDownIcon /></Button>
+        {/snippet}
+      </Menu.Trigger>
+      <Menu.Content align="end">
+        {#each [50, 100, 500] as n (n)}
+          <Menu.Item onSelect={() => copyLast(n)}>{n} lines</Menu.Item>
+        {/each}
+      </Menu.Content>
+    </Menu.Root>
     <Button
       size="sm"
       variant="ghost"

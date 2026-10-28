@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Crumbs from "#lib/components/shell/Crumbs.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
@@ -13,6 +14,7 @@
 {#if !session.can("Administrator")}
   <Notice kind="info">Only administrators can view logs.</Notice>
 {:else}
+  <Crumbs steps={[{ label: tab === "history" ? "History" : "Live" }]} />
   <nav aria-label="Logs" class="flex gap-1">
     {#each [{ id: "live", title: "Live" }, { id: "history", title: "History" }] as t (t.id)}
       <a
