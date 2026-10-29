@@ -3060,6 +3060,12 @@ export interface components {
             /** @description where the spectrogram image of this report is served */
             spectrogramUrl: string;
             /**
+             * @description true when an older version of reseek analysed the file and this one cannot show its
+             *     report: only the file, when, the reading and the user's judgement are kept, and analysing
+             *     the file again replaces it
+             */
+            stale: boolean;
+            /**
              * @description one sentence saying what the analyser found and where
              * @example 68% of the time is full-band; 32% shows a 16 kHz cutoff concentrated in vocal content.
              */

@@ -14811,7 +14811,8 @@
           "summary",
           "measures",
           "spectrogramUrl",
-          "limitations"
+          "limitations",
+          "stale"
         ],
         "properties": {
           "analysedAt": {
@@ -14905,6 +14906,10 @@
           "spectrogramUrl": {
             "type": "string",
             "description": "where the spectrogram image of this report is served"
+          },
+          "stale": {
+            "type": "boolean",
+            "description": "true when an older version of reseek analysed the file and this one cannot show its\nreport: only the file, when, the reading and the user's judgement are kept, and analysing\nthe file again replaces it"
           },
           "summary": {
             "type": "string",

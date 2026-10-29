@@ -95,6 +95,10 @@ pub struct AudioAnalysis {
   pub judgement: Option<AnalysisOverride>,
   /// what made this analysis less reliable, such as few windows or a decoder error
   pub limitations: Vec<String>,
+  /// true when an older version of reseek analysed the file and this one cannot show its
+  /// report: only the file, when, the reading and the user's judgement are kept, and analysing
+  /// the file again replaces it
+  pub stale: bool,
 }
 
 /// The format a file's container claims. A file that could not be read as audio claims the

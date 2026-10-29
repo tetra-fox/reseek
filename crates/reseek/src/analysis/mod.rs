@@ -27,6 +27,7 @@ mod service_tests;
 #[cfg(test)]
 mod tests;
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
@@ -69,6 +70,8 @@ pub struct Analysis {
   /// where the spectrogram images are kept
   images: PathBuf,
   queue: Mutex<Queue>,
+  /// the reports whose JSON could not be read, said once each
+  unreadable: Mutex<HashSet<String>>,
   /// woken when a job is queued or one ends
   wake: Notify,
   shutdown: CancellationToken,
@@ -95,6 +98,7 @@ impl Analysis {
       events,
       images: data.join("analysis"),
       queue: Mutex::new(Queue::default()),
+      unreadable: Mutex::default(),
       wake: Notify::new(),
       shutdown,
     });
@@ -122,6 +126,21 @@ impl Analysis {
     }
   }
 
+  /// Says once that the report of the file at `path` could not be read and why, when it could
+  /// not; it reads as stale.
+  fn unreadable(&self, path: &str, why: Option<&str>) {
+    let Some(why) = why else {
+      return;
+    };
+    if lock(&self.unreadable).insert(path.to_string()) {
+      warn!(
+        path,
+        error = why,
+        "an analysis report does not read; it shows as stale"
+      );
+    }
+  }
+
   /// The stored report of the file at `path`, 404 when it has none.
   async fn stored(&self, path: &std::path::Path) -> Result<store::Stored, ApiError> {
     let path = path.to_string_lossy();
@@ -129,6 +148,7 @@ impl Analysis {
       .await
       .map_err(ApiError::internal)?
       .ok_or_else(|| ApiError::not_found(format!("'{path}' has not been analysed")))?;
+    self.unreadable(&stored.report.path, stored.unreadable.as_deref());
     Ok(stored)
   }
 }
@@ -164,7 +184,10 @@ impl AnalysisService for Analysis {
       let stored = store::find(&self.db, &path)
         .await
         .map_err(ApiError::internal)?;
-      if stored.is_some_and(|stored| current(&stored, file.size, file.modified)) {
+      // a stale report is no reading of the file, so it is analysed again
+      let current =
+        |stored: &store::Stored| !stored.report.stale && current(stored, file.size, file.modified);
+      if stored.as_ref().is_some_and(current) {
         return Err(ApiError::conflict(
           "the file has been analysed already",
           Some("its report is current; ask with force=true to analyse it again".to_string()),
@@ -232,6 +255,11 @@ impl AnalysisService for Analysis {
   ) -> Result<Response, ApiError> {
     let file = self.files.local_path(&target).await?;
     let stored = self.stored(&file.path).await?;
+    if stored.report.stale {
+      return Err(ApiError::not_found(
+        "the file was analysed by an older version of reseek; analyse it again to draw it",
+      ));
+    }
     if stored.report.spectrogram.is_none() {
       return Err(ApiError::not_found(
         "no spectrogram was drawn for the file; its report's limitations say why",
@@ -304,9 +332,18 @@ impl AnalysisService for Analysis {
   }
 
   async fn list(&self, query: AnalysisListQuery) -> Result<Vec<AudioAnalysis>, ApiError> {
-    store::list(&self.db, &query)
+    let listed = store::list(&self.db, &query)
       .await
-      .map_err(ApiError::internal)
+      .map_err(ApiError::internal)?;
+    Ok(
+      listed
+        .into_iter()
+        .map(|listed| {
+          self.unreadable(&listed.report.path, listed.unreadable.as_deref());
+          listed.report
+        })
+        .collect(),
+    )
   }
 
   async fn jobs(&self) -> Result<Vec<AnalysisJob>, ApiError> {

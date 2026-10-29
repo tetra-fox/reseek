@@ -1,14 +1,28 @@
 //! `analysis.db`: the newest report of each file, the user's judgement of each file, and the
 //! spectrogram images kept on disk with when each was last viewed.
 
-use api_types::analysis::{AnalysisListQuery, AnalysisOverride, AudioAnalysis, Judgement};
+use api_types::analysis::{
+  AnalysisListQuery, AnalysisMeasures, AnalysisOverride, AnalysisVerdict, AudioAnalysis,
+  ClaimedFormat, Judgement,
+};
+use api_types::files::FileRoot;
 use chrono::{DateTime, Utc};
 use rusqlite::{OptionalExtension, params};
+use uuid::Uuid;
 
+use super::report::spectrogram_url;
 use crate::db::{self, Database, DbError, Schema};
 
 /// The analysis database's migrations.
-pub static SCHEMA: Schema = db::schema!("analysis", ["0001_initial"]);
+pub static SCHEMA: Schema = db::schema!("analysis", ["0001_initial", "0002_report_format"]);
+
+/// The shape of the report JSON this version writes. Raise it with any change a stored report
+/// could not be read back through: a report stored in another shape reads as stale.
+pub(super) const REPORT_FORMAT: i64 = 1;
+
+/// What a stale report says in place of a reading.
+pub(super) const STALE_SUMMARY: &str =
+  "This was analysed by an older version of reseek. Analyse again to see it.";
 
 /// A report as it is stored.
 #[derive(Clone, Debug)]
@@ -21,6 +35,15 @@ pub(super) struct Stored {
   pub modified: String,
   /// the name the spectrogram images are kept under
   pub image: String,
+  /// why a report stored in this version's own shape could not be read, so it reads as stale
+  pub unreadable: Option<String>,
+}
+
+/// A listed report: the report or its stale stand-in, and why it could not be read as
+/// [`Stored::unreadable`] says.
+pub(super) struct Listed {
+  pub report: AudioAnalysis,
+  pub unreadable: Option<String>,
 }
 
 /// A report to store, which names its file.
@@ -35,41 +58,118 @@ fn spelled(value: &impl serde::Serialize) -> String {
   serde_plain::to_string(value).expect("the analysis enums are plain names")
 }
 
-/// The report of a row read with [`JUDGED`]: its JSON in column 0, the judgement beside it in
-/// columns 4 to 7, which are null when there is none, and the file's root, path under it and
-/// download in columns 8 to 10, which name the file whatever the JSON holds.
-fn judged_report(row: &rusqlite::Row<'_>) -> rusqlite::Result<AudioAnalysis> {
-  let json: String = row.get(0)?;
-  let unreadable = |column: usize, e: serde_json::Error| {
-    rusqlite::Error::FromSqlConversionFailure(column, rusqlite::types::Type::Text, e.into())
-  };
-  let mut fields: serde_json::Map<String, serde_json::Value> =
-    serde_json::from_str(&json).map_err(|e| unreadable(0, e))?;
-  fields.insert("root".into(), row.get::<_, String>(8)?.into());
-  fields.insert("relativePath".into(), row.get::<_, String>(9)?.into());
-  fields.insert(
-    "transferId".into(),
-    row.get::<_, Option<String>>(10)?.into(),
-  );
-  let mut report: AudioAnalysis =
-    serde_json::from_value(fields.into()).map_err(|e| unreadable(0, e))?;
-  let verdict: Option<String> = row.get(4)?;
-  report.judgement = match verdict {
+/// A failure to read column `index` as its type.
+fn conversion(index: usize) -> impl Fn(serde_plain::Error) -> rusqlite::Error {
+  move |e| rusqlite::Error::FromSqlConversionFailure(index, rusqlite::types::Type::Text, e.into())
+}
+
+/// The report of a row read with [`JUDGED`], and why its JSON could not be read when it was in
+/// this version's shape. The JSON is in column 0 and its shape in column 14; the judgement is in
+/// columns 4 to 7, null when there is none; the file's root, path under it, download, local path,
+/// when it was analysed and the reading are in columns 8 to 13, which name the file whatever the
+/// JSON holds. A report in another shape, or one that does not read, is a stale stand-in made from
+/// those columns, with the judgement kept.
+fn judged_report(row: &rusqlite::Row<'_>) -> rusqlite::Result<(AudioAnalysis, Option<String>)> {
+  let judgement = match row.get::<_, Option<String>>(4)? {
     Some(verdict) => Some(AnalysisOverride {
-      verdict: serde_plain::from_str(&verdict).map_err(|e| {
-        rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, e.into())
-      })?,
+      verdict: serde_plain::from_str(&verdict).map_err(conversion(4))?,
       note: row.get(5)?,
       by: row.get(6)?,
       at: db::read_timestamp(&row.get::<_, String>(7)?)?,
     }),
     None => None,
   };
-  Ok(report)
+  let format: Option<i64> = row.get(14)?;
+  let read = match format {
+    Some(format) if format != REPORT_FORMAT => None,
+    _ => Some(decoded(row)?),
+  };
+  let (mut report, unreadable) = match read {
+    Some(Ok(report)) => (report, None),
+    // one stored before shapes were numbered that does not read is in an older shape
+    Some(Err(e)) if format.is_some() => (stale(row)?, Some(e)),
+    _ => (stale(row)?, None),
+  };
+  report.judgement = judgement;
+  Ok((report, unreadable))
+}
+
+/// The report in a row's JSON, named by its columns, or why it does not read.
+fn decoded(row: &rusqlite::Row<'_>) -> rusqlite::Result<Result<AudioAnalysis, String>> {
+  let json: String = row.get(0)?;
+  let naming = [
+    ("root", row.get::<_, String>(8)?.into()),
+    ("relativePath", row.get::<_, String>(9)?.into()),
+    ("transferId", row.get::<_, Option<String>>(10)?.into()),
+    ("stale", false.into()),
+  ];
+  let read = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&json)
+    .and_then(|mut fields| {
+      for (key, value) in naming {
+        fields.insert(key.into(), value);
+      }
+      serde_json::from_value(fields.into())
+    })
+    .map_err(|e| e.to_string());
+  Ok(read)
+}
+
+/// The stand-in for a report this version cannot show, from the row's columns.
+fn stale(row: &rusqlite::Row<'_>) -> rusqlite::Result<AudioAnalysis> {
+  let root: FileRoot = serde_plain::from_str(&row.get::<_, String>(8)?).map_err(conversion(8))?;
+  let relative_path: String = row.get(9)?;
+  Ok(AudioAnalysis {
+    path: row.get(11)?,
+    spectrogram_url: spectrogram_url(root, &relative_path),
+    root,
+    relative_path,
+    // written from a uuid
+    transfer_id: row
+      .get::<_, Option<String>>(10)?
+      .and_then(|id| Uuid::parse_str(&id).ok()),
+    // written from a u64, so never negative
+    size: u64::try_from(row.get::<_, i64>(1)?).unwrap_or_default(),
+    analysed_at: db::read_timestamp(&row.get::<_, String>(12)?)?,
+    duration_seconds: 0.0,
+    claimed: ClaimedFormat {
+      codec: "unknown".to_string(),
+      sample_rate: 0,
+      bit_depth: None,
+      channels: 0,
+      bitrate_kbps: None,
+    },
+    // a reading an older version gave that this one no longer has is no reading to show
+    verdict: serde_plain::from_str(&row.get::<_, String>(13)?)
+      .unwrap_or(AnalysisVerdict::Inconclusive),
+    confidence: 0.0,
+    flags: Vec::new(),
+    encoder_guess: None,
+    summary: STALE_SUMMARY.to_string(),
+    measures: AnalysisMeasures {
+      cutoff_hz_histogram: Vec::new(),
+      cutoff_median_hz: None,
+      shelf_sharpness_db_p95: None,
+      sfb21_holes: None,
+      frame_artefact_score: None,
+      upsample_ratio: None,
+      bit_depth_effective: None,
+      noise_floor_dbfs: None,
+      stereo_correlation: None,
+      side_energy_db: None,
+      dc_offset: None,
+      clipped_samples_pct: None,
+    },
+    windows: None,
+    spectrogram: None,
+    judgement: None,
+    limitations: Vec::new(),
+    stale: true,
+  })
 }
 
 const JUDGED: &str = "SELECT r.report, r.size, r.modified, r.image, j.verdict, j.note, j.by, j.at, \
-                      r.root, r.relative, r.transfer_id \
+                      r.root, r.relative, r.transfer_id, r.path, r.analysed_at, r.verdict, \
+                      r.format \
                       FROM reports r LEFT JOIN judgements j ON j.path = r.path";
 
 /// Stores `new` as the newest report of its file.
@@ -95,10 +195,20 @@ pub(super) async fn save(db: &Database, new: NewReport<'_>) -> Result<(), DbErro
   db.write(move |conn| {
     conn.execute(
       "INSERT OR REPLACE INTO reports \
-       (path, root, relative, size, modified, transfer_id, analysed_at, verdict, image, report) \
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+       (path, root, relative, size, modified, transfer_id, analysed_at, verdict, image, report, \
+       format) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
       params![
-        row.0, row.1, row.2, row.3, row.4, row.5, row.6, row.7, row.8, row.9
+        row.0,
+        row.1,
+        row.2,
+        row.3,
+        row.4,
+        row.5,
+        row.6,
+        row.7,
+        row.8,
+        row.9,
+        REPORT_FORMAT
       ],
     )?;
     Ok(())
@@ -112,8 +222,10 @@ pub(super) async fn find(db: &Database, path: &str) -> Result<Option<Stored>, Db
   db.read(move |conn| {
     conn
       .query_row(&format!("{JUDGED} WHERE r.path = ?1"), [path], |row| {
+        let (report, unreadable) = judged_report(row)?;
         Ok(Stored {
-          report: judged_report(row)?,
+          report,
+          unreadable,
           // written from a u64, so never negative
           size: u64::try_from(row.get::<_, i64>(1)?).unwrap_or_default(),
           modified: row.get(2)?,
@@ -126,10 +238,7 @@ pub(super) async fn find(db: &Database, path: &str) -> Result<Option<Stored>, Db
 }
 
 /// The reports `query` asks for, newest first, without their windows.
-pub(super) async fn list(
-  db: &Database,
-  query: &AnalysisListQuery,
-) -> Result<Vec<AudioAnalysis>, DbError> {
+pub(super) async fn list(db: &Database, query: &AnalysisListQuery) -> Result<Vec<Listed>, DbError> {
   let verdict = query.verdict.as_ref().map(spelled);
   let since = query.since.map(db::timestamp);
   let (offset, limit) = (query.offset, query.limit);
@@ -139,9 +248,9 @@ pub(super) async fn list(
        ORDER BY r.analysed_at DESC LIMIT ?3 OFFSET ?4"
     ))?;
     let rows = statement.query_map(params![verdict, since, limit, offset], |row| {
-      let mut report = judged_report(row)?;
+      let (mut report, unreadable) = judged_report(row)?;
       report.windows = None;
-      Ok(report)
+      Ok(Listed { report, unreadable })
     })?;
     rows.collect()
   })
@@ -238,4 +347,98 @@ pub(super) async fn evict(db: &Database, limit: u64) -> Result<Vec<String>, DbEr
     Ok(gone)
   })
   .await
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::db::{Location, Schema};
+
+  /// The database as it was before reports carried their shape.
+  static BEFORE: Schema = Schema {
+    name: "analysis",
+    migrations: SCHEMA.migrations.split_at(1).0,
+    private: false,
+  };
+
+  const PATH: &str = "/srv/downloads/a.flac";
+
+  fn everything() -> AnalysisListQuery {
+    AnalysisListQuery {
+      verdict: None,
+      since: None,
+      offset: 0,
+      limit: 100,
+    }
+  }
+
+  #[tokio::test]
+  async fn a_report_stored_before_shapes_were_numbered_reads_as_stale_with_its_judgement() {
+    let dir = tempfile::tempdir().unwrap();
+    let location = Location {
+      data: dir.path().join("data"),
+      backups: dir.path().join("backups"),
+      volatile: false,
+      log_sql: false,
+    };
+    std::fs::create_dir_all(&location.data).unwrap();
+    std::fs::create_dir_all(&location.backups).unwrap();
+    let db = Database::open(&BEFORE, &location).await.unwrap();
+    let at = db::timestamp(Utc::now());
+    db.write(move |conn| {
+      // a report in a shape this version's type no longer reads
+      conn.execute(
+        "INSERT INTO reports \
+         (path, root, relative, size, modified, transfer_id, analysed_at, verdict, image, report) \
+         VALUES (?1, 'downloads', 'a.flac', 10, 'then', NULL, ?2, 'likely_transcode', 'img', \
+         '{\"path\": \"/srv/downloads/a.flac\", \"summary\": \"an older shape\"}')",
+        params![PATH, at],
+      )?;
+      conn.execute(
+        "INSERT INTO judgements (path, verdict, note, by, at) \
+         VALUES (?1, 'fake', 'an old rip', 'local:reseek', ?2)",
+        params![PATH, at],
+      )
+    })
+    .await
+    .unwrap();
+    drop(db);
+
+    let db = Database::open(&SCHEMA, &location).await.unwrap();
+    let stored = find(&db, PATH).await.unwrap().unwrap();
+    let report = &stored.report;
+    assert!(report.stale);
+    assert_eq!(
+      stored.unreadable, None,
+      "an older shape is no fault to report"
+    );
+    assert_eq!(report.summary, STALE_SUMMARY);
+    assert_eq!(report.verdict, AnalysisVerdict::LikelyTranscode);
+    assert_eq!(
+      (report.root, report.relative_path.as_str()),
+      (FileRoot::Downloads, "a.flac")
+    );
+    let judgement = report.judgement.as_ref().unwrap();
+    assert_eq!(judgement.verdict, Judgement::Fake);
+    assert_eq!(judgement.note.as_deref(), Some("an old rip"));
+    let listed = list(&db, &everything()).await.unwrap();
+    assert_eq!(listed.len(), 1);
+    assert!(listed[0].report.stale && listed[0].report.judgement.is_some());
+
+    // a report in this version's own shape that does not read is stale too, and says why
+    let format = |format: i64| {
+      move |conn: &mut rusqlite::Connection| {
+        conn.execute("UPDATE reports SET format = ?1", [format])
+      }
+    };
+    db.write(format(REPORT_FORMAT)).await.unwrap();
+    let stored = find(&db, PATH).await.unwrap().unwrap();
+    assert!(stored.report.stale);
+    assert!(stored.unreadable.unwrap().contains("missing field"));
+    // one in another numbered shape is stale without being read
+    db.write(format(REPORT_FORMAT + 1)).await.unwrap();
+    let stored = find(&db, PATH).await.unwrap().unwrap();
+    assert!(stored.report.stale);
+    assert_eq!(stored.unreadable, None);
+  }
 }

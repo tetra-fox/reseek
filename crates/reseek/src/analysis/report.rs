@@ -96,5 +96,6 @@ pub(super) fn assemble(
     spectrogram: layout,
     judgement: None,
     limitations: reading.limitations,
+    stale: false,
   }
 }

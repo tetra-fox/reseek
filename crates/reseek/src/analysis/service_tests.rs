@@ -458,3 +458,50 @@ async fn a_queued_analysis_can_be_cancelled_and_a_window_read() {
   let gap = |i: usize| rows[i].as_f64().unwrap() - rows[i + 1].as_f64().unwrap();
   assert!(gap(0) > gap(500) * 10.0, "{} {}", gap(0), gap(500));
 }
+
+#[tokio::test]
+async fn a_report_from_an_older_version_lists_as_stale_keeps_its_judgement_and_is_replaced() {
+  let app = app(CONFIG, &[]).await;
+  lossless(&app, "a.flac");
+  send(&app, "POST", &route("a.flac"), None).await;
+  settled(&app).await;
+  let judgement = json!({ "verdict": "fake", "note": "sounds like 128k" });
+  let judged = format!("{}/override", route("a.flac"));
+  assert_eq!(send(&app, "PUT", &judged, Some(judgement)).await.0, 204);
+  // the report as an older version stored it: without a field the layout has since gained, and
+  // from before stored reports carried their shape
+  let stored = rusqlite::Connection::open(app.state.paths.data.join("analysis.db")).unwrap();
+  stored
+    .execute(
+      "UPDATE reports SET format = NULL, \
+       report = json_remove(report, '$.spectrogram.durationSeconds')",
+      [],
+    )
+    .unwrap();
+
+  let (status, listed) = send(&app, "GET", "/api/v0/analysis?offset=0&limit=500", None).await;
+  assert_eq!(status, 200, "{listed}");
+  let entry = &listed[0];
+  assert_eq!(entry["stale"], true);
+  assert_eq!(entry["relativePath"], "a.flac");
+  assert_eq!(entry["override"]["note"], "sounds like 128k");
+  let (status, report) = send(&app, "GET", &route("a.flac"), None).await;
+  assert_eq!(status, 200, "{report}");
+  assert_eq!(report["stale"], true);
+  assert_eq!(report["override"]["verdict"], "fake");
+  assert_eq!(report["spectrogram"], Value::Null);
+  let image = format!("{}/spectrogram.png", route("a.flac"));
+  assert_eq!(app.send(request("GET", &image, None)).await.status, 404);
+
+  // analysing again needs no force: a stale report is no reading of the file
+  let (status, created) = send(&app, "POST", &route("a.flac"), None).await;
+  assert_eq!(status, 202, "{created}");
+  settled(&app).await;
+  let (_, report) = send(&app, "GET", &route("a.flac"), None).await;
+  assert_eq!(report["stale"], false);
+  assert!(report["spectrogram"]["durationSeconds"].is_number());
+  assert_eq!(
+    report["override"]["note"], "sounds like 128k",
+    "the judgement stays"
+  );
+}

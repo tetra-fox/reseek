@@ -265,6 +265,7 @@ fn blank_analysis(d: &str, now: DateTime<Utc>) -> AudioAnalysis {
       at: now,
     }),
     limitations: Vec::new(),
+    stale: false,
   }
 }
 
