@@ -20,12 +20,12 @@
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
 
-  import Judgement from "./Judgement.svelte";
+  import Judgment from "./Judgment.svelte";
   import Reading from "./Reading.svelte";
   import SpectrogramView from "./SpectrogramView.svelte";
 
   // one file's analysis, top to bottom: the spectrogram, the waveform and the spectrum at the
-  // cursor with the disclaimer, the user's judgement, then the analyzer's reading folded away;
+  // cursor with the disclaimer, the user's judgment, then the analyzer's reading folded away;
   // while the file waits or runs in the queue, how far it is with a way to cancel it
   type Props = {
     target: Target;
@@ -79,7 +79,7 @@
     if (ask !== asked) return;
     if (outcome.ok) {
       report = outcome.data;
-      // the lists' chips follow what the drawer shows, a judgement saved here included
+      // the lists' chips follow what the drawer shows, a judgment saved here included
       if (report) marks.put(report);
       error = "";
     } else {
@@ -167,7 +167,7 @@
         {/if}
       </div>
     {/if}
-    <Judgement {target} {report} onsaved={() => void load()} />
+    <Judgment {target} {report} onsaved={() => void load()} />
   {:else if report}
     {#if scope}
       <SpectrogramView {scope} {track} onlarge={() => (large = true)} />
@@ -184,7 +184,7 @@
         {DISCLAIMER}
       </p>
     {/if}
-    <Judgement {target} {report} onsaved={() => void load()} />
+    <Judgment {target} {report} onsaved={() => void load()} />
     <Reading {report} bind:open={readingOpen} />
     {#if write && !job}
       <Button variant="ghost" size="sm" class="self-start" onclick={() => void analyze(true)}

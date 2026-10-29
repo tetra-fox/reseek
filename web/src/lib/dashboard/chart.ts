@@ -28,7 +28,7 @@ export const tickLabel = {
 /**
  * Room around a chart's plot for its axes, in pixels at `remPx` to the rem: on the left the
  * widest of `labels`, the value labels the axis can show, below one line of time labels, and above
- * half a line for the top label, which is centred on its tick. A figure is taken as 0.62 of the
+ * half a line for the top label, which is centered on its tick. A figure is taken as 0.62 of the
  * text size wide, a little more than a tabular digit
  */
 export const axisPadding = (labels: string[], remPx: number) => {

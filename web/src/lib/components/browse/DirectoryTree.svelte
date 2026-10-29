@@ -99,7 +99,7 @@
   export const collapseAll = () => expansion.reset(false);
 
   /** Scrolls the row at `index` to the middle of the list */
-  const centre = (index: number) => {
+  const center = (index: number) => {
     if (index !== -1) lines.scrollTo(index, "center");
   };
 
@@ -120,7 +120,7 @@
     if (at === -1) return;
     e.preventDefault();
     onselect(rows[at].node.name);
-    centre(at);
+    center(at);
   };
 
   /** Opens every folder above `name`, selects it and scrolls it to the middle */
@@ -128,7 +128,7 @@
     for (const above of ancestors(name, tree, separator)) expansion.set(above, true);
     onselect(name);
     await tick();
-    centre(rows.findIndex((r) => r.node.name === name));
+    center(rows.findIndex((r) => r.node.name === name));
   };
 </script>
 

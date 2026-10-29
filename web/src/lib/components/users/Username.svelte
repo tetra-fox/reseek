@@ -13,7 +13,7 @@
 
   import { Busy } from "#lib/busy.svelte.js";
   import { copyText } from "#lib/clipboard.svelte.js";
-  import { nameColour } from "#lib/colours.js";
+  import { nameColor } from "#lib/colors.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { interaction } from "#lib/interaction.svelte.js";
   import { userHref } from "#lib/nav.js";
@@ -146,7 +146,7 @@
     bind:this={link}
     href={userHref(name)}
     class="truncate font-medium underline-offset-2 hover:underline"
-    style:color={nameColour(name)}
+    style:color={nameColor(name)}
     onpointerenter={enter}
     onpointerleave={leave}
     onpointerdown={down}
@@ -211,7 +211,7 @@
                 ? "bg-warning"
                 : "bg-fg-subtle/50"
           ]}></span>
-        <span class="truncate font-mono font-medium" style:color={nameColour(name)}>{name}</span>
+        <span class="truncate font-mono font-medium" style:color={nameColor(name)}>{name}</span>
         {#if user}<span class="ml-auto"><GroupBadge group={user.group} /></span>{/if}
       </div>
       <Menu.Separator />

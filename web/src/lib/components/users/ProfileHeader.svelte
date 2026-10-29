@@ -19,7 +19,7 @@
   import { app } from "#lib/app.svelte.js";
   import { copyText } from "#lib/clipboard.svelte.js";
   import { clock } from "#lib/clock.svelte.js";
-  import { nameColour } from "#lib/colours.js";
+  import { nameColor } from "#lib/colors.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
@@ -99,7 +99,7 @@
         <span title={p.presenceAt ? `since ${ago(p.presenceAt, clock.now)}` : undefined}>
           <Presence presence={p.presence} />
         </span>
-        <h1 class="truncate font-mono text-lg font-semibold" style:color={nameColour(name)}>
+        <h1 class="truncate font-mono text-lg font-semibold" style:color={nameColor(name)}>
           {name}
         </h1>
         <Button

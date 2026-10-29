@@ -3,8 +3,8 @@
 
   import {
     judge,
-    type Judgement,
-    JUDGEMENTS,
+    type Judgment,
+    JUDGMENTS,
     type Report,
     type Target,
     targetKey
@@ -15,22 +15,22 @@
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
 
-  // the user's own judgement of the file, which lists show in place of the analyser's reading:
+  // the user's own judgment of the file, which lists show in place of the analyzer's reading:
   // genuine, fake or not decided, with a note, saved with a tick when it is kept
   type Props = { target: Target; report: Report; onsaved: () => void };
 
   let { target, report, onsaved }: Props = $props();
 
-  const CHOICES: [Judgement | null, string][] = [
-    ["legit", JUDGEMENTS.legit],
-    ["fake", JUDGEMENTS.fake],
+  const CHOICES: [Judgment | null, string][] = [
+    ["legit", JUDGMENTS.legit],
+    ["fake", JUDGMENTS.fake],
     [null, "Not decided"]
   ];
-  let choice = $state<Judgement | null>(null);
+  let choice = $state<Judgment | null>(null);
   let note = $state("");
   let saving = $state(false);
   let saved = $state(false);
-  // the form follows the judgement kept; the tick goes when another file is shown
+  // the form follows the judgment kept; the tick goes when another file is shown
   $effect(() => {
     choice = report.override?.verdict ?? null;
     note = report.override?.note ?? "";
@@ -48,15 +48,15 @@
     saving = true;
     const outcome = await judge(target, choice, note);
     saving = false;
-    if (!outcome.ok) return void toast(`Couldn't save your judgement: ${outcome.error}`, "error");
+    if (!outcome.ok) return void toast(`Couldn't save your judgment: ${outcome.error}`, "error");
     saved = true;
     onsaved();
   };
 </script>
 
 <fieldset class="flex flex-col gap-2" disabled={!write || saving}>
-  <legend class="mb-1 text-sm font-medium">Your judgement</legend>
-  <div class="flex flex-wrap gap-1" role="radiogroup" aria-label="Your judgement">
+  <legend class="mb-1 text-sm font-medium">Your judgment</legend>
+  <div class="flex flex-wrap gap-1" role="radiogroup" aria-label="Your judgment">
     {#each CHOICES as [value, text] (text)}
       <button
         type="button"
@@ -82,7 +82,7 @@
       oninput={() => (saved = false)} />
   </label>
   <div class="flex items-center gap-2">
-    <Button size="sm" disabled={!changed} onclick={() => void save()}>Save judgement</Button>
+    <Button size="sm" disabled={!changed} onclick={() => void save()}>Save judgment</Button>
     {#if saved && !changed}
       <span class="flex items-center gap-1 text-sm text-success" role="status"
         ><CheckIcon class="size-4" />Saved</span>

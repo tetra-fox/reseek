@@ -10,7 +10,7 @@
   import XIcon from "@lucide/svelte/icons/x";
 
   import { MARK_FILTERS, type MarkFilter } from "#lib/analysis/marks.js";
-  import { analyserOffered } from "#lib/analysis/marks.svelte.js";
+  import { analyzerOffered } from "#lib/analysis/marks.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
@@ -111,7 +111,7 @@
         </Button>
       {/each}
     </div>
-    {#if markCounts && analyserOffered()}
+    {#if markCounts && analyzerOffered()}
       <div class="flex flex-wrap gap-1" role="group" aria-label="Analysis">
         {#each MARK_FILTERS as f (f.id)}
           {@const on = view.filters.analysis === f.id}

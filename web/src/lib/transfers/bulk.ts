@@ -1,6 +1,6 @@
 import type { Schemas } from "#lib/api/client.js";
 
-import { ERRORED, isCancellable, isRemovable, isRetryable, type Transfer } from "./states";
+import { ERRORED, isCancelable, isRemovable, isRetryable, type Transfer } from "./states";
 
 export type BulkAction = Schemas["BulkAction"];
 
@@ -9,14 +9,14 @@ export const SCOPES = {
   retry: [
     { id: "errored", label: "Retry all failed", test: (s: string) => ERRORED.includes(s) },
     {
-      id: "cancelled",
-      label: "Retry all cancelled",
+      id: "canceled",
+      label: "Retry all canceled",
       test: (s: string) => s === "Completed, Cancelled"
     },
     { id: "all", label: "Retry all", test: isRetryable }
   ],
   cancel: [
-    { id: "all", label: "Cancel all", test: isCancellable },
+    { id: "all", label: "Cancel all", test: isCancelable },
     {
       id: "queued",
       label: "Cancel all queued",
@@ -27,8 +27,8 @@ export const SCOPES = {
   remove: [
     { id: "errored", label: "Remove all failed", test: (s: string) => ERRORED.includes(s) },
     {
-      id: "cancelled",
-      label: "Remove all cancelled",
+      id: "canceled",
+      label: "Remove all canceled",
       test: (s: string) => s === "Completed, Cancelled"
     },
     { id: "completed", label: "Remove all finished", test: isRemovable }
@@ -37,7 +37,7 @@ export const SCOPES = {
 
 /** Whether `action` applies to a transfer in `state`, so it is worth sending */
 export const applies = (action: BulkAction, state: string) =>
-  action === "retry" ? isRetryable(state) : action === "cancel" ? isCancellable(state) : true;
+  action === "retry" ? isRetryable(state) : action === "cancel" ? isCancelable(state) : true;
 
 /** The bulk call for `action` on the transfers it applies to, null when there are none */
 export const bulkRequest = (
@@ -52,7 +52,7 @@ export const bulkRequest = (
 export const activeAmong = (transfers: Transfer[]) =>
   transfers.filter((t) => t.state === "InProgress").length;
 
-const PAST = { cancel: "cancelled", remove: "removed", retry: "retried" } as const;
+const PAST = { cancel: "canceled", remove: "removed", retry: "retried" } as const;
 
 /** One line for what a bulk call did: "12 removed, 1 failed: <why>" */
 export const summary = (action: BulkAction, result: Schemas["BulkResult"]): string => {

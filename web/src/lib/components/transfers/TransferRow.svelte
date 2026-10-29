@@ -64,8 +64,8 @@
     around: Transfer[];
     /** ticks the row; `range` when shift was held */
     onselect: (range: boolean) => void;
-    /** opens the details drawer, at the file's analysis with `analyse` */
-    ondetails: (analyse?: boolean) => void;
+    /** opens the details drawer, at the file's analysis with `analyze` */
+    ondetails: (analyze?: boolean) => void;
     onremove: () => void;
     onblock: (deny: boolean) => void;
   };
@@ -302,7 +302,7 @@
             {onremove}
             {onblock}
             ondetails={() => ondetails()}
-            onanalyse={() => ondetails(true)} />
+            onanalyze={() => ondetails(true)} />
         </Menu.LazyRoot>
       </div>
     {/if}

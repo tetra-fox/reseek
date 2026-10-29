@@ -5,7 +5,7 @@
   import { SvelteSet } from "svelte/reactivity";
 
   import { MARK_FILTERS, type MarkFilter, passes } from "#lib/analysis/marks.js";
-  import { analysable, marks } from "#lib/analysis/marks.svelte.js";
+  import { analyzable, marks } from "#lib/analysis/marks.svelte.js";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
@@ -76,7 +76,7 @@
   let messaging = $state(false);
   let detailId = $state<string | null>(null);
   /** the transfer whose drawer opened at its analysis, which starts one when it has none */
-  let analyseId = $state<string | null>(null);
+  let analyzeId = $state<string | null>(null);
   const folds = new Expansion(true);
   const selected = new SvelteSet<string>();
   let confirm = $state<{ title: string; body: string; label: string; run: () => void } | null>(
@@ -105,12 +105,12 @@
     direction === "download"
       ? (t) => ({
           mark: marks.download(t.id),
-          analysable: isSucceeded(t.state) && analysable(getFileName(t.filename))
+          analyzable: isSucceeded(t.state) && analyzable(getFileName(t.filename))
         })
       : undefined;
   const marked = (lookup: MarkLookup, filter: MarkFilter) => (t: Transfer) => {
     const found = lookup(t);
-    return passes(filter, found.mark, found.analysable);
+    return passes(filter, found.mark, found.analyzable);
   };
   const markCounts = $derived.by(() => {
     if (!markLookup) return null;
@@ -146,7 +146,7 @@
       : []
   );
 
-  // the users on screen are looked up for their group, colour and block
+  // the users on screen are looked up for their group, color and block
   $effect(() => {
     for (const name of new Set(rows.slice(0, 200).map((t) => t.username))) void users.load(name);
   });
@@ -289,9 +289,9 @@
     {view}
     expansion={folds}
     {selected}
-    ondetails={(t, analyse) => {
+    ondetails={(t, analyze) => {
       detailId = t.id;
-      analyseId = analyse ? t.id : null;
+      analyzeId = analyze ? t.id : null;
     }}
     onremove={remove}
     ondelete={remove}
@@ -338,8 +338,8 @@
     {store}
     {direction}
     around={detailAround}
-    analyse={analyseId === detail.id}
-    onanalyse={() => (analyseId = detail.id)}
+    analyze={analyzeId === detail.id}
+    onanalyze={() => (analyzeId = detail.id)}
     onclose={() => (detailId = null)}
     onstep={step}
     onremove={() => remove([detail])}

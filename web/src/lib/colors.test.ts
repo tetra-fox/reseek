@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { DARK, LIGHT, NAME_HUES, nameColour, nameHue } from "./colours";
+import { DARK, LIGHT, NAME_HUES, nameColor, nameHue } from "./colors";
 
-/** linear sRGB of an OKLCH colour, unclamped */
+/** linear sRGB of an OKLCH color, unclamped */
 const linear = (l: number, c: number, h: number) => {
   const a = c * Math.cos((h * Math.PI) / 180);
   const b = c * Math.sin((h * Math.PI) / 180);
@@ -17,7 +17,7 @@ const linear = (l: number, c: number, h: number) => {
 };
 
 /**
- * The relative luminance an OKLCH colour shows as: chroma is lowered until the colour fits in
+ * The relative luminance an OKLCH color shows as: chroma is lowered until the color fits in
  * sRGB, as a browser maps one that doesn't, keeping its lightness
  */
 const luminance = (l: number, c: number, h: number) => {
@@ -38,12 +38,12 @@ const luminance = (l: number, c: number, h: number) => {
 
 const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 
-describe("username colours", () => {
-  it("give a name the same colour every time, from the palette", () => {
+describe("username colors", () => {
+  it("give a name the same color every time, from the palette", () => {
     expect(nameHue("alice")).toBe(nameHue("alice"));
-    expect(nameColour("bob")).toBe(nameColour("bob"));
+    expect(nameColor("bob")).toBe(nameColor("bob"));
     expect(NAME_HUES).toContain(nameHue("ж€😀"));
-    expect(nameColour("alice")).toMatch(/^light-dark\(oklch\(.+\), oklch\(.+\)\)$/);
+    expect(nameColor("alice")).toMatch(/^light-dark\(oklch\(.+\), oklch\(.+\)\)$/);
   });
 
   it("spread names evenly over the palette", () => {
@@ -56,7 +56,7 @@ describe("username colours", () => {
     const mean = total / NAME_HUES.length;
     expect(counts.size).toBe(NAME_HUES.length);
     for (const n of counts.values()) expect(Math.abs(n - mean) / mean).toBeLessThan(0.15);
-    // names one letter apart rarely share a colour
+    // names one letter apart rarely share a color
     const pairs = ["alice", "bob", "carol", "dave", "erin", "frank", "grace", "heidi"];
     const same = pairs.filter((n) => nameHue(n) === nameHue(`${n}2`)).length;
     expect(same).toBeLessThan(3);

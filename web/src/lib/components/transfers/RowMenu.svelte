@@ -46,15 +46,15 @@
     around: Transfer[];
     /** removes it, asking first when it is still running */
     onremove: () => void;
-    /** blocks the user, asking first; with `deny` their unfinished uploads are cancelled first */
+    /** blocks the user, asking first; with `deny` their unfinished uploads are canceled first */
     onblock: (deny: boolean) => void;
     /** opens the details drawer; without it the menu has no Details */
     ondetails?: () => void;
-    /** opens the file's analysis; without it the menu has no Analyse */
-    onanalyse?: () => void;
+    /** opens the file's analysis; without it the menu has no Analyze */
+    onanalyze?: () => void;
   };
 
-  let { transfer: t, direction, around, onremove, onblock, ondetails, onanalyse }: Props = $props();
+  let { transfer: t, direction, around, onremove, onblock, ondetails, onanalyze }: Props = $props();
 
   const can = $derived(rowActions(t, direction));
   const write = $derived(session.can("ReadWrite"));
@@ -124,8 +124,8 @@
     <Menu.Separator />
     <Menu.Item onSelect={ondetails}><InfoIcon />Details</Menu.Item>
   {/if}
-  {#if onanalyse && can.open}
+  {#if onanalyze && can.open}
     {#if !ondetails}<Menu.Separator />{/if}
-    <Menu.Item onSelect={onanalyse}><AudioLinesIcon />Analyse</Menu.Item>
+    <Menu.Item onSelect={onanalyze}><AudioLinesIcon />Analyze</Menu.Item>
   {/if}
 </Menu.Content>

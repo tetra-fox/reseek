@@ -20,7 +20,7 @@
   import { queue } from "#lib/analysis/analysis.js";
   import { jobs } from "#lib/analysis/jobs.svelte.js";
   import { FILE_FILTERS, type MarkFilter, passes } from "#lib/analysis/marks.js";
-  import { analysable, analyserOffered, marks } from "#lib/analysis/marks.svelte.js";
+  import { analyzable, analyzerOffered, marks } from "#lib/analysis/marks.svelte.js";
   import { api, type Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import { copyText } from "#lib/clipboard.svelte.js";
@@ -157,17 +157,17 @@
   /** which files the list shows by their analysis, every file when null */
   let only = $state<MarkFilter | null>(null);
   const shows = (e: Entry) =>
-    e.kind !== "file" || !only || passes(only, marks.file(root, e.path), analysable(e.name));
+    e.kind !== "file" || !only || passes(only, marks.file(root, e.path), analyzable(e.name));
   $effect(() => marks.retain());
   /** the file whose analysis the drawer shows, queued when it has none with `start` */
-  let analysing = $state<{ entry: Entry; start: boolean } | null>(null);
+  let analyzing = $state<{ entry: Entry; start: boolean } | null>(null);
   $effect(() => {
     void root;
-    analysing = null;
+    analyzing = null;
   });
 
-  /** Queues every file under a folder whose extension the analyser is offered for */
-  const analyseFolder = async (e: Entry) => {
+  /** Queues every file under a folder whose extension the analyzer is offered for */
+  const analyzeFolder = async (e: Entry) => {
     const listing = await call(() =>
       api.GET("/api/v0/files/{root}/directories/{path}", {
         params: { path: { root, path: encodePath(e.path) }, query: { recursive: true } }
@@ -176,20 +176,20 @@
     if (!listing.ok) return void toast(`Couldn't read ${e.name}: ${listing.error}`, "error");
     const files = (listing.data.files ?? [])
       .map((f) => f.fullName.replaceAll("\\", "/"))
-      .filter(analysable);
-    if (!files.length) return void toast(`${e.name} has no files to analyse`);
+      .filter(analyzable);
+    if (!files.length) return void toast(`${e.name} has no files to analyze`);
     let queued = 0;
     const failed: string[] = [];
     for (const file of files) {
       const outcome = await queue({ kind: "file", root, path: joinPath([e.path, file]) });
-      // a file analysed already or in the queue is left as it is
+      // a file analyzed already or in the queue is left as it is
       if (outcome.ok) queued++;
       else if (outcome.status !== 409) failed.push(`${file}: ${outcome.error}`);
     }
     void jobs.refresh();
     if (failed.length) toast(`Couldn't queue ${failed.join("; ")}`, "error");
     else if (queued) toast(`${plural(queued, "file", "files")} queued for analysis`);
-    else toast(`Every file in ${e.name} has been analysed already`);
+    else toast(`Every file in ${e.name} has been analyzed already`);
   };
   const write = $derived(session.can("ReadWrite"));
   const canDelete = $derived(managed && write);
@@ -243,8 +243,8 @@
       }
     }
     selected.clear();
-    const shown = analysing?.entry.path;
-    if (targets.some((e) => e.path === shown)) analysing = null;
+    const shown = analyzing?.entry.path;
+    if (targets.some((e) => e.path === shown)) analyzing = null;
     load();
     if (failed.length) toast(`Couldn't delete ${failed.join("; ")}`, "error");
     else
@@ -345,7 +345,7 @@
     {/each}
   </nav>
   <div class="ml-auto flex max-w-full flex-wrap justify-end gap-inline">
-    {#if analyserOffered()}
+    {#if analyzerOffered()}
       <Select
         bind:value={only}
         aria-label="Show"
@@ -378,18 +378,18 @@
         {#if isAudio(e.name)}
           <Menu.Item onSelect={() => preview(e)}><PlayIcon />Preview</Menu.Item>
         {/if}
-        {#if analysable(e.name)}
-          <Menu.Item onSelect={() => (analysing = { entry: e, start: write })}
-            ><AudioLinesIcon />Analyse</Menu.Item>
+        {#if analyzable(e.name)}
+          <Menu.Item onSelect={() => (analyzing = { entry: e, start: write })}
+            ><AudioLinesIcon />Analyze</Menu.Item>
         {/if}
         <Menu.Item onSelect={() => void save(e)}><SaveIcon />Download to device</Menu.Item>
       {:else}
         <Menu.Item onSelect={() => void open(e)}><FolderOpenIcon />Open</Menu.Item>
         <Menu.Item onSelect={() => window.location.assign(archiveUrl(root, e.path))}
           ><FileArchiveIcon />Download as zip</Menu.Item>
-        {#if write && analyserOffered()}
-          <Menu.Item onSelect={() => void analyseFolder(e)}
-            ><AudioLinesIcon />Analyse folder</Menu.Item>
+        {#if write && analyzerOffered()}
+          <Menu.Item onSelect={() => void analyzeFolder(e)}
+            ><AudioLinesIcon />Analyze folder</Menu.Item>
         {/if}
       {/if}
       <Menu.Item onSelect={() => void copyText(e.path)}><CopyIcon />Copy path</Menu.Item>
@@ -527,14 +527,14 @@
   </Tooltip>
 {/snippet}
 
-{#if analysing}
-  {@const e = analysing.entry}
+{#if analyzing}
+  {@const e = analyzing.entry}
   <AnalysisDrawer
     target={{ kind: "file", root, path: e.path }}
     track={fileTrack(root, e.path)}
     name={e.name}
-    start={analysing.start}
-    onclose={() => (analysing = null)}>
+    start={analyzing.start}
+    onclose={() => (analyzing = null)}>
     {#snippet actions()}
       {#if isAudio(e.name)}
         {@render tool("Preview", PlayIcon, () => preview(e))}

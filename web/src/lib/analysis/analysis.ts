@@ -7,7 +7,7 @@ export type Report = Schemas["AudioAnalysis"];
 export type Layout = Schemas["SpectrogramLayout"];
 export type Guide = Schemas["GuideLine"];
 export type Job = Schemas["AnalysisJob"];
-export type Judgement = Schemas["Judgment"];
+export type Judgment = Schemas["Judgment"];
 export type Scale = Layout["scale"];
 
 /** The text shown with every spectrogram and every reading */
@@ -66,8 +66,8 @@ export const queue = (t: Target, force = false) =>
         })
   );
 
-/** Records the user's judgement of a target, or takes it away with `null` */
-export const judge = (t: Target, verdict: Judgement | null, note: string) => {
+/** Records the user's judgment of a target, or takes it away with `null` */
+export const judge = (t: Target, verdict: Judgment | null, note: string) => {
   if (verdict === null) {
     return call(() =>
       t.kind === "file"
@@ -114,5 +114,5 @@ export const FLAGS: Record<Report["flags"][number], string> = {
   bit_padded: "Padded: the samples use fewer bits than the format holds"
 };
 
-/** The judgement in words */
-export const JUDGEMENTS: Record<Judgement, string> = { legit: "Genuine", fake: "Fake" };
+/** The judgment in words */
+export const JUDGMENTS: Record<Judgment, string> = { legit: "Genuine", fake: "Fake" };

@@ -151,7 +151,7 @@
 
 /* shadows refer to these so dark mode can swap them, tailwind inlines theme shadows otherwise */
 :root {
-  /* the accent's hue, which every accent colour in both themes takes; the colour is the owner's
+  /* the accent's hue, which every accent color in both themes takes; the color is the owner's
      to choose, so choosing it is this one line */
   --accent-hue: 252;
   --elevation-card: 0 1px 2px 0 oklch(0.2 0.01 255 / 0.04), 0 1px 3px 0 oklch(0.2 0.01 255 / 0.03);
@@ -396,7 +396,7 @@
   }
 }
 
-/* the chart library's colours from the page's tokens, so its axes, grid and tooltips follow the theme */
+/* the chart library's colors from the page's tokens, so its axes, grid and tooltips follow the theme */
 .lc-root-container,
 .lc-tooltip-root {
   --color-primary: var(--color-accent);

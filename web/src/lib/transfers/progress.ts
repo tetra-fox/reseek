@@ -1,6 +1,6 @@
 import { isActive, isRetryable, isSucceeded, type Transfer } from "./states";
 
-/** How far a group of transfers has come, counting those still wanted: not failed or cancelled */
+/** How far a group of transfers has come, counting those still wanted: not failed or canceled */
 export type Progress = {
   /** bytes moved, a finished file counting whole */
   moved: number;

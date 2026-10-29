@@ -1,7 +1,7 @@
 import type { Unit } from "./chart";
 import type { Point } from "./reports";
 
-/** A line of the history chart: what it plots, its name, unit and colour token */
+/** A line of the history chart: what it plots, its name, unit and color token */
 export type Series = {
   key: Exclude<keyof Point, "timestamp">;
   name: string;

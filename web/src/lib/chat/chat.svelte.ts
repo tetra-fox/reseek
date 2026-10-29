@@ -89,7 +89,7 @@ class Chat {
     return n;
   }
 
-  /** The unread room mentions, which turn the badge to the accent colour */
+  /** The unread room mentions, which turn the badge to the accent color */
   get totalMentions(): number {
     return this.unread?.totalMentions ?? this.rooms.rows.reduce((n, r) => n + r.mentions, 0);
   }

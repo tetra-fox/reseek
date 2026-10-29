@@ -12,13 +12,13 @@ test("a room reads like a chat: names, actions, links and the wall", async ({ pa
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/room.png` });
   // the breadcrumb names the room
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("#indie");
-  // bob's two lines are one group under one name, coloured the same everywhere
+  // bob's two lines are one group under one name, colored the same everywhere
   await expect(log.getByRole("link", { name: "bob", exact: true })).toHaveCount(1);
-  const colour = await log
+  const color = await log
     .getByRole("link", { name: "bob", exact: true })
     .evaluate((a) => getComputedStyle(a).color);
   const listed = page.getByRole("grid", { name: "Users in the room" });
-  await expect(listed.getByRole("link", { name: "bob", exact: true })).toHaveCSS("color", colour);
+  await expect(listed.getByRole("link", { name: "bob", exact: true })).toHaveCSS("color", color);
   // a name takes only its text's width: its menu button takes no room until it shows
   const widths = await log
     .getByRole("link", { name: "bob", exact: true })

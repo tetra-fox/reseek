@@ -3,7 +3,7 @@ import { getDirectoryName } from "#lib/format.js";
 /**
  * A folder of a tree built from paths: the items directly in it, the folders under it, and what
  * it holds counting everything below. A chain of folders that hold nothing but the next one is
- * one node, labelled with the whole chain, so a share's `@@abc\Music\Artist` doesn't take three
+ * one node, labeled with the whole chain, so a share's `@@abc\Music\Artist` doesn't take three
  * levels before anything shows
  */
 export type FolderNode<T> = {

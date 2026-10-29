@@ -43,9 +43,9 @@
     onremove: () => void;
     onblock: (deny: boolean) => void;
     /** the drawer opened at the file's analysis, which starts one when the file has none */
-    analyse?: boolean;
+    analyze?: boolean;
     /** moves to the file's analysis and starts one when the file has none */
-    onanalyse: () => void;
+    onanalyze: () => void;
   };
 
   let {
@@ -57,8 +57,8 @@
     onstep,
     onremove,
     onblock,
-    analyse = false,
-    onanalyse
+    analyze = false,
+    onanalyze
   }: Props = $props();
 
   let history = $state.raw<Schemas["TransferStateChange"][] | null>(null);
@@ -92,11 +92,11 @@
   let analysis = $state<HTMLElement | null>(null);
   /** Shows the analysis when the drawer was asked for it, once it is on the page */
   const reveal = () => {
-    if (analyse) analysis?.scrollIntoView({ block: "start" });
+    if (analyze) analysis?.scrollIntoView({ block: "start" });
   };
   // asked for the analysis while the drawer is open, the drawer moves to it
   $effect(() => {
-    if (analyse) untrack(reveal);
+    if (analyze) untrack(reveal);
   });
 
   const user = $derived(users.get(t.username));
@@ -160,7 +160,7 @@
             ><EllipsisIcon /></Button>
         {/snippet}
       </Menu.Trigger>
-      <RowMenu transfer={t} {direction} {around} {onremove} {onblock} {onanalyse} />
+      <RowMenu transfer={t} {direction} {around} {onremove} {onblock} {onanalyze} />
     </Menu.Root>
     <Button variant="ghost" size="icon-sm" aria-label="Close details" onclick={onclose}
       ><XIcon /></Button>
@@ -265,7 +265,7 @@
         <AnalysisPanel
           target={{ kind: "download", username: t.username, id: t.id }}
           track={downloadTrack(t)}
-          start={analyse}
+          start={analyze}
           onshown={reveal} />
       </section>
     {/if}

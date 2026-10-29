@@ -11,7 +11,7 @@
   import { app } from "#lib/app.svelte.js";
   import { Busy } from "#lib/busy.svelte.js";
   import { clock } from "#lib/clock.svelte.js";
-  import { nameColour } from "#lib/colours.js";
+  import { nameColor } from "#lib/colors.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
@@ -94,7 +94,7 @@
   <div class="flex items-center gap-3">
     <Avatar {name} {pictureUrl} src={draft?.src} class="size-12" />
     <div class="flex min-w-0 flex-col">
-      <span class="truncate font-mono font-medium" style:color={nameColour(name)}>{name}</span>
+      <span class="truncate font-mono font-medium" style:color={nameColor(name)}>{name}</span>
       <span class="flex items-center gap-1.5 text-xs text-fg-muted">
         <span class={["size-2 rounded-full", presence.dot]}></span>
         {presence.text}

@@ -66,15 +66,15 @@ const clickAt = async (plot: Locator, across: number) => {
   await plot.click({ position: { x: r.x + across * r.width, y: r.y + r.height / 2 } });
 };
 
-test("analyzes a finished download from its row and keeps a judgement", async ({ page }) => {
+test("analyzes a finished download from its row and keeps a judgment", async ({ page }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);
   await login(page, "/downloads");
   const table = page.getByRole("grid", { name: "Downloads" });
   // the analyzed download says so in its row, muted, with the reading in its tooltip
-  await expect(table.getByText("Analysed", { exact: true })).toHaveCount(1);
+  await expect(table.getByText("Analyzed", { exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
 
   const drawer = page.getByRole("complementary", { name: "Transfer details" });
   await expect(drawer.getByRole("heading", { name: "Analysis" })).toBeInViewport();
@@ -91,16 +91,16 @@ test("analyzes a finished download from its row and keeps a judgement", async ({
   await legend.click();
   await expect.poll(() => pixel(plot, 0.5, guide)).toEqual([90, 210, 255]);
 
-  // the user's judgement, saved with its note and a tick
+  // the user's judgment, saved with its note and a tick
   await drawer.getByRole("radio", { name: "Fake" }).click();
   await drawer.getByLabel("Note").fill("sounds like an old rip");
-  await drawer.getByRole("button", { name: "Save judgement" }).click();
+  await drawer.getByRole("button", { name: "Save judgment" }).click();
   await expect(drawer.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
-  await expect(drawer.getByRole("button", { name: "Save judgement" })).toBeDisabled();
-  // the row now shows the user's own judgement
+  await expect(drawer.getByRole("button", { name: "Save judgment" })).toBeDisabled();
+  // the row now shows the user's own judgment
   await expect(table.getByText("Fake", { exact: true })).toBeVisible();
 
-  // the analyzer's reading, folded away and labelled as its own
+  // the analyzer's reading, folded away and labeled as its own
   await drawer.getByText("The analyzer's reading").click();
   await expect(drawer.getByText("Likely a transcode")).toBeVisible();
 
@@ -147,7 +147,7 @@ test("analyzes a finished download from its row and keeps a judgement", async ({
   await expect(drawer.getByText("Spectrum at 0:10")).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
   await expect(scales.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
 
   // and the whole file can be seen across the screen, the cursor where the drawer has it
@@ -171,7 +171,7 @@ test("dragging the cursor on the waveform moves it on the spectrogram and the sp
   await fakeAnalysis(page);
   await login(page, "/downloads");
   await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
   const drawer = page.getByRole("complementary", { name: "Transfer details" });
   const plot = drawer.getByRole("slider", { name: "Cursor" });
   const spectrum = drawer
@@ -209,7 +209,7 @@ test("zooms around the pointer, pans, and loads the detail in view", async ({ pa
   });
   await login(page, "/downloads");
   await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
   const drawer = page.getByRole("complementary", { name: "Transfer details" });
   const plot = drawer.getByRole("slider", { name: "Cursor" });
   await expect(plot).toHaveAttribute("data-view", "0.000 300.000");
@@ -257,7 +257,7 @@ test("pans a zoomed five-minute file at sixty frames a second", async ({ page })
   await fakeAnalysis(page, { duration: 300 });
   await login(page, "/downloads");
   await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
   const drawer = page.getByRole("complementary", { name: "Transfer details" });
   await drawer.getByRole("button", { name: "Open large" }).click();
   const plot = page.getByRole("dialog", { name: "2.flac" }).getByRole("slider", { name: "Cursor" });
@@ -323,7 +323,7 @@ test("the cursor follows playback and a click seeks it", async ({ page }) => {
   );
   await login(page, "/downloads");
   await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
   const drawer = page.getByRole("complementary", { name: "Transfer details" });
   const plot = drawer.getByRole("slider", { name: "Cursor" });
   await plot.focus();
@@ -344,7 +344,7 @@ test("the cursor follows playback and a click seeks it", async ({ page }) => {
   expect(await now()).toBe(paused);
 });
 
-test("a report an older version made asks to be analysed again", async ({ page }) => {
+test("a report an older version made asks to be analyzed again", async ({ page }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page, { stale: true });
   const queued: string[] = [];
@@ -353,15 +353,15 @@ test("a report an older version made asks to be analysed again", async ({ page }
   });
   await login(page, "/downloads");
   await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
   const drawer = page.getByRole("complementary", { name: "Transfer details" });
   await expect(
     drawer.getByText("This was analyzed by an older version of reseek. Analyze again to see it.")
   ).toBeVisible();
   await expect(drawer.getByRole("slider", { name: "Cursor" })).toHaveCount(0);
-  // the judgement is the user's and outlives the report
-  await expect(drawer.getByRole("radiogroup", { name: "Your judgement" })).toBeVisible();
-  // asked to analyse, it is queued as a file with no report would be
+  // the judgment is the user's and outlives the report
+  await expect(drawer.getByRole("radiogroup", { name: "Your judgment" })).toBeVisible();
+  // asked to analyze, it is queued as a file with no report would be
   await expect.poll(() => queued.length).toBe(1);
   await drawer.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect.poll(() => queued.length).toBe(2);
@@ -376,24 +376,24 @@ test("filters downloads by their analysis, by chip and by word", async ({ page }
   await expect(shown("3.flac")).toBeVisible();
 
   const analysis = page.getByRole("group", { name: "Analysis" });
-  await analysis.getByRole("button", { name: /^Analysed/ }).click();
+  await analysis.getByRole("button", { name: /^Analyzed/ }).click();
   await expect(shown("2.flac")).toBeVisible();
   await expect(shown("3.flac")).toHaveCount(0);
-  // a finished flac without a report is waiting to be analysed; the running one is not
-  await analysis.getByRole("button", { name: /^Not analysed/ }).click();
+  // a finished flac without a report is waiting to be analyzed; the running one is not
+  await analysis.getByRole("button", { name: /^Not analyzed/ }).click();
   await expect(shown("3.flac")).toBeVisible();
   await expect(shown("2.flac")).toHaveCount(0);
   await expect(shown("1.flac")).toHaveCount(0);
-  await analysis.getByRole("button", { name: /^Not analysed/ }).click();
+  await analysis.getByRole("button", { name: /^Not analyzed/ }).click();
 
-  await page.getByRole("searchbox", { name: "Filter" }).fill("analysed:yes");
+  await page.getByRole("searchbox", { name: "Filter" }).fill("analyzed:yes");
   await expect(shown("2.flac")).toBeVisible();
   await expect(shown("3.flac")).toHaveCount(0);
   await page.getByRole("searchbox", { name: "Filter" }).fill("marked:fake");
   await expect(shown("2.flac")).toHaveCount(0);
 });
 
-test("analyses a file and queues a folder from the Files screen", async ({ page }) => {
+test("analyzes a file and queues a folder from the Files screen", async ({ page }) => {
   await fakeAnalysis(page);
   const at = "2026-10-27T18:00:00Z";
   const file = (fullName: string) => ({
@@ -454,7 +454,7 @@ test("analyses a file and queues a folder from the Files screen", async ({ page 
       }
       // the folder's files have no report yet
       if (path.startsWith("Album/")) {
-        return route.fulfill({ status: 404, json: { error: "the file has not been analysed" } });
+        return route.fulfill({ status: 404, json: { error: "the file has not been analyzed" } });
       }
       return route.fallback();
     }
@@ -479,24 +479,24 @@ test("analyses a file and queues a folder from the Files screen", async ({ page 
   await login(page, "/system/files");
   await expect(page.getByRole("button", { name: "More for notes.txt" })).toBeVisible();
   await page.getByRole("button", { name: "More for notes.txt" }).click();
-  await expect(page.getByRole("menuitem", { name: "Analyse" })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Analyze" })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
-  // the analysed file says so, and the filter by the analyser's reading finds it
+  // the analyzed file says so, and the filter by the analyzer's reading finds it
   const files = page.getByRole("treegrid");
-  await expect(files.getByText("Analysed", { exact: true })).toBeVisible();
+  await expect(files.getByText("Analyzed", { exact: true })).toBeVisible();
   const show = page.getByRole("combobox", { name: "Show" });
   await show.click();
-  await page.getByRole("option", { name: "Analyser: likely a transcode" }).click();
+  await page.getByRole("option", { name: "Analyzer: likely a transcode" }).click();
   await expect(page.getByRole("button", { name: "More for track.flac" })).toBeVisible();
   await show.click();
-  await page.getByRole("option", { name: "Not analysed" }).click();
+  await page.getByRole("option", { name: "Not analyzed" }).click();
   await expect(page.getByRole("button", { name: "More for track.flac" })).toHaveCount(0);
   await show.click();
   await page.getByRole("option", { name: "All files" }).click();
 
   await page.getByRole("button", { name: "More for track.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
   const drawer = page.getByRole("complementary", { name: "Analysis" });
   // queued by another browser, it shows its place in the queue
   await expect(drawer.getByText("Waiting for the analyzer")).toBeVisible();
@@ -508,15 +508,15 @@ test("analyses a file and queues a folder from the Files screen", async ({ page 
   await drawer.getByRole("button", { name: "Close the analysis" }).click();
 
   await page.getByRole("button", { name: "More for Album" }).click();
-  await page.getByRole("menuitem", { name: "Analyse folder" }).click();
+  await page.getByRole("menuitem", { name: "Analyze folder" }).click();
   await expect(page.getByText("2 files queued for analysis")).toBeVisible();
   expect(queued.map((q) => q.path)).toEqual(["Album/01.flac", "Album/CD2/02.wav"]);
 
-  // a file the folder queued shows its place in the queue, not an offer to analyse it
+  // a file the folder queued shows its place in the queue, not an offer to analyze it
   await page.getByRole("button", { name: "More for Album" }).click();
   await page.getByRole("menuitem", { name: "Open" }).click();
   await page.getByRole("button", { name: "More for 01.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
   await expect(drawer.getByText("Waiting for the analyzer")).toBeVisible();
   await expect(drawer.getByRole("button", { name: "Analyze", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Analysis queue" })).toBeVisible();

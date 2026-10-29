@@ -77,11 +77,16 @@ const groupUpload = (prefix: string, group: string): Field[] => [
   ...limits(`${prefix}.upload`, group)
 ];
 
-/** The four outcome ages of one transfer direction's retention */
+/** The four outcome ages of one transfer direction's retention, by option key and label word */
 const transferRetention = (direction: "upload" | "download"): Field[] =>
-  ["succeeded", "errored", "cancelled", "failed"].map((outcome) => ({
+  [
+    ["succeeded", "succeeded"],
+    ["errored", "errored"],
+    ["cancelled", "canceled"],
+    ["failed", "failed"]
+  ].map(([outcome, word]) => ({
     key: `retention.transfers.${direction}.${outcome}`,
-    label: `${direction === "upload" ? "Uploads" : "Downloads"} ${outcome}`,
+    label: `${direction === "upload" ? "Uploads" : "Downloads"} ${word}`,
     placeholder: "kept"
   }));
 
@@ -462,7 +467,7 @@ export const sections: Section[] = [
       },
       { key: "logging.targets", label: "Levels by module" },
       { key: "logger.no_disk", label: "No log files" },
-      { key: "logger.no_color", label: "No colour" },
+      { key: "logger.no_color", label: "No color" },
       { key: "logger.loki", label: "Loki URL" }
     ]
   },

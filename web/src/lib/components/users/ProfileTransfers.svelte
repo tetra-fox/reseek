@@ -22,7 +22,7 @@
   import { live } from "#lib/live/live.svelte.js";
   import { call } from "#lib/request.js";
   import { act, storeOf } from "#lib/transfers/actions.js";
-  import { isActive, isCancellable, stateChip, type Transfer } from "#lib/transfers/states.js";
+  import { isActive, isCancelable, stateChip, type Transfer } from "#lib/transfers/states.js";
   import { uploads } from "#lib/transfers/transfers.svelte.js";
 
   import { blocking } from "./block.svelte";
@@ -102,7 +102,7 @@
   /** Cancels the user's unfinished uploads listed here, then asks to block them */
   const denyAndBlock = async () => {
     const ids = shown
-      .filter((t) => t.direction === "Upload" && isCancellable(t.state))
+      .filter((t) => t.direction === "Upload" && isCancelable(t.state))
       .map((t) => t.id);
     await act(uploads, "cancel", ids);
     blocking.ask(username, ["uploads"]);
@@ -205,7 +205,7 @@
 <ConfirmDialog
   bind:open={confirmOpen}
   title="Remove a running transfer?"
-  body="The transfer is cancelled first. The file on disk is kept."
+  body="The transfer is canceled first. The file on disk is kept."
   confirm="Remove"
   danger
   onconfirm={() => removing && void act(storeOf(removing), "remove", [removing.id])} />

@@ -5,7 +5,7 @@ export const FRESH_MS = 600;
 
 /**
  * Tells rows that arrived while a list was on screen from rows that were there all along, so a
- * new row can make an entrance while one that only scrolled into a virtualised list's window
+ * new row can make an entrance while one that only scrolled into a virtualized list's window
  * doesn't. The first keys seen are the list as it opened and count as there all along
  */
 export class Arrivals {

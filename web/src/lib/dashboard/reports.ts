@@ -201,8 +201,8 @@ export const merged = <T>(
 export const shortDirectory = (path: string) =>
   path.split(/[\\/]/).filter(Boolean).slice(-2).join("/");
 
-/** How the transfers of one direction ended in the range: done, failed, or cancelled here */
-export type Outcome = { direction: string; succeeded: number; failed: number; cancelled: number };
+/** How the transfers of one direction ended in the range: done, failed, or canceled here */
+export type Outcome = { direction: string; succeeded: number; failed: number; canceled: number };
 
 /**
  * Each direction's finished transfers by how they ended, for the outcome bars. A timeout, an
@@ -222,5 +222,5 @@ export const outcomes = (summary: Schemas["SummaryReport"]): Outcome[] =>
       (n, s) => n + (d[s]?.count ?? 0),
       0
     ),
-    cancelled: d.Cancelled?.count ?? 0
+    canceled: d.Cancelled?.count ?? 0
   }));

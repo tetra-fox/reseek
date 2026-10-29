@@ -90,7 +90,7 @@ export class Transfers {
   };
 
   /**
-   * Removes transfers once their Undo has passed, cancelling running ones then; until then they
+   * Removes transfers once their Undo has passed, canceling running ones then; until then they
    * only leave the screen. `all` removes every completed one with one call instead
    */
   removeLater = (ids: string[], { all = false } = {}) => {

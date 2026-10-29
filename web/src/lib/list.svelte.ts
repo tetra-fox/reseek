@@ -26,7 +26,7 @@ export type ListSpec<L> = {
   layer?: () => boolean;
   /**
    * Whether the line at `index` is rendered now, `element` being the one a focused control is
-   * in; every line by default. A virtualised list renders a window of its lines
+   * in; every line by default. A virtualized list renders a window of its lines
    */
   rendered?: (index: number, element?: HTMLElement) => boolean;
   /** brings the line at `index` into view; by default its element scrolls to the nearest edge */
@@ -191,7 +191,7 @@ export class ListControl<L> {
 
   /**
    * Gives focus back to the container when the control that has it is in a line about to stop
-   * being rendered. For a virtualised list's scroll; a control the browser scrolled into view
+   * being rendered. For a virtualized list's scroll; a control the browser scrolled into view
    * keeps it
    */
   scrolled() {

@@ -70,7 +70,7 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
     return right > innerWidth + 0.5 ? "runs off the screen" : null;
   });
   expect(bar, `${what}: the status bar ${bar}`).toBeNull();
-  // a figure is never cut or painted over its neighbour, a line of a list fits the height it is
+  // a figure is never cut or painted over its neighbor, a line of a list fits the height it is
   // placed at, a header's label stays in its cell, and a name keeps room for a few letters
   const cells = await page.locator("[data-content]").evaluate((area) => {
     const shown = (e: Element) => e.getClientRects().length > 0;
@@ -185,7 +185,7 @@ const everyScreen = async (page: Page) => {
   await expect(page.getByRole("button", { name: "Sort: Speed" })).toBeVisible();
   // a finished download's analysis, with its reading open, fits the drawer
   await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
   await page.getByText("The analyzer's reading", { exact: true }).click();
   await page.getByRole("radio", { name: "Mel" }).click();
   await expect(page.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
@@ -288,7 +288,7 @@ test.describe("at a large text size", () => {
         await page.getByRole("radio", { name: "Cards" }).click();
         await fits(page, "/downloads", shows("3.flac"));
         await page.getByRole("button", { name: "More for 2.flac" }).click();
-        await page.getByRole("menuitem", { name: "Analyse" }).click();
+        await page.getByRole("menuitem", { name: "Analyze" }).click();
         await page.getByText("The analyzer's reading", { exact: true }).click();
         await drawerHolds(page, "Transfer details");
         await page.keyboard.press("Escape");

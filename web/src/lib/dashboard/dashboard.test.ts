@@ -115,7 +115,7 @@ describe("the dashboard's reports", () => {
 });
 
 describe("the outcome bars", () => {
-  it("count each direction's transfers as done, failed or cancelled", () => {
+  it("count each direction's transfers as done, failed or canceled", () => {
     const n = (count: number) => ({ count }) as never;
     expect(
       outcomes({
@@ -124,8 +124,8 @@ describe("the outcome bars", () => {
         distinctUsers: 0
       } as never)
     ).toEqual([
-      { direction: "Downloads", succeeded: 10, failed: 3, cancelled: 3 },
-      { direction: "Uploads", succeeded: 0, failed: 5, cancelled: 0 }
+      { direction: "Downloads", succeeded: 10, failed: 3, canceled: 3 },
+      { direction: "Uploads", succeeded: 0, failed: 5, canceled: 0 }
     ]);
   });
 });

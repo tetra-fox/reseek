@@ -27,7 +27,7 @@
 
   let view: EditorView | null = null;
 
-  // colours from the page's tokens, so the editor follows the light and dark themes
+  // colors from the page's tokens, so the editor follows the light and dark themes
   const theme = EditorView.theme({
     "&": { backgroundColor: "var(--color-surface)", color: "var(--color-fg)", height: "100%" },
     ".cm-content": { fontFamily: "var(--font-mono)", caretColor: "var(--color-fg)" },

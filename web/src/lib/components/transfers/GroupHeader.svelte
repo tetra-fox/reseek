@@ -25,12 +25,7 @@
   import { act, folderOf, openFolder } from "#lib/transfers/actions.js";
   import { encodePath } from "#lib/transfers/content.js";
   import { groupProgress } from "#lib/transfers/progress.js";
-  import {
-    isCancellable,
-    isRetryable,
-    isSucceeded,
-    type Direction
-  } from "#lib/transfers/states.js";
+  import { isCancelable, isRetryable, isSucceeded, type Direction } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Group } from "#lib/transfers/view.js";
   import { quota, waits } from "#lib/transfers/why.svelte.js";
@@ -50,7 +45,7 @@
     onremove: () => void;
     /** cancels the group's transfers, asking first when any is moving bytes */
     oncancel: () => void;
-    /** blocks the user, asking first; with `deny` their unfinished uploads are cancelled first */
+    /** blocks the user, asking first; with `deny` their unfinished uploads are canceled first */
     onblock: (deny: boolean) => void;
   };
 
@@ -116,7 +111,7 @@
     {
       label: "Cancel the group",
       icon: XIcon,
-      shown: () => write && list.some((t) => isCancellable(t.state)),
+      shown: () => write && list.some((t) => isCancelable(t.state)),
       run: () => oncancel()
     },
     { label: "Remove the group", icon: Trash2Icon, shown: () => write, run: () => onremove() },

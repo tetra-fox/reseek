@@ -14,8 +14,8 @@ import { type Mark, markOf } from "./marks";
 const PAGE = 500;
 
 /**
- * The mark of every analysed file, for lists to show a chip and filter by, read once while a list
- * that shows them is open and then only what was analysed since
+ * The mark of every analyzed file, for lists to show a chip and filter by, read once while a list
+ * that shows them is open and then only what was analyzed since
  */
 class Marks {
   #files = new SvelteMap<string, Mark>();
@@ -41,7 +41,7 @@ class Marks {
     };
   }
 
-  /** Takes in a report read on its own, such as one whose judgement just changed */
+  /** Takes in a report read on its own, such as one whose judgment just changed */
   put(report: Report) {
     const mark = markOf(report);
     this.#files.set(`${report.root}:${report.relativePath}`, mark);
@@ -52,12 +52,12 @@ class Marks {
     }
   }
 
-  /** The mark of a file under a root, if it has been analysed */
+  /** The mark of a file under a root, if it has been analyzed */
   file(root: Root, path: string): Mark | undefined {
     return this.#files.get(`${root}:${path}`);
   }
 
-  /** The mark of a download's file, if it has been analysed */
+  /** The mark of a download's file, if it has been analyzed */
   download(id: string): Mark | undefined {
     return this.#downloads.get(id);
   }
@@ -92,15 +92,15 @@ class Marks {
 
 export const marks = new Marks();
 
-/** The extensions the analyser is offered for, lowercased, as the options name them */
+/** The extensions the analyzer is offered for, lowercased, as the options name them */
 const extensions = $derived.by(() => {
   const listed = fields(fields(app.options).analysis).extensions;
   return new Set(Array.isArray(listed) ? listed.map((x) => String(x).toLowerCase()) : []);
 });
 
-/** Whether the analyser is offered for any kind of file */
-export const analyserOffered = () => extensions.size > 0;
+/** Whether the analyzer is offered for any kind of file */
+export const analyzerOffered = () => extensions.size > 0;
 
-/** Whether the analyser is offered for a file, by its name's extension */
-export const analysable = (name: string) =>
+/** Whether the analyzer is offered for a file, by its name's extension */
+export const analyzable = (name: string) =>
   extensions.has(name.split(".").pop()?.toLowerCase() ?? "");

@@ -119,7 +119,7 @@
 {#if scan?.faulted}
   <Notice kind="warning">The last scan failed. See Logs for details.</Notice>
 {:else if scan?.cancelled}
-  <Notice kind="warning">The last scan was cancelled, so shares may be incomplete.</Notice>
+  <Notice kind="warning">The last scan was canceled, so shares may be incomplete.</Notice>
 {/if}
 <LoadError loader={shares} />
 

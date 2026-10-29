@@ -34,8 +34,8 @@
     expansion: Expansion;
     /** the selected transfers' ids, which the page acts on */
     selected: SvelteSet<string>;
-    /** opens the details drawer, at the file's analysis with `analyse` */
-    ondetails: (t: Transfer, analyse?: boolean) => void;
+    /** opens the details drawer, at the file's analysis with `analyze` */
+    ondetails: (t: Transfer, analyze?: boolean) => void;
     onremove: (transfers: Transfer[]) => void;
     /** removes with the Delete key, which asks first for more than one */
     ondelete: (transfers: Transfer[]) => void;
@@ -274,7 +274,7 @@
             speeds={store.speeds.get(item.transfer.id) ?? []}
             around={item.group?.transfers ?? [item.transfer]}
             onselect={(range) => list.tick(item.transfer.id, range)}
-            ondetails={(analyse) => ondetails(item.transfer, analyse)}
+            ondetails={(analyze) => ondetails(item.transfer, analyze)}
             onremove={() => onremove([item.transfer])}
             onblock={(deny) => onblock(item.transfer.username, deny)} />
         {/if}

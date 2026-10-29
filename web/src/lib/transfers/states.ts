@@ -16,7 +16,7 @@ export const isRetryable = (state: string) =>
   state.includes("Completed") && state !== "Completed, Succeeded";
 
 /** It is waiting or moving, so it can be stopped */
-export const isCancellable = (state: string) =>
+export const isCancelable = (state: string) =>
   [
     "InProgress",
     "Requested",
@@ -33,9 +33,13 @@ export const isQueued = (state: string) => state.includes("Queued");
 
 export const isSucceeded = (state: string) => state === "Completed, Succeeded";
 
-const ENDINGS: Record<string, string> = { Errored: "failed", TimedOut: "timed out" };
+const ENDINGS: Record<string, string> = {
+  Errored: "failed",
+  TimedOut: "timed out",
+  Cancelled: "canceled"
+};
 
-/** How an ended transfer's state reads in a sentence: "failed", "timed out", "cancelled" */
+/** How an ended transfer's state reads in a sentence: "failed", "timed out", "canceled" */
 export const endingText = (state: string) => {
   const word = state.replace("Completed, ", "");
   return ENDINGS[word] ?? word.toLowerCase();
@@ -50,15 +54,15 @@ export const STATE_CHIPS = [
   { id: "requested", label: "Requested", test: (s: string) => s === "Requested" },
   { id: "completed", label: "Succeeded", test: isSucceeded },
   { id: "errored", label: "Failed", test: (s: string) => ERRORED.includes(s) },
-  { id: "cancelled", label: "Cancelled", test: (s: string) => s === "Completed, Cancelled" }
+  { id: "canceled", label: "Canceled", test: (s: string) => s === "Completed, Cancelled" }
 ] as const;
 
 export type ChipId = (typeof STATE_CHIPS)[number]["id"];
 
-/** The colour a state is shown in */
+/** The color a state is shown in */
 export type Tone = "accent" | "success" | "info" | "neutral" | "warning" | "danger";
 
-/** How a transfer's state reads in its chip, its colour, and the full text for its tooltip */
+/** How a transfer's state reads in its chip, its color, and the full text for its tooltip */
 export const stateChip = (t: Transfer): { text: string; tone: Tone; title: string | null } => {
   const tries = t.attempts > 1 ? ` ×${t.attempts}` : "";
   const why = t.exception ?? null;
@@ -86,6 +90,7 @@ export const stateChip = (t: Transfer): { text: string; tone: Tone; title: strin
     return { text: reason("Rejected") + tries, tone: "danger", title: why };
   if (s === "Completed, TimedOut")
     return { text: reason("Timed out") + tries, tone: "danger", title: why };
+  if (s === "Completed, Cancelled") return { text: `Canceled${tries}`, tone: "danger", title: why };
   if (s.startsWith("Completed, ")) {
     return { text: s.slice("Completed, ".length) + tries, tone: "danger", title: why };
   }
@@ -103,7 +108,7 @@ export const rowActions = (t: Transfer, direction: Direction) => {
     openFolder: download && succeeded && !!t.localPath,
     copyLocalPath: !!t.localPath,
     retry: download && isRetryable(s),
-    cancel: isCancellable(s),
+    cancel: isCancelable(s),
     remove: true,
     redownload: download && isRemovable(s),
     queuePosition: download && s === "Queued, Remotely",

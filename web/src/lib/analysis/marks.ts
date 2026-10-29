@@ -1,13 +1,13 @@
-import { type Judgement, JUDGEMENTS, type Report, VERDICTS } from "./analysis";
+import { type Judgment, JUDGMENTS, type Report, VERDICTS } from "./analysis";
 
-/** What a list shows of a file's analysis: the user's judgement, or else the analyser's reading */
+/** What a list shows of a file's analysis: the user's judgment, or else the analyzer's reading */
 export type Mark = {
   verdict: Report["verdict"];
-  /** the encoder profile the analyser matched, such as `mp3 ~128 kbps` */
+  /** the encoder profile the analyzer matched, such as `mp3 ~128 kbps` */
   profile: string | null;
-  judgement: Judgement | null;
+  judgment: Judgment | null;
   note: string | null;
-  /** analysed by an older version, whose report this one cannot show */
+  /** analyzed by an older version, whose report this one cannot show */
   stale: boolean;
 };
 
@@ -15,41 +15,41 @@ export type Mark = {
 export const markOf = (r: Report): Mark => ({
   verdict: r.verdict,
   profile: r.encoderGuess?.profile ?? null,
-  judgement: r.override?.verdict ?? null,
+  judgment: r.override?.verdict ?? null,
   note: r.override?.note ?? null,
   stale: r.stale
 });
 
 /** What a mark's chip says when it is pointed at */
 export const markHint = (m: Mark) => {
-  if (m.judgement) {
-    const marked = `You marked this ${JUDGEMENTS[m.judgement].toLowerCase()}`;
+  if (m.judgment) {
+    const marked = `You marked this ${JUDGMENTS[m.judgment].toLowerCase()}`;
     return m.note ? `${marked}: ${m.note}` : marked;
   }
-  if (m.stale) return "Analysed by an older version of reseek";
+  if (m.stale) return "Analyzed by an older version of reseek";
   const reading = VERDICTS[m.verdict].toLowerCase();
-  return `The analyser's reading: ${reading}${m.profile ? `, ${m.profile}` : ""}`;
+  return `The analyzer's reading: ${reading}${m.profile ? `, ${m.profile}` : ""}`;
 };
 
-/** A filter over files by their analysis; `reading:` ones go by the analyser's verdict */
+/** A filter over files by their analysis; `reading:` ones go by the analyzer's verdict */
 export type MarkFilter =
   | "fake"
   | "genuine"
-  | "analysed"
-  | "unanalysed"
+  | "analyzed"
+  | "unanalyzed"
   | `reading:${Report["verdict"]}`;
 
 /** The filters offered wherever files are listed */
 export const MARK_FILTERS: { id: MarkFilter; label: string }[] = [
   { id: "fake", label: "Marked fake" },
-  { id: "analysed", label: "Analysed" },
-  { id: "unanalysed", label: "Not analysed" }
+  { id: "analyzed", label: "Analyzed" },
+  { id: "unanalyzed", label: "Not analyzed" }
 ];
 
-/** The filters by the analyser's reading, offered on the Files screen */
+/** The filters by the analyzer's reading, offered on the Files screen */
 export const READING_FILTERS: { id: MarkFilter; label: string }[] = (
   Object.keys(VERDICTS) as Report["verdict"][]
-).map((v) => ({ id: `reading:${v}`, label: `Analyser: ${VERDICTS[v].toLowerCase()}` }));
+).map((v) => ({ id: `reading:${v}`, label: `Analyzer: ${VERDICTS[v].toLowerCase()}` }));
 
 /** Every filter the Files screen offers */
 export const FILE_FILTERS: { id: MarkFilter; label: string }[] = [
@@ -59,19 +59,19 @@ export const FILE_FILTERS: { id: MarkFilter; label: string }[] = [
 ];
 
 /**
- * Whether a file passes a filter, given its mark if it has been analysed and whether the analyser
- * is offered for its kind of file; a file the analyser is not offered for is never "not analysed"
+ * Whether a file passes a filter, given its mark if it has been analyzed and whether the analyzer
+ * is offered for its kind of file; a file the analyzer is not offered for is never "not analyzed"
  */
-export const passes = (filter: MarkFilter, mark: Mark | undefined, analysable: boolean) => {
+export const passes = (filter: MarkFilter, mark: Mark | undefined, analyzable: boolean) => {
   switch (filter) {
     case "fake":
-      return mark?.judgement === "fake";
+      return mark?.judgment === "fake";
     case "genuine":
-      return mark?.judgement === "legit";
-    case "analysed":
+      return mark?.judgment === "legit";
+    case "analyzed":
       return mark !== undefined;
-    case "unanalysed":
-      return mark === undefined && analysable;
+    case "unanalyzed":
+      return mark === undefined && analyzable;
     default:
       return mark?.verdict === filter.slice("reading:".length);
   }
@@ -81,9 +81,9 @@ export const passes = (filter: MarkFilter, mark: Mark | undefined, analysable: b
 const TOKENS = new Map<string, MarkFilter>([
   ["marked:fake", "fake"],
   ["marked:genuine", "genuine"],
-  ["analysed:yes", "analysed"],
-  ["analysed:no", "unanalysed"]
+  ["analyzed:yes", "analyzed"],
+  ["analyzed:no", "unanalyzed"]
 ]);
 
-/** The filter a `marked:` or `analysed:` word of the filter language asks for, if it is one */
+/** The filter a `marked:` or `analyzed:` word of the filter language asks for, if it is one */
 export const markToken = (token: string) => TOKENS.get(token);

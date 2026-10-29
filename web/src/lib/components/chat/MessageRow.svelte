@@ -8,7 +8,7 @@
   import { actionOf } from "#lib/chat/rich.js";
   import { copyText } from "#lib/clipboard.svelte.js";
   import { clock } from "#lib/clock.svelte.js";
-  import { nameColour } from "#lib/colours.js";
+  import { nameColor } from "#lib/colors.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
@@ -105,7 +105,7 @@
       <!-- an action reads as a sentence: the name starts it unless the header above shows it -->
       <p
         class="cursor-text text-sm leading-5 wrap-anywhere whitespace-pre-wrap text-fg-muted italic">
-        {#if !head}<span class="font-medium not-italic" style:color={nameColour(m.author)}
+        {#if !head}<span class="font-medium not-italic" style:color={nameColor(m.author)}
             >{m.author}</span
           >{" "}{/if}{@render body()}
       </p>

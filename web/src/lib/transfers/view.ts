@@ -6,12 +6,12 @@ import { type ChipId, STATE_CHIPS, type Transfer } from "./states";
 
 export type GroupBy = "user" | "folder" | "batch" | "flat";
 
-/** A transfer's analysis as filters read it: its mark, and whether it could be analysed */
-export type MarkLookup = (t: Transfer) => { mark: Mark | undefined; analysable: boolean };
+/** A transfer's analysis as filters read it: its mark, and whether it could be analyzed */
+export type MarkLookup = (t: Transfer) => { mark: Mark | undefined; analyzable: boolean };
 
 /**
  * The text filter over transfers: `user:`, `folder:` and `ext:` match those parts, `marked:fake`,
- * `marked:genuine`, `analysed:yes` and `analysed:no` the file's analysis read through `marks`
+ * `marked:genuine`, `analyzed:yes` and `analyzed:no` the file's analysis read through `marks`
  * (nothing without it), any other word the username, file name or folder; every token must
  * match. Null for an empty filter
  */
@@ -26,8 +26,8 @@ export const textFilter = (text: string, marks?: MarkLookup): ((t: Transfer) => 
       const byMark = markToken(token);
       if (byMark) {
         if (!marks) return false;
-        const { mark, analysable } = marks(t);
-        return passes(byMark, mark, analysable);
+        const { mark, analyzable } = marks(t);
+        return passes(byMark, mark, analyzable);
       }
       if (token.startsWith("user:")) return user.includes(token.slice(5));
       if (token.startsWith("folder:")) return folder.includes(token.slice(7));

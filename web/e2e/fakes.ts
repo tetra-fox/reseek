@@ -81,7 +81,7 @@ export const fakeChat = async (page: Page) => {
         })),
         tickers: [
           { username: "alice", ticker: "listening to Geogaddi" },
-          { username: "bob", ticker: "sharing the whole BoC catalogue" }
+          { username: "bob", ticker: "sharing the whole BoC catalog" }
         ],
         messages: null
       }
@@ -375,7 +375,7 @@ export const transfer = (
 });
 
 /** The finished download of alice's 2.flac, which `fakeAnalysis` has a report of */
-export const ANALYSED_DOWNLOAD = "2f1ac000-0000-4000-8000-000000000002";
+export const ANALYZED_DOWNLOAD = "2f1ac000-0000-4000-8000-000000000002";
 
 /**
  * Answers the downloads list with alice's two folders, one download running and one done, and
@@ -386,7 +386,7 @@ export const fakeDownloads = async (page: Page) => {
     transfer("@@a\\Music\\One\\1.flac", "InProgress"),
     {
       ...transfer("@@a\\Music\\Two\\2.flac"),
-      id: ANALYSED_DOWNLOAD,
+      id: ANALYZED_DOWNLOAD,
       localPath: "/downloads/alice/Two/2.flac"
     }
   ];
@@ -532,10 +532,10 @@ export const longRoom = async (page: Page, n: number) => {
   await page.route("**/api/v0/conversations**", (route) => route.fulfill({ json: [] }));
 };
 
-/** A report of a 128 kbps transcode `duration` seconds long, with the judgement `override` */
+/** A report of a 128 kbps transcode `duration` seconds long, with the judgment `override` */
 const report = (
   override: unknown,
-  file = { relativePath: "alice/Two/2.flac", transferId: ANALYSED_DOWNLOAD as string | null },
+  file = { relativePath: "alice/Two/2.flac", transferId: ANALYZED_DOWNLOAD as string | null },
   scale = "linear",
   duration = 30.5
 ) => ({
@@ -582,7 +582,7 @@ const report = (
 /**
  * Answers every file's and download's analysis with the report of a transcode `duration` seconds
  * long, its spectrogram, waveform and window spectra and an empty queue, and the list of reports
- * with 2.flac's and track.flac's; a judgement put is kept and read back. With `stale`, a file's
+ * with 2.flac's and track.flac's; a judgment put is kept and read back. With `stale`, a file's
  * report is one an older version made
  */
 export const fakeAnalysis = async (page: Page, { stale = false, duration = 30.5 } = {}) => {
@@ -637,11 +637,11 @@ export const fakeAnalysis = async (page: Page, { stale = false, duration = 30.5 
       if (method === "POST") {
         return route.fulfill({
           status: 409,
-          json: { error: "the file has been analysed already" }
+          json: { error: "the file has been analyzed already" }
         });
       }
       const json = report(override, undefined, "linear", duration);
-      // an older version's report: the file, the reading and the judgement, nothing to draw
+      // an older version's report: the file, the reading and the judgment, nothing to draw
       if (stale)
         return route.fulfill({ json: { ...json, stale, spectrogram: null, windows: null } });
       return route.fulfill({ json });

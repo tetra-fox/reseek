@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Schemas } from "#lib/api/client.js";
 
-  // a user's presence as a dot: green online, yellow away, grey offline or unknown
+  // a user's presence as a dot: green online, yellow away, gray offline or unknown
   let { presence }: { presence: Schemas["UserPresence"] | null | undefined } = $props();
 </script>
 

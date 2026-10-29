@@ -17,10 +17,10 @@
   const SERIES = [
     { key: "succeeded", label: "Succeeded", color: "var(--color-success)", state: "completed" },
     { key: "failed", label: "Failed", color: "var(--color-danger)", state: "errored" },
-    { key: "cancelled", label: "Cancelled", color: "var(--color-fg-subtle)", state: "cancelled" }
+    { key: "canceled", label: "Canceled", color: "var(--color-fg-subtle)", state: "canceled" }
   ] as const;
   type Row = (typeof data)[number];
-  const total = $derived(data.reduce((n, d) => n + d.succeeded + d.failed + d.cancelled, 0));
+  const total = $derived(data.reduce((n, d) => n + d.succeeded + d.failed + d.canceled, 0));
   // the directions' names on the left, the counts below
   const padding = $derived({
     ...axisPadding(["Downloads", "Uploads"], rem.px),
@@ -64,7 +64,7 @@
         .join("; ")}`}>
       <Chart
         {data}
-        x={(d: Row) => d.succeeded + d.failed + d.cancelled}
+        x={(d: Row) => d.succeeded + d.failed + d.canceled}
         xDomain={[0, null]}
         xNice
         y="direction"

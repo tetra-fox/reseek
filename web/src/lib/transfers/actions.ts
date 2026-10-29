@@ -11,7 +11,7 @@ import { toast } from "#lib/toast.svelte.js";
 
 import type { BulkAction } from "./bulk";
 import { contentUrl, localFolder } from "./content";
-import { isCancellable, isSucceeded, type Transfer } from "./states";
+import { isCancelable, isSucceeded, type Transfer } from "./states";
 import { bump, downloads, type Transfers, uploads } from "./transfers.svelte";
 
 /** The store of a transfer's direction */
@@ -107,7 +107,7 @@ export const bumpUpload = async (t: Transfer) => {
 /** Cancels every upload to a user that hasn't finished, then asks to block them from uploads */
 export const denyAndBlock = async (username: string) => {
   const ids = uploads.list.rows
-    .filter((t) => t.username === username && isCancellable(t.state))
+    .filter((t) => t.username === username && isCancelable(t.state))
     .map((t) => t.id);
   await act(uploads, "cancel", ids);
   blocking.ask(username, ["uploads"]);

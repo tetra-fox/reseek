@@ -27,7 +27,7 @@
   }: Props = $props();
 </script>
 
-<!-- a centred box over the page, closed by Esc, the overlay or its close button -->
+<!-- a centered box over the page, closed by Esc, the overlay or its close button -->
 <Dialog.Root bind:open>
   <Dialog.Portal>
     <Scrim />

@@ -455,7 +455,7 @@ describe("the transfers table", () => {
         'button[aria-label="Cancel the group"]'
       )!;
       cancelGroup.focus();
-      // a group with running transfers asks before it is cancelled
+      // a group with running transfers asks before it is canceled
       cancelGroup.click();
       await flush();
       expect(document.body.textContent).toContain("Cancel 2 active transfers?");
