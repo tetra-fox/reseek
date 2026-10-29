@@ -21,7 +21,7 @@ const HI_RES_TOP_HZ: f64 = 24_000.0;
 
 /// What the analyzer makes of a file.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Reading {
+pub(in crate::analysis) struct Reading {
   /// the reading of the cutoff
   pub verdict: AnalysisVerdict,
   /// how sure it is, from 0 to [`CONFIDENCE_CAP`]
@@ -152,7 +152,7 @@ fn lower_profile_at(hz: f64) -> Option<&'static Profile> {
 }
 
 /// Reads what `measured` found.
-pub(super) fn read(measured: &Measured) -> Reading {
+pub(in crate::analysis) fn read(measured: &Measured) -> Reading {
   let Some(claimed) = &measured.claimed else {
     return Reading {
       verdict: AnalysisVerdict::Inconclusive,

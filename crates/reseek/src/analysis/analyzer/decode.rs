@@ -22,7 +22,7 @@ use symphonia::core::units::Time;
 use tracing::{debug, trace};
 
 /// The most channels the analyzer reads; the rest of a surround file is left out.
-pub(super) const ANALYZED_CHANNELS: usize = 2;
+pub(in crate::analysis) const ANALYZED_CHANNELS: usize = 2;
 
 /// The highest sample rate the analyzer reads; a window holds a second of samples, so a header
 /// claiming more is not trusted with the memory.
@@ -33,7 +33,7 @@ const MAX_SKIPPED: u32 = 1000;
 
 /// The format a file's container and codec claim.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Claimed {
+pub(in crate::analysis) struct Claimed {
   /// the codec's short name, such as `flac` or `mp3`
   pub codec: String,
   /// samples per second
@@ -49,7 +49,7 @@ pub(super) struct Claimed {
 }
 
 /// An audio file open for decoding.
-pub(super) struct Decoder {
+pub(in crate::analysis) struct Decoder {
   format: Box<dyn FormatReader>,
   decoder: Box<dyn AudioDecoder>,
   track: u32,
@@ -75,7 +75,7 @@ pub(super) struct Decoder {
 
 /// What filling a window gave.
 #[derive(Debug, PartialEq, Eq)]
-pub(super) enum Filled {
+pub(in crate::analysis) enum Filled {
   /// the window is full
   Full,
   /// the file ended first; the window holds this many frames

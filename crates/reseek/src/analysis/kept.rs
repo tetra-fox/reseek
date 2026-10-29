@@ -11,8 +11,8 @@ use api_types::analysis::{SpectrogramTile, WaveformTile, WindowSpectra};
 use serde::Serialize;
 use tracing::{debug, info, warn};
 
-use super::measure::Window;
-use super::picture::{BINS, CEILING_DB, COLUMNS_PER_SECOND, FLOOR_DB, PEAKS_PER_SECOND};
+use super::analyzer::measure::Window;
+use super::analyzer::picture::{BINS, CEILING_DB, COLUMNS_PER_SECOND, FLOOR_DB, PEAKS_PER_SECOND};
 use super::tiles::{self, Cut, Kind, Second};
 
 /// What the file starts with: its kind and the version of its layout.
@@ -363,7 +363,7 @@ pub(super) fn remove_older(dir: &Path) {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::analysis::picture::Shown;
+  use crate::analysis::analyzer::picture::Shown;
 
   /// A window at `at` of `seconds`, its columns at `level` and its buckets at `peak`.
   fn window(at: u32, seconds: f64, level: u8, peak: i8) -> Window {

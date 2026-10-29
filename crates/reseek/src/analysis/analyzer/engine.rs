@@ -19,7 +19,7 @@ use super::totals::Totals;
 
 /// How one analysis runs.
 #[derive(Clone, Debug)]
-pub(super) struct Settings {
+pub(in crate::analysis) struct Settings {
   /// files up to this many seconds long are analyzed in full
   pub max_full_seconds: f64,
   /// how many windows a longer file is analyzed at
@@ -41,7 +41,7 @@ impl Settings {
 
 /// What an analysis measured.
 #[derive(Debug)]
-pub(super) struct Measured {
+pub(in crate::analysis) struct Measured {
   /// the format the file claims, `None` when it could not be opened as audio
   pub claimed: Option<Claimed>,
   /// how long the audio is, in seconds
@@ -64,10 +64,10 @@ pub(super) struct Measured {
 
 /// The analysis was canceled; nothing is reported.
 #[derive(Debug, PartialEq, Eq)]
-pub(super) struct Canceled;
+pub(in crate::analysis) struct Canceled;
 
 /// Analyzes the file at `path`.
-pub(super) fn run(
+pub(in crate::analysis) fn run(
   path: &Path,
   settings: &Settings,
   cancel: &CancellationToken,
@@ -82,7 +82,7 @@ pub(super) fn run(
 }
 
 /// Analyzes audio held in memory, as a file's would be.
-pub(super) fn read_bytes(
+pub(in crate::analysis) fn read_bytes(
   bytes: Vec<u8>,
   settings: &Settings,
   cancel: &CancellationToken,
@@ -95,7 +95,7 @@ pub(super) fn read_bytes(
 }
 
 /// What is reported for audio that could not be opened.
-pub(super) fn unreadable(problem: String) -> Measured {
+pub(in crate::analysis) fn unreadable(problem: String) -> Measured {
   Measured {
     claimed: None,
     duration: 0.0,
@@ -110,7 +110,7 @@ pub(super) fn unreadable(problem: String) -> Measured {
 }
 
 /// Measures the audio `decoder` reads.
-pub(super) fn measure(
+pub(in crate::analysis) fn measure(
   mut decoder: Decoder,
   settings: &Settings,
   cancel: &CancellationToken,
@@ -359,7 +359,10 @@ fn sampled(
 /// What a reading saw, for a failing test to print: the reading, then each window's start,
 /// level, cutoff, shelf and steepest inner step.
 #[cfg(test)]
-pub(super) fn explain(measured: &Measured, reading: &super::reading::Reading) -> String {
+pub(in crate::analysis) fn explain(
+  measured: &Measured,
+  reading: &super::reading::Reading,
+) -> String {
   let mut text = format!(
     "{:?} at {:.2}, guess {:?}, flags {:?}\n  {}\n  limitations {:?}\n  median {:?} Hz, \
      bitrate {:?} kbps\n",

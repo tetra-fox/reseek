@@ -9,7 +9,7 @@ use super::measure::Window;
 use super::thresholds::{CLUSTER_HZ, LOWER_RATE_EDGES, MONO_CORRELATION, MONO_SIDE_DB, profile_at};
 
 /// What was found beside the reading.
-pub(super) struct Findings {
+pub(in crate::analysis) struct Findings {
   /// the flags
   pub flags: Vec<AnalysisFlag>,
   /// a sentence for the summary per finding
@@ -21,7 +21,7 @@ pub(super) struct Findings {
 
 /// The findings in a file claiming `claimed`, from its non-silent `windows`, which cut off at
 /// `median`, and its `measures`.
-pub(super) fn findings(
+pub(in crate::analysis) fn findings(
   claimed: &Claimed,
   windows: &[&Window],
   median: Option<f64>,

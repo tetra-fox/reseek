@@ -4,19 +4,19 @@
 //! half the sample rate, so a viewer can lay them out on any frequency axis.
 
 /// How many frequency bins a spectrum is kept at, from 0 Hz to half the sample rate.
-pub(super) const BINS: usize = 512;
+pub(in crate::analysis) const BINS: usize = 512;
 /// How many spectrogram columns a second of audio is kept at.
-pub(super) const COLUMNS_PER_SECOND: usize = 16;
+pub(in crate::analysis) const COLUMNS_PER_SECOND: usize = 16;
 /// How many waveform buckets a second of audio is kept at.
-pub(super) const PEAKS_PER_SECOND: usize = 200;
+pub(in crate::analysis) const PEAKS_PER_SECOND: usize = 200;
 /// The quietest level a byte holds, in dB relative to a full-scale sine.
-pub(super) const FLOOR_DB: f64 = -160.0;
+pub(in crate::analysis) const FLOOR_DB: f64 = -160.0;
 /// The loudest level a byte holds, in dB relative to a full-scale sine.
-pub(super) const CEILING_DB: f64 = 0.0;
+pub(in crate::analysis) const CEILING_DB: f64 = 0.0;
 
 /// One window as the spectrogram and the waveform show it.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Shown {
+pub(in crate::analysis) struct Shown {
   /// the spectrum over the whole window, [`BINS`] levels lowest first
   pub spectrum: Vec<u8>,
   /// the window's columns one after another, each [`BINS`] levels lowest first; a whole second
@@ -28,18 +28,18 @@ pub(super) struct Shown {
 }
 
 /// A level in dB as a byte: [`FLOOR_DB`] and below is 0, [`CEILING_DB`] and above is 255.
-pub(super) fn level_byte(level: f64) -> u8 {
+pub(in crate::analysis) fn level_byte(level: f64) -> u8 {
   let scaled = (level - FLOOR_DB) / (CEILING_DB - FLOOR_DB) * 255.0;
   scaled.round().clamp(0.0, 255.0) as u8
 }
 
 /// The level in dB of a byte.
-pub(super) fn byte_level(byte: u8) -> f64 {
+pub(in crate::analysis) fn byte_level(byte: u8) -> f64 {
   FLOOR_DB + f64::from(byte) / 255.0 * (CEILING_DB - FLOOR_DB)
 }
 
 /// The middle of bin `bin` in Hz, for audio whose band ends at `max_hz`.
-pub(super) fn bin_hz(bin: usize, max_hz: f64) -> f64 {
+pub(in crate::analysis) fn bin_hz(bin: usize, max_hz: f64) -> f64 {
   (bin as f64 + 0.5) * max_hz / BINS as f64
 }
 
@@ -55,7 +55,7 @@ fn power_byte(power: f64) -> u8 {
 /// A power spectrum of a transform's bins, lowest first, as [`BINS`] bytes: each byte is the
 /// mean power of the transform bins that fall in it. The bin at half the sample rate is left
 /// out, so every byte averages the same number of bins.
-pub(super) fn spectrum_bytes(power: &[f64]) -> Vec<u8> {
+pub(in crate::analysis) fn spectrum_bytes(power: &[f64]) -> Vec<u8> {
   let group = (power.len() - 1) / BINS;
   power[..group * BINS]
     .chunks_exact(group)
@@ -67,7 +67,7 @@ pub(super) fn spectrum_bytes(power: &[f64]) -> Vec<u8> {
 /// frames, each `frame` samples long and `hop` apart. A column is the power mean of the frames
 /// whose middle falls in it; one that no frame's middle falls in takes the frame nearest its
 /// middle. A window with no frames has silent columns.
-pub(super) fn columns(
+pub(in crate::analysis) fn columns(
   frames: &[Vec<f64>],
   length: usize,
   rate: usize,
@@ -118,7 +118,7 @@ fn sample_byte(sample: f32) -> u8 {
 
 /// The lowest and the highest sample over every channel in each bucket of a window at `rate`,
 /// as two signed bytes a bucket.
-pub(super) fn peaks(channels: &[Vec<f32>], rate: usize) -> Vec<u8> {
+pub(in crate::analysis) fn peaks(channels: &[Vec<f32>], rate: usize) -> Vec<u8> {
   let length = channels[0].len();
   let count = (length * PEAKS_PER_SECOND).div_ceil(rate);
   (0..count)

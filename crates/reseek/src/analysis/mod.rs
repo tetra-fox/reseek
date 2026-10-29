@@ -6,27 +6,15 @@
 //! analyzer reads files under the downloads and incomplete directories only and never changes
 //! one.
 
-mod aggregate;
-mod decode;
-mod engine;
-mod flags;
+mod analyzer;
 mod jobs;
 mod kept;
-mod measure;
-mod picture;
-mod reading;
 mod report;
 mod store;
-mod thresholds;
 mod tiles;
-mod totals;
 
 #[cfg(test)]
-mod fixtures;
-#[cfg(test)]
 mod service_tests;
-#[cfg(test)]
-mod tests;
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -57,6 +45,7 @@ use crate::files::Files;
 use crate::live::Live;
 use crate::services::{AnalysisService, FileTarget, Piece};
 use crate::sync::lock;
+use analyzer::{engine, picture, reading};
 use jobs::{Job, QUEUE_LIMIT, Queue, Queued};
 use report::modified_text;
 pub use store::SCHEMA;

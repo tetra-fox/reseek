@@ -12,7 +12,7 @@ use super::measure::Window;
 const HISTOGRAM_HZ: f64 = 500.0;
 
 /// The aggregate measures over the non-silent `windows`.
-pub(super) fn measures(
+pub(in crate::analysis) fn measures(
   measured: &Measured,
   windows: &[&Window],
   upsample_ratio: Option<f64>,
@@ -46,7 +46,7 @@ pub(super) fn measures(
 }
 
 /// The share of the energy of `windows` above half the band.
-pub(super) fn upsample_ratio(windows: &[&Window]) -> f64 {
+pub(in crate::analysis) fn upsample_ratio(windows: &[&Window]) -> f64 {
   let (high, total) = windows
     .iter()
     .fold((0.0, 0.0), |(h, t), w| (h + w.energy.0, t + w.energy.1));
@@ -54,12 +54,12 @@ pub(super) fn upsample_ratio(windows: &[&Window]) -> f64 {
 }
 
 /// The median of `values`, 0 for none.
-pub(super) fn middle(values: &[f64]) -> f64 {
+pub(in crate::analysis) fn middle(values: &[f64]) -> f64 {
   percentile(values, 0.5).unwrap_or(0.0)
 }
 
 /// The value `fraction` of the way through `values` in order, by nearest rank.
-pub(super) fn percentile(values: &[f64], fraction: f64) -> Option<f64> {
+pub(in crate::analysis) fn percentile(values: &[f64], fraction: f64) -> Option<f64> {
   if values.is_empty() {
     return None;
   }

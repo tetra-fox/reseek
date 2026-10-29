@@ -13,10 +13,10 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{DateTime, SecondsFormat, Utc};
 use sha2::{Digest, Sha256};
 
-use super::engine::Measured;
-use super::picture::{BINS, COLUMNS_PER_SECOND, PEAKS_PER_SECOND};
-use super::reading::Reading;
-use super::thresholds::GUIDES;
+use super::analyzer::engine::Measured;
+use super::analyzer::picture::{BINS, COLUMNS_PER_SECOND, PEAKS_PER_SECOND};
+use super::analyzer::reading::Reading;
+use super::analyzer::thresholds::GUIDES;
 use super::tiles::{TILE_SECONDS, tile_count};
 use crate::files::LocalFile;
 

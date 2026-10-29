@@ -13,7 +13,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde_json::{Value, json};
 
-use super::fixtures::{music, pink, write_flac};
+use super::analyzer::fixtures::{music, pink, write_flac};
 use crate::testing::{TRUSTED, TestApp, app, request};
 use crate::transfers::{Record, store as transfers};
 

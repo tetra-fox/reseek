@@ -19,9 +19,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 use uuid::Uuid;
 
-use super::engine::{self, Settings};
+use super::analyzer::engine::{self, Settings};
+use super::analyzer::reading;
 use super::report::{assemble, kept_name, layout, modified_text};
-use super::{Analysis, current, kept, reading, store};
+use super::{Analysis, current, kept, store};
 use crate::api::error::ApiError;
 use crate::config::Options;
 use crate::files::LocalFile;

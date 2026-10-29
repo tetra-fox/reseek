@@ -4,7 +4,7 @@
 //! cell no window covers, between the windows of a sampled read or past a last window cut
 //! short, is marked unread rather than shown as silence.
 
-use super::picture::{self, BINS, COLUMNS_PER_SECOND, PEAKS_PER_SECOND};
+use super::analyzer::picture::{self, BINS, COLUMNS_PER_SECOND, PEAKS_PER_SECOND};
 
 /// How many columns the spectrogram's overview has at most.
 pub(super) const OVERVIEW_COLUMNS: usize = 1024;

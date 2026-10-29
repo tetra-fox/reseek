@@ -17,7 +17,7 @@ use super::thresholds::{
 use super::totals::Totals;
 
 /// The length of one spectrum frame in samples.
-pub(super) const FFT_SIZE: usize = 4096;
+pub(in crate::analysis) const FFT_SIZE: usize = 4096;
 /// How far one frame starts after the one before: half a frame.
 const HOP: usize = FFT_SIZE / 2;
 /// How wide the band is that a spectrum is smoothed over, either side of a bin.
@@ -36,7 +36,7 @@ const CODEC_PERIODS: [usize; 3] = [
 
 /// A step down in level inside a band that reaches the top.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct Step {
+pub(in crate::analysis) struct Step {
   /// where it is, in Hz
   pub hz: f64,
   /// how much quieter the band above it is than the band below, in dB
@@ -49,7 +49,7 @@ pub(super) struct Step {
 
 /// What one window measured.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Window {
+pub(in crate::analysis) struct Window {
   /// where the window starts, in seconds
   pub t: f64,
   /// how long it is, in seconds: 1 but for a shorter last window
@@ -88,7 +88,7 @@ impl Window {
 }
 
 /// The spectrum analyzer for one sample rate: the frame transform and the window function.
-pub(super) struct Analyzer {
+pub(in crate::analysis) struct Analyzer {
   fft: Arc<dyn RealToComplex<f32>>,
   hann: Vec<f32>,
   input: Vec<f32>,
