@@ -48,7 +48,7 @@
     saving = true;
     const outcome = await judge(target, choice, note);
     saving = false;
-    if (!outcome.ok) return void toast(`Couldn't save your judgment: ${outcome.error}`, "error");
+    if (!outcome.ok) return void toast(`Could not save the judgment: ${outcome.error}`, "error");
     saved = true;
     onsaved();
   };
@@ -77,7 +77,7 @@
     <Textarea
       bind:value={note}
       rows={2}
-      placeholder="What you heard or saw, for later"
+      placeholder="Notes on what was heard or seen"
       disabled={choice === null}
       oninput={() => (saved = false)} />
   </label>

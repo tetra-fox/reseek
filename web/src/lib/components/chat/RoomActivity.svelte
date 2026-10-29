@@ -45,7 +45,7 @@
       </div>
     {:else}
       <div>
-        <EmptyState icon={UsersRoundIcon} title="No member activity since you opened this room" />
+        <EmptyState icon={UsersRoundIcon} title="No member activity since this room was opened" />
       </div>
     {/each}
   </div>

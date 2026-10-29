@@ -20,7 +20,7 @@
 
   // the page's one block dialog: reason, how long, and what the block stops
   const DURATIONS = [
-    { value: "", label: "Until I unblock them" },
+    { value: "", label: "Until unblocked" },
     { value: "1h", label: "1 hour" },
     { value: "1d", label: "1 day" },
     { value: "7d", label: "7 days" },
@@ -90,14 +90,14 @@
 
 <Dialog bind:open={blocking.open} title={`Block ${title}`}>
   <Form id="block-form" layout="stacked" class="flex flex-col gap-group" onsubmit={submit}>
-    <Field label="Reason" for="block-reason" hint="Only you see it">
+    <Field label="Reason" for="block-reason" hint="Not shown to the user">
       <Input id="block-reason" maxlength={500} bind:value={reason} autocomplete="off" />
     </Field>
-    <Field label="For how long" for="block-duration">
+    <Field label="Duration" for="block-duration">
       <Select id="block-duration" bind:value={duration} options={DURATIONS} />
     </Field>
     {#if duration === "custom"}
-      <Field label="Duration" for="block-custom">
+      <Field label="Custom duration" for="block-custom">
         <Input id="block-custom" placeholder="For example 12h or 3d" required bind:value={custom} />
       </Field>
     {/if}
@@ -114,7 +114,7 @@
       {/each}
     </fieldset>
     {#if !scopes.length}
-      <p class="text-xs text-danger">Choose at least one thing to block.</p>
+      <p class="text-xs text-danger">Select at least one item to block.</p>
     {/if}
     {#if error}<Notice kind="error">{error}</Notice>{/if}
   </Form>

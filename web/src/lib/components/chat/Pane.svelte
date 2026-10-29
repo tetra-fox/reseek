@@ -77,13 +77,12 @@
   const joined = $derived(target.kind === "room" ? !!chat.rooms.get(target.name) : true);
   const summary = $derived(target.kind === "user" ? users.get(target.name) : undefined);
   const disabled = $derived.by(() => {
-    if (!write) return "Read-only accounts can't send messages";
+    if (!write) return "Read-only accounts cannot send messages";
     if (target.kind === "user" && target.name === "server")
-      return "You can't reply to server notices";
+      return "Server notices cannot be answered";
     if (!joined) return "Join the room to send messages";
     if (!app.isServerConnected) return "Connect to the Soulseek server to send messages";
-    if (summary?.block?.scopes.includes("messages"))
-      return "You blocked this user from messaging you";
+    if (summary?.block?.scopes.includes("messages")) return "Messages from this user are blocked";
     return null;
   });
   /** the words marked in messages: our name and the watched words from the options */
@@ -226,7 +225,7 @@
       {/if}
       {#if target.kind === "room" && !joined && !write}
         <p class="border-t px-3 py-2 text-xs text-fg-muted">
-          You're not in this room. This is its stored history.
+          This room is not joined. Its stored history is shown.
         </p>
       {:else}
         <Composer bind:this={composer} {pane} {disabled} {names} />

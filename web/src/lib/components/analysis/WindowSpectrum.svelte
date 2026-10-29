@@ -102,6 +102,6 @@
   {:else if spectra === null && !scope.pictures.lost && !scope.pictures.error}
     <p class="text-sm text-fg-muted">Loading...</p>
   {:else if spectra === null}
-    <p class="text-sm text-fg-muted">The windows' spectra couldn't be loaded.</p>
+    <p class="text-sm text-fg-muted">Could not load the window spectra.</p>
   {/if}
 </div>

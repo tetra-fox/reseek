@@ -49,12 +49,12 @@ describe("the block dialog", () => {
     app.options = { blocking: { default_scopes: ["searches", "browse"] } } as never;
     const net = await open(["uploads"]);
     expect(checked()).toEqual([
-      "Stop their downloads from you",
-      "Don't send them your search results",
-      "Stop them browsing your shares"
+      "Refuse uploads to this user",
+      "Withhold search results from this user",
+      "Refuse share browsing"
     ]);
-    box("Cancel your downloads from them").click();
-    box("Don't send them your search results").click();
+    box("Cancel downloads from this user").click();
+    box("Withhold search results from this user").click();
     flushSync();
     const reason = document.querySelector<HTMLInputElement>("#block-reason")!;
     reason.value = "  spam ";
@@ -79,7 +79,8 @@ describe("the block dialog", () => {
     for (const label of checked()) box(label!).click();
     flushSync();
     expect(blockButton().disabled).toBe(true);
-    expect(document.body.textContent).toContain("Choose at least one");
+    expect(document.body.textContent).toContain("Select at least one");
+
     expect(net.requests.filter((r) => r.method === "PUT")).toEqual([]);
   });
 });

@@ -125,16 +125,16 @@
       <div
         class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-1.5 text-xs text-fg-muted">
         <span class="flex min-w-[min(100%,16rem)] flex-1 items-center gap-2"
-          ><BellRingIcon class="size-3.5 shrink-0" />reseek can tell you about new messages while
-          this tab is in the background.</span>
+          ><BellRingIcon class="size-3.5 shrink-0" />Desktop notifications can announce new messages
+          while this tab is in the background.</span>
         <Button variant="link" class="text-xs" onclick={() => void notifier.ask()}
           >Turn on notifications</Button>
       </div>
     {/if}
     {#if insecure}
       <p class="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-fg-muted">
-        <BellOffIcon class="size-3.5 shrink-0" />Browsers only show notifications over HTTPS or on
-        localhost, so on this address reseek can tell you about new messages only inside the page.
+        <BellOffIcon class="size-3.5 shrink-0" />Browsers show desktop notifications only over HTTPS
+        or on localhost. On this address, new messages are announced only inside the page.
       </p>
     {/if}
     {#if target === "search"}

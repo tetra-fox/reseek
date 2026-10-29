@@ -125,7 +125,7 @@ describe("a chat pane", () => {
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
     );
     flushSync();
-    expect(document.body.textContent).toContain("sending");
+    expect(document.body.textContent).toContain("Sending");
     await flush();
     expect(net.requests.find((r) => r.method === "POST")?.body).toBe("hi back");
     net.frame("conversations.message", {
@@ -134,7 +134,7 @@ describe("a chat pane", () => {
     });
     await flush();
     expect(ids()).toEqual(["1", "2", "3", "4"]);
-    expect(document.body.textContent).not.toContain("sending");
+    expect(document.body.textContent).not.toContain("Sending");
     expect(chat.total).toBe(0);
   });
 
@@ -305,7 +305,7 @@ describe("a chat pane", () => {
     expect(net.requests.some((r) => r.method === "POST")).toBe(true);
     expect(ids()).toHaveLength(2);
     expect(Number(ids()[1])).toBeLessThan(0);
-    expect(document.body.textContent).not.toContain("sending");
+    expect(document.body.textContent).not.toContain("Sending");
     net.frame("rooms.message", {
       roomName: "indie",
       message: roomMessage(2, { username: "me", self: true, message: "hello all" })

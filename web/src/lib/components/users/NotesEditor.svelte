@@ -60,7 +60,7 @@
   <Textarea
     aria-label="Notes"
     class="min-h-24 text-sm"
-    placeholder={disabled ? "" : "Only you see these"}
+    placeholder={disabled ? "" : "Not shown to the user"}
     bind:value={text}
     {disabled} />
   <p class="flex h-4 items-center gap-1 text-xs text-fg-muted" role="status">

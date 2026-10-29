@@ -23,12 +23,12 @@ export const markOf = (r: Report): Mark => ({
 /** What a mark's chip says when it is pointed at */
 export const markHint = (m: Mark) => {
   if (m.judgment) {
-    const marked = `You marked this ${JUDGMENTS[m.judgment].toLowerCase()}`;
+    const marked = `Marked ${JUDGMENTS[m.judgment].toLowerCase()}`;
     return m.note ? `${marked}: ${m.note}` : marked;
   }
   if (m.stale) return "Analyzed by an older version of reseek";
   const reading = VERDICTS[m.verdict].toLowerCase();
-  return `The analyzer's reading: ${reading}${m.profile ? `, ${m.profile}` : ""}`;
+  return `Analyzer reading: ${reading}${m.profile ? `, ${m.profile}` : ""}`;
 };
 
 /** A filter over files by their analysis; `reading:` ones go by the analyzer's verdict */

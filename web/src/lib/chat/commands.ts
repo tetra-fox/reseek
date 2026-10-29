@@ -13,17 +13,22 @@ export type CommandInfo = {
 
 /** Every command, in the order `/help` lists them */
 export const COMMANDS: CommandInfo[] = [
-  { name: "help", args: "", about: "List these commands" },
-  { name: "me", args: "<action>", about: "Say what you are doing: /me waves" },
+  { name: "help", args: "", about: "List the available commands" },
+  { name: "me", args: "<action>", about: "Send an action, such as /me waves" },
   { name: "msg", args: "<user> <text>", about: "Send a private message" },
-  { name: "join", args: "<room>", about: "Join a room, creating it if it doesn't exist" },
-  { name: "leave", args: "[room]", about: "Leave this room, or the one named" },
+  { name: "join", args: "<room>", about: "Join a room, or create it if it does not exist" },
+  { name: "leave", args: "[room]", about: "Leave this room or the named room" },
   { name: "browse", args: "<user>", about: "Browse a user's shares" },
   { name: "whois", args: "<user>", about: "Open a user's profile" },
   { name: "search", args: "<text>", about: "Search the network" },
-  { name: "rsearch", args: "<text>", about: "Search this room's members", roomOnly: true },
+  {
+    name: "rsearch",
+    args: "<text>",
+    about: "Search the shares of the members of this room",
+    roomOnly: true
+  },
   { name: "block", args: "<user>", about: "Block a user" },
-  { name: "clear", args: "", about: "Clear this view; the history is kept" }
+  { name: "clear", args: "", about: "Clear this view without deleting the history" }
 ];
 
 /** What the composer's text asks for */
@@ -63,9 +68,9 @@ export const parseCommand = (input: string, place: Place): Parsed => {
   const rest = match?.[2].trim() ?? "";
   const command = COMMANDS.find((c) => c.name === name);
   if (!command)
-    return { kind: "error", message: `/${name} isn't a command. Type /help to see the list.` };
+    return { kind: "error", message: `/${name} is not a command. Type /help for the list.` };
   if (command.roomOnly && place !== "room") {
-    return { kind: "error", message: `/${name} only works in a room` };
+    return { kind: "error", message: `/${name} is available only in rooms` };
   }
   const needs = command.args.startsWith("<");
   if (needs && !rest) return { kind: "error", message: `Usage: ${usage(command)}` };
@@ -76,7 +81,7 @@ export const parseCommand = (input: string, place: Place): Parsed => {
     return { kind: "command", name, target, text: message };
   }
   if (name === "leave" && !rest && place !== "room") {
-    return { kind: "error", message: "Name the room to leave: /leave <room>" };
+    return { kind: "error", message: "Usage: /leave <room>" };
   }
   const takesTarget = ["join", "leave", "browse", "whois", "block"].includes(name);
   return takesTarget

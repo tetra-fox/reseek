@@ -73,7 +73,7 @@
     const level =
       window.cutoffHz === null || window.cutoffHz === undefined
         ? "near silent"
-        : `content stops at ${formatHz(window.cutoffHz)}`;
+        : `cutoff at ${formatHz(window.cutoffHz)}`;
     return `${at}, in the window at ${formatTime(window.t)}: ${window.rmsDbfs.toFixed(1)} dBFS, ${level}`;
   });
 
@@ -89,16 +89,16 @@
   const all = $derived(showsAll(scope.view, scope.duration));
   /** the mouse and keyboard controls, shown under the graph; the drawer zooms on Ctrl+scroll */
   const controls = $derived([
-    ["Click", "place the cursor"],
-    ["Drag line", "move the cursor"],
-    ["Drag", "pan"],
-    [large ? "Scroll" : "Ctrl+scroll", "zoom"],
-    ["Shift+scroll", "pan"],
-    ["+ / −", "zoom"],
-    ["← / →", "step a window"],
-    ["Shift+← / →", "step ten"],
-    ["Home / End", "first / last"],
-    ...(canPlay ? [["Space", "play / pause"]] : [])
+    ["Click", "Place the cursor"],
+    ["Drag line", "Move the cursor"],
+    ["Drag", "Pan"],
+    [large ? "Scroll" : "Ctrl+scroll", "Zoom"],
+    ["Shift+scroll", "Pan"],
+    ["+ / −", "Zoom"],
+    ["← / →", "Previous or next window"],
+    ["Shift+← / →", "Ten windows back or forward"],
+    ["Home / End", "First or last window"],
+    ...(canPlay ? [["Space", "Play or pause"]] : [])
   ]);
   const deepest = $derived(scope.view.span <= Math.min(MIN_SPAN, scope.duration) + 1e-9);
 </script>
@@ -195,7 +195,7 @@
       <Minimap {scope} {motion} />
       {#if scope.pictures.lost}
         <p class="text-xs text-fg-muted" role="status">
-          Part of the spectrogram couldn't be loaded, so it shows less detail: {sentence(
+          Part of the spectrogram could not be loaded and is shown at lower detail: {sentence(
             scope.pictures.lost
           )}
         </p>
@@ -209,7 +209,7 @@
       </p>
       {#if track && !canPlay}
         <p class="text-xs text-fg-muted">
-          This browser can't play this file, so the cursor doesn't follow playback.
+          This browser cannot play this file. The cursor does not follow playback.
         </p>
       {/if}
     {/if}
@@ -228,9 +228,9 @@
     </dl>
     {#if layout.sampled}
       <p class="text-xs text-fg-muted">
-        The file is long, so {scope.starts.length} one-second samples spread over its {formatDuration(
+        Only {scope.starts.length} one-second samples across the {formatDuration(
           layout.durationSeconds
-        )} were analyzed; the hatched stretches between them were not read.
+        )} of this file were analyzed. The hatched stretches between them were not read.
       </p>
     {/if}
     <p

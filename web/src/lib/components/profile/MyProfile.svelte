@@ -124,7 +124,7 @@
     for (const step of steps) {
       const outcome = await step();
       if (!outcome.ok) {
-        error = outcome.error ?? "Couldn't save the profile";
+        error = outcome.error ?? "Could not save the profile";
         break;
       }
     }
@@ -138,7 +138,7 @@
   };
 
   beforeNavigate(({ cancel, type }) => {
-    if (dirty && type !== "leave" && !confirm("Leave without saving your profile?")) cancel();
+    if (dirty && type !== "leave" && !confirm("Leave without saving the profile?")) cancel();
   });
   $effect(() => {
     if (!dirty) return;
@@ -154,10 +154,11 @@
 </script>
 
 {#if !admin}
-  <Notice kind="info">Only administrators change the profile; this is how others see it.</Notice>
+  <Notice kind="info">Only administrators can change the profile.</Notice>
 {:else if view.data && !remote}
   <Notice kind="info">
-    Changes from here need <code>remote_configuration</code> on; until then the profile is only shown.
+    Editing the profile requires <code>remote_configuration</code>. Until it is enabled, the profile
+    is read-only.
   </Notice>
 {/if}
 <LoadError loader={ownProfile.loader} />
@@ -220,7 +221,7 @@
         <Textarea
           id="profile-text"
           class="min-h-48 text-sm"
-          placeholder="What other users read about you"
+          placeholder="Text shown to other users"
           bind:value={text}
           disabled={!canText} />
         <p class="flex justify-between text-xs text-fg-muted">
@@ -236,7 +237,7 @@
       </div>
     </Card>
 
-    <Card title="How others see you">
+    <Card title="Public view">
       <ProfileView
         {name}
         pictureUrl={shownPicture}

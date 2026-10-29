@@ -39,8 +39,9 @@ describe("filtering files by their analysis", () => {
 
 describe("a chip's hint", () => {
   it("names the judgment with its note, or else the analyzer's reading", () => {
-    expect(markHint(fake)).toBe("You marked this fake: an old rip");
-    expect(markHint(reading)).toBe("The analyzer's reading: likely a transcode, mp3 ~128 kbps");
+    expect(markHint(fake)).toBe("Marked fake: an old rip");
+    expect(markHint(reading)).toBe("Analyzer reading: likely a transcode, mp3 ~128 kbps");
+
     expect(markHint({ ...reading, stale: true })).toBe("Analyzed by an older version of reseek");
   });
 });
