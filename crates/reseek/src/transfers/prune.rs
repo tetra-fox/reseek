@@ -24,7 +24,7 @@ fn before_now(age: Duration) -> String {
 fn outcomes(retention: &TransferRetention) -> [(&'static str, Option<Duration>, &'static str); 4] {
   [
     ("succeeded", retention.succeeded, SUCCESSFUL),
-    ("cancelled", retention.cancelled, CANCELLED),
+    ("canceled", retention.canceled, CANCELLED),
     ("errored", retention.errored, ERRORED),
     ("failed", retention.failed, FAILED),
   ]

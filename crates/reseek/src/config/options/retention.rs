@@ -81,7 +81,7 @@ pub struct TransferRetention {
   pub errored: Option<Duration>,
   /// Transfers that were canceled.
   #[serde(with = "humantime_serde")]
-  pub cancelled: Option<Duration>,
+  pub canceled: Option<Duration>,
   /// Transfers that errored or were canceled.
   #[serde(with = "humantime_serde")]
   pub failed: Option<Duration>,

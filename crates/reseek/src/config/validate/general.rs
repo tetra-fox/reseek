@@ -224,7 +224,7 @@ fn check_transfer_retention(direction: &str, retention: &TransferRetention, repo
   for (outcome, value) in [
     ("succeeded", retention.succeeded),
     ("errored", retention.errored),
-    ("cancelled", retention.cancelled),
+    ("canceled", retention.canceled),
     ("failed", retention.failed),
   ] {
     if let Some(value) = value {
