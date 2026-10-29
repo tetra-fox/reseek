@@ -111,7 +111,7 @@ impl AgentClient {
       if attempt > 0 {
         tokio::select! {
           () = self.shutdown.cancelled() => break,
-          () = tokio::time::sleep(backoff::wait(attempt, ATTEMPT_BACKOFF)) => {}
+          () = tokio::time::sleep(backoff::wait(attempt, backoff::AT_ONCE, ATTEMPT_BACKOFF)) => {}
         }
       }
       let fetched = tokio::select! {

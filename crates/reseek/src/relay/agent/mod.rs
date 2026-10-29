@@ -167,9 +167,9 @@ impl AgentClient {
       }
       if failures > 0 {
         let mut delay = if refused {
-          backoff::wait(u32::MAX, BACKOFF_CAP)
+          backoff::wait(u32::MAX, backoff::AT_ONCE, BACKOFF_CAP)
         } else {
-          backoff::wait(failures, BACKOFF_CAP)
+          backoff::wait(failures, backoff::AT_ONCE, BACKOFF_CAP)
         };
         if shut_down {
           delay = delay.max(AFTER_SHUTDOWN);

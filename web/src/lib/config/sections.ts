@@ -232,6 +232,7 @@ export const sections: Section[] = [
         label: "Download request style"
       },
       { key: "transfers.download.retry.attempts", label: "Download attempts", ...AT_LEAST_1 },
+      { key: "transfers.download.retry.delay", label: "First retry delay" },
       { key: "transfers.download.retry.max_delay", label: "Maximum retry delay" },
       {
         key: "transfers.download.retry.partial",

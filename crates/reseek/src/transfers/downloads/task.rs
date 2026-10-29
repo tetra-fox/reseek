@@ -63,10 +63,10 @@ impl Ended {
   }
 }
 
-/// The wait before try `attempt`, the second or a later one: the shared retry back-off, at most
-/// `max` plus its jitter.
-fn retry_wait(attempt: u32, max: Duration) -> Duration {
-  backoff::wait(attempt - 1, max)
+/// The wait before try `attempt`, the second or a later one: `delay`, doubled for every try
+/// between the first and this one, at most `max`, plus the shared jitter.
+fn retry_wait(attempt: u32, delay: Duration, max: Duration) -> Duration {
+  backoff::wait(attempt - 1, backoff::doubling(delay), max)
 }
 
 impl Downloads {
@@ -200,7 +200,7 @@ impl Downloads {
           record.ended_at = None;
           record.place_in_queue = None;
           record.exception = Some(failure.message);
-          let wait = retry_wait(attempt, retry.max_delay);
+          let wait = retry_wait(attempt, retry.delay, retry.max_delay);
           record.next_attempt_at =
             Some(Utc::now() + chrono::Duration::from_std(wait).unwrap_or(chrono::Duration::MAX));
           delay = Some(wait);
@@ -307,12 +307,12 @@ mod tests {
   const SECOND: Duration = Duration::from_secs(1);
 
   #[test]
-  fn retries_wait_from_nothing_doubling_up_to_the_most() {
-    let whole = |attempt| retry_wait(attempt, 60 * SECOND).as_secs();
+  fn each_retry_waits_twice_as_long_up_to_the_most() {
+    let whole = |attempt| retry_wait(attempt, 5 * SECOND, 60 * SECOND).as_secs();
     let waits: Vec<u64> = (2..=9).map(whole).collect();
     assert_eq!(
       waits,
-      [0, 1, 3, 7, 15, 31, 60, 60],
+      [5, 10, 20, 40, 60, 60, 60, 60],
       "under a second of jitter"
     );
   }

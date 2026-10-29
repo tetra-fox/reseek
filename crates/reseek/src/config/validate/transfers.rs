@@ -37,6 +37,14 @@ pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Re
     at_least("transfers.download.retry.attempts", retry.attempts, 1),
   );
   report.check(
+    "transfers.download.retry.delay",
+    duration_at_least(
+      "transfers.download.retry.delay",
+      retry.delay,
+      Duration::from_secs(1),
+    ),
+  );
+  report.check(
     "transfers.download.retry.max_delay",
     duration_at_least(
       "transfers.download.retry.max_delay",

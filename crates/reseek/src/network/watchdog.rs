@@ -218,7 +218,7 @@ impl Watchdog {
           Some(wait)
         }
         None if failed > 0 => {
-          let wait = backoff::wait(failed, BACKOFF_MAX);
+          let wait = backoff::wait(failed, backoff::AT_ONCE, BACKOFF_MAX);
           info!(
             seconds = wait.as_millis().div_ceil(1000),
             "Waiting before attempting to reconnect"
