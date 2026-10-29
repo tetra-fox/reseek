@@ -286,7 +286,7 @@ async fn waveform_download(
     .await
 }
 
-/// The spectrum of every analysed window of a file, in the order of its report's windows.
+/// The spectrum of every analyzed window of a file, in the order of its report's windows.
 #[utoipa::path(
   get, path = "/files/{root}/files/{path}/analysis/spectra", tag = "analysis",
   params(
@@ -315,7 +315,7 @@ async fn spectra_file(
     .await
 }
 
-/// The spectrum of every analysed window of a succeeded download.
+/// The spectrum of every analyzed window of a succeeded download.
 #[utoipa::path(
   get, path = "/transfers/downloads/{username}/{id}/analysis/spectra", tag = "analysis",
   params(

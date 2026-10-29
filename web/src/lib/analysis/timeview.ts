@@ -53,7 +53,7 @@ export const follow = (view: View, t: number, duration: number): View => {
 export const showsAll = (view: View, duration: number) => view.span >= duration - 1e-9;
 
 /**
- * The analysed window at time `t`: the one whose second holds it, or where the file was read in
+ * The analyzed window at time `t`: the one whose second holds it, or where the file was read in
  * samples and `t` falls between them, the one whose middle is nearest
  */
 export const windowAt = (starts: number[], t: number): number => {
@@ -74,10 +74,10 @@ export const windowAt = (starts: number[], t: number): number => {
   return t - (starts[before] + 0.5) <= starts[after] + 0.5 - t ? before : after;
 };
 
-/** The steps a time axis is labelled at, in seconds, the shortest first */
+/** The steps a time axis is labeled at, in seconds, the shortest first */
 const STEPS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
 
-/** The times a time axis over `view` is labelled at, at least `apart` of its width apart */
+/** The times a time axis over `view` is labeled at, at least `apart` of its width apart */
 export const timeTicks = (view: View, apart: number): number[] => {
   const step = STEPS.find((s) => s / view.span >= apart) ?? STEPS[STEPS.length - 1];
   const first = Math.ceil(view.start / step - 1e-9) * step;

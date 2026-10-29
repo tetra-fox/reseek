@@ -87,7 +87,7 @@ impl Window {
   }
 }
 
-/// The spectrum analyser for one sample rate: the frame transform and the window function.
+/// The spectrum analyzer for one sample rate: the frame transform and the window function.
 pub(super) struct Analyser {
   fft: Arc<dyn RealToComplex<f32>>,
   hann: Vec<f32>,
@@ -105,7 +105,7 @@ pub(super) struct Analyser {
 }
 
 impl Analyser {
-  /// An analyser for audio at `rate` samples per second.
+  /// An analyzer for audio at `rate` samples per second.
   pub fn new(rate: u32, bits: Option<u32>) -> Self {
     let fft = RealFftPlanner::<f32>::new().plan_fft_forward(FFT_SIZE);
     let hann = (0..FFT_SIZE)

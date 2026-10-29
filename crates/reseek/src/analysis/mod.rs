@@ -410,7 +410,7 @@ impl AnalysisService for Analysis {
   }
 }
 
-/// The tag a piece of a report's pictures is served with: the same file analysed at the same
+/// The tag a piece of a report's pictures is served with: the same file analyzed at the same
 /// time gives the same bytes.
 fn entity_tag(stored: &store::Stored, piece: Piece) -> String {
   let piece = match piece {

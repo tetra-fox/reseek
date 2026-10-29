@@ -7,7 +7,7 @@ import {
   loudest,
   type Palette,
   peakBetween,
-  rasterise,
+  rasterize,
   type Rect
 } from "./paint";
 import type { Cells, Pictures } from "./pictures.svelte";
@@ -111,7 +111,7 @@ export class Rasters {
     const key = `${scale}:${height}:${top}`;
     const kept = this.#kept.get(cells);
     if (kept?.key === key) return kept.canvas;
-    const canvas = rasterise(cells, scale, maxHz, height, colors());
+    const canvas = rasterize(cells, scale, maxHz, height, colors());
     this.#kept.set(cells, { key, canvas });
     return canvas;
   }

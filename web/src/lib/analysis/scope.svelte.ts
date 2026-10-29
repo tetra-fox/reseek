@@ -13,7 +13,7 @@ export class Scope {
   readonly report: Report;
   readonly layout: Layout;
   readonly pictures: Pictures;
-  /** where each analysed window starts, in seconds */
+  /** where each analyzed window starts, in seconds */
   readonly starts: number[];
   view = $state.raw<View>({ start: 0, span: 0 });
   /** the cursor's time, in seconds */
@@ -36,7 +36,7 @@ export class Scope {
     return this.layout.durationSeconds;
   }
 
-  /** The analysed window the cursor is in, -1 for a report without windows */
+  /** The analyzed window the cursor is in, -1 for a report without windows */
   get window(): number {
     return windowAt(this.starts, this.cursor);
   }

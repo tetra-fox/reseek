@@ -353,7 +353,7 @@ pub struct WaveformTile {
   pub unread: Vec<[u32; 2]>,
 }
 
-/// The header of a window spectra response, which every analysed window's spectrum over its
+/// The header of a window spectra response, which every analyzed window's spectrum over its
 /// second follows, in the order of the report's windows: `bins` bytes each, lowest first, a
 /// byte a level from `minDb` (0) to `maxDb` (255).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]

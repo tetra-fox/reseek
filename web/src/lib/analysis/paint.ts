@@ -83,7 +83,7 @@ const readAt = (cells: Cells, index: number) => {
  * row reads its frequency between the two linear bins around it, and a column the analysis did
  * not read is left clear
  */
-export const rasterise = (
+export const rasterize = (
   cells: Cells,
   scale: Scale,
   maxHz: number,

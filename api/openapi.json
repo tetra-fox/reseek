@@ -2770,7 +2770,7 @@
         "tags": [
           "analysis"
         ],
-        "summary": "The spectrum of every analysed window of a file, in the order of its report's windows.",
+        "summary": "The spectrum of every analyzed window of a file, in the order of its report's windows.",
         "operationId": "spectra_file",
         "parameters": [
           {
@@ -10816,7 +10816,7 @@
         "tags": [
           "analysis"
         ],
-        "summary": "The spectrum of every analysed window of a succeeded download.",
+        "summary": "The spectrum of every analyzed window of a succeeded download.",
         "operationId": "spectra_download",
         "parameters": [
           {
@@ -24541,7 +24541,7 @@
       },
       "WindowSpectra": {
         "type": "object",
-        "description": "The header of a window spectra response, which every analysed window's spectrum over its\nsecond follows, in the order of the report's windows: `bins` bytes each, lowest first, a\nbyte a level from `minDb` (0) to `maxDb` (255).",
+        "description": "The header of a window spectra response, which every analyzed window's spectrum over its\nsecond follows, in the order of the report's windows: `bins` bytes each, lowest first, a\nbyte a level from `minDb` (0) to `maxDb` (255).",
         "required": [
           "windows",
           "bins",

@@ -541,7 +541,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The spectrum of every analysed window of a file, in the order of its report's windows. */
+        /** The spectrum of every analyzed window of a file, in the order of its report's windows. */
         get: operations["spectra_file"];
         put?: never;
         post?: never;
@@ -2115,7 +2115,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The spectrum of every analysed window of a succeeded download. */
+        /** The spectrum of every analyzed window of a succeeded download. */
         get: operations["spectra_download"];
         put?: never;
         post?: never;
@@ -7581,7 +7581,7 @@ export interface components {
             unread: number[][];
         };
         /**
-         * @description The header of a window spectra response, which every analysed window's spectrum over its
+         * @description The header of a window spectra response, which every analyzed window's spectrum over its
          *     second follows, in the order of the report's windows: `bins` bytes each, lowest first, a
          *     byte a level from `minDb` (0) to `maxDb` (255).
          */

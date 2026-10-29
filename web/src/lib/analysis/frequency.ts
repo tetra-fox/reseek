@@ -56,7 +56,7 @@ export const binsAt = (
   return { below, above: below + 1, share: Math.max(0, at - below) };
 };
 
-/** The frequencies an axis on `scale` is labelled at, up to `maxHz` */
+/** The frequencies an axis on `scale` is labeled at, up to `maxHz` */
 export const frequencyTicks = (scale: Scale, maxHz: number): number[] => {
   const ticks = {
     linear: [0, 5_000, 10_000, 15_000, 20_000, 30_000, 40_000, 60_000, 80_000],

@@ -13,7 +13,7 @@ pub(super) const OVERVIEW_PEAKS: usize = 2048;
 /// How many seconds a tile spans.
 pub(super) const TILE_SECONDS: usize = 16;
 
-/// One analysed window as the tiles are cut from it.
+/// One analyzed window as the tiles are cut from it.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Second<'a> {
   /// the whole second the window starts at
