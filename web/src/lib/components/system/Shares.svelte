@@ -7,8 +7,6 @@
 
   import { api, type Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
-  import { Busy } from "#lib/busy.svelte.js";
-  import { copyText } from "#lib/clipboard.svelte.js";
   import LoadError from "#lib/components/LoadError.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
@@ -16,6 +14,8 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";

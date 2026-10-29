@@ -2,9 +2,9 @@ import { goto } from "$app/navigation";
 
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
+import { toast } from "#lib/feedback/toast.svelte.js";
 import { chatHref, roomHref } from "#lib/nav.js";
 import { fields } from "#lib/stored.svelte.js";
-import { toast } from "#lib/toast.svelte.js";
 import { users } from "#lib/users.svelte.js";
 
 /** The `chat.notifications` options */

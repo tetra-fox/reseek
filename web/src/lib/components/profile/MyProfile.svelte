@@ -17,11 +17,11 @@
   import UserCard from "#lib/components/users/UserCard.svelte";
   import { editability } from "#lib/config/editability.js";
   import { valueAt } from "#lib/config/sections.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { ownProfile } from "#lib/profile.svelte.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
 
   // our own profile: the text and picture on the left, and on the right how others see them

@@ -7,12 +7,12 @@
   import { fly } from "svelte/transition";
 
   import type { Schemas } from "#lib/api/client.js";
-  import { copyText } from "#lib/clipboard.svelte.js";
   import AnalysisPanel from "#lib/components/analysis/AnalysisPanel.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Username from "#lib/components/users/Username.svelte";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import {
     ago,
     formatBytes,

@@ -4,9 +4,9 @@
   import { api, byUser } from "#lib/api/client.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
-  import { toast } from "#lib/toast.svelte.js";
 
   // a user's tags: each links to the users with it; typing one and Enter adds it
   type Props = { username: string; tags: string[]; disabled: boolean };

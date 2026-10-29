@@ -1,5 +1,5 @@
 import { root, sessionGone } from "#lib/api/client.js";
-import { toast } from "#lib/toast.svelte.js";
+import { toast } from "#lib/feedback/toast.svelte.js";
 
 import {
   type End,

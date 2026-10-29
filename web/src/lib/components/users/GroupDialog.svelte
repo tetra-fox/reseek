@@ -5,7 +5,7 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
-  import { toast } from "#lib/toast.svelte.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
 
   import { assignGroup, userGroups } from "./actions";

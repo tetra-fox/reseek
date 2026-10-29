@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
+import { toasts } from "#lib/feedback/toast.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
-import { toasts } from "#lib/toast.svelte.js";
 import { SUMMARY_TTL_MS, users } from "#lib/users.svelte.js";
 
 import { type Arrival, notifier, type NotifyOptions, shouldNotify } from "./notify.svelte";

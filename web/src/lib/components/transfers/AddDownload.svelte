@@ -4,7 +4,7 @@
   import Input from "#lib/components/ui/Input.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { enqueue } from "#lib/downloads.js";
-  import { toast } from "#lib/toast.svelte.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { parsePaste } from "#lib/transfers/add.js";
 
   // a download by hand: a user and a path, or links and search results pasted in

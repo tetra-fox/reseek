@@ -1,13 +1,13 @@
 import { goto } from "$app/navigation";
 
 import { app } from "#lib/app.svelte.js";
-import { copyText } from "#lib/clipboard.svelte.js";
 import { blocking } from "#lib/components/users/block.svelte.js";
 import { enqueue } from "#lib/downloads.js";
+import { copyText } from "#lib/feedback/clipboard.svelte.js";
+import { toast } from "#lib/feedback/toast.svelte.js";
 import { downloadFile } from "#lib/format.js";
 import { href } from "#lib/nav.js";
 import { player, type Track } from "#lib/player.svelte.js";
-import { toast } from "#lib/toast.svelte.js";
 
 import type { BulkAction } from "./bulk";
 import { contentUrl, localFolder } from "./content";

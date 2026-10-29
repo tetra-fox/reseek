@@ -20,13 +20,13 @@
   import type { BrowseFilter } from "#lib/browse/filter.js";
   import { attributesOf, kindOf, lengthOf, sizeOf } from "#lib/browse/summary.js";
   import { downloadGroups, filesUnder, leaf, type TreeNode } from "#lib/browse/tree.js";
-  import { copyText } from "#lib/clipboard.svelte.js";
   import FileMenu from "#lib/components/files/FileMenu.svelte";
   import FolderFiles from "#lib/components/files/FolderFiles.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { asItem, type Enqueued, enqueue } from "#lib/downloads.js";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import {
     formatAttributes,
     formatBytes,

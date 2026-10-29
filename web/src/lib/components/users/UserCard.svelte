@@ -9,17 +9,17 @@
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
 
   import { app } from "#lib/app.svelte.js";
-  import { Busy } from "#lib/busy.svelte.js";
   import { nameColor } from "#lib/colors.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, formatSpeed, plural } from "#lib/format.js";
   import { userHref } from "#lib/nav.js";
   import { firstLines, ownProfile } from "#lib/profile.svelte.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { type UserSummary, users } from "#lib/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";

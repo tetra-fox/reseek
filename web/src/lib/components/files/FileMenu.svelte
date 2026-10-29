@@ -10,8 +10,8 @@
   import SaveIcon from "@lucide/svelte/icons/save";
   import type { Snippet } from "svelte";
 
-  import { copyText } from "#lib/clipboard.svelte.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { slskLink } from "#lib/slsk.js";
 
   import { isAudio, remoteFolder } from "./links";

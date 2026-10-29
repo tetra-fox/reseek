@@ -6,12 +6,12 @@
   import type { Snippet } from "svelte";
 
   import type { Schemas } from "#lib/api/client.js";
-  import { copyText } from "#lib/clipboard.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import type { Editability } from "#lib/config/editability.js";
   import type { Draft } from "#lib/config/fields.js";
   import type { Control, Field } from "#lib/config/sections.js";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
 
   import FieldControl from "./FieldControl.svelte";
   import SourceBadge from "./SourceBadge.svelte";

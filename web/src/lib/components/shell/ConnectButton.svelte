@@ -8,8 +8,8 @@
 
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
-  import { Busy } from "#lib/busy.svelte.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
   import { UNREACHABLE_HINT } from "#lib/reachability.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";

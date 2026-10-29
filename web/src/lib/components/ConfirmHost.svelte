@@ -1,6 +1,6 @@
 <script lang="ts">
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
-  import { confirmation } from "#lib/confirm.svelte.js";
+  import { confirmation } from "#lib/feedback/confirm.svelte.js";
 
   // the dialog behind `confirmation.ask`, mounted once by the app shell
   const q = $derived(confirmation.question);

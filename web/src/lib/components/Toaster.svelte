@@ -5,7 +5,7 @@
   import { fly } from "svelte/transition";
 
   import Button from "#lib/components/ui/Button.svelte";
-  import { dismiss, hold, toasts } from "#lib/toast.svelte.js";
+  import { dismiss, hold, toasts } from "#lib/feedback/toast.svelte.js";
   import { motionFast } from "#lib/ui/motion.js";
 
   const motion = () => ({ duration: motionFast(), easing: cubicOut });

@@ -3,9 +3,9 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { plural } from "#lib/format.js";
   import { call } from "#lib/request.js";
-  import { toast } from "#lib/toast.svelte.js";
 
   type Props = {
     open: boolean;

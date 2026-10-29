@@ -13,6 +13,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, dateTime, listText, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -21,7 +22,6 @@
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
 
   import { unblock, unblockMany } from "./block.svelte";

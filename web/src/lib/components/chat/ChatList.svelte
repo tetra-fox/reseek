@@ -22,12 +22,12 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, plural } from "#lib/format.js";
   import { freezesWhileUsed, heldOrder, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { chatHref, roomHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { users } from "#lib/users.svelte.js";
 

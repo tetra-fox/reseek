@@ -15,7 +15,6 @@
   import { untrack } from "svelte";
 
   import { api, type Schemas } from "#lib/api/client.js";
-  import { copyText } from "#lib/clipboard.svelte.js";
   import LoadError from "#lib/components/LoadError.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -25,6 +24,8 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, dateTime, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
@@ -34,7 +35,6 @@
   import { userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { type UserSummary, users as usersStore } from "#lib/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";

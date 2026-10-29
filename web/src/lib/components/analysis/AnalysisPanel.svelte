@@ -16,9 +16,9 @@
   import { Scope } from "#lib/analysis/scope.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { player, type Track } from "#lib/player.svelte.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
 
   import Judgment from "./Judgment.svelte";
   import Reading from "./Reading.svelte";

@@ -17,10 +17,10 @@
   import { chatLayout } from "#lib/chat/prefs.svelte.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { links, pin } from "#lib/components/users/actions.js";
-  import { confirmation } from "#lib/confirm.svelte.js";
+  import { confirmation } from "#lib/feedback/confirm.svelte.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { href, segment, userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";
 

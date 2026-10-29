@@ -10,11 +10,11 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { href } from "#lib/nav.js";
   import { forget, recent, remember, restore, togglePin } from "#lib/search/recent.svelte.js";
   import { type SearchScope, scopeLabel, searches } from "#lib/search/searches.svelte.js";
   import { parseSlsk, slskBrowse } from "#lib/slsk.js";
-  import { toast } from "#lib/toast.svelte.js";
 
   type Props = {
     /** where the search goes; the whole network when not given */

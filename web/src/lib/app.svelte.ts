@@ -1,11 +1,11 @@
 import { api, onUnauthorized, type Schemas } from "#lib/api/client.js";
 import { chat } from "#lib/chat/chat.svelte.js";
+import { toast } from "#lib/feedback/toast.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { player } from "#lib/player.svelte.js";
 import { call } from "#lib/request.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
-import { toast } from "#lib/toast.svelte.js";
 import { downloads, uploads } from "#lib/transfers/transfers.svelte.js";
 import { users } from "#lib/users.svelte.js";
 

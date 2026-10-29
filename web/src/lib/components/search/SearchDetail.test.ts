@@ -3,14 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
+import { toasts } from "#lib/feedback/toast.svelte.js";
+import { UNDO_MS } from "#lib/feedback/undo.js";
 import { live } from "#lib/live/live.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { searchOptions } from "#lib/settings.svelte.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
-import { toasts } from "#lib/toast.svelte.js";
-import { UNDO_MS } from "#lib/undo.js";
 
 import SearchDetail from "./SearchDetail.svelte";
 

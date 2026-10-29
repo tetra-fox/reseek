@@ -14,7 +14,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { valueAt } from "#lib/config/sections.js";
-  import { confirmation } from "#lib/confirm.svelte.js";
+  import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { plural } from "#lib/format.js";
   import { call } from "#lib/request.js";
 

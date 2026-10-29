@@ -3,7 +3,6 @@
 
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
-  import { Busy } from "#lib/busy.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
@@ -11,6 +10,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import type { ConfigView } from "#lib/config/fields.js";
   import { valueAt } from "#lib/config/sections.js";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
   import { dateTime } from "#lib/format.js";
   import { call } from "#lib/request.js";
   import { RESTART, UNTIL_RESTART } from "#lib/wording.js";

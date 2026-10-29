@@ -19,6 +19,8 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { useCrumbs } from "#lib/crumbs.svelte.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
+  import { undoable } from "#lib/feedback/undo.js";
   import { plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -32,11 +34,9 @@
   import { scopeLabel, searches } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { LONG_QUEUE, searchOptions } from "#lib/settings.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { motionFast } from "#lib/ui/motion.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
-  import { undoable } from "#lib/undo.js";
   import { users } from "#lib/users.svelte.js";
 
   import DenseResults from "./DenseResults.svelte";

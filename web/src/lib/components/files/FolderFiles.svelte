@@ -19,13 +19,13 @@
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import { asItem, enqueue } from "#lib/downloads.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatAttributes, formatBytes, plural } from "#lib/format.js";
   import { Grid, keptIn } from "#lib/lists/table.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { fileMatches, parseFilters } from "#lib/search/filters.js";
   import { separatorOf } from "#lib/search/results.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { rem, viewport } from "#lib/ui/viewport.svelte.js";
 
   import Suspect from "./Suspect.svelte";

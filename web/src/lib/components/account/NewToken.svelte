@@ -3,14 +3,14 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
 
   import { api, root, type Schemas } from "#lib/api/client.js";
-  import { Busy } from "#lib/busy.svelte.js";
-  import { CopyButton } from "#lib/clipboard.svelte.js";
   import Field from "#lib/components/Field.svelte";
   import Form from "#lib/components/Form.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Select from "#lib/components/ui/Select.svelte";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
+  import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
   import { call } from "#lib/request.js";
   import { type Role, session } from "#lib/session.svelte.js";
 

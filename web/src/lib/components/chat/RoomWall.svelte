@@ -8,12 +8,12 @@
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Username from "#lib/components/users/Username.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
 
   // the room's wall: each member's ticker, the latest change first, and a field to set our own

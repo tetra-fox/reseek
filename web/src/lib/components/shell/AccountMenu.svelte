@@ -10,10 +10,10 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { href } from "#lib/nav.js";
   import { ownProfile } from "#lib/profile.svelte.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
 
   import { sidebar } from "./sidebar.svelte";
 

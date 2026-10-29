@@ -1,10 +1,10 @@
 import { SvelteSet } from "svelte/reactivity";
 
 import { api, byUser, type Schemas } from "#lib/api/client.js";
+import { toast } from "#lib/feedback/toast.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
-import { toast } from "#lib/toast.svelte.js";
 
 import { type BrowseInfo, readListing, writeListing } from "./cache";
 import { rememberBrowsed } from "./recent.svelte";

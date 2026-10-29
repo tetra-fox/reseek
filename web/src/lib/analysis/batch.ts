@@ -1,5 +1,5 @@
+import { toast } from "#lib/feedback/toast.svelte.js";
 import { getFileName, listText, plural } from "#lib/format.js";
-import { toast } from "#lib/toast.svelte.js";
 import { isSucceeded, type Transfer } from "#lib/transfers/states.js";
 
 import { queue, type Target } from "./analysis";

@@ -8,10 +8,10 @@
   import SearchIcon from "@lucide/svelte/icons/search";
 
   import { app } from "#lib/app.svelte.js";
-  import { CopyButton } from "#lib/clipboard.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { trail } from "#lib/crumbs.svelte.js";
+  import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
   import { listText } from "#lib/format.js";
   import { baseCrumbs, href, route } from "#lib/nav.js";
   import { shortcutAria, shortcutText } from "#lib/ui/keys.js";

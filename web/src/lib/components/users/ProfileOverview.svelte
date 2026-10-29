@@ -2,9 +2,9 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
 
   import type { Schemas } from "#lib/api/client.js";
-  import { copyText } from "#lib/clipboard.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { formatBytes } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
 

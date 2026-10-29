@@ -15,14 +15,14 @@
   import { flag } from "#lib/components/users/hover.svelte.js";
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { confirmation } from "#lib/confirm.svelte.js";
+  import { confirmation } from "#lib/feedback/confirm.svelte.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatSpeed, plural } from "#lib/format.js";
   import { freezesWhileUsed, heldOrder, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { userHref } from "#lib/nav.js";
   import type { Outcome } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
 
   // who is in a room: operators then members, online first, a filter and the counts; in a private

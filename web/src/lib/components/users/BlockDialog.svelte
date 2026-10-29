@@ -7,7 +7,7 @@
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
-  import { toast } from "#lib/toast.svelte.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
 
   import {
     ALSO_SCOPES,

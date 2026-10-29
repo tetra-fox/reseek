@@ -3,12 +3,12 @@
   import { onMount } from "svelte";
 
   import { api, type Schemas } from "#lib/api/client.js";
-  import { Busy } from "#lib/busy.svelte.js";
   import LoadError from "#lib/components/LoadError.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
   import { ago, dateTime } from "#lib/format.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";

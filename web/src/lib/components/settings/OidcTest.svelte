@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api, type Schemas } from "#lib/api/client.js";
-  import { Busy } from "#lib/busy.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
   import { call } from "#lib/request.js";
 
   // a discovery check for each configured provider, its outcome shown under it

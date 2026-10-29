@@ -11,10 +11,10 @@
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import { DropdownMenu, Popover } from "bits-ui";
 
-  import { Busy } from "#lib/busy.svelte.js";
-  import { copyText } from "#lib/clipboard.svelte.js";
   import { nameColor } from "#lib/colors.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { interaction } from "#lib/lists/interaction.svelte.js";
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";

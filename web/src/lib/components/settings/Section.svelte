@@ -6,8 +6,6 @@
   import { SvelteSet } from "svelte/reactivity";
 
   import { api } from "#lib/api/client.js";
-  import { Busy } from "#lib/busy.svelte.js";
-  import { CopyButton } from "#lib/clipboard.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -25,11 +23,13 @@
   import { fieldMatches } from "#lib/config/find.js";
   import { asNixSettings } from "#lib/config/nix.js";
   import { type Field, type Section, valueAt } from "#lib/config/sections.js";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
+  import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { plural } from "#lib/format.js";
   import { same } from "#lib/lists/keyed.svelte.js";
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { UNTIL_RESTART } from "#lib/wording.js";
 
   import FieldRow from "./FieldRow.svelte";

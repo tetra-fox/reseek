@@ -3,8 +3,8 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
 
-  import { CopyButton } from "#lib/clipboard.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
 
   type Props = {
     caption: string;

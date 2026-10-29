@@ -22,9 +22,9 @@
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Username from "#lib/components/users/Username.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatBytes, formatDuration, plural } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { act, folderOf, openFolder } from "#lib/transfers/actions.js";
   import { encodePath } from "#lib/transfers/content.js";
   import { groupProgress } from "#lib/transfers/progress.js";

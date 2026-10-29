@@ -1,4 +1,5 @@
-import type { Outcome } from "./request";
+import type { Outcome } from "#lib/request.js";
+
 import { toast } from "./toast.svelte";
 
 /**

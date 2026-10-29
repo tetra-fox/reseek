@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { toasts } from "#lib/feedback/toast.svelte.js";
 import { transfer } from "#lib/testing/fixtures.js";
 import { fakeNetwork } from "#lib/testing/network.js";
-import { toasts } from "#lib/toast.svelte.js";
 
 import { Transfers } from "./transfers.svelte";
 

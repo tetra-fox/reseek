@@ -12,6 +12,7 @@
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { asItem, enqueue } from "#lib/downloads.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import {
     formatAttributes,
     formatBytes,
@@ -25,7 +26,6 @@
   import { Grid } from "#lib/lists/table.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { DENSE_COLUMNS, type DenseColumn, type DenseRow, denseView } from "#lib/search/dense.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { rem } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users.svelte.js";
 

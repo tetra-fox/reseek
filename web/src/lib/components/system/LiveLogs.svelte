@@ -6,11 +6,11 @@
   import PlayIcon from "@lucide/svelte/icons/play";
 
   import { api, type Schemas } from "#lib/api/client.js";
-  import { copyText } from "#lib/clipboard.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";

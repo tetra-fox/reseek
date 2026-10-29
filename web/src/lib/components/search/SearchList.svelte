@@ -16,6 +16,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Time from "#lib/components/ui/Time.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { NONE } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -23,7 +24,6 @@
   import { remember } from "#lib/search/recent.svelte.js";
   import { isDone, scopeLabel, searches } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
 
   import StatusIcon from "./StatusIcon.svelte";
 

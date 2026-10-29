@@ -8,6 +8,8 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
+  import { undoable } from "#lib/feedback/undo.js";
   import {
     type Preset,
     presetsOf,
@@ -16,8 +18,6 @@
     withPreset
   } from "#lib/search/presets.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
-  import { undoable } from "#lib/undo.js";
 
   // the named filters kept by the daemon, one click puts one in the filter box
   let { filter = $bindable() }: { filter: string } = $props();

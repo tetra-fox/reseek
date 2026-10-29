@@ -11,9 +11,9 @@
   } from "#lib/analysis/analysis.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatDate } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
 
   // the user's own judgment of the file, which lists show in place of the analyzer's reading:
   // genuine, fake or not decided, with a note, saved with a tick when it is kept

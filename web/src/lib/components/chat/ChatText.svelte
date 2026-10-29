@@ -3,9 +3,9 @@
 
   import { richText } from "#lib/chat/rich.js";
   import { enqueue } from "#lib/downloads.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { slskBrowse, type SlskLink } from "#lib/slsk.js";
-  import { toast } from "#lib/toast.svelte.js";
 
   // a chat message's text, shown as text: web links open in a new tab, slsk:// links open the
   // folder in Browse with a download button for a file, and the watched words are marked

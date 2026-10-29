@@ -19,11 +19,11 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { plural } from "#lib/format.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users.svelte.js";
 

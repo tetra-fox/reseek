@@ -21,6 +21,7 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { asItem, type Enqueued, enqueue } from "#lib/downloads.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { fetchFolder } from "#lib/folders.js";
   import {
     columnWidth,
@@ -33,7 +34,6 @@
   } from "#lib/format.js";
   import { href } from "#lib/nav.js";
   import { type Result, type ResultFile, resultFiles } from "#lib/search/results.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, folderTree, treeLines } from "#lib/tree/folders.js";
   import { TICK_REM } from "#lib/tree/indent.js";

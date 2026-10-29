@@ -3,7 +3,7 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "#lib/app.svelte.js";
-import { confirmation } from "#lib/confirm.svelte.js";
+import { confirmation } from "#lib/feedback/confirm.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";

@@ -4,14 +4,14 @@
 
   import { api, type Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
-  import { Busy } from "#lib/busy.svelte.js";
   import LoadError from "#lib/components/LoadError.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { sections, valueAt } from "#lib/config/sections.js";
-  import { confirmation } from "#lib/confirm.svelte.js";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
+  import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { formatBytes, parseDuration, sayDuration } from "#lib/format.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";

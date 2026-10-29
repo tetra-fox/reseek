@@ -23,7 +23,6 @@
   import { analyzable, analyzerOffered, marks } from "#lib/analysis/marks.svelte.js";
   import { api, type Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
-  import { copyText } from "#lib/clipboard.svelte.js";
   import AnalysisDrawer from "#lib/components/analysis/AnalysisDrawer.svelte";
   import AnalysisJobs from "#lib/components/analysis/AnalysisJobs.svelte";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
@@ -36,7 +35,9 @@
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { confirmation } from "#lib/confirm.svelte.js";
+  import { copyText } from "#lib/feedback/clipboard.svelte.js";
+  import { confirmation } from "#lib/feedback/confirm.svelte.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { dateTime, formatBytes, plural } from "#lib/format.js";
   import { archiveUrl, fileTrack, fileUrl, joinPath, type Root } from "#lib/localfiles.js";
   import { href } from "#lib/nav.js";
@@ -44,7 +45,6 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
   import { encodePath } from "#lib/transfers/content.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";

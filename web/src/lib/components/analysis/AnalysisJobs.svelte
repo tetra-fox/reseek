@@ -3,8 +3,8 @@
 
   import { jobs } from "#lib/analysis/jobs.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { session } from "#lib/session.svelte.js";
-  import { toast } from "#lib/toast.svelte.js";
 
   // the files waiting for or under analysis, with how far each is and a way to cancel it;
   // nothing while the queue is empty
