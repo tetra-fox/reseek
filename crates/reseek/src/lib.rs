@@ -7,6 +7,7 @@ pub mod analysis;
 pub mod api;
 pub mod app;
 pub mod auth;
+pub mod backoff;
 pub mod cli;
 pub mod clock;
 pub mod config;

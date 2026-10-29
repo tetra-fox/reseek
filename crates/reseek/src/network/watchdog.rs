@@ -14,12 +14,12 @@ use std::time::Duration;
 use api_types::state::ConnectionWatchdogState;
 use cascade::Watcher;
 use chrono::Utc;
-use rand::Rng;
 use soulseek_client::{Client, ClientError, ClientState};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
+use crate::backoff;
 use crate::config::Options;
 use crate::shares::Shares;
 use crate::state::StateOwner;
@@ -27,9 +27,6 @@ use crate::sync::lock;
 
 /// How often the timer starts a loop while the watchdog is on and no loop runs.
 const BACKSTOP: Duration = Duration::from_millis(100);
-
-/// The back-off's unit: the second attempt waits about this long.
-pub const BACKOFF_BASE: Duration = Duration::from_secs(1);
 
 /// The longest wait between two attempts after transport failures.
 pub const BACKOFF_MAX: Duration = Duration::from_secs(300);
@@ -40,21 +37,6 @@ const UNANSWERED: [Duration; 3] = [
   Duration::from_secs(60 * 60),
   Duration::from_secs(6 * 60 * 60),
 ];
-
-/// The wait before the attempt after `iteration` failed ones, without its jitter: half of
-/// `2^iteration - 1` times `base`, rounded down, at most `max`. The first retry is at once.
-pub fn backoff(iteration: u32, base: Duration, max: Duration) -> Duration {
-  let factor = ((1u128 << iteration.min(100)) - 1) / 2;
-  let millis = factor.saturating_mul(base.as_millis()).min(max.as_millis());
-  // at most `max`, which is a Duration's milliseconds
-  Duration::from_millis(u64::try_from(millis).unwrap_or(u64::MAX))
-}
-
-/// A random wait added to a back-off: whole milliseconds below `base`.
-pub fn jitter(base: Duration) -> Duration {
-  let base = u64::try_from(base.as_millis()).unwrap_or(u64::MAX);
-  Duration::from_millis(rand::rng().random_range(0..base.max(1)))
-}
 
 /// The wait after `unanswered` logins in a row went unanswered, `None` after none.
 pub fn unanswered_wait(unanswered: u32) -> Option<Duration> {
@@ -236,7 +218,7 @@ impl Watchdog {
           Some(wait)
         }
         None if failed > 0 => {
-          let wait = backoff(failed, BACKOFF_BASE, BACKOFF_MAX) + jitter(BACKOFF_BASE);
+          let wait = backoff::wait(failed, BACKOFF_MAX);
           info!(
             seconds = wait.as_millis().div_ceil(1000),
             "Waiting before attempting to reconnect"
@@ -365,47 +347,6 @@ enum Attempt {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  fn seconds(ms: u64) -> Duration {
-    Duration::from_millis(ms)
-  }
-
-  #[test]
-  fn the_backoff_doubles_from_nothing_up_to_its_cap() {
-    let delays: Vec<u64> = (1..=11)
-      .map(|i| backoff(i, BACKOFF_BASE, BACKOFF_MAX).as_millis() as u64)
-      .collect();
-    assert_eq!(
-      delays,
-      [
-        0, 1_000, 3_000, 7_000, 15_000, 31_000, 63_000, 127_000, 255_000, 300_000, 300_000
-      ]
-    );
-    assert_eq!(backoff(0, BACKOFF_BASE, BACKOFF_MAX), Duration::ZERO);
-    assert_eq!(
-      backoff(999_999, BACKOFF_BASE, BACKOFF_MAX),
-      BACKOFF_MAX,
-      "capped"
-    );
-  }
-
-  #[test]
-  fn the_backoff_scales_with_its_base() {
-    for (iteration, half, double) in [(2, 500, 2_000), (3, 1_500, 6_000), (4, 3_500, 14_000)] {
-      assert_eq!(backoff(iteration, seconds(500), BACKOFF_MAX), seconds(half));
-      assert_eq!(
-        backoff(iteration, seconds(2_000), BACKOFF_MAX),
-        seconds(double)
-      );
-    }
-  }
-
-  #[test]
-  fn the_jitter_stays_below_its_base() {
-    for _ in 0..1000 {
-      assert!(jitter(BACKOFF_BASE) < BACKOFF_BASE);
-    }
-  }
 
   #[test]
   fn unanswered_logins_back_off_hard() {
