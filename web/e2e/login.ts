@@ -8,3 +8,14 @@ export const login = async (page: Page, route = "/dashboard") => {
   await page.getByRole("button", { name: "Log in", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`#${route}$`));
 };
+
+/**
+ * A browser's larger font sizes: at a root of 20 px, "Large", the app's 14 px text is 17.5 px.
+ * Set before every page, since a navigation may load a new one
+ */
+export const textSize = (page: Page, root: number) =>
+  page.addInitScript((px) => {
+    document.addEventListener("DOMContentLoaded", () => {
+      document.documentElement.style.fontSize = `${px}px`;
+    });
+  }, root);

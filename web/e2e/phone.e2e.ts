@@ -12,7 +12,7 @@ import {
   fakeSearch,
   SEARCH_ID
 } from "./fakes";
-import { login } from "./login";
+import { login, textSize } from "./login";
 
 // a phone's width: no screen may be wider than it, so nothing runs off its right edge
 test.use({ viewport: { width: 390, height: 844 } });
@@ -268,17 +268,6 @@ test.describe("on a wide screen", () => {
     expect(over).toEqual([]);
   });
 });
-
-/**
- * A browser's larger font sizes: at a root of 20 px, "Large", the app's 14 px text is 17.5 px.
- * Set before every page, since a navigation may load a new one
- */
-const textSize = (page: Page, root: number) =>
-  page.addInitScript((px) => {
-    document.addEventListener("DOMContentLoaded", () => {
-      document.documentElement.style.fontSize = `${px}px`;
-    });
-  }, root);
 
 test.describe("at a large text size", () => {
   test.describe("on a wide screen", () => {
