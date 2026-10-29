@@ -149,8 +149,12 @@
     "Liberation Mono", "Courier New", monospace;
 }
 
-/* shadows refer to these so dark mode can swap them, tailwind inlines theme shadows otherwise */
+/* shadows refer to these so dark mode can swap them, tailwind inlines theme shadows otherwise.
+   The color scheme is declared here as well as by the theme switcher: the build turns the
+   light-dark() in the chart library's styles into variables it sets only where a stylesheet
+   declares one */
 :root {
+  color-scheme: light;
   /* the accent's hue, which every accent color in both themes takes; the color is the owner's
      to choose, so choosing it is this one line */
   --accent-hue: 252;
@@ -194,6 +198,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --color-page: oklch(0.135 0.006 255);
   --color-surface: oklch(0.168 0.007 255);
   --color-surface-muted: oklch(0.198 0.008 255);
@@ -404,6 +409,13 @@
   --color-surface-200: var(--color-surface-muted);
   --color-surface-300: var(--color-border);
   --color-surface-content: var(--color-fg);
+}
+
+/* a chart's tooltip is a popover like the app's others, on the overlay's solid fill, with their
+   border, corners and shadow */
+.lc-tooltip-container:not([data-variant="none"]) {
+  @apply rounded-control border bg-overlay text-fg shadow-raised;
+  backdrop-filter: none;
 }
 
 /* the nav link for where the page is, marked with aria-current */

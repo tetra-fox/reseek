@@ -49,3 +49,29 @@ for (const [width, height] of [
     });
   }
 }
+
+/** The alpha of a computed color, as `rgba(r, g, b, a)` or `oklch(l c h / a)` writes it */
+const alpha = (color: string) => {
+  const slash = color.match(/\/\s*([\d.]+)(%?)\s*\)$/);
+  if (slash) return Number(slash[1]) / (slash[2] ? 100 : 1);
+  const rgba = color.match(/^rgba\(.*,\s*([\d.]+)\)$/);
+  return rgba ? Number(rgba[1]) : 1;
+};
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`a chart's tooltip is opaque, ${scheme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await fakeReports(page);
+    await login(page, "/dashboard");
+    for (const name of ["Transfers over time", "Transfer outcomes"]) {
+      const chart = page.getByRole("img", { name }).first();
+      await chart.scrollIntoViewIfNeeded();
+      const box = (await chart.boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      const tip = page.locator(".lc-tooltip-container").first();
+      await expect(tip, name).toBeVisible();
+      const fill = await tip.evaluate((e) => getComputedStyle(e).backgroundColor);
+      expect(alpha(fill), `${name}: ${fill}`).toBeGreaterThan(0.97);
+    }
+  });
+}
