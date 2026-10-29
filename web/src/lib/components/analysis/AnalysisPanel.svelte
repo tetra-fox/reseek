@@ -35,9 +35,11 @@
     start?: boolean;
     /** called once a file's report, or the lack of one, is on the page */
     onshown?: () => void;
+    /** opens straight in the large view once there is a spectrogram to show */
+    large?: boolean;
   };
 
-  let { target, track = null, start = false, onshown }: Props = $props();
+  let { target, track = null, start = false, onshown, large: openLarge = false }: Props = $props();
 
   /** undefined while loading, null when the file has no report */
   let report = $state.raw<Report | null | undefined>(undefined);
@@ -114,6 +116,13 @@
   });
   /** the spectrogram shown across the whole screen */
   let large = $state(false);
+  // asked to open large: once, as soon as the spectrogram can show
+  let openedLarge = false;
+  $effect(() => {
+    if (!openLarge || openedLarge || !scope) return;
+    openedLarge = true;
+    large = true;
+  });
   // the report is read again whenever an analysis finishes
   $effect(() => {
     if (jobs.finished) void load();

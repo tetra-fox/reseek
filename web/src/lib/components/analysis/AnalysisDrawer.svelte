@@ -20,11 +20,13 @@
     track: Track | null;
     name: string;
     start: boolean;
+    /** opens straight in the large view */
+    large?: boolean;
     actions?: Snippet;
     onclose: () => void;
   };
 
-  let { target, track, name, start, actions, onclose }: Props = $props();
+  let { target, track, name, start, large = false, actions, onclose }: Props = $props();
 </script>
 
 <svelte:window
@@ -44,6 +46,6 @@
       ><XIcon /></Button>
   </header>
   <div class="flex-1 overflow-y-auto p-4">
-    <AnalysisPanel {target} {track} {start} />
+    <AnalysisPanel {target} {track} {start} {large} />
   </div>
 </aside>

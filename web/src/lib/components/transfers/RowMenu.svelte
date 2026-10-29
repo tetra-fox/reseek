@@ -23,6 +23,7 @@
   import { isAudio, remoteFolder } from "#lib/components/files/links.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { links } from "#lib/components/users/actions.js";
+  import { shiftHeld } from "#lib/keys.js";
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import {
@@ -51,7 +52,7 @@
     /** opens the details drawer; without it the menu has no Details */
     ondetails?: () => void;
     /** opens the file's analysis; without it the menu has no Analyze */
-    onanalyze?: () => void;
+    onanalyze?: (large: boolean) => void;
   };
 
   let { transfer: t, direction, around, onremove, onblock, ondetails, onanalyze }: Props = $props();
@@ -126,6 +127,6 @@
   {/if}
   {#if onanalyze && can.open}
     {#if !ondetails}<Menu.Separator />{/if}
-    <Menu.Item onSelect={onanalyze}><AudioLinesIcon />Analyze</Menu.Item>
+    <Menu.Item onSelect={() => onanalyze(shiftHeld())}><AudioLinesIcon />Analyze</Menu.Item>
   {/if}
 </Menu.Content>

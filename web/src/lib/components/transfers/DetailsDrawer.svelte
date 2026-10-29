@@ -44,8 +44,10 @@
     onblock: (deny: boolean) => void;
     /** the drawer opened at the file's analysis, which starts one when the file has none */
     analyze?: boolean;
-    /** moves to the file's analysis and starts one when the file has none */
-    onanalyze: () => void;
+    /** the analysis opens straight in the large view */
+    analyzeLarge?: boolean;
+    /** moves to the file's analysis and starts one when the file has none, in the large view with `large` */
+    onanalyze: (large: boolean) => void;
   };
 
   let {
@@ -58,6 +60,7 @@
     onremove,
     onblock,
     analyze = false,
+    analyzeLarge = false,
     onanalyze
   }: Props = $props();
 
@@ -266,6 +269,7 @@
           target={{ kind: "download", username: t.username, id: t.id }}
           track={downloadTrack(t)}
           start={analyze}
+          large={analyzeLarge}
           onshown={reveal} />
       </section>
     {/if}

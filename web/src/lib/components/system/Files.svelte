@@ -38,6 +38,7 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
   import { dateTime, formatBytes, plural } from "#lib/format.js";
+  import { shiftHeld } from "#lib/keys.js";
   import { archiveUrl, fileTrack, fileUrl, joinPath, type Root } from "#lib/localfiles.js";
   import { href } from "#lib/nav.js";
   import { player } from "#lib/player.svelte.js";
@@ -160,7 +161,7 @@
     e.kind !== "file" || !only || passes(only, marks.file(root, e.path), analyzable(e.name));
   $effect(() => marks.retain());
   /** the file whose analysis the drawer shows, queued when it has none with `start` */
-  let analyzing = $state<{ entry: Entry; start: boolean } | null>(null);
+  let analyzing = $state<{ entry: Entry; start: boolean; large: boolean } | null>(null);
   $effect(() => {
     void root;
     analyzing = null;
@@ -379,7 +380,7 @@
           <Menu.Item onSelect={() => preview(e)}><PlayIcon />Preview</Menu.Item>
         {/if}
         {#if analyzable(e.name)}
-          <Menu.Item onSelect={() => (analyzing = { entry: e, start: write })}
+          <Menu.Item onSelect={() => (analyzing = { entry: e, start: write, large: shiftHeld() })}
             ><AudioLinesIcon />Analyze</Menu.Item>
         {/if}
         <Menu.Item onSelect={() => void save(e)}><SaveIcon />Download to device</Menu.Item>
@@ -534,6 +535,7 @@
     track={fileTrack(root, e.path)}
     name={e.name}
     start={analyzing.start}
+    large={analyzing.large}
     onclose={() => (analyzing = null)}>
     {#snippet actions()}
       {#if isAudio(e.name)}

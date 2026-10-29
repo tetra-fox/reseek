@@ -77,6 +77,8 @@
   let detailId = $state<string | null>(null);
   /** the transfer whose drawer opened at its analysis, which starts one when it has none */
   let analyzeId = $state<string | null>(null);
+  /** the analysis opens straight in the large view */
+  let analyzeLarge = $state(false);
   const folds = new Expansion(true);
   const selected = new SvelteSet<string>();
   let confirm = $state<{ title: string; body: string; label: string; run: () => void } | null>(
@@ -289,9 +291,10 @@
     {view}
     expansion={folds}
     {selected}
-    ondetails={(t, analyze) => {
+    ondetails={(t, analyze, large) => {
       detailId = t.id;
       analyzeId = analyze ? t.id : null;
+      analyzeLarge = !!large;
     }}
     onremove={remove}
     ondelete={remove}
@@ -339,7 +342,11 @@
     {direction}
     around={detailAround}
     analyze={analyzeId === detail.id}
-    onanalyze={() => (analyzeId = detail.id)}
+    analyzeLarge={analyzeId === detail.id && analyzeLarge}
+    onanalyze={(large) => {
+      analyzeId = detail.id;
+      analyzeLarge = large;
+    }}
     onclose={() => (detailId = null)}
     onstep={step}
     onremove={() => remove([detail])}
