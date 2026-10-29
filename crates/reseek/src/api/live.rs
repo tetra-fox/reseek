@@ -280,29 +280,33 @@ mod tests {
     );
     assert!(b.id.unwrap() > seen && c.id > b.id);
 
-    let mut late = app
-      .stream_from(
-        "127.0.0.1:1",
-        with(
-          request("GET", "/api/v0/live?topics=application,users", None),
-          "last-event-id",
-          // below every number a sequence starts at, so older than anything the ring keeps
-          &((1u64 << 32) - 1).to_string(),
-        ),
-      )
-      .await;
-    let frames = late.until("lagged").await;
-    let kinds: Vec<&str> = frames.iter().map(|f| f.event.as_str()).collect();
-    assert_eq!(
-      kinds,
-      [
-        "hello",
-        "application.state",
-        "application.options",
-        "lagged"
-      ]
-    );
-    assert_eq!(frames[0].data["resumed"], false);
+    // below every number a sequence starts at, so older than anything the ring keeps; and
+    // above every number one reaches, as one from an earlier run of the daemon can be
+    for unknown in [(1u64 << 32) - 1, 1 << 50] {
+      let mut late = app
+        .stream_from(
+          "127.0.0.1:1",
+          with(
+            request("GET", "/api/v0/live?topics=application,users", None),
+            "last-event-id",
+            &unknown.to_string(),
+          ),
+        )
+        .await;
+      let frames = late.until("lagged").await;
+      let kinds: Vec<&str> = frames.iter().map(|f| f.event.as_str()).collect();
+      assert_eq!(
+        kinds,
+        [
+          "hello",
+          "application.state",
+          "application.options",
+          "lagged"
+        ],
+        "{unknown}"
+      );
+      assert_eq!(frames[0].data["resumed"], false, "{unknown}");
+    }
   }
 
   #[tokio::test]

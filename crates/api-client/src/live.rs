@@ -246,8 +246,8 @@ mod tests {
     serde_json::to_value(frame).unwrap()["data"].to_string()
   }
 
-  /// A daemon that answers the `n`th connection with `answers[n]` and sends back each
-  /// request's `Last-Event-ID`.
+  /// A daemon that answers the `n`th connection with `answers[n]`, an empty one closing the
+  /// connection unanswered, and sends back each request's `Last-Event-ID`.
   async fn daemon(answers: Vec<String>) -> (String, tokio::sync::mpsc::Receiver<Option<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
@@ -288,6 +288,7 @@ mod tests {
     let hello = hello();
     let (base, mut asked) = daemon(vec![
       events(&format!("id: 7\nevent: hello\ndata: {hello}\n\n")),
+      String::new(),
       refusal("429 Too Many Requests", "retry-after: 0\r\n"),
       refusal("503 Service Unavailable", ""),
       refusal("502 Bad Gateway", ""),
@@ -300,6 +301,8 @@ mod tests {
     let mut stream = client.live(&["application"]).open().await.unwrap();
     let first = stream.next().await.unwrap().unwrap();
     assert_eq!(first.id, Some(7));
+    let dropped = stream.next().await.unwrap().unwrap_err();
+    assert_eq!(dropped.status(), None, "a connection closed unanswered");
     for status in [429, 503, 502] {
       let error = stream.next().await.unwrap().unwrap_err();
       assert_eq!(error.status().map(|s| s.as_u16()), Some(status));
@@ -315,7 +318,7 @@ mod tests {
       "a refused credential ends the stream"
     );
     assert_eq!(asked.recv().await.unwrap(), None);
-    for _ in 0..4 {
+    for _ in 0..5 {
       assert_eq!(
         asked.recv().await.unwrap().as_deref(),
         Some("7"),
