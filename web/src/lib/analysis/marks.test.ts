@@ -6,7 +6,8 @@ const reading: Mark = {
   verdict: "likely_transcode",
   profile: "mp3 ~128 kbps",
   judgement: null,
-  note: null
+  note: null,
+  stale: false
 };
 const fake: Mark = { ...reading, judgement: "fake", note: "an old rip" };
 
@@ -40,5 +41,6 @@ describe("a chip's hint", () => {
   it("names the judgement with its note, or else the analyser's reading", () => {
     expect(markHint(fake)).toBe("You marked this fake: an old rip");
     expect(markHint(reading)).toBe("The analyser's reading: likely a transcode, mp3 ~128 kbps");
+    expect(markHint({ ...reading, stale: true })).toBe("Analysed by an older version of reseek");
   });
 });

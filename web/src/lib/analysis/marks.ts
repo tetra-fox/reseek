@@ -7,6 +7,8 @@ export type Mark = {
   profile: string | null;
   judgement: Judgement | null;
   note: string | null;
+  /** analysed by an older version, whose report this one cannot show */
+  stale: boolean;
 };
 
 /** The mark of a report */
@@ -14,7 +16,8 @@ export const markOf = (r: Report): Mark => ({
   verdict: r.verdict,
   profile: r.encoderGuess?.profile ?? null,
   judgement: r.override?.verdict ?? null,
-  note: r.override?.note ?? null
+  note: r.override?.note ?? null,
+  stale: r.stale
 });
 
 /** What a mark's chip says when it is pointed at */
@@ -23,6 +26,7 @@ export const markHint = (m: Mark) => {
     const marked = `You marked this ${JUDGEMENTS[m.judgement].toLowerCase()}`;
     return m.note ? `${marked}: ${m.note}` : marked;
   }
+  if (m.stale) return "Analysed by an older version of reseek";
   const reading = VERDICTS[m.verdict].toLowerCase();
   return `The analyser's reading: ${reading}${m.profile ? `, ${m.profile}` : ""}`;
 };

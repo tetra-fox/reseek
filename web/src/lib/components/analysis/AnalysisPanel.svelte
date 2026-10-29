@@ -81,10 +81,12 @@
   });
   /** the file last queued because it was asked to start, so it is queued once */
   let started = "";
-  // asked to start, a file without a report is queued once it is known to have none
+  // asked to start, a file without a report it can show is queued once that is known
   $effect(() => {
     const key = targetKey(target);
-    if (!start || report !== null || !write || started === key) return;
+    // a report an older version made is as good as none
+    const none = report === null || report?.stale === true;
+    if (!start || !none || !write || started === key) return;
     started = key;
     void analyse(false);
   });
@@ -146,6 +148,18 @@
     <p class="text-sm text-fg-muted">{error}</p>
   {:else if report === undefined}
     <p class="text-sm text-fg-muted">Loading...</p>
+  {:else if report?.stale}
+    {#if !job}
+      <div class="flex flex-col items-start gap-2 text-sm">
+        <p class="text-fg-muted">
+          This was analysed by an older version of reseek. Analyse again to see it.
+        </p>
+        {#if write}
+          <Button size="sm" onclick={() => void analyse(false)}>Analyse</Button>
+        {/if}
+      </div>
+    {/if}
+    <Judgement {target} {report} onsaved={() => void load()} />
   {:else if report}
     {#if report.spectrogram}
       <Spectrogram

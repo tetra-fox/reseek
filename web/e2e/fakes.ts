@@ -598,15 +598,16 @@ const report = (
     ]
   },
   override,
-  limitations: ["Two or more lossy generations show as the lowest cutoff among them."]
+  limitations: ["Two or more lossy generations show as the lowest cutoff among them."],
+  stale: false
 });
 
 /**
  * Answers every file's and download's analysis with the report of a transcode, its image, its
  * windows' spectra and an empty queue, and the list of reports with 2.flac's and track.flac's; a
- * judgement put is kept and read back
+ * judgement put is kept and read back. With `stale`, a file's report is one an older version made
  */
-export const fakeAnalysis = async (page: Page) => {
+export const fakeAnalysis = async (page: Page, { stale = false } = {}) => {
   let override: unknown = null;
   await page.route(
     (url) => /\/analysis(\/|$)/.test(url.pathname),
@@ -655,7 +656,11 @@ export const fakeAnalysis = async (page: Page) => {
       }
       // the layout on the scale asked for, the linear one when none is
       const scale = new URL(route.request().url()).searchParams.get("scale") ?? "linear";
-      return route.fulfill({ json: report(override, undefined, scale) });
+      const json = report(override, undefined, scale);
+      // an older version's report: the file, the reading and the judgement, nothing to draw
+      if (stale)
+        return route.fulfill({ json: { ...json, stale, spectrogram: null, windows: null } });
+      return route.fulfill({ json });
     }
   );
 };

@@ -87,6 +87,29 @@ test("analyses a finished download from its row and keeps a judgement", async ({
   await expect(large).toBeHidden();
 });
 
+test("a report an older version made asks to be analysed again", async ({ page }) => {
+  await fakeDownloads(page);
+  await fakeAnalysis(page, { stale: true });
+  const queued: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() === "POST" && r.url().includes("/analysis")) queued.push(r.url());
+  });
+  await login(page, "/downloads");
+  await page.getByRole("button", { name: "More for 2.flac" }).click();
+  await page.getByRole("menuitem", { name: "Analyse" }).click();
+  const drawer = page.getByRole("complementary", { name: "Transfer details" });
+  await expect(
+    drawer.getByText("This was analysed by an older version of reseek. Analyse again to see it.")
+  ).toBeVisible();
+  await expect(drawer.getByRole("img", { name: /^Spectrogram/ })).toHaveCount(0);
+  // the judgement is the user's and outlives the report
+  await expect(drawer.getByRole("radiogroup", { name: "Your judgement" })).toBeVisible();
+  // asked to analyse, it is queued as a file with no report would be
+  await expect.poll(() => queued.length).toBe(1);
+  await drawer.getByRole("button", { name: "Analyse", exact: true }).click();
+  await expect.poll(() => queued.length).toBe(2);
+});
+
 test("filters downloads by their analysis, by chip and by word", async ({ page }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);

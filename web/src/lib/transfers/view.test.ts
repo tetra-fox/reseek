@@ -14,7 +14,13 @@ describe("the transfers view", () => {
   });
 
   it("filters by analysis through the marks it is given", () => {
-    const mark = { verdict: "consistent", profile: null, judgement: "fake", note: null } as const;
+    const mark = {
+      verdict: "consistent",
+      profile: null,
+      judgement: "fake",
+      note: null,
+      stale: false
+    } as const;
     const marks = (t: { id: string }) => ({
       mark: t.id === "marked" ? mark : undefined,
       analysable: true
