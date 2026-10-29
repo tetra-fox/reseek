@@ -1,7 +1,7 @@
 import { expect, type Locator, test } from "@playwright/test";
 
 import { newId } from "../src/lib/ids";
-import { fakeAnalysis, fakeDownloads } from "./fakes";
+import { ANALYZED_DOWNLOAD, fakeAnalysis, fakeDownloads } from "./fakes";
 import { login } from "./login";
 import { wav } from "./pictures";
 
@@ -519,6 +519,55 @@ test("filters downloads by their analysis, by chip and by word", async ({ page }
   await expect(shown("2.flac")).toHaveCount(0);
 });
 
+test("queues a user's downloads, a folder and a selection for analysis", async ({ page }) => {
+  await fakeDownloads(page);
+  await fakeAnalysis(page);
+  const queued: string[] = [];
+  await page.route(
+    (url) => /\/transfers\/downloads\/[^/]+\/[^/]+\/analysis$/.test(url.pathname),
+    (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      const id = new URL(route.request().url()).pathname.split("/").at(-2)!;
+      if (id === ANALYZED_DOWNLOAD) {
+        return route.fulfill({
+          status: 409,
+          json: { error: "the file has been analyzed already" }
+        });
+      }
+      queued.push(id);
+      return route.fulfill({ status: 202, json: { jobId: newId() } });
+    }
+  );
+  await login(page, "/downloads");
+  const grid = page.getByRole("grid", { name: "Downloads" });
+  const header = (name: string) => grid.getByRole("rowheader").filter({ hasText: name });
+
+  // alice's running download is not finished and her other one is analyzed already
+  await header("alice").getByRole("button", { name: "Analyze the group" }).click();
+  await expect(
+    page.getByText(
+      "No files queued for analysis. 2 files skipped: 1 not finished and 1 already analyzed or queued."
+    )
+  ).toBeVisible();
+  expect(queued).toEqual([]);
+
+  await header("Big").getByRole("button", { name: "Analyze folder" }).click();
+  await expect(page.getByText("1 file queued for analysis", { exact: true })).toBeVisible();
+  expect(queued).toHaveLength(1);
+
+  // a selection of nothing finished offers no Analyze
+  await grid.getByRole("checkbox", { name: "Select 1.flac" }).check();
+  const bar = page.getByRole("toolbar", { name: "Selected transfers" });
+  await expect(bar.getByRole("button", { name: "Cancel" })).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Analyze" })).toHaveCount(0);
+  await grid.getByRole("checkbox", { name: "Select 3.flac" }).check();
+  await bar.getByRole("button", { name: "Analyze" }).click();
+  await expect(
+    page.getByText("1 file queued for analysis. 1 file skipped: 1 not finished.")
+  ).toBeVisible();
+  expect(queued).toHaveLength(2);
+});
+
 test("analyzes a file and queues a folder from the Files screen", async ({ page }) => {
   await fakeAnalysis(page);
   const at = "2026-10-27T18:00:00Z";
@@ -635,7 +684,9 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
 
   await page.getByRole("button", { name: "More for Album" }).click();
   await page.getByRole("menuitem", { name: "Analyze folder" }).click();
-  await expect(page.getByText("2 files queued for analysis")).toBeVisible();
+  await expect(
+    page.getByText("2 files queued for analysis. 1 file skipped: 1 not an audio type.")
+  ).toBeVisible();
   expect(queued.map((q) => q.path)).toEqual(["Album/01.flac", "Album/CD2/02.wav"]);
 
   // a file the folder queued shows its place in the queue, not an offer to analyze it

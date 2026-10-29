@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
   import BanIcon from "@lucide/svelte/icons/ban";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import FileArchiveIcon from "@lucide/svelte/icons/file-archive";
@@ -12,6 +13,8 @@
   import XIcon from "@lucide/svelte/icons/x";
   import type { Component } from "svelte";
 
+  import { analyzableDownload, analyzeBatch, downloadCandidate } from "#lib/analysis/batch.js";
+  import { analyzerOffered } from "#lib/analysis/marks.svelte.js";
   import { root } from "#lib/api/client.js";
   import { folderLinks, remoteFolder } from "#lib/components/files/links.js";
   import TreeToggle from "#lib/components/tree/TreeToggle.svelte";
@@ -139,6 +142,19 @@
       icon: FileArchiveIcon,
       shown: () => folderActions() && !!local,
       run: zip
+    },
+    {
+      get label() {
+        return group.kind === "folder" ? "Analyze folder" : "Analyze the group";
+      },
+      icon: AudioLinesIcon,
+      shown: () =>
+        write &&
+        direction === "download" &&
+        group.kind !== "batch" &&
+        analyzerOffered() &&
+        list.some(analyzableDownload),
+      run: () => void analyzeBatch(list.map(downloadCandidate), `${group.label} has no downloads`)
     },
     {
       label: "Deny queued uploads",

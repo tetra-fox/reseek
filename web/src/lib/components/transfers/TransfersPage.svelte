@@ -4,8 +4,9 @@
   import { untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
+  import { analyzableDownload, analyzeBatch, downloadCandidate } from "#lib/analysis/batch.js";
   import { MARK_FILTERS, type MarkFilter, passes } from "#lib/analysis/marks.js";
-  import { analyzable, marks } from "#lib/analysis/marks.svelte.js";
+  import { analyzerOffered, marks } from "#lib/analysis/marks.svelte.js";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
@@ -25,7 +26,6 @@
   import {
     type ChipId,
     type Direction,
-    isSucceeded,
     rowActions,
     STATE_CHIPS,
     type Transfer
@@ -107,7 +107,7 @@
     direction === "download"
       ? (t) => ({
           mark: marks.download(t.id),
-          analyzable: isSucceeded(t.state) && analyzable(getFileName(t.filename))
+          analyzable: analyzableDownload(t)
         })
       : undefined;
   const marked = (lookup: MarkLookup, filter: MarkFilter) => (t: Transfer) => {
@@ -321,6 +321,13 @@
         >Cancel</Button>
       <Button size="sm" variant="outline" disabled={working} onclick={() => remove(chosen)}
         >Remove</Button>
+    {/if}
+    {#if write && direction === "download" && analyzerOffered() && chosen.some(analyzableDownload)}
+      <Button
+        size="sm"
+        variant="outline"
+        onclick={() => void analyzeBatch(chosen.map(downloadCandidate), "No downloads selected")}
+        >Analyze</Button>
     {/if}
     {#if direction === "download" && oneFolder}
       <Button size="sm" variant="outline" onclick={() => openFolder(chosen)}>Open folder</Button>
