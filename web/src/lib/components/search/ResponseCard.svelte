@@ -13,7 +13,7 @@
   import FileMenu from "#lib/components/files/FileMenu.svelte";
   import FolderFiles from "#lib/components/files/FolderFiles.svelte";
   import Suspect from "#lib/components/files/Suspect.svelte";
-  import FolderTree, { TICK_COLUMN } from "#lib/components/tree/FolderTree.svelte";
+  import FolderTree from "#lib/components/tree/FolderTree.svelte";
   import TreeToggle from "#lib/components/tree/TreeToggle.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -36,6 +36,7 @@
   import { toast } from "#lib/toast.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, folderTree, treeLines } from "#lib/tree/folders.js";
+  import { TICK_REM } from "#lib/tree/indent.js";
   import { users } from "#lib/users.svelte.js";
   import { viewport } from "#lib/viewport.svelte.js";
 
@@ -80,9 +81,9 @@
   // files say nothing of their quality has no attributes column. A phone's rows show the tick, the
   // name with its size under it, and the menu
   const columns = $derived(
-    `${TICK_COLUMN} minmax(0, 1fr) ${columnWidth(WIDEST.size)} ${attributed ? "9rem " : ""}${columnWidth(WIDEST.length)} 2.5rem`
+    `${TICK_REM}rem minmax(0, 1fr) ${columnWidth(WIDEST.size)} ${attributed ? "9rem " : ""}${columnWidth(WIDEST.length)} 2.5rem`
   );
-  const PHONE_COLUMNS = `${TICK_COLUMN} minmax(0, 1fr) 2.5rem`;
+  const PHONE_COLUMNS = `${TICK_REM}rem minmax(0, 1fr) 2.5rem`;
   const roots = $derived(
     folderTree(
       files,

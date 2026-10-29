@@ -28,7 +28,7 @@
   import AnalysisJobs from "#lib/components/analysis/AnalysisJobs.svelte";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
   import { isAudio } from "#lib/components/files/links.js";
-  import FolderTree, { TICK_COLUMN } from "#lib/components/tree/FolderTree.svelte";
+  import FolderTree from "#lib/components/tree/FolderTree.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -48,6 +48,7 @@
   import { encodePath } from "#lib/transfers/content.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
+  import { TICK_REM } from "#lib/tree/indent.js";
   import { viewport } from "#lib/viewport.svelte.js";
 
   import { type Entry, entries, type SortBy } from "./explorer";
@@ -298,8 +299,8 @@
   // the room it needs
   const COLUMNS = $derived(
     viewport.phone
-      ? `${TICK_COLUMN} minmax(0,1fr) 2.5rem`
-      : `${TICK_COLUMN} minmax(14rem,1fr) 10rem 7rem 3rem`
+      ? `${TICK_REM}rem minmax(0,1fr) 2.5rem`
+      : `${TICK_REM}rem minmax(14rem,1fr) 10rem 7rem 3rem`
   );
 </script>
 

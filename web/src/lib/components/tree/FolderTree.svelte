@@ -1,12 +1,3 @@
-<script lang="ts" module>
-  /**
-   * The width of a first column holding a tick, for a tree whose folder lines start with one too:
-   * the tick and the gap after it, so an item's cells after it line up under what follows the
-   * tick on a folder line
-   */
-  export const TICK_COLUMN = "1.375rem";
-</script>
-
 <script lang="ts" generics="T">
   import type { Snippet } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
@@ -16,7 +7,7 @@
   import { ListControl } from "#lib/list.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import type { FolderNode, TreeLine } from "#lib/tree/folders.js";
-  import { viewport } from "#lib/viewport.svelte.js";
+  import { GAP_REM, lineStart, TOGGLE_REM } from "#lib/tree/indent.js";
 
   import TreeToggle from "./TreeToggle.svelte";
 
@@ -87,12 +78,11 @@
   const hidden = $derived(lines.length - shown.length);
 
   /**
-   * How far a line at `depth` is set in: a step a level, a phone's shorter so a deep name keeps
-   * its room. An item also passes the room of the toggle and the gap after it that start a folder
-   * line, so an item's cells line up under the content of a folder line at its depth
+   * How far a line at `depth` is set in. An item also passes the toggle and the gap after it that
+   * start a folder line, so an item's cells line up under the content of a folder line at its depth
    */
   const inset = (depth: number, kind: "folder" | "item") =>
-    `calc(${depth} * ${viewport.phone ? 0.75 : 1.25}rem + 0.5rem${kind === "item" ? " + 1.625rem" : ""})`;
+    `${lineStart(depth) + (kind === "item" ? TOGGLE_REM + GAP_REM : 0)}rem`;
 
   /** the ids of every item in a folder and the folders below it */
   const under = (node: FolderNode<T>): string[] => [
@@ -157,7 +147,7 @@
         role="row"
         {...list.line(line, i)}
         class={[
-          "group flex min-h-9 items-center gap-1.5 border-b pr-3",
+          "group flex min-h-9 items-center border-b pr-3",
           folderId && selected.has(folderId(line.node))
             ? "bg-accent-soft/60"
             : "bg-surface-muted/50",
@@ -166,7 +156,10 @@
         aria-level={line.depth + 1}
         aria-expanded={expansion.isOpen(line.node.path)}
         style:padding-left={inset(line.depth, "folder")}>
-        <div role="gridcell" class="flex min-w-0 flex-1 items-center gap-1.5">
+        <div
+          role="gridcell"
+          class="flex min-w-0 flex-1 items-center"
+          style:column-gap={`${GAP_REM}rem`}>
           <TreeToggle
             {expansion}
             key={line.node.path}
