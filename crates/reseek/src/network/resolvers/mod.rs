@@ -94,7 +94,6 @@ impl Edges {
     );
   }
 
-  /// The upload engine.
   fn uploads(&self) -> &Uploads {
     self
       .uploads

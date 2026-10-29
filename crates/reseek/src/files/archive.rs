@@ -352,7 +352,7 @@ pub(super) async fn send(
         }
         Err(e) => {
           warn!(path = %member.path.display(), error = %e, "an archive stopped at a file that could not be read");
-          // the archive can not be finished whole, so the client is told it broke off
+          // the archive cannot be finished whole, so the client is told it broke off
           drop(sender.send(Err(e)).await);
           return;
         }

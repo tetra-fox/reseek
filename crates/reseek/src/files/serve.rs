@@ -287,7 +287,7 @@ pub(super) async fn body(
       let want = CHUNK.min(usize::try_from(left).unwrap_or(CHUNK));
       let mut buffer = vec![0; speed.allowed(want).await];
       match file.read(&mut buffer).await {
-        // the file got shorter while it was sent; the length promised can not be kept
+        // the file got shorter while it was sent; the length promised cannot be kept
         Ok(0) => {
           warn!(
             path = shown,

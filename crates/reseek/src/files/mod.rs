@@ -5,8 +5,9 @@
 //!
 //! Every path is checked against its root after links are resolved, so a link inside a root
 //! that points out of it leads nowhere. Files and archives are sent no faster than
-//! `web.files.serve_speed_limit` allows over every response together. A file a download is writing is held in [`Writing`]
-//! and is neither served, deleted nor pruned until the download lets go of it.
+//! `web.files.serve_speed_limit` allows over every response together. A file a download is
+//! writing is held in [`Writing`] and is neither served, deleted nor pruned until the download
+//! lets go of it.
 
 mod archive;
 mod delete;
@@ -240,7 +241,7 @@ fn served_path(root: &Path, relative: &str) -> Result<PathBuf, ApiError> {
 }
 
 /// A name for an archive's `Content-Disposition`: the base name made safe, without the quotes
-/// and controls a quoted header value can not hold.
+/// and controls a quoted header value cannot hold.
 fn archive_name(name: &str) -> String {
   safety::file_name_safely(name, true, Os::CURRENT)
     .unwrap_or_else(|| "archive".to_string())

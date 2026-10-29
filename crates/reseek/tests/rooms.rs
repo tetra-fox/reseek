@@ -2,10 +2,9 @@
 //! the mentions of us marked and counted unread, the history survives a restart that joins it
 //! again with the gap the restart left in it; the rooms we were in are joined again after a
 //! restart until we leave them, and one taken by a private room is forgotten, while a room
-//! joined only because the configuration listed it is not; a room joined
-//! twice is joined once, left and
-//! joined again, and refused while logged out; the server's room list is asked for once a
-//! minute at most; and each message said is one event.
+//! joined only because the configuration listed it is not; a room joined twice is joined once,
+//! left and joined again, and refused while logged out; the server's room list is asked for
+//! once a minute at most; and each message said is one event.
 
 mod support;
 
