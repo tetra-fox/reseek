@@ -162,7 +162,7 @@ impl Directory {
       .read(move |conn| store::picture(conn, &name))
       .await
       .map_err(internal)?
-      .ok_or_else(|| ApiError::not_found(format!("no picture of {username} is kept")))?;
+      .ok_or_else(|| ApiError::not_found(format!("No picture of {username} is stored")))?;
     Ok(picture_response(picture, "private, max-age=3600"))
   }
 
@@ -205,9 +205,9 @@ impl Directory {
       && configured != *wanted
     {
       return Err(ApiError::conflict(
-        format!("the configuration puts {username} in the group {configured}"),
+        format!("The configuration puts {username} in the group {configured}"),
         Some(format!(
-          "change transfers.groups.user_defined.{configured}.members to move the user"
+          "Change transfers.groups.user_defined.{configured}.members to move the user"
         )),
       ));
     }
@@ -295,7 +295,7 @@ impl BlockingService for Directory {
     expires_in: Option<std::time::Duration>,
   ) -> Result<Block, ApiError> {
     if self.is_us(username) {
-      return Err(ApiError::conflict("we can not block ourselves", None));
+      return Err(ApiError::conflict("This account cannot block itself", None));
     }
     let now = Utc::now();
     let expires_at = match (expires_in, request.expires_at) {
@@ -307,7 +307,7 @@ impl BlockingService for Directory {
       (None, at) => at,
     };
     if !blocking::stands(expires_at, now) {
-      return Err(ApiError::bad_request("a block must end after now"));
+      return Err(ApiError::bad_request("A block must end in the future"));
     }
     let block = Block {
       username: username.to_string(),
@@ -332,8 +332,8 @@ impl BlockingService for Directory {
     if !deleted {
       if self.blocks.configuration_blocks(username) {
         return Err(ApiError::conflict(
-          "blocked by configuration",
-          Some("change transfers.groups.blacklisted to unblock the user".to_string()),
+          "Blocked by the configuration",
+          Some("Change transfers.groups.blacklisted to unblock the user".to_string()),
         ));
       }
       return Err(ApiError::not_found(format!("{username} is not blocked")));

@@ -169,7 +169,7 @@ async fn set_tags(
 /// holds anything but `a-z`, `0-9`, `_` and `-`.
 fn tags(tags: Vec<String>) -> Result<Vec<String>, ApiError> {
   if tags.len() > TAGS {
-    return Err(ApiError::bad_request("a user has at most 32 tags"));
+    return Err(ApiError::bad_request("A user can have at most 32 tags"));
   }
   tags
     .into_iter()
@@ -178,8 +178,8 @@ fn tags(tags: Vec<String>) -> Result<Vec<String>, ApiError> {
       let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-';
       if tag.is_empty() || tag.chars().count() > TAG_CHARS || !tag.chars().all(allowed) {
         return Err(ApiError::invalid(
-          "invalid tag",
-          format!("{tag:?}: a tag is 1 to 32 of a-z, 0-9, _ and -"),
+          "Invalid tag",
+          format!("{tag:?}: A tag has 1 to 32 characters from a-z, 0-9, _ and -"),
         ));
       }
       Ok(tag)

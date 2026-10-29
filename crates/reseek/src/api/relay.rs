@@ -60,7 +60,7 @@ fn mode(options: &Options, side: Option<Side>) -> Result<(), ApiError> {
   if !relay.enabled {
     return Err(ApiError::disabled(
       "relay_disabled",
-      "relay mode is off on this instance",
+      "Relay mode is disabled on this instance",
     ));
   }
   let fits = match (side, relay.mode) {
@@ -73,7 +73,7 @@ fn mode(options: &Options, side: Option<Side>) -> Result<(), ApiError> {
   }
   Err(ApiError::disabled(
     "wrong_relay_mode",
-    format!("this instance is a relay {:?}", relay.mode),
+    format!("This instance runs in relay mode {:?}", relay.mode),
   ))
 }
 
@@ -82,7 +82,7 @@ fn stored_credential(principal: &Principal, options: &Options) -> Result<(), Api
   match principal.via {
     Via::ApiToken { .. } | Via::ConfigApiKey { .. } => Ok(()),
     Via::TrustedNetwork { .. } if options.web.authentication.disabled => Ok(()),
-    _ => Err(ApiError::forbidden("an agent calls with an API key")),
+    _ => Err(ApiError::forbidden("An agent must call with an API key")),
   }
 }
 
@@ -365,12 +365,12 @@ fn download_filename(headers: &HeaderMap) -> Result<String, ApiError> {
     .ok_or_else(|| ApiError::bad_request("X-Relay-Filename-Base64 is required"))?;
   let bytes = base64::engine::general_purpose::STANDARD
     .decode(encoded)
-    .map_err(|e| ApiError::invalid("X-Relay-Filename-Base64 is not base64", e.to_string()))?;
+    .map_err(|e| ApiError::invalid("X-Relay-Filename-Base64 is not valid base64", e.to_string()))?;
   let filename = String::from_utf8(bytes)
-    .map_err(|_| ApiError::bad_request("X-Relay-Filename-Base64 is not UTF-8"))?;
+    .map_err(|_| ApiError::bad_request("X-Relay-Filename-Base64 is not valid UTF-8"))?;
   if traverses(&filename) {
     return Err(ApiError::bad_request(
-      "the filename contains a traversal segment",
+      "The filename contains a traversal segment",
     ));
   }
   Ok(filename)

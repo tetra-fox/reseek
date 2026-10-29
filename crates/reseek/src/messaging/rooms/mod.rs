@@ -57,7 +57,7 @@ fn internal(error: DbError) -> ApiError {
 }
 
 fn not_in(room: &str) -> ApiError {
-  ApiError::not_found(format!("we are not in the room {room}"))
+  ApiError::not_found(format!("The room {room} is not joined"))
 }
 
 /// The answer to a join the server refused.

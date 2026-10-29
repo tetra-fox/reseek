@@ -19,7 +19,7 @@ pub const PRIMARY: &str = "primary";
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum KeyRefusal {
   /// no configured key is the presented one
-  #[error("unknown API key")]
+  #[error("Unknown API key")]
   Unknown,
   /// the key may not be used from the client's address
   #[error("API key {name} is not allowed from {ip}")]

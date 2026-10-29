@@ -15,12 +15,12 @@ use crate::safety::{self, Os};
 pub fn limit(name: &str, value: u32, max: u32) -> Result<(), ApiError> {
   if value == 0 {
     return Err(ApiError::bad_request(format!(
-      "{name} must be greater than zero"
+      "The value of {name} must be greater than zero"
     )));
   }
   if value > max {
     return Err(ApiError::bad_request(format!(
-      "{name} must be at most {max}"
+      "The value of {name} must be at most {max}"
     )));
   }
   Ok(())
@@ -35,7 +35,7 @@ pub fn positive(name: &str, value: u32) -> Result<(), ApiError> {
 pub fn text_size(name: &str, text: &str, max: usize) -> Result<(), ApiError> {
   if text.len() > max {
     return Err(ApiError::bad_request(format!(
-      "{name} must be at most {max} bytes"
+      "The value of {name} must be at most {max} bytes"
     )));
   }
   Ok(())
@@ -43,8 +43,12 @@ pub fn text_size(name: &str, text: &str, max: usize) -> Result<(), ApiError> {
 
 /// A duration written as `"15s"`, `"2h 30m"` or `"7d"`.
 pub fn duration(name: &str, text: &str) -> Result<Duration, ApiError> {
-  humantime::parse_duration(text.trim())
-    .map_err(|e| ApiError::invalid(format!("{name} is not a duration"), e.to_string()))
+  humantime::parse_duration(text.trim()).map_err(|e| {
+    ApiError::invalid(
+      format!("The value of {name} is not a duration"),
+      e.to_string(),
+    )
+  })
 }
 
 /// Refuses a room name the server would not take: empty, longer than 24 characters, anything
@@ -67,11 +71,11 @@ pub fn files_path(encoded: &str, deleting: bool) -> Result<String, ApiError> {
   };
   let bytes = engine
     .decode(encoded)
-    .map_err(|e| ApiError::invalid("the path is not base64", e.to_string()))?;
+    .map_err(|e| ApiError::invalid("The path is not valid base64", e.to_string()))?;
   let text =
-    String::from_utf8(bytes).map_err(|_| ApiError::bad_request("the path is not UTF-8"))?;
+    String::from_utf8(bytes).map_err(|_| ApiError::bad_request("The path is not valid UTF-8"))?;
   if text.contains('\0') {
-    return Err(ApiError::bad_request("the path holds a NUL character"));
+    return Err(ApiError::bad_request("The path contains a NUL character"));
   }
   let mut path = text.replace('\\', "/");
   if deleting {

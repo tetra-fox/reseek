@@ -140,7 +140,7 @@ impl TransferService for Downloads {
     .await
     .map_err(internal)?
     .pop()
-    .ok_or_else(|| ApiError::not_found(format!("no downloads from {username}")))
+    .ok_or_else(|| ApiError::not_found(format!("No downloads from {username}")))
   }
 
   async fn download(
@@ -158,7 +158,7 @@ impl TransferService for Downloads {
     )
     .await
     .map_err(internal)?
-    .ok_or_else(|| ApiError::not_found(format!("no download {id} from {username}")))
+    .ok_or_else(|| ApiError::not_found(format!("No download {id} from {username}")))
   }
 
   async fn place_in_queue(&self, username: &str, id: Uuid) -> Result<u32, ApiError> {
@@ -230,7 +230,7 @@ impl TransferService for Downloads {
     batches::read(&self.db, id, include_removed)
       .await
       .map_err(internal)?
-      .ok_or_else(|| ApiError::not_found(format!("no batch {id}")))
+      .ok_or_else(|| ApiError::not_found(format!("No batch {id}")))
   }
 
   async fn cancel_download(&self, username: &str, id: Uuid, remove: bool) -> Result<(), ApiError> {

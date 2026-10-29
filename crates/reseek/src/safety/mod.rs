@@ -117,7 +117,7 @@ pub fn is_sub_directory_of(sub: &str, root: &str, os: Os) -> Result<bool, String
 /// under it.
 pub fn combine_safely(root: &str, segments: &[&str], os: Os) -> Result<String, String> {
   if root.trim().is_empty() {
-    return Err("the root may not be empty".to_string());
+    return Err("The root must not be empty".to_string());
   }
   if traverses(root) {
     return Err("Path traversal is not permitted in the root".to_string());
@@ -150,7 +150,7 @@ pub fn combine_safely(root: &str, segments: &[&str], os: Os) -> Result<String, S
 pub fn relative_everywhere(name: &str, path: &str) -> Result<(), String> {
   if is_absolute(path, Os::Unix) || is_absolute(path, Os::Windows) {
     return Err(format!(
-      "The {name} field must be a relative path on all operating systems."
+      "The field {name} must be a relative path on all operating systems."
     ));
   }
   Ok(())
@@ -160,7 +160,7 @@ pub fn relative_everywhere(name: &str, path: &str) -> Result<(), String> {
 pub fn non_traversing(name: &str, path: &str) -> Result<(), String> {
   if traverses(path) {
     return Err(format!(
-      "The {name} field contains one or more unsafe path traversal segments ('.' or '..')"
+      "The field {name} contains one or more unsafe path traversal segments ('.' or '..')."
     ));
   }
   Ok(())

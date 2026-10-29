@@ -167,7 +167,7 @@ impl Files {
       })
       .await
       .map_err(ApiError::internal)?;
-    let missing = || ApiError::not_found(format!("no file of the download {id}"));
+    let missing = || ApiError::not_found(format!("No file for the download {id}"));
     let Some((peer, local)) = found else {
       return Err(missing());
     };
@@ -215,7 +215,7 @@ fn unreadable(what: &str, path: &Path, error: std::io::Error) -> ApiError {
     ))
   } else {
     ApiError::internal(format!(
-      "the {what} '{}' could not be read: {error}",
+      "Could not read the {what} '{}': {error}",
       path.display()
     ))
   }
@@ -300,7 +300,7 @@ impl FileService for Files {
     let link = match (&request.principal, request.link.as_deref()) {
       (Some(_), _) => None,
       (None, Some(token)) => Some(token),
-      (None, None) => return Err(ApiError::unauthorized("authentication required")),
+      (None, None) => return Err(ApiError::unauthorized("Authentication required")),
     };
     let (root, path) = match target {
       FileTarget::File { root, path } => (root, path),
@@ -315,7 +315,7 @@ impl FileService for Files {
         Ok(subject) => debug!(subject, "file served by its link token"),
         Err(reason) => {
           return Err(ApiError::unauthorized(format!(
-            "the link token is not valid: {reason}"
+            "The link token is not valid: {reason}"
           )));
         }
       }
@@ -326,8 +326,8 @@ impl FileService for Files {
     let lexical = self.root(root).join(&path);
     if root == FileRoot::Incomplete && self.writing.holds(&[&lexical, &resolved]) {
       return Err(ApiError::conflict(
-        "the file is being written by a download",
-        Some("files in the incomplete directory are served once their download ends".to_string()),
+        "The file is being written by a download",
+        Some("Files in the incomplete directory are served once their download ends".to_string()),
       ));
     }
     let served = Served::at(&resolved)
@@ -401,15 +401,13 @@ impl FileService for Files {
       .as_u64();
     if total > limit {
       return Err(ApiError::too_large(format!(
-        "the folder holds {total} bytes, more than web.files.archive_max_bytes ({limit})"
+        "The folder holds {total} bytes, more than web.files.archive_max_bytes ({limit})"
       )));
     }
     let slot = {
       let mut archives = lock(&self.archives);
       if !archives.insert(principal.subject.clone()) {
-        return Err(ApiError::too_many(
-          "an archive is being sent to you already",
-        ));
+        return Err(ApiError::too_many("An archive is already being sent"));
       }
       ArchiveSlot {
         archives: self.archives.clone(),
@@ -516,7 +514,7 @@ impl FileService for Files {
     let mut served = Served::at(&resolved)
       .await
       .map_err(|e| unreadable("log file", &resolved, e))?
-      .ok_or_else(|| ApiError::not_found("the log file is not a file"))?;
+      .ok_or_else(|| ApiError::not_found("The log file is not a regular file"))?;
     served.content_type = Some("text/plain; charset=utf-8");
     serve::respond(served, &request, &self.speed).await
   }

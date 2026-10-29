@@ -531,7 +531,7 @@ test("queues a user's downloads, a folder and a selection for analysis", async (
       if (id === ANALYZED_DOWNLOAD) {
         return route.fulfill({
           status: 409,
-          json: { error: "the file has been analyzed already" }
+          json: { error: "The file has already been analyzed" }
         });
       }
       queued.push(id);

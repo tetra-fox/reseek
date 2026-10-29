@@ -129,10 +129,10 @@ async fn what_is_locked_too_large_or_no_picture_is_refused() {
     .send(request("PUT", "/api/v0/profile", Some(text)))
     .await;
   assert_eq!(locked.status, 409);
-  assert_eq!(locked.json()["error"], "set by RESEEK_SLSK_DESCRIPTION");
+  assert_eq!(locked.json()["error"], "Set by RESEEK_SLSK_DESCRIPTION");
   let picture = upload(&app, png(8, 8, BLUE), "image/png").await;
   assert_eq!(picture.status, 409);
-  assert_eq!(picture.json()["error"], "set by RESEEK_SLSK_PICTURE");
+  assert_eq!(picture.json()["error"], "Set by RESEEK_SLSK_PICTURE");
   let removing = app
     .send(request("DELETE", "/api/v0/profile/picture", None))
     .await;
@@ -293,7 +293,10 @@ async fn a_picture_whose_option_write_is_refused_is_not_kept() {
   edit_by_hand(&app);
   let first = upload(&app, png(16, 16, BLUE), "image/png").await;
   assert_eq!(first.status, 409, "{:?}", first.body);
-  assert_eq!(first.json()["error"], "config file changed on disk");
+  assert_eq!(
+    first.json()["error"],
+    "The configuration file changed on disk"
+  );
   assert!(!stored.exists(), "a first picture is taken away again");
   assert_eq!(staged(), 0);
 

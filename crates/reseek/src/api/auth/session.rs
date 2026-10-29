@@ -78,7 +78,7 @@ async fn login(
   Extension(presented): Extension<Presented>,
   body: Result<Json<LoginRequest>, JsonRejection>,
 ) -> Result<Response, ApiError> {
-  let missing = || ApiError::bad_request("Username and/or Password missing or invalid");
+  let missing = || ApiError::bad_request("Username or password is missing");
   let Json(login) = body.map_err(|_| missing())?;
   if login.username.trim().is_empty() || login.password.trim().is_empty() {
     return Err(missing());
@@ -92,18 +92,18 @@ async fn login(
         suppressed, "Login rejected; web UI is DISABLED when running in headless mode"
       );
     }
-    return Err(ApiError::forbidden("the web UI is disabled in headless mode").logged());
+    return Err(ApiError::forbidden("The web UI is disabled in headless mode").logged());
   }
   let client = &presented.client;
   if app.auth.limits.logins.blocked(client.ip) {
     return Err(ApiError::rate_limited());
   }
   if !options.web.authentication.local.enabled {
-    return Err(ApiError::forbidden("password login is off"));
+    return Err(ApiError::forbidden("Password login is disabled"));
   }
   if !offered_to(options, client) {
     return Err(ApiError::forbidden(
-      "password login is not offered to this address",
+      "Password login is not offered to this address",
     ));
   }
   let username = login.username.clone();
@@ -121,9 +121,9 @@ async fn login(
       version: 0,
       provider: "local".to_string(),
       ip: client.ip.to_string(),
-      reason: "invalid username or password".to_string(),
+      reason: "Invalid username or password".to_string(),
     }));
-    return Err(ApiError::unauthorized("invalid username or password").logged());
+    return Err(ApiError::unauthorized("Invalid username or password").logged());
   };
   let session = start_session(
     &app,
@@ -282,7 +282,7 @@ async fn revoke(
     .filter(|session| session.active(chrono::Utc::now(), crate::auth::idle(&app)))
     .filter(|session| is_admin(&caller) || session.subject == caller.principal.subject);
   let Some(session) = found else {
-    return Err(ApiError::not_found("no such session"));
+    return Err(ApiError::not_found("No such session"));
   };
   end(
     &app,
@@ -579,7 +579,7 @@ mod tests {
     };
     let bare = app.send_from(OUTSIDE, logout()).await;
     assert_eq!(bare.status, 403);
-    assert_eq!(bare.json()["error"], "cross-site request refused");
+    assert_eq!(bare.json()["error"], "Cross-site request refused");
     let elsewhere = app
       .send_from(OUTSIDE, with(logout(), "origin", "http://evil.example"))
       .await;
@@ -710,7 +710,7 @@ mod tests {
     assert_eq!(far.status, 403);
     assert_eq!(
       far.json()["error"],
-      "password login is not offered to this address"
+      "Password login is not offered to this address"
     );
     assert_eq!(
       app
@@ -738,7 +738,7 @@ mod tests {
       )
       .await;
     assert_eq!(off.status, 403);
-    assert_eq!(off.json()["error"], "password login is off");
+    assert_eq!(off.json()["error"], "Password login is disabled");
   }
 
   #[tokio::test]

@@ -64,7 +64,7 @@ impl RelayService for Relay {
     } else {
       Err(ApiError::conflict(
         "not_connected",
-        Some("the agent is not logged in to its controller".to_string()),
+        Some("The agent is not logged in to its controller".to_string()),
       ))
     }
   }
@@ -110,7 +110,7 @@ impl RelayService for Relay {
       .any(|protocol| protocol.trim() == RELAY_SUBPROTOCOL);
     if !offered {
       return Err(ApiError::upgrade_required(format!(
-        "the relay socket needs the {RELAY_SUBPROTOCOL} protocol"
+        "The relay socket requires the {RELAY_SUBPROTOCOL} protocol"
       )));
     }
     let address = parts

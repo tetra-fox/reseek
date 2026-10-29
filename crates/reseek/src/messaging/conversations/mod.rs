@@ -33,14 +33,14 @@ fn internal(error: DbError) -> ApiError {
 }
 
 fn no_conversation(username: &str) -> ApiError {
-  ApiError::not_found(format!("there is no conversation with {username}"))
+  ApiError::not_found(format!("There is no conversation with {username}"))
 }
 
 /// The answer to a request the server could not take: 409 while not logged in, else 502.
 pub(super) fn unsent(error: ClientError) -> ApiError {
   match error {
-    ClientError::InvalidOperation(detail) => ApiError::conflict("not logged in", Some(detail)),
-    other => ApiError::upstream("the server could not be reached", Some(other.to_string())),
+    ClientError::InvalidOperation(detail) => ApiError::conflict("Not logged in", Some(detail)),
+    other => ApiError::upstream("Could not reach the server", Some(other.to_string())),
   }
 }
 
@@ -259,7 +259,7 @@ impl Messaging {
   /// blocked from messages is refused.
   pub(super) async fn send_private(&self, username: &str, message: String) -> Result<(), ApiError> {
     if self.users.is_blocked(username, None, BlockScope::Messages) {
-      return Err(ApiError::forbidden("user is blocked"));
+      return Err(ApiError::forbidden("The user is blocked"));
     }
     let name = username.to_string();
     let now = Utc::now();
@@ -333,7 +333,7 @@ impl Messaging {
       .map_err(internal)?
     {
       return Err(ApiError::not_found(format!(
-        "there is no message {id} from {username}"
+        "There is no message {id} from {username}"
       )));
     }
     let told = self.acknowledge_ids(username, &[id]).await;

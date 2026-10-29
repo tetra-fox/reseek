@@ -209,7 +209,7 @@ fn queue_requests(
     .collect::<Option<_>>()
     .ok_or_else(|| ApiError::bad_request("One or more files in the request are null"))?;
   if files.iter().any(|file| file.filename.trim().is_empty()) {
-    return Err(ApiError::bad_request("The Filename field is required."));
+    return Err(ApiError::bad_request("The Filename field is required"));
   }
   if files.iter().any(|file| traverses(&file.filename)) {
     return Err(ApiError::bad_request(
@@ -275,7 +275,7 @@ fn batch_request(request: &EnqueueDownloadBatchRequest) -> Result<(), ApiError> 
     ));
   }
   if request.username.trim().is_empty() {
-    return Err(ApiError::bad_request("The Username field is required."));
+    return Err(ApiError::bad_request("The Username field is required"));
   }
   if request.username.chars().count() > USERNAME_CHARS {
     return Err(ApiError::bad_request(
@@ -284,18 +284,18 @@ fn batch_request(request: &EnqueueDownloadBatchRequest) -> Result<(), ApiError> 
   }
   if request.files.is_empty() {
     return Err(ApiError::bad_request(
-      "The field Files must be a string or array type with a minimum length of '1'.",
+      "The field Files must contain at least one file",
     ));
   }
   let mut seen = HashSet::new();
   for file in &request.files {
     if file.filename.trim().is_empty() {
-      return Err(ApiError::bad_request("The Filename field is required."));
+      return Err(ApiError::bad_request("The Filename field is required"));
     }
     non_traversing("Filename", &file.filename).map_err(ApiError::bad_request)?;
     if file.size > i64::MAX as u64 {
       return Err(ApiError::bad_request(format!(
-        "The field Size must be between 0 and {}.",
+        "The field Size must be between 0 and {}",
         i64::MAX
       )));
     }
@@ -470,11 +470,11 @@ mod tests {
     let mut long = fine.clone();
     long.username = "x".repeat(501);
     assert!(refusal(&long).contains("between 1 and 500"));
-    assert!(refusal(&batch_of(vec![], None)).contains("minimum length of '1'"));
+    assert!(refusal(&batch_of(vec![], None)).contains("at least one file"));
     let repeated = batch_of(vec![file("a\\b", 1), file("a\\b", 2)], None);
     assert!(refusal(&repeated).contains("repeated"));
     let traversing = batch_of(vec![file("a\\..\\b", 1)], None);
-    assert!(refusal(&traversing).contains("Filename field contains one or more unsafe"));
+    assert!(refusal(&traversing).contains("field Filename contains one or more unsafe"));
     let huge = batch_of(vec![file("a", u64::MAX)], None);
     assert!(refusal(&huge).contains("Size must be between 0 and 9223372036854775807"));
     for (destination, message) in [
@@ -484,7 +484,7 @@ mod tests {
       ("C:\\Music", "relative path on all operating systems"),
       (
         "Artist/../..",
-        "Destination field contains one or more unsafe",
+        "field Destination contains one or more unsafe",
       ),
     ] {
       let request = batch_of(vec![file("a", 1)], Some(destination));

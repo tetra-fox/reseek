@@ -54,13 +54,15 @@ async fn json_bytes<S: Send + Sync>(request: Request, state: &S) -> Result<Bytes
     .map(str::to_string);
   let bytes = Bytes::from_request(request, state)
     .await
-    .map_err(|e: BytesRejection| ApiError::invalid("the body could not be read", e.body_text()))?;
+    .map_err(|e: BytesRejection| {
+      ApiError::invalid("Could not read the request body", e.body_text())
+    })?;
   if bytes.is_empty() {
     return Ok(bytes);
   }
   match declared {
     Some(kind) if is_json(&kind) => Ok(bytes),
-    _ => Err(ApiError::unsupported_media("the body must be JSON")),
+    _ => Err(ApiError::unsupported_media("The request body must be JSON")),
   }
 }
 
@@ -86,7 +88,7 @@ fn is_json(content_type: &str) -> bool {
 fn read_json<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, ApiError> {
   let reader = &mut serde_json::Deserializer::from_slice(bytes);
   serde_path_to_error::deserialize(reader)
-    .map_err(|e| ApiError::invalid("invalid request body", described(e.path(), e.inner())))
+    .map_err(|e| ApiError::invalid("Invalid request body", described(e.path(), e.inner())))
 }
 
 /// A query read as `T`. A parameter may be repeated for a list.
@@ -103,7 +105,7 @@ impl<S: Send + Sync, T: DeserializeOwned> FromRequestParts<S> for Query<T> {
 fn read_query<T: DeserializeOwned>(query: &str) -> Result<T, ApiError> {
   let reader = serde_html_form::Deserializer::from_bytes(query.as_bytes());
   serde_path_to_error::deserialize(reader)
-    .map_err(|e| ApiError::invalid("invalid query", described(e.path(), e.inner())))
+    .map_err(|e| ApiError::invalid("Invalid query", described(e.path(), e.inner())))
 }
 
 /// `inner`, after the field it is about when there is one.
@@ -126,7 +128,7 @@ impl<S: Send + Sync, T: DeserializeOwned + Send> FromRequestParts<S> for Path<T>
     axum::extract::Path::<T>::from_request_parts(parts, state)
       .await
       .map(|axum::extract::Path(value)| Path(value))
-      .map_err(|e| ApiError::invalid("invalid path", e.body_text()))
+      .map_err(|e| ApiError::invalid("Invalid path", e.body_text()))
   }
 }
 
@@ -185,14 +187,16 @@ async fn named<S: Send + Sync>(
     Some(value) => value,
     None => RawPathParams::from_request_parts(parts, state)
       .await
-      .map_err(|e| ApiError::invalid("invalid path", e.body_text()))?
+      .map_err(|e| ApiError::invalid("Invalid path", e.body_text()))?
       .iter()
       .find(|(name, _)| *name == key)
       .map(|(_, value)| value.to_string())
       .ok_or_else(|| ApiError::internal(format!("a route takes {key} it has not got")))?,
   };
   if value.is_empty() {
-    return Err(ApiError::bad_request(format!("{key} is required")));
+    return Err(ApiError::bad_request(format!(
+      "A value for {key} is required"
+    )));
   }
   Ok(value)
 }

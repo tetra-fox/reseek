@@ -216,7 +216,7 @@ impl Downloads {
     super::listing::record(&self.db, TransferDirection::Download, username, id)
       .await
       .map_err(ApiError::internal)?
-      .ok_or_else(|| ApiError::not_found(format!("no download {id} from {username}")))
+      .ok_or_else(|| ApiError::not_found(format!("No download {id} from {username}")))
   }
 
   /// Cancels the download `id` of `username`: a running one stops wherever it is and ends

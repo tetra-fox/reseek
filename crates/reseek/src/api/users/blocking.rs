@@ -97,17 +97,17 @@ async fn block(
 fn block_request(request: &BlockRequest) -> Result<Option<Duration>, ApiError> {
   if !crate::users::reason_fits(&request.reason) {
     return Err(ApiError::bad_request(
-      "reason must be at most 500 characters",
+      "The reason must be at most 500 characters",
     ));
   }
   if request.scopes.as_ref().is_some_and(Vec::is_empty) {
     return Err(ApiError::bad_request(
-      "scopes must name at least one scope; leave it out for the default scopes",
+      "The scopes must name at least one scope. Omit them for the default scopes.",
     ));
   }
   if request.expires_in.is_some() && request.expires_at.is_some() {
     return Err(ApiError::bad_request(
-      "give expiresIn or expiresAt, not both",
+      "Specify expiresIn or expiresAt, not both",
     ));
   }
   request
@@ -183,8 +183,8 @@ fn block_import(headers: &HeaderMap, body: &[u8]) -> Result<BlockImport, ApiErro
     .unwrap_or_default();
   match kind.as_str() {
     "text/plain" => {
-      let text =
-        std::str::from_utf8(body).map_err(|_| ApiError::bad_request("the list is not UTF-8"))?;
+      let text = std::str::from_utf8(body)
+        .map_err(|_| ApiError::bad_request("The list is not valid UTF-8"))?;
       let names = text
         .lines()
         .map(str::trim)
@@ -195,9 +195,9 @@ fn block_import(headers: &HeaderMap, body: &[u8]) -> Result<BlockImport, ApiErro
     }
     "application/json" => serde_json::from_slice(body)
       .map(BlockImport::Blocks)
-      .map_err(|e| ApiError::invalid("invalid request body", e.to_string())),
+      .map_err(|e| ApiError::invalid("Invalid request body", e.to_string())),
     _ => Err(ApiError::unsupported_media(
-      "the list must be text/plain or application/json",
+      "The list must be text/plain or application/json",
     )),
   }
 }

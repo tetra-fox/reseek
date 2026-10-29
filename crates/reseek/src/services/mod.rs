@@ -105,5 +105,5 @@ impl ReportService for Unavailable {}
 
 /// The answer of a call `domain` has no engine for yet.
 fn not_yet(domain: &str) -> ApiError {
-  ApiError::unavailable(Some(format!("{domain} not implemented yet")))
+  ApiError::unavailable(Some(format!("{domain} is not implemented")))
 }

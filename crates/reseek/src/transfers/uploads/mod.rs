@@ -275,7 +275,7 @@ impl Uploads {
     super::listing::record(&self.db, TransferDirection::Upload, username, id)
       .await
       .map_err(ApiError::internal)?
-      .ok_or_else(|| ApiError::not_found(format!("no upload {id} to {username}")))
+      .ok_or_else(|| ApiError::not_found(format!("No upload {id} to {username}")))
   }
 
   /// Cancels the upload `id` to `username` if it runs; with `remove` it leaves the listings,

@@ -82,7 +82,7 @@ pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Re
     if !is_regex(pattern, case_sensitive) {
       report.add(
         "transfers.groups.blacklisted.patterns",
-        format!("Pattern '{pattern}' is not a valid regular expression"),
+        format!("The pattern '{pattern}' is not a valid regular expression."),
       );
     }
   }
@@ -95,7 +95,7 @@ pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Re
       report.add(
         key,
         format!(
-          "User defined group '{name}' collides with a built in group.  Choose a different name."
+          "The user-defined group '{name}' collides with a built-in group. Choose a different name."
         ),
       );
     }
@@ -112,7 +112,7 @@ pub(super) fn check_speed(key: &str, limit: Option<u32>, report: &mut Report) {
   if limit == Some(0) {
     report.add(
       key,
-      format!("The field {key} must be at least 1 KiB/s; leave it unset for no limit."),
+      format!("The field {key} must be at least 1 KiB/s. Leave it unset for no limit."),
     );
   }
 }
@@ -150,12 +150,12 @@ fn check_destination(destination: &Destination, report: &mut Report) {
     if subdirectory.is_empty() {
       report.add(
         key,
-        format!("The field {key} must contain at least one character"),
+        format!("The field {key} must contain at least one character."),
       );
     } else if subdirectory.trim().is_empty() {
       report.add(
         key,
-        format!("The field {key} must not contain only whitespace"),
+        format!("The field {key} must not contain only whitespace."),
       );
     } else {
       report.check(key, relative_everywhere(key, subdirectory));
@@ -170,7 +170,7 @@ fn check_destination(destination: &Destination, report: &mut Report) {
       key,
       format!(
         "The field {key} is invalid. Specify a three- or four-character string consisting of \
-         only 0-7 (chmod syntax, [0]000-[7]777, inclusive)"
+         only 0-7 (chmod syntax, [0]000-[7]777, inclusive)."
       ),
     );
   }
@@ -197,7 +197,7 @@ mod tests {
       problems(&transfers),
       [(
         "transfers.upload.speed_limit".to_string(),
-        "The field transfers.upload.speed_limit must be at least 1 KiB/s; leave it unset for no \
+        "The field transfers.upload.speed_limit must be at least 1 KiB/s. Leave it unset for no \
          limit."
           .to_string()
       )]
@@ -217,8 +217,8 @@ mod tests {
       problems(&transfers),
       [(
         "transfers.groups.user_defined".to_string(),
-        "User defined group 'blacklisted' collides with a built in group.  Choose a different \
-         name."
+        "The user-defined group 'blacklisted' collides with a built-in group. Choose a \
+         different name."
           .to_string()
       )]
     );

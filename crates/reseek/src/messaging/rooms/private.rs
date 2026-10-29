@@ -13,7 +13,7 @@ use crate::messaging::conversations::unsent;
 /// The answer to a change of a private room that did not go through.
 fn refused(error: ClientError) -> ApiError {
   match error {
-    ClientError::Timeout(_) => ApiError::forbidden("the server refused the change"),
+    ClientError::Timeout(_) => ApiError::forbidden("The server refused the change"),
     other => unsent(other),
   }
 }

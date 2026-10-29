@@ -66,7 +66,7 @@ fn serving(app: &AppState) -> Result<(), ApiError> {
   if app.config.current().values.web.files.serve {
     return Ok(());
   }
-  Err(ApiError::forbidden("serving files is turned off"))
+  Err(ApiError::forbidden("File serving is disabled"))
 }
 
 /// A request for a file's bytes: by its principal, or else by its link token alone.
@@ -77,7 +77,7 @@ fn by_principal_or_link(
   match (&authentication.0, &query.token) {
     (Some(principal), _) => Ok(Some(principal.clone())),
     (None, Some(_)) => Ok(None),
-    (None, None) => Err(ApiError::unauthorized("authentication required")),
+    (None, None) => Err(ApiError::unauthorized("Authentication required")),
   }
 }
 
@@ -202,7 +202,7 @@ fn deleting(app: &AppState, by: &Principal, path: &str) -> Result<(), ApiError> 
     by = by.subject,
     path, "deletion refused; remote file management is disabled"
   );
-  Err(ApiError::forbidden("remote file management is disabled").logged())
+  Err(ApiError::forbidden("Remote file management is disabled").logged())
 }
 
 /// A file's bytes for the browser to show or save, a single range honored. A link without a
@@ -380,7 +380,7 @@ async fn link_token(
   let files = &app.services.files;
   let token = match request {
     FileTokenRequest::Path { path } => {
-      let malformed = || ApiError::bad_request("path must be <root>/<base64 path>");
+      let malformed = || ApiError::bad_request("The path must be <root>/<base64 path>");
       let (name, encoded) = path.split_once('/').ok_or_else(malformed)?;
       let root = root(name).map_err(|_| malformed())?;
       let path = validate::files_path(encoded, false)?;

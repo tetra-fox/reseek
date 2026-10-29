@@ -322,7 +322,7 @@ async fn blocking_ourselves_or_a_configured_block_is_a_conflict() {
     .call("DELETE", "/api/v0/users/mallory/block", None)
     .await;
   assert_eq!(status, 409);
-  assert_eq!(body["error"], "blocked by configuration");
+  assert_eq!(body["error"], "Blocked by the configuration");
   let (status, _) = app.call("DELETE", "/api/v0/users/alice/block", None).await;
   assert_eq!(status, 404);
 

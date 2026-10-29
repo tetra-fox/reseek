@@ -52,10 +52,7 @@ fn unanswered(username: &str, error: ClientError) -> ApiError {
     ClientError::UserOffline(_) => ApiError::offline(username),
     ClientError::UserNotFound(message) => ApiError::not_found(message),
     ClientError::InvalidOperation(detail) => ApiError::unavailable(Some(detail)),
-    other => ApiError::upstream(
-      format!("{username} could not be asked"),
-      Some(other.to_string()),
-    ),
+    other => ApiError::upstream(format!("Could not ask {username}"), Some(other.to_string())),
   }
 }
 
@@ -302,7 +299,7 @@ impl UserService for Users {
     self
       .browses
       .status(username)
-      .ok_or_else(|| ApiError::not_found(format!("no browse of {username} is under way")))
+      .ok_or_else(|| ApiError::not_found(format!("No browse of {username} is in progress")))
   }
 
   async fn directory(
@@ -372,7 +369,7 @@ impl UserService for Users {
     if uploading {
       return Err(ApiError::conflict(
         format!("{username} has uploads that have not completed"),
-        Some("their upload group needs their status kept current".to_string()),
+        Some("Their upload group requires their status to be kept current".to_string()),
       ));
     }
     self

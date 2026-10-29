@@ -61,7 +61,7 @@ pub(crate) fn duration_off_or_at_least(
 ) -> Result<(), String> {
   if !value.is_zero() && value < min {
     return Err(format!(
-      "The field {name} must be 0 to turn it off, or at least {}.",
+      "The field {name} must be 0 (disabled) or at least {}.",
       humantime::format_duration(min)
     ));
   }
@@ -72,7 +72,7 @@ pub(crate) fn duration_off_or_at_least(
 pub(crate) fn off_or_at_least(name: &str, value: u32, min: u32) -> Result<(), String> {
   if value != 0 && value < min {
     return Err(format!(
-      "The field {name} must be 0 to turn it off, or at least {min}."
+      "The field {name} must be 0 (disabled) or at least {min}."
     ));
   }
   Ok(())
@@ -101,9 +101,9 @@ pub(crate) fn length(
 /// A string is set and holds more than whitespace.
 pub(crate) fn required(name: &str, value: Option<&str>) -> Result<(), String> {
   match value {
-    None | Some("") => Err(format!("The {name} field must contain a value")),
+    None | Some("") => Err(format!("The field {name} must contain a value.")),
     Some(v) if v.trim().is_empty() => Err(format!(
-      "The {name} field must not contain a value consisting only of whitespace"
+      "The field {name} must not contain only whitespace."
     )),
     Some(_) => Ok(()),
   }
@@ -113,12 +113,12 @@ pub(crate) fn required(name: &str, value: Option<&str>) -> Result<(), String> {
 pub(crate) fn ip_address(name: &str, value: &str) -> Result<(), String> {
   if value.contains(',') {
     return Err(format!(
-      "The {name} field accepts a single value only (a comma separated list was specified)"
+      "The field {name} accepts a single value, not a comma-separated list."
     ));
   }
   if addresses::address(value.trim()).is_none() {
     return Err(format!(
-      "The {name} field specifies an invalid IPv4 or IPv6 IP address."
+      "The field {name} specifies an invalid IPv4 or IPv6 address."
     ));
   }
   Ok(())
@@ -126,9 +126,9 @@ pub(crate) fn ip_address(name: &str, value: &str) -> Result<(), String> {
 
 /// A comma-separated list of IP addresses as the listeners read it.
 pub(crate) fn ip_addresses(name: &str, value: &str) -> Result<(), String> {
-  addresses::list(Some(value)).map(drop).map_err(|_| {
-    format!("The {name} field contains one or more invalid IPv4 or IPv6 IP addresses.")
-  })
+  addresses::list(Some(value))
+    .map(drop)
+    .map_err(|_| format!("The field {name} contains one or more invalid IPv4 or IPv6 addresses."))
 }
 
 /// Whether `pattern` is a usable regular expression: not blank, and it compiles as the engines
@@ -142,14 +142,14 @@ pub(crate) fn cidr(value: &str) -> Result<(), String> {
   value
     .parse::<IpRange>()
     .map(drop)
-    .map_err(|e| format!("CIDR {value} is invalid: {e}"))
+    .map_err(|e| format!("CIDR {value} is invalid: {e}."))
 }
 
 /// A comma-separated list of address ranges.
 pub(crate) fn cidr_list(value: &str) -> Result<(), String> {
   parse_list(value)
     .map(drop)
-    .map_err(|(element, e)| format!("CIDR {element} is invalid: {e}"))
+    .map_err(|(element, e)| format!("CIDR {element} is invalid: {e}."))
 }
 
 /// An absolute `http` or `https` URL with a host.
@@ -182,12 +182,12 @@ mod tests {
     assert!(ip_address("x", "::1").is_ok());
     assert_eq!(
       ip_address("x", "1.2.3.4,5.6.7.8").unwrap_err(),
-      "The x field accepts a single value only (a comma separated list was specified)"
+      "The field x accepts a single value, not a comma-separated list."
     );
     assert!(ip_address("x", "localhost").is_err());
     assert_eq!(
       ip_addresses("x", "127.0.0.1,nope").unwrap_err(),
-      "The x field contains one or more invalid IPv4 or IPv6 IP addresses."
+      "The field x contains one or more invalid IPv4 or IPv6 addresses."
     );
   }
 
@@ -217,11 +217,11 @@ mod tests {
     assert!(!is_regex("(?=x)", false), "look-around is not supported");
     assert_eq!(
       cidr("192.168.1.0/33").unwrap_err(),
-      "CIDR 192.168.1.0/33 is invalid: prefix length 33 is out of range"
+      "CIDR 192.168.1.0/33 is invalid: prefix length 33 is out of range."
     );
     assert_eq!(
       cidr_list("0.0.0.0/0,::ffff:1.2.3.4").unwrap_err(),
-      "CIDR ::ffff:1.2.3.4 is invalid: IPv4 mapped IPv6 addresses are not allowed"
+      "CIDR ::ffff:1.2.3.4 is invalid: IPv4 mapped IPv6 addresses are not allowed."
     );
   }
 
@@ -229,11 +229,11 @@ mod tests {
   fn required_strings_need_more_than_whitespace() {
     assert_eq!(
       required("x", None).unwrap_err(),
-      "The x field must contain a value"
+      "The field x must contain a value."
     );
     assert_eq!(
       required("x", Some(" ")).unwrap_err(),
-      "The x field must not contain a value consisting only of whitespace"
+      "The field x must not contain only whitespace."
     );
     assert!(required("x", Some("a")).is_ok());
   }

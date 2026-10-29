@@ -20,7 +20,7 @@ pub(crate) fn absolute(name: &str, path: &Path) -> Result<(), String> {
   let text = path.to_string_lossy();
   if !is_absolute(&text, Os::CURRENT) {
     return Err(format!(
-      "The {name} field must be an absolute path on the current operating system."
+      "The field {name} must be an absolute path on the current operating system."
     ));
   }
   non_traversing(name, &text)
@@ -32,13 +32,13 @@ pub(crate) fn readable_file(name: &str, path: &Path) -> Result<(), String> {
   let full = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
   if !full.is_file() {
     return Err(format!(
-      "The {name} field specifies a non-existent file '{}'.",
+      "The field {name} specifies a file '{}' that does not exist.",
       full.display()
     ));
   }
   fs::File::open(&full).map(drop).map_err(|_| {
     format!(
-      "The {name} field specifies a file '{}' that cannot be opened for required access 'Read'",
+      "The field {name} specifies a file '{}' that cannot be opened for reading.",
       full.display()
     )
   })
@@ -62,7 +62,7 @@ pub(crate) fn directory_under(name: &str, path: &Path, base: &Path) -> Result<()
   let text = path.to_string_lossy();
   if path.has_root() || is_absolute(&text, Os::CURRENT) {
     return Err(format!(
-      "The {name} field specifies a non-relative directory path: '{text}'."
+      "The field {name} must be a relative directory path, not '{text}'."
     ));
   }
   existing_directory(name, &base.join(path))
@@ -72,7 +72,7 @@ fn existing_directory(name: &str, path: &Path) -> Result<(), String> {
   let full = resolved(path);
   if !full.is_dir() {
     return Err(format!(
-      "The {name} field specifies a non-existent directory '{}'.",
+      "The field {name} specifies a directory '{}' that does not exist.",
       full.display()
     ));
   }
@@ -83,7 +83,7 @@ fn existing_directory(name: &str, path: &Path) -> Result<(), String> {
 fn writable(name: &str, dir: &Path) -> Result<(), String> {
   crate::paths::probe(dir).map_err(|_| {
     format!(
-      "The {name} field specifies a directory '{}' that exists, but is not writeable.",
+      "The field {name} specifies a directory '{}' that is not writable.",
       resolved(dir).display()
     )
   })
@@ -112,7 +112,7 @@ mod tests {
     assert_eq!(
       download_directory("d", &missing, &default).unwrap_err(),
       format!(
-        "The d field specifies a non-existent directory '{}'.",
+        "The field d specifies a directory '{}' that does not exist.",
         missing.display()
       )
     );
@@ -151,7 +151,7 @@ mod tests {
     assert!(
       readable_file("f", &file)
         .unwrap_err()
-        .contains("non-existent file")
+        .contains("that does not exist")
     );
     fs::write(&file, "1.2.3.4\n").unwrap();
     assert!(readable_file("f", &file).is_ok());

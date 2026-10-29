@@ -194,7 +194,10 @@
         if (!outcome.ok) {
           // the files written before this one keep their change
           await settle(done);
-          if (outcome.status === 409 && outcome.error.startsWith("config file changed on disk")) {
+          if (
+            outcome.status === 409 &&
+            outcome.error.startsWith("The configuration file changed on disk")
+          ) {
             if (!done.length) await onchanged();
             return {
               ...outcome,

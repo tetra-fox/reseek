@@ -65,7 +65,7 @@ impl TransferService for Uploads {
     listing::one(&self.db, UPLOAD, username, id, include_history)
       .await
       .map_err(internal)?
-      .ok_or_else(|| ApiError::not_found(format!("no upload {id} to {username}")))
+      .ok_or_else(|| ApiError::not_found(format!("No upload {id} to {username}")))
   }
 
   async fn cancel_upload(&self, username: &str, id: Uuid, remove: bool) -> Result<(), ApiError> {
@@ -167,7 +167,7 @@ impl TransferService for Uploads {
         Ok(())
       }
       Bumped::NotWaiting => Err(ApiError::conflict(
-        "the upload is not waiting in the queue",
+        "The upload is not waiting in the queue",
         None,
       )),
     }

@@ -64,7 +64,7 @@ impl FromStr for Topic {
           id.parse()
             .map_err(|_| format!("topic {other} does not name a search by its id"))?,
         ),
-        None => return Err(format!("unknown topic {other}")),
+        None => return Err(format!("Unknown topic {other}")),
       },
     })
   }
@@ -158,7 +158,7 @@ mod tests {
     );
     assert_eq!(parse(None).unwrap(), [Topic::Application]);
     assert_eq!(parse(Some(" , ")).unwrap(), [Topic::Application]);
-    assert_eq!(parse(Some("hubs")).unwrap_err(), "unknown topic hubs");
+    assert_eq!(parse(Some("hubs")).unwrap_err(), "Unknown topic hubs");
     assert!(parse(Some("search:7")).is_err());
     assert_eq!(
       Topic::SearchResponses(id).to_string(),

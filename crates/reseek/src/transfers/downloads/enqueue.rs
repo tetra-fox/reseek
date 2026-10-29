@@ -92,13 +92,13 @@ fn check(username: &str, files: &[FileRequest]) -> Result<(), ApiError> {
   }
   if files.iter().any(|f| traverses(&f.filename)) {
     return Err(ApiError::bad_request(
-      "One or more files contains a dangerous path traversal segment",
+      "One or more files contain a dangerous path traversal segment",
     ));
   }
   let mut seen = HashSet::new();
   if !files.iter().all(|f| seen.insert(f.filename.as_str())) {
     return Err(ApiError::bad_request(
-      "Two or more files in request are duplicated",
+      "Two or more files in the request are duplicated",
     ));
   }
   Ok(())
@@ -110,7 +110,7 @@ fn unreachable(username: &str, error: ClientError) -> ApiError {
     ClientError::UserOffline(_) | ClientError::UserNotFound(_) => ApiError::offline(username),
     ClientError::InvalidOperation(message) => ApiError::unavailable(Some(message)),
     other => ApiError::upstream(
-      format!("{username} could not be reached"),
+      format!("Could not reach {username}"),
       Some(other.to_string()),
     ),
   }
@@ -233,7 +233,7 @@ impl Downloads {
         username,
         "enqueue from a user blocked from downloads refused"
       );
-      return Err(ApiError::conflict("user is blocked", None));
+      return Err(ApiError::conflict("The user is blocked", None));
     }
     let client = self.network.client();
     let endpoint = client
@@ -363,7 +363,7 @@ mod tests {
     );
     assert_eq!(
       message("alice", &[file("a/../b")]),
-      "One or more files contains a dangerous path traversal segment"
+      "One or more files contain a dangerous path traversal segment"
     );
     let same_name = [
       file("a\\b.flac"),
@@ -374,7 +374,7 @@ mod tests {
     ];
     assert_eq!(
       message("alice", &same_name),
-      "Two or more files in request are duplicated"
+      "Two or more files in the request are duplicated"
     );
   }
 }

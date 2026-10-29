@@ -133,7 +133,7 @@ impl EventService for EventLog {
   ) -> Result<EventRecord, ApiError> {
     let event = samples::sample(event_type, &disambiguator, Utc::now()).ok_or_else(|| {
       ApiError::bad_request(format!(
-        "Event type '{}' can not be raised",
+        "Event type '{}' cannot be raised",
         event_type.name()
       ))
     })?;

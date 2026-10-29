@@ -17,7 +17,7 @@ fn failed(error: DbError) -> ApiError {
 }
 
 fn unknown(id: &str) -> ApiError {
-  ApiError::not_found(format!("no share has the id {id}"))
+  ApiError::not_found(format!("No share has the id {id}"))
 }
 
 #[async_trait]
@@ -57,10 +57,10 @@ impl ShareService for Shares {
 
   async fn scan(&self, force: bool) -> Result<(), ApiError> {
     Shares::scan(self, force)
-      .map_err(|_| ApiError::conflict("A share scan is already in progress.", None))
+      .map_err(|_| ApiError::conflict("A share scan is already in progress", None))
   }
 
   async fn cancel_scan(&self) -> Result<(), ApiError> {
-    Shares::cancel_scan(self).map_err(|_| ApiError::conflict("No share scan is in progress.", None))
+    Shares::cancel_scan(self).map_err(|_| ApiError::conflict("No share scan is in progress", None))
   }
 }

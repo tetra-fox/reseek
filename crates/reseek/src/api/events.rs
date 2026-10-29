@@ -88,7 +88,7 @@ fn raisable(name: &str) -> Result<EventType, ApiError> {
     .any(|kind| kind.eq_ignore_ascii_case(name))
   {
     return Err(ApiError::bad_request(format!(
-      "Event type '{name}' can not be raised"
+      "Event type '{name}' cannot be raised"
     )));
   }
   name.parse().map_err(ApiError::bad_request)

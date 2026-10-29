@@ -19,7 +19,7 @@ fn check_script(name: &str, script: &Script, report: &mut Report) {
   if script.on.iter().any(|event| event.trim().is_empty()) {
     report.add(
       KEY,
-      format!("The field {on} contains one or more null or empty values"),
+      format!("The field {on} contains one or more null or empty values."),
     );
   }
   // a script's own record runs no script, so naming it would never run one
@@ -42,7 +42,7 @@ fn check_script(name: &str, script: &Script, report: &mut Report) {
     report.add(
       KEY,
       format!(
-        "The elements in the field {on} must all be one of: {}. Case insensitive.",
+        "Each element of the field {on} must be one of the following, ignoring case: {}.",
         names.join(", ")
       ),
     );
@@ -53,10 +53,9 @@ fn check_script(name: &str, script: &Script, report: &mut Report) {
     report.add(
       KEY,
       format!(
-        "Script '{name}': One and only one of the fields Command or Executable may be specified \
-         for a single script. If you intend to use the system shell, omit 'executable'. If you \
-         intend to use an executable other than the system shell, omit 'command' and specify \
-         either 'args' or 'arglist'."
+        "Script '{name}': Exactly one of the fields Command and Executable must be specified. \
+         To use the system shell, omit 'executable'. To use another executable, omit 'command' \
+         and specify either 'args' or 'arglist'."
       ),
     );
   }
@@ -64,9 +63,8 @@ fn check_script(name: &str, script: &Script, report: &mut Report) {
     report.add(
       KEY,
       format!(
-        "Script '{name}': Only one of the fields Args or Arglist may be specified for a single \
-         script. Specify 'args' if you intend to construct a single quoted string yourself, and \
-         specify 'arglist' if you'd like reseek to handle quoting for you."
+        "Script '{name}': Only one of the fields Args and Arglist may be specified. Specify \
+         'args' to write a single quoted string, or 'arglist' to have reseek handle the quoting."
       ),
     );
   }
@@ -103,8 +101,8 @@ mod tests {
     assert!(problems(command(&[])).is_empty(), "never runs");
     let found = problems(command(&["DownloadFinished", ""]));
     assert_eq!(found.len(), 2);
-    assert!(found[0].ends_with("contains one or more null or empty values"));
-    assert!(found[1].contains("must all be one of: Any, All, *, DownloadFileComplete"));
+    assert!(found[0].ends_with("contains one or more null or empty values."));
+    assert!(found[1].contains("ignoring case: Any, All, *, DownloadFileComplete"));
     assert_eq!(problems(command(&["None"])).len(), 1, "None never matches");
     assert_eq!(
       problems(command(&["ScriptRunCompleted"])).len(),
@@ -126,6 +124,6 @@ mod tests {
     program.run.arglist = Some(Vec::new());
     let found = problems(program);
     assert_eq!(found.len(), 1);
-    assert!(found[0].contains("Only one of the fields Args or Arglist"));
+    assert!(found[0].contains("Only one of the fields Args and Arglist"));
   }
 }

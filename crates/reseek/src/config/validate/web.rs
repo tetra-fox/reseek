@@ -83,7 +83,7 @@ fn check_certificate(certificate: &Certificate, report: &mut Report) {
     report.add(
       &format!("{prefix}.pfx"),
       format!(
-        "Invalid HTTPs certificate: set {prefix}.cert and {prefix}.key or {prefix}.pfx, not both"
+        "The HTTPS certificate is invalid. Set {prefix}.cert and {prefix}.key, or {prefix}.pfx, not both."
       ),
     );
     return;
@@ -92,7 +92,7 @@ fn check_certificate(certificate: &Certificate, report: &mut Report) {
     if let Err(message) = load_pem(cert, key) {
       report.add(
         &format!("{prefix}.cert"),
-        format!("Invalid HTTPs certificate: {message}"),
+        format!("The HTTPS certificate is invalid: {message}"),
       );
     }
   } else if let Some(pfx) = &certificate.pfx
@@ -100,7 +100,7 @@ fn check_certificate(certificate: &Certificate, report: &mut Report) {
   {
     report.add(
       &format!("{prefix}.pfx"),
-      format!("Invalid HTTPs certificate: {message}"),
+      format!("The HTTPS certificate is invalid: {message}"),
     );
   }
 }
@@ -111,7 +111,7 @@ fn load_pem(cert: &Path, key: &Path) -> Result<(), String> {
     .and_then(|certs| certs.collect::<Result<Vec<_>, _>>())
     .map_err(|e| format!("{}: {e}", cert.display()))?;
   if chain.is_empty() {
-    return Err(format!("{} holds no certificate", cert.display()));
+    return Err(format!("{} contains no certificate", cert.display()));
   }
   PrivateKeyDer::from_pem_file(key)
     .map(drop)
@@ -126,7 +126,7 @@ fn load_pkcs12(pfx: &Path, password: &str) -> Result<(), String> {
       .map_err(|e| e.to_string())?;
   match store.private_key_chain() {
     Some((_, chain)) if !chain.certs().is_empty() => Ok(()),
-    _ => Err("the file holds no private key with its certificate".to_string()),
+    _ => Err("the file contains no private key for its certificate".to_string()),
   }
 }
 
@@ -164,7 +164,7 @@ fn check_authentication(auth: &Authentication, report: &mut Report) {
       (None, Some(_)) => {}
       (None, None) => report.add(
         &key,
-        format!("The local account {name} needs password_hash or password"),
+        format!("The local account {name} requires password_hash or password."),
       ),
     }
   }
@@ -192,7 +192,9 @@ fn check_authentication(auth: &Authentication, report: &mut Report) {
     {
       report.add(
         &key,
-        format!("The OpenID Connect provider name {name:?} may hold only letters, digits, - and _"),
+        format!(
+          "The OpenID Connect provider name {name:?} may contain only letters, digits, - and _."
+        ),
       );
     }
     report.check(
@@ -273,7 +275,7 @@ mod tests {
     assert_eq!(
       messages,
       [
-        "The web.authentication.api_keys.script.key field must contain a value",
+        "The field web.authentication.api_keys.script.key must contain a value.",
         "The field web.authentication.api_keys.short.key must be a string with a minimum length \
          of 16 and a maximum length of 255.",
       ]
@@ -301,7 +303,7 @@ mod tests {
     assert!(messages[0].starts_with("The field web.authentication.password_hash is not"));
     assert_eq!(
       messages[1],
-      "The local account nobody needs password_hash or password"
+      "The local account nobody requires password_hash or password."
     );
   }
 
@@ -355,7 +357,7 @@ mod tests {
     web.https.certificate.key = Some(cert);
     let found = problems(&web);
     assert!(
-      found[0].1.starts_with("Invalid HTTPs certificate:"),
+      found[0].1.starts_with("The HTTPS certificate is invalid:"),
       "{found:?}"
     );
   }
@@ -369,11 +371,11 @@ mod tests {
     web.https.certificate.pfx = Some(pfx.clone());
     let found = problems(&web);
     assert_eq!(found.len(), 1);
-    assert!(found[0].1.starts_with("Invalid HTTPs certificate:"));
+    assert!(found[0].1.starts_with("The HTTPS certificate is invalid:"));
     web.https.certificate.cert = Some(pfx.clone());
     web.https.certificate.key = Some(pfx);
     let found = problems(&web);
     assert_eq!(found.len(), 1);
-    assert!(found[0].1.ends_with("not both"), "{found:?}");
+    assert!(found[0].1.ends_with("not both."), "{found:?}");
   }
 }

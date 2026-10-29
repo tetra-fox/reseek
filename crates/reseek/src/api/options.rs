@@ -98,7 +98,7 @@ async fn get_debug(
   let current = app.config.current();
   if !current.values.debug {
     warn!("Blocked configuration debug view; debug mode is off");
-    return Err(ApiError::forbidden("the debug view needs debug mode").logged());
+    return Err(ApiError::forbidden("The debug view requires debug mode").logged());
   }
   remote(
     &current,
@@ -139,8 +139,9 @@ async fn patch_options(
   let lasts = match patch.expires_in.as_deref() {
     Some(UNTIL_RESTART) => Lasts::UntilRestart,
     Some(text) => {
-      let duration = humantime::parse_duration(text)
-        .map_err(|e| ApiError::invalid("expiresIn is not a duration", e.to_string()))?;
+      let duration = humantime::parse_duration(text).map_err(|e| {
+        ApiError::invalid("The value of expiresIn is not a duration", e.to_string())
+      })?;
       Lasts::Until(shifted(Utc::now(), lifetime(duration)))
     }
     None => Lasts::UntilRemoved,
@@ -371,7 +372,7 @@ pub(super) fn remote(current: &Loaded<Options>, blocked: &str) -> Result<(), Api
     return Ok(());
   }
   warn!("{blocked}");
-  Err(ApiError::forbidden("remote configuration is disabled").logged())
+  Err(ApiError::forbidden("Remote configuration is disabled").logged())
 }
 
 fn is_authentication(key: &str) -> bool {
@@ -494,13 +495,13 @@ mod tests {
     assert_eq!(restart.status, 400);
     assert_eq!(
       restart.json()["error"],
-      "needs a restart; write it to the file"
+      "Requires a restart and must be saved to the file"
     );
     let env = app
       .send(set(json!({ "set": { "soulseek.description": "x" } })))
       .await;
     assert_eq!(env.status, 409);
-    assert_eq!(env.json()["error"], "set by RESEEK_SLSK_DESCRIPTION");
+    assert_eq!(env.json()["error"], "Set by RESEEK_SLSK_DESCRIPTION");
     let empty = app.send(set(json!({}))).await;
     assert_eq!(empty.status, 204);
 
@@ -610,7 +611,7 @@ mod tests {
     ] {
       let answer = app.send(request(method, uri, body)).await;
       assert_eq!(answer.status, 403, "{method} {uri}");
-      assert_eq!(answer.json()["error"], "remote configuration is disabled");
+      assert_eq!(answer.json()["error"], "Remote configuration is disabled");
     }
   }
 
@@ -643,7 +644,10 @@ mod tests {
       ))
       .await;
     assert_eq!(stale.status, 409);
-    assert_eq!(stale.json()["error"], "config file changed on disk");
+    assert_eq!(
+      stale.json()["error"],
+      "The configuration file changed on disk"
+    );
     let invalid = app
       .send(patch(
         json!({ "set": { "web.https.port": 0 }, "revision": revision }),
@@ -662,7 +666,7 @@ mod tests {
       ))
       .await;
     assert_eq!(shadowed.status, 409);
-    assert_eq!(shadowed.json()["error"], "set by config.d/10-rooms.toml");
+    assert_eq!(shadowed.json()["error"], "Set by config.d/10-rooms.toml");
     let written = app
       .send(patch(
         json!({ "set": { "debug": true }, "revision": revision }),

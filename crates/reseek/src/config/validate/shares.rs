@@ -86,7 +86,7 @@ pub(super) fn check(shares: &Shares, downloads: &Path, case_sensitive: bool, rep
           )
         } else {
           format!(
-            "Shares {}, {} collide. Specify an alias for one or both to disambiguate them.",
+            "Shares {} and {} collide. Specify an alias for one or both to disambiguate them.",
             a.named(),
             b.named()
           )
@@ -95,12 +95,16 @@ pub(super) fn check(shares: &Shares, downloads: &Path, case_sensitive: bool, rep
       } else if share::same_path(&a.share.local_path, &b.share.local_path) {
         let message = if first.derived() {
           format!(
-            "Share {} aliases the same path as {}",
+            "Share {} aliases the same path as {}.",
             first.named(),
             second.named()
           )
         } else {
-          format!("Shares {}, {} alias the same path", a.named(), b.named())
+          format!(
+            "Shares {} and {} alias the same path.",
+            a.named(),
+            b.named()
+          )
         };
         report.add(KEY, message);
       }
@@ -110,7 +114,7 @@ pub(super) fn check(shares: &Shares, downloads: &Path, case_sensitive: bool, rep
     if !is_regex(filter, case_sensitive) {
       report.add(
         "shares.filters",
-        format!("Share filter '{filter}' is not a valid regular expression"),
+        format!("Share filter '{filter}' is not a valid regular expression."),
       );
     }
   }
@@ -143,13 +147,13 @@ fn valid(written: &str) -> Result<(), String> {
   }
   let trimmed = trimmed(written);
   if NO_PATH.is_match(trimmed) {
-    return Err(format!("Share {written} does not specify a path"));
+    return Err(format!("Share {written} does not specify a path."));
   }
   let parts = share::entry(trimmed);
   let (alias, path) = (parts.alias, parts.path);
   if !(path.starts_with('/') || path.starts_with("\\\\") || has_drive(path)) {
     return Err(format!(
-      "Share {written} contains a relative path; only absolute paths are supported."
+      "Share {written} contains a relative path. Only absolute paths are supported."
     ));
   }
   if TRAVERSAL.is_match(path) {
@@ -159,17 +163,17 @@ fn valid(written: &str) -> Result<(), String> {
   }
   if alias.trim().is_empty() {
     return Err(format!(
-      "Share '{written}' is invalid; alias may not be null, empty or consist of only whitespace"
+      "Share '{written}' is invalid. The alias must not be empty or only whitespace."
     ));
   }
   if alias.contains(['/', '\\']) {
     return Err(format!(
-      "Share '{written}' is invalid; aliases may not contain path separators '/' or '\\'"
+      "Share '{written}' is invalid. An alias must not contain the path separators '/' or '\\'."
     ));
   }
   if alias == "." || alias == ".." || alias.chars().any(char::is_control) {
     return Err(format!(
-      "Share '{written}' is invalid; alias may not be '.', '..' or contain control characters"
+      "Share '{written}' is invalid. The alias must not be '.' or '..' or contain control characters."
     ));
   }
   Ok(())
@@ -202,7 +206,7 @@ mod tests {
 
   #[test]
   fn bad_entries_say_what_is_wrong() {
-    assert_eq!(problems(&["[x]"]), ["Share [x] does not specify a path"]);
+    assert_eq!(problems(&["[x]"]), ["Share [x] does not specify a path."]);
     assert_eq!(
       problems(&["[x]/"]),
       ["Share [x]/ specifies a root mount, which is not supported."]
@@ -213,7 +217,7 @@ mod tests {
     );
     assert_eq!(
       problems(&["music"]),
-      ["Share music contains a relative path; only absolute paths are supported."]
+      ["Share music contains a relative path. Only absolute paths are supported."]
     );
     assert_eq!(
       problems(&["/x/.."]),
@@ -221,17 +225,19 @@ mod tests {
     );
     assert_eq!(
       problems(&["[ ]/music"]),
-      ["Share '[ ]/music' is invalid; alias may not be null, empty or consist of only whitespace"]
+      ["Share '[ ]/music' is invalid. The alias must not be empty or only whitespace."]
     );
     assert_eq!(
       problems(&["[a\\b]/music"]),
-      ["Share '[a\\b]/music' is invalid; aliases may not contain path separators '/' or '\\'"]
+      [
+        "Share '[a\\b]/music' is invalid. An alias must not contain the path separators '/' or '\\'."
+      ]
     );
     for alias in ["[.]/music", "[..]/music", "[a\u{7}]/music"] {
       assert_eq!(
         problems(&[alias]),
         [format!(
-          "Share '{alias}' is invalid; alias may not be '.', '..' or contain control characters"
+          "Share '{alias}' is invalid. The alias must not be '.' or '..' or contain control characters."
         )]
       );
     }
@@ -242,7 +248,7 @@ mod tests {
     assert_eq!(
       problems(&["/a/music", "/b/music"]),
       [
-        "Shares '/a/music', '/b/music' collide. Specify an alias for one or both to disambiguate \
+        "Shares '/a/music' and '/b/music' collide. Specify an alias for one or both to disambiguate \
          them."
       ]
     );
@@ -253,7 +259,7 @@ mod tests {
     );
     assert_eq!(
       problems(&["[one]/music", "[two]/music/"]),
-      ["Shares '[one]/music', '[two]/music/' alias the same path"]
+      ["Shares '[one]/music' and '[two]/music/' alias the same path."]
     );
     assert!(problems(&["[one]/a/music", "/b/music"]).is_empty());
     assert!(
@@ -278,7 +284,7 @@ mod tests {
     assert_eq!(
       problems_with(&["![dl]/srv/downloads"], true),
       [
-        "Share '/srv/downloads' (from shares.share_downloads) aliases the same path as '![dl]/srv/downloads'"
+        "Share '/srv/downloads' (from shares.share_downloads) aliases the same path as '![dl]/srv/downloads'."
       ]
     );
     assert!(problems_with(&["/mnt/downloads"], false).is_empty());

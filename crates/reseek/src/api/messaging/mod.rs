@@ -33,12 +33,12 @@ pub fn routes() -> OpenApiRouter<AppState> {
 /// Refuses a message that is empty or longer than `chat.max_message_length` characters.
 fn message(app: &AppState, text: &str) -> Result<(), ApiError> {
   if text.is_empty() {
-    return Err(ApiError::bad_request("the message is empty"));
+    return Err(ApiError::bad_request("The message is empty"));
   }
   let max = app.config.current().values.chat.max_message_length;
   if text.chars().count() > max as usize {
     return Err(ApiError::bad_request(format!(
-      "the message is longer than {max} characters"
+      "The message is longer than {max} characters"
     )));
   }
   Ok(())
@@ -59,11 +59,11 @@ async fn search(
   Query(query): Query<MessageSearchQuery>,
 ) -> Result<Json<MessageSearchResults>, ApiError> {
   if query.q.trim().is_empty() {
-    return Err(ApiError::bad_request("q is required"));
+    return Err(ApiError::bad_request("A value for q is required"));
   }
   if query.q.chars().count() > QUERY_CHARS {
     return Err(ApiError::bad_request(format!(
-      "q must be at most {QUERY_CHARS} characters"
+      "The value of q must be at most {QUERY_CHARS} characters"
     )));
   }
   validate::positive("limit", query.limit)?;

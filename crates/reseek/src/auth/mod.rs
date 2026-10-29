@@ -119,7 +119,7 @@ pub async fn authenticate(
     if cross_site {
       let via = identified.principal.as_ref().map(|p| &p.via);
       debug!(ip = %client.ip, ?via, "cross-site request refused");
-      return ApiError::forbidden("cross-site request refused")
+      return ApiError::forbidden("Cross-site request refused")
         .logged()
         .into_response();
     }
@@ -158,7 +158,7 @@ pub fn require_interactive(principal: &Principal) -> Result<(), ApiError> {
     Ok(())
   } else {
     Err(ApiError::forbidden(
-      "needs a login session; an API key or token may not do this",
+      "Requires a login session. An API key or token cannot perform this action.",
     ))
   }
 }
@@ -202,7 +202,7 @@ impl<S: Send + Sync, R: MinimumRole> FromRequestParts<S> for Authorized<R> {
   async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, ApiError> {
     let principal = match parts.extensions.get::<Authentication>() {
       Some(Authentication(Some(principal))) => principal.clone(),
-      Some(Authentication(None)) => return Err(ApiError::unauthorized("authentication required")),
+      Some(Authentication(None)) => return Err(ApiError::unauthorized("Authentication required")),
       None => {
         return Err(ApiError::internal(
           "a route that needs a role is not authenticated",
@@ -210,7 +210,10 @@ impl<S: Send + Sync, R: MinimumRole> FromRequestParts<S> for Authorized<R> {
       }
     };
     if principal.role < R::ROLE {
-      return Err(ApiError::forbidden(format!("needs the {:?} role", R::ROLE)));
+      return Err(ApiError::forbidden(format!(
+        "Requires the {:?} role",
+        R::ROLE
+      )));
     }
     Ok(Self {
       principal,
@@ -256,7 +259,7 @@ pub(crate) mod tests {
       .send(with_header("authorization", "Bearer slsk_0123456789"))
       .await;
     assert_eq!(token.status, 401);
-    assert_eq!(token.json()["error"], "unknown API token");
+    assert_eq!(token.json()["error"], "Unknown API token");
   }
 
   #[tokio::test]
@@ -271,7 +274,7 @@ pub(crate) mod tests {
     };
     let foreign = app.send(patch(Some("http://evil.example"))).await;
     assert_eq!(foreign.status, 403);
-    assert_eq!(foreign.json()["error"], "cross-site request refused");
+    assert_eq!(foreign.json()["error"], "Cross-site request refused");
     assert_eq!(app.send(patch(Some("null"))).await.status, 403);
     assert_eq!(app.send(patch(Some("http://localhost"))).await.status, 204);
     assert_eq!(
@@ -299,7 +302,7 @@ pub(crate) mod tests {
     headers.insert("origin", "http://evil.example".parse().unwrap());
     let foreign = app.send(patch).await;
     assert_eq!(foreign.status, 403);
-    assert_eq!(foreign.json()["error"], "cross-site request refused");
+    assert_eq!(foreign.json()["error"], "Cross-site request refused");
   }
 
   #[tokio::test]

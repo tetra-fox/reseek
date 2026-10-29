@@ -71,7 +71,7 @@ fn internal(error: DbError) -> ApiError {
 }
 
 fn not_found(id: Uuid) -> ApiError {
-  ApiError::not_found(format!("no search has the id {id}"))
+  ApiError::not_found(format!("No search has the id {id}"))
 }
 
 /// `query` as it is sent: a term of one character matches too much to be sent, so it is left
@@ -470,7 +470,7 @@ mod tests {
       )
     };
     let refused = app.send(start()).await;
-    assert_eq!(refused.status, 409, "not logged in");
+    assert_eq!(refused.status, 409, "Not logged in");
     assert!(
       refused.json()["error"]
         .as_str()

@@ -353,21 +353,21 @@ impl Controller {
     };
     let Some((filename, transfer, stream)) = wait else {
       warn!(agent = name, %token, "file upload with an unknown or expired token");
-      return Err(ApiError::unauthorized("the token is unknown or expired").logged());
+      return Err(ApiError::unauthorized("The token is unknown or expired").logged());
     };
     let Some(stream) = stream else {
       warn!(agent = name, %token, "file upload with a used token");
-      return Err(ApiError::unauthorized("the token was used").logged());
+      return Err(ApiError::unauthorized("The token was already used").logged());
     };
     self.authenticate(&caller, Purpose::File, token)?;
     let mut field = form
       .next_field()
       .await
       .map_err(|e| ApiError::bad_request(e.body_text()))?
-      .ok_or_else(|| ApiError::bad_request("the file part is missing"))?;
+      .ok_or_else(|| ApiError::bad_request("The file part is missing"))?;
     let named = field.file_name().unwrap_or_default().to_string();
     if named.is_empty() {
-      return Err(ApiError::bad_request("the file part has no filename"));
+      return Err(ApiError::bad_request("The file part has no filename"));
     }
     if traverses(&named) {
       warn!(
@@ -375,7 +375,7 @@ impl Controller {
         filename = named,
         "Suspicious file upload with unsafe path segments"
       );
-      return Err(ApiError::bad_request("the filename contains a traversal segment").logged());
+      return Err(ApiError::bad_request("The filename contains a traversal segment").logged());
     }
     if !names_the_same(&named, &filename) {
       warn!(
@@ -384,7 +384,7 @@ impl Controller {
         sent = named,
         "agent sent a file other than the one asked for"
       );
-      return Err(ApiError::bad_request("the filename is not the one asked for").logged());
+      return Err(ApiError::bad_request("The filename is not the one requested").logged());
     }
     let (chunks, read) = mpsc::channel(CHUNKS);
     let (done, ended) = oneshot::channel();

@@ -21,7 +21,7 @@ pub(crate) enum Format {
 
 /// The message for a file whose format can not be told.
 pub(crate) const UNDETECTED: &str =
-  "Failed to detect blacklist format. Only CIDR, P2P and DAT formats are supported";
+  "Could not detect the blacklist format. Only the CIDR, P2P and DAT formats are supported.";
 
 /// Whether a trimmed line of a blocklist holds a range: it is not blank or a comment.
 pub(crate) fn is_data(line: &str) -> bool {

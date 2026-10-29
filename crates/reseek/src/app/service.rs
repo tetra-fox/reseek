@@ -49,7 +49,7 @@ impl ApplicationService for Application {
     }
     self.releases.update(&self.state).await.map_err(|e| {
       warn!(error = e, "Failed to check version");
-      ApiError::upstream("Failed to check version", Some(e))
+      ApiError::upstream("Could not check the version", Some(e))
     })
   }
 

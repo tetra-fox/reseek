@@ -33,7 +33,7 @@ impl std::str::FromStr for FileRoot {
 
   /// Reads a root by its name as a path writes it.
   fn from_str(text: &str) -> Result<Self, String> {
-    serde_plain::from_str(text).map_err(|_| format!("no directory root named {text}"))
+    serde_plain::from_str(text).map_err(|_| format!("No directory root named {text}"))
   }
 }
 
@@ -208,7 +208,7 @@ mod tests {
     assert_eq!("incomplete".parse(), Ok(FileRoot::Incomplete));
     assert_eq!(
       "Downloads".parse::<FileRoot>(),
-      Err("no directory root named Downloads".to_string())
+      Err("No directory root named Downloads".to_string())
     );
   }
 

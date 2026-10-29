@@ -21,7 +21,7 @@ pub(super) fn check(options: &Options, report: &mut Report) {
   if relay.mode == RelayMode::Agent && options.instance_name == "local" {
     report.add(
       "instance_name",
-      "Instance name must be something other than 'local' when operating in Relay Agent mode",
+      "The field instance_name must not be 'local' in relay agent mode.",
     );
   }
   if agent {
@@ -47,13 +47,13 @@ pub(super) fn check(options: &Options, report: &mut Report) {
     ),
   ] {
     if value < Duration::from_millis(1) {
-      report.add(key, format!("The field {key} must be longer than 0."));
+      report.add(key, format!("The field {key} must not be empty."));
     }
   }
   let key = "relay.controller.downloads_filter";
   for pattern in &relay.controller.downloads_filter {
     if let Err(e) = glob::Pattern::new(pattern) {
-      report.add(key, format!("Pattern {pattern} is invalid: {e}"));
+      report.add(key, format!("The pattern {pattern} is invalid: {e}."));
     }
   }
 }
@@ -66,7 +66,7 @@ fn file_name(key: &str, name: &str) -> Result<(), String> {
     .any(|c| !(' '..='~').contains(&c) || NOT_IN_A_NAME.contains(&c));
   if unfit || name == "." || name == ".." {
     return Err(format!(
-      "The field {key} must be printable ASCII without / \\ : * ? \" < > |, and not . or .."
+      "The field {key} must be printable ASCII without / \\ : * ? \" < > | and must not be '.' or '..'."
     ));
   }
   Ok(())
@@ -108,7 +108,7 @@ fn check_agents(relay: &Relay, report: &mut Report) {
       key,
       parse_trimmed_list(&agent.cidr)
         .map(drop)
-        .map_err(|(element, e)| format!("CIDR {element} is invalid: {e}")),
+        .map_err(|(element, e)| format!("CIDR {element} is invalid: {e}.")),
     );
     if let Some(instance) = instance {
       *names.entry(instance).or_insert(0) += 1;
@@ -117,7 +117,7 @@ fn check_agents(relay: &Relay, report: &mut Report) {
   if names.values().any(|&count| count > 1) {
     report.add(
       key,
-      "One or more Agent instance names are duplicated.  Ensure instance names are unique.",
+      "One or more agent instance names are duplicated. Instance names must be unique.",
     );
   }
 }
@@ -192,10 +192,10 @@ mod tests {
     assert_eq!(
       messages,
       [
-        "The relay.agents.c.instance_name field must contain a value",
-        "The relay.agents.c.secret field must contain a value",
-        "CIDR ::ffff:0:0/96 is invalid: IPv4 mapped IPv6 addresses are not allowed",
-        "One or more Agent instance names are duplicated.  Ensure instance names are unique.",
+        "The field relay.agents.c.instance_name must contain a value.",
+        "The field relay.agents.c.secret must contain a value.",
+        "CIDR ::ffff:0:0/96 is invalid: IPv4 mapped IPv6 addresses are not allowed.",
+        "One or more agent instance names are duplicated. Instance names must be unique.",
       ]
     );
   }

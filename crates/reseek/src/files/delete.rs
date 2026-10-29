@@ -75,7 +75,7 @@ pub(super) fn delete(
     Err(Failure::Missing) => Err(missing()),
     Err(Failure::Link) => {
       warn!(path = %shown.display(), "deletion through a link refused");
-      Err(ApiError::forbidden("Paths leading through a link may not be deleted").logged())
+      Err(ApiError::forbidden("Paths that lead through a link cannot be deleted").logged())
     }
     Err(Failure::Io(e)) if e.kind() == io::ErrorKind::PermissionDenied => {
       warn!(path = %shown.display(), error = %e, "deletion denied by the system");

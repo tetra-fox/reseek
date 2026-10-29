@@ -28,7 +28,7 @@ impl Downloads {
   pub async fn place_in_queue(&self, username: &str, id: Uuid) -> Result<u32, ApiError> {
     if self.users.is_blocked(username, None, BlockScope::Downloads) {
       return Err(ApiError::not_found(format!(
-        "no download {id} from {username}"
+        "No download {id} from {username}"
       )));
     }
     let mut record = self.record_of(username, id).await?;
@@ -59,7 +59,7 @@ impl Downloads {
       Err(_) => {
         cancel.cancel();
         return Err(ApiError::gateway_timeout(format!(
-          "{username} did not say the place in its queue in time"
+          "{username} did not report a queue position in time"
         )));
       }
     };
@@ -150,7 +150,7 @@ fn asked_failed(username: &str, error: ClientError) -> ApiError {
     ClientError::UserOffline(_) | ClientError::UserNotFound(_) => ApiError::offline(username),
     ClientError::InvalidOperation(message) => ApiError::unavailable(Some(message)),
     other => ApiError::upstream(
-      format!("{username} did not say the place in its queue"),
+      format!("Could not get the queue position from {username}"),
       Some(other.to_string()),
     ),
   }

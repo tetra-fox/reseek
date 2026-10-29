@@ -46,7 +46,7 @@ async fn stream(
     .find(|topic| caller.principal.role < topic.role())
   {
     return Err(ApiError::forbidden(format!(
-      "the {topic} topic needs the {:?} role",
+      "The {topic} topic requires the {:?} role",
       topic.role()
     )));
   }
@@ -71,7 +71,7 @@ async fn stream(
       limit,
       last_seen: asked.flatten(),
     })
-    .map_err(|_| ApiError::too_many("too many event streams open"))?;
+    .map_err(|_| ApiError::too_many("Too many event streams are open"))?;
   let listed: Vec<String> = topics.iter().map(ToString::to_string).collect();
   let span = info_span!(
     "live",

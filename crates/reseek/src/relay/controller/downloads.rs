@@ -131,17 +131,17 @@ impl Controller {
       });
     if !announced {
       warn!(agent = name, %token, filename, "download fetched with an unknown or expired token");
-      return Err(ApiError::unauthorized("the token is unknown or expired").logged());
+      return Err(ApiError::unauthorized("The token is unknown or expired").logged());
     }
     self.authenticate(&caller, Purpose::Download, token)?;
     if is_absolute(&filename, Os::CURRENT) {
-      return Err(ApiError::bad_request("the filename is not relative"));
+      return Err(ApiError::bad_request("The filename is not relative"));
     }
     let source = self.downloads.join(&filename);
     let file = match tokio::fs::File::open(&source).await {
       Ok(file) => file,
       Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-        return Err(ApiError::not_found(format!("{filename} is gone")));
+        return Err(ApiError::not_found(format!("{filename} no longer exists")));
       }
       Err(e) => return Err(ApiError::internal(format!("{}: {e}", source.display()))),
     };

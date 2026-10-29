@@ -174,7 +174,7 @@ impl Messaging {
       })
       .await
       .map_err(ApiError::internal)?;
-    found.map_err(|e| ApiError::bad_request(format!("q is not a valid search: {e}")))
+    found.map_err(|e| ApiError::bad_request(format!("The value of q is not a valid search: {e}")))
   }
 }
 

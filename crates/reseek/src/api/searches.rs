@@ -69,7 +69,9 @@ fn timeout(timeout: &SearchTimeout) -> Result<Duration, ApiError> {
     SearchTimeout::Text(text) => validate::duration("searchTimeout", text)?,
   };
   if duration < SHORTEST_TIMEOUT {
-    return Err(ApiError::bad_request("searchTimeout must be at least 1s"));
+    return Err(ApiError::bad_request(
+      "The value of searchTimeout must be at least 1s",
+    ));
   }
   Ok(duration)
 }
@@ -79,7 +81,7 @@ fn timeout(timeout: &SearchTimeout) -> Result<Duration, ApiError> {
 fn search_request(request: &SearchRequest) -> Result<(), ApiError> {
   if request.search_text.trim().is_empty() {
     return Err(ApiError::bad_request(
-      "The field SearchText can not be null, empty, or consist of only whitespace",
+      "The field SearchText cannot be null, empty or only whitespace",
     ));
   }
   let query = SearchQuery::parse(&request.search_text);
@@ -96,10 +98,10 @@ fn search_request(request: &SearchRequest) -> Result<(), ApiError> {
   let subjects = request.scope.subjects.len();
   match request.scope.scope_type {
     SearchScopeType::User if subjects == 0 => Err(ApiError::bad_request(
-      "a user search names at least one user",
+      "A user search must name at least one user",
     )),
     SearchScopeType::Room if subjects != 1 => {
-      Err(ApiError::bad_request("a room search names one room"))
+      Err(ApiError::bad_request("A room search must name one room"))
     }
     _ => Ok(()),
   }
@@ -260,7 +262,7 @@ mod tests {
       search_request(&request("\u{e9}t\u{e9}")).is_ok(),
       "characters, not bytes"
     );
-    assert!(message("   ").contains("can not be null"));
+    assert!(message("   ").contains("cannot be null"));
     assert!(message("-live --remix").contains("non-exclusion term\""));
     assert!(
       message("- a b -live").contains("length greater than 1"),

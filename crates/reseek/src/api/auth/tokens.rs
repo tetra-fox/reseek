@@ -98,18 +98,19 @@ async fn create(
   check_name(&request.name)?;
   if request.role > caller.principal.role {
     return Err(ApiError::forbidden(
-      "a token may not have a role above your own",
+      "A token cannot have a higher role than its creator",
     ));
   }
   let expires_at = match (&request.expires_in, request.expires_at) {
     (Some(_), Some(_)) => {
       return Err(ApiError::bad_request(
-        "give expiresIn or expiresAt, not both",
+        "Specify expiresIn or expiresAt, not both",
       ));
     }
     (Some(text), None) => {
-      let lasts = humantime::parse_duration(text)
-        .map_err(|e| ApiError::invalid("expiresIn is not a duration", e.to_string()))?;
+      let lasts = humantime::parse_duration(text).map_err(|e| {
+        ApiError::invalid("The value of expiresIn is not a duration", e.to_string())
+      })?;
       Some(shifted(Utc::now(), lifetime(lasts)))
     }
     (None, at) => at,
@@ -119,7 +120,7 @@ async fn create(
     && let Err((element, e)) = parse_list(cidr)
   {
     return Err(ApiError::invalid(
-      "cidr is not a list of networks",
+      "The value of cidr is not a list of networks",
       format!("{element}: {e}"),
     ));
   }
@@ -177,7 +178,7 @@ async fn update(
   let token = tokens::update(&app.auth.db, id, request.name, request.expires_at)
     .await
     .map_err(ApiError::internal)?
-    .ok_or_else(|| ApiError::not_found("no such token"))?;
+    .ok_or_else(|| ApiError::not_found("No such token"))?;
   info!(id = %id, by = caller.principal.subject, "API token changed");
   Ok(Json(token.to_api()))
 }
@@ -203,7 +204,7 @@ async fn revoke(
     .await
     .map_err(ApiError::internal)?
   {
-    return Err(ApiError::not_found("no such token"));
+    return Err(ApiError::not_found("No such token"));
   }
   info!(id = %id, by = caller.principal.subject, "API token revoked");
   raise(&app, &token, &caller.principal.subject, false);
@@ -223,14 +224,14 @@ async fn visible(
     .filter(|token| {
       caller.principal.role == Role::Administrator || token.owner == caller.principal.subject
     })
-    .ok_or_else(|| ApiError::not_found("no such token"))
+    .ok_or_else(|| ApiError::not_found("No such token"))
 }
 
 fn check_name(name: &str) -> Result<(), ApiError> {
   let count = name.chars().count();
   if name.trim().is_empty() || count > NAME_CHARS {
     return Err(ApiError::bad_request(format!(
-      "name must have 1 to {NAME_CHARS} characters"
+      "The name must have 1 to {NAME_CHARS} characters"
     )));
   }
   Ok(())
@@ -238,9 +239,9 @@ fn check_name(name: &str) -> Result<(), ApiError> {
 
 fn check_expiry(expires_at: Option<chrono::DateTime<Utc>>) -> Result<(), ApiError> {
   match expires_at {
-    Some(at) if at <= Utc::now() => Err(ApiError::bad_request("the expiry is in the past")),
+    Some(at) if at <= Utc::now() => Err(ApiError::bad_request("The expiry is in the past")),
     // a later time is not stored in time order, so pruning would take it for an old one
-    Some(at) if at > latest() => Err(ApiError::bad_request("the expiry is after the year 9999")),
+    Some(at) if at > latest() => Err(ApiError::bad_request("The expiry is after the year 9999")),
     _ => Ok(()),
   }
 }

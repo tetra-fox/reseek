@@ -44,7 +44,7 @@ pub(super) fn check(analysis: &Analysis, report: &mut Report) {
     if extension.is_empty() || extension.contains(['.', '/', '\\']) {
       report.add(
         "analysis.extensions",
-        format!("'{extension}' is not a file extension without its dot"),
+        format!("'{extension}' must be a file extension without the leading dot."),
       );
     }
   }

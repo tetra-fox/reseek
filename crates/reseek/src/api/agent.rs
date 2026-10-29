@@ -94,7 +94,7 @@ pub async fn refuse_in_agent_mode(
   if authenticated && refused {
     return ApiError::disabled(
       "relay_agent_mode",
-      "This instance is running as a relay agent; the Soulseek-facing API is disabled.",
+      "This instance is running as a relay agent. The Soulseek API is disabled.",
     )
     .into_response();
   }

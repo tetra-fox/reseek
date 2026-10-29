@@ -76,7 +76,7 @@ impl Messaging {
     let page = self.history_page(room, query).await?;
     if page.messages.is_empty() && query.before.is_none() && self.tracks(room).is_err() {
       return Err(ApiError::not_found(format!(
-        "no messages of the room {room} are stored"
+        "No messages of the room {room} are stored"
       )));
     }
     Ok(page)
@@ -108,7 +108,7 @@ impl Messaging {
       .map_err(internal)?;
     if deleted == 0 {
       return Err(ApiError::not_found(format!(
-        "no messages of the room {room} are stored"
+        "No messages of the room {room} are stored"
       )));
     }
     debug!(room, deleted, "room history deleted");
@@ -129,7 +129,7 @@ impl Messaging {
       .map_err(internal)?;
     if messages.is_empty() {
       return Err(ApiError::not_found(format!(
-        "no messages of the room {room} are stored"
+        "No messages of the room {room} are stored"
       )));
     }
     export::room(room, &messages, format)

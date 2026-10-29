@@ -167,15 +167,15 @@ impl AnalysisService for Analysis {
     match self.enqueue(file, force).await? {
       Queued::Job(id) => Ok(AnalysisJobCreated { job_id: id }),
       Queued::Current => Err(ApiError::conflict(
-        "the file has been analyzed already",
-        Some("its report is current; ask with force=true to analyze it again".to_string()),
+        "The file has already been analyzed",
+        Some("Its report is current. Use force=true to analyze it again.".to_string()),
       )),
       Queued::Already => Err(ApiError::conflict(
-        "the file is queued or being analyzed",
+        "The file is queued or being analyzed",
         None,
       )),
       Queued::Full => Err(ApiError::too_many(format!(
-        "the analysis queue is full at {QUEUE_LIMIT} files"
+        "The analysis queue is full ({QUEUE_LIMIT} files)"
       ))),
     }
   }
@@ -235,7 +235,7 @@ impl AnalysisService for Analysis {
       None
     } else {
       Some(self.read_kept(&stored, asked).await?.ok_or_else(|| {
-        ApiError::not_found("the file is not that long; the layout says how many tiles it has")
+        ApiError::not_found("The file is shorter than that. The layout gives the number of tiles.")
       })?)
     };
     if piece == Piece::Spectrogram(None)
@@ -341,14 +341,14 @@ impl AnalysisService for Analysis {
         job.cancel.cancel();
         Ok(())
       }
-      None => Err(ApiError::not_found(format!("no analysis job {id}"))),
+      None => Err(ApiError::not_found(format!("No analysis job {id}"))),
     }
   }
 
   async fn window(&self, target: FileTarget, index: u32) -> Result<WindowSpectrum, ApiError> {
     let file = self.files.local_path(&target).await?;
     let stored = self.stored(&file.path).await?;
-    let missing = || ApiError::not_found(format!("the report has no window {index}"));
+    let missing = || ApiError::not_found(format!("The report has no window {index}"));
     let windows = stored.report.windows.as_deref().unwrap_or_default();
     let window = windows.get(index as usize).ok_or_else(missing)?;
     let max_hz = stored
@@ -398,12 +398,12 @@ impl Analysis {
   fn kept_piece(stored: &store::Stored, piece: Piece) -> Result<kept::Asked, ApiError> {
     if stored.report.stale {
       return Err(ApiError::not_found(
-        "the file was analyzed by an older version of reseek; analyze it again to see it",
+        "The file was analyzed by an older version of reseek. Analyze it again to view it.",
       ));
     }
     if stored.report.spectrogram.is_none() {
       return Err(ApiError::not_found(
-        "the file has no spectrogram; its report's limitations say why",
+        "The file has no spectrogram. The limitations in its report give the reason.",
       ));
     }
     Ok(match piece {
@@ -427,8 +427,9 @@ impl Analysis {
     let read = tokio::task::spawn_blocking(move || kept::read(&reading, asked))
       .await
       .map_err(ApiError::internal)?;
-    let not_kept =
-      || ApiError::not_found("the spectrogram is no longer kept; analyze the file again to see it");
+    let not_kept = || {
+      ApiError::not_found("The spectrogram is no longer kept. Analyze the file again to view it.")
+    };
     match read {
       Ok(bytes) => Ok(bytes),
       Err(kept::Unkept::Missing) => Err(not_kept()),

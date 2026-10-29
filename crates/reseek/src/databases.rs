@@ -82,7 +82,7 @@ impl ApplicationService for Databases {
   async fn vacuum(&self, name: &str) -> Result<(), ApiError> {
     let db = self
       .named(name)
-      .ok_or_else(|| ApiError::not_found(format!("no database named {name}")))?;
+      .ok_or_else(|| ApiError::not_found(format!("No database named {name}")))?;
     db.vacuum().await.map_err(|e| {
       warn!(database = name, error = %e, "database not vacuumed");
       ApiError::internal(e).logged()

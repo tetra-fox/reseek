@@ -110,7 +110,7 @@ impl std::str::FromStr for EventType {
       .ok_or_else(|| {
         let names = Self::ALL.iter().map(|kind| kind.name()).collect::<Vec<_>>();
         format!(
-          "unknown event type '{text}'; must be one of {}",
+          "Unknown event type '{text}'. It must be one of: {}.",
           names.join(", ")
         )
       })
@@ -208,7 +208,7 @@ mod tests {
       assert_eq!(serde_json::from_str::<EventType>(&lower).unwrap(), kind);
     }
     let error = serde_json::from_str::<EventType>("\"Any\"").unwrap_err();
-    assert!(error.to_string().contains("unknown event type 'Any'"));
+    assert!(error.to_string().contains("Unknown event type 'Any'"));
   }
 
   #[test]

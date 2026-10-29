@@ -239,9 +239,7 @@ impl Controller {
         cidr = agent.cidr,
         "relay call from outside the agent's networks"
       );
-      return Err(
-        ApiError::unauthorized("the address is not one the agent may call from").logged(),
-      );
+      return Err(ApiError::unauthorized("The agent may not call from this address").logged());
     }
     // a configured agent has a secret, which loading the options checked
     let secret = agent.secret.as_deref().unwrap_or_default();
@@ -250,7 +248,7 @@ impl Controller {
       .verifies(purpose, &token.to_string(), &caller.credential)
     {
       warn!(agent = name, %token, "relay call with a credential mismatch");
-      return Err(ApiError::unauthorized("the credential does not match").logged());
+      return Err(ApiError::unauthorized("The credential does not match").logged());
     }
     debug!(agent = name, %token, "Agent authenticated for token");
     Ok(())

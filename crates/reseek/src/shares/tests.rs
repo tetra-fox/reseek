@@ -123,7 +123,7 @@ async fn a_scan_is_one_at_a_time_and_only_a_running_one_cancels() {
   *lock(&shares.running) = Some(held.clone());
   let scan = app.send(request("PUT", "/api/v0/shares", None)).await;
   assert_eq!(scan.status, 409);
-  assert_eq!(scan.json()["error"], "A share scan is already in progress.");
+  assert_eq!(scan.json()["error"], "A share scan is already in progress");
   let cancel = app.send(request("DELETE", "/api/v0/shares", None)).await;
   assert_eq!(cancel.status, 204);
   assert!(held.is_cancelled());

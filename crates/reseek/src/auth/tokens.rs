@@ -32,7 +32,7 @@ const USE_WRITES: Duration = Duration::minutes(1);
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Refusal {
   /// no token has this secret
-  #[error("unknown API token")]
+  #[error("Unknown API token")]
   Unknown,
   /// the token's expiry passed
   #[error("token_expired")]

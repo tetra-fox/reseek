@@ -246,7 +246,7 @@ async fn add_member(
   Json(RoomMemberName(username)): Json<RoomMemberName>,
 ) -> Result<StatusCode, ApiError> {
   if username.is_empty() {
-    return Err(ApiError::bad_request("the username is empty"));
+    return Err(ApiError::bad_request("The username is empty"));
   }
   app.services.messaging.add_member(&room, &username).await?;
   info!(
@@ -306,7 +306,7 @@ async fn add_operator(
   Json(RoomMemberName(username)): Json<RoomMemberName>,
 ) -> Result<StatusCode, ApiError> {
   if username.is_empty() {
-    return Err(ApiError::bad_request("the username is empty"));
+    return Err(ApiError::bad_request("The username is empty"));
   }
   app
     .services

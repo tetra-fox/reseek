@@ -71,8 +71,8 @@ impl ApiError {
   pub fn rate_limited() -> Self {
     let mut e = Self::new(
       StatusCode::TOO_MANY_REQUESTS,
-      "too many failed attempts",
-      Some("try again in a minute".to_string()),
+      "Too many failed attempts",
+      Some("Try again in a minute".to_string()),
     );
     e.retry_after = Some(60);
     e
@@ -137,8 +137,8 @@ impl ApiError {
   pub fn internal(error: impl std::fmt::Display) -> Self {
     let mut e = Self::new(
       StatusCode::INTERNAL_SERVER_ERROR,
-      "internal error",
-      Some("the reason is in the daemon's log".to_string()),
+      "Internal error",
+      Some("The reason is in the daemon log".to_string()),
     );
     e.internal = Some(error.to_string());
     e
@@ -200,11 +200,11 @@ impl From<cascade::Error> for ApiError {
   fn from(error: cascade::Error) -> Self {
     use cascade::Error as E;
     match error {
-      E::Stale => Self::conflict("config file changed on disk", None),
+      E::Stale => Self::conflict("The configuration file changed on disk", None),
       E::ReadOnly { file, reason } => Self::conflict(format!("{file} is read-only"), Some(reason)),
-      E::SetBy { key, by } => Self::conflict(format!("set by {by}"), Some(key)),
+      E::SetBy { key, by } => Self::conflict(format!("Set by {by}"), Some(key)),
       E::Invalid(invalid) => Self::invalid(
-        "invalid configuration",
+        "Invalid configuration",
         invalid
           .iter()
           .map(ToString::to_string)
@@ -212,11 +212,13 @@ impl From<cascade::Error> for ApiError {
           .join("; "),
       ),
       e @ (E::Value { .. } | E::Parse { .. }) => {
-        Self::invalid("invalid configuration", e.to_string())
+        Self::invalid("Invalid configuration", e.to_string())
       }
-      E::UnknownKey(key) => Self::bad_request(format!("unknown key {key}")),
-      E::NeedsRestart(key) => Self::invalid("needs a restart; write it to the file", key),
-      E::NoOverride(key) => Self::not_found(format!("no runtime override for {key}")),
+      E::UnknownKey(key) => Self::bad_request(format!("Unknown key {key}")),
+      E::NeedsRestart(key) => {
+        Self::invalid("Requires a restart and must be saved to the file", key)
+      }
+      E::NoOverride(key) => Self::not_found(format!("No runtime override for {key}")),
       E::UnknownFile(file) => Self::not_found(format!("{file} is not a configuration file")),
       e @ (E::Read { .. } | E::Write { .. } | E::Overrides { .. } | E::Stopped) => {
         Self::internal(e)

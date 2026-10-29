@@ -154,7 +154,7 @@ async fn https_only(
     return response;
   }
   let Some(host) = client.host else {
-    return ApiError::bad_request("a Host header is needed to redirect to HTTPS").into_response();
+    return ApiError::bad_request("A Host header is required to redirect to HTTPS").into_response();
   };
   let path = request.uri().path_and_query().map_or("/", |p| p.as_str());
   // an IPv6 address takes its brackets back in the URL

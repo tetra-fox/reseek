@@ -127,7 +127,7 @@ async fn get_latest_version(
   }
   if caller.principal.role < Role::ReadWrite {
     return Err(ApiError::forbidden(
-      "checking for a release now needs the ReadWrite role",
+      "Checking for a release requires the ReadWrite role",
     ));
   }
   app.services.application.check_version().await.map(Json)
@@ -314,7 +314,7 @@ async fn collect_garbage(_admin: Authorized<Administrator>) -> StatusCode {
 /// Refuses a memory dump; the daemon does not write them.
 async fn dump(_admin: Authorized<Administrator>) -> ApiError {
   warn!("memory dump asked for; dumps are not written");
-  ApiError::forbidden("memory dumps are not available").logged()
+  ApiError::forbidden("Memory dumps are not available").logged()
 }
 
 /// The Soulseek client's own records of its transfers.

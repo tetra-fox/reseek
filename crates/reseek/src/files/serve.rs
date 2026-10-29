@@ -233,7 +233,7 @@ pub(super) async fn respond(
     }
     Wanted::Unsatisfiable => {
       let mut response = ApiError::range_not_satisfiable(format!(
-        "the file has {} bytes; one range within them may be asked for",
+        "The file has {} bytes. Only one range within them can be requested.",
         file.size
       ))
       .into_response();
@@ -270,7 +270,7 @@ pub(super) async fn body(
   let mut opened = tokio::fs::File::open(path)
     .await
     .map_err(|e| match e.kind() {
-      std::io::ErrorKind::NotFound => ApiError::not_found("the file is gone"),
+      std::io::ErrorKind::NotFound => ApiError::not_found("The file no longer exists"),
       _ => ApiError::internal(format!("{} not opened: {e}", path.display())),
     })?;
   opened

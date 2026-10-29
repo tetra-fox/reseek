@@ -66,7 +66,7 @@ async fn login(
     .unwrap_or_else(|| format!("{}/", app.url_base));
   if !is_local_path(&redirect) {
     return Err(ApiError::bad_request(
-      "redirect must be a path on this site",
+      "The redirect must be a path on this site",
     ));
   }
   let callback = callback_url(&app, &presented, &name)?;
@@ -143,7 +143,7 @@ async fn callback(
   };
   let Some(login) = login else {
     failed("the login expired or its state did not match".to_string());
-    let mut response = ApiError::bad_request("login expired, try again")
+    let mut response = ApiError::bad_request("The login expired. Try again.")
       .logged()
       .into_response();
     response.headers_mut().append(header::SET_COOKIE, clear);
@@ -228,7 +228,7 @@ async fn backchannel(
   let provider = provider(&app, &name)?;
   if !provider.options.logout.back_channel {
     return Err(ApiError::not_found(
-      "back-channel logout is off for this provider",
+      "Back-channel logout is disabled for this provider",
     ));
   }
   let form = match serde_html_form::from_bytes::<BackchannelLogout>(&body) {
@@ -340,14 +340,16 @@ fn unavailable(name: &str, error: &str) -> ApiError {
       error, suppressed, "OpenID Connect provider unavailable"
     );
   }
-  ApiError::service_unavailable("the identity provider is unavailable").logged()
+  ApiError::service_unavailable("The identity provider is unavailable").logged()
 }
 
 /// The provider `name`, 404 when none is configured.
 fn provider(app: &AppState, name: &str) -> Result<Arc<Provider>, ApiError> {
   match app.auth.oidc.get(name, &app.config.current().values) {
     Ok(Some(provider)) => Ok(provider),
-    Ok(None) => Err(ApiError::not_found(format!("no identity provider {name}"))),
+    Ok(None) => Err(ApiError::not_found(format!(
+      "No identity provider named {name}"
+    ))),
     Err(e) => Err(ApiError::internal(format!("identity provider {name}: {e}"))),
   }
 }
@@ -363,9 +365,9 @@ fn callback_url(
     &app.config.current().values,
     &presented.client,
   )
-  .ok_or_else(|| ApiError::bad_request("a Host header is needed to sign in"))?;
+  .ok_or_else(|| ApiError::bad_request("A Host header is required to sign in"))?;
   RedirectUrl::new(format!("{base}/api/v0/auth/oidc/{name}/callback"))
-    .map_err(|e| ApiError::bad_request(format!("the callback URL is not valid: {e}")))
+    .map_err(|e| ApiError::bad_request(format!("The callback URL is not valid: {e}")))
 }
 
 /// The login page showing `error`, with the login cookie cleared.
@@ -665,7 +667,7 @@ mod tests {
     );
     let crossed = back(&app, &other, "c1").await;
     assert_eq!(crossed.status, 400, "the state belongs to another login");
-    assert_eq!(crossed.json()["error"], "login expired, try again");
+    assert_eq!(crossed.json()["error"], "The login expired. Try again.");
 
     let started = start(&app, "/").await;
     grant(

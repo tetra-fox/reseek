@@ -52,7 +52,7 @@ pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
     if !is_regex(filter, context.started_case_sensitive) {
       report.add(
         "filters.search.request",
-        format!("Search request filter '{filter}' is not a valid regular expression"),
+        format!("Search request filter '{filter}' is not a valid regular expression."),
       );
     }
   }
@@ -106,7 +106,10 @@ pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
   }
   for room in &options.rooms {
     if let Err(reason) = soulseek_proto::validate_room_name(room) {
-      report.add("rooms", format!("Invalid room name '{room}': {reason}"));
+      report.add(
+        "rooms",
+        format!("The room name '{room}' is invalid: {reason}."),
+      );
     }
   }
   let refresh = "transfers.ui.queue_refresh";
@@ -152,7 +155,7 @@ fn check_logging(logging: &Logging, report: &mut Report) {
       report.add(
         "logging.targets",
         format!(
-          "Log target '{directive}' must be a module and a level, such as reseek::http=debug"
+          "Log target '{directive}' must be a module and a level, such as reseek::http=debug."
         ),
       );
     }
@@ -328,11 +331,11 @@ mod tests {
       [
         (
           "filters.search.request".to_string(),
-          "Search request filter '(' is not a valid regular expression".to_string()
+          "Search request filter '(' is not a valid regular expression.".to_string()
         ),
         (
           "filters.search.request".to_string(),
-          format!("Search request filter '{huge}' is not a valid regular expression")
+          format!("Search request filter '{huge}' is not a valid regular expression.")
         ),
       ]
     );

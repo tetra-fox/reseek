@@ -102,7 +102,7 @@ async fn directory(
   Json(request): Json<DirectoryRequest>,
 ) -> Result<Json<Vec<Directory>>, ApiError> {
   if request.directory.is_empty() {
-    return Err(ApiError::bad_request("directory is required"));
+    return Err(ApiError::bad_request("A directory is required"));
   }
   app
     .services

@@ -124,8 +124,8 @@ impl Files {
     }
     if root == FileRoot::Incomplete && self.writing.holds(&[&path, &resolved]) {
       return Err(ApiError::conflict(
-        "the file is being written by a download",
-        Some("a file in the incomplete directory can be read once its download ends".to_string()),
+        "The file is being written by a download",
+        Some("A file in the incomplete directory can be read once its download ends".to_string()),
       ));
     }
     let transfer_id = match transfer_id {

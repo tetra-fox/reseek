@@ -661,7 +661,7 @@ export const fakeAnalysis = async (page: Page, { stale = false, duration = 30.5 
       if (method === "POST") {
         return route.fulfill({
           status: 409,
-          json: { error: "the file has been analyzed already" }
+          json: { error: "The file has already been analyzed" }
         });
       }
       const json = report(override, undefined, "linear", duration);

@@ -128,7 +128,7 @@ async fn get_profile_picture(
     .user_info()
     .await
     .picture
-    .ok_or_else(|| ApiError::not_found("no profile picture is set"))?;
+    .ok_or_else(|| ApiError::not_found("No profile picture is set"))?;
   // it changes whenever a new one is uploaded, so the browser asks again each time
   Ok(picture_response(picture, "private, no-cache"))
 }
@@ -169,7 +169,7 @@ async fn put_profile_picture(
     .unwrap_or_default();
   if !UPLOAD_TYPES.contains(&declared.as_str()) {
     return Err(ApiError::unsupported_media(
-      "the picture must be a JPEG, PNG, GIF or WebP image",
+      "The picture must be a JPEG, PNG, GIF or WebP image",
     ));
   }
   // every refusal comes before the upload is read, so a refused one changes no picture
@@ -177,11 +177,11 @@ async fn put_profile_picture(
   let upload = match Limited::new(body, MAX_UPLOAD).collect().await {
     Ok(collected) => collected.to_bytes(),
     Err(e) if e.is::<LengthLimitError>() => {
-      return Err(ApiError::too_large("the picture is larger than 1 MiB"));
+      return Err(ApiError::too_large("The picture is larger than 1 MiB"));
     }
     Err(e) => {
       return Err(ApiError::invalid(
-        "the body could not be read",
+        "Could not read the request body",
         e.to_string(),
       ));
     }
@@ -191,7 +191,7 @@ async fn put_profile_picture(
     .map_err(ApiError::internal)?
     .map_err(|e| {
       debug!(error = %e, kind = declared, "profile picture refused");
-      ApiError::invalid("the picture could not be read", e.to_string()).logged()
+      ApiError::invalid("Could not read the picture", e.to_string()).logged()
     })?;
   let _writing = app.profile_writes.lock().await;
   // again, with the file as the change before this one left it

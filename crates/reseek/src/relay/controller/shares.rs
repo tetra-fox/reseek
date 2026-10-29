@@ -132,7 +132,9 @@ impl Controller {
       Some(t) if t.agent == name && t.expires > Instant::now() => t.socket,
       _ => {
         warn!(agent = name, %token, "share upload with an unknown, expired or used token");
-        return Err(ApiError::unauthorized("the token is unknown, expired or used").logged());
+        return Err(
+          ApiError::unauthorized("The token is unknown, expired or already used").logged(),
+        );
       }
     };
     self.authenticate(&caller, Purpose::Shares, token)?;
@@ -195,12 +197,12 @@ impl Controller {
             .map_err(|e| ApiError::bad_request(e.body_text()))?
           {
             if text.len() + chunk.len() > SHARE_LIST_MAX {
-              return Err(ApiError::too_large("the share list is too large"));
+              return Err(ApiError::too_large("The share list is too large"));
             }
             text.extend_from_slice(&chunk);
           }
           let list: Vec<Share> = serde_json::from_slice(&text)
-            .map_err(|e| ApiError::invalid("the share list is not JSON shares", e.to_string()))?;
+            .map_err(|e| ApiError::invalid("The share list is not valid JSON", e.to_string()))?;
           shares = Some(list);
         }
         Some("database") => {
@@ -221,7 +223,7 @@ impl Controller {
                 limit, "agent's share database larger than allowed"
               );
               return Err(ApiError::too_large(format!(
-                "the share database is larger than {limit} bytes"
+                "The share database is larger than {limit} bytes"
               )));
             }
             out
@@ -250,8 +252,8 @@ impl Controller {
     }
     match (shares, database) {
       (Some(shares), true) => Ok(shares),
-      (None, _) => Err(ApiError::bad_request("the part shares is missing")),
-      (_, false) => Err(ApiError::bad_request("the part database is missing")),
+      (None, _) => Err(ApiError::bad_request("The shares part is missing")),
+      (_, false) => Err(ApiError::bad_request("The database part is missing")),
     }
   }
 
