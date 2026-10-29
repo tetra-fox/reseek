@@ -1,4 +1,3 @@
-import { cubicOut } from "svelte/easing";
 import { SvelteSet } from "svelte/reactivity";
 
 import { motionSlow } from "#lib/motion.js";
@@ -17,8 +16,11 @@ import {
   zoomAround
 } from "./timeview";
 
-/** An eased change of zoom: from one view to another, keeping the time `across` the view in place */
-type Zooming = { from: View; to: View; across: number; start: number; duration: number };
+/**
+ * An eased change of zoom: the view it is headed to, the point `across` the view that stays in
+ * place, how quickly it closes in, and when it last moved
+ */
+type Zooming = { to: View; across: number; tau: number; last: number };
 
 /**
  * What one report's viewer shows, shared by the drawer and the large view so both agree: the
@@ -111,8 +113,10 @@ export class Scope {
   }
 
   /**
-   * Moves the view to `to` over the slow motion token, eased out: the span changes by equal
-   * ratios and the time `across` the view moves from where it is to where `to` has it
+   * Moves the view toward `to`, closing a fixed share of the distance each moment (eased out,
+   * settled within about the slow motion token): the span changes by equal ratios and the time
+   * `across` the view moves to where `to` has it. A new target while moving carries on from
+   * where the view is, so quick zooms in a row neither restart nor fall behind
    */
   #ease(to: View, across: number) {
     const duration = motionSlow();
@@ -121,7 +125,8 @@ export class Scope {
       this.view = to;
       return;
     }
-    this.#zooming = { from: this.view, to, across, start: performance.now(), duration };
+    const last = this.#zooming?.last ?? performance.now();
+    this.#zooming = { to, across, tau: duration / 4, last };
     if (!this.#frame) this.#frame = requestAnimationFrame(this.#tick);
   }
 
@@ -129,16 +134,19 @@ export class Scope {
     this.#frame = 0;
     const z = this.#zooming;
     if (!z) return;
-    const t = Math.min(1, Math.max(0, (now - z.start) / z.duration));
-    if (t >= 1) {
+    const k = 1 - Math.exp(-Math.max(0, now - z.last) / z.tau);
+    z.last = now;
+    const v = this.view;
+    const span = v.span * (z.to.span / v.span) ** k;
+    const at = timeAt(v, z.across);
+    const anchor = at + (timeAt(z.to, z.across) - at) * k;
+    const settled =
+      Math.abs(Math.log(z.to.span / span)) < 1e-3 && Math.abs(z.to.start - v.start) < span * 1e-3;
+    if (settled) {
       this.#zooming = null;
       this.view = z.to;
       return;
     }
-    const e = cubicOut(t);
-    const span = z.from.span * (z.to.span / z.from.span) ** e;
-    const from = timeAt(z.from, z.across);
-    const anchor = from + (timeAt(z.to, z.across) - from) * e;
     this.view = clamp({ start: anchor - z.across * span, span }, this.duration);
     this.#frame = requestAnimationFrame(this.#tick);
   };
