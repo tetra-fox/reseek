@@ -33,6 +33,8 @@ CREATE TABLE private_messages (
 );
 CREATE UNIQUE INDEX pm_remote ON private_messages(username, remote_id) WHERE remote_id IS NOT NULL;
 CREATE INDEX pm_user_ts ON private_messages(username, timestamp);
+-- a conversation's messages in the order they were stored, so its newest one is a single seek
+CREATE INDEX pm_user_local ON private_messages(username, local_id);
 CREATE INDEX pm_unacked ON private_messages(username) WHERE is_acknowledged = 0;
 
 -- every message said in a room while we were in it
@@ -62,7 +64,11 @@ CREATE TABLE room_state (
   -- "all", "mentions" or "none"
   notify TEXT NOT NULL DEFAULT 'mentions',
   joined_at TEXT,
-  left_at TEXT
+  left_at TEXT,
+  -- 1 for a room joined again after a start: a join asked for through the UI or the API marks
+  -- the room, a leave unmarks it; a room joined only because the configuration lists it is not
+  -- marked
+  remembered INTEGER NOT NULL DEFAULT 0
 );
 
 -- each time we were logged in, so room history can say where it has holes

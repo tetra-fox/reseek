@@ -14,15 +14,7 @@ use super::report::spectrogram_url;
 use crate::db::{self, Database, DbError, Schema};
 
 /// The analysis database's migrations.
-pub static SCHEMA: Schema = db::schema!(
-  "analysis",
-  [
-    "0001_initial",
-    "0002_report_format",
-    "0003_spectra",
-    "0004_american_names"
-  ]
-);
+pub static SCHEMA: Schema = db::schema!("analysis", ["0001_initial"]);
 
 /// The shape of the report JSON this version writes. Raise it with any change a stored report
 /// could not be read back through: a report stored in another shape reads as stale.
@@ -362,14 +354,7 @@ pub(super) async fn evict(db: &Database, limit: u64) -> Result<Vec<String>, DbEr
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::db::{Location, Schema};
-
-  /// The database as it was before reports carried their shape.
-  static BEFORE: Schema = Schema {
-    name: "analysis",
-    migrations: SCHEMA.migrations.split_at(1).0,
-    private: false,
-  };
+  use crate::db::Location;
 
   const PATH: &str = "/srv/downloads/a.flac";
 
@@ -393,28 +378,27 @@ mod tests {
     };
     std::fs::create_dir_all(&location.data).unwrap();
     std::fs::create_dir_all(&location.backups).unwrap();
-    let db = Database::open(&BEFORE, &location).await.unwrap();
+    let db = Database::open(&SCHEMA, &location).await.unwrap();
     let at = db::timestamp(Utc::now());
     db.write(move |conn| {
-      // a report in a shape this version's type no longer reads
+      // a report in a shape this version's type no longer reads, without a shape number
       conn.execute(
         "INSERT INTO reports \
-         (path, root, relative, size, modified, transfer_id, analysed_at, verdict, image, report) \
+         (path, root, relative, size, modified, transfer_id, analyzed_at, verdict, spectra, \
+         report, format) \
          VALUES (?1, 'downloads', 'a.flac', 10, 'then', NULL, ?2, 'likely_transcode', 'img', \
-         '{\"path\": \"/srv/downloads/a.flac\", \"summary\": \"an older shape\"}')",
+         '{\"path\": \"/srv/downloads/a.flac\", \"summary\": \"an older shape\"}', NULL)",
         params![PATH, at],
       )?;
       conn.execute(
-        "INSERT INTO judgements (path, verdict, note, by, at) \
+        "INSERT INTO judgments (path, verdict, note, by, at) \
          VALUES (?1, 'fake', 'an old rip', 'local:reseek', ?2)",
         params![PATH, at],
       )
     })
     .await
     .unwrap();
-    drop(db);
 
-    let db = Database::open(&SCHEMA, &location).await.unwrap();
     let stored = find(&db, PATH).await.unwrap().unwrap();
     let report = &stored.report;
     assert!(report.stale);
