@@ -124,7 +124,8 @@ impl Via {
 }
 
 /// Runs both attempts and returns the first connection either makes, dropping the other; fails
-/// only when both have failed.
+/// only when both have failed. When both are ready at once the user's connection is kept: the
+/// user already counts it as its connection to us, while ours has not introduced us yet.
 pub(crate) async fn race(
   direct: impl Future<Output = Result<Conn, ClientError>>,
   indirect: impl Future<Output = Result<Conn, ClientError>>,
@@ -134,13 +135,14 @@ pub(crate) async fn race(
   let mut indirect_failed = None;
   loop {
     tokio::select! {
-      result = &mut direct, if direct_failed.is_none() => match result {
-        Ok(conn) => return Ok((conn, Via::Direct)),
-        Err(error) => direct_failed = Some(error),
-      },
+      biased;
       result = &mut indirect, if indirect_failed.is_none() => match result {
         Ok(conn) => return Ok((conn, Via::Indirect)),
         Err(error) => indirect_failed = Some(error),
+      },
+      result = &mut direct, if direct_failed.is_none() => match result {
+        Ok(conn) => return Ok((conn, Via::Direct)),
+        Err(error) => direct_failed = Some(error),
       },
     }
     match (direct_failed.take(), indirect_failed.take()) {
@@ -286,6 +288,14 @@ mod tests {
     let (direct, indirect) = result.err().unwrap();
     assert_eq!(direct.to_string(), "direct");
     assert_eq!(indirect.to_string(), "indirect");
+  }
+
+  #[tokio::test]
+  async fn both_ready_keeps_the_users_connection() {
+    let (dialled, _a) = crate::conn::tests::pair(ConnectionOptions::default()).await;
+    let (answered, _b) = crate::conn::tests::pair(ConnectionOptions::default()).await;
+    let result = race(async { Ok(dialled) }, async { Ok(answered) }).await;
+    assert_eq!(result.unwrap().1, Via::Indirect);
   }
 
   #[test]
