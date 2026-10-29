@@ -170,7 +170,7 @@
       const [a, b] = [...pointers.values()];
       const distance = Math.hypot(a.x - b.x, a.y - b.y);
       const middle = acrossRect(stage.spectrogram, (a.x + b.x) / 2);
-      scope.zoom((scope.view.span / pinch.span) * (distance / pinch.distance), middle);
+      scope.zoom((scope.view.span / pinch.span) * (distance / pinch.distance), middle, false);
       return;
     }
     if (!press) return;
