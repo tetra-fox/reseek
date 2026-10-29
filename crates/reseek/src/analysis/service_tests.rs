@@ -500,15 +500,10 @@ async fn a_report_from_an_older_version_lists_as_stale_keeps_its_judgment_and_is
   let judgment = json!({ "verdict": "fake", "note": "sounds like 128k" });
   let judged = format!("{}/override", route("a.flac"));
   assert_eq!(send(&app, "PUT", &judged, Some(judgment)).await.0, 204);
-  // the report as an older version stored it: without a field the layout has since gained, and
-  // from before stored reports carried their shape
+  // the report as an older version stored it, numbered as an older shape
   let stored = rusqlite::Connection::open(app.state.paths.data.join("analysis.db")).unwrap();
   stored
-    .execute(
-      "UPDATE reports SET format = NULL, \
-       report = json_remove(report, '$.spectrogram.durationSeconds')",
-      [],
-    )
+    .execute("UPDATE reports SET format = format - 1", [])
     .unwrap();
 
   let (status, listed) = send(&app, "GET", "/api/v0/analysis?offset=0&limit=500", None).await;

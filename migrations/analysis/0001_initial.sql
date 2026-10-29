@@ -18,10 +18,8 @@ CREATE TABLE reports (
   spectra TEXT NOT NULL,
   -- the report as JSON, with its windows and without the user's judgment
   report TEXT NOT NULL,
-  -- the shape the report's JSON was written in, which the daemon reads only in its own shape;
-  -- null for a report stored before shapes were numbered, which is read when it can be and is
-  -- stale otherwise
-  format INTEGER
+  -- the shape the report's JSON was written in, which the daemon reads only in its own shape
+  format INTEGER NOT NULL
 );
 CREATE INDEX reports_analyzed_at ON reports(analyzed_at);
 CREATE INDEX reports_transfer_id ON reports(transfer_id);

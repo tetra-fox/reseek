@@ -79,16 +79,14 @@ fn judged_report(row: &rusqlite::Row<'_>) -> rusqlite::Result<(AudioAnalysis, Op
     }),
     None => None,
   };
-  let format: Option<i64> = row.get(14)?;
-  let read = match format {
-    Some(format) if format != REPORT_FORMAT => None,
-    _ => Some(decoded(row)?),
-  };
-  let (mut report, unreadable) = match read {
-    Some(Ok(report)) => (report, None),
-    // one stored before shapes were numbered that does not read is in an older shape
-    Some(Err(e)) if format.is_some() => (stale(row)?, Some(e)),
-    _ => (stale(row)?, None),
+  let format: i64 = row.get(14)?;
+  let (mut report, unreadable) = if format != REPORT_FORMAT {
+    (stale(row)?, None)
+  } else {
+    match decoded(row)? {
+      Ok(report) => (report, None),
+      Err(e) => (stale(row)?, Some(e)),
+    }
   };
   report.judgment = judgment;
   Ok((report, unreadable))
@@ -368,7 +366,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn a_report_stored_before_shapes_were_numbered_reads_as_stale_with_its_judgment() {
+  async fn a_report_in_another_shape_reads_as_stale_with_its_judgment() {
     let dir = tempfile::tempdir().unwrap();
     let location = Location {
       data: dir.path().join("data"),
@@ -381,14 +379,14 @@ mod tests {
     let db = Database::open(&SCHEMA, &location).await.unwrap();
     let at = db::timestamp(Utc::now());
     db.write(move |conn| {
-      // a report in a shape this version's type no longer reads, without a shape number
+      // a report in a shape this version's type no longer reads, numbered as an older shape
       conn.execute(
         "INSERT INTO reports \
          (path, root, relative, size, modified, transfer_id, analyzed_at, verdict, spectra, \
          report, format) \
          VALUES (?1, 'downloads', 'a.flac', 10, 'then', NULL, ?2, 'likely_transcode', 'img', \
-         '{\"path\": \"/srv/downloads/a.flac\", \"summary\": \"an older shape\"}', NULL)",
-        params![PATH, at],
+         '{\"path\": \"/srv/downloads/a.flac\", \"summary\": \"an older shape\"}', ?3)",
+        params![PATH, at, REPORT_FORMAT - 1],
       )?;
       conn.execute(
         "INSERT INTO judgments (path, verdict, note, by, at) \
@@ -420,19 +418,11 @@ mod tests {
     assert!(listed[0].report.stale && listed[0].report.judgment.is_some());
 
     // a report in this version's own shape that does not read is stale too, and says why
-    let format = |format: i64| {
-      move |conn: &mut rusqlite::Connection| {
-        conn.execute("UPDATE reports SET format = ?1", [format])
-      }
-    };
-    db.write(format(REPORT_FORMAT)).await.unwrap();
+    db.write(|conn| conn.execute("UPDATE reports SET format = ?1", [REPORT_FORMAT]))
+      .await
+      .unwrap();
     let stored = find(&db, PATH).await.unwrap().unwrap();
     assert!(stored.report.stale);
     assert!(stored.unreadable.unwrap().contains("missing field"));
-    // one in another numbered shape is stale without being read
-    db.write(format(REPORT_FORMAT + 1)).await.unwrap();
-    let stored = find(&db, PATH).await.unwrap().unwrap();
-    assert!(stored.report.stale);
-    assert_eq!(stored.unreadable, None);
   }
 }
