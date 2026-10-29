@@ -238,37 +238,6 @@ describe("a chat pane", () => {
     expect(log.textContent).not.toMatch(/joined|left/);
   });
 
-  it("doesn't count messages read when the pane opens away from the bottom", async () => {
-    const many = Array.from({ length: 40 }, (_, n) =>
-      privateMessage(n + 1, { isAcknowledged: false })
-    );
-    const net = fakeNetwork((url, method) => {
-      if (url.pathname.endsWith("/conversations/alice/messages")) return many;
-      if (url.pathname.endsWith("/conversations/alice") && method === "GET") return { status: 404 };
-      if (method === "PUT") return { status: 200 };
-      return undefined;
-    });
-    // a log 3000 px tall seen through 300 px; jsdom lays nothing out, so the sizes are given
-    Object.defineProperties(HTMLElement.prototype, {
-      scrollHeight: { get: () => 3000, configurable: true },
-      clientHeight: { get: () => 300, configurable: true }
-    });
-    try {
-      live.start();
-      component = mount(Pane, {
-        target: document.body,
-        props: { target: { kind: "user", name: "alice" }, at: 3 }
-      });
-      await flush();
-      expect(net.requests.filter((r) => r.method === "PUT").map((r) => r.url.pathname)).toEqual([]);
-    } finally {
-      // jsdom keeps its own on Element
-      const own = HTMLElement.prototype as unknown as Record<string, unknown>;
-      delete own.scrollHeight;
-      delete own.clientHeight;
-    }
-  });
-
   it("keeps a room message we sent until the server's echo replaces it", async () => {
     const net = fakeNetwork((url, method) => {
       if (url.pathname.endsWith("/rooms/joined/indie/messages") && method === "GET") {

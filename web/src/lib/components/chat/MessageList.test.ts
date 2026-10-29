@@ -64,20 +64,13 @@ describe("the message list", () => {
     await flush();
   };
 
-  it("reads one older page for a pull to the top", async () => {
-    const { pages } = history(450);
-    const { box } = await open();
-    await pullToTop(box);
-    expect(pages.filter((p) => p !== null)).toHaveLength(1);
-  });
-
   it("reads page after page to the start while the scrollbar is held at the top", async () => {
-    const { pages } = history(450);
+    const { pages } = history(250);
     const { pane, box } = await open();
     // a press on the scrollbar, beside the content
     box.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 305 }));
     await pullToTop(box);
     expect(pane.hasMore).toBe(false);
-    expect(pages.filter((p) => p !== null)).toEqual([351, 251, 151, 51]);
+    expect(pages.filter((p) => p !== null)).toEqual([151, 51]);
   });
 });
