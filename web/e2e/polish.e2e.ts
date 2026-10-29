@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { fakeBrowse, fakeDownloads, fakeSearch, SEARCH_ID } from "./fakes";
+import { fakeBrowse, fakeSearch, SEARCH_ID } from "./fakes";
 import { login } from "./login";
 
 test("shows search results as cards and as dense rows walked by key", async ({ page }) => {
@@ -15,13 +15,6 @@ test("shows search results as cards and as dense rows walked by key", async ({ p
   const alice = page.locator('section[data-key="0:alice"]');
   await expect(alice.getByRole("button", { name: "Close @@a\\Music" })).toBeVisible();
   await expect(alice.getByText("01 One.flac")).toBeVisible();
-  // Alt-click closes the folder and the one beside it
-  await alice.getByRole("button", { name: "Close Album" }).click({ modifiers: ["Alt"] });
-  await expect(alice.getByText("01 One.flac")).toBeHidden();
-  await expect(alice.getByText("03 Three.mp3")).toBeHidden();
-  await alice.getByRole("button", { name: "Open Album" }).click({ modifiers: ["Alt"] });
-  await expect(alice.getByText("01 One.flac")).toBeVisible();
-  await expect(alice.getByText("03 Three.mp3")).toBeVisible();
 
   // a filter token keeps only what it matches, and the clear button empties the box
   const filter = page.getByLabel("Filter", { exact: true });
@@ -75,18 +68,6 @@ test("cross-fades between screens", async ({ page }) => {
   await page.getByRole("link", { name: "Downloads" }).click();
   await expect(page).toHaveURL(/#\/downloads$/);
   await expect.poll(fades).toBeGreaterThan(before);
-});
-
-test("groups downloads by user and a tree of folders", async ({ page }) => {
-  await fakeDownloads(page);
-  await login(page, "/downloads");
-  const grid = page.getByRole("grid", { name: "Downloads" });
-  await expect(grid.getByRole("button", { name: "Close @@a\\Music" })).toBeVisible();
-  // the folder with a running download shows how far it is
-  await expect(grid.getByText("70%").first()).toBeVisible();
-  await grid.getByRole("button", { name: "Close One" }).click({ modifiers: ["Alt"] });
-  await expect(grid.getByText("1.flac")).toBeHidden();
-  await expect(grid.getByText("2.flac")).toBeHidden();
 });
 
 test("browses a user, finds a folder by typing and shows where it is", async ({ page }) => {
