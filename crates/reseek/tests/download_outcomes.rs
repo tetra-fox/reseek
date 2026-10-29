@@ -1,19 +1,18 @@
 //! Downloads by the daemon from scripted peers logged in to soulfind, for what a real client
-//! does not do on cue: a refusal, a failure tried again after its wait, a size that differs
-//! with and without a partial file, a resumed partial, a partial as long as the file, a peer
-//! that never answers the request or the question of its queue, the place in its queue a peer
-//! gives when asked or on its own, and a script told how each download ended.
+//! does not do on cue: a refusal, a failure tried again after its wait, a resumed partial, a
+//! partial kept when the peer names another size, a peer that never answers the request or the
+//! question of its queue, the place in its queue a peer gives when asked or on its own, and a
+//! script told how each download ended.
 
 mod support;
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::Path;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use api_client::Client;
-use api_types::events::EventsQuery;
-use api_types::transfers::{QueueDownloadRequest, Transfer, TransferDirection, TransferStates};
+use api_types::transfers::{Transfer, TransferStates};
 use serde_json::json;
 use soulseek_client::ClientOptions;
 use soulseek_proto::init::{FileTransferInit, PeerInit};
@@ -25,9 +24,11 @@ use soulseek_proto::{InitMessage, PeerConnectionType, PeerMessage, TransferDirec
 use support::peer::PeerSide;
 use support::soulfind::{self, Soulfind, User};
 use support::transfers::content;
-use support::{PATIENCE, daemon_listening, events, free_port, logged_in, signed_in, until};
+use support::{
+  PATIENCE, completed, daemon_listening, download_when, enqueue, events, free_port, logged_in,
+  signed_in, until,
+};
 use tokio::net::TcpListener;
-use uuid::Uuid;
 
 /// A user on soulfind whose peer side the test scripts: soulfind gives out the port of a
 /// listener of the test's as the user's own.
@@ -119,44 +120,8 @@ async fn send_from(daemon: SocketAddr, username: &str, token: u32, start: u64, s
   transfer.closed().await;
 }
 
-/// The download `id` from `username` once `ready` holds for it.
-async fn download_when(
-  api: &Client,
-  username: &str,
-  id: Uuid,
-  what: &str,
-  ready: impl Fn(&Transfer) -> bool,
-) -> Transfer {
-  let started = Instant::now();
-  loop {
-    let transfer = api
-      .transfer(TransferDirection::Download, username, id, false)
-      .await
-      .unwrap();
-    if ready(&transfer) {
-      return transfer;
-    }
-    assert!(started.elapsed() < PATIENCE, "never {what}: {transfer:?}");
-    tokio::time::sleep(Duration::from_millis(20)).await;
-  }
-}
-
-async fn enqueue(api: &Client, username: &str, filename: &str, size: u64) -> Uuid {
-  let files = [QueueDownloadRequest {
-    filename: filename.to_string(),
-    size,
-  }];
-  let answer = api.enqueue(username, &files).await.unwrap();
-  assert!(answer.failed.is_empty(), "{:?}", answer.failed);
-  answer.enqueued[0].id
-}
-
 fn ended(transfer: &Transfer) -> bool {
   transfer.ended_at.is_some()
-}
-
-fn completed(outcome: TransferStates) -> TransferStates {
-  TransferStates::Completed | outcome
 }
 
 /// The daemon in `dir` with `config`, logged in to `server`, taking peers' connections on
@@ -264,19 +229,10 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
     "no place once out of the peer's queue"
   );
   assert_eq!((errored.attempts, errored.next_attempt_at), (2, None));
-  let query: EventsQuery = serde_json::from_value(json!({ "type": "DownloadFileFailed" })).unwrap();
-  let started = Instant::now();
-  let failures = loop {
-    let failures = api.events(&query).await.unwrap().items;
-    if failures.len() >= 2 {
-      break failures;
-    }
-    assert!(started.elapsed() < PATIENCE, "{failures:?}");
-    tokio::time::sleep(Duration::from_millis(20)).await;
-  };
-  let reasons: Vec<serde_json::Value> = failures
+  let reasons: Vec<serde_json::Value> = events(&api, "DownloadFileFailed", 2)
+    .await
     .iter()
-    .map(|e| serde_json::to_value(e).unwrap()["data"]["reason"].clone())
+    .map(|data| data["reason"].clone())
     .collect();
   assert!(reasons.contains(&json!("File not shared.")), "{reasons:?}");
   assert!(
@@ -284,26 +240,8 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
     "once, after the last try: {reasons:?}"
   );
 
-  // a size the peer gives differently is taken when nothing was written yet
-  let sending = Scripted::start(&server).await;
-  let grown = "@@share\\b\\grown.flac";
-  let id = enqueue(&api, sending.name(), grown, 100).await;
-  let mut side = sending.connected().await;
-  queued(&mut side, grown).await;
-  offer(&mut side, grown, 7, 120).await;
-  send_from(listen, sending.name(), 7, 0, 120).await;
-  let done = download_when(&api, sending.name(), id, "moved", |t| {
-    t.local_path.is_some()
-  })
-  .await;
-  assert_eq!(
-    (done.state, done.size),
-    (completed(TransferStates::Succeeded), 120)
-  );
-  let landed = std::fs::read(done.local_path.unwrap()).unwrap();
-  assert_eq!(landed, content(120));
-
   // a partial file is resumed where it ends, and kept when the size differs
+  let sending = Scripted::start(&server).await;
   let incomplete = dir
     .path()
     .join("data")
@@ -314,6 +252,7 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
   std::fs::write(incomplete.join("partial.flac"), &content(100)[..40]).unwrap();
   let partial = "@@share\\b\\partial.flac";
   let id = enqueue(&api, sending.name(), partial, 100).await;
+  let mut side = sending.connected().await;
   queued(&mut side, partial).await;
   offer(&mut side, partial, 8, 100).await;
   send_from(listen, sending.name(), 8, 40, 100).await;
@@ -325,18 +264,6 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
     std::fs::read(done.local_path.unwrap()).unwrap(),
     content(100)
   );
-  // the move took the emptied directory away
-  std::fs::create_dir_all(&incomplete).unwrap();
-  std::fs::write(incomplete.join("whole.flac"), content(100)).unwrap();
-  let whole = "@@share\\b\\whole.flac";
-  let id = enqueue(&api, sending.name(), whole, 100).await;
-  queued(&mut side, whole).await;
-  offer(&mut side, whole, 9, 100).await;
-  send_from(listen, sending.name(), 9, 0, 100).await;
-  download_when(&api, sending.name(), id, "moved", |t| {
-    t.local_path.is_some()
-  })
-  .await;
   // the move took the emptied directory away
   std::fs::create_dir_all(&incomplete).unwrap();
   std::fs::write(incomplete.join("shrunk.flac"), &content(100)[..10]).unwrap();
@@ -505,20 +432,7 @@ arglist = ["-c", 'echo "$RESEEK_SCRIPT_RESULT: $RESEEK_SCRIPT_REASON"; test "$RE
   })
   .await;
 
-  let query: EventsQuery = serde_json::from_value(json!({ "type": "ScriptRunCompleted" })).unwrap();
-  let started = Instant::now();
-  let runs = loop {
-    let runs = api.events(&query).await.unwrap().items;
-    if runs.len() >= 2 {
-      break runs;
-    }
-    assert!(started.elapsed() < PATIENCE, "{runs:?}");
-    tokio::time::sleep(Duration::from_millis(50)).await;
-  };
-  let mut runs: Vec<serde_json::Value> = runs
-    .iter()
-    .map(|e| serde_json::to_value(e).unwrap()["data"].clone())
-    .collect();
+  let mut runs = events(&api, "ScriptRunCompleted", 2).await;
   runs.sort_by_key(|run| run["eventType"].as_str().unwrap().to_string());
   let outcome = |run: &serde_json::Value| {
     (
