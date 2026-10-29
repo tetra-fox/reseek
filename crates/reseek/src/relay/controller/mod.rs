@@ -116,8 +116,8 @@ pub struct Controller {
 impl Controller {
   /// The controller serving the agents of the options, loading their shares into `shares`,
   /// raising its events on `events`, keeping `State.relay.agents` current and counting in
-  /// `telemetry`. It follows the
-  /// agents' configuration until `shutdown`, which closes every agent's socket.
+  /// `telemetry`. It follows the agents' configuration until `shutdown`, which closes every
+  /// agent's socket.
   pub fn new(
     config: Watcher<Options>,
     shares: Arc<Shares>,
