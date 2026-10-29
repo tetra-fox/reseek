@@ -27,6 +27,7 @@
   import SelectionBar from "#lib/components/files/SelectionBar.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
+  import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
@@ -493,13 +494,12 @@
     </SelectionBar>
   {/if}
   {#if lines.every((l) => l.kind === "item" && l.item.kind === "up")}
-    <p class="px-4 py-6 text-center text-sm text-fg-subtle">
-      {only
-        ? "No files here match the filter."
+    <EmptyRow
+      text={only
+        ? "No files here match the filter"
         : root === "downloads" && !path
-          ? "No finished downloads yet."
-          : "This folder is empty."}
-    </p>
+          ? "No finished downloads yet"
+          : "This folder is empty"} />
   {/if}
 {/if}
 

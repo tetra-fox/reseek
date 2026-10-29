@@ -2,6 +2,7 @@
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
 
   import type { Schemas } from "#lib/api/client.js";
+  import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import { shortDirectory } from "#lib/dashboard/reports.js";
 
   // the directories peers took the most from us
@@ -30,8 +31,7 @@
         <td class="px-2 py-1 text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
       </tr>
     {:else}
-      <tr
-        ><td colspan="4" class="py-6 text-center text-fg-subtle">No uploads in this range.</td></tr>
+      <EmptyRow colspan={4} text="No uploads in this range" />
     {/each}
   </tbody>
 </table>

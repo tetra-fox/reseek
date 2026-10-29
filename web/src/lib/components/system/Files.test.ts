@@ -138,6 +138,6 @@ describe("the file explorer", () => {
     await flush();
     const rows = [...document.querySelectorAll("[role=row][data-line]")];
     expect(rows.map((r) => r.getAttribute("data-line"))).toEqual([".."]);
-    expect(document.body.textContent).toContain("This folder is empty.");
+    expect(document.body.textContent).toContain("This folder is empty");
   });
 });

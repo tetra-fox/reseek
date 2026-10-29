@@ -10,6 +10,7 @@
   import AnalysisPanel from "#lib/components/analysis/AnalysisPanel.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Username from "#lib/components/users/Username.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
@@ -245,7 +246,7 @@
       {#if history === null}
         <p class="text-fg-muted">Loading...</p>
       {:else if !history.length}
-        <p class="text-fg-muted">No state changes recorded</p>
+        <EmptyRow text="No state changes recorded" class="px-0 py-2 text-left" />
       {:else}
         <ol class="flex flex-col gap-1">
           {#each history as change, i (`${change.at}:${change.state}`)}

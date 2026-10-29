@@ -3,6 +3,7 @@
   import { Axis, Bar, Chart, Grid, Svg, Tooltip } from "layerchart";
 
   import type { Schemas } from "#lib/api/client.js";
+  import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import { axisPadding, tickLabel } from "#lib/dashboard/chart.js";
   import { outcomes } from "#lib/dashboard/reports.js";
   import { href } from "#lib/nav.js";
@@ -111,7 +112,7 @@
       </Chart>
     </div>
   {:else}
-    <p class="text-sm text-fg-subtle">No transfers finished in this range.</p>
+    <EmptyRow text="No transfers finished in this range" />
   {/if}
   <!-- the same figures as links, for the keyboard and for reading exactly: a column for each
        direction, each figure whole on a line of its own -->

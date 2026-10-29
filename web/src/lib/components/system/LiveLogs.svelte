@@ -7,6 +7,7 @@
 
   import { api, type Schemas } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
@@ -219,6 +220,6 @@
       </span>
     </div>
   {:else}
-    <p class="px-4 py-6 text-center text-fg-subtle">No log lines</p>
+    <EmptyRow text="No log lines" />
   {/each}
 </div>

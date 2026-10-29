@@ -6,6 +6,7 @@
   import { api } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
+  import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import {
     type Direction,
@@ -158,9 +159,7 @@
             <td class="px-2 py-1 text-right tabular-nums">{row.distinctUsers.toLocaleString()}</td>
           </tr>
         {:else}
-          <tr
-            ><td colspan="5" class="py-6 text-center text-fg-subtle">No errors in this range.</td
-            ></tr>
+          <EmptyRow colspan={5} text="No errors in this range" />
         {/each}
       </tbody>
     </table>
@@ -207,9 +206,7 @@
             </td>
           </tr>
         {:else}
-          <tr
-            ><td colspan="5" class="py-6 text-center text-fg-subtle">No errors in this range.</td
-            ></tr>
+          <EmptyRow colspan={5} text="No errors in this range" />
         {/each}
       </tbody>
     </table>

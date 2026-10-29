@@ -11,6 +11,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
+  import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
@@ -209,7 +210,7 @@
             <span role="gridcell" class="truncate font-mono text-xs">{r.remotePath}</span>
           </div>
         {:else}
-          <p class="px-4 py-6 text-center text-sm text-fg-subtle">No shares configured</p>
+          <EmptyRow text="No shares configured" />
         {/each}
       </div>
     {/snippet}
@@ -237,7 +238,7 @@
             <span role="gridcell" class="font-mono text-xs">{r.localPath}</span>
           </div>
         {:else}
-          <p class="px-4 py-6 text-center text-sm text-fg-subtle">No exclusions configured</p>
+          <EmptyRow text="No exclusions configured" />
         {/each}
       </div>
     {/snippet}
