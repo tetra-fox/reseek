@@ -197,15 +197,7 @@ mod tests {
 
   #[tokio::test]
   async fn private_and_room_messages_are_found_with_their_match_marked() {
-    let location = crate::db::Location {
-      data: std::env::temp_dir(),
-      backups: std::env::temp_dir(),
-      volatile: true,
-      log_sql: false,
-    };
-    let db = crate::db::Database::open(&crate::messaging::SCHEMA, &location)
-      .await
-      .unwrap();
+    let db = crate::db::Database::memory(&crate::messaging::SCHEMA).await;
     db.write(|conn| {
       store::receive(
         conn,

@@ -451,19 +451,11 @@ pub fn active(conn: &Connection) -> rusqlite::Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::db::{Database, Location};
+  use crate::db::Database;
 
   #[tokio::test]
   async fn the_servers_notices_are_never_unread() {
-    let location = Location {
-      data: std::env::temp_dir(),
-      backups: std::env::temp_dir(),
-      volatile: true,
-      log_sql: false,
-    };
-    let db = Database::open(&crate::messaging::SCHEMA, &location)
-      .await
-      .unwrap();
+    let db = Database::memory(&crate::messaging::SCHEMA).await;
     let now: DateTime<Utc> = "2026-10-26T10:00:00Z".parse().unwrap();
     db.write(move |conn| {
       for (id, username) in [(1, SERVER), (2, "alice")] {
@@ -513,15 +505,7 @@ mod tests {
 
   #[tokio::test]
   async fn a_conversation_carries_its_newest_message_either_way() {
-    let location = Location {
-      data: std::env::temp_dir(),
-      backups: std::env::temp_dir(),
-      volatile: true,
-      log_sql: false,
-    };
-    let db = Database::open(&crate::messaging::SCHEMA, &location)
-      .await
-      .unwrap();
+    let db = Database::memory(&crate::messaging::SCHEMA).await;
     let at = |s: &str| s.parse::<DateTime<Utc>>().unwrap();
     db.write(move |conn| {
       activate(conn, "alice", at("2026-10-26T10:00:00Z"))?;
@@ -567,15 +551,7 @@ mod tests {
 
   #[tokio::test]
   async fn the_newest_message_is_found_by_index() {
-    let location = Location {
-      data: std::env::temp_dir(),
-      backups: std::env::temp_dir(),
-      volatile: true,
-      log_sql: false,
-    };
-    let db = Database::open(&crate::messaging::SCHEMA, &location)
-      .await
-      .unwrap();
+    let db = Database::memory(&crate::messaging::SCHEMA).await;
     let plan = db
       .read(|conn| {
         conn

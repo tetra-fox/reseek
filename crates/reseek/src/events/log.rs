@@ -312,15 +312,10 @@ mod tests {
   use api_types::events::{NoFields, UserBlocked};
 
   async fn log() -> (Arc<EventLog>, EventBus) {
-    let dir = tempfile::tempdir().unwrap();
-    let location = Location {
-      data: dir.path().to_path_buf(),
-      backups: dir.path().to_path_buf(),
-      volatile: true,
-      log_sql: false,
-    };
     let bus = EventBus::new();
-    let log = EventLog::subscribed(&location, &bus).await.unwrap();
+    let log = EventLog::subscribed(&Location::memory(), &bus)
+      .await
+      .unwrap();
     (log, bus)
   }
 

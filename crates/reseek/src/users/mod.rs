@@ -542,18 +542,10 @@ async fn load_blocklist(path: PathBuf) -> Result<Blocklist, String> {
 
 #[cfg(test)]
 mod testing {
-  use crate::db::{Database, Location};
+  use crate::db::Database;
 
   /// An empty `users.db` in memory.
   pub async fn users_db() -> Database {
-    let location = Location {
-      data: std::env::temp_dir(),
-      backups: std::env::temp_dir(),
-      volatile: true,
-      log_sql: false,
-    };
-    Database::open(&super::store::SCHEMA, &location)
-      .await
-      .unwrap()
+    Database::memory(&super::store::SCHEMA).await
   }
 }

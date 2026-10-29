@@ -301,18 +301,10 @@ pub fn set_notify(conn: &Connection, room: &str, notify: NotifyLevel) -> rusqlit
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::db::{Database, Location};
+  use crate::db::Database;
 
   pub async fn db() -> Database {
-    let location = Location {
-      data: std::env::temp_dir(),
-      backups: std::env::temp_dir(),
-      volatile: true,
-      log_sql: false,
-    };
-    Database::open(&crate::messaging::SCHEMA, &location)
-      .await
-      .unwrap()
+    Database::memory(&crate::messaging::SCHEMA).await
   }
 
   fn said(room: &str, username: &str, at: &str) -> Arrived {

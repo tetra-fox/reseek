@@ -73,6 +73,19 @@ pub struct Location {
   pub log_sql: bool,
 }
 
+#[cfg(test)]
+impl Location {
+  /// Databases kept in memory, for tests.
+  pub fn memory() -> Self {
+    Self {
+      data: std::env::temp_dir(),
+      backups: std::env::temp_dir(),
+      volatile: true,
+      log_sql: false,
+    }
+  }
+}
+
 /// One SQLite database. Cloning gives another handle to the same connections.
 #[derive(Clone)]
 pub struct Database {
@@ -99,6 +112,12 @@ impl Database {
   /// brings it to the newest migration, backing it up first when it already had data.
   pub async fn open(schema: &'static Schema, location: &Location) -> Result<Self, DbError> {
     Self::open_as(schema, location, schema.name).await
+  }
+
+  /// An empty database of `schema` in memory, for tests.
+  #[cfg(test)]
+  pub async fn memory(schema: &'static Schema) -> Self {
+    Self::open(schema, &Location::memory()).await.unwrap()
   }
 
   /// Opens the database `schema` describes as [`Database::open`] does, in the file
