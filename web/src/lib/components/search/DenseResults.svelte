@@ -144,6 +144,7 @@
   <div
     class="relative overflow-auto rounded-card border bg-surface text-sm tabular-nums shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
     style:height="max(20rem, calc(var(--content-h) - 16rem))"
+    style:--line-h={`${rowHeight}px`}
     role="grid"
     aria-label="Search results"
     aria-rowcount={sorted.length}
@@ -168,9 +169,8 @@
           role="row"
           {...list.line(row, index)}
           class={[
-            "group absolute inset-x-0 top-0 grid items-center border-b hover:bg-hover",
+            "group absolute inset-x-0 top-0 grid items-center list-row hover:bg-hover",
             selected.has(row.key) && "bg-accent-soft/60",
-            list.isFocused(row) && "ring-1 ring-accent ring-inset",
             arrivals.isFresh(row.key) && "animate-row-in"
           ]}
           style:transform={`translateY(${start - headerHeight}px)`}
@@ -230,7 +230,6 @@
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="size-6"
                 aria-label={`Download the folder, ${plural(folder.length, "file", "files")}, ${formatBytes(folder.reduce((n, r) => n + r.file.size, 0))}`}
                 title={`Download the folder: ${plural(folder.length, "file", "files")}, ${formatBytes(folder.reduce((n, r) => n + r.file.size, 0))}`}
                 onclick={() => void download(folder)}>
@@ -246,7 +245,6 @@
                   {...props}
                   variant="ghost"
                   size="icon-sm"
-                  class="size-6"
                   aria-label={`Actions for ${name}`}>
                   <EllipsisIcon />
                 </Button>

@@ -135,10 +135,11 @@
       {#each lines.drawn as { line: file, index, start } (file.filename)}
         <div
           role="row"
-          class="absolute inset-x-0 top-0 grid items-center border-b py-1"
+          class="absolute inset-x-0 top-0 grid items-center list-row py-1"
           style:transform={`translateY(${start - headerHeight}px)`}
           style:grid-template-columns={grid.template}
           data-index={index}
+          data-last={index === rows.length - 1 || undefined}
           {@attach lines.measure}>
           <span role="gridcell" class="flex justify-center">
             <Checkbox

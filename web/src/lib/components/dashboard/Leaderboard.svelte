@@ -176,7 +176,7 @@
                     c.phone === false && "max-md:hidden"
                   ]}>{c.value(entry)}</td>
               {/each}
-              <td class="max-md:hidden">
+              <td class="py-0.5 max-md:hidden">
                 <Button
                   variant="ghost"
                   size="icon-sm"

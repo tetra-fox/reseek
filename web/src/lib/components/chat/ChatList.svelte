@@ -204,10 +204,7 @@
         <div
           role="row"
           {...list.line(line, i)}
-          class={[
-            "flex items-center gap-1 px-1 pt-2 pb-1 text-xs font-medium text-fg-muted",
-            list.isFocused(line) && "ring-1 ring-accent ring-inset"
-          ]}>
+          class="flex items-center gap-1 px-1 pt-2 pb-1 text-xs font-medium text-fg-muted">
           <button
             type="button"
             class="flex items-center gap-1 hover:text-fg"
@@ -238,8 +235,7 @@
           class={[
             "group/row flex items-center gap-2 rounded-control px-2 py-1.5 hover:bg-hover",
             current === line.key && "bg-hover",
-            list.selected.has(line.key) && "bg-accent-soft/60",
-            list.isFocused(line) && "ring-1 ring-accent ring-inset"
+            list.selected.has(line.key) && "bg-accent-soft/60"
           ]}
           oncontextmenu={(e) => {
             e.preventDefault();

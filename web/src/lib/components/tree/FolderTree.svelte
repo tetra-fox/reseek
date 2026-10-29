@@ -180,13 +180,12 @@
           role="row"
           {...list.line(line, index)}
           class={[
-            "group flex items-center border-b pr-3",
+            "group flex items-center list-row pr-3",
             // opaque tints, so the lines scrolling under a pinned folder line don't show through
             folderId && selected.has(folderId(line.node))
               ? "bg-[color-mix(in_srgb,var(--color-accent-soft)_60%,var(--color-surface))]"
               : "bg-[color-mix(in_srgb,var(--color-surface-muted)_50%,var(--color-surface))]",
-            pin && "sticky",
-            list.isFocused(line) && "ring-1 ring-accent ring-inset"
+            pin && "sticky"
           ]}
           aria-level={line.depth + 1}
           aria-expanded={expansion.isOpen(line.node.path)}
@@ -215,9 +214,8 @@
         role="row"
         {...list.line(line, index)}
         class={[
-          "group grid min-h-9 items-center border-b hover:bg-hover",
-          selected.has(idOf(line.item)) && "bg-accent-soft/60",
-          list.isFocused(line) && "ring-1 ring-accent ring-inset"
+          "group grid min-h-9 items-center list-row hover:bg-hover",
+          selected.has(idOf(line.item)) && "bg-accent-soft/60"
         ]}
         aria-level={line.depth + 1}
         style:grid-template-columns={columns}

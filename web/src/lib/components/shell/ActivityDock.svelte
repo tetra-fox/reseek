@@ -80,7 +80,8 @@
 <!-- on a wide screen the log is a panel in the shell, above the footer, that takes its height
      from the content area and slides it up as it opens; a phone has no room to spare for one,
      so there it is a sheet over the bottom of the screen, standing on the footer at the height
-     the shell measures for it -->
+     the shell measures for it. The slide is local: a dock open when the app starts is just
+     there, rather than squeezing the screen as it loads -->
 <section
   aria-label="Activity on the network"
   class={[
@@ -90,7 +91,7 @@
       : "relative bg-surface"
   ]}
   style:height={viewport.phone ? undefined : `${height}px`}
-  transition:drawer|global>
+  transition:drawer>
   {#if !viewport.phone}
     <ResizeHandle
       bind:value={height}
@@ -151,11 +152,7 @@
         role="row"
         {...list.line(e, i)}
         aria-label={activityText(e, formatBytes)}
-        class={[
-          "log-row",
-          list.selected.has(String(e.id)) && "bg-accent-soft/60",
-          list.isFocused(e) && "ring-1 ring-accent ring-inset"
-        ]}>
+        class={["log-row", list.selected.has(String(e.id)) && "bg-accent-soft/60"]}>
         <LogTime at={e.at} />
         <span role="gridcell" class="flex justify-center pt-1">
           <Icon

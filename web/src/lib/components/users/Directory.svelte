@@ -312,11 +312,10 @@
           role="row"
           {...list.line(u, i)}
           class={[
-            "grid min-w-max items-center gap-2 border-b px-2 py-1.5 last:border-b-0 hover:bg-hover",
+            "grid min-w-max items-center gap-2 list-row px-2 py-1.5 hover:bg-hover",
             COLUMNS,
             u.block && "bg-danger-soft/40",
             list.selected.has(u.username) && "bg-accent-soft/60",
-            list.isFocused(u) && "ring-1 ring-accent ring-inset",
             rows.removed.has(u.username) && "opacity-40"
           ]}>
           <span role="gridcell">

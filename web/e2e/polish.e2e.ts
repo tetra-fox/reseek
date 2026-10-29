@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { fakeBrowse, fakeDownloads, fakeSearch, SEARCH_ID } from "./fakes";
+import { fakeBrowse, fakeChat, fakeDownloads, fakeSearch, manyDownloads, SEARCH_ID } from "./fakes";
 import { login } from "./login";
 
 test("shows search results as cards and as dense rows walked by key", async ({ page }) => {
@@ -131,4 +131,77 @@ test("goes to a screen from the command palette", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/#\/downloads$/);
   await expect(box).toBeHidden();
+});
+
+test("keeps a compact row's controls between its dividers", async ({ page }) => {
+  await manyDownloads(page, 30);
+  await login(page, "/downloads");
+  await page.getByRole("radio", { name: "Compact" }).click();
+  const grid = page.getByRole("grid", { name: "Downloads" });
+  const row = grid.locator("[role=row]").filter({ hasText: "00002 Track.flac" });
+  const header = grid.locator("[role=row]").filter({ hasText: "Album 0" }).first();
+  for (const line of [row, header]) {
+    await line.getByRole("button").last().hover();
+    // every control, and so its hover tint, ends above the line's divider
+    const crossing = await line.evaluate((e) => {
+      const box = e.getBoundingClientRect();
+      const divider = parseFloat(getComputedStyle(e).borderBottomWidth);
+      return [...e.querySelectorAll("button")]
+        .map((b) => b.getBoundingClientRect())
+        .filter((b) => b.height && (b.top < box.top || b.bottom > box.bottom - divider)).length;
+    });
+    expect(crossing).toBe(0);
+    await expect(line).toHaveCSS("border-bottom-width", "1px");
+  }
+});
+
+test("shows a list's focus ring for the keys, not after a click", async ({ page }) => {
+  await fakeChat(page);
+  await login(page, "/chat");
+  const list = page.getByRole("grid", { name: "Rooms and conversations" });
+  const rooms = list.locator('[data-line="h:rooms"]');
+  await rooms.getByRole("button").click();
+  await page.mouse.move(0, 0);
+  await expect(list.locator("[data-line]").first()).toBeVisible();
+  await expect(rooms).toHaveCSS("box-shadow", "none");
+  await expect(list.locator("[data-focused]")).toHaveCount(0);
+  // the keys bring it back, on the row they move to
+  await rooms.getByRole("button").click();
+  await page.keyboard.press("ArrowDown");
+  await expect(list.locator("[data-focused]")).toHaveCount(1);
+  await expect(list.locator("[data-focused]")).not.toHaveCSS("box-shadow", "none");
+});
+
+test("fades between screens without morphing the content area", async ({ page }) => {
+  await fakeChat(page);
+  await login(page, "/dashboard");
+  // the size each named part of a transition starts and ends at, as the transitions run
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    Object.assign(window, { seen });
+    const watch = () => {
+      for (const a of document.getAnimations()) {
+        const effect = a.effect as KeyframeEffect;
+        if (!effect.pseudoElement?.startsWith("::view-transition-group")) continue;
+        const frames = effect.getKeyframes();
+        const size = (k: Keyframe) => `${k.width} x ${k.height}`;
+        seen.push(`${effect.pseudoElement}: ${size(frames[0])} to ${size(frames.at(-1)!)}`);
+      }
+      requestAnimationFrame(watch);
+    };
+    watch();
+  });
+  const seen = () => page.evaluate(() => (window as unknown as { seen: string[] }).seen);
+  // from a padded screen to the full-height chat, and back
+  await page.getByRole("link", { name: "Chat" }).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+  await page.getByRole("link", { name: "Dashboard" }).click();
+  await expect(page).toHaveURL(/#\/dashboard$/);
+  await expect
+    .poll(async () => (await seen()).some((s) => s.startsWith("::view-transition-group(page)")))
+    .toBe(true);
+  for (const s of await seen()) {
+    const [from, to] = s.split(": ")[1].split(" to ");
+    expect(to, s).toBe(from);
+  }
 });

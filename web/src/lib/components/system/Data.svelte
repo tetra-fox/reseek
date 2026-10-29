@@ -116,9 +116,8 @@
           {...list.line(d, i)}
           class={[
             // a phone puts the path on a line of its own and leaves out the log's size
-            "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-0.5 border-b px-5 py-1.5 last:border-b-0 hover:bg-hover md:grid-cols-[10rem_minmax(0,1fr)_6rem_6rem_6rem]",
-            list.selected.has(d.name) && "bg-accent-soft/60",
-            list.isFocused(d) && "ring-1 ring-accent ring-inset"
+            "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-0.5 list-row px-5 py-1.5 hover:bg-hover md:grid-cols-[10rem_minmax(0,1fr)_6rem_6rem_6rem]",
+            list.selected.has(d.name) && "bg-accent-soft/60"
           ]}>
           <span role="gridcell" class="truncate font-medium">{d.name}</span>
           <span

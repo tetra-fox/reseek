@@ -209,6 +209,7 @@
 <div
   class="relative overflow-auto rounded-card border bg-surface text-sm tabular-nums shadow-card outline-none"
   style:height="max(20rem, calc(var(--content-h) - 14rem))"
+  style:--line-h={`${row}px`}
   role="grid"
   aria-label={direction === "download" ? "Downloads" : "Uploads"}
   aria-rowcount={items.length}
@@ -227,15 +228,13 @@
       {#if pin.item.type === "group"}
         {@const group = pin.item.group}
         <div
-          class={[
-            "absolute inset-x-0 bg-surface",
-            list.focusedKey === pin.item.key && "ring-1 ring-accent ring-inset"
-          ]}
+          class="absolute inset-x-0 list-row bg-surface"
           id={pinnedId(pin.index)}
           style:top={`calc(100% + ${pin.top}px)`}
           style:height={`${row}px`}
           style:z-index={n - pinned.length}
           data-line={pin.item.key}
+          data-focused={list.isFocused(pin.item) || undefined}
           data-pinned="true">
           <GroupHeader
             {group}
@@ -260,10 +259,9 @@
     {#each lines.drawn as { line: item, index, start, size } (item.key)}
       <div
         class={[
-          "absolute inset-x-0 top-0",
-          list.isFocused(item) && "ring-1 ring-accent ring-inset",
+          "absolute inset-x-0 top-0 list-row",
           item.type === "row" && [
-            "group grid items-center border-b hover:bg-hover",
+            "group grid items-center hover:bg-hover",
             item.transfer.state.startsWith("Completed, ") &&
               item.transfer.state !== "Completed, Succeeded" &&
               item.transfer.state !== "Completed, Cancelled" &&

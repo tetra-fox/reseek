@@ -149,9 +149,8 @@
           role="row"
           {...list.line(t, i)}
           class={[
-            "grid min-w-max items-center gap-2 border-b px-2 py-1.5 last:border-b-0 hover:bg-hover",
+            "grid min-w-max items-center gap-2 list-row px-2 py-1.5 hover:bg-hover",
             list.selected.has(t.id) && "bg-accent-soft/60",
-            list.isFocused(t) && "ring-1 ring-accent ring-inset",
             rows.removed.has(t.id) && "opacity-40"
           ]}
           style:grid-template-columns={COLUMNS}>

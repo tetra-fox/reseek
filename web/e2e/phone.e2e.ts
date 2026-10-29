@@ -334,6 +334,8 @@ test("a toast's countdown runs along its foot and holds under the pointer", asyn
   const toast = page.getByRole("alert").filter({ hasText: "Could not copy" });
   await expect(toast).toBeVisible();
   const bar = toast.locator(".countdown");
+  // measured once it has flown in, as the two boxes are read one after the other
+  await toast.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished)));
   const [box, line] = [(await toast.boundingBox())!, (await bar.boundingBox())!];
   expect(box.x + box.width, "the toast fits the phone").toBeLessThanOrEqual(390);
   expect(line.height).toBeLessThanOrEqual(3);

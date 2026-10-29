@@ -36,11 +36,7 @@
         role="row"
         {...list.line(burst, i)}
         aria-label={burstText(burst)}
-        class={[
-          "log-row",
-          list.selected.has(burst.key) && "bg-accent-soft/60",
-          list.isFocused(burst) && "ring-1 ring-accent ring-inset"
-        ]}>
+        class={["log-row", list.selected.has(burst.key) && "bg-accent-soft/60"]}>
         <PresenceRow {burst} />
       </div>
     {:else}

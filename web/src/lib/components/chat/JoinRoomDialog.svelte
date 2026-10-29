@@ -204,8 +204,7 @@
             style:grid-template-columns={grid.template}
             class={[
               "group absolute inset-x-0 top-0 grid items-center hover:bg-hover",
-              list.selected.has(room.name) && "bg-accent-soft/60",
-              list.isFocused(room) && "ring-1 ring-accent ring-inset"
+              list.selected.has(room.name) && "bg-accent-soft/60"
             ]}>
             <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
               {#if room.isPrivate}<LockIcon
