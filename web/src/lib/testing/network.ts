@@ -8,8 +8,7 @@ export type Answer = unknown | { status: number; body?: unknown };
 /**
  * Stands in for the daemon in a test: the event stream is held open and fed by `frame`, and
  * every other request is answered by `answer`, 404 when it gives undefined. A JSON body is
- * handed over parsed, any other as its text. Undone by
- * `vi.unstubAllGlobals()`
+ * handed over parsed, any other as its text. Undone by `vi.unstubAllGlobals()`
  */
 export const fakeNetwork = (
   answer: (url: URL, method: string, body: unknown) => Answer | Promise<Answer>

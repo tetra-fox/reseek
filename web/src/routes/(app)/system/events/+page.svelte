@@ -4,7 +4,6 @@
   import Events from "#lib/components/system/Events.svelte";
   import { route } from "#lib/nav.js";
 
-  // /system/events?page=&per_page=&type=A,B
   const query = $derived(route(page.url).query);
   const current = $derived(Math.max(1, Number(query.get("page")) || 1));
   const perPage = $derived(

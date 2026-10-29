@@ -213,11 +213,11 @@ export const FILTER_PLACEHOLDER = filterPlaceholder([
 ]);
 
 /**
- * Reads a filter. Tokens are split on whitespace and compared in lower case. A `min…:N` token
- * sets that minimum (the first of a kind wins, 0 leaves it off), the four flags set their kind,
- * `field:value`, `type:` and `country:` tokens add a condition, a token named in `keys` is kept for
- * the screen, any other token with a colon is ignored, `-word` excludes and every other word
- * includes
+ * Reads a filter. Tokens are split on whitespace and compared in lower case. A minimum token such
+ * as `minbr:N` sets that minimum (the first of a kind wins, 0 leaves it off), the four flags set
+ * their kind, `field:value`, `type:` and `country:` tokens add a condition, a token named in `keys`
+ * is kept for the screen, any other token with a colon is ignored, `-word` excludes and every
+ * other word includes
  */
 export const parseFilters = (text: string, keys: readonly string[] = []): Filters => {
   const filters: Filters = {

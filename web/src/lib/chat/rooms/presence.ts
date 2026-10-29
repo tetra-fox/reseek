@@ -64,7 +64,7 @@ const VERBS: Record<PresenceKind, [string, string]> = {
 
 /**
  * A burst's line in parts: the names it spells out, how many others it counts, and the words
- * after. "alice joined the room", "alice and bob joined", "alice, bob and 3 others joined"
+ * after. "alice joined", "alice and bob joined", "alice, bob and 3 others joined"
  */
 export const burstLine = (b: Burst) => {
   const shown = b.names.length > NAMED + 1 ? b.names.slice(0, NAMED - 1) : b.names;

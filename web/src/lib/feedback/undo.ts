@@ -3,7 +3,7 @@ import { dismiss, toast } from "./toast.svelte";
 /** How long an action can be undone before it is carried out */
 export const UNDO_MS = 6_000;
 
-/** takes away each toast whose action still waits, which carries the action out */
+/** the dismiss of each toast whose action still waits; dismissing carries the action out */
 const waiting = new Map<number, () => void>();
 
 // leaving the page carries out what was waiting, as the toast would have once it went

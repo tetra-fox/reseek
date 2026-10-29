@@ -12,8 +12,8 @@ export const formatBytes = (bytes: number, decimals = 2, padding = 0, padChar = 
 };
 
 /**
- * Bytes moved of a size in the size's unit, both to one decimal: "3.2/10.5 MB", "0 B/0 B"
- * for an empty file
+ * Bytes moved of a size in the size's unit, both to one decimal, whole under 1 KB: "3.2/10.5 MB",
+ * "0 B/0 B" for an empty file
  */
 export const formatBytesTransferred = (size: number, transferred: number): string => {
   if (!Number.isFinite(size) || size < 1) return "0 B/0 B";

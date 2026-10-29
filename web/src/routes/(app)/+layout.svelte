@@ -48,10 +48,9 @@
     if (prefersReducedMotion.current || typeof document.startViewTransition !== "function") return;
     const { from, to } = navigation;
     if (!from?.url || !to?.url || !changesScreen(route(from.url).path, route(to.url).path)) return;
-    // the content area fades, not the screen in it: its box is the same on every screen, where a
-    // padded screen's and a full-height one's differ and would be morphed into each other. It is
-    // named only while the transition runs, as a name makes it a stacking context that would put
-    // a screen's fixed layers, such as the transfer details drawer, under the header
+    // the content area fades, not the screen, whose box differs between padded and full-height
+    // screens and would morph. It is named only during the transition: a name makes a stacking
+    // context that puts fixed layers, such as the transfer details drawer, under the header
     const page = content.scroller;
     if (page) page.style.viewTransitionName = "page";
     return new Promise((ready) => {
@@ -65,17 +64,15 @@
     });
   });
 
-  // the content area scrolls on its own, so a new screen starts it at the top as a page would.
-  // The navigation that first shows a page comes from none, whose url is null
+  // the content area scrolls on its own, so a new screen starts it at the top as a page would
   afterNavigate(({ from, to }) => {
     if (from?.url && to?.url && route(from.url).path !== route(to.url).path) {
       content.scroller?.scrollTo({ top: 0 });
     }
   });
 
-  // screens size what fills the content area from its height, and fixed layers keep clear of
-  // the panels below it. The heights go on the document's root, so the toasts and anything else
-  // drawn outside the shell, such as a dialog's portal, read the same values
+  // screens size their content from these heights and fixed layers keep clear of the panels.
+  // They go on the root so toasts and dialog portals, drawn outside the shell, read them too
   let contentHeight = $state(0);
   let dockHeight = $state(0);
   let bottomHeight = $state(0);
@@ -105,7 +102,7 @@
     void goto(href(`/login?to=${encodeURIComponent(here)}`), { replace: true });
   });
 
-  // routes that don't render: unknown ones, and everything but System on a relay agent
+  // routes that don't render: the root, and everything but System on a relay agent
   $effect(() => {
     if (app.phase !== "app") return;
     const target = redirectFor(at.path, app.mode === "agent");
@@ -134,7 +131,7 @@
     return untrack(() => live.retain("transfers"));
   });
 
-  // the state document by polling while frames don't keep it current
+  // polls the state document while frames don't keep it current
   $effect(() => {
     if (app.phase !== "app") return;
     const ms = live.pollMs;
