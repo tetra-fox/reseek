@@ -11,6 +11,7 @@
   import { fields } from "#lib/stored.svelte.js";
   import type { Grid } from "#lib/table.svelte.js";
   import type { ColumnId } from "#lib/transfers/columns.js";
+  import { depthOf, nesting, pins } from "#lib/transfers/pinned.js";
   import type { ViewSettings } from "#lib/transfers/settings.svelte.js";
   import type { Direction, Transfer } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
@@ -70,25 +71,30 @@
     compact: { wide: 1.75, phone: 2.75 }
   };
 
-  /** the scroll position, which decides the group header pinned under the column header */
+  /** the scroll position, which decides the group headers pinned under the column header */
   let scrollTop = $state(0);
   /** where the rows start in the scrolled content, under the column header */
   let rowsTop = $state(0);
+  /** the scroll box's height */
+  let boxHeight = $state(0);
 
   // a phone's row has two lines, the name over its size and progress
   const row = $derived(rem.px * LINES[view.density][viewport.phone ? "phone" : "wide"]);
   const pinnable = $derived(view.groupBy !== "flat");
   const columns = $derived(grid.columns.map((c) => c.id as ColumnId));
-  // the header of the group the top line belongs to stays at the top while its rows scroll:
-  // from when its own header starts to go under the column header
-  const sticky = $derived.by(() => {
-    const top = Math.min(Math.floor(scrollTop / row), items.length - 1);
-    for (let i = top; i >= 0; i--) {
-      const item = items[i];
-      if (item.type === "group" && item.group.depth === 0) return i * row < scrollTop ? item : null;
-    }
-    return null;
-  });
+  /**
+   * A group header's slot under the column header: a line per level, so the user, their folder and
+   * its subfolder stack in order. A phone keeps two, the top group and the innermost folder
+   */
+  const slot = (depth: number) => (viewport.phone ? Math.min(depth, 1) : depth);
+  const nest = $derived(nesting(items));
+  // the headers of the groups the top lines are in stay at the top while their rows scroll
+  const pinned = $derived(
+    pinnable
+      ? pins(items, nest, scrollTop, row, slot).map((pin) => ({ ...pin, item: items[pin.index] }))
+      : []
+  );
+  const pinnedId = (index: number) => `${list.uid}-pinned-${index}`;
   const flat = $derived(view.groupBy === "flat" || view.groupBy === "batch");
   const ids = (group: Group) => group.transfers.map((t) => t.id);
   const ticked = (group: Group) => group.transfers.filter((t) => selected.has(t.id)).length;
@@ -151,10 +157,10 @@
       return true;
     },
     layer: () => drawerOpen,
-    // the pinned copy of a group header is rendered only while its group is the pinned one
+    // the pinned copy of a group header is rendered only while its group is pinned
     rendered: (index, element) =>
-      element?.dataset.pinned ? sticky?.key === items[index]?.key : lines.isDrawn(index),
-    reveal: (index) => lines.scrollTo(index),
+      element?.dataset.pinned ? pinned.some((pin) => pin.index === index) : lines.isDrawn(index),
+    reveal: (index) => reveal(index),
     // svelte-ignore state_referenced_locally
     selected
   });
@@ -166,13 +172,27 @@
       estimateSize: () => row,
       overscan: 10,
       scrollMargin: rowsTop,
-      // a row brought into view stops under the column header and the pinned group header
-      scrollPaddingStart: rowsTop + (pinnable ? row : 0),
+      scrollPaddingStart: rowsTop,
       sizes: row,
       // a control in a line that scrolled out of the window gives focus back to the list
       onchange: () => list.scrolled()
     })
   );
+
+  /**
+   * Brings the line at `index` into view, stopping a line brought down under the column header
+   * and the group headers that will be pinned over it there: one per level it is in
+   */
+  const reveal = (index: number) => {
+    const start = lines.startOf(index);
+    if (start === undefined) return lines.scrollTo(index);
+    const depth = depthOf(items[index]);
+    const covered = pinnable && depth > 0 ? (slot(depth - 1) + 1) * row : 0;
+    const highest = start - rowsTop - covered;
+    const lowest = start + row - boxHeight;
+    if (lines.offset > highest) lines.scrollToOffset(highest);
+    else if (lines.offset < lowest) lines.scrollToOffset(lowest);
+  };
 
   /** Gives the grid DOM focus, without scrolling */
   export const focus = list.focus;
@@ -180,9 +200,8 @@
   /** Whether `element` is inside the table */
   export const has = list.has;
 
-  const activeId = $derived(
-    sticky && list.focusedKey === sticky.key ? `${list.uid}-pinned` : list.activeId
-  );
+  const focusedPin = $derived(pinned.find((pin) => pin.item.key === list.focusedKey));
+  const activeId = $derived(focusedPin ? pinnedId(focusedPin.index) : list.activeId);
 </script>
 
 <!-- every row, the header too, has the cells' font with tabular figures, so a column width in ch
@@ -197,32 +216,40 @@
   aria-activedescendant={activeId}
   tabindex="0"
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
+  bind:clientHeight={boxHeight}
   {@attach lines.attach}
   {@attach list.attach}>
+  <!-- the pinned group headers are drawn under the column header, which a pushed one goes
+       under, and over the rows, opaque so no row shows through -->
   <div class="sticky top-0 z-10" style:min-width={grid.width} bind:offsetHeight={rowsTop}>
     <GridHeader {grid} class="h-9 border-b bg-surface-muted text-sm font-medium text-fg-muted" />
-    {#if sticky?.type === "group"}
-      <div
-        class={[
-          "absolute inset-x-0 top-full",
-          list.focusedKey === sticky.key && "ring-1 ring-accent ring-inset"
-        ]}
-        id={`${list.uid}-pinned`}
-        style:height={`${row}px`}
-        data-line={sticky.key}
-        data-pinned="true">
-        <GroupHeader
-          group={sticky.group}
-          {store}
-          {direction}
-          {expansion}
-          ticked={ticked(sticky.group)}
-          onselect={(on) => list.setAll(ids(sticky.group), on)}
-          onremove={() => onremove(sticky.group.transfers)}
-          oncancel={() => oncancel(sticky.group.transfers)}
-          onblock={(deny) => onblock(sticky.group.username, deny)} />
-      </div>
-    {/if}
+    {#each pinned as pin, n (pin.item.key)}
+      {#if pin.item.type === "group"}
+        {@const group = pin.item.group}
+        <div
+          class={[
+            "absolute inset-x-0 bg-surface",
+            list.focusedKey === pin.item.key && "ring-1 ring-accent ring-inset"
+          ]}
+          id={pinnedId(pin.index)}
+          style:top={`calc(100% + ${pin.top}px)`}
+          style:height={`${row}px`}
+          style:z-index={n - pinned.length}
+          data-line={pin.item.key}
+          data-pinned="true">
+          <GroupHeader
+            {group}
+            {store}
+            {direction}
+            {expansion}
+            ticked={ticked(group)}
+            onselect={(on) => list.setAll(ids(group), on)}
+            onremove={() => onremove(group.transfers)}
+            oncancel={() => oncancel(group.transfers)}
+            onblock={(deny) => onblock(group.username, deny)} />
+        </div>
+      {/if}
+    {/each}
   </div>
   <div
     class="relative"
