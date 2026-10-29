@@ -8,6 +8,8 @@
   cmake,
   perl,
   installShellFiles,
+  zsh,
+  fish,
   web,
   version,
   # the commit the build is of, shown beside the version; none outside a git checkout
@@ -51,6 +53,12 @@ rustPlatform.buildRustPackage {
     cmake
     perl
     installShellFiles
+  ];
+
+  # the completions test reads each script in its shell
+  nativeCheckInputs = [
+    zsh
+    fish
   ];
 
   useNextest = true;
