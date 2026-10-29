@@ -121,7 +121,8 @@
   $effect(() => {
     if (!openLarge || openedLarge || !scope) return;
     openedLarge = true;
-    large = true;
+    // the dialog mounts with the spectrogram in this same update; it opens once it is there
+    void tick().then(() => (large = true));
   });
   // the report is read again whenever an analysis finishes
   $effect(() => {
