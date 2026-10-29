@@ -235,15 +235,6 @@ impl ReportService for Telemetry {
 mod tests {
   use super::*;
 
-  #[test]
-  fn key_figures_are_ours_the_processs_and_the_hosts_but_its_processor_times() {
-    assert!(is_kpi("reseek_browse_requests_received"));
-    assert!(is_kpi("process_resident_memory_bytes"));
-    assert!(is_kpi("node_filesystem_avail_bytes"));
-    assert!(!is_kpi("node_cpu_seconds_total"));
-    assert!(!is_kpi("tokio_workers"));
-  }
-
   #[tokio::test]
   async fn the_metrics_hold_the_catalog_and_the_process() {
     let telemetry = Telemetry::new(

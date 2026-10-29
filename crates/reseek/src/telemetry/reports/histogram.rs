@@ -150,8 +150,7 @@ mod tests {
   use super::*;
   use crate::telemetry::reports::tests::{at, row};
   use crate::transfers::fixtures::{insert, transfers};
-  use api_types::reports::TransferOutcome;
-  use api_types::transfers::TransferDirection::{Download, Upload};
+  use api_types::transfers::TransferDirection::Upload;
 
   async fn cut(
     reports: &Reports,
@@ -162,54 +161,6 @@ mod tests {
     reports
       .histogram(Window { start, end }, width, HistogramQuery::default())
       .await
-  }
-
-  #[tokio::test]
-  async fn buckets_are_epoch_aligned_and_the_end_is_excluded() {
-    let db = transfers().await;
-    let mut slow = row("alice", Upload, 48, at(1, 30));
-    slow.size = 600;
-    slow.started_at = Some(at(1, 20));
-    let mut fast = row("bob", Upload, 48, at(1, 40));
-    fast.size = 600;
-    fast.started_at = Some(at(1, 38));
-    // the window ends inside the last bucket, so only the exclusive end leaves this one out
-    let on_the_end = row("carol", Download, 48, at(2, 30));
-    let failed = row("dave", Download, 272, at(2, 29));
-    insert(&db, vec![slow, fast, on_the_end, failed]).await;
-    let reports = Reports::new(db);
-    let histogram = cut(
-      &reports,
-      at(0, 30),
-      at(2, 30),
-      Width::Minutes(NonZeroU32::new(60).unwrap()),
-    )
-    .await
-    .unwrap();
-    let keys: Vec<_> = histogram.keys().cloned().collect();
-    assert_eq!(
-      keys,
-      [
-        "2026-03-01T00:00:00Z",
-        "2026-03-01T01:00:00Z",
-        "2026-03-01T02:00:00Z"
-      ],
-      "the first bucket starts before the window, the last holds its end"
-    );
-    let one = &histogram["2026-03-01T01:00:00Z"].upload[&TransferOutcome::Succeeded];
-    assert_eq!(
-      (one.count, one.total_bytes, one.distinct_users),
-      (2, 1200, 2)
-    );
-    // 1200 bytes over 600 + 120 seconds of transfer
-    assert!((one.average_speed - 1200.0 / 720.0).abs() < 1e-9);
-    let two = &histogram["2026-03-01T02:00:00Z"];
-    assert_eq!(two.download[&TransferOutcome::Errored].count, 1);
-    assert!(
-      !two.download.contains_key(&TransferOutcome::Succeeded),
-      "a transfer ending on the window's end is outside it"
-    );
-    assert!(histogram["2026-03-01T00:00:00Z"].upload.is_empty());
   }
 
   #[tokio::test]

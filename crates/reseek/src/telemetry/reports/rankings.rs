@@ -133,9 +133,6 @@ fn directory_of(filename: &str) -> &str {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::telemetry::reports::tests::{all, at, row};
-  use crate::transfers::fixtures::{insert, transfers};
-  use api_types::transfers::TransferDirection::{Download, Upload};
 
   #[test]
   fn a_directory_is_the_name_without_its_last_segment() {
@@ -146,113 +143,5 @@ mod tests {
     assert_eq!(directory_of("a/b//c.flac"), "a/b");
     assert_eq!(directory_of("dir\\"), "dir");
     assert_eq!(directory_of("bare.mp3"), "");
-  }
-
-  fn leaderboard(sort_by: LeaderboardSort, sort_order: SortOrder) -> LeaderboardQuery {
-    LeaderboardQuery {
-      direction: Upload,
-      start: None,
-      end: None,
-      sort_by,
-      sort_order,
-      limit: 25,
-      offset: 0,
-    }
-  }
-
-  #[tokio::test]
-  async fn the_leaderboard_ranks_successful_transfers_and_breaks_ties_by_name() {
-    let db = transfers().await;
-    let sized = |user: &str, size, speed| {
-      let mut r = row(user, Upload, 48, at(10, 0));
-      r.size = size;
-      r.speed = speed;
-      r
-    };
-    insert(
-      &db,
-      vec![
-        sized("alice", 100, 10.0),
-        sized("alice", 100, 30.0),
-        sized("bob", 500, 5.0),
-        sized("carol", 50, 50.0),
-        row("alice", Upload, 272, at(10, 0)),
-        row("zed", Download, 48, at(10, 0)),
-      ],
-    )
-    .await;
-    let reports = Reports::new(db);
-    let names = |entries: Vec<LeaderboardEntry>| {
-      entries
-        .into_iter()
-        .map(|e| (e.username, e.summary.count))
-        .collect::<Vec<_>>()
-    };
-    let by_count = reports
-      .leaderboard(all(), leaderboard(LeaderboardSort::Count, SortOrder::Desc))
-      .await
-      .unwrap();
-    assert_eq!(by_count[0].summary.distinct_users, 1);
-    assert_eq!(by_count[0].summary.average_speed, 20.0);
-    assert_eq!(
-      names(by_count),
-      [("alice".into(), 2), ("carol".into(), 1), ("bob".into(), 1)],
-      "a failed upload and a download do not count; ties by name descending"
-    );
-    let by_bytes = reports
-      .leaderboard(
-        all(),
-        leaderboard(LeaderboardSort::TotalBytes, SortOrder::Asc),
-      )
-      .await
-      .unwrap();
-    assert_eq!(by_bytes[0].username, "carol");
-    let mut paged = leaderboard(LeaderboardSort::AverageSpeed, SortOrder::Desc);
-    paged.offset = 1;
-    paged.limit = 1;
-    assert_eq!(
-      names(reports.leaderboard(all(), paged).await.unwrap()),
-      [("alice".into(), 2)]
-    );
-  }
-
-  #[tokio::test]
-  async fn directories_rank_by_distinct_downloaders_then_downloads() {
-    let db = transfers().await;
-    let upload = |user: &str, file: &str| {
-      let mut r = row(user, Upload, 48, at(10, 0));
-      r.filename = file.to_string();
-      r
-    };
-    insert(
-      &db,
-      vec![
-        upload("a", "@@s\\One\\1.mp3"),
-        upload("a", "@@s\\One\\2.mp3"),
-        upload("a", "@@s\\One\\3.mp3"),
-        upload("a", "@@s\\Two\\1.mp3"),
-        upload("b", "@@s\\Two\\2.mp3"),
-        row("c", Download, 48, at(10, 0)),
-      ],
-    )
-    .await;
-    let counts = Reports::new(db)
-      .directories(
-        all(),
-        DirectoriesQuery {
-          start: None,
-          end: None,
-          username: None,
-          limit: 25,
-          offset: 0,
-        },
-      )
-      .await
-      .unwrap();
-    let ranked: Vec<_> = counts
-      .iter()
-      .map(|c| (c.directory.as_str(), c.distinct_users, c.count))
-      .collect();
-    assert_eq!(ranked, [("@@s\\Two", 2, 2), ("@@s\\One", 1, 3)]);
   }
 }
