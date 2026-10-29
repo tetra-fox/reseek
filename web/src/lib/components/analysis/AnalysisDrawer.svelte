@@ -8,6 +8,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
   import { motionFast } from "#lib/motion.js";
+  import type { Track } from "#lib/player.svelte.js";
 
   import AnalysisPanel from "./AnalysisPanel.svelte";
 
@@ -15,13 +16,15 @@
   // with the file's own actions beside its name
   type Props = {
     target: Target;
+    /** the file as the player plays it */
+    track: Track | null;
     name: string;
     start: boolean;
     actions?: Snippet;
     onclose: () => void;
   };
 
-  let { target, name, start, actions, onclose }: Props = $props();
+  let { target, track, name, start, actions, onclose }: Props = $props();
 </script>
 
 <svelte:window
@@ -41,6 +44,6 @@
       ><XIcon /></Button>
   </header>
   <div class="flex-1 overflow-y-auto p-4">
-    <AnalysisPanel {target} {start} />
+    <AnalysisPanel {target} {track} {start} />
   </div>
 </aside>

@@ -1,4 +1,4 @@
-import { api, root, type Schemas } from "#lib/api/client.js";
+import { api, type Schemas } from "#lib/api/client.js";
 import type { Root } from "#lib/localfiles.js";
 import { call, type Outcome } from "#lib/request.js";
 import { encodePath } from "#lib/transfers/content.js";
@@ -7,17 +7,20 @@ export type Report = Schemas["AudioAnalysis"];
 export type Layout = Schemas["SpectrogramLayout"];
 export type Guide = Schemas["GuideLine"];
 export type Job = Schemas["AnalysisJob"];
-export type Spectrum = Schemas["WindowSpectrum"];
 export type Judgement = Schemas["Judgement"];
 export type Scale = Layout["scale"];
+
+/** The text shown with every spectrogram and every reading */
+export const DISCLAIMER =
+  "This is a tool to help you judge, not proof. Content can stop short of the top of the graph for honest reasons: a test tone, speech, an old master or a vinyl rip all do. And a careful transcode can reach the top. Listen, compare, and decide for yourself.";
 
 /** The file an analysis is about: one under a root, or a finished download's */
 export type Target =
   | { kind: "file"; root: Root; path: string }
   | { kind: "download"; username: string; id: string };
 
-/** The route of a target's analysis, without the API prefix */
-const route = (t: Target) =>
+/** The route of a target's analysis, from the daemon's root */
+export const analysisRoute = (t: Target) =>
   t.kind === "file"
     ? `/api/v0/files/${t.root}/files/${encodePath(t.path)}/analysis`
     : `/api/v0/transfers/downloads/${encodeURIComponent(t.username)}/${t.id}/analysis`;
@@ -35,24 +38,15 @@ export const names = (
     ? file.root === t.root && file.relativePath === t.path
     : file.transferId === t.id;
 
-/** The URL of a target's spectrogram image on `scale`, with or without the guide lines drawn in */
-export const imageUrl = (t: Target, guides: boolean, scale: Scale) =>
-  `${root()}${route(t)}/spectrogram.png?guides=${guides}&scale=${scale}`;
-
-/** A target's report with its spectrogram layout on `scale`, null when it has none yet */
-export const loadReport = async (
-  t: Target,
-  scale: Scale | null
-): Promise<Outcome<Report | null>> => {
-  // without a scale the daemon gives the layout on the option's
-  const query = scale ? { scale } : {};
+/** A target's report, null when it has none yet */
+export const loadReport = async (t: Target): Promise<Outcome<Report | null>> => {
   const outcome = await call(() =>
     t.kind === "file"
       ? api.GET("/api/v0/files/{root}/files/{path}/analysis", {
-          params: { path: { root: t.root, path: encodePath(t.path) }, query }
+          params: { path: { root: t.root, path: encodePath(t.path) } }
         })
       : api.GET("/api/v0/transfers/downloads/{username}/{id}/analysis", {
-          params: { path: { username: t.username, id: t.id }, query }
+          params: { path: { username: t.username, id: t.id } }
         })
   );
   // a report is kept after its file is gone, so a 404 means there is none to show
@@ -99,57 +93,6 @@ export const judge = (t: Target, verdict: Judgement | null, note: string) => {
   );
 };
 
-/** The spectrum of one window of a target's report, at the rows of `scale` */
-export const loadWindow = (t: Target, index: number, scale: Scale) =>
-  call(() =>
-    t.kind === "file"
-      ? api.GET("/api/v0/files/{root}/files/{path}/analysis/windows/{index}", {
-          params: { path: { root: t.root, path: encodePath(t.path), index }, query: { scale } }
-        })
-      : api.GET("/api/v0/transfers/downloads/{username}/{id}/analysis/windows/{index}", {
-          params: { path: { username: t.username, id: t.id, index }, query: { scale } }
-        })
-  );
-
-/** The mel pitch of `hz`, by O'Shaughnessy's formula: 2595 log10(1 + f / 700) */
-const mel = (hz: number) => 2595 * Math.log10(1 + hz / 700);
-
-/**
- * Where `hz` falls on the plot, from 0 at its top to 1 at its bottom, on the axis the daemon drew:
- * hertz the same height on a linear axis, octaves on a log one, pitch as heard on a mel one
- */
-export const heightOf = (layout: Layout, hz: number): number => {
-  const { minHz: min, maxHz: max } = layout;
-  const position =
-    layout.scale === "log"
-      ? Math.log(Math.max(hz, min) / min) / Math.log(max / min)
-      : layout.scale === "mel"
-        ? (mel(Math.max(hz, min)) - mel(min)) / (mel(max) - mel(min))
-        : (hz - min) / (max - min);
-  return 1 - Math.min(1, Math.max(0, position));
-};
-
-/**
- * The window shown at a point `across` the plot, from 0 at its left edge to 1 at its right: the
- * plot spans the file's whole length, so the point is a time, and the window is the second that
- * holds it, or where a file was read in samples and the time falls between them, the sample
- * whose middle is nearest
- */
-export const windowAt = (layout: Layout, across: number, starts: number[]): number => {
-  const t = Math.min(1, Math.max(0, across)) * layout.durationSeconds;
-  const holding = starts.findIndex((start) => start <= t && t < start + 1);
-  if (holding >= 0) return holding;
-  let nearest = 0;
-  starts.forEach((start, i) => {
-    if (Math.abs(start + 0.5 - t) < Math.abs(starts[nearest] + 0.5 - t)) nearest = i;
-  });
-  return nearest;
-};
-
-/** How far across the plot a time falls, from 0 at its left edge to 1 at its right */
-export const acrossAt = (layout: Layout, t: number) =>
-  layout.durationSeconds > 0 ? Math.min(1, t / layout.durationSeconds) : 0;
-
 /** The frequency scales a spectrogram can be drawn on, as the switch names them */
 export const SCALES: { id: Scale; label: string }[] = [
   { id: "linear", label: "Linear" },
@@ -157,7 +100,7 @@ export const SCALES: { id: Scale; label: string }[] = [
   { id: "mel", label: "Mel" }
 ];
 
-/** The analyser's verdict in words */
+/** The analyzer's verdict in words */
 export const VERDICTS: Record<Report["verdict"], string> = {
   consistent: "Consistent with its format",
   likely_transcode: "Likely a transcode",

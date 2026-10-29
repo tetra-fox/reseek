@@ -25,6 +25,7 @@
   } from "#lib/format.js";
   import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
   import { motionFast } from "#lib/motion.js";
+  import { downloadTrack } from "#lib/transfers/actions.js";
   import { rowActions, stateChip, type Direction, type Transfer } from "#lib/transfers/states.js";
   import { endpoint, type Transfers } from "#lib/transfers/transfers.svelte.js";
   import { users } from "#lib/users.svelte.js";
@@ -263,6 +264,7 @@
         <h3 class="text-xs font-medium text-fg-muted uppercase">Analysis</h3>
         <AnalysisPanel
           target={{ kind: "download", username: t.username, id: t.id }}
+          track={downloadTrack(t)}
           start={analyse}
           onshown={reveal} />
       </section>

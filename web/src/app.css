@@ -139,6 +139,10 @@
   --color-series-upload-wait: #8e44ad;
   --color-series-share-ratio: #b5cc18;
 
+  /* the spectrogram's plot and the text on it, dark on both themes */
+  --color-plot: #101014;
+  --color-plot-fg: #c8c8d0;
+
   --font-sans: "Inter Variable", sans-serif;
   --font-mono:
     "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
@@ -159,6 +163,25 @@
   :root {
     --spacing-gutter: 2rem;
   }
+}
+
+/* what the spectrogram's canvas reads: its levels from quiet to loud on a perceptual map
+   (inferno), unread stretches, muted labels, the waveform and the cursor. Plain properties, as
+   theme tokens no class uses are left out of the stylesheet */
+:root {
+  --color-level-0: #000004;
+  --color-level-1: #1b0c41;
+  --color-level-2: #4a0c6b;
+  --color-level-3: #781c6d;
+  --color-level-4: #a52c60;
+  --color-level-5: #cf4446;
+  --color-level-6: #ed6925;
+  --color-level-7: #fb9b06;
+  --color-level-8: #fcffa4;
+  --color-plot-unread: #30303a;
+  --color-plot-muted: #8a8a9a;
+  --color-plot-wave: #8fb4ff;
+  --color-plot-cursor: #ffffff;
 }
 
 /* the shell measures these: the content area's height, which screens fill, and the heights of

@@ -1,90 +1,46 @@
 <script lang="ts">
-  import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
-  import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import { Axis, Chart, Grid, Spline, Svg } from "layerchart";
 
-  import {
-    heightOf,
-    type Layout,
-    loadWindow,
-    type Spectrum,
-    type Target
-  } from "#lib/analysis/analysis.js";
-  import Button from "#lib/components/ui/Button.svelte";
+  import type { Scale } from "#lib/analysis/analysis.js";
+  import { binHz, formatHz, frequencyTicks, heightOf } from "#lib/analysis/frequency.js";
+  import type { Scope } from "#lib/analysis/scope.svelte.js";
+  import { formatTime } from "#lib/analysis/timeview.js";
   import { tickLabel } from "#lib/dashboard/chart.js";
-  import { formatDuration } from "#lib/format.js";
 
-  // one window's spectrum on LayerChart: level against frequency, on the frequency axis the
-  // spectrogram uses, with the window before and after a press away
-  type Props = {
-    target: Target;
-    layout: Layout;
-    starts: number[];
-    picked: number;
-    onpick: (index: number) => void;
-  };
+  // the spectrum of the window the cursor is in on LayerChart: level against frequency, on the
+  // frequency axis the spectrogram uses. Every window's spectrum loads with the spectrogram, so
+  // it follows the cursor as it is dragged
+  type Props = { scope: Scope; scale: Scale };
 
-  let { target, layout, starts, picked, onpick }: Props = $props();
+  let { scope, scale }: Props = $props();
 
-  let spectrum = $state.raw<Spectrum | null>(null);
-  let error = $state("");
-  let asked = 0;
-  $effect(() => {
-    const index = picked;
-    const ask = ++asked;
-    error = "";
-    void loadWindow(target, index, layout.scale).then((o) => {
-      if (ask !== asked) return;
-      if (o.ok) spectrum = o.data;
-      else error = o.error;
-    });
+  const spectra = $derived(scope.pictures.spectra);
+  const index = $derived(scope.window);
+  const maxHz = $derived(scope.layout.maxHz);
+  /** across the axis from its lowest frequency (0) to its highest (1), as the spectrogram runs */
+  const across = (hz: number) => 1 - heightOf(scale, maxHz, hz);
+  const points = $derived.by(() => {
+    if (!spectra || index < 0 || index >= spectra.windows) return [];
+    const { bins, minDb, maxDb, bytes } = spectra;
+    const row = bytes.subarray(index * bins, (index + 1) * bins);
+    return Array.from(row, (byte, bin) => ({
+      x: across(binHz(bin, bins, maxHz)),
+      db: minDb + (byte / 255) * (maxDb - minDb)
+    }));
   });
-
-  /** across the axis from its lowest frequency (0) to its highest (1), as the image runs */
-  const across = (hz: number) => 1 - heightOf(layout, hz);
-  const points = $derived(
-    spectrum ? spectrum.hz.map((hz, i) => ({ x: across(hz), db: spectrum!.db[i] })) : []
-  );
-  /** where the frequency axis is labelled, spread evenly on each scale */
-  const TICKS = {
-    linear: [0, 5_000, 10_000, 15_000, 20_000, 40_000],
-    log: [100, 1_000, 10_000],
-    mel: [0, 1_000, 4_000, 16_000]
-  };
   const ticks = $derived(
-    TICKS[layout.scale].filter((hz) => hz >= layout.minHz && hz <= layout.maxHz)
+    frequencyTicks(scale, maxHz).filter((_, i, all) => all.length < 6 || i % 2 === 0)
   );
-  const label = (x: number) => {
-    const hz = ticks.find((t) => Math.abs(across(t) - x) < 1e-9) ?? 0;
-    return hz >= 1000 ? `${hz / 1000} kHz` : `${hz} Hz`;
-  };
+  const label = (x: number) => formatHz(ticks.find((t) => Math.abs(across(t) - x) < 1e-9) ?? 0);
+  const at = $derived(index >= 0 ? formatTime(scope.starts[index] ?? 0) : "");
 </script>
 
-<div class="flex flex-col gap-2">
-  <div class="flex items-center gap-2">
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label="Previous window"
-      disabled={picked <= 0}
-      onclick={() => onpick(picked - 1)}><ChevronLeftIcon /></Button>
-    <p class="text-sm">
-      Spectrum at <span class="tabular-nums">{formatDuration(starts[picked] ?? 0)}</span>
-    </p>
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label="Next window"
-      disabled={picked >= starts.length - 1}
-      onclick={() => onpick(picked + 1)}><ChevronRightIcon /></Button>
-  </div>
-  {#if error}
-    <p class="text-sm text-fg-muted">{error}</p>
-  {:else if points.length}
-    <div
-      class="h-40"
-      role="img"
-      aria-label={`The spectrum of the window at ${formatDuration(starts[picked] ?? 0)}`}>
+<div class="flex min-w-0 flex-col gap-1">
+  <p class="text-sm">
+    Spectrum at <span class="tabular-nums">{at}</span>
+  </p>
+  {#if points.length}
+    <div class="h-40" role="img" aria-label={`The spectrum of the window at ${at}`}>
       <Chart
         data={points}
         x="x"
@@ -108,5 +64,7 @@
         </Svg>
       </Chart>
     </div>
+  {:else if spectra === null}
+    <p class="text-sm text-fg-muted">Loading...</p>
   {/if}
 </div>

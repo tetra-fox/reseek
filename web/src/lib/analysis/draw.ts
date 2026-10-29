@@ -1,0 +1,402 @@
+import type { Guide, Scale } from "./analysis";
+import { formatHz, frequencyTicks, heightOf, hzAt } from "./frequency";
+import {
+  drawRaster,
+  levelAt,
+  levelColors,
+  loudest,
+  type Palette,
+  peakBetween,
+  rasterise,
+  type Rect
+} from "./paint";
+import type { Cells, Pictures } from "./pictures.svelte";
+import { acrossOf, formatTime, timeAt, timeTicks, type View } from "./timeview";
+
+/** Where everything goes on the timeline's canvas, in device pixels */
+export type Stage = {
+  width: number;
+  height: number;
+  /** device pixels per CSS pixel */
+  dpr: number;
+  /** device pixels per rem, which text and gaps follow */
+  rem: number;
+  spectrogram: Rect;
+  waveform: Rect;
+  /** the time axis under the waveform */
+  axis: Rect;
+};
+
+/** The stage for a canvas `width` CSS pixels wide, its plots `plot` and `wave` rem tall */
+export const stageOf = (
+  width: number,
+  dpr: number,
+  rem: number,
+  plot: number,
+  wave: number
+): Stage => {
+  const r = rem * dpr;
+  const left = Math.round(3.25 * r);
+  const right = Math.round(0.5 * r);
+  const inner = Math.max(1, Math.round(width * dpr) - left - right);
+  const spectrogram = { x: left, y: 0, width: inner, height: Math.round(plot * r) };
+  const waveform = {
+    x: left,
+    y: spectrogram.height + Math.round(0.25 * r),
+    width: inner,
+    height: Math.round(wave * r)
+  };
+  const axis = {
+    x: left,
+    y: waveform.y + waveform.height,
+    width: inner,
+    height: Math.round(1.4 * r)
+  };
+  return {
+    width: Math.round(width * dpr),
+    height: axis.y + axis.height,
+    dpr,
+    rem: r,
+    spectrogram,
+    waveform,
+    axis
+  };
+};
+
+/** Where `x` (device pixels) falls across a rect, from 0 at its left edge to 1 at its right */
+export const acrossRect = (rect: Rect, x: number) => (x - rect.x) / rect.width;
+
+/** Whether the point is inside a rect */
+export const inside = (rect: Rect, x: number, y: number) =>
+  x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
+
+/** Each encoder line's own color, so the legend tells them apart; all read on the dark plot */
+const ENCODER = ["#5ad2ff", "#7cffb2", "#c3a6ff", "#ffffff", "#ffb86b"];
+
+/** A guide line's color: the file limit red, the analyzer's cutoff yellow, encoders by turn */
+export const guideColor = (guide: Guide, guides: Guide[]) =>
+  guide.kind === "file_limit"
+    ? "#ff7878"
+    : guide.kind === "cutoff"
+      ? "#ffd850"
+      : ENCODER[guides.filter((g) => g.kind === "encoder").indexOf(guide) % ENCODER.length];
+
+/** A guide's key, which the legend toggles it by */
+export const guideKey = (guide: Guide) => `${guide.kind}:${guide.hz}`;
+
+/** What a timeline draws */
+export type Scene = {
+  pictures: Pictures;
+  view: View;
+  scale: Scale;
+  cursor: number;
+  hidden: ReadonlySet<string>;
+  palette: Palette;
+  /** where the pointer is over the canvas, in device pixels, null when it is elsewhere */
+  hover: { x: number; y: number } | null;
+};
+
+/** The spectrogram images drawn from each set of columns, kept for the scale and height drawn */
+export class Rasters {
+  readonly #kept = new WeakMap<Cells, { key: string; canvas: HTMLCanvasElement }>();
+
+  of(
+    cells: Cells,
+    scale: Scale,
+    maxHz: number,
+    height: number,
+    colors: () => Uint8ClampedArray,
+    top: number
+  ) {
+    const key = `${scale}:${height}:${top}`;
+    const kept = this.#kept.get(cells);
+    if (kept?.key === key) return kept.canvas;
+    const canvas = rasterise(cells, scale, maxHz, height, colors());
+    this.#kept.set(cells, { key, canvas });
+    return canvas;
+  }
+}
+
+/** How many full-detail cells of `perSecond` a file `duration` seconds long has */
+const detailOf = (duration: number, perSecond: number) => Math.ceil(duration * perSecond - 1e-9);
+
+/**
+ * Whether a view `width` device pixels wide shows more of `overview` than it has cells for, and
+ * full detail has more
+ */
+export const wantsDetail = (
+  overview: Cells,
+  view: View,
+  width: number,
+  perSecond: number,
+  duration: number
+) =>
+  overview.count < detailOf(duration, perSecond) &&
+  (overview.count * view.span) / (overview.to - overview.from) < width;
+
+/** The tiles of `kind` that overlap `view`, those that have arrived */
+const tilesIn = (pictures: Pictures, kind: "spectrogram" | "waveform", view: View): Cells[] => {
+  const seconds = pictures.layout.tileSeconds;
+  const first = Math.floor(view.start / seconds);
+  const last = Math.min(pictures.layout.tiles - 1, Math.floor((view.start + view.span) / seconds));
+  const found: Cells[] = [];
+  for (let tile = first; tile <= last; tile++) {
+    const cells = pictures.tile(kind, tile);
+    if (cells) found.push(cells);
+  }
+  return found;
+};
+
+/** The hatch each canvas fills unread stretches with, made once for its colors and size */
+const hatches = new WeakMap<
+  CanvasRenderingContext2D,
+  { key: string; fill: CanvasPattern | string }
+>();
+
+/** The hatch unread stretches are filled with */
+const hatch = (context: CanvasRenderingContext2D, palette: Palette, size: number) => {
+  const key = `${palette.plot}:${palette.unread}:${size}`;
+  const kept = hatches.get(context);
+  if (kept?.key === key) return kept.fill;
+  const tile = document.createElement("canvas");
+  tile.width = tile.height = size;
+  const t = tile.getContext("2d");
+  if (t) {
+    t.fillStyle = palette.plot;
+    t.fillRect(0, 0, size, size);
+    t.strokeStyle = palette.unread;
+    t.lineWidth = size / 4;
+    t.beginPath();
+    t.moveTo(0, size);
+    t.lineTo(size, 0);
+    t.stroke();
+  }
+  const fill = context.createPattern(tile, "repeat") ?? palette.plot;
+  hatches.set(context, { key, fill });
+  return fill;
+};
+
+/** Draws the spectrogram, the waveform, their axes, the guide lines, the cursor and the hover readout */
+export const drawTimeline = (
+  context: CanvasRenderingContext2D,
+  stage: Stage,
+  scene: Scene,
+  rasters: Rasters
+) => {
+  const { pictures, view, scale, palette } = scene;
+  const { layout } = pictures;
+  const { spectrogram: spec, waveform: wave, axis, rem, dpr } = stage;
+  context.clearRect(0, 0, stage.width, stage.height);
+  const unread = hatch(context, palette, Math.max(4, Math.round(0.5 * rem)));
+  context.fillStyle = unread;
+  context.fillRect(spec.x, spec.y, spec.width, spec.height);
+  context.fillRect(wave.x, wave.y, wave.width, wave.height);
+  const overview = pictures.spectrogram;
+  if (!overview || view.span <= 0) return;
+
+  // the spectrogram, the overview first and the tiles at full detail over it
+  const top = loudest(overview);
+  const dbPerByte = ((overview.maxDb ?? 0) - (overview.minDb ?? -160)) / 255;
+  const colors = () => levelColors(palette.levels, top, dbPerByte);
+  context.imageSmoothingEnabled = true;
+  const paint = (cells: Cells) =>
+    drawRaster(
+      context,
+      rasters.of(cells, scale, layout.maxHz, spec.height, colors, top),
+      cells,
+      view,
+      spec
+    );
+  paint(overview);
+  const detail = wantsDetail(
+    overview,
+    view,
+    spec.width,
+    layout.columnsPerSecond,
+    layout.durationSeconds
+  );
+  const shown = detail ? tilesIn(pictures, "spectrogram", view) : [];
+  shown.forEach(paint);
+
+  // the guide lines across it
+  context.lineWidth = Math.max(1, Math.round(dpr));
+  for (const guide of layout.guides) {
+    if (scene.hidden.has(guideKey(guide))) continue;
+    const y =
+      Math.round(spec.y + heightOf(scale, layout.maxHz, guide.hz) * (spec.height - 1)) + 0.5;
+    context.strokeStyle = guideColor(guide, layout.guides);
+    context.setLineDash(guide.kind === "cutoff" ? [4 * dpr, 3 * dpr] : []);
+    context.beginPath();
+    context.moveTo(spec.x, y);
+    context.lineTo(spec.x + spec.width, y);
+    context.stroke();
+  }
+  context.setLineDash([]);
+
+  // the frequency axis on the left, labels kept a line apart
+  context.font = `${Math.round(0.7 * rem)}px ui-sans-serif, system-ui, sans-serif`;
+  context.textAlign = "right";
+  context.textBaseline = "middle";
+  context.fillStyle = palette.muted;
+  let lastY = Number.POSITIVE_INFINITY;
+  for (const hz of frequencyTicks(scale, layout.maxHz)) {
+    const y = spec.y + heightOf(scale, layout.maxHz, hz) * spec.height;
+    if (lastY - y < 0.9 * rem) continue;
+    lastY = y;
+    context.fillRect(spec.x - 0.25 * rem, Math.round(y), 0.2 * rem, dpr);
+    const label = Math.min(spec.y + spec.height - 0.4 * rem, Math.max(spec.y + 0.4 * rem, y));
+    context.fillText(formatHz(hz), spec.x - 0.35 * rem, label);
+  }
+
+  // the waveform, from the tiles at full detail where they have arrived, else the overview
+  const waves = pictures.waveform;
+  if (waves) {
+    const tiles = wantsDetail(
+      waves,
+      view,
+      wave.width,
+      layout.peaksPerSecond,
+      layout.durationSeconds
+    )
+      ? tilesIn(pictures, "waveform", view)
+      : [];
+    const middle = wave.y + wave.height / 2;
+    const half = wave.height / 2 - dpr;
+    const peaks = Array.from({ length: wave.width }, (_, x) => {
+      const from = timeAt(view, x / wave.width);
+      const to = timeAt(view, (x + 1) / wave.width);
+      const source = tiles.find((t) => t.from <= from && from < t.to) ?? waves;
+      return peakBetween(source, from, to);
+    });
+    // read stretches cover the hatch in runs, then the peaks go over them in one color
+    context.fillStyle = palette.plot;
+    let run = -1;
+    peaks.forEach((peak, x) => {
+      if (peak && run < 0) run = x;
+      if ((!peak || x === peaks.length - 1) && run >= 0) {
+        const end = peak ? x + 1 : x;
+        context.fillRect(wave.x + run, wave.y, end - run, wave.height);
+        run = -1;
+      }
+    });
+    context.fillStyle = palette.wave;
+    peaks.forEach((peak, x) => {
+      if (!peak) return;
+      const y0 = Math.floor(middle - peak[1] * half);
+      const y1 = Math.ceil(middle - peak[0] * half);
+      context.fillRect(wave.x + x, y0, 1, Math.max(1, y1 - y0));
+    });
+  }
+
+  // the time axis under both
+  context.textAlign = "center";
+  context.textBaseline = "top";
+  const ticks = timeTicks(view, (5 * rem) / axis.width);
+  const tenths = ticks.length > 1 && ticks[1] - ticks[0] < 1;
+  for (const t of ticks) {
+    const x = Math.round(axis.x + acrossOf(view, t) * axis.width);
+    context.fillStyle = palette.muted;
+    context.fillRect(x, axis.y, dpr, 0.25 * rem);
+    const label = formatTime(t, tenths);
+    const w = context.measureText(label).width / 2;
+    context.fillText(label, Math.min(stage.width - w, Math.max(w, x)), axis.y + 0.3 * rem);
+  }
+
+  // the line under the pointer, under the cursor's
+  const hovered =
+    scene.hover &&
+    (inside(spec, scene.hover.x, scene.hover.y) || inside(wave, scene.hover.x, scene.hover.y));
+  if (hovered) {
+    context.fillStyle = palette.fg;
+    context.globalAlpha = 0.5;
+    context.fillRect(scene.hover!.x, spec.y, 1, wave.y + wave.height - spec.y);
+    context.globalAlpha = 1;
+  }
+
+  // the cursor across both, with its time on the time axis
+  const across = acrossOf(view, scene.cursor);
+  if (across >= 0 && across <= 1) {
+    const x = Math.round(spec.x + across * spec.width);
+    context.fillStyle = palette.cursor;
+    const width = Math.max(1, Math.round(1.5 * dpr));
+    context.fillRect(x - Math.floor(width / 2), spec.y, width, wave.y + wave.height - spec.y);
+    chip(context, formatTime(scene.cursor, true), x, axis.y + 0.15 * rem, stage, palette, true);
+  }
+
+  if (hovered) readout(context, stage, scene, overview, shown, detail);
+};
+
+/** A label in a box at `x`, kept on the canvas */
+const chip = (
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  stage: Stage,
+  palette: Palette,
+  dark: boolean
+) => {
+  const { rem } = stage;
+  context.font = `${Math.round(0.7 * rem)}px ui-sans-serif, system-ui, sans-serif`;
+  const width = context.measureText(text).width + 0.6 * rem;
+  const height = 1.1 * rem;
+  const left = Math.min(stage.width - width, Math.max(stage.spectrogram.x, x - width / 2));
+  context.fillStyle = dark ? palette.cursor : palette.plot;
+  context.globalAlpha = dark ? 1 : 0.9;
+  context.fillRect(left, y, width, height);
+  context.globalAlpha = 1;
+  context.fillStyle = dark ? palette.plot : palette.fg;
+  context.textAlign = "left";
+  context.textBaseline = "middle";
+  context.fillText(text, left + 0.3 * rem, y + height / 2);
+};
+
+/** The time, frequency and level under the pointer, or the time and peak over the waveform */
+const readout = (
+  context: CanvasRenderingContext2D,
+  stage: Stage,
+  scene: Scene,
+  overview: Cells,
+  tiles: Cells[],
+  detail: boolean
+) => {
+  const { x, y } = scene.hover!;
+  const { spectrogram: spec, waveform: wave, rem } = stage;
+  const { layout } = scene.pictures;
+  let text: string | null = null;
+  if (inside(spec, x, y)) {
+    const t = timeAt(scene.view, acrossRect(spec, x));
+    const height = (y - spec.y) / spec.height;
+    const hz = hzAt(scene.scale, layout.maxHz, height);
+    const bin = Math.min(layout.bins - 1, Math.floor((hz / layout.maxHz) * layout.bins));
+    const source = (detail && tiles.find((c) => c.from <= t && t < c.to)) || overview;
+    const byte = levelAt(source, t, bin);
+    const db =
+      byte === null
+        ? "not read"
+        : `${Math.round((source.minDb ?? -160) + (byte / 255) * ((source.maxDb ?? 0) - (source.minDb ?? -160)))} dB`;
+    text = `${formatTime(t, true)} · ${formatHz(hz)} · ${db}`;
+  } else if (inside(wave, x, y) && scene.pictures.waveform) {
+    const t = timeAt(scene.view, acrossRect(wave, x));
+    const span = scene.view.span / wave.width;
+    const peak = peakBetween(scene.pictures.waveform, t, t + span);
+    const level = peak ? Math.max(-peak[0], peak[1]) : 0;
+    const db = !peak
+      ? "not read"
+      : level > 0
+        ? `peak ${(20 * Math.log10(level)).toFixed(1)} dBFS`
+        : "silent";
+    text = `${formatTime(t, true)} · ${db}`;
+  }
+  if (!text) return;
+  const below = y + 1.6 * rem < stage.height ? y + 0.6 * rem : y - 1.7 * rem;
+  chip(
+    context,
+    text,
+    x + 0.8 * rem + context.measureText(text).width / 2,
+    below,
+    stage,
+    scene.palette,
+    false
+  );
+};
