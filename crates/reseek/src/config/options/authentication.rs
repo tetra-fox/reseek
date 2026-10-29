@@ -11,27 +11,27 @@ use serde::{Deserialize, Serialize};
 use crate::config::cidr::ANY;
 use crate::config::enums::{DefaultRole, Role};
 
-/// Who may use the API and the web UI.
+/// Access to the API and the web UI.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Authentication {
-  /// Lets every request in without a credential, as an administrator; the same as trusting
-  /// every network.
+  /// Disables authentication. Every request is accepted as an administrator, the same as
+  /// trusting every network.
   #[cascade(env = "RESEEK_NO_AUTH", cli = "-X|--no-auth", apply = "restart")]
   pub disabled: bool,
-  /// The administrator account's username.
+  /// Administrator username.
   #[cascade(env = "RESEEK_USERNAME", cli = "-u|--username")]
   pub username: String,
-  /// The administrator account's password.
+  /// Administrator password.
   #[cascade(env = "RESEEK_PASSWORD", cli = "-p|--password", secret)]
   pub password: String,
-  /// The administrator account's password as an argon2id hash, used instead of `password`
-  /// when set.
+  /// Administrator password as an argon2id hash. Used instead of `password` when set.
   #[cascade(env = "RESEEK_PASSWORD_HASH", cli = "--password-hash", secret)]
   pub password_hash: Option<String>,
-  /// One API key given outside the files: the key alone, or `;`-separated parts of
+  /// An API key set outside the configuration files: the key alone, or `;`-separated parts
   /// `role=<role>`, `cidr=<networks>` and the key, such as
-  /// `role=readonly;cidr=192.168.1.0/24;<key>`. An administrator key from anywhere by default.
+  /// `role=readonly;cidr=192.168.1.0/24;<key>`. A key without parts has the administrator
+  /// role from any network.
   #[cascade(
     env = "RESEEK_API_KEY",
     cli = "-k|--api-key",
@@ -42,17 +42,17 @@ pub struct Authentication {
   /// API keys by name.
   #[cascade(user_keyed)]
   pub api_keys: BTreeMap<String, ApiKey>,
-  /// Networks whose requests need no credential.
+  /// Networks whose requests need no credentials.
   #[cascade(env = "RESEEK_TRUSTED_NETWORKS", cli = "--trusted-networks")]
   pub trusted_networks: Vec<String>,
-  /// The role of a request from a trusted network.
+  /// Role granted to requests from trusted networks.
   #[cascade(env = "RESEEK_TRUSTED_ROLE", cli = "--trusted-role")]
   pub trusted_role: Role,
-  /// How long a session from a local login lasts.
+  /// Lifetime of a session from a password login.
   #[cascade(env = "RESEEK_SESSION_TTL", cli = "--session-ttl")]
   #[serde(with = "humantime_serde")]
   pub session_ttl: Duration,
-  /// How long a session lasts without being used.
+  /// Time after which an unused session expires.
   #[cascade(env = "RESEEK_SESSION_IDLE", cli = "--session-idle")]
   #[serde(with = "humantime_serde")]
   pub session_idle: Duration,
@@ -61,7 +61,7 @@ pub struct Authentication {
   /// OpenID Connect providers by name.
   #[cascade(user_keyed)]
   pub oidc: BTreeMap<String, Oidc>,
-  /// A reverse proxy's forwarded identity.
+  /// Identity forwarded by a reverse proxy.
   pub proxy: Proxy,
 }
 
@@ -89,12 +89,12 @@ impl Default for Authentication {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct ApiKey {
-  /// The key, 16 to 255 characters.
+  /// API key, 16 to 255 characters.
   #[cascade(secret)]
   pub key: Option<String>,
-  /// What the key may do.
+  /// Role of the key.
   pub role: Role,
-  /// The networks the key may be used from, comma-separated.
+  /// Networks the key may be used from, comma-separated.
   pub cidr: String,
 }
 
@@ -112,13 +112,13 @@ impl Default for ApiKey {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Local {
-  /// Offers the password login.
+  /// Enables password login.
   #[cascade(env = "RESEEK_LOCAL_LOGIN", cli = "--local-login")]
   pub enabled: bool,
-  /// More local accounts by username.
+  /// Additional local accounts by username.
   #[cascade(user_keyed)]
   pub users: BTreeMap<String, LocalUser>,
-  /// The networks password login is allowed from; anywhere when empty.
+  /// Networks password login is allowed from. Any network when empty.
   #[cascade(env = "RESEEK_LOCAL_LOGIN_ONLY_FROM", cli = "--local-login-only-from")]
   pub only_from: Vec<String>,
 }
@@ -133,17 +133,17 @@ impl Default for Local {
   }
 }
 
-/// A local account besides the administrator.
+/// A local account other than the administrator.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct LocalUser {
-  /// The password as an argon2id hash.
+  /// Password as an argon2id hash.
   #[cascade(secret)]
   pub password_hash: Option<String>,
-  /// The password in plain text, accepted with a warning at startup.
+  /// Password in plain text. Accepted with a warning at startup.
   #[cascade(secret)]
   pub password: Option<String>,
-  /// What the account may do.
+  /// Role of the account.
   pub role: Role,
 }
 
@@ -151,33 +151,33 @@ pub struct LocalUser {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Oidc {
-  /// The issuer URL; discovery is read from under it.
+  /// Issuer URL. Discovery is read from under it.
   pub issuer: Option<String>,
-  /// The client id registered with the provider.
+  /// Client ID registered with the provider.
   pub client_id: Option<String>,
-  /// The client secret, for a confidential client.
+  /// Client secret, for a confidential client.
   #[cascade(secret)]
   pub client_secret: Option<String>,
-  /// The login button's label; the provider's name when not set.
+  /// Label of the login button. The provider name is used when not set.
   pub display_name: Option<String>,
-  /// The scopes asked for.
+  /// Requested scopes.
   pub scopes: Vec<String>,
-  /// How the provider's groups map to roles.
+  /// Mapping of provider groups to roles.
   pub role_mapping: OidcRoleMapping,
-  /// The only subjects allowed to log in; anyone when empty.
+  /// Subjects allowed to log in. Anyone when empty.
   pub allowed_subjects: Vec<String>,
-  /// The only verified email addresses allowed to log in; anyone when empty.
+  /// Verified email addresses allowed to log in. Anyone when empty.
   pub allowed_emails: Vec<String>,
-  /// The claim that names the user, falling back to the email and then the subject.
+  /// Claim that holds the username. Falls back to the email address, then the subject.
   pub username_claim: String,
-  /// Sends the login page straight to this provider when it is the only one.
+  /// Redirects the login page to this provider when it is the only one.
   pub auto_login: bool,
-  /// How long a session from this provider lasts.
+  /// Lifetime of a session from this provider.
   #[serde(with = "humantime_serde")]
   pub session_ttl: Duration,
-  /// Logging out at the provider.
+  /// Logout at the provider.
   pub logout: OidcLogout,
-  /// A PEM file with an extra certificate authority for a private provider.
+  /// PEM file with an additional certificate authority, for a private provider.
   pub ca_certificate: Option<PathBuf>,
   /// Refuses an `http://` issuer that is not on this machine.
   pub require_https: bool,
@@ -206,20 +206,20 @@ impl Default for Oidc {
   }
 }
 
-/// How an OpenID Connect provider's groups map to roles; the highest role a user's groups
-/// give wins.
+/// Mapping of provider groups to roles. The highest role granted by any group of a user
+/// applies.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct OidcRoleMapping {
-  /// The claim with the user's groups, a dotted path for a nested claim.
+  /// Claim that holds the groups of the user. A dotted path selects a nested claim.
   pub claim: String,
-  /// Groups whose users are administrators.
+  /// Groups granted the administrator role.
   pub administrator: Vec<String>,
-  /// Groups whose users may read and write.
+  /// Groups granted read and write access.
   pub readwrite: Vec<String>,
-  /// Groups whose users may only read.
+  /// Groups granted read-only access.
   pub readonly: Vec<String>,
-  /// The role of a user in none of the groups, or `deny` to refuse them.
+  /// Role for users in none of the groups, or `deny` to refuse them.
   pub default: DefaultRole,
 }
 
@@ -235,13 +235,14 @@ impl Default for OidcRoleMapping {
   }
 }
 
-/// Logging out at an OpenID Connect provider.
+/// Logout at an OpenID Connect provider.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct OidcLogout {
-  /// Sends the browser to the provider's logout page on logout when it has one.
+  /// Redirects the browser to the logout page of the provider on logout, when the provider
+  /// has one.
   pub rp_initiated: bool,
-  /// Accepts the provider's back-channel logout calls.
+  /// Accepts back-channel logout requests from the provider.
   pub back_channel: bool,
 }
 
@@ -254,28 +255,27 @@ impl Default for OidcLogout {
   }
 }
 
-/// A reverse proxy's forwarded identity, believed only from trusted proxies.
+/// Identity forwarded by a reverse proxy, accepted only from trusted proxies.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Proxy {
-  /// Takes the identity the proxy forwards.
+  /// Accepts the identity forwarded by the proxy.
   #[cascade(env = "RESEEK_PROXY_AUTH", cli = "--proxy-auth")]
   pub enabled: bool,
-  /// The header with the username.
+  /// Header that holds the username.
   #[cascade(env = "RESEEK_PROXY_AUTH_USER_HEADER")]
   pub user_header: String,
-  /// The header with the user's groups, separated by `|` or `,`.
+  /// Header that holds the groups of the user, separated by `|` or `,`.
   #[cascade(env = "RESEEK_PROXY_AUTH_GROUPS_HEADER")]
   pub groups_header: String,
-  /// The header with the user's email address.
+  /// Header that holds the email address.
   #[cascade(env = "RESEEK_PROXY_AUTH_EMAIL_HEADER")]
   pub email_header: String,
-  /// How the forwarded groups map to roles.
+  /// Mapping of forwarded groups to roles.
   pub role_mapping: RoleMapping,
-  /// Starts a session when the web UI's page is served to a user the proxy names and the
-  /// browser has no session yet, so the page's later requests work without the proxy's
-  /// headers; API requests act on the headers alone. Off, the headers are read on every
-  /// request.
+  /// Starts a session when the web UI is served to a user named by the proxy and the browser
+  /// has no session, so that later requests from the page work without the proxy headers. API
+  /// requests rely on the headers alone. When off, the headers are read on every request.
   #[cascade(env = "RESEEK_PROXY_AUTH_SESSION")]
   pub session: bool,
 }
@@ -293,16 +293,17 @@ impl Default for Proxy {
   }
 }
 
-/// How forwarded groups map to roles; the highest role a user's groups give wins.
+/// Mapping of forwarded groups to roles. The highest role granted by any group of a user
+/// applies.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct RoleMapping {
-  /// Groups whose users are administrators.
+  /// Groups granted the administrator role.
   pub administrator: Vec<String>,
-  /// Groups whose users may read and write.
+  /// Groups granted read and write access.
   pub readwrite: Vec<String>,
-  /// Groups whose users may only read.
+  /// Groups granted read-only access.
   pub readonly: Vec<String>,
-  /// The role of a user in none of the groups, or `deny` to refuse them.
+  /// Role for users in none of the groups, or `deny` to refuse them.
   pub default: DefaultRole,
 }

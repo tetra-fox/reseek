@@ -14,24 +14,24 @@ pub const MAX_ANALYSIS_WORKERS: u32 = 4;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Analysis {
-  /// File extensions, without the dot, of the files the UI offers to analyze and queues when
+  /// File extensions, without the dot, that the UI offers to analyze and that are queued when
   /// a whole folder is analyzed.
   pub extensions: Vec<String>,
-  /// How many files are analyzed at the same time, at most 4.
+  /// Number of files analyzed at once. Maximum: 4.
   pub workers: u32,
-  /// How long one file may take; an analysis that runs longer stops and reports what it
-  /// measured so far.
+  /// Maximum analysis time per file. An analysis that runs longer stops and reports its
+  /// partial results.
   #[serde(with = "humantime_serde")]
   pub timeout: Duration,
-  /// Files up to this many minutes long are analyzed in full; longer ones are sampled.
+  /// Maximum length, in minutes, of a file analyzed in full. Longer files are sampled.
   pub max_full_minutes: u32,
-  /// How many one-second windows, spread evenly, a sampled file is analyzed at.
+  /// Number of evenly spaced one-second windows analyzed in a sampled file.
   pub sampled_windows: u32,
-  /// How much disk the spectrograms and waveforms of analyzed files may take; the least recently
-  /// viewed go first.
+  /// Disk space for the spectrograms and waveforms of analyzed files. The least recently
+  /// viewed are removed first.
   #[cascade(kind = "size")]
   pub cache_max_bytes: bytesize::ByteSize,
-  /// How the spectrogram is shown.
+  /// Spectrogram display.
   pub spectrogram: Spectrogram,
 }
 
@@ -51,11 +51,11 @@ impl Default for Analysis {
   }
 }
 
-/// How the spectrogram is shown.
+/// Spectrogram display.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Spectrogram {
-  /// The frequency axis the browser shows the spectrogram on until its user picks another:
-  /// `log`, `linear` or `mel`.
+  /// Default frequency scale of the spectrogram: `log`, `linear` or `mel`. A scale picked in
+  /// the browser takes precedence.
   pub scale: SpectrogramScale,
 }
