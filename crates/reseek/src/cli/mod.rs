@@ -161,39 +161,39 @@ const BOOTSTRAP: &[BootstrapFlag] = &[
     Some('g'),
     "--generate-cert",
     Some("path"),
-    "Writes a self-signed certificate as PKCS#12, to reseek.pfx when no path is given, prints \
-     its password and exits.",
+    "Writes a self-signed PKCS#12 certificate to the given path, or to reseek.pfx, prints its \
+     password and exits.",
   ),
   (
     Bootstrap::GenerateSecret,
     None,
     "--generate-secret",
     Some("int"),
-    "Prints a random secret made of this many bytes, 16 to 255, and exits.",
+    "Prints a random secret of this many bytes, from 16 to 255, and exits.",
   ),
   (
     Bootstrap::AppDir,
     Some('a'),
     "--app-dir",
     Some("path"),
-    "Keeps the configuration, data, cache and logs under this one directory.",
+    "Directory that holds the configuration, data, cache and logs.",
   ),
   (
     Bootstrap::Supervised,
     None,
     "--supervised",
     None,
-    "Exits with code 75 when a restart is asked for, for a supervisor such as systemd to start \
-     it again, instead of starting itself again; `--supervised=false` for the latter. Without the \
-     flag it is on under systemd or as a container's first process.",
+    "Exits with code 75 on a restart request, so that a supervisor such as systemd restarts the \
+     process. `--supervised=false` restarts in place instead. On by default under systemd and as \
+     the first process of a container.",
   ),
   (
     Bootstrap::Config,
     Some('c'),
     "--config",
     Some("path"),
-    "A configuration file, instead of config.toml in the configuration directory; repeat for \
-     more files, later ones win.",
+    "Configuration file to use instead of config.toml in the configuration directory. Repeat for \
+     more files. Later files take precedence.",
   ),
 ];
 
