@@ -121,7 +121,7 @@
     const outcome = await fetchFolder(name, folder);
     asking = null;
     if (!outcome.ok) {
-      toast(`Couldn't load the folder: ${outcome.error}`, "error");
+      toast(`Could not load the folder: ${outcome.error}`, "error");
       return;
     }
     flat = { folder, files: outcome.data.flatMap((d) => d.files) };

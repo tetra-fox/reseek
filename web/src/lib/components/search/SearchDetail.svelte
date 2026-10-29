@@ -190,7 +190,7 @@
   const dismiss = (username: string) => {
     dismissed.add(username);
     undoable(
-      `Hid ${username}'s results`,
+      `Results from ${username} hidden`,
       () => {},
       () => dismissed.delete(username)
     );
@@ -222,13 +222,13 @@
 
 {#if refused}
   <ErrorSegment
-    caption={`The search couldn't start: ${refused}`}
+    caption={`Could not start the search: ${refused}`}
     retry={again}
     retryLabel="Try again" />
 {:else if !search}
   {#if missing}
     <ErrorSegment
-      caption="This search couldn't be loaded"
+      caption="Could not load this search"
       retry={() => (missing = false)}
       retryLabel="Retry" />
   {:else}
@@ -355,6 +355,6 @@
     <EmptyState
       icon={SearchXIcon}
       title="No results"
-      description="Try fewer or different words, or search again later." />
+      description="Use fewer or different words, or search again later." />
   {/if}
 {/if}

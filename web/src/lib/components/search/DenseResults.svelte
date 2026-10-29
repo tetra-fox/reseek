@@ -105,7 +105,7 @@
       else failed.push(`${username}: ${result.text}`);
     }
     if (!failed.length) toast(`${plural(queued, "file", "files")} queued`);
-    else toast(`${queued} queued; ${failed.join("; ")}`, "error");
+    else toast(`${plural(queued, "file", "files")} queued. Failed: ${failed.join("; ")}`, "error");
   };
 
   const list = new ListControl<DenseRow>({

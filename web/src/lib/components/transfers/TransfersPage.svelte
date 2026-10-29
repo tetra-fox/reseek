@@ -279,7 +279,7 @@
     icon={direction === "download" ? DownloadIcon : UploadIcon}
     title={direction === "download" ? "No downloads yet" : "No uploads yet"}
     description={direction === "download"
-      ? "Download from search results or a user's shares, or use Add to enter a path or link."
+      ? "Downloads start from search results, from a user's shares, or from Add with a path or link."
       : undefined} />
 {:else}
   <TransferTable

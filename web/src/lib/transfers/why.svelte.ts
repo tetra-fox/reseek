@@ -45,7 +45,7 @@ export const whyText = (s: UploadQueueStatus): string => {
     `${s.groupSlotsUsed} of ${s.groupSlots} upload slots for group ${s.group} in use`,
     `${s.globalSlotsUsed} of ${s.globalSlots} upload slots in use overall`
   ];
-  if (s.globalSlotsUsed >= s.globalSlots) lines.push("Every upload slot is in use");
+  if (s.globalSlotsUsed >= s.globalSlots) lines.push("All upload slots are in use");
   if (s.userActive)
     lines.push(`This user already has ${plural(s.userActive, "active upload", "active uploads")}`);
   return lines.join("\n");

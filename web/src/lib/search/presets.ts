@@ -27,7 +27,7 @@ export const whyNotSaved = (
 ): string | null => {
   if (!administrator) return "Only administrators can save presets";
   if (fields(options).remote_configuration !== true) {
-    return "Presets can't be saved because remote configuration is off";
+    return "Presets cannot be saved while remote configuration is off";
   }
   return null;
 };

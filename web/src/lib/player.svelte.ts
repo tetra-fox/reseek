@@ -111,9 +111,9 @@ class Player {
   }
 
   #offerDownload(track: Track) {
-    toast(`This browser can't play ${getFileName(track.filename)}`, "error", {
+    toast(`This browser cannot play ${getFileName(track.filename)}`, "error", {
       action: {
-        label: "Download it",
+        label: "Download",
         run: async () => {
           const url = await track.url("attachment");
           if (url.ok) window.location.assign(url.data);

@@ -139,7 +139,7 @@
   role="tree"
   aria-label="Shared folders"
   tabindex="0"
-  title="Type a folder's first letters to go to it"
+  title="Type the first letters of a folder name to go to it"
   onkeydown={typeToFind}
   {@attach lines.attach}
   {@attach freezesWhileUsed}>
@@ -168,7 +168,9 @@
           type="button"
           class="shrink-0"
           aria-label={`${open ? "Collapse" : "Expand"} ${leaf(node.name)}`}
-          title={node.locked ? LOCKED_HINT : "Alt-click to open or close the folders beside it too"}
+          title={node.locked
+            ? LOCKED_HINT
+            : "Alt-click to open or close the sibling folders as well"}
           onclick={(e) => {
             e.stopPropagation();
             expansion.toggle(node.name, siblings(node), withSiblings(e));

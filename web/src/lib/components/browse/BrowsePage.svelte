@@ -260,7 +260,7 @@
     </div>
   {:else if browser.phase === "error"}
     <div class="mt-12 flex flex-col items-center gap-1 text-center">
-      <p class="text-lg">Couldn't browse {browser.username}</p>
+      <p class="text-lg">Could not browse {browser.username}</p>
       {#if browser.errorMessage}<p class="text-sm text-fg-muted">{browser.errorMessage}</p>{/if}
     </div>
   {:else if !browser.tree.roots.length}
@@ -270,7 +270,7 @@
         <p class="text-lg">Loading saved shares...</p>
       </div>
     {:else if browser.phase === "complete"}
-      <EmptyState icon={FolderOpenIcon} title={`${browser.username} isn't sharing any files`} />
+      <EmptyState icon={FolderOpenIcon} title={`${browser.username} is not sharing any files`} />
     {/if}
   {:else}
     <section class="flex flex-col rounded-card border bg-surface shadow-card">

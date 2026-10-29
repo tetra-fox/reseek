@@ -103,7 +103,7 @@
     <label class="flex items-center gap-2">
       <Switch bind:checked={searchOptions.hideNoFreeSlots} />Hide users with no free slot
     </label>
-    <label class="flex items-center gap-2" title="Hides users who were offline when last seen">
+    <label class="flex items-center gap-2" title="Users who were offline when last seen">
       <Switch bind:checked={searchOptions.hideOffline} />Hide offline users
     </label>
     <label class="flex items-center gap-2">

@@ -85,7 +85,7 @@ export const redownload = async (t: Transfer) => {
 export const copyPath = (path: string) => void copyText(path);
 
 /** Why a download's place in the queue is not known, from the last failed ask */
-export const queueFailure = (error: string) => `Couldn't get the queue position: ${error}`;
+export const queueFailure = (error: string) => `Could not get the queue position: ${error}`;
 
 /**
  * Asks a queued download's place of the peer, toasting why when the peer can't say; the row's
@@ -99,7 +99,7 @@ export const queuePosition = async (t: Transfer) => {
 export const bumpUpload = async (t: Transfer) => {
   const outcome = await bump(t);
   toast(
-    outcome.ok ? "Moved to the front of its group's queue" : outcome.error,
+    outcome.ok ? "Moved to the front of the group queue" : outcome.error,
     outcome.ok ? "info" : "error"
   );
 };
