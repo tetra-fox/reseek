@@ -352,7 +352,6 @@ pub(super) async fn evict(db: &Database, limit: u64) -> Result<Vec<String>, DbEr
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::db::Location;
 
   const PATH: &str = "/srv/downloads/a.flac";
 
@@ -367,16 +366,7 @@ mod tests {
 
   #[tokio::test]
   async fn a_report_in_another_shape_reads_as_stale_with_its_judgment() {
-    let dir = tempfile::tempdir().unwrap();
-    let location = Location {
-      data: dir.path().join("data"),
-      backups: dir.path().join("backups"),
-      volatile: false,
-      log_sql: false,
-    };
-    std::fs::create_dir_all(&location.data).unwrap();
-    std::fs::create_dir_all(&location.backups).unwrap();
-    let db = Database::open(&SCHEMA, &location).await.unwrap();
+    let db = Database::memory(&SCHEMA).await;
     let at = db::timestamp(Utc::now());
     db.write(move |conn| {
       // a report in a shape this version's type no longer reads, numbered as an older shape
