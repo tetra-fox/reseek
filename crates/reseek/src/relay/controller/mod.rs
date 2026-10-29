@@ -40,7 +40,7 @@ use crate::shares::Shares;
 use crate::state::StateOwner;
 use crate::sync::lock;
 use crate::telemetry::Telemetry;
-use crate::telemetry::catalogue::RelayMetrics;
+use crate::telemetry::catalog::RelayMetrics;
 pub use files::RelayStream;
 use files::StreamWait;
 use info::FileInfoWait;

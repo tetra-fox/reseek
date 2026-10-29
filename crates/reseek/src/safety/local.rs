@@ -30,7 +30,7 @@ pub fn too_long(path: &str, os: Os) -> bool {
   }
 }
 
-/// `segment`, a name already sanitised, as `os` creates it unchanged: on Windows, trailing
+/// `segment`, a name already sanitized, as `os` creates it unchanged: on Windows, trailing
 /// dots and spaces, which Windows drops, are dropped here, and a reserved device name gets `_`
 /// after its stem; everywhere, a name over 255 bytes has its stem cut to fit, its extension
 /// kept. A name that ends up empty is `_`.
@@ -117,7 +117,7 @@ mod tests {
   }
 
   #[test]
-  fn a_path_is_sanitised_then_made_creatable_segment_by_segment() {
+  fn a_path_is_sanitized_then_made_creatable_segment_by_segment() {
     assert_eq!(
       creatable_path("Artist\\..\\AUX\\track?.flac", Os::Windows),
       "Artist\\_\\AUX_\\track_.flac"

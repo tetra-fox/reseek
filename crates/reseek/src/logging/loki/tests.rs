@@ -71,7 +71,7 @@ fn client() -> reqwest::Client {
 }
 
 #[tokio::test]
-async fn lines_go_in_one_batch_per_push_labelled_by_the_process() {
+async fn lines_go_in_one_batch_per_push_labeled_by_the_process() {
   let (url, mut pushes) = receiver(&[]).await;
   let labels = Labels::default();
   let (queue, sink) = channel(&url, labels.clone(), 16);

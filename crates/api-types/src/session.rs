@@ -51,7 +51,7 @@ pub struct OidcProvider {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProxyProvider {
-  /// the proxy's identity headers are honoured
+  /// the proxy's identity headers are honored
   pub enabled: bool,
 }
 

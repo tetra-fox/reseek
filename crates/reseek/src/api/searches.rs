@@ -21,7 +21,7 @@ use super::validate;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized, ReadWrite};
 use crate::searches;
-use crate::services::Cancelled;
+use crate::services::Canceled;
 
 /// The shortest wait for another response.
 const SHORTEST_TIMEOUT: Duration = Duration::from_secs(1);
@@ -186,11 +186,11 @@ async fn cancel(
   Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
   match app.services.searches.cancel(id).await? {
-    Cancelled::Now => {
-      info!(by = caller.principal.subject, %id, "search cancelled");
+    Canceled::Now => {
+      info!(by = caller.principal.subject, %id, "search canceled");
       Ok(StatusCode::OK)
     }
-    Cancelled::Already => Ok(StatusCode::NOT_MODIFIED),
+    Canceled::Already => Ok(StatusCode::NOT_MODIFIED),
   }
 }
 

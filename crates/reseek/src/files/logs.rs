@@ -1,5 +1,5 @@
 //! The daemon's log files: the `.log` files directly in the log directory, and one of them as
-//! text with ranges honoured.
+//! text with ranges honored.
 
 use std::path::Path;
 

@@ -1,4 +1,4 @@
-//! A scan's life in the engine: the one scan slot, starting and cancelling a scan, running it
+//! A scan's life in the engine: the one scan slot, starting and canceling a scan, running it
 //! with its outcome put into the state, and the work that follows a scan or a watched change
 //! at most once a minute.
 
@@ -57,7 +57,7 @@ impl Shares {
     self.publish(|status| {
       status.scanning = true;
       status.ready = false;
-      status.cancelled = false;
+      status.canceled = false;
       status.progress = 0.0;
       status.directories = 0;
       status.files = 0;
@@ -114,7 +114,7 @@ impl Shares {
             self.publish(|status| {
               status.scanning = false;
               status.faulted = false;
-              status.cancelled = false;
+              status.canceled = false;
               if current {
                 status.scan_pending = false;
               }
@@ -142,10 +142,10 @@ impl Shares {
           }
         }
       }
-      Ok(Outcome::Cancelled) => {
+      Ok(Outcome::Canceled) => {
         self.publish(|status| {
           status.scanning = false;
-          status.cancelled = true;
+          status.canceled = true;
           status.faulted = false;
           status.progress = 1.0;
           status.scan_pending = true;

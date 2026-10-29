@@ -216,7 +216,7 @@
         ],
         "responses": {
           "204": {
-            "description": "cancelled"
+            "description": "canceled"
           },
           "400": {
             "description": "",
@@ -2508,7 +2508,7 @@
           {
             "name": "force",
             "in": "query",
-            "description": "analyse again even when a report for the file as it is now exists",
+            "description": "analyze again even when a report for the file as it is now exists",
             "required": false,
             "schema": {
               "type": "boolean"
@@ -3136,7 +3136,7 @@
         "tags": [
           "files"
         ],
-        "summary": "A file's bytes for the browser to show or save, a single range honoured. A link without a\nsession loads it with the token `t`.",
+        "summary": "A file's bytes for the browser to show or save, a single range honored. A link without a\nsession loads it with the token `t`.",
         "operationId": "file_content",
         "parameters": [
           {
@@ -3519,7 +3519,7 @@
         "tags": [
           "logs"
         ],
-        "summary": "One log file's text, ranges honoured. The name is a bare file name ending in `.log`.",
+        "summary": "One log file's text, ranges honored. The name is a bare file name ending in `.log`.",
         "operationId": "get_log_file",
         "parameters": [
           {
@@ -10378,7 +10378,7 @@
         ],
         "responses": {
           "204": {
-            "description": "cancelled"
+            "description": "canceled"
           },
           "400": {
             "description": "",
@@ -10552,7 +10552,7 @@
           {
             "name": "force",
             "in": "query",
-            "description": "analyse again even when a report for the file as it is now exists",
+            "description": "analyze again even when a report for the file as it is now exists",
             "required": false,
             "schema": {
               "type": "boolean"
@@ -12056,7 +12056,7 @@
         ],
         "responses": {
           "204": {
-            "description": "cancelled"
+            "description": "canceled"
           },
           "400": {
             "description": "",
@@ -14779,7 +14779,7 @@
           "confidence": {
             "type": "number",
             "format": "double",
-            "description": "how sure the analyser is of its reading"
+            "description": "how sure the analyzer is of its reading"
           },
           "flags": {
             "type": "array",
@@ -14798,11 +14798,11 @@
               "null"
             ],
             "format": "uuid",
-            "description": "the download the file belongs to, null when it was analysed by path"
+            "description": "the download the file belongs to, null when it was analyzed by path"
           },
           "verdict": {
             "$ref": "#/components/schemas/AnalysisVerdict",
-            "description": "the analyser's reading"
+            "description": "the analyzer's reading"
           }
         }
       },
@@ -14963,7 +14963,7 @@
             "format": "double",
             "description": "the mean sample value relative to full scale"
           },
-          "frameArtefactScore": {
+          "frameArtifactScore": {
             "type": [
               "number",
               "null"
@@ -15023,7 +15023,7 @@
       },
       "AnalysisOverride": {
         "type": "object",
-        "description": "The user's judgement of a file, with who recorded it.",
+        "description": "The user's judgment of a file, with who recorded it.",
         "required": [
           "verdict",
           "by",
@@ -15049,14 +15049,14 @@
             "example": "remix, known low-quality acapella"
           },
           "verdict": {
-            "$ref": "#/components/schemas/Judgement",
-            "description": "the judgement"
+            "$ref": "#/components/schemas/Judgment",
+            "description": "the judgment"
           }
         }
       },
       "AnalysisVerdict": {
         "type": "string",
-        "description": "The analyser's reading of whether the audio matches the format the file claims.",
+        "description": "The analyzer's reading of whether the audio matches the format the file claims.",
         "enum": [
           "consistent",
           "likely_transcode",
@@ -15066,7 +15066,7 @@
       },
       "AnalysisWindow": {
         "type": "object",
-        "description": "The measures of one analysed window.",
+        "description": "The measures of one analyzed window.",
         "required": [
           "t",
           "rmsDbfs"
@@ -15118,7 +15118,7 @@
           "root",
           "relativePath",
           "size",
-          "analysedAt",
+          "analyzedAt",
           "durationSeconds",
           "claimed",
           "verdict",
@@ -15131,7 +15131,7 @@
           "stale"
         ],
         "properties": {
-          "analysedAt": {
+          "analyzedAt": {
             "type": "string",
             "format": "date-time",
             "description": "when the analysis finished"
@@ -15143,7 +15143,7 @@
           "confidence": {
             "type": "number",
             "format": "double",
-            "description": "how sure the analyser is of its reading, from 0 to 0.98"
+            "description": "how sure the analyzer is of its reading, from 0 to 0.98"
           },
           "durationSeconds": {
             "type": "number",
@@ -15186,7 +15186,7 @@
               },
               {
                 "$ref": "#/components/schemas/AnalysisOverride",
-                "description": "the user's judgement, shown in place of the verdict; null until the user sets one"
+                "description": "the user's judgment, shown in place of the verdict; null until the user sets one"
               }
             ]
           },
@@ -15205,7 +15205,7 @@
           "size": {
             "type": "integer",
             "format": "int64",
-            "description": "the file's size in bytes when it was analysed",
+            "description": "the file's size in bytes when it was analyzed",
             "minimum": 0
           },
           "spectrogram": {
@@ -15225,11 +15225,11 @@
           },
           "stale": {
             "type": "boolean",
-            "description": "true when an older version of reseek analysed the file and this one cannot show its\nreport: only the file, when, the reading and the user's judgement are kept, and analysing\nthe file again replaces it"
+            "description": "true when an older version of reseek analyzed the file and this one cannot show its\nreport: only the file, when, the reading and the user's judgment are kept, and analyzing\nthe file again replaces it"
           },
           "summary": {
             "type": "string",
-            "description": "one sentence saying what the analyser found and where",
+            "description": "one sentence saying what the analyzer found and where",
             "example": "68% of the time is full-band; 32% shows a 16 kHz cutoff concentrated in vocal content."
           },
           "transferId": {
@@ -15242,7 +15242,7 @@
           },
           "verdict": {
             "$ref": "#/components/schemas/AnalysisVerdict",
-            "description": "the analyser's reading"
+            "description": "the analyzer's reading"
           },
           "windows": {
             "type": [
@@ -15252,7 +15252,7 @@
             "items": {
               "$ref": "#/components/schemas/AnalysisWindow"
             },
-            "description": "the measures of each analysed window, null where the per-window list was left out"
+            "description": "the measures of each analyzed window, null where the per-window list was left out"
           }
         }
       },
@@ -15944,7 +15944,7 @@
           "failed": {
             "type": "integer",
             "format": "int64",
-            "description": "how many failed, cancelled ones included",
+            "description": "how many failed, canceled ones included",
             "minimum": 0
           },
           "succeeded": {
@@ -16817,7 +16817,7 @@
           "confidence": {
             "type": "number",
             "format": "double",
-            "description": "how sure the analyser is of the match, from 0 to 1"
+            "description": "how sure the analyzer is of the match, from 0 to 1"
           },
           "profile": {
             "type": "string",
@@ -18333,9 +18333,9 @@
           }
         }
       },
-      "Judgement": {
+      "Judgment": {
         "type": "string",
-        "description": "The user's own judgement of a file.",
+        "description": "The user's own judgment of a file.",
         "enum": [
           "legit",
           "fake"
@@ -20755,7 +20755,7 @@
         "properties": {
           "enabled": {
             "type": "boolean",
-            "description": "the proxy's identity headers are honoured"
+            "description": "the proxy's identity headers are honored"
           }
         }
       },
@@ -22136,7 +22136,7 @@
       },
       "SetAnalysisOverride": {
         "type": "object",
-        "description": "The body of `PUT .../analysis/override`, which records the user's judgement of a file.",
+        "description": "The body of `PUT .../analysis/override`, which records the user's judgment of a file.",
         "required": [
           "verdict"
         ],
@@ -22150,8 +22150,8 @@
             "example": "remix, known low-quality acapella"
           },
           "verdict": {
-            "$ref": "#/components/schemas/Judgement",
-            "description": "the judgement"
+            "$ref": "#/components/schemas/Judgment",
+            "description": "the judgment"
           }
         }
       },
@@ -22251,7 +22251,7 @@
         "properties": {
           "cancelled": {
             "type": "boolean",
-            "description": "the last scan was cancelled"
+            "description": "the last scan was canceled"
           },
           "directories": {
             "type": "integer",
@@ -23759,7 +23759,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "the obfuscation type the server reported, 0 for none and 1 for rotated; null when it\nsent none. Shown for diagnostics, never dialled",
+            "description": "the obfuscation type the server reported, 0 for none and 1 for rotated; null when it\nsent none. Shown for diagnostics, never dialed",
             "minimum": 0
           },
           "port": {
@@ -23824,7 +23824,7 @@
               "string",
               "null"
             ],
-            "description": "the colour the group is shown in, a CSS colour name such as `violet`; null for none",
+            "description": "the color the group is shown in, a CSS color name such as `violet`; null for none",
             "example": "violet"
           },
           "name": {
@@ -24232,7 +24232,7 @@
           "cancelled": {
             "type": "integer",
             "format": "int64",
-            "description": "the ones cancelled",
+            "description": "the ones canceled",
             "minimum": 0
           },
           "errored": {
@@ -24581,7 +24581,7 @@
       },
       "WindowSpectrum": {
         "type": "object",
-        "description": "The spectrum of one analysed window, as `GET .../analysis/windows/{index}` answers it.",
+        "description": "The spectrum of one analyzed window, as `GET .../analysis/windows/{index}` answers it.",
         "required": [
           "index",
           "t",

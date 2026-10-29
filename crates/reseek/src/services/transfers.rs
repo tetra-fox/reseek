@@ -14,7 +14,7 @@ use crate::api::error::ApiError;
 
 const DOMAIN: &str = "transfers";
 
-/// Listing, enqueueing, cancelling and removing transfers. Every call that takes a username and
+/// Listing, enqueueing, canceling and removing transfers. Every call that takes a username and
 /// an id finds the transfer by both, and answers 404 when no transfer of that direction has
 /// them.
 #[async_trait]

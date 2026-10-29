@@ -29,6 +29,6 @@ fn main() {
       .expect("every file is in the directory");
     file.path = Path::new(SHOWN_DIR).join(name).display().to_string();
   }
-  let text = serde_json::to_string_pretty(&view).expect("the view serialises");
+  let text = serde_json::to_string_pretty(&view).expect("the view serializes");
   println!("{text}");
 }

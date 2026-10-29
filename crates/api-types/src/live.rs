@@ -199,8 +199,8 @@ mod tests {
   use crate::auth::Role;
   use serde_json::json;
 
-  /// Every frame's name, as the event stream's catalogue spells it.
-  const CATALOGUE: &[&str] = &[
+  /// Every frame's name, as the event stream's catalog spells it.
+  const CATALOG: &[&str] = &[
     "hello",
     "lagged",
     "bye",
@@ -240,7 +240,7 @@ mod tests {
   ];
 
   #[test]
-  fn every_frame_is_named_as_the_catalogue_spells_it() {
+  fn every_frame_is_named_as_the_catalog_spells_it() {
     // reading an unknown type lists every name the enum takes, in declaration order
     let e = serde_json::from_value::<LiveFrame>(json!({ "type": "nope", "data": null }))
       .unwrap_err()
@@ -254,7 +254,7 @@ mod tests {
       .map(|n| n.trim_matches(|c: char| c == '`' || !c.is_ascii_graphic()))
       .map(|n| n.split('`').next().unwrap_or(n))
       .collect();
-    assert_eq!(names, CATALOGUE);
+    assert_eq!(names, CATALOG);
   }
 
   #[test]

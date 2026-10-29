@@ -6,7 +6,7 @@ use serde_json::Value;
 use super::{BOOTSTRAP, COMPLETIONS, CONFIG_FILE, HASH_PASSWORD, MAN, Shell};
 use crate::version;
 
-/// The startup banner: the name, the version, the licence and the build's markers.
+/// The startup banner: the name, the version, the license and the build's markers.
 pub fn banner() -> String {
   let info = version::info();
   let mut text = format!(

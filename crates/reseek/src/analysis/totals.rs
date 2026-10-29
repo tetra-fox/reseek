@@ -1,4 +1,4 @@
-//! The figures kept over every analysed sample rather than per window: the mean, how many
+//! The figures kept over every analyzed sample rather than per window: the mean, how many
 //! samples are at full scale, the sums the correlation of two channels and their side energy
 //! need, and a histogram of short blocks' loudness for the quietest level.
 
@@ -7,7 +7,7 @@ const LEVEL_BLOCK: usize = 1024;
 /// The quietest block level the histogram counts, in dBFS; one bucket per whole dB up to 0.
 const LEVELS_FROM_DB: f64 = -160.0;
 
-/// The running figures over every analysed sample.
+/// The running figures over every analyzed sample.
 #[derive(Clone, Debug, Default)]
 pub(super) struct Totals {
   samples: u64,

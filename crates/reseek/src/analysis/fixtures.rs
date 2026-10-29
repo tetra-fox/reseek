@@ -1,4 +1,4 @@
-//! Audio the analyser is tested on, made in the test from a fixed seed: noise shaped like
+//! Audio the analyzer is tested on, made in the test from a fixed seed: noise shaped like
 //! music's spectrum, written as FLAC, and the same noise through the LAME MP3 encoder and back
 //! for the transcodes. Nothing here is fetched or shipped as a binary.
 
@@ -107,7 +107,7 @@ pub fn combed(hz: f64) -> f64 {
 
 /// `seconds` of orchestral-like stereo at 44.1 kHz: falling 6 dB an octave from 2 kHz and
 /// 36 dB an octave from 15 kHz, notes every 3 s decaying over 2.5 s, phrases swelling from -45
-/// to -15 dBFS over 40 s, so its tails sit near the quantisation noise.
+/// to -15 dBFS over 40 s, so its tails sit near the quantization noise.
 pub fn classical(seconds: usize) -> Audio {
   let rate = 44_100u32;
   let spectrum =
@@ -298,7 +298,7 @@ impl Audio {
 
   /// The audio as integers of `bits`, with triangular dither, the same dither in every
   /// channel so identical channels stay identical.
-  fn quantised(&self, bits: u32, seed: u64) -> Vec<Vec<i32>> {
+  fn quantized(&self, bits: u32, seed: u64) -> Vec<Vec<i32>> {
     let full = f64::from(1u32 << (bits - 1));
     self
       .channels
@@ -322,7 +322,7 @@ impl Audio {
 /// Writes `audio` as FLAC at `path`: as `bits`-bit samples, or as 16-bit samples stored in 24
 /// bits when `padded`.
 pub fn write_flac(audio: &Audio, bits: u32, padded: bool, path: &Path) {
-  let mut planes = audio.quantised(if padded { 16 } else { bits }, 7);
+  let mut planes = audio.quantized(if padded { 16 } else { bits }, 7);
   if padded {
     planes.iter_mut().flatten().for_each(|s| *s <<= 8);
   }

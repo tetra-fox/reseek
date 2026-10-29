@@ -111,7 +111,7 @@ pub struct AppState {
   pub activity: Arc<Activity>,
   /// the application state document
   pub state: StateOwner,
-  /// cancelled when the daemon shuts down
+  /// canceled when the daemon shuts down
   pub shutdown: CancellationToken,
   /// every place reseek reads or writes
   pub paths: Paths,

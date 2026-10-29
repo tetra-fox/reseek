@@ -320,7 +320,7 @@ pub struct SharesState {
   pub ready: bool,
   /// the last scan failed
   pub faulted: bool,
-  /// the last scan was cancelled
+  /// the last scan was canceled
   pub cancelled: bool,
   /// how far the running scan is, from 0 to 1
   pub scan_progress: f64,

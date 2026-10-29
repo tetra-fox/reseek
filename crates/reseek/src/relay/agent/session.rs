@@ -31,7 +31,7 @@ const OUTBOUND: usize = 64;
 pub(super) struct Link {
   /// frames for the socket
   outbound: mpsc::Sender<String>,
-  /// closes the socket with the code it is cancelled with
+  /// closes the socket with the code it is canceled with
   closing: CancellationToken,
   close_code: std::sync::atomic::AtomicU16,
   /// what it connected with

@@ -47,8 +47,8 @@ class Marks {
     this.#files.set(`${report.root}:${report.relativePath}`, mark);
     if (report.transferId) this.#downloads.set(report.transferId, mark);
     // compared as times: the fractions of a second can differ in length
-    if (!this.#newest || Date.parse(report.analysedAt) > Date.parse(this.#newest)) {
-      this.#newest = report.analysedAt;
+    if (!this.#newest || Date.parse(report.analyzedAt) > Date.parse(this.#newest)) {
+      this.#newest = report.analyzedAt;
     }
   }
 

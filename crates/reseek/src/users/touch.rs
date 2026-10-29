@@ -1,4 +1,4 @@
-//! Touching a user: marking that we dealt with them, with what we learnt about them on the way.
+//! Touching a user: marking that we dealt with them, with what we learned about them on the way.
 //! Touches go through a bounded channel to one writer, which folds the touches of a user that
 //! arrive within a second into one write.
 
@@ -150,7 +150,7 @@ impl Pending {
 }
 
 /// Waits for the next touch, then gathers every touch that arrives within [`WINDOW`] of it,
-/// folded by user. `None` once the channel is closed and empty or `cancel` is cancelled.
+/// folded by user. `None` once the channel is closed and empty or `cancel` is canceled.
 pub async fn gather(
   receiver: &mut mpsc::Receiver<Touched>,
   cancel: &CancellationToken,

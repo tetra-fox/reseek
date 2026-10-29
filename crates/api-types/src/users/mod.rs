@@ -88,7 +88,7 @@ pub struct UserEndpoint {
   #[schema(example = 2234)]
   pub port: u16,
   /// the obfuscation type the server reported, 0 for none and 1 for rotated; null when it
-  /// sent none. Shown for diagnostics, never dialled
+  /// sent none. Shown for diagnostics, never dialed
   pub obfuscation_type: Option<u32>,
   /// the obfuscated listen port, null when the server sent none
   pub obfuscated_port: Option<u16>,

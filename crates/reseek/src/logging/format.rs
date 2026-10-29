@@ -26,8 +26,8 @@ pub struct Line {
   pub clock: Clock,
   /// names the module on every line
   pub module: bool,
-  /// colours the level
-  pub colour: bool,
+  /// colors the level
+  pub color: bool,
 }
 
 /// The three-letter name of a level.
@@ -41,8 +41,8 @@ fn abbreviation(level: Level) -> &'static str {
   }
 }
 
-/// The ANSI colour of a level.
-fn colour(level: Level) -> &'static str {
+/// The ANSI color of a level.
+fn color(level: Level) -> &'static str {
   match level {
     Level::TRACE => "\x1b[2m",
     Level::DEBUG => "\x1b[36m",
@@ -71,8 +71,8 @@ where
       Clock::Off => {}
     }
     let level = *event.metadata().level();
-    if self.colour {
-      write!(writer, "{}{}\x1b[0m] ", colour(level), abbreviation(level))?;
+    if self.color {
+      write!(writer, "{}{}\x1b[0m] ", color(level), abbreviation(level))?;
     } else {
       write!(writer, "{}] ", abbreviation(level))?;
     }

@@ -1,7 +1,7 @@
 //! The analysis calls against the in-memory daemon: a downloaded file analyzed by its path and
 //! by its download, its report, its spectrogram and its waveform, the event and the frame raised
 //! once, files outside the roots refused, unreadable files reported rather than failed, and the
-//! user's judgement kept across a restart.
+//! user's judgment kept across a restart.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -83,7 +83,7 @@ fn count_events(app: &TestApp) -> Arc<AtomicUsize> {
 }
 
 #[tokio::test]
-async fn a_download_is_analysed_reported_drawn_and_announced_once() {
+async fn a_download_is_analyzed_reported_drawn_and_announced_once() {
   let app = app(CONFIG, &[]).await;
   lossless(&app, "Album/01.flac");
   let mut record = Record::download("alice", "@@share\\Album\\01.flac", 3, None);
@@ -111,7 +111,7 @@ async fn a_download_is_analysed_reported_drawn_and_announced_once() {
   assert_eq!(status, 202, "{created}");
   assert!(created["jobId"].is_string());
   let (status, _) = send(&app, "POST", &route("Album/01.flac"), None).await;
-  assert_eq!(status, 409, "queued, running or analysed already");
+  assert_eq!(status, 409, "queued, running or analyzed already");
   let frames = stream.until("files.analysis").await;
   let frame = &frames.last().unwrap().data;
   assert_eq!(frame["transferId"], json!(id));
@@ -142,7 +142,7 @@ async fn a_download_is_analysed_reported_drawn_and_announced_once() {
   let (status, same) = send(&app, "GET", &by_download, None).await;
   assert_eq!(status, 200);
   assert_eq!(same["windows"], Value::Null);
-  assert_eq!(same["analysedAt"], report["analysedAt"]);
+  assert_eq!(same["analyzedAt"], report["analyzedAt"]);
   let (_, listed) = send(&app, "GET", "/api/v0/analysis", None).await;
   assert_eq!(listed[0]["relativePath"], "Album/01.flac");
   assert_eq!(listed[0]["transferId"], json!(id));
@@ -275,16 +275,16 @@ async fn unreadable_files_are_reported_inconclusive_not_failed() {
 }
 
 #[tokio::test]
-async fn the_judgement_is_kept_across_a_restart_and_beside_a_new_analysis() {
+async fn the_judgment_is_kept_across_a_restart_and_beside_a_new_analysis() {
   let app = app(CONFIG, &[]).await;
   lossless(&app, "a.flac");
-  let judgement = format!("{}/override", route("a.flac"));
+  let judgment = format!("{}/override", route("a.flac"));
   let fake = json!({ "verdict": "fake", "note": "sounds like 128k" });
-  let (status, _) = send(&app, "PUT", &judgement, Some(fake.clone())).await;
+  let (status, _) = send(&app, "PUT", &judgment, Some(fake.clone())).await;
   assert_eq!(status, 404, "nothing to judge before an analysis");
   send(&app, "POST", &route("a.flac"), None).await;
   settled(&app).await;
-  let (status, _) = send(&app, "PUT", &judgement, Some(fake)).await;
+  let (status, _) = send(&app, "PUT", &judgment, Some(fake)).await;
   assert_eq!(status, 204);
 
   let app = app.restarted(&[]).await;
@@ -314,7 +314,7 @@ async fn the_judgement_is_kept_across_a_restart_and_beside_a_new_analysis() {
     "a new analysis keeps it"
   );
 
-  let (status, _) = send(&app, "DELETE", &judgement, None).await;
+  let (status, _) = send(&app, "DELETE", &judgment, None).await;
   assert_eq!(status, 204);
   let (_, report) = send(&app, "GET", &route("a.flac"), None).await;
   assert_eq!(report["override"], Value::Null);
@@ -342,7 +342,7 @@ async fn spectrograms_beyond_the_cache_limit_go_least_recently_viewed_first() {
 }
 
 #[tokio::test]
-async fn a_report_and_its_judgement_outlive_the_file() {
+async fn a_report_and_its_judgment_outlive_the_file() {
   let app = app(CONFIG, &[]).await;
   lossless(&app, "Album/02.flac");
   let mut record = Record::download("alice", "@@share\\Album\\02.flac", 3, None);
@@ -384,7 +384,7 @@ async fn a_report_and_its_judgement_outlive_the_file() {
   let (status, _) = send(&app, "DELETE", &format!("{by_download}/override"), None).await;
   assert_eq!(status, 204);
   let (status, _) = send(&app, "POST", &format!("{by_download}?force=true"), None).await;
-  assert_eq!(status, 404, "a file that is gone can not be analysed again");
+  assert_eq!(status, 404, "a file that is gone can not be analyzed again");
 }
 
 #[tokio::test]
@@ -412,7 +412,7 @@ async fn lowering_the_cache_limit_removes_spectrograms_at_once() {
 }
 
 #[tokio::test]
-async fn a_queued_analysis_can_be_cancelled_and_a_window_read() {
+async fn a_queued_analysis_can_be_canceled_and_a_window_read() {
   let app = app(CONFIG, &[]).await;
   for name in ["a.flac", "b.flac", "c.flac"] {
     lossless(&app, name);
@@ -453,7 +453,7 @@ async fn a_queued_analysis_can_be_cancelled_and_a_window_read() {
   assert_eq!(send(&app, "DELETE", &unknown, None).await.0, 404);
   settled(&app).await;
   let (status, _) = send(&app, "GET", &route("c.flac"), None).await;
-  assert_eq!(status, 404, "the cancelled file was not analysed");
+  assert_eq!(status, 404, "the canceled file was not analyzed");
 
   let (status, window) = send(&app, "GET", &format!("{}/windows/3", route("a.flac")), None).await;
   assert_eq!(status, 200, "{window}");
@@ -492,14 +492,14 @@ async fn spectrogram_images_an_older_version_kept_are_removed_at_startup() {
 }
 
 #[tokio::test]
-async fn a_report_from_an_older_version_lists_as_stale_keeps_its_judgement_and_is_replaced() {
+async fn a_report_from_an_older_version_lists_as_stale_keeps_its_judgment_and_is_replaced() {
   let app = app(CONFIG, &[]).await;
   lossless(&app, "a.flac");
   send(&app, "POST", &route("a.flac"), None).await;
   settled(&app).await;
-  let judgement = json!({ "verdict": "fake", "note": "sounds like 128k" });
+  let judgment = json!({ "verdict": "fake", "note": "sounds like 128k" });
   let judged = format!("{}/override", route("a.flac"));
-  assert_eq!(send(&app, "PUT", &judged, Some(judgement)).await.0, 204);
+  assert_eq!(send(&app, "PUT", &judged, Some(judgment)).await.0, 204);
   // the report as an older version stored it: without a field the layout has since gained, and
   // from before stored reports carried their shape
   let stored = rusqlite::Connection::open(app.state.paths.data.join("analysis.db")).unwrap();
@@ -525,7 +525,7 @@ async fn a_report_from_an_older_version_lists_as_stale_keeps_its_judgement_and_i
   let pictures = format!("{}/spectrogram", route("a.flac"));
   assert_eq!(app.send(request("GET", &pictures, None)).await.status, 404);
 
-  // analysing again needs no force: a stale report is no reading of the file
+  // analyzing again needs no force: a stale report is no reading of the file
   let (status, created) = send(&app, "POST", &route("a.flac"), None).await;
   assert_eq!(status, 202, "{created}");
   settled(&app).await;
@@ -534,6 +534,6 @@ async fn a_report_from_an_older_version_lists_as_stale_keeps_its_judgement_and_i
   assert!(report["spectrogram"]["durationSeconds"].is_number());
   assert_eq!(
     report["override"]["note"], "sounds like 128k",
-    "the judgement stays"
+    "the judgment stays"
   );
 }

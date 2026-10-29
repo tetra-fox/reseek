@@ -35,7 +35,7 @@ use crate::config::Options;
 use crate::db::{Database, DbError, Location, shifted};
 use crate::live::Live;
 use crate::network::Network;
-use crate::services::{Cancelled, SearchService};
+use crate::services::{Canceled, SearchService};
 use crate::sync::lock;
 use crate::users::Directory;
 use running::Running;
@@ -82,7 +82,7 @@ pub fn sendable(mut query: SearchQuery) -> SearchQuery {
 }
 
 /// The text a search for `text` sends: the terms in order, then the exclusions.
-fn normalised(text: &str) -> String {
+fn normalized(text: &str) -> String {
   sendable(SearchQuery::parse(text)).search_text()
 }
 
@@ -224,11 +224,11 @@ impl Searches {
     self.db.read(move |conn| store::text(conn, id)).await
   }
 
-  /// Ends every running search as cancelled at shutdown, before the client is stopped, and
+  /// Ends every running search as canceled at shutdown, before the client is stopped, and
   /// waits for each to write how it ended.
   pub async fn stop(&self) {
     for running in self.running().values() {
-      running.cancelled.store(true, Ordering::Relaxed);
+      running.canceled.store(true, Ordering::Relaxed);
       running.cancel.cancel();
     }
     self.tasks.close();
@@ -291,7 +291,7 @@ impl SearchService for Searches {
     let id = request.id.unwrap_or_else(Uuid::new_v4);
     let record = Search {
       id,
-      search_text: normalised(&request.search_text),
+      search_text: normalized(&request.search_text),
       token: client.next_token(),
       scope: request.scope.clone(),
       state: SearchStates::Requested,
@@ -409,11 +409,11 @@ impl SearchService for Searches {
       .ok_or_else(|| not_found(id))
   }
 
-  async fn cancel(&self, id: Uuid) -> Result<Cancelled, ApiError> {
+  async fn cancel(&self, id: Uuid) -> Result<Canceled, ApiError> {
     if let Some(running) = self.running().get(&id).cloned() {
-      running.cancelled.store(true, Ordering::Relaxed);
+      running.canceled.store(true, Ordering::Relaxed);
       running.cancel.cancel();
-      return Ok(Cancelled::Now);
+      return Ok(Canceled::Now);
     }
     let exists = self
       .db
@@ -422,7 +422,7 @@ impl SearchService for Searches {
       .map_err(internal)?
       .is_some();
     if exists {
-      Ok(Cancelled::Already)
+      Ok(Canceled::Already)
     } else {
       Err(not_found(id))
     }
@@ -431,7 +431,7 @@ impl SearchService for Searches {
   async fn delete(&self, id: Uuid) -> Result<(), ApiError> {
     let running = self.running().get(&id).cloned();
     if let Some(running) = running {
-      running.cancelled.store(true, Ordering::Relaxed);
+      running.canceled.store(true, Ordering::Relaxed);
       running.cancel.cancel();
       let mut done = running.done.subscribe();
       if tokio::time::timeout(ENDING, done.wait_for(|done| *done))
@@ -508,12 +508,12 @@ mod tests {
 
   #[test]
   fn the_text_sent_is_the_terms_then_the_exclusions() {
-    assert_eq!(normalised("pink  floyd\t-live --live"), "pink floyd -live");
+    assert_eq!(normalized("pink  floyd\t-live --live"), "pink floyd -live");
     assert_eq!(
-      normalised("a animals -x"),
+      normalized("a animals -x"),
       "animals -x",
       "one character is too short"
     );
-    assert_eq!(normalised("é pink"), "pink", "characters, not bytes");
+    assert_eq!(normalized("é pink"), "pink", "characters, not bytes");
   }
 }

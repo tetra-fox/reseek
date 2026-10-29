@@ -97,7 +97,7 @@ pub struct Directory {
 impl Directory {
   /// Opens `users.db` in `location` and loads the blocks, the groups we put users in and the
   /// blocklist file, then starts the touch writer, the expiry and retention sweeps and the
-  /// follower of the configuration, which all stop when `shutdown` is cancelled. A user's
+  /// follower of the configuration, which all stop when `shutdown` is canceled. A user's
   /// figures are read from `transfers` and `messaging`.
   pub async fn open(
     location: &Location,

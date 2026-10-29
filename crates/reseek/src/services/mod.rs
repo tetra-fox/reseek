@@ -30,7 +30,7 @@ pub use files::{ContentRequest, FileService, FileTarget};
 pub use messaging::{Joined, MessagingService};
 pub use relay::{AgentCredential, RelayService};
 pub use reports::ReportService;
-pub use searches::{Cancelled, SearchService};
+pub use searches::{Canceled, SearchService};
 pub use shares::ShareService;
 pub use transfers::TransferService;
 pub use users::UserService;

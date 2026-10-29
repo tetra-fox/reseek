@@ -88,7 +88,7 @@ impl Reports {
   }
 }
 
-/// The transfers `filter` selects, summarised by direction and outcome.
+/// The transfers `filter` selects, summarized by direction and outcome.
 fn by_outcome(conn: &Connection, filter: Filter) -> rusqlite::Result<DirectionSummaries> {
   let sql = format!(
     "SELECT Direction, State, {SUMMARY} FROM Transfers{} GROUP BY Direction, State",

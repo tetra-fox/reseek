@@ -37,9 +37,9 @@ impl Counter {
 /// Values that only go up, one for each set of label values counted. Cloning gives another
 /// handle to the same values.
 #[derive(Clone, Debug, Default)]
-pub struct LabelledCounter(Arc<Mutex<BTreeMap<Labels, f64>>>);
+pub struct LabeledCounter(Arc<Mutex<BTreeMap<Labels, f64>>>);
 
-impl LabelledCounter {
+impl LabeledCounter {
   /// Adds one to the value of `labels`, which starts at zero.
   pub fn inc(&self, labels: &[(&str, &str)]) {
     let labels: Labels = labels
@@ -196,7 +196,7 @@ pub type Labels = BTreeMap<String, String>;
 #[derive(Clone, Debug)]
 enum Metric {
   Counter(Counter),
-  LabelledCounter(LabelledCounter),
+  LabeledCounter(LabeledCounter),
   Gauge(Gauge),
   Histogram(Histogram),
 }
@@ -218,16 +218,16 @@ impl Registry {
   }
 
   /// Registers a counter kept apart by its labels.
-  pub fn labelled_counter(
+  pub fn labeled_counter(
     &mut self,
     name: impl Into<String>,
     help: impl Into<String>,
-  ) -> LabelledCounter {
-    let counter = LabelledCounter::default();
+  ) -> LabeledCounter {
+    let counter = LabeledCounter::default();
     self.entries.push((
       name.into(),
       help.into(),
-      Metric::LabelledCounter(counter.clone()),
+      Metric::LabeledCounter(counter.clone()),
     ));
     counter
   }
@@ -267,7 +267,7 @@ impl Registry {
         help: help.clone(),
         values: match metric {
           Metric::Counter(c) => Values::Counter(vec![(Labels::new(), c.get())]),
-          Metric::LabelledCounter(c) => Values::Counter(c.samples()),
+          Metric::LabeledCounter(c) => Values::Counter(c.samples()),
           Metric::Gauge(g) => Values::Gauge(vec![(Labels::new(), g.get())]),
           Metric::Histogram(h) => {
             let (buckets, sum, count) = h.snapshot();
@@ -449,9 +449,9 @@ mod tests {
   }
 
   #[test]
-  fn a_labelled_counter_has_a_sample_per_label_set() {
+  fn a_labeled_counter_has_a_sample_per_label_set() {
     let mut registry = Registry::default();
-    let requests = registry.labelled_counter("reseek_requests_total", "requests");
+    let requests = registry.labeled_counter("reseek_requests_total", "requests");
     assert_eq!(
       text(&registry.families()),
       "# HELP reseek_requests_total requests\n# TYPE reseek_requests_total counter\n"

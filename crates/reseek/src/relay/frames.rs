@@ -104,7 +104,7 @@ pub fn encode(id: Option<Uuid>, message: RelayMessage) -> String {
     id,
     message,
   })
-  .expect("a relay message always serialises")
+  .expect("a relay message always serializes")
 }
 
 /// `duration` in whole milliseconds, as the socket's messages give durations.

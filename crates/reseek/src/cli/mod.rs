@@ -200,7 +200,7 @@ const BOOTSTRAP: &[BootstrapFlag] = &[
 /// A second spelling of `--config`.
 const CONFIG_FILE: &str = "--config-file";
 
-/// One flag the parser recognised.
+/// One flag the parser recognized.
 enum Flag<'a> {
   Bootstrap(Bootstrap, bool),
   Option(&'a cascade::Field),
@@ -316,7 +316,7 @@ fn word_command(args: &[String]) -> Option<Result<Command, UsageError>> {
   })
 }
 
-/// The command the recognised flags ask for, in the order version, help and environment
+/// The command the recognized flags ask for, in the order version, help and environment
 /// variables, certificate, secret, then running the daemon.
 fn command(
   seen: Vec<(Bootstrap, Option<String>)>,

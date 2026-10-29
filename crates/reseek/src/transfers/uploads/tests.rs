@@ -1,7 +1,7 @@
 //! The upload engine against the in-memory daemon, which is not connected: every refusal a
 //! peer can be told and what triggers it, a privileged user past the limits, the upload calls
 //! of the API, a group we put a user in taking effect at once, and the queued uploads of a user
-//! cancelled when the user is blocked.
+//! canceled when the user is blocked.
 
 use std::path::Path;
 use std::sync::atomic::Ordering;

@@ -1,4 +1,4 @@
-//! The uploads routes: listing, why a queued upload waits, bumping it, cancelling and removing.
+//! The uploads routes: listing, why a queued upload waits, bumping it, canceling and removing.
 //! Uploads are asked for by peers, never through the API.
 
 use api_types::Page;
@@ -182,7 +182,7 @@ async fn bump(
     CancelQuery
   ),
   responses(
-    (status = 204, description = "cancelled"), (status = 400, body = api_types::ErrorBody),
+    (status = 204, description = "canceled"), (status = 400, body = api_types::ErrorBody),
     (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
     (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
@@ -198,7 +198,7 @@ async fn cancel(
     .transfers
     .cancel_upload(&username, id, query.remove)
     .await?;
-  info!(by = caller.principal.subject, username, %id, remove = query.remove, "upload cancelled");
+  info!(by = caller.principal.subject, username, %id, remove = query.remove, "upload canceled");
   Ok(StatusCode::NO_CONTENT)
 }
 

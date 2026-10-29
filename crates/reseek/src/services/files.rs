@@ -79,7 +79,7 @@ pub trait FileService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// A file's bytes as the whole response, ranges and caching headers honoured. A request
+  /// A file's bytes as the whole response, ranges and caching headers honored. A request
   /// without a principal is let in by its link token alone, or refused with 401.
   async fn content(
     &self,
@@ -125,7 +125,7 @@ pub trait FileService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// One log file's text as the whole response, ranges honoured. `name` is a bare `.log`
+  /// One log file's text as the whole response, ranges honored. `name` is a bare `.log`
   /// file name.
   async fn log_file(&self, name: &str, request: ContentRequest) -> Result<Response, ApiError> {
     Err(not_yet(DOMAIN))

@@ -50,13 +50,13 @@ fn mapped(lifetime: u64) -> Mapped {
 }
 
 /// A mapper over `routers` with port mapping on for port 50300, with its state, its
-/// reachability judgement and the requests the routers saw.
+/// reachability judgment and the requests the routers saw.
 struct Rig {
   mapper: PortMapper,
   state: StateOwner,
   reachability: Arc<Reachability>,
   requests: Arc<Mutex<Vec<String>>>,
-  /// the count of peers reaching us, which the judgement follows while it is held
+  /// the count of peers reaching us, which the judgment follows while it is held
   _inbound: watch::Sender<u64>,
 }
 
@@ -251,7 +251,7 @@ async fn a_renewal_refused_asks_for_the_mapping_anew() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_new_mapping_starts_the_reachability_judgement_over() {
+async fn a_new_mapping_starts_the_reachability_judgment_over() {
   let Rig {
     mapper,
     state,

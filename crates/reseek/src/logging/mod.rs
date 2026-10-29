@@ -68,7 +68,7 @@ pub struct Sinks {
 }
 
 /// The field formatter of the console, a type of its own so a span's fields formatted with
-/// colour for the console are not reused by the log file.
+/// color for the console are not reused by the log file.
 struct ConsoleFields(DefaultFields);
 
 impl<'writer> FormatFields<'writer> for ConsoleFields {
@@ -91,15 +91,15 @@ pub fn init(options: &Options, sinks: Sinks) -> Result<Logging, String> {
     filter(options, diagnostics)?
   };
   let (filter, handle) = reload::Layer::new(filter);
-  let colour = !(options.logger.no_color || sinks.no_color_env);
+  let color = !(options.logger.no_color || sinks.no_color_env);
   let console = FmtLayer::default()
     .fmt_fields(ConsoleFields(DefaultFields::new()))
     .event_format(Line {
       clock: Clock::Time,
       module: options.debug,
-      colour,
+      color,
     })
-    .with_ansi(colour)
+    .with_ansi(color)
     .with_writer(std::io::stdout);
   let (file, guard) = match sinks.files {
     Some(dir) => {
@@ -112,7 +112,7 @@ pub fn init(options: &Options, sinks: Sinks) -> Result<Logging, String> {
         .event_format(Line {
           clock: Clock::DateTime,
           module: options.debug,
-          colour: false,
+          color: false,
         })
         .with_ansi(false)
         .with_writer(writer);

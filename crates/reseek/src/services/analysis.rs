@@ -1,5 +1,5 @@
 //! Audio analysis of downloaded files: the spectrum reading, the spectrogram and the user's
-//! judgement.
+//! judgment.
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,

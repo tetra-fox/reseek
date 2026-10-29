@@ -37,7 +37,7 @@ bitflags::bitflags! {
     const Completed = 16;
     /// outcome: the whole file arrived
     const Succeeded = 32;
-    /// outcome: cancelled here
+    /// outcome: canceled here
     const Cancelled = 64;
     /// outcome: a connect or inactivity timeout
     const TimedOut = 128;

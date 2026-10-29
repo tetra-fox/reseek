@@ -1,10 +1,10 @@
-//! Cancelling, removing and retrying transfers, one at a time or many in one call.
+//! Canceling, removing and retrying transfers, one at a time or many in one call.
 
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-/// Whether cancelling a transfer also removes it.
+/// Whether canceling a transfer also removes it.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
 #[into_params(parameter_in = Query)]
@@ -20,7 +20,7 @@ pub struct CancelQuery {
 pub enum BulkAction {
   /// cancel the transfer if it has not completed
   Cancel,
-  /// remove the transfer from the listings, cancelling it first if it is running
+  /// remove the transfer from the listings, canceling it first if it is running
   Remove,
   /// enqueue a completed download again, as a new transfer in the same batch
   Retry,

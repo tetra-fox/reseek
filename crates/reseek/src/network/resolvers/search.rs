@@ -21,7 +21,7 @@ use tracing::{debug, info, trace, warn};
 
 use super::{Edges, blocked, forecast, log_refused};
 use crate::config::{Options, patterns};
-use crate::telemetry::catalogue::SearchMetrics;
+use crate::telemetry::catalog::SearchMetrics;
 use crate::telemetry::millis;
 use crate::telemetry::registry::Gauge;
 
@@ -54,7 +54,7 @@ pub struct IncomingSearches {
 
 impl IncomingSearches {
   /// The workers and filters `options` give at startup; a waiting request gives up when
-  /// `shutdown` is cancelled.
+  /// `shutdown` is canceled.
   pub fn new(options: &Options, shutdown: CancellationToken) -> Self {
     let case_sensitive = options.flags.case_sensitive_regex;
     Self {

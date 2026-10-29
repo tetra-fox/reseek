@@ -1,7 +1,7 @@
 //! Telemetry: the metrics the daemon keeps and reads from the system, served as Prometheus
 //! text or JSON, and the reports over the transfer history.
 
-pub mod catalogue;
+pub mod catalog;
 pub mod derived;
 pub mod exposition;
 pub mod registry;
@@ -27,7 +27,7 @@ use tracing::{Instrument, error, info_span};
 use crate::api::error::ApiError;
 use crate::db::Database;
 use crate::services::ReportService;
-use catalogue::Catalogue;
+use catalog::Catalog;
 use registry::Family;
 use reports::{HistogramError, Reports, Width, Window};
 use system::SystemProbe;
@@ -37,7 +37,7 @@ const MINUTE: Duration = Duration::from_secs(60);
 
 /// The metrics and the reports.
 pub struct Telemetry {
-  catalogue: Catalogue,
+  catalog: Catalog,
   system: Arc<SystemProbe>,
   reports: Reports,
 }
@@ -47,7 +47,7 @@ impl Telemetry {
   /// each minute of the per-minute counts until `shutdown`.
   pub fn new(transfers: Database, shutdown: CancellationToken) -> Arc<Self> {
     let telemetry = Arc::new(Self {
-      catalogue: Catalogue::default(),
+      catalog: Catalog::default(),
       system: Arc::new(SystemProbe::default()),
       reports: Reports::new(transfers),
     });
@@ -58,7 +58,7 @@ impl Telemetry {
         loop {
           tokio::select! {
             () = shutdown.cancelled() => return,
-            _ = every.tick() => clock.catalogue.elapse_minute(),
+            _ = every.tick() => clock.catalog.elapse_minute(),
           }
         }
       }
@@ -68,8 +68,8 @@ impl Telemetry {
   }
 
   /// The metrics the engines update.
-  pub fn metrics(&self) -> &Catalogue {
-    &self.catalogue
+  pub fn metrics(&self) -> &Catalog {
+    &self.catalog
   }
 
   /// The memory this process holds in RAM, in bytes, when the system says.
@@ -86,7 +86,7 @@ impl Telemetry {
 
   /// Every family: the daemon's own, then those read from the system.
   async fn families(&self) -> Result<Vec<Family>, ApiError> {
-    let mut families = self.catalogue.registry.families();
+    let mut families = self.catalog.registry.families();
     let system = self.system.clone();
     let read = tokio::task::spawn_blocking(move || system.families())
       .await
@@ -245,7 +245,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn the_metrics_hold_the_catalogue_and_the_process() {
+  async fn the_metrics_hold_the_catalog_and_the_process() {
     let telemetry = Telemetry::new(
       crate::transfers::fixtures::transfers().await,
       CancellationToken::new(),

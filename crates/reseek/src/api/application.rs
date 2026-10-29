@@ -255,7 +255,7 @@ async fn get_log_files(
   app.services.files.log_files().await.map(Json)
 }
 
-/// One log file's text, ranges honoured. The name is a bare file name ending in `.log`.
+/// One log file's text, ranges honored. The name is a bare file name ending in `.log`.
 #[utoipa::path(
   get, path = "/logs/files/{filename}", tag = "logs",
   params(("filename" = String, Path, description = "the log file's name")),

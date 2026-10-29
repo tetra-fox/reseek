@@ -8,7 +8,7 @@
 //! the clock starts and a relay agent dials its controller. Then the watchdog connects, unless
 //! this is a relay agent, connecting is turned off or there are no credentials.
 //!
-//! Stopping, once the HTTP host has stopped: the running searches end as cancelled, the
+//! Stopping, once the HTTP host has stopped: the running searches end as canceled, the
 //! watchdog stops, the port mapping is removed, the client disconnects and is disposed, the
 //! events this raised are handled, the session is closed, the statistics fetched again and the
 //! transfer tasks end, the transfers still unfinished are ended as shut down, the scripts' tasks

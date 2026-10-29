@@ -354,11 +354,11 @@ mod tests {
     assert_eq!(held.status, 200);
     held.next().await.unwrap();
     assert_eq!(open(&app, "/api/v0/live").await.status, 429);
-    let neighbour = app
+    let neighbor = app
       .stream_from("127.0.0.2:1", request("GET", "/api/v0/live", None))
       .await;
     assert_eq!(
-      neighbour.status, 200,
+      neighbor.status, 200,
       "another address of the trusted network has its own cap"
     );
     drop(held);

@@ -16,7 +16,7 @@ static UNC: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[/\\]{2}[^/\\]+[/\\
 static SOULSEEK_QT: LazyLock<Regex> =
   LazyLock::new(|| Regex::new(r"^@@[A-Za-z0-9]{5,}[/\\]?").unwrap());
 
-/// `path` localised to `os` without a leading drive root, UNC root (with its server) or
+/// `path` localized to `os` without a leading drive root, UNC root (with its server) or
 /// SoulseekQt root. A single leading `/` is not a root and stays.
 pub fn strip_path_root(path: &str, os: Os) -> String {
   let mut path = localize_path(path, os);
@@ -205,7 +205,7 @@ mod tests {
   }
 
   #[test]
-  fn paths_are_sanitised_segment_by_segment() {
+  fn paths_are_sanitized_segment_by_segment() {
     let unix = |p| sanitize_path(p, '_', Os::Unix).unwrap();
     assert_eq!(unix("foo/../bar"), "foo/_/bar");
     assert_eq!(unix("/foo/bar"), "foo/bar");

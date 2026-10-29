@@ -2,7 +2,7 @@
 //! claims, such as a FLAC that is really a converted MP3. The file is decoded and its spectrum
 //! measured a second at a time; the main output is a spectrogram and a waveform, which the
 //! viewer draws with guide lines where common encoders cut off, and the analyzer's own reading
-//! comes with them as evidence. The user's judgement, once recorded, is what counts. The
+//! comes with them as evidence. The user's judgment, once recorded, is what counts. The
 //! analyzer reads files under the downloads and incomplete directories only and never changes
 //! one.
 
@@ -60,7 +60,7 @@ use jobs::{Job, QUEUE_LIMIT, Queue};
 use report::modified_text;
 pub use store::SCHEMA;
 
-/// The analysis service: the queue, the reports and judgements in `analysis.db`, and the
+/// The analysis service: the queue, the reports and judgments in `analysis.db`, and the
 /// spectrogram and waveform files in the data directory.
 pub struct Analysis {
   db: Database,
@@ -139,13 +139,13 @@ impl Analysis {
     let stored = store::find(&self.db, &path)
       .await
       .map_err(ApiError::internal)?
-      .ok_or_else(|| ApiError::not_found(format!("'{path}' has not been analysed")))?;
+      .ok_or_else(|| ApiError::not_found(format!("'{path}' has not been analyzed")))?;
     self.unreadable(&stored.report.path, stored.unreadable.as_deref());
     Ok(stored)
   }
 }
 
-/// The analyser's verdict on audio held in memory, read as a downloaded file is, given ten
+/// The analyzer's verdict on audio held in memory, read as a downloaded file is, given ten
 /// seconds. It exists for fuzzing the decoders and the measures with arbitrary bytes; the
 /// daemon reads files.
 #[doc(hidden)]
@@ -158,7 +158,7 @@ pub fn verdict_of(bytes: Vec<u8>) -> api_types::analysis::AnalysisVerdict {
   };
   match engine::read_bytes(bytes, &settings, &CancellationToken::new()) {
     Ok(measured) => reading::read(&measured).verdict,
-    Err(engine::Cancelled) => unreachable!("nothing cancels this token"),
+    Err(engine::Canceled) => unreachable!("nothing cancels this token"),
   }
 }
 
@@ -176,13 +176,13 @@ impl AnalysisService for Analysis {
       let stored = store::find(&self.db, &path)
         .await
         .map_err(ApiError::internal)?;
-      // a stale report is no reading of the file, so it is analysed again
+      // a stale report is no reading of the file, so it is analyzed again
       let current =
         |stored: &store::Stored| !stored.report.stale && current(stored, file.size, file.modified);
       if stored.as_ref().is_some_and(current) {
         return Err(ApiError::conflict(
-          "the file has been analysed already",
-          Some("its report is current; ask with force=true to analyse it again".to_string()),
+          "the file has been analyzed already",
+          Some("its report is current; ask with force=true to analyze it again".to_string()),
         ));
       }
     }
@@ -191,7 +191,7 @@ impl AnalysisService for Analysis {
       let mut queue = lock(&self.queue);
       if queue.holds(&file.path) {
         return Err(ApiError::conflict(
-          "the file is queued or being analysed",
+          "the file is queued or being analyzed",
           None,
         ));
       }
@@ -224,7 +224,7 @@ impl AnalysisService for Analysis {
     let note = match file.found {
       None => Some("The file is no longer there."),
       Some((size, modified)) if !current(&stored, size, modified) => {
-        Some("The file has changed since it was analysed.")
+        Some("The file has changed since it was analyzed.")
       }
       Some(_) => None,
     };
@@ -319,7 +319,7 @@ impl AnalysisService for Analysis {
     )
     .await
     .map_err(ApiError::internal)?;
-    info!(by = by.subject, path = stored.report.path, judgement = ?verdict.verdict, "file judged");
+    info!(by = by.subject, path = stored.report.path, judgment = ?verdict.verdict, "file judged");
     Ok(())
   }
 
@@ -330,7 +330,7 @@ impl AnalysisService for Analysis {
       .await
       .map_err(ApiError::internal)?;
     if removed {
-      info!(path, "judgement of a file taken away");
+      info!(path, "judgment of a file taken away");
     }
     Ok(())
   }
@@ -423,7 +423,7 @@ fn entity_tag(stored: &store::Stored, piece: Piece) -> String {
   format!(
     "\"{}-{}-{piece}\"",
     &stored.kept[..stored.kept.len().min(16)],
-    stored.report.analysed_at.timestamp_micros()
+    stored.report.analyzed_at.timestamp_micros()
   )
 }
 

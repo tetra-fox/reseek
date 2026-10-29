@@ -7,7 +7,7 @@ export type Report = Schemas["AudioAnalysis"];
 export type Layout = Schemas["SpectrogramLayout"];
 export type Guide = Schemas["GuideLine"];
 export type Job = Schemas["AnalysisJob"];
-export type Judgement = Schemas["Judgement"];
+export type Judgement = Schemas["Judgment"];
 export type Scale = Layout["scale"];
 
 /** The text shown with every spectrogram and every reading */

@@ -24,7 +24,7 @@ bitflags::bitflags! {
     const InProgress = 2;
     /// finished, with one reason flag
     const Completed = 4;
-    /// reason: cancelled here
+    /// reason: canceled here
     const Cancelled = 8;
     /// reason: no response was accepted for the search's timeout
     const TimedOut = 16;

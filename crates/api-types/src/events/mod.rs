@@ -13,9 +13,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-/// Declares the event catalogue once: `EventType` with a variant per type and `Event` with the
+/// Declares the event catalog once: `EventType` with a variant per type and `Event` with the
 /// same variants carrying their data, so a type name and its data cannot drift apart.
-macro_rules! event_catalogue {
+macro_rules! event_catalog {
   ($($(#[$doc:meta])* $name:ident($data:ty),)*) => {
     /// What kind of event something is, written as its name and read ignoring case.
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, ToSchema)]
@@ -31,7 +31,7 @@ macro_rules! event_catalogue {
     }
 
     impl EventType {
-      /// Every event type, in catalogue order.
+      /// Every event type, in catalog order.
       pub const ALL: &'static [EventType] = &[$(EventType::$name,)*];
 
       /// The type's name as it is written, such as `DownloadFileComplete`.
@@ -53,7 +53,7 @@ macro_rules! event_catalogue {
   };
 }
 
-event_catalogue! {
+event_catalog! {
   /// a download succeeded and its file was moved into the downloads directory
   DownloadFileComplete(DownloadFileComplete),
   /// the last pending download from a user in one remote directory succeeded

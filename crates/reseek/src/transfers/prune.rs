@@ -156,7 +156,7 @@ mod tests {
         ended("old-success", 48, 3),
         ended("new-success", 48, 1),
         ended("old-rejected", 528, 3),
-        ended("old-cancelled", 80, 3),
+        ended("old-canceled", 80, 3),
         Row::new("running", TransferDirection::Download, 8),
       ],
     )

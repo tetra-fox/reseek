@@ -1,8 +1,8 @@
-//! Audio analysis: the report the analyser writes for one downloaded file, the user's own
-//! judgement of it, the analysis queue, and the bodies and queries of the analysis calls.
+//! Audio analysis: the report the analyzer writes for one downloaded file, the user's own
+//! judgment of it, the analysis queue, and the bodies and queries of the analysis calls.
 //!
 //! The report is evidence for the user to read next to the spectrogram, not proof: the
-//! analyser's verdict is its own reading and the user's judgement replaces it once set.
+//! analyzer's verdict is its own reading and the user's judgment replaces it once set.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -11,14 +11,14 @@ use uuid::Uuid;
 
 use crate::files::FileRoot;
 
-/// The analyser's reading of whether the audio matches the format the file claims.
+/// The analyzer's reading of whether the audio matches the format the file claims.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AnalysisVerdict {
   /// nearly every window reaches the top of the claimed band without an encoder's shelf
   Consistent,
   /// nearly every window stops at the same known encoder cutoff with a sharp shelf or frame
-  /// artefacts
+  /// artifacts
   LikelyTranscode,
   /// part of the time or part of the frequency range is band-limited while the rest is full
   /// band, as when one low-bitrate stem is mixed into a lossless track
@@ -38,10 +38,10 @@ pub enum AnalysisFlag {
   BitPadded,
 }
 
-/// The user's own judgement of a file.
+/// The user's own judgment of a file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum Judgement {
+pub enum Judgment {
   /// the file is what it claims to be
   Legit,
   /// the file is not what it claims to be
@@ -60,43 +60,43 @@ pub struct AudioAnalysis {
   pub relative_path: String,
   /// the download the file belongs to, null when it is no download's
   pub transfer_id: Option<Uuid>,
-  /// the file's size in bytes when it was analysed
+  /// the file's size in bytes when it was analyzed
   pub size: u64,
   /// when the analysis finished
-  pub analysed_at: DateTime<Utc>,
+  pub analyzed_at: DateTime<Utc>,
   /// how long the audio is, in seconds
   pub duration_seconds: f64,
   /// the format the container claims
   pub claimed: ClaimedFormat,
-  /// the analyser's reading
+  /// the analyzer's reading
   pub verdict: AnalysisVerdict,
-  /// how sure the analyser is of its reading, from 0 to 0.98
+  /// how sure the analyzer is of its reading, from 0 to 0.98
   pub confidence: f64,
   /// findings independent of the verdict, empty when there are none
   pub flags: Vec<AnalysisFlag>,
   /// the encoder profile the cutoff matches, null when it matches none
   pub encoder_guess: Option<EncoderGuess>,
-  /// one sentence saying what the analyser found and where
+  /// one sentence saying what the analyzer found and where
   #[schema(
     example = "68% of the time is full-band; 32% shows a 16 kHz cutoff concentrated in vocal content."
   )]
   pub summary: String,
   /// the aggregate measures over the non-silent windows
   pub measures: AnalysisMeasures,
-  /// the measures of each analysed window, null where the per-window list was left out
+  /// the measures of each analyzed window, null where the per-window list was left out
   pub windows: Option<Vec<AnalysisWindow>>,
   /// where the overview of this report's spectrogram is served
   pub spectrogram_url: String,
   /// how the spectrogram and the waveform are served and how their axes run; null when the file
   /// could not be read as audio and has neither
   pub spectrogram: Option<SpectrogramLayout>,
-  /// the user's judgement, shown in place of the verdict; null until the user sets one
+  /// the user's judgment, shown in place of the verdict; null until the user sets one
   #[serde(rename = "override")]
-  pub judgement: Option<AnalysisOverride>,
+  pub judgment: Option<AnalysisOverride>,
   /// what made this analysis less reliable, such as few windows or a decoder error
   pub limitations: Vec<String>,
-  /// true when an older version of reseek analysed the file and this one cannot show its
-  /// report: only the file, when, the reading and the user's judgement are kept, and analysing
+  /// true when an older version of reseek analyzed the file and this one cannot show its
+  /// report: only the file, when, the reading and the user's judgment are kept, and analyzing
   /// the file again replaces it
   pub stale: bool,
 }
@@ -127,7 +127,7 @@ pub struct EncoderGuess {
   /// the codec and approximate bitrate
   #[schema(example = "mp3 ~128 kbps")]
   pub profile: String,
-  /// how sure the analyser is of the match, from 0 to 1
+  /// how sure the analyzer is of the match, from 0 to 1
   pub confidence: f64,
 }
 
@@ -146,7 +146,7 @@ pub struct AnalysisMeasures {
   /// the ratio of near-zero to populated bins between 16 and 20 kHz
   pub sfb21_holes: Option<f64>,
   /// how strongly the noise floor repeats at lossy codec frame lengths, from 0 to 1
-  pub frame_artefact_score: Option<f64>,
+  pub frame_artifact_score: Option<f64>,
   /// the fraction of energy above half the claimed band, null unless the file claims more
   /// than 48 kHz
   pub upsample_ratio: Option<f64>,
@@ -164,7 +164,7 @@ pub struct AnalysisMeasures {
   pub clipped_samples_pct: Option<f64>,
 }
 
-/// The measures of one analysed window.
+/// The measures of one analyzed window.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisWindow {
@@ -243,16 +243,16 @@ pub enum GuideKind {
   Encoder,
   /// half the file's sample rate, the highest frequency it can hold
   FileLimit,
-  /// the cutoff the analyser measured, drawn dashed
+  /// the cutoff the analyzer measured, drawn dashed
   Cutoff,
 }
 
-/// The user's judgement of a file, with who recorded it.
+/// The user's judgment of a file, with who recorded it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisOverride {
-  /// the judgement
-  pub verdict: Judgement,
+  /// the judgment
+  pub verdict: Judgment,
   /// why, in the user's words; null when none was given
   #[schema(example = "remix, known low-quality acapella")]
   pub note: Option<String>,
@@ -263,12 +263,12 @@ pub struct AnalysisOverride {
   pub at: DateTime<Utc>,
 }
 
-/// The body of `PUT .../analysis/override`, which records the user's judgement of a file.
+/// The body of `PUT .../analysis/override`, which records the user's judgment of a file.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetAnalysisOverride {
-  /// the judgement
-  pub verdict: Judgement,
+  /// the judgment
+  pub verdict: Judgment,
   /// why, in the user's words
   #[serde(default)]
   #[schema(example = "remix, known low-quality acapella")]
@@ -280,7 +280,7 @@ pub struct SetAnalysisOverride {
 #[serde(rename_all = "camelCase")]
 #[into_params(parameter_in = Query)]
 pub struct RunAnalysisQuery {
-  /// analyse again even when a report for the file as it is now exists
+  /// analyze again even when a report for the file as it is now exists
   #[serde(default)]
   pub force: bool,
 }
@@ -404,7 +404,7 @@ fn default_list_limit() -> u32 {
 pub enum AnalysisJobState {
   /// waiting for the worker
   Queued,
-  /// being analysed
+  /// being analyzed
   Running,
 }
 
@@ -432,7 +432,7 @@ pub struct AnalysisJob {
   pub progress: Option<f64>,
 }
 
-/// The spectrum of one analysed window, as `GET .../analysis/windows/{index}` answers it.
+/// The spectrum of one analyzed window, as `GET .../analysis/windows/{index}` answers it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowSpectrum {
@@ -450,13 +450,13 @@ pub struct WindowSpectrum {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisCompleted {
-  /// the download the file belongs to, null when it was analysed by path
+  /// the download the file belongs to, null when it was analyzed by path
   pub transfer_id: Option<Uuid>,
   /// the file's local path
   pub path: String,
-  /// the analyser's reading
+  /// the analyzer's reading
   pub verdict: AnalysisVerdict,
-  /// how sure the analyser is of its reading
+  /// how sure the analyzer is of its reading
   pub confidence: f64,
   /// findings independent of the verdict
   pub flags: Vec<AnalysisFlag>,

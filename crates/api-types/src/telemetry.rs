@@ -60,7 +60,7 @@ pub struct QueuedMetrics {
 pub struct CompletedMetrics {
   /// how many succeeded
   pub succeeded: u64,
-  /// how many failed, cancelled ones included
+  /// how many failed, canceled ones included
   pub failed: u64,
   /// the bytes moved by the ones that succeeded
   pub bytes: u64,
@@ -76,7 +76,7 @@ pub enum MetricType {
   Gauge,
   /// observations counted into cumulative buckets
   Histogram,
-  /// observations summarised as quantiles
+  /// observations summarized as quantiles
   Summary,
   /// a value without a declared kind
   Untyped,

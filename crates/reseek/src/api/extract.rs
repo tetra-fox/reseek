@@ -203,7 +203,7 @@ mod tests {
   use api_types::transfers::{TransferListQuery, TransferStateCategory, TransferStateFilter};
 
   #[test]
-  fn json_content_types_are_recognised_with_parameters_and_suffixes() {
+  fn json_content_types_are_recognized_with_parameters_and_suffixes() {
     assert!(is_json("application/json"));
     assert!(is_json("Application/JSON; charset=utf-8"));
     assert!(is_json("application/merge-patch+json"));

@@ -1,6 +1,6 @@
 //! One analysis from file to measures: the file is decoded a window at a time, in full or, for
 //! a long file, at windows spread evenly over it, and each window is measured. It runs on a
-//! blocking thread, stops promptly when cancelled, and stops with what it has when its time
+//! blocking thread, stops promptly when canceled, and stops with what it has when its time
 //! is up.
 
 use std::collections::BTreeSet;
@@ -14,15 +14,15 @@ use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
 use super::decode::{Claimed, Decoder, Filled};
-use super::measure::{Analyser, FFT_SIZE, Window};
+use super::measure::{Analyzer, FFT_SIZE, Window};
 use super::totals::Totals;
 
 /// How one analysis runs.
 #[derive(Clone, Debug)]
 pub(super) struct Settings {
-  /// files up to this many seconds long are analysed in full
+  /// files up to this many seconds long are analyzed in full
   pub max_full_seconds: f64,
-  /// how many windows a longer file is analysed at
+  /// how many windows a longer file is analyzed at
   pub sampled_windows: usize,
   /// when the analysis stops with what it has
   pub deadline: Instant,
@@ -48,13 +48,13 @@ pub(super) struct Measured {
   pub duration: f64,
   /// a lossy file's bitrate in kbit/s, from its decoded packets
   pub bitrate_kbps: Option<u32>,
-  /// every analysed window, in time order
+  /// every analyzed window, in time order
   pub windows: Vec<Window>,
-  /// the figures over every analysed sample
+  /// the figures over every analyzed sample
   pub totals: Totals,
   /// the bits per sample the integer samples use
   pub bits_used: Option<u32>,
-  /// whether only windows spread over the file were analysed
+  /// whether only windows spread over the file were analyzed
   pub sampled: bool,
   /// the channels left out of a file with more than two
   pub channels_left_out: u32,
@@ -62,16 +62,16 @@ pub(super) struct Measured {
   pub problems: Vec<String>,
 }
 
-/// The analysis was cancelled; nothing is reported.
+/// The analysis was canceled; nothing is reported.
 #[derive(Debug, PartialEq, Eq)]
-pub(super) struct Cancelled;
+pub(super) struct Canceled;
 
-/// Analyses the file at `path`.
+/// Analyzes the file at `path`.
 pub(super) fn run(
   path: &Path,
   settings: &Settings,
   cancel: &CancellationToken,
-) -> Result<Measured, Cancelled> {
+) -> Result<Measured, Canceled> {
   match Decoder::open(path) {
     Ok(decoder) => measure(decoder, settings, cancel),
     Err(problem) => {
@@ -81,12 +81,12 @@ pub(super) fn run(
   }
 }
 
-/// Analyses audio held in memory, as a file's would be.
+/// Analyzes audio held in memory, as a file's would be.
 pub(super) fn read_bytes(
   bytes: Vec<u8>,
   settings: &Settings,
   cancel: &CancellationToken,
-) -> Result<Measured, Cancelled> {
+) -> Result<Measured, Canceled> {
   let source = Box::new(std::io::Cursor::new(bytes));
   match Decoder::from_source(source, &Hint::new()) {
     Ok(decoder) => measure(decoder, settings, cancel),
@@ -114,11 +114,11 @@ pub(super) fn measure(
   mut decoder: Decoder,
   settings: &Settings,
   cancel: &CancellationToken,
-) -> Result<Measured, Cancelled> {
+) -> Result<Measured, Canceled> {
   let claimed = decoder.claimed.clone();
   let rate = claimed.sample_rate as usize;
   let stated = claimed.frames.map(|frames| frames as f64 / rate as f64);
-  let mut analyser = Analyser::new(claimed.sample_rate, claimed.bit_depth);
+  let mut analyzer = Analyzer::new(claimed.sample_rate, claimed.bit_depth);
   let mut buffer = vec![Vec::with_capacity(rate); decoder.channels];
   let mut measured = Measured {
     duration: stated.unwrap_or(0.0),
@@ -139,7 +139,7 @@ pub(super) fn measure(
       measured.sampled = true;
       sampled(
         &mut decoder,
-        &mut analyser,
+        &mut analyzer,
         &mut buffer,
         &picks,
         settings,
@@ -152,7 +152,7 @@ pub(super) fn measure(
       let longest = settings.max_full_seconds.ceil() as u64;
       let decoded = whole(
         &mut decoder,
-        &mut analyser,
+        &mut analyzer,
         &mut buffer,
         Read::Upto(longest),
         settings,
@@ -198,15 +198,15 @@ fn picks(seconds: f64, count: usize) -> BTreeSet<u64> {
     .collect()
 }
 
-/// Whether the analysis is to stop: an error when it was cancelled, true when its time is up,
+/// Whether the analysis is to stop: an error when it was canceled, true when its time is up,
 /// which is noted once in `measured`.
 fn stop(
   settings: &Settings,
   cancel: &CancellationToken,
   measured: &mut Measured,
-) -> Result<bool, Cancelled> {
+) -> Result<bool, Canceled> {
   if cancel.is_cancelled() {
-    return Err(Cancelled);
+    return Err(Canceled);
   }
   if Instant::now() >= settings.deadline {
     debug!(windows = measured.windows.len(), "analysis out of time");
@@ -248,13 +248,13 @@ enum Read<'a> {
 /// for. Returns the seconds read.
 fn whole(
   decoder: &mut Decoder,
-  analyser: &mut Analyser,
+  analyzer: &mut Analyzer,
   buffer: &mut [Vec<f32>],
   read: Read<'_>,
   settings: &Settings,
   cancel: &CancellationToken,
   measured: &mut Measured,
-) -> Result<f64, Cancelled> {
+) -> Result<f64, Canceled> {
   let rate = decoder.claimed.sample_rate as usize;
   let stated = decoder
     .claimed
@@ -302,7 +302,7 @@ fn whole(
       Read::Only(picks) => picks.contains(&second),
     };
     if usable(&filled, rate) && wanted {
-      let window = analyser.measure(second as f64, buffer, &mut measured.totals);
+      let window = analyzer.measure(second as f64, buffer, &mut measured.totals);
       measured.windows.push(window);
     }
     if filled != Filled::Full {
@@ -316,13 +316,13 @@ fn whole(
 /// in, reads it from the start and measures the picked seconds as they come.
 fn sampled(
   decoder: &mut Decoder,
-  analyser: &mut Analyser,
+  analyzer: &mut Analyzer,
   buffer: &mut [Vec<f32>],
   picks: &BTreeSet<u64>,
   settings: &Settings,
   cancel: &CancellationToken,
   measured: &mut Measured,
-) -> Result<(), Cancelled> {
+) -> Result<(), Canceled> {
   let rate = decoder.claimed.sample_rate as usize;
   for (index, &second) in picks.iter().enumerate() {
     settings.report(index as f64 / picks.len() as f64);
@@ -338,7 +338,7 @@ fn sampled(
       debug!(problem, "the file can not be sought in, reading it through");
       whole(
         decoder,
-        analyser,
+        analyzer,
         buffer,
         Read::Only(picks),
         settings,
@@ -350,7 +350,7 @@ fn sampled(
     if !usable(&decoder.fill(buffer, rate), rate) {
       continue;
     }
-    let window = analyser.measure(second as f64, buffer, &mut measured.totals);
+    let window = analyzer.measure(second as f64, buffer, &mut measured.totals);
     measured.windows.push(window);
   }
   Ok(())

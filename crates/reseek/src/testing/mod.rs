@@ -244,7 +244,7 @@ impl Stream {
 }
 
 /// What `f` logged on this thread while it ran, one line per event as the text sink writes it,
-/// without colour; for tests whose behaviour is a log line.
+/// without color; for tests whose behavior is a log line.
 pub fn logged<T>(f: impl FnOnce() -> T) -> (T, String) {
   #[derive(Clone, Default)]
   struct Lines(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);

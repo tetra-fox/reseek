@@ -1,5 +1,5 @@
 //! The transfers that failed, listed by when they ended and counted by their error message. A
-//! failed transfer is one that was cancelled, timed out, errored, was rejected or aborted; its
+//! failed transfer is one that was canceled, timed out, errored, was rejected or aborted; its
 //! message is read as stored, which is already without the transfer library's prefix.
 
 use api_types::reports::{ExceptionCount, ExceptionsQuery, ParetoQuery, TransferExceptionDetail};

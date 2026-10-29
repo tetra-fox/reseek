@@ -15,7 +15,7 @@ use super::validate;
 use crate::app::AppState;
 use crate::auth::{Administrator, AnyRole, Authorized};
 
-/// The catalogue's pseudo-types, which name no event; which real types have no sample is the
+/// The catalog's pseudo-types, which name no event; which real types have no sample is the
 /// event log's to say.
 const NOT_RAISABLE: &[&str] = &["None", "Any"];
 

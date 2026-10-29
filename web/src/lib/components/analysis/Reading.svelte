@@ -31,7 +31,7 @@
         ],
         [
           "Frame rhythm",
-          share(m.frameArtefactScore),
+          share(m.frameArtifactScore),
           "How strongly the noise repeats at a lossy codec's frame length. Reported only."
         ],
         [

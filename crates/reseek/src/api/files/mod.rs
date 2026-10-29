@@ -205,7 +205,7 @@ fn deleting(app: &AppState, by: &Principal, path: &str) -> Result<(), ApiError> 
   Err(ApiError::forbidden("remote file management is disabled").logged())
 }
 
-/// A file's bytes for the browser to show or save, a single range honoured. A link without a
+/// A file's bytes for the browser to show or save, a single range honored. A link without a
 /// session loads it with the token `t`.
 #[utoipa::path(
   get, path = "/files/{root}/files/{path}/content", tag = "files",

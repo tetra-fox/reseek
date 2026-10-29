@@ -42,7 +42,7 @@ pub(super) struct Step {
   /// how much quieter the band above it is than the band below, in dB
   pub drop: f64,
   /// how far the band above it is over the cutoff line (the loudest band less
-  /// [`CUTOFF_RANGE_DB`], or the quantisation noise plus [`FLOOR_MARGIN_DB`] when that is
+  /// [`CUTOFF_RANGE_DB`], or the quantization noise plus [`FLOOR_MARGIN_DB`] when that is
   /// higher), in dB: a few dB is a noise floor that only just reaches the line
   pub clearance: f64,
 }
@@ -54,7 +54,7 @@ pub(super) struct Window {
   pub t: f64,
   /// how long it is, in seconds: 1 but for a shorter last window
   pub seconds: f64,
-  /// its loudness over every analysed channel, in dBFS
+  /// its loudness over every analyzed channel, in dBFS
   pub rms_dbfs: f64,
   /// the highest frequency within the measured range of the loudest band, in Hz; `None` for a
   /// near-silent window or one too short for a spectrum
@@ -88,7 +88,7 @@ impl Window {
 }
 
 /// The spectrum analyzer for one sample rate: the frame transform and the window function.
-pub(super) struct Analyser {
+pub(super) struct Analyzer {
   fft: Arc<dyn RealToComplex<f32>>,
   hann: Vec<f32>,
   input: Vec<f32>,
@@ -99,12 +99,12 @@ pub(super) struct Analyser {
   bin_hz: f64,
   /// scratch spectra: per frame, the power of every bin over the channels
   frames: Vec<Vec<f64>>,
-  /// the level of one bin of the quantisation noise integer samples carry, when they are
+  /// the level of one bin of the quantization noise integer samples carry, when they are
   /// integers
-  quantisation_db: Option<f64>,
+  quantization_db: Option<f64>,
 }
 
-impl Analyser {
+impl Analyzer {
   /// An analyzer for audio at `rate` samples per second.
   pub fn new(rate: u32, bits: Option<u32>) -> Self {
     let fft = RealFftPlanner::<f32>::new().plan_fft_forward(FFT_SIZE);
@@ -125,11 +125,11 @@ impl Analyser {
       rate,
       bin_hz,
       frames: Vec::new(),
-      quantisation_db: bits.map(quantisation_db),
+      quantization_db: bits.map(quantization_db),
     }
   }
 
-  /// Measures the window starting at `t` seconds, one sample vector per analysed channel, and
+  /// Measures the window starting at `t` seconds, one sample vector per analyzed channel, and
   /// adds its samples to `totals`.
   pub fn measure(&mut self, t: f64, channels: &[Vec<f32>], totals: &mut Totals) -> Window {
     let length = channels[0].len();
@@ -166,9 +166,9 @@ impl Analyser {
     }
     let smoothed = smooth_db(&power, (SMOOTH_HZ / self.bin_hz).round() as usize);
     let peak = smoothed[1..].iter().copied().fold(FLOOR_DB, f64::max);
-    // in a quiet passage the range would reach the quantisation noise, which is no content
+    // in a quiet passage the range would reach the quantization noise, which is no content
     let line = self
-      .quantisation_db
+      .quantization_db
       .map_or(peak - CUTOFF_RANGE_DB, |floor| {
         (peak - CUTOFF_RANGE_DB).max(floor + FLOOR_MARGIN_DB)
       });
@@ -191,7 +191,7 @@ impl Analyser {
 
   /// The power of every bin averaged over the window's frames and summed over its channels,
   /// relative to a full-scale sine; `None` for a window shorter than one frame. The power of
-  /// each frame is kept in `frames` for [`Analyser::holes`].
+  /// each frame is kept in `frames` for [`Analyzer::holes`].
   fn spectrum(&mut self, channels: &[Vec<f32>]) -> Option<Vec<f64>> {
     let length = channels[0].len();
     if length < FFT_SIZE {
@@ -327,9 +327,9 @@ impl Analyser {
 }
 
 /// The level of one bin of the noise `bits`-bit samples carry, on the scale a full-scale sine
-/// reads 0 dB: dithered quantisation adds a quarter of a step squared per sample, and the
+/// reads 0 dB: dithered quantization adds a quarter of a step squared per sample, and the
 /// windowed transform puts 6 / [`FFT_SIZE`] of a sample's noise power in each bin.
-fn quantisation_db(bits: u32) -> f64 {
+fn quantization_db(bits: u32) -> f64 {
   let step = 2f64.powi(1 - bits.clamp(2, 32) as i32);
   10.0 * (step * step / 4.0 * 6.0 / FFT_SIZE as f64).log10()
 }
@@ -360,8 +360,8 @@ fn smooth_db(power: &[f64], radius: usize) -> Vec<f64> {
 }
 
 /// How strongly the energy of a window's high-frequency noise repeats every 1024, 1152 or
-/// 2048 samples beyond what the neighbouring periods show, from 0 to 1. A lossy codec
-/// quantises each frame on its own, which can leave that rhythm behind after decoding.
+/// 2048 samples beyond what the neighboring periods show, from 0 to 1. A lossy codec
+/// quantizes each frame on its own, which can leave that rhythm behind after decoding.
 fn frame_score(channels: &[Vec<f32>]) -> Option<f64> {
   let length = channels[0].len();
   let blocks = length / ENVELOPE_BLOCK;
@@ -393,7 +393,7 @@ fn frame_score(channels: &[Vec<f32>]) -> Option<f64> {
   }
   let correlation = |k: usize| lag(k) / zero;
   // a rhythm at the period stands above every lag near it; an envelope that swings faster,
-  // as a steady tone's does against the blocks, has neighbours as high
+  // as a steady tone's does against the blocks, has neighbors as high
   let excess = CODEC_PERIODS
     .iter()
     .map(|&period| {

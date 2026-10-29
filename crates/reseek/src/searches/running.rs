@@ -30,7 +30,7 @@ pub(super) struct Running {
   /// stops the search
   pub cancel: CancellationToken,
   /// the search was stopped by a cancel or a delete, not by a lost connection
-  pub cancelled: AtomicBool,
+  pub canceled: AtomicBool,
   /// true once the end is written, or found not to be
   pub done: watch::Sender<bool>,
   progress: Mutex<Progress>,
@@ -87,7 +87,7 @@ impl Running {
   pub fn new(record: Search, accepted: oneshot::Sender<Result<(), ClientError>>) -> Self {
     Self {
       cancel: CancellationToken::new(),
-      cancelled: AtomicBool::new(false),
+      canceled: AtomicBool::new(false),
       done: watch::channel(false).0,
       progress: Mutex::new(Progress {
         record,
@@ -240,7 +240,7 @@ impl Searches {
     };
     let reason = match result {
       Ok(search) => state(search.state) - SearchStates::Completed,
-      Err(ClientError::Canceled) if running.cancelled.load(Ordering::Relaxed) => {
+      Err(ClientError::Canceled) if running.canceled.load(Ordering::Relaxed) => {
         SearchStates::Cancelled
       }
       Err(error) => {
@@ -364,7 +364,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn a_search_running_at_shutdown_ends_cancelled() {
+  async fn a_search_running_at_shutdown_ends_canceled() {
     let app = app("", &[]).await;
     let searches = app.state.searches.clone();
     let record = record();

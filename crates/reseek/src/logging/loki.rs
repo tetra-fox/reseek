@@ -1,5 +1,5 @@
 //! The Grafana Loki sink: every line the filter lets through is queued, without waiting, for a
-//! task that pushes the lines in batches to Loki's push API, each labelled with the process's
+//! task that pushes the lines in batches to Loki's push API, each labeled with the process's
 //! instance name, invocation id and process id and its level. A full queue drops a line and
 //! counts it, and the count goes to Loki with the next batch; a batch Loki does not take is
 //! tried again twice, then dropped.
@@ -104,7 +104,7 @@ where
     .event_format(Line {
       clock: Clock::Off,
       module: true,
-      colour: false,
+      color: false,
     })
     .with_ansi(false)
     .with_writer(queue)

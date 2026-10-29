@@ -35,7 +35,7 @@ pub(super) struct Job {
   pub file: LocalFile,
   pub queued_at: DateTime<Utc>,
   pub started_at: Option<DateTime<Utc>>,
-  /// cancelled when the job is cancelled or the daemon stops
+  /// canceled when the job is canceled or the daemon stops
   pub cancel: CancellationToken,
   /// how far the worker is, in thousandths of the file
   pub progress: Arc<AtomicU32>,
@@ -193,8 +193,8 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
   .await;
   let (report, bytes) = match worked {
     Ok(Ok(done)) => done,
-    Ok(Err(engine::Cancelled)) => {
-      debug!("analysis cancelled");
+    Ok(Err(engine::Canceled)) => {
+      debug!("analysis canceled");
       return;
     }
     Err(e) => {
@@ -234,10 +234,10 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
       flags: report.flags.clone(),
     }));
   let judged = store::find(&analysis.db, &report.path).await;
-  let judgement = match judged {
-    Ok(found) => found.and_then(|stored| stored.report.judgement),
+  let judgment = match judged {
+    Ok(found) => found.and_then(|stored| stored.report.judgment),
     Err(e) => {
-      warn!(error = %e, "the judgement of an analysed file not read for its event");
+      warn!(error = %e, "the judgment of an analyzed file not read for its event");
       None
     }
   };
@@ -247,7 +247,7 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
       version: 0,
       report: Box::new(api_types::analysis::AudioAnalysis {
         windows: None,
-        judgement,
+        judgment,
         ..report
       }),
     }));

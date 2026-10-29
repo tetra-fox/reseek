@@ -9,7 +9,7 @@ use utoipa::{IntoParams, ToSchema};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum BlockScope {
-  /// the user's download requests from us are refused and their queued uploads cancelled
+  /// the user's download requests from us are refused and their queued uploads canceled
   Uploads,
   /// our shares do not answer the user's searches
   Searches,
@@ -19,7 +19,7 @@ pub enum BlockScope {
   Messages,
   /// the user's room messages are stored hidden and not pushed
   Rooms,
-  /// we can not download from the user, and our downloads from them are cancelled
+  /// we can not download from the user, and our downloads from them are canceled
   Downloads,
   /// the user can not be our child in the distributed network
   Distributed,

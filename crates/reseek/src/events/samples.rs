@@ -8,7 +8,7 @@
 
 use api_types::analysis::{
   AnalysisMeasures, AnalysisOverride, AnalysisVerdict, AudioAnalysis, ClaimedFormat, EncoderGuess,
-  Judgement, SpectrogramLayout, SpectrogramScale,
+  Judgment, SpectrogramLayout, SpectrogramScale,
 };
 use api_types::auth::{Role, Via};
 use api_types::conversations::{MessageDirection, PrivateMessage};
@@ -211,7 +211,7 @@ fn blank_analysis(d: &str, now: DateTime<Utc>) -> AudioAnalysis {
     relative_path: text("relativePath"),
     transfer_id: Some(Uuid::nil()),
     size: 0,
-    analysed_at: now,
+    analyzed_at: now,
     duration_seconds: 0.0,
     claimed: ClaimedFormat {
       codec: text("codec"),
@@ -233,7 +233,7 @@ fn blank_analysis(d: &str, now: DateTime<Utc>) -> AudioAnalysis {
       cutoff_median_hz: Some(0),
       shelf_sharpness_db_p95: Some(0.0),
       sfb21_holes: Some(0.0),
-      frame_artefact_score: Some(0.0),
+      frame_artifact_score: Some(0.0),
       upsample_ratio: Some(0.0),
       bit_depth_effective: Some(0),
       noise_floor_dbfs: Some(0.0),
@@ -256,8 +256,8 @@ fn blank_analysis(d: &str, now: DateTime<Utc>) -> AudioAnalysis {
       tile_seconds: 0,
       tiles: 0,
     }),
-    judgement: Some(AnalysisOverride {
-      verdict: Judgement::Legit,
+    judgment: Some(AnalysisOverride {
+      verdict: Judgment::Legit,
       note: Some(text("note")),
       by: text("by"),
       at: now,

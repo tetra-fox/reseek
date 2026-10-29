@@ -54,7 +54,7 @@
       return;
     }
     const same = untrack(() => scope);
-    if (same?.report.path === report.path && same.report.analysedAt === report.analysedAt) return;
+    if (same?.report.path === report.path && same.report.analyzedAt === report.analyzedAt) return;
     const made = new Scope(target, report, layout);
     scope = made;
     void made.pictures.start();

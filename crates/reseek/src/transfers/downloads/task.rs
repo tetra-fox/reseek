@@ -1,6 +1,6 @@
 //! One download's task: it waits its turn among the files of its request, checks its record,
 //! then tries the download, waiting longer before each new try, until the file arrives, the
-//! download fails for good or it is cancelled, and writes how it ended. A stop of the daemon
+//! download fails for good or it is canceled, and writes how it ended. A stop of the daemon
 //! leaves the record as it is, for the stop to end.
 
 use std::path::PathBuf;
@@ -81,7 +81,7 @@ fn jitter(delay: Duration) -> Duration {
 
 impl Downloads {
   /// Starts the task of the download `record`, which takes its turn in `gate` and stops when
-  /// `cancel` is cancelled.
+  /// `cancel` is canceled.
   pub(super) fn spawn(&self, record: Record, gate: Arc<Semaphore>, cancel: CancellationToken) {
     let this = self.this();
     let span = info_span!(
@@ -108,7 +108,7 @@ impl Downloads {
   async fn download(&self, id: Uuid, gate: Arc<Semaphore>, cancel: &CancellationToken) -> Ended {
     let permit = tokio::select! {
       permit = gate.acquire_owned() => permit.expect("the gate of a request is never closed"),
-      () = cancel.cancelled() => return self.cancelled(id, None).await,
+      () = cancel.cancelled() => return self.canceled(id, None).await,
     };
     let mut gate = Some(Gate {
       _permit: permit,
@@ -179,7 +179,7 @@ impl Downloads {
         );
         tokio::select! {
           () = tokio::time::sleep(delay) => {}
-          () = cancel.cancelled() => return self.cancelled(id, Some(incomplete)).await,
+          () = cancel.cancelled() => return self.canceled(id, Some(incomplete)).await,
         }
         record.next_attempt_at = None;
         self.save(&record, false).await;
@@ -220,17 +220,17 @@ impl Downloads {
     }
   }
 
-  /// The end of a download cancelled while it was not trying: left for the stop when the
-  /// daemon is stopping, else failed as cancelled.
-  async fn cancelled(&self, id: Uuid, incomplete: Option<PathBuf>) -> Ended {
+  /// The end of a download canceled while it was not trying: left for the stop when the
+  /// daemon is stopping, else failed as canceled.
+  async fn canceled(&self, id: Uuid, incomplete: Option<PathBuf>) -> Ended {
     if self.shutdown.is_cancelled() {
       return Ended::Abandoned;
     }
     match self.db.read(move |conn| store::get(conn, id)).await {
-      Ok(record) => Ended::failed(record, Failure::cancelled(), incomplete),
+      Ok(record) => Ended::failed(record, Failure::canceled(), incomplete),
       Err(e) => {
-        warn!(error = %e, "cancelled download not read");
-        Ended::failed(None, Failure::cancelled(), incomplete)
+        warn!(error = %e, "canceled download not read");
+        Ended::failed(None, Failure::canceled(), incomplete)
       }
     }
   }
@@ -243,7 +243,7 @@ impl Downloads {
   }
 
   /// Writes a download that failed for good as completed with its outcome, unless it has ended
-  /// already, counts it as failed, and, unless it was cancelled, raises `DownloadFileFailed`.
+  /// already, counts it as failed, and, unless it was canceled, raises `DownloadFileFailed`.
   async fn fail(&self, failed: Failed) {
     let Failed {
       record,
@@ -256,14 +256,14 @@ impl Downloads {
     if record.is_completed() {
       return debug!(state = %record.state, "download ended already");
     }
-    let cancelled = failure.state == TransferStates::Cancelled;
+    let canceled = failure.state == TransferStates::Cancelled;
     let reason = lock(&self.in_flight)
       .get(&record.id)
       .and_then(|entry| entry.reason);
     record.state = TransferStates::Completed | failure.state;
     record.ended_at = Some(record.ended_at.unwrap_or_else(Utc::now));
     record.exception = Some(match reason {
-      Some(reason) if cancelled => reason.to_string(),
+      Some(reason) if canceled => reason.to_string(),
       _ => failure.message,
     });
     record.next_attempt_at = None;
@@ -271,8 +271,8 @@ impl Downloads {
     record.removed = self.removal_pending(record.id);
     self.save(&record, true).await;
     self.telemetry.metrics().transfers().downloads.failed();
-    if cancelled {
-      return info!(reason = record.exception, "download cancelled");
+    if canceled {
+      return info!(reason = record.exception, "download canceled");
     }
     info!(state = %record.state, reason = record.exception, "download failed");
     let local_filename = match incomplete {

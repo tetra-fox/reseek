@@ -1,5 +1,5 @@
 //! The download calls of the API against the in-memory daemon, which is not connected: finding
-//! a download by its peer and id, cancelling and removing one no task runs, the place in queue
+//! a download by its peer and id, canceling and removing one no task runs, the place in queue
 //! of one the peer has not queued, an unknown batch, and a finished download's file served from
 //! where it was moved.
 
@@ -78,7 +78,7 @@ async fn a_download_is_found_by_its_peer_and_id_with_its_history() {
 }
 
 #[tokio::test]
-async fn cancelling_a_download_no_task_runs_ends_it_and_can_remove_it() {
+async fn canceling_a_download_no_task_runs_ends_it_and_can_remove_it() {
   let app = app(CONFIG, &[]).await;
   let stuck = Record::download("alice", "a.flac", 10, None);
   insert(&app, &stuck).await;

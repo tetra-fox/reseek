@@ -110,7 +110,7 @@ impl PortMapper {
   }
 
   /// Starts following what is wanted, writing where the mapping stands into `state` and
-  /// starting `reachability`'s judgement over whenever the mapping changes.
+  /// starting `reachability`'s judgment over whenever the mapping changes.
   pub fn start(&self, state: StateOwner, reachability: Arc<Reachability>) {
     let Some(gateways) = lock(&self.gateways).take() else {
       return warn!("the port mapping was started already");

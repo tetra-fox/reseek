@@ -486,7 +486,7 @@ async fn jobs(
   delete, path = "/analysis/jobs/{id}", tag = "analysis",
   params(("id" = Uuid, Path, description = "the job's id")),
   responses(
-    (status = 204, description = "cancelled"), (status = 400, body = api_types::ErrorBody),
+    (status = 204, description = "canceled"), (status = 400, body = api_types::ErrorBody),
     (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
     (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
@@ -497,7 +497,7 @@ async fn cancel_job(
   Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
   app.services.analysis.cancel_job(id).await?;
-  info!(by = caller.principal.subject, job = %id, "analysis cancelled");
+  info!(by = caller.principal.subject, job = %id, "analysis canceled");
   Ok(StatusCode::NO_CONTENT)
 }
 

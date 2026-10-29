@@ -1,6 +1,6 @@
 //! The transfer family of metrics, the same for uploads and downloads: the gauges of what is
 //! queued and in progress, read from the transfers the client runs, and the counters of what
-//! completed. The family is taken under one lock (`Catalogue::transfers`), so the figures one
+//! completed. The family is taken under one lock (`Catalog::transfers`), so the figures one
 //! update changes are seen together.
 
 use std::collections::HashSet;
@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use api_types::telemetry as figures;
 use soulseek_client::{Transfer, TransferState};
 
-use super::catalogue::PREFIX;
+use super::catalog::PREFIX;
 use super::derived::Ema;
 use super::registry::{Counter, Gauge, Histogram, Registry};
 
@@ -166,7 +166,7 @@ impl TransferMetrics {
     self.completed_speed_average_current.update(speed);
   }
 
-  /// A transfer that failed in any way, cancelled included.
+  /// A transfer that failed in any way, canceled included.
   pub fn failed(&self) {
     self.completed_failed.inc();
   }
@@ -214,7 +214,7 @@ impl TransferMetrics {
     }
   }
 
-  /// Moves the speed averages towards the summed and the mean speed of the transfers in
+  /// Moves the speed averages toward the summed and the mean speed of the transfers in
   /// progress among `transfers`, or empties them when none is.
   pub fn pace(&self, transfers: &[Transfer]) {
     let speeds: Vec<f64> = transfers

@@ -66,14 +66,14 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 
-# argon2 is slow by design and much slower unoptimised; tests check passwords
+# argon2 is slow by design and much slower unoptimized; tests check passwords
 [profile.dev.package.argon2]
 opt-level = 3
 
 [profile.dev.package.blake2]
 opt-level = 3
 
-# the audio analyser's transforms and decoders are slow unoptimised; tests analyse audio
+# the audio analyzer's transforms and decoders are slow unoptimized; tests analyze audio
 [profile.dev.package.rustfft]
 opt-level = 3
 
@@ -86,7 +86,7 @@ opt-level = 3
 [profile.dev.package.symphonia-core]
 opt-level = 3
 
-# the encoders the analyser's tests make audio with
+# the encoders the analyzer's tests make audio with
 [profile.dev.package.flacenc]
 opt-level = 3
 

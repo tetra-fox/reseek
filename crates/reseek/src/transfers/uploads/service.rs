@@ -1,5 +1,5 @@
 //! The upload calls of the API, answered by the engine: the listings, one upload with what it
-//! waits for, bumping it, cancelling and removing.
+//! waits for, bumping it, canceling and removing.
 
 use api_types::Page;
 use api_types::live::LiveFrame;

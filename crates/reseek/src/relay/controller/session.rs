@@ -434,7 +434,7 @@ impl Controller {
       },
       RelayMessage::FileAck {} => match id {
         Some(id) if self.stream_acknowledged(name, id) => None,
-        _ => unexpected("A file acknowledgement with this id was not expected"),
+        _ => unexpected("A file acknowledgment with this id was not expected"),
       },
       RelayMessage::FileFailed {
         reason,

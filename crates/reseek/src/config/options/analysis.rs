@@ -14,18 +14,18 @@ pub const MAX_ANALYSIS_WORKERS: u32 = 4;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Analysis {
-  /// File extensions, without the dot, of the files the UI offers to analyse and queues when
-  /// a whole folder is analysed.
+  /// File extensions, without the dot, of the files the UI offers to analyze and queues when
+  /// a whole folder is analyzed.
   pub extensions: Vec<String>,
-  /// How many files are analysed at the same time, at most 4.
+  /// How many files are analyzed at the same time, at most 4.
   pub workers: u32,
   /// How long one file may take; an analysis that runs longer stops and reports what it
   /// measured so far.
   #[serde(with = "humantime_serde")]
   pub timeout: Duration,
-  /// Files up to this many minutes long are analysed in full; longer ones are sampled.
+  /// Files up to this many minutes long are analyzed in full; longer ones are sampled.
   pub max_full_minutes: u32,
-  /// How many one-second windows, spread evenly, a sampled file is analysed at.
+  /// How many one-second windows, spread evenly, a sampled file is analyzed at.
   pub sampled_windows: u32,
   /// How much disk the spectrograms and waveforms of analyzed files may take; the least recently
   /// viewed go first.

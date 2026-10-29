@@ -41,7 +41,7 @@ pub struct Peer {
   pub transport: Transport,
 }
 
-/// Serves `app` on every listener until `cancel` is cancelled, then lets requests in flight
+/// Serves `app` on every listener until `cancel` is canceled, then lets requests in flight
 /// finish for up to `grace`.
 pub async fn serve(listeners: Listeners, app: Router, cancel: CancellationToken, grace: Duration) {
   let mut loops = JoinSet::new();

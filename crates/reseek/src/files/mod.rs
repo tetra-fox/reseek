@@ -98,7 +98,7 @@ pub struct Files {
 impl Files {
   /// The service over the directories of `paths`, finding downloads' files in `transfers`,
   /// pruning them by `retention.files` and following the speed files are served at until
-  /// `shutdown` is cancelled.
+  /// `shutdown` is canceled.
   pub fn start(
     config: Watcher<Options>,
     transfers: Database,

@@ -34,7 +34,7 @@ pub struct UserGroup {
   pub source: GroupSource,
   /// the group's upload priority, a lower number served first
   pub priority: u32,
-  /// the colour the group is shown in, a CSS colour name such as `violet`; null for none
+  /// the color the group is shown in, a CSS color name such as `violet`; null for none
   #[schema(example = "violet")]
   pub color: Option<String>,
 }

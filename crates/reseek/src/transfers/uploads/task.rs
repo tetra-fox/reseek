@@ -91,7 +91,7 @@ fn relayed(result: &Result<Snapshot, ClientError>, record: &Record) -> (RelayUpl
 
 impl Uploads {
   /// Starts the task of the upload `record` of the file `located`, which stops when `cancel`
-  /// is cancelled.
+  /// is canceled.
   pub(super) fn spawn(&self, record: Record, located: Located, cancel: CancellationToken) {
     let this = self.this();
     let span = info_span!(
@@ -366,7 +366,7 @@ impl Uploads {
     if record.is_completed() {
       return debug!(state = %record.state, "upload ended already");
     }
-    let cancelled_for = lock(&self.in_flight)
+    let canceled_for = lock(&self.in_flight)
       .get(&record.id)
       .and_then(|entry| entry.reason);
     let state = match ended {
@@ -378,7 +378,7 @@ impl Uploads {
     };
     record.state = state;
     record.ended_at.get_or_insert_with(Utc::now);
-    record.exception = Some(match cancelled_for {
+    record.exception = Some(match canceled_for {
       Some(why) if state.contains(TransferStates::Cancelled) => why.to_string(),
       _ => reason(error),
     });

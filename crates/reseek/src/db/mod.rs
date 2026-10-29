@@ -34,7 +34,7 @@ pub enum DbError {
   /// the database file could not be created
   #[error("{0} could not be created: {1}")]
   Create(PathBuf, std::io::Error),
-  /// the blocking thread running a call panicked or was cancelled
+  /// the blocking thread running a call panicked or was canceled
   #[error("a database call did not finish: {0}")]
   Task(String),
   /// the file holds tables but no migration record, so it is not one of reseek's
@@ -240,7 +240,7 @@ impl Database {
       .write(|conn| conn.execute_batch("PRAGMA optimize;"))
       .await
     {
-      warn!(database = name, error = %e, "database not optimised on close");
+      warn!(database = name, error = %e, "database not optimized on close");
     }
     debug!(database = name, "database closed");
   }

@@ -240,7 +240,7 @@ impl Network {
 
   /// The listener's options may have changed: the client's own, which a listener that could
   /// not move keeps as they were, are mapped on the router when `mapping` is on, and a new
-  /// port starts the judgement of who can reach us over.
+  /// port starts the judgment of who can reach us over.
   fn listening_changed(&self, mapping: bool) {
     let options = self.client.options();
     let (ip, port) = (options.listen_ip_address, options.listen_port);
@@ -273,7 +273,7 @@ impl Network {
     }
   }
 
-  /// Stops for good at shutdown: the watchdog is cancelled, the port mapping removed, the
+  /// Stops for good at shutdown: the watchdog is canceled, the port mapping removed, the
   /// client disconnected and disposed, and the events this raised are handled before this
   /// returns.
   pub async fn stop(&self) {

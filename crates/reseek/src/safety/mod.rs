@@ -36,7 +36,7 @@ impl Os {
     }
   }
 
-  /// The characters no file name may hold. `/` and `\` are replaced by the sanitisers on every
+  /// The characters no file name may hold. `/` and `\` are replaced by the sanitizers on every
   /// system besides these.
   pub fn invalid_filename_chars(self) -> Vec<char> {
     match self {
@@ -216,7 +216,7 @@ mod tests {
   }
 
   #[test]
-  fn paths_are_localised_to_the_systems_separator() {
+  fn paths_are_localized_to_the_systems_separator() {
     assert_eq!(localize_path("a/b\\c", Os::Unix), "a/b/c");
     assert_eq!(localize_path("a/b\\c", Os::Windows), "a\\b\\c");
   }

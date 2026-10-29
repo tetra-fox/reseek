@@ -75,7 +75,7 @@ impl Failure {
   }
 
   /// A cancel.
-  pub fn cancelled() -> Self {
+  pub fn canceled() -> Self {
     Self {
       state: TransferStates::Cancelled,
       message: "Operation cancelled".to_string(),
@@ -105,7 +105,7 @@ pub(super) fn failure(error: &ClientError) -> Failure {
     retryable: true,
   };
   match error {
-    ClientError::Canceled => Failure::cancelled(),
+    ClientError::Canceled => Failure::canceled(),
     ClientError::Timeout(message) => retry(TransferStates::TimedOut, message.clone()),
     ClientError::TransferRejected(reason) => Failure {
       state: TransferStates::Rejected,

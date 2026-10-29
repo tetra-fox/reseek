@@ -39,7 +39,7 @@ struct Session {
   recovered: bool,
 }
 
-/// Handles the client's events in order until `drained` is cancelled and every event raised
+/// Handles the client's events in order until `drained` is canceled and every event raised
 /// before has been handled.
 pub(super) async fn follow(
   app: AppState,
@@ -300,7 +300,7 @@ fn server_state(app: &AppState, state: ClientState) {
 }
 
 /// The TCP connection to the server is up, before the login: the watchdog stops without
-/// cancelling the login, what waited for a reconnect is in effect now, and the users the last
+/// canceling the login, what waited for a reconnect is in effect now, and the users the last
 /// session watched are watched no more.
 async fn connected(app: &AppState) {
   app.network.watchdog().stop(false);
@@ -391,8 +391,8 @@ fn disconnected(app: &AppState, message: &str, error: Option<&ClientError>, reac
         "Disconnected from the Soulseek server: disconnected by the user"
       );
     }
-    // a restart or a disconnect asked for cancelled the attempt
-    Some(ClientError::Canceled) => debug!("connection attempt cancelled"),
+    // a restart or a disconnect asked for canceled the attempt
+    Some(ClientError::Canceled) => debug!("connection attempt canceled"),
     Some(ClientError::LoginRejected(reason)) => {
       error!(
         reason,

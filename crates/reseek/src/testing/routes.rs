@@ -12,7 +12,7 @@ use super::{Answer, TestApp, request, with};
 pub const KEY: &str = "robot-key-0123456789";
 
 /// A configuration every route answers under: loopback is a trusted administrator, the relay
-/// runs as both of its sides, its agent half dialling a port nothing listens on, and every
+/// runs as both of its sides, its agent half dialing a port nothing listens on, and every
 /// switch a route checks is on.
 pub const CONFIG: &str = "debug = true\nremote_configuration = true\nremote_file_management = \
                           true\n[relay]\nenabled = true\nmode = \"debug\"\n\

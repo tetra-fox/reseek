@@ -592,12 +592,12 @@ pub(super) mod tests {
     let (failed, mut second) = ready(&queue, "bob");
     let (_, mut third) = ready(&queue, "carol");
     assert!(started(&mut first));
-    // a waiting upload that is cancelled gives up its wait and frees nothing
-    let cancelled = Uuid::new_v4();
-    queue.enqueue(cancelled, "dave", "file");
-    let waiting = queue.await_start(cancelled).unwrap();
+    // a waiting upload that is canceled gives up its wait and frees nothing
+    let canceled = Uuid::new_v4();
+    queue.enqueue(canceled, "dave", "file");
+    let waiting = queue.await_start(canceled).unwrap();
     drop(waiting);
-    assert!(queue.complete(cancelled));
+    assert!(queue.complete(canceled));
     assert!(!started(&mut second));
     assert!(queue.complete(done), "the upload that succeeded");
     assert!(started(&mut second));

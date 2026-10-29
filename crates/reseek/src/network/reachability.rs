@@ -2,7 +2,7 @@
 //! a peer that connects to our listener shows they can, whether it came by itself or to answer
 //! a connection request we had the server relay (nothing else gets a peer to our port); ten
 //! minutes logged in, or five of our searches drawing responses, with every peer connection one
-//! we opened ourselves, shows they cannot. The judgement starts over at every login and whenever
+//! we opened ourselves, shows they cannot. The judgment starts over at every login and whenever
 //! the listening port or its mapping on the router changes; it is
 //! `State.server.listen.reachable`.
 
@@ -25,7 +25,7 @@ pub const WAITED: Duration = Duration::from_secs(600);
 /// How many of our searches draw responses before nobody connecting to us says they cannot.
 pub const SEARCHES: usize = 5;
 
-/// What the judgement is made from, since it last started over.
+/// What the judgment is made from, since it last started over.
 struct Evidence {
   logged_in: bool,
   since: Instant,
@@ -35,7 +35,7 @@ struct Evidence {
   answered: HashSet<u32>,
 }
 
-/// The judgement of whether other users can connect to us.
+/// The judgment of whether other users can connect to us.
 pub struct Reachability {
   state: StateOwner,
   inbound: watch::Receiver<u64>,
@@ -56,7 +56,7 @@ pub fn judge(reached: u64, searches: usize, waited: bool) -> Reachable {
 }
 
 impl Reachability {
-  /// A judgement made from the connections `inbound` counts, written into `state`; it is
+  /// A judgment made from the connections `inbound` counts, written into `state`; it is
   /// "unknown" until we log in.
   pub fn new(state: StateOwner, inbound: watch::Receiver<u64>) -> Self {
     let base = *inbound.borrow();
@@ -77,7 +77,7 @@ impl Reachability {
     lock(&self.evidence)
   }
 
-  /// We logged in: the judgement starts over.
+  /// We logged in: the judgment starts over.
   pub fn logged_in(&self) {
     self.evidence().logged_in = true;
     self.start_over("logged in");
@@ -89,7 +89,7 @@ impl Reachability {
     self.changed.notify_one();
   }
 
-  /// What other users could reach changed, for `why`: the judgement starts over.
+  /// What other users could reach changed, for `why`: the judgment starts over.
   pub fn start_over(&self, why: &str) {
     let mut evidence = self.evidence();
     evidence.since = Instant::now();
@@ -107,7 +107,7 @@ impl Reachability {
     }
   }
 
-  /// The judgement now, and when it next changes by time alone.
+  /// The judgment now, and when it next changes by time alone.
   fn now(&self) -> (Reachable, Option<Instant>) {
     let evidence = self.evidence();
     if !evidence.logged_in {
@@ -174,7 +174,7 @@ mod tests {
     assert_eq!(judge(0, 0, true), Reachable::No);
   }
 
-  /// Lets the judgement's task run until it waits again.
+  /// Lets the judgment's task run until it waits again.
   async fn settle() {
     for _ in 0..10 {
       tokio::task::yield_now().await;

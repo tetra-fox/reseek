@@ -21,7 +21,7 @@ use crate::config::Options;
 use crate::relay::credential::Key;
 use crate::relay::frames::MAX_FRAME;
 
-/// How long dialling the controller may take, TLS and the upgrade included.
+/// How long dialing the controller may take, TLS and the upgrade included.
 const DIAL: Duration = Duration::from_secs(10);
 
 /// A connection to the controller that is plain or TLS.

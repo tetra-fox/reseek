@@ -41,7 +41,7 @@ pub struct RelayTimeouts {
   #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_ACK")]
   #[serde(with = "humantime_serde")]
   pub file_ack: Duration,
-  /// After the acknowledgement, for the file's bytes to start arriving.
+  /// After the acknowledgment, for the file's bytes to start arriving.
   #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_STREAM")]
   #[serde(with = "humantime_serde")]
   pub file_stream: Duration,

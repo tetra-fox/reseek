@@ -40,7 +40,7 @@ pub(super) enum StreamFailure {
 /// The bytes of an agent's file as they arrive.
 type Chunks = mpsc::Receiver<io::Result<Bytes>>;
 
-/// A file request waiting for the agent's acknowledgement and its bytes.
+/// A file request waiting for the agent's acknowledgment and its bytes.
 pub(super) struct StreamWait {
   pub agent: String,
   /// the remote filename asked for
@@ -154,7 +154,7 @@ fn names_the_same(sent: &str, asked: &str) -> bool {
 
 impl Controller {
   /// Asks the agent `agent` for `filename` from `start` for the upload `transfer`, and waits
-  /// for its bytes: for the acknowledgement as long as the options say, then as long again for
+  /// for its bytes: for the acknowledgment as long as the options say, then as long again for
   /// the bytes. An agent not logged in or without the file fails as not found, a wait too
   /// long as timed out.
   pub async fn open_stream(
@@ -246,7 +246,7 @@ impl Controller {
       )
     };
     tokio::pin!(arrived);
-    // the bytes may arrive before the acknowledgement does
+    // the bytes may arrive before the acknowledgment does
     let early = tokio::select! {
       acked = acknowledged => {
         if acked.is_ok() {
@@ -289,7 +289,7 @@ impl Controller {
     }
   }
 
-  /// Takes the agent's acknowledgement of the file request `id`; false when nobody waits for
+  /// Takes the agent's acknowledgment of the file request `id`; false when nobody waits for
   /// it.
   pub(super) fn stream_acknowledged(&self, agent: &str, id: Uuid) -> bool {
     let mut registry = lock(&self.registry);

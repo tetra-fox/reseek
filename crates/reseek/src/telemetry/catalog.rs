@@ -6,7 +6,7 @@
 use std::sync::{Mutex, MutexGuard};
 
 use super::derived::{Ema, TimedCounter};
-use super::registry::{Counter, Gauge, Histogram, LabelledCounter, Registry, exponential};
+use super::registry::{Counter, Gauge, Histogram, LabeledCounter, Registry, exponential};
 use super::transfers::{TransferFamily, TransferMetrics};
 use crate::sync::lock;
 
@@ -122,12 +122,12 @@ pub struct RelayMetrics {
   /// peers' downloads of agents' files whose bytes are flowing through the controller
   pub uploads_in_flight: Gauge,
   /// what the controller was asked by or asked of its agents, by `type` and `outcome`
-  pub requests: LabelledCounter,
+  pub requests: LabeledCounter,
 }
 
 /// Every metric of the daemon, and the registry they are exposed from.
 #[derive(Debug)]
-pub struct Catalogue {
+pub struct Catalog {
   /// incoming searches
   pub search: SearchMetrics,
   /// incoming browses
@@ -144,7 +144,7 @@ pub struct Catalogue {
   pub registry: Registry,
 }
 
-impl Default for Catalogue {
+impl Default for Catalog {
   /// Every metric registered at zero.
   fn default() -> Self {
     let mut r = Registry::default();
@@ -314,7 +314,7 @@ impl Default for Catalogue {
         name("relay_uploads_in_flight"),
         "Current number of uploads whose file is coming from a relay agent",
       ),
-      requests: r.labelled_counter(
+      requests: r.labeled_counter(
         name("relay_requests_total"),
         "Total number of relay requests, by type and outcome",
       ),
@@ -331,7 +331,7 @@ impl Default for Catalogue {
   }
 }
 
-impl Catalogue {
+impl Catalog {
   /// The metrics of both directions of transfers, held until the guard is dropped, so the
   /// figures one update changes together are seen together.
   pub fn transfers(&self) -> MutexGuard<'_, TransferFamily> {
@@ -409,9 +409,9 @@ mod tests {
   ];
 
   #[test]
-  fn the_catalogue_registers_every_family_once_at_zero() {
-    let catalogue = Catalogue::default();
-    let families = catalogue.registry.families();
+  fn the_catalog_registers_every_family_once_at_zero() {
+    let catalog = Catalog::default();
+    let families = catalog.registry.families();
     let mut names: Vec<_> = families.iter().map(|f| f.name.clone()).collect();
     names.sort_unstable();
     let mut expected: Vec<String> = FIXED.iter().map(ToString::to_string).collect();

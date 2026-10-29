@@ -110,7 +110,7 @@ pub(super) fn assemble(
   measured: &Measured,
   reading: Reading,
   layout: Option<SpectrogramLayout>,
-  analysed_at: DateTime<Utc>,
+  analyzed_at: DateTime<Utc>,
 ) -> AudioAnalysis {
   let claimed = match &measured.claimed {
     Some(claimed) => ClaimedFormat {
@@ -144,7 +144,7 @@ pub(super) fn assemble(
     relative_path: file.relative.clone(),
     transfer_id: file.transfer_id,
     size: file.size,
-    analysed_at,
+    analyzed_at,
     duration_seconds: measured.duration,
     claimed,
     verdict: reading.verdict,
@@ -156,7 +156,7 @@ pub(super) fn assemble(
     windows: Some(windows),
     spectrogram_url: spectrogram_url(file.root, &file.relative),
     spectrogram: layout,
-    judgement: None,
+    judgment: None,
     limitations: reading.limitations,
     stale: false,
   }

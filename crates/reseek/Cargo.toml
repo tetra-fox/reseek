@@ -66,7 +66,7 @@ serde_plain.workspace = true
 sha1 = "0.10"
 sha2.workspace = true
 subtle = "2"
-# decodes every audio format the analyser reads, streamed
+# decodes every audio format the analyzer reads, streamed
 symphonia = { version = "0.6", features = ["all"] }
 sysinfo = { version = "0.39", default-features = false, features = ["disk", "network", "system"] }
 thiserror.workspace = true
@@ -100,7 +100,7 @@ win32job = "2"
 
 [dev-dependencies]
 api-client.workspace = true
-# make the lossless and lossy audio the analyser is tested on
+# make the lossless and lossy audio the analyzer is tested on
 flacenc = { version = "0.5", default-features = false }
 # builds the LAME source it carries with autotools (`configure`, `make`, a C compiler), for
 # the test fixtures only; nothing of it is in the program

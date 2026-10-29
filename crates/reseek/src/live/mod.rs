@@ -40,7 +40,7 @@ pub struct Live {
 
 struct Hub {
   state: Mutex<HubState>,
-  /// cancelled when the daemon shuts down, which closes every stream
+  /// canceled when the daemon shuts down, which closes every stream
   cancel: CancellationToken,
 }
 
@@ -134,7 +134,7 @@ impl Drop for Registered {
 pub struct TooManyStreams;
 
 impl Live {
-  /// A hub whose streams say goodbye and close when `cancel` is cancelled.
+  /// A hub whose streams say goodbye and close when `cancel` is canceled.
   pub fn new(cancel: CancellationToken) -> Self {
     Self {
       hub: Arc::new(Hub {

@@ -32,7 +32,7 @@ pub(super) fn measures(
     cutoff_median_hz: (!cutoffs.is_empty()).then(|| middle(&cutoffs).round() as u32),
     shelf_sharpness_db_p95: percentile(&shelves, 0.95),
     sfb21_holes: percentile(&holes, 0.5),
-    frame_artefact_score: percentile(&scores, 0.5),
+    frame_artifact_score: percentile(&scores, 0.5),
     upsample_ratio,
     bit_depth_effective: measured
       .bits_used

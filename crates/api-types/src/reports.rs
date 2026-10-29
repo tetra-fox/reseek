@@ -22,7 +22,7 @@ use crate::transfers::{SortOrder, TransferDirection, TransferStates};
 pub enum TransferOutcome {
   /// the whole file arrived
   Succeeded,
-  /// cancelled here
+  /// canceled here
   Cancelled,
   /// a connect or inactivity timeout
   TimedOut,
@@ -184,7 +184,7 @@ pub struct UserTransferStatistics {
   pub successful: u64,
   /// the ones that errored, timed out, were rejected or aborted
   pub errored: u64,
-  /// the ones cancelled
+  /// the ones canceled
   pub cancelled: u64,
 }
 

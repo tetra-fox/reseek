@@ -126,8 +126,8 @@ pub enum Outcome {
     /// files in the index
     files: u32,
   },
-  /// it was cancelled; what it wrote stays and nothing was pruned
-  Cancelled,
+  /// it was canceled; what it wrote stays and nothing was pruned
+  Canceled,
 }
 
 /// Why a scan failed.
@@ -142,7 +142,7 @@ pub enum ScanError {
 }
 
 /// Runs a scan of `settings`' shares into `db`, reporting progress to `report` after every
-/// directory written. Cancelling `cancel` stops it between directories.
+/// directory written. Canceling `cancel` stops it between directories.
 pub async fn scan(
   db: &Database,
   settings: Arc<Settings>,
@@ -289,8 +289,8 @@ pub async fn scan(
   if cancel.is_cancelled() {
     db.write(move |conn| repository::mark_suspect(conn, timestamp))
       .await?;
-    info!("Shared file scan cancelled successfully");
-    return Ok(Outcome::Cancelled);
+    info!("Shared file scan canceled successfully");
+    return Ok(Outcome::Canceled);
   }
   let pruning = Instant::now();
   info!("Rebuilding filename index...");
@@ -493,7 +493,7 @@ pub(super) mod tests {
   }
 
   #[tokio::test]
-  async fn a_cancelled_scan_prunes_nothing_and_is_suspect() {
+  async fn a_canceled_scan_prunes_nothing_and_is_suspect() {
     let dir = tree();
     let db = index().await;
     let settings = settings(dir.path(), &[], &[], false);
@@ -502,7 +502,7 @@ pub(super) mod tests {
     let cancel = CancellationToken::new();
     cancel.cancel();
     let outcome = scan(&db, settings, false, 1, cancel, |_| {}).await.unwrap();
-    assert_eq!(outcome, Outcome::Cancelled);
+    assert_eq!(outcome, Outcome::Canceled);
     assert_eq!(names(&db).await, before);
     let latest = db.read(repository::latest_scan).await.unwrap().unwrap();
     assert!(latest.ended_at.is_none() && latest.suspect);

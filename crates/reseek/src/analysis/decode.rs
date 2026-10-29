@@ -1,5 +1,5 @@
 //! Reading an audio file as samples, a little at a time: the container and codec are found by
-//! probing, packets are decoded one by one, and the analyser takes the first two channels as
+//! probing, packets are decoded one by one, and the analyzer takes the first two channels as
 //! floats in one-second windows. Integer samples are also looked at as they come, for the bits
 //! they actually use.
 
@@ -21,10 +21,10 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::Time;
 use tracing::{debug, trace};
 
-/// The most channels the analyser reads; the rest of a surround file is left out.
-pub(super) const ANALYSED_CHANNELS: usize = 2;
+/// The most channels the analyzer reads; the rest of a surround file is left out.
+pub(super) const ANALYZED_CHANNELS: usize = 2;
 
-/// The highest sample rate the analyser reads; a window holds a second of samples, so a header
+/// The highest sample rate the analyzer reads; a window holds a second of samples, so a header
 /// claiming more is not trusted with the memory.
 const MAX_RATE: u32 = 768_000;
 
@@ -40,7 +40,7 @@ pub(super) struct Claimed {
   pub sample_rate: u32,
   /// bits per sample, `None` for a codec without integer samples
   pub bit_depth: Option<u32>,
-  /// every channel of the file, analysed or not
+  /// every channel of the file, analyzed or not
   pub channels: u32,
   /// whether the codec keeps every bit of the audio
   pub lossless: bool,
@@ -55,9 +55,9 @@ pub(super) struct Decoder {
   track: u32,
   /// what the file claims
   pub claimed: Claimed,
-  /// the channels analysed: one for mono, else the first two
+  /// the channels analyzed: one for mono, else the first two
   pub channels: usize,
-  /// decoded samples not taken yet, one vector per analysed channel
+  /// decoded samples not taken yet, one vector per analyzed channel
   pending: Vec<Vec<f32>>,
   /// where the next sample of `pending` starts in `pending`
   taken: usize,
@@ -103,7 +103,7 @@ impl Decoder {
         FormatOptions::default(),
         MetadataOptions::default(),
       )
-      .map_err(|e| format!("the container was not recognised: {e}"))?;
+      .map_err(|e| format!("the container was not recognized: {e}"))?;
     let track = format
       .default_track(TrackType::Audio)
       .ok_or("the file holds no audio track")?;
@@ -119,7 +119,7 @@ impl Decoder {
     let codec = codecs
       .get_audio_decoder(params.codec)
       .map(|registered| registered.codec.info.short_name.to_string())
-      .ok_or("the codec is not one the analyser can decode")?;
+      .ok_or("the codec is not one the analyzer can decode")?;
     let decoder = codecs
       .make_audio_decoder(&params, &AudioDecoderOptions::default())
       .map_err(|e| format!("the decoder could not start: {e}"))?;
@@ -129,14 +129,14 @@ impl Decoder {
       .ok_or("the sample rate is not stated")?;
     if sample_rate > MAX_RATE {
       return Err(format!(
-        "the sample rate of {sample_rate} Hz is above the {MAX_RATE} Hz the analyser reads"
+        "the sample rate of {sample_rate} Hz is above the {MAX_RATE} Hz the analyzer reads"
       ));
     }
     let all = params.channels.as_ref().map_or(0, |c| c.count());
     if all == 0 {
       return Err("the number of channels is not stated".to_string());
     }
-    let channels = all.min(ANALYSED_CHANNELS);
+    let channels = all.min(ANALYZED_CHANNELS);
     debug!(codec, sample_rate, channels = all, "audio opened");
     Ok(Self {
       format,
@@ -179,7 +179,7 @@ impl Decoder {
     })
   }
 
-  /// Fills `window`, one vector per analysed channel, with the next `frames` sample frames.
+  /// Fills `window`, one vector per analyzed channel, with the next `frames` sample frames.
   pub fn fill(&mut self, window: &mut [Vec<f32>], frames: usize) -> Filled {
     for channel in window.iter_mut() {
       channel.clear();
@@ -277,7 +277,7 @@ impl Decoder {
       self.decoded.0 += packet.data.len() as u64;
       self.decoded.1 += decoded.frames() as u64;
       decoded.copy_to_vecs_planar::<f32>(&mut self.scratch);
-      // the analysed channels must stay the same length
+      // the analyzed channels must stay the same length
       if self.scratch.len() < self.channels {
         debug!(
           planes = self.scratch.len(),

@@ -1,7 +1,7 @@
 //! The download engine: enqueueing files from a peer, one task per download that tries it,
 //! waits and tries again, writing it into the incomplete directory and moving it into the
 //! downloads directory once it has arrived, and what the API does to downloads besides:
-//! cancelling, removing, the place in the peer's queue, and resuming the downloads a stop
+//! canceling, removing, the place in the peer's queue, and resuming the downloads a stop
 //! interrupted.
 //!
 //! [`Downloads`] keeps every running download's cancel handle, keyed by its id, from the
@@ -62,7 +62,7 @@ const STOPPING: Duration = Duration::from_secs(5);
 /// How many enqueue calls of the API run at once.
 const ENQUEUE_CALLS: usize = 2;
 
-/// Why a download cancelled at block time ended.
+/// Why a download canceled at block time ended.
 const BLOCKED: &str = "Blocked";
 
 /// What is kept for a download whose task runs.
@@ -71,7 +71,7 @@ struct InFlight {
   cancel: CancellationToken,
   /// remove the record from the listings once it has ended
   remove: bool,
-  /// why it was cancelled, when not by a plain cancel
+  /// why it was canceled, when not by a plain cancel
   reason: Option<&'static str>,
 }
 
@@ -110,7 +110,7 @@ impl Downloads {
   /// blocked, marking the files it writes in `files`, reading what a batch searched for from
   /// `searches`, raising its events on `events`, pushing
   /// its records to `live`, counting the downloads that end in `telemetry` and telling `relay`
-  /// of each that finished. Its tasks end when `shutdown` is cancelled.
+  /// of each that finished. Its tasks end when `shutdown` is canceled.
   #[allow(
     clippy::too_many_arguments,
     reason = "the engine takes each part of the daemon it uses"
@@ -215,7 +215,7 @@ impl Downloads {
   }
 
   /// Cancels the download `id` of `username`: a running one stops wherever it is and ends
-  /// cancelled; one whose task is gone without ending it is ended cancelled here. With
+  /// canceled; one whose task is gone without ending it is ended canceled here. With
   /// `remove` it leaves the listings once it has ended. 404 when there is no such download.
   pub async fn cancel(&self, username: &str, id: Uuid, remove: bool) -> Result<(), ApiError> {
     let mut record = self.record_of(username, id).await?;
@@ -227,7 +227,7 @@ impl Downloads {
       record.state = TransferStates::Completed | TransferStates::Cancelled;
       record.ended_at = Some(Utc::now());
       record.exception = Some("The operation was canceled.".to_string());
-      info!(%id, username, "download without a running task ended as cancelled");
+      info!(%id, username, "download without a running task ended as canceled");
       self.save(&record, true).await;
     }
     if remove {
@@ -248,7 +248,7 @@ impl Downloads {
     entry.remove |= remove;
     entry.reason = entry.reason.or(reason);
     entry.cancel.cancel();
-    debug!(%id, remove, "running download cancelled");
+    debug!(%id, remove, "running download canceled");
     true
   }
 
@@ -276,18 +276,15 @@ impl Downloads {
       .await;
     let ids = match unfinished {
       Ok(ids) => ids,
-      Err(e) => return warn!(username, error = %e, "downloads from a blocked user not cancelled"),
+      Err(e) => return warn!(username, error = %e, "downloads from a blocked user not canceled"),
     };
-    let mut cancelled = 0;
+    let mut canceled = 0;
     for id in self::ids(ids) {
       if self.cancel_running(id, false, Some(BLOCKED)) {
-        cancelled += 1;
+        canceled += 1;
       }
     }
-    info!(
-      username,
-      cancelled, "downloads from a blocked user cancelled"
-    );
+    info!(username, canceled, "downloads from a blocked user canceled");
   }
 
   /// Enqueues again the downloads a stop interrupted that were not removed since, each user's
@@ -323,7 +320,7 @@ impl Downloads {
   }
 
   /// Waits, at shutdown and once the client is stopped, for the download tasks the shutdown
-  /// cancelled to end; what they leave unfinished the stop ends after.
+  /// canceled to end; what they leave unfinished the stop ends after.
   pub async fn stop(&self) {
     self.tasks.close();
     if tokio::time::timeout(STOPPING, self.tasks.wait())

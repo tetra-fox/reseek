@@ -616,7 +616,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * A file's bytes for the browser to show or save, a single range honoured. A link without a
+         * A file's bytes for the browser to show or save, a single range honored. A link without a
          *     session loads it with the token `t`.
          */
         get: operations["file_content"];
@@ -674,7 +674,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One log file's text, ranges honoured. The name is a bare file name ending in `.log`. */
+        /** One log file's text, ranges honored. The name is a bare file name ending in `.log`. */
         get: operations["get_log_file"];
         put?: never;
         post?: never;
@@ -2894,7 +2894,7 @@ export interface components {
         AnalysisCompleted: {
             /**
              * Format: double
-             * @description how sure the analyser is of its reading
+             * @description how sure the analyzer is of its reading
              */
             confidence: number;
             /** @description findings independent of the verdict */
@@ -2903,10 +2903,10 @@ export interface components {
             path: string;
             /**
              * Format: uuid
-             * @description the download the file belongs to, null when it was analysed by path
+             * @description the download the file belongs to, null when it was analyzed by path
              */
             transferId?: string | null;
-            /** @description the analyser's reading */
+            /** @description the analyzer's reading */
             verdict: components["schemas"]["AnalysisVerdict"];
         };
         /**
@@ -3006,7 +3006,7 @@ export interface components {
              * Format: double
              * @description how strongly the noise floor repeats at lossy codec frame lengths, from 0 to 1
              */
-            frameArtefactScore?: number | null;
+            frameArtifactScore?: number | null;
             /**
              * Format: double
              * @description the estimated noise floor in dBFS
@@ -3039,7 +3039,7 @@ export interface components {
              */
             upsampleRatio?: number | null;
         };
-        /** @description The user's judgement of a file, with who recorded it. */
+        /** @description The user's judgment of a file, with who recorded it. */
         AnalysisOverride: {
             /**
              * Format: date-time
@@ -3056,15 +3056,15 @@ export interface components {
              * @example remix, known low-quality acapella
              */
             note?: string | null;
-            /** @description the judgement */
-            verdict: components["schemas"]["Judgement"];
+            /** @description the judgment */
+            verdict: components["schemas"]["Judgment"];
         };
         /**
-         * @description The analyser's reading of whether the audio matches the format the file claims.
+         * @description The analyzer's reading of whether the audio matches the format the file claims.
          * @enum {string}
          */
         AnalysisVerdict: "consistent" | "likely_transcode" | "mixed_sources" | "inconclusive";
-        /** @description The measures of one analysed window. */
+        /** @description The measures of one analyzed window. */
         AnalysisWindow: {
             /**
              * Format: int32
@@ -3098,12 +3098,12 @@ export interface components {
              * Format: date-time
              * @description when the analysis finished
              */
-            analysedAt: string;
+            analyzedAt: string;
             /** @description the format the container claims */
             claimed: components["schemas"]["ClaimedFormat"];
             /**
              * Format: double
-             * @description how sure the analyser is of its reading, from 0 to 0.98
+             * @description how sure the analyzer is of its reading, from 0 to 0.98
              */
             confidence: number;
             /**
@@ -3127,20 +3127,20 @@ export interface components {
             root: components["schemas"]["FileRoot"];
             /**
              * Format: int64
-             * @description the file's size in bytes when it was analysed
+             * @description the file's size in bytes when it was analyzed
              */
             size: number;
             spectrogram?: null | components["schemas"]["SpectrogramLayout"];
             /** @description where the overview of this report's spectrogram is served */
             spectrogramUrl: string;
             /**
-             * @description true when an older version of reseek analysed the file and this one cannot show its
-             *     report: only the file, when, the reading and the user's judgement are kept, and analysing
+             * @description true when an older version of reseek analyzed the file and this one cannot show its
+             *     report: only the file, when, the reading and the user's judgment are kept, and analyzing
              *     the file again replaces it
              */
             stale: boolean;
             /**
-             * @description one sentence saying what the analyser found and where
+             * @description one sentence saying what the analyzer found and where
              * @example 68% of the time is full-band; 32% shows a 16 kHz cutoff concentrated in vocal content.
              */
             summary: string;
@@ -3149,9 +3149,9 @@ export interface components {
              * @description the download the file belongs to, null when it is no download's
              */
             transferId?: string | null;
-            /** @description the analyser's reading */
+            /** @description the analyzer's reading */
             verdict: components["schemas"]["AnalysisVerdict"];
-            /** @description the measures of each analysed window, null where the per-window list was left out */
+            /** @description the measures of each analyzed window, null where the per-window list was left out */
             windows?: components["schemas"]["AnalysisWindow"][] | null;
         };
         /**
@@ -3503,7 +3503,7 @@ export interface components {
             bytes: number;
             /**
              * Format: int64
-             * @description how many failed, cancelled ones included
+             * @description how many failed, canceled ones included
              */
             failed: number;
             /**
@@ -3945,7 +3945,7 @@ export interface components {
         EncoderGuess: {
             /**
              * Format: double
-             * @description how sure the analyser is of the match, from 0 to 1
+             * @description how sure the analyzer is of the match, from 0 to 1
              */
             confidence: number;
             /**
@@ -4605,10 +4605,10 @@ export interface components {
             userCount: number;
         };
         /**
-         * @description The user's own judgement of a file.
+         * @description The user's own judgment of a file.
          * @enum {string}
          */
-        Judgement: "legit" | "fake";
+        Judgment: "legit" | "fake";
         /** @description What the known-users directory holds about a user, shared by the summary and the profile. */
         KnownUser: {
             block?: null | components["schemas"]["Block"];
@@ -5587,7 +5587,7 @@ export interface components {
         };
         /** @description Identity forwarded by a trusted reverse proxy. */
         ProxyProvider: {
-            /** @description the proxy's identity headers are honoured */
+            /** @description the proxy's identity headers are honored */
             enabled: boolean;
         };
         /**
@@ -6315,15 +6315,15 @@ export interface components {
              */
             version: number;
         };
-        /** @description The body of `PUT .../analysis/override`, which records the user's judgement of a file. */
+        /** @description The body of `PUT .../analysis/override`, which records the user's judgment of a file. */
         SetAnalysisOverride: {
             /**
              * @description why, in the user's words
              * @example remix, known low-quality acapella
              */
             note?: string | null;
-            /** @description the judgement */
-            verdict: components["schemas"]["Judgement"];
+            /** @description the judgment */
+            verdict: components["schemas"]["Judgment"];
         };
         /** @description A shared directory, or a directory excluded from the shares. */
         Share: {
@@ -6377,7 +6377,7 @@ export interface components {
         };
         /** @description The share scan and the share cache. */
         SharesState: {
-            /** @description the last scan was cancelled */
+            /** @description the last scan was canceled */
             cancelled: boolean;
             /**
              * Format: int32
@@ -7229,7 +7229,7 @@ export interface components {
             /**
              * Format: int32
              * @description the obfuscation type the server reported, 0 for none and 1 for rotated; null when it
-             *     sent none. Shown for diagnostics, never dialled
+             *     sent none. Shown for diagnostics, never dialed
              */
             obfuscationType?: number | null;
             /**
@@ -7261,7 +7261,7 @@ export interface components {
         /** @description The upload group a user is in. */
         UserGroup: {
             /**
-             * @description the colour the group is shown in, a CSS colour name such as `violet`; null for none
+             * @description the color the group is shown in, a CSS color name such as `violet`; null for none
              * @example violet
              */
             color?: string | null;
@@ -7450,7 +7450,7 @@ export interface components {
         UserTransferStatistics: {
             /**
              * Format: int64
-             * @description the ones cancelled
+             * @description the ones canceled
              */
             cancelled: number;
             /**
@@ -7612,7 +7612,7 @@ export interface components {
              */
             windows: number;
         };
-        /** @description The spectrum of one analysed window, as `GET .../analysis/windows/{index}` answers it. */
+        /** @description The spectrum of one analyzed window, as `GET .../analysis/windows/{index}` answers it. */
         WindowSpectrum: {
             /** @description the level at each point, in dB relative to a full-scale sine, at least -160 */
             db: number[];
@@ -7772,7 +7772,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description cancelled */
+            /** @description canceled */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -9373,7 +9373,7 @@ export interface operations {
     run_file: {
         parameters: {
             query?: {
-                /** @description analyse again even when a report for the file as it is now exists */
+                /** @description analyze again even when a report for the file as it is now exists */
                 force?: boolean;
             };
             header?: never;
@@ -15101,7 +15101,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description cancelled */
+            /** @description canceled */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -15212,7 +15212,7 @@ export interface operations {
     run_download: {
         parameters: {
             query?: {
-                /** @description analyse again even when a report for the file as it is now exists */
+                /** @description analyze again even when a report for the file as it is now exists */
                 force?: boolean;
             };
             header?: never;
@@ -16252,7 +16252,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description cancelled */
+            /** @description canceled */
             204: {
                 headers: {
                     [name: string]: unknown;

@@ -1,4 +1,4 @@
-//! The analyser's own reading of its measures: whether the audio is consistent with the format
+//! The analyzer's own reading of its measures: whether the audio is consistent with the format
 //! it claims, a likely transcode, a mix of sources, or something it can not tell, with how sure
 //! it is, the findings independent of that, one summary, and what made it less reliable. The
 //! reading works from the spread over windows, not an average, so a band-limited minority of
@@ -19,7 +19,7 @@ use super::thresholds::{
 /// The top of the band of a 48 kHz recording; a file whose band goes past it is hi-res.
 const HI_RES_TOP_HZ: f64 = 24_000.0;
 
-/// What the analyser makes of a file.
+/// What the analyzer makes of a file.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Reading {
   /// the reading of the cutoff
@@ -184,13 +184,13 @@ pub(super) fn read(measured: &Measured) -> Reading {
   let mut limitations = measured.problems.clone();
   if measured.sampled {
     limitations.push(format!(
-      "Only {} one-second windows spread over the file were analysed.",
+      "Only {} one-second windows spread over the file were analyzed.",
       measured.windows.len()
     ));
   }
   if measured.channels_left_out > 0 {
     limitations.push(format!(
-      "Only the first two of {} channels were analysed.",
+      "Only the first two of {} channels were analyzed.",
       claimed.channels
     ));
   }
@@ -225,7 +225,7 @@ pub(super) fn read(measured: &Measured) -> Reading {
       summary: format!(
         "The content stops sharply at {}: the top of what a {} kHz recording holds, and also \
          where an encoder at {} cuts off. Either it was made at that rate and converted up, \
-         or it is a transcode from that encoder; the analyser can not tell which.",
+         or it is a transcode from that encoder; the analyzer can not tell which.",
         khz(edge),
         format!("{:.2}", edge * 2.0 / 1000.0)
           .trim_end_matches('0')
@@ -350,7 +350,7 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     reading.limitations.push(filtered_at_20_khz());
     reading.summary = format!(
       "{} of the time stops at {} with a sharp shelf, where an encoder at {} cuts off; a \
-       recording filtered there when it was made looks the same, and the analyser can not \
+       recording filtered there when it was made looks the same, and the analyzer can not \
        tell the two apart.",
       percent(clustered),
       khz(median),
@@ -466,7 +466,7 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     }
     reading.limitations.push(
       "Lossless recordings of old masters, speech, lo-fi material or vinyl and cassette \
-       transfers roll off early, and heavy equalisation can look like a shelf."
+       transfers roll off early, and heavy equalization can look like a shelf."
         .to_string(),
     );
     if median >= NATURAL_LIMIT * heard.top {

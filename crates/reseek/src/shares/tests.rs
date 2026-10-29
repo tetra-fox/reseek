@@ -471,7 +471,7 @@ async fn changes_waiting_for_quiet_are_applied_when_the_watches_are_replaced() {
 }
 
 #[tokio::test]
-async fn a_cancelled_scan_leaves_the_engine_idle_at_full_progress() {
+async fn a_canceled_scan_leaves_the_engine_idle_at_full_progress() {
   let (files, app) = shared_app().await;
   let shares = app.state.shares.clone();
   eventually(async || lock(&shares.running).is_none()).await;

@@ -66,7 +66,7 @@ pub struct AgentClient {
 
 impl AgentClient {
   /// The agent of the options, copying finished downloads into `downloads`; `debug` when
-  /// the daemon is also the controller. Nothing is dialled until [`AgentClient::start`].
+  /// the daemon is also the controller. Nothing is dialed until [`AgentClient::start`].
   pub fn new(
     config: Watcher<Options>,
     shares: Arc<Shares>,
@@ -117,7 +117,7 @@ impl AgentClient {
     }
   }
 
-  /// Closes the connection to the controller and stops dialling.
+  /// Closes the connection to the controller and stops dialing.
   pub fn stop(&self) {
     self.started.send_replace(false);
     if let Some(link) = self.current() {
@@ -176,7 +176,7 @@ impl AgentClient {
         debug!(
           attempt = failures + 1,
           ?delay,
-          "dialling the relay controller again after a wait"
+          "dialing the relay controller again after a wait"
         );
         tokio::select! {
           () = self.shutdown.cancelled() => return,

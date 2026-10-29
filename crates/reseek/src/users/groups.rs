@@ -14,7 +14,7 @@ pub const LEECHERS: &str = "leechers";
 /// The group of everyone else.
 pub const DEFAULT: &str = "default";
 
-/// The colour a group is shown in: the built-in groups each their own, every user-defined group
+/// The color a group is shown in: the built-in groups each their own, every user-defined group
 /// the same, the default group none.
 fn color(name: &str, source: GroupSource) -> Option<String> {
   let color = match (source, name) {

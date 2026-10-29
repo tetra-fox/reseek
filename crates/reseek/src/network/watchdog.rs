@@ -141,8 +141,8 @@ impl Watchdog {
   }
 
   /// Turns the watchdog off, so no new loop starts and the running one ends after its attempt.
-  /// With `abort`, its wait or attempt is cancelled too, which a connect in progress reports as
-  /// cancelled.
+  /// With `abort`, its wait or attempt is canceled too, which a connect in progress reports as
+  /// canceled.
   pub fn stop(&self, abort: bool) {
     self.inner.enabled.send_replace(false);
     self.publish();
@@ -151,7 +151,7 @@ impl Watchdog {
     }
   }
 
-  /// Starts over at once: the running loop and its back-off are cancelled, the waits after
+  /// Starts over at once: the running loop and its back-off are canceled, the waits after
   /// unanswered logins forgotten, and a new loop starts as soon as the old one has ended.
   /// Returns whether the watchdog was on.
   pub fn restart(&self) -> bool {
@@ -213,7 +213,7 @@ impl Watchdog {
     }
   }
 
-  /// The connect loop: tries until connected, off, or cancelled.
+  /// The connect loop: tries until connected, off, or canceled.
   async fn run(&self) {
     let inner = &self.inner;
     lock(&inner.status).attempting = true;
@@ -251,7 +251,7 @@ impl Watchdog {
       if let Some(wait) = wait {
         tokio::select! {
           () = attempt.cancelled() => {
-            debug!("Reconnection attempt cancelled");
+            debug!("Reconnection attempt canceled");
             return;
           }
           () = tokio::time::sleep(wait) => {}
@@ -262,7 +262,7 @@ impl Watchdog {
       }
       let span = info_span!("server_connect", attempt = failed + 1);
       match self.attempt(&attempt).instrument(span).await {
-        Attempt::Connected | Attempt::Cancelled => return,
+        Attempt::Connected | Attempt::Canceled => return,
         Attempt::Stop => {
           self.stop(false);
           return;
@@ -284,8 +284,8 @@ impl Watchdog {
     info!("Attempting to connect to the Soulseek server");
     tokio::select! {
       () = cancel.cancelled() => {
-        debug!("Reconnection attempt cancelled");
-        return Attempt::Cancelled;
+        debug!("Reconnection attempt canceled");
+        return Attempt::Canceled;
       }
       () = inner.shares.initialized() => {}
     }
@@ -302,8 +302,8 @@ impl Watchdog {
     {
       Ok(()) => Attempt::Connected,
       Err(ClientError::Canceled) => {
-        debug!("Reconnection attempt cancelled");
-        Attempt::Cancelled
+        debug!("Reconnection attempt canceled");
+        Attempt::Canceled
       }
       Err(ClientError::LoginNoResponse(message)) => {
         error!(
@@ -352,7 +352,7 @@ enum Attempt {
   /// connected and logged in
   Connected,
   /// stopped by a restart, a disconnect asked for or shutdown
-  Cancelled,
+  Canceled,
   /// nothing the loop can retry: no credentials, or credentials the server or the client
   /// refuses
   Stop,

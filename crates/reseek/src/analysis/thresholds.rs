@@ -1,4 +1,4 @@
-//! Every threshold the analyser measures and reads with, in one place. They come from what
+//! Every threshold the analyzer measures and reads with, in one place. They come from what
 //! common encoders do and are checked against generated audio in the tests; they are rules
 //! of thumb that real files can break, which is why the reading is evidence and not proof.
 
@@ -7,7 +7,7 @@ pub(super) const SILENCE_DBFS: f64 = -70.0;
 /// The cutoff is the highest band within this many dB of a window's loudest band.
 pub(super) const CUTOFF_RANGE_DB: f64 = 60.0;
 /// The cutoff line never sits less than this many dB over the noise of the samples' bit
-/// depth, so a quiet passage's quantisation noise does not read as content.
+/// depth, so a quiet passage's quantization noise does not read as content.
 pub(super) const FLOOR_MARGIN_DB: f64 = 10.0;
 /// How far from a frequency the bands compared across it start, in Hz.
 pub(super) const SHELF_GAP_HZ: f64 = 100.0;
@@ -26,7 +26,7 @@ pub(super) const INNER_SHELF_FROM_HZ: f64 = 10_000.0;
 /// A step of at least this many dB inside a full band is a band-limited layer under it.
 pub(super) const INNER_SHELF_DB: f64 = 20.0;
 /// A step of at least this many dB where the highest bitrates cut, under a band that reaches
-/// the top, is reason enough to doubt the band: it reads as something the analyser can not
+/// the top, is reason enough to doubt the band: it reads as something the analyzer can not
 /// tell, which costs an honest file nothing. Honest spectra step by a decibel or two there.
 pub(super) const HIGH_STEP_DB: f64 = 10.0;
 /// The band above such a step is content only when it is at least this many dB over the
@@ -92,7 +92,7 @@ pub(super) struct Profile {
 }
 
 /// Profiles at this bitrate and above cut where some recordings are filtered when they are
-/// made, so a sharp shelf there reads as something the analyser can not tell, never as a
+/// made, so a sharp shelf there reads as something the analyzer can not tell, never as a
 /// transcode.
 pub(super) const HIGH_BITRATE_KBPS: u32 = 320;
 

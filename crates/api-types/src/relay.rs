@@ -269,9 +269,9 @@ pub enum RelayMessage {
 pub struct RelayTimeouts {
   /// for the answer to a file info request
   pub file_info: u64,
-  /// for the acknowledgement of a file request
+  /// for the acknowledgment of a file request
   pub file_ack: u64,
-  /// after the acknowledgement, for the file's bytes to start arriving
+  /// after the acknowledgment, for the file's bytes to start arriving
   pub file_stream: u64,
 }
 
@@ -362,7 +362,7 @@ pub struct RelayFileUpload {
 pub enum RelayUploadOutcome {
   /// the peer received the whole file
   Succeeded,
-  /// the upload was cancelled here or by the peer
+  /// the upload was canceled here or by the peer
   Cancelled,
   /// the transfer to the peer failed
   Failed,

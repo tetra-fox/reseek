@@ -176,7 +176,7 @@ async fn callback(
   let admitted = match flow::admit(&provider, &claims) {
     Ok(admitted) => admitted,
     Err(reason) => {
-      failed(format!("not authorised: {reason}"));
+      failed(format!("not authorized: {reason}"));
       let back = external_base(&app.url_base, &app.config.current().values, client)
         .map(|base| format!("{base}/"))
         .unwrap_or_default();
@@ -398,8 +398,8 @@ fn refused_page(sign_out: Option<&str>) -> Response {
   (
     StatusCode::FORBIDDEN,
     Html(format!(
-      "<!doctype html><html><head><meta charset=\"utf-8\"><title>Not authorised</title></head>\
-       <body><p>Your account is not authorised for this application.</p>{link}</body></html>"
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>Not authorized</title></head>\
+       <body><p>Your account is not authorized for this application.</p>{link}</body></html>"
     )),
   )
     .into_response()
@@ -751,7 +751,7 @@ mod tests {
     let denied = back(&app, &started, "c1").await;
     assert_eq!(denied.status, 403);
     let page = String::from_utf8_lossy(&denied.body).into_owned();
-    assert!(page.contains("Your account is not authorised for this application"));
+    assert!(page.contains("Your account is not authorized for this application"));
     assert!(page.contains("Sign out of SSO"));
 
     issuer.set_userinfo(json!({ "sub": "u3", "groups": ["admins"] }));

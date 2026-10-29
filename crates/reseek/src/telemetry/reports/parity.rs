@@ -162,7 +162,7 @@ fn waits_and_durations(rows: &[&Record]) -> (Vec<f64>, Vec<f64>) {
   (waits, durations)
 }
 
-fn summarised(rows: &[&Record]) -> TransferSummary {
+fn summarized(rows: &[&Record]) -> TransferSummary {
   let (waits, durations) = waits_and_durations(rows);
   let speeds: Vec<f64> = rows.iter().map(|r| r.average_speed).collect();
   TransferSummary {
@@ -187,7 +187,7 @@ fn by_outcome(rows: &[&Record]) -> BTreeMap<TransferOutcome, TransferSummary> {
   }
   grouped
     .into_iter()
-    .map(|(outcome, rows)| (outcome, summarised(&rows)))
+    .map(|(outcome, rows)| (outcome, summarized(&rows)))
     .collect()
 }
 
@@ -396,7 +396,7 @@ async fn the_rankings_order_users_and_directories_as_they_say() {
               *user,
               TransferSummary {
                 distinct_users: 1,
-                ..summarised(rows)
+                ..summarized(rows)
               },
             )
           })

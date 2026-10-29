@@ -13,7 +13,7 @@ const DOMAIN: &str = "searches";
 
 /// What asking to cancel a search did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Cancelled {
+pub enum Canceled {
   /// the search was running and is being stopped
   Now,
   /// the search had already completed
@@ -53,7 +53,7 @@ pub trait SearchService: Send + Sync {
   }
 
   /// Stops a running search.
-  async fn cancel(&self, id: Uuid) -> Result<Cancelled, ApiError> {
+  async fn cancel(&self, id: Uuid) -> Result<Canceled, ApiError> {
     Err(not_yet(DOMAIN))
   }
 

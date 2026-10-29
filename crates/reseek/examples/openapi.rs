@@ -3,6 +3,6 @@
 fn main() {
   let document = reseek::api::openapi()
     .to_pretty_json()
-    .expect("the OpenAPI document serialises");
+    .expect("the OpenAPI document serializes");
   println!("{document}");
 }

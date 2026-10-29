@@ -1,6 +1,6 @@
 //! Every type that crosses reseek's HTTP API or its event stream, defined once.
 //!
-//! The daemon's handlers serialise these types and the OpenAPI document is generated from them,
+//! The daemon's handlers serialize these types and the OpenAPI document is generated from them,
 //! so the web UI's generated types and the daemon cannot disagree. The JSON is camelCase,
 //! `null` is always written rather than left out, timestamps are UTC RFC 3339 with `Z`, and an
 //! error is `{ "error", "detail" }`. Clients must treat a missing field and `null` alike.

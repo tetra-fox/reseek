@@ -107,7 +107,7 @@ struct Status {
   scanning: bool,
   ready: bool,
   faulted: bool,
-  cancelled: bool,
+  canceled: bool,
   progress: f64,
   directories: u32,
   files: u32,
@@ -124,7 +124,7 @@ impl Status {
       scanning: self.scanning,
       ready: self.ready,
       faulted: self.faulted,
-      cancelled: self.cancelled,
+      cancelled: self.canceled,
       scan_progress: self.progress,
       hosts: listed.then(|| {
         std::iter::once(LOCAL_HOST.to_string())

@@ -117,7 +117,7 @@ pub struct Messaging {
   tasks: TaskTracker,
   /// what a message search is tried against before it runs
   probe: search::Probe,
-  /// cancelled when the daemon shuts down
+  /// canceled when the daemon shuts down
   shutdown: CancellationToken,
 }
 

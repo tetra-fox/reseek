@@ -62,7 +62,7 @@ impl Ema {
     }
   }
 
-  /// Moves the average towards `x` and returns it; the first value is the average.
+  /// Moves the average toward `x` and returns it; the first value is the average.
   pub fn update(&self, x: f64) -> f64 {
     let mut value = lock(&self.value);
     let next = value.map_or(x, |v| v + (x - v) * ALPHA);

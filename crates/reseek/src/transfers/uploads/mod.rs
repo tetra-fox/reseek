@@ -54,7 +54,7 @@ use queue::UploadQueue;
 /// How long the tasks of running uploads get to end at shutdown.
 const STOPPING: Duration = Duration::from_secs(5);
 
-/// Why an upload cancelled at block time ended.
+/// Why an upload canceled at block time ended.
 const BLOCKED: &str = "Blocked";
 
 /// What is kept for an upload whose task runs.
@@ -63,7 +63,7 @@ struct InFlight {
   cancel: CancellationToken,
   /// remove the record from the listings once it has ended
   remove: bool,
-  /// why it was cancelled, when not by a plain cancel
+  /// why it was canceled, when not by a plain cancel
   reason: Option<&'static str>,
   /// the client's upload ended, before the task has written how
   ended: bool,
@@ -303,7 +303,7 @@ impl Uploads {
     entry.remove |= remove;
     entry.reason = entry.reason.or(reason);
     entry.cancel.cancel();
-    debug!(%id, remove, "running upload cancelled");
+    debug!(%id, remove, "running upload canceled");
     true
   }
 
@@ -311,13 +311,13 @@ impl Uploads {
   /// "Blocked"; for a user just blocked from uploads.
   pub fn blocked(&self, username: &str) {
     let waiting = self.queue.waiting(username);
-    let cancelled = waiting
+    let canceled = waiting
       .iter()
       .filter(|id| self.cancel_running(**id, false, Some(BLOCKED)))
       .count();
     info!(
       username,
-      cancelled, "queued uploads to a blocked user cancelled"
+      canceled, "queued uploads to a blocked user canceled"
     );
   }
 
@@ -327,7 +327,7 @@ impl Uploads {
   }
 
   /// Waits, at shutdown and once the client is stopped, for the upload tasks the shutdown
-  /// cancelled to end; what they leave unfinished the stop ends after.
+  /// canceled to end; what they leave unfinished the stop ends after.
   pub async fn stop(&self) {
     self.tasks.close();
     if tokio::time::timeout(STOPPING, self.tasks.wait())
