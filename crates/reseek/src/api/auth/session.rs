@@ -16,7 +16,7 @@ use tracing::{info, warn};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
-use super::error::ApiError;
+use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::auth::cookies::{self, Scope};
 use crate::auth::oidc::external_base;

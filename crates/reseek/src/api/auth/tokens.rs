@@ -2,7 +2,7 @@
 //! (only from a login session, never with a token), renaming it or changing its expiry, and
 //! revoking it.
 
-use super::extract::Json;
+use crate::api::extract::Json;
 use api_types::auth::Role;
 use api_types::events::{Event, TokenChanged};
 use api_types::tokens::{ConfigApiKey, CreateToken, CreatedToken, ListedToken, Token, UpdateToken};
@@ -15,7 +15,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 use uuid::Uuid;
 
-use super::error::ApiError;
+use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::auth::keys::PRIMARY;
 use crate::auth::sessions::lifetime;

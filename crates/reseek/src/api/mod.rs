@@ -5,21 +5,19 @@ mod activity;
 pub mod agent;
 mod analysis;
 mod application;
+mod auth;
 pub mod error;
 mod events;
 pub mod extract;
 mod files;
 mod live;
 mod messaging;
-mod oidc;
 mod options;
 mod profile;
 mod relay;
 mod searches;
-mod session;
 mod shares;
 mod telemetry;
-mod tokens;
 mod transfers;
 mod users;
 mod validate;
@@ -31,7 +29,6 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::{Config, SwaggerUi};
 
 use crate::app::AppState;
-use crate::auth;
 
 /// The OpenAPI document's description of the API as a whole.
 #[derive(OpenApi)]
@@ -104,9 +101,7 @@ fn routes() -> OpenApiRouter<AppState> {
     .merge(telemetry::routes())
     .merge(options::routes())
     .merge(profile::routes())
-    .merge(session::routes())
-    .merge(oidc::routes())
-    .merge(tokens::routes())
+    .merge(auth::routes())
     .merge(live::routes());
   OpenApiRouter::with_openapi(ApiDoc::openapi()).nest("/api/v0", api)
 }
@@ -123,7 +118,7 @@ pub fn router(state: AppState) -> Router {
     ))
     .layer(middleware::from_fn_with_state(
       state.clone(),
-      auth::authenticate,
+      crate::auth::authenticate,
     ))
     .with_state(state)
 }

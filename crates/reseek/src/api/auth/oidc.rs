@@ -17,8 +17,8 @@ use tracing::{debug, info, warn};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
-use super::error::ApiError;
 use super::session::end;
+use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::auth::cookies::{self, Scope};
 use crate::auth::oidc::flow::{self, LOGIN_TIME, is_local_path};
