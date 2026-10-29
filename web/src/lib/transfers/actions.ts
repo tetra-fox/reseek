@@ -45,7 +45,7 @@ export const saveToDevice = async (t: Transfer) => {
 };
 
 /** A finished download as a track of the player */
-const track = (t: Transfer): Track => {
+export const downloadTrack = (t: Transfer): Track => {
   const folder = folderOf([t]);
   return {
     key: t.id,
@@ -57,7 +57,10 @@ const track = (t: Transfer): Track => {
 
 /** Plays a finished download in the player, its folder's other finished files around it */
 export const preview = (t: Transfer, around: Transfer[]) =>
-  void player.play(track(t), around.filter((o) => isSucceeded(o.state) && o.localPath).map(track));
+  void player.play(
+    downloadTrack(t),
+    around.filter((o) => isSucceeded(o.state) && o.localPath).map(downloadTrack)
+  );
 
 /** The folder a finished download is in under the downloads directory, null when it isn't */
 export const folderOf = (transfers: Transfer[]) =>
