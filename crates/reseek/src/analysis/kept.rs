@@ -38,8 +38,8 @@ pub(super) fn path(dir: &Path, name: &str) -> PathBuf {
 /// An answer that is binary: the header's length as four little-endian bytes, the header as
 /// JSON, then `body`.
 pub(super) fn framed(header: &impl Serialize, body: &[u8]) -> Vec<u8> {
-  // the headers are numbers and lists of numbers, which always serialise
-  let header = serde_json::to_vec(header).expect("a header serialises");
+  // the headers are numbers and lists of numbers, which always serialize
+  let header = serde_json::to_vec(header).expect("a header serializes");
   let mut out = Vec::with_capacity(4 + header.len() + body.len());
   out.extend((header.len() as u32).to_le_bytes());
   out.extend(header);
@@ -164,13 +164,24 @@ pub(super) enum Unkept {
   Broken(String),
 }
 
-/// The head of an open file.
+/// One window's entry in the table.
+struct Entry {
+  /// the whole second it starts at
+  at: u32,
+  /// how many of its slot's columns it fills
+  columns: usize,
+  /// how many of its slot's buckets it fills
+  peaks: usize,
+}
+
+/// The head of an open file, with its window table.
 struct Head {
   windows: usize,
   duration: f64,
   max_hz: f64,
   /// the lengths of the overviews and the window spectra
   kept: [usize; 3],
+  entries: Vec<Entry>,
 }
 
 impl Head {
@@ -218,11 +229,12 @@ fn open(path: &Path) -> Result<(File, Head), Unkept> {
     return Err(Unkept::Broken("not a file this version keeps".to_string()));
   }
   let f64_at = |at: usize| f64::from_le_bytes(head[at..at + 8].try_into().expect("eight bytes"));
-  let head = Head {
+  let mut head = Head {
     windows: u32_at(&head, 8) as usize,
     duration: f64_at(12),
     max_hz: f64_at(20),
     kept: [28, 32, 36].map(|at| u32_at(&head, at) as usize),
+    entries: Vec::new(),
   };
   let length = file.metadata().map_err(broken)?.len();
   if length != head.end() {
@@ -230,6 +242,26 @@ fn open(path: &Path) -> Result<(File, Head), Unkept> {
       "{length} bytes where its head says {}",
       head.end()
     )));
+  }
+  let table = read_at(&mut file, head.table(), head.windows * ENTRY).map_err(broken)?;
+  for entry in table.as_chunks::<ENTRY>().0 {
+    let entry = Entry {
+      at: u32_at(entry, 0),
+      columns: usize::from(u16::from_le_bytes([entry[4], entry[5]])),
+      peaks: usize::from(u16::from_le_bytes([entry[6], entry[7]])),
+    };
+    // tiles slice each slot by these counts and find windows by their seconds in order
+    let in_order = head
+      .entries
+      .last()
+      .is_none_or(|before| before.at < entry.at);
+    if entry.columns > COLUMNS_PER_SECOND || entry.peaks > PEAKS_PER_SECOND || !in_order {
+      return Err(Unkept::Broken(format!(
+        "its window table has a window at {} s with {} columns and {} buckets",
+        entry.at, entry.columns, entry.peaks
+      )));
+    }
+    head.entries.push(entry);
   }
   Ok((file, head))
 }
@@ -259,30 +291,27 @@ fn cut_tile(
   kind: Kind,
   tile: u32,
 ) -> std::io::Result<Option<Vec<u8>>> {
-  let table = read_at(file, head.table(), head.windows * ENTRY)?;
-  let entries = table.as_chunks::<ENTRY>().0;
-  let starts: Vec<u32> = entries.iter().map(|entry| u32_at(entry, 0)).collect();
+  let entries = &head.entries;
   let span = tiles::TILE_SECONDS as u32;
   let from = tile.saturating_mul(span);
-  let first = starts.partition_point(|at| *at < from);
-  let last = starts.partition_point(|at| *at < from.saturating_add(span));
+  let first = entries.partition_point(|entry| entry.at < from);
+  let last = entries.partition_point(|entry| entry.at < from.saturating_add(span));
   let (slots, slot) = match kind {
     Kind::Spectrogram => (head.columns(), COLUMN_SLOT),
     Kind::Waveform => (head.peaks(), PEAK_SLOT),
   };
   let bytes = read_at(file, slots + (first * slot) as u64, (last - first) * slot)?;
-  let seconds: Vec<Second<'_>> = (first..last)
+  let seconds: Vec<Second<'_>> = entries[first..last]
+    .iter()
     .zip(bytes.chunks_exact(slot))
-    .map(|(index, slot)| {
-      let entry = &entries[index];
-      let columns = u16::from_le_bytes([entry[4], entry[5]]) as usize;
-      let peaks = u16::from_le_bytes([entry[6], entry[7]]) as usize;
+    .map(|(entry, slot)| {
+      // the counts were checked against the slots when the file was opened
       let (columns, peaks) = match kind {
-        Kind::Spectrogram => (&slot[..columns * BINS], &[][..]),
-        Kind::Waveform => (&[][..], &slot[..peaks * 2]),
+        Kind::Spectrogram => (&slot[..entry.columns * BINS], &[][..]),
+        Kind::Waveform => (&[][..], &slot[..entry.peaks * 2]),
       };
       Second {
-        at: starts[index],
+        at: entry.at,
         columns,
         peaks,
       }
