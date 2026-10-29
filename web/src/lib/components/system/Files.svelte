@@ -17,8 +17,8 @@
   import { type Component, untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
-  import { queue } from "#lib/analysis/analysis.js";
-  import { jobs } from "#lib/analysis/jobs.svelte.js";
+  import type { Target } from "#lib/analysis/analysis.js";
+  import { analyzeBatch } from "#lib/analysis/batch.js";
   import { FILE_FILTERS, type MarkFilter, passes } from "#lib/analysis/marks.js";
   import { analyzable, analyzerOffered, marks } from "#lib/analysis/marks.svelte.js";
   import { api, type Schemas } from "#lib/api/client.js";
@@ -175,22 +175,12 @@
       })
     );
     if (!listing.ok) return void toast(`Could not read ${e.name}: ${listing.error}`, "error");
-    const files = (listing.data.files ?? [])
-      .map((f) => f.fullName.replaceAll("\\", "/"))
-      .filter(analyzable);
-    if (!files.length) return void toast(`${e.name} has no files to analyze`);
-    let queued = 0;
-    const failed: string[] = [];
-    for (const file of files) {
-      const outcome = await queue({ kind: "file", root, path: joinPath([e.path, file]) });
-      // a file analyzed already or in the queue is left as it is
-      if (outcome.ok) queued++;
-      else if (outcome.status !== 409) failed.push(`${file}: ${outcome.error}`);
-    }
-    void jobs.refresh();
-    if (failed.length) toast(`Could not queue ${failed.join("; ")}`, "error");
-    else if (queued) toast(`${plural(queued, "file", "files")} queued for analysis`);
-    else toast(`All files in ${e.name} are already analyzed`);
+    const candidates = (listing.data.files ?? []).map((f) => {
+      const file = f.fullName.replaceAll("\\", "/");
+      const target: Target = { kind: "file", root, path: joinPath([e.path, file]) };
+      return { target, name: file, finished: true };
+    });
+    await analyzeBatch(candidates, `${e.name} has no files to analyze`);
   };
   const write = $derived(session.can("ReadWrite"));
   const canDelete = $derived(managed && write);
