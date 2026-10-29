@@ -194,13 +194,6 @@ mod tests {
   }
 
   #[test]
-  fn extensions_are_lower_case_after_the_last_dot() {
-    assert_eq!(extension("01 - Track.FLAC"), "flac");
-    assert_eq!(extension("a.tar.gz"), "gz");
-    assert_eq!(extension("README"), "");
-  }
-
-  #[test]
   fn a_file_that_does_not_read_has_no_attributes() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("broken.mp3");

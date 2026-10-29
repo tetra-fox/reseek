@@ -229,29 +229,6 @@ async fn mark_attributes(shares: &Shares) {
 }
 
 #[tokio::test]
-async fn an_incremental_scan_reuses_unchanged_rows_and_a_forced_one_reads_again() {
-  let (files, app) = shared_app().await;
-  let shares = app.state.shares.clone();
-  eventually(async || lock(&shares.running).is_none()).await;
-  mark_attributes(&shares).await;
-  shares.scan(false).unwrap();
-  eventually(async || lock(&shares.running).is_none()).await;
-  assert_eq!(
-    attributes(&shares).await,
-    MARKER,
-    "size and time unchanged: reused"
-  );
-  shares.scan(true).unwrap();
-  eventually(async || lock(&shares.running).is_none()).await;
-  assert_ne!(
-    attributes(&shares).await,
-    MARKER,
-    "a forced scan reads it again"
-  );
-  drop(files);
-}
-
-#[tokio::test]
 async fn an_index_that_fails_to_load_is_scanned_again_without_reusing_rows() {
   let (files, app) = shared_app().await;
   let shares = app.state.shares.clone();

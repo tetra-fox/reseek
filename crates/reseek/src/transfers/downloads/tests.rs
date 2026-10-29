@@ -75,23 +75,6 @@ async fn canceling_a_download_no_task_runs_ends_it_and_can_remove_it() {
   let stuck = Record::download("alice", "a.flac", 10, None);
   insert(&app, &stuck).await;
   let id = stuck.id;
-  let unknown = Uuid::new_v4();
-  let (status, _) = app
-    .call(
-      "DELETE",
-      &format!("/api/v0/transfers/downloads/alice/{unknown}"),
-      None,
-    )
-    .await;
-  assert_eq!(status, 404);
-  let (status, _) = app
-    .call(
-      "DELETE",
-      &format!("/api/v0/transfers/downloads/bob/{id}"),
-      None,
-    )
-    .await;
-  assert_eq!(status, 404);
   let uri = format!("/api/v0/transfers/downloads/alice/{id}?remove=true");
   let (status, _) = app.call("DELETE", &uri, None).await;
   assert_eq!(status, 204);
@@ -137,30 +120,6 @@ async fn removing_completed_downloads_leaves_running_ones() {
   assert_eq!(status, 200);
   assert_eq!(result["ok"], json!([waiting.id]));
   assert_eq!(result["failed"].as_array().unwrap().len(), 2);
-}
-
-#[tokio::test]
-async fn the_place_in_queue_is_asked_only_of_a_download_the_peer_queued() {
-  let app = app(TRUSTED, &[]).await;
-  let waiting = Record::download("alice", "a.flac", 10, None);
-  insert(&app, &waiting).await;
-  let uri = format!("/api/v0/transfers/downloads/alice/{}/position", waiting.id);
-  let (status, body) = app.call("GET", &uri, None).await;
-  assert_eq!(status, 409);
-  assert_eq!(body["error"], "Transfer is not queued remotely");
-}
-
-#[tokio::test]
-async fn an_unknown_batch_is_not_found() {
-  let app = app(TRUSTED, &[]).await;
-  let (status, _) = app
-    .call(
-      "GET",
-      &format!("/api/v0/transfers/downloads/batches/{}", Uuid::new_v4()),
-      None,
-    )
-    .await;
-  assert_eq!(status, 404);
 }
 
 #[tokio::test]

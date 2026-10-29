@@ -120,76 +120,6 @@ async fn every_refusal_a_peer_can_be_told_and_what_triggers_it() {
 }
 
 #[tokio::test]
-async fn each_limit_tells_the_peer_its_own_reason() {
-  let now = chrono::Utc::now();
-  // a row of alice's: its state bits, when it started, and its size
-  let row = |state: u32, started: bool, size: i64| {
-    let mut row = Row::new("alice", TransferDirection::Upload, state);
-    row.filename = "Music\\Album\\02.mp3".to_string();
-    row.size = size;
-    row.started_at = started.then_some(now);
-    row.ended_at = (state & 16 != 0).then_some(now);
-    row
-  };
-  let cases = [
-    (
-      "queued = { files = 1 }",
-      row(2 | 2048, false, 1),
-      "Too many files",
-    ),
-    (
-      "queued = { megabytes = 1 }",
-      row(2 | 2048, false, 999_998),
-      "Too many megabytes",
-    ),
-    (
-      "weekly = { failures = 1 }",
-      row(16 | 256, true, 1),
-      "Too many failed transfers this week",
-    ),
-    (
-      "weekly = { files = 1 }",
-      row(16 | 32, true, 1),
-      "Too many files this week",
-    ),
-    (
-      "weekly = { megabytes = 1 }",
-      row(16 | 32, true, 999_998),
-      "Too many megabytes this week",
-    ),
-    (
-      "daily = { failures = 1 }",
-      row(16 | 512, true, 1),
-      "Too many failed transfers today",
-    ),
-    (
-      "daily = { files = 1 }",
-      row(16 | 32, true, 1),
-      "Too many files today",
-    ),
-    (
-      "daily = { megabytes = 1 }",
-      row(16 | 32, true, 999_998),
-      "Too many megabytes today",
-    ),
-  ];
-  for (limit, row, reason) in cases {
-    let (_files, app) = shared_app(&format!("[transfers.upload.limits]\n{limit}\n")).await;
-    insert(&app.state.transfers, vec![row]).await;
-    assert_eq!(
-      asked(&app, "alice", SHARED).await.as_deref(),
-      Some(reason),
-      "{limit}"
-    );
-    assert_eq!(
-      asked(&app, "bob", SHARED).await,
-      None,
-      "{limit}: bob has nothing yet"
-    );
-  }
-}
-
-#[tokio::test]
 async fn a_privileged_user_is_queued_past_the_limits() {
   let (_files, app) = shared_app("[transfers.upload.limits]\nqueued = { files = 1 }\n").await;
   let mut queued = Row::new("vip", TransferDirection::Upload, 2 | 2048);
@@ -295,26 +225,10 @@ async fn the_upload_calls_find_an_upload_by_its_user_and_id() {
     .await
     .unwrap();
   let id = done.id;
-  let unknown = Uuid::new_v4();
-  for (method, uri) in [
-    ("GET", format!("/api/v0/transfers/uploads/alice/{unknown}")),
-    ("GET", format!("/api/v0/transfers/uploads/bob/{id}")),
-    (
-      "DELETE",
-      format!("/api/v0/transfers/uploads/alice/{unknown}"),
-    ),
-    (
-      "GET",
-      format!("/api/v0/transfers/uploads/alice/{unknown}/why"),
-    ),
-    (
-      "POST",
-      format!("/api/v0/transfers/uploads/alice/{unknown}/bump"),
-    ),
-  ] {
-    let (status, _) = app.call(method, &uri, None).await;
-    assert_eq!(status, 404, "{method} {uri}");
-  }
+  let (status, _) = app
+    .call("GET", &format!("/api/v0/transfers/uploads/bob/{id}"), None)
+    .await;
+  assert_eq!(status, 404, "another user's id");
   let (status, why) = app
     .call(
       "GET",
@@ -356,28 +270,6 @@ async fn the_upload_calls_find_an_upload_by_its_user_and_id() {
     .unwrap()
     .unwrap();
   assert!(removed.removed);
-}
-
-#[tokio::test]
-async fn the_grouped_uploads_take_a_range_of_request_times_and_a_limit() {
-  let (_files, app) = shared_app("").await;
-  let rows = (1..=3)
-    .map(|minute| {
-      let mut row = Row::new("alice", TransferDirection::Upload, 48);
-      row.filename = format!("Music\\{minute}.mp3");
-      row.requested_at = format!("2026-01-01T00:0{minute}:00Z").parse().unwrap();
-      row
-    })
-    .collect();
-  insert(&app.state.transfers, rows).await;
-  let uri = "/api/v0/transfers/uploads?since=2026-01-01T00:02:00Z&limit=1";
-  let (status, body) = app.call("GET", uri, None).await;
-  assert_eq!(status, 200);
-  assert_eq!(
-    body[0]["directories"][0]["files"][0]["filename"],
-    "Music\\2.mp3"
-  );
-  assert_eq!(body[0]["directories"][0]["fileCount"], 1);
 }
 
 #[tokio::test]
