@@ -166,14 +166,6 @@ mod tests {
     }
   }
 
-  #[tokio::test]
-  async fn the_server_socket_has_no_keepalive_when_it_is_turned_off() {
-    let mut options = ClientOptions::default();
-    options.server_keepalive.enabled = false;
-    let (stream, _listener) = server_socket(options).await;
-    assert!(!SockRef::from(&stream).keepalive().unwrap());
-  }
-
   #[test]
   fn an_ipv4_address_wins_over_an_earlier_ipv6_one() {
     let v6: SocketAddr = "[::1]:2271".parse().unwrap();

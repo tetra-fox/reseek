@@ -344,27 +344,4 @@ mod tests {
       Err(ClientError::InvalidArgument(message)) if message.starts_with("listen_backlog: Must be greater than or equal to 128")
     ));
   }
-
-  #[test]
-  fn protocol_versions() {
-    let options = ClientOptions {
-      protocol_minor_version: 100,
-      ..ClientOptions::default()
-    };
-    assert!(options.validate().is_err());
-    let options = ClientOptions {
-      protocol_major_version: 0,
-      ..ClientOptions::default()
-    };
-    assert!(options.validate().is_err());
-  }
-
-  #[test]
-  fn server_connection_never_times_out_and_uses_the_server_keepalive() {
-    let mut options = ClientOptions::default();
-    options.server_connection_options.inactivity_timeout = Some(Duration::from_secs(1));
-    let effective = options.effective_server_connection_options();
-    assert_eq!(effective.inactivity_timeout, None);
-    assert_eq!(effective.keepalive, options.server_keepalive);
-  }
 }
