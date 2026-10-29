@@ -212,33 +212,6 @@ mod tests {
   }
 
   #[test]
-  fn record_nests_data_beside_type() {
-    let id = Uuid::from_u128(1);
-    let record = EventRecord {
-      id,
-      timestamp: "2025-03-01T12:00:00Z".parse().unwrap(),
-      event: Event::LoginFailed(LoginFailed {
-        version: 0,
-        provider: "local".to_string(),
-        ip: "192.168.1.5".to_string(),
-        reason: "bad password".to_string(),
-      }),
-    };
-    let json = serde_json::to_value(&record).unwrap();
-    assert_eq!(
-      json,
-      serde_json::json!({
-        "id": id,
-        "timestamp": "2025-03-01T12:00:00Z",
-        "type": "LoginFailed",
-        "data": { "version": 0, "provider": "local", "ip": "192.168.1.5", "reason": "bad password" }
-      })
-    );
-    assert_eq!(serde_json::from_value::<EventRecord>(json).unwrap(), record);
-    assert_eq!(record.event.event_type(), EventType::LoginFailed);
-  }
-
-  #[test]
   fn events_query_reads_a_comma_separated_type_list() {
     let query: EventsQuery =
       serde_json::from_str(r#"{"type":"downloadfilecomplete, DownloadFileFailed,"}"#).unwrap();

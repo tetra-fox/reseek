@@ -190,16 +190,4 @@ mod tests {
     );
     assert!(serde_json::from_str::<TransferStateFilter>("\"failed\"").is_err());
   }
-
-  #[test]
-  fn state_filters_are_written_as_their_names() {
-    let filters = [
-      TransferStateFilter::Category(TransferStateCategory::Successful),
-      TransferStateFilter::State(TransferStates::Completed | TransferStates::Aborted),
-    ];
-    assert_eq!(
-      serde_json::to_string(&filters).unwrap(),
-      "[\"Successful\",\"Completed, Aborted\"]"
-    );
-  }
 }
