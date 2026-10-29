@@ -105,7 +105,7 @@ pub async fn refuse_in_agent_mode(
 mod tests {
   use super::*;
   use crate::testing::routes::{CONFIG, Operation, answer, in_order, operations};
-  use crate::testing::{app, request};
+  use crate::testing::{OUTSIDE, app, request};
   use serde_json::Value;
 
   #[test]
@@ -190,7 +190,7 @@ mod tests {
       assert_eq!(refused, expected, "{operation:?}: {}", answer.status);
     }
     let anonymous = app
-      .send_from("192.0.2.1:1", request("GET", "/api/v0/searches", None))
+      .send_from(OUTSIDE, request("GET", "/api/v0/searches", None))
       .await;
     assert_eq!(anonymous.status, 401, "who asks is settled first");
   }

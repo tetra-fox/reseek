@@ -9,7 +9,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde_json::json;
 
-use crate::testing::{TestApp, app, request, with};
+use crate::testing::{TRUSTED, TestApp, app, request, with};
 
 /// Loopback is a trusted administrator; deleting is allowed.
 const CONFIG: &str = "remote_file_management = true\n[web.authentication]\n\
@@ -270,7 +270,7 @@ async fn listings_and_deletions_stay_inside_their_roots() {
   );
   assert!(!root.join("Album").exists());
 
-  let off = with_files("[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n").await;
+  let off = with_files(TRUSTED).await;
   assert_eq!(
     off.send(delete("page.html")).await.status,
     403,

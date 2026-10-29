@@ -455,14 +455,12 @@ impl SearchService for Searches {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::testing::{app, request};
+  use crate::testing::{TRUSTED, app, request};
   use serde_json::json;
-
-  const CONFIG: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
 
   #[tokio::test]
   async fn a_search_refused_offline_is_kept_ended_and_its_id_stays_taken() {
-    let app = app(CONFIG, &[]).await;
+    let app = app(TRUSTED, &[]).await;
     let id = "00000000-0000-4000-8000-0000000000aa";
     let start = || {
       request(

@@ -320,15 +320,11 @@ async fn user(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::testing::{app, request};
+  use crate::testing::{TRUSTED, app, request};
 
   #[tokio::test]
   async fn report_queries_are_checked_before_the_reports_run() {
-    let app = app(
-      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
-      &[],
-    )
-    .await;
+    let app = app(TRUSTED, &[]).await;
     let reports = "/api/v0/telemetry/reports/transfers";
     let at = "2026-01-02T00:00:00Z";
     let cases = [

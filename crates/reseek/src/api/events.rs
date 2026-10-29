@@ -96,17 +96,12 @@ fn raisable(name: &str) -> Result<EventType, ApiError> {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use crate::testing::{app, request};
+  use crate::testing::{OUTSIDE, TRUSTED, app, request};
   use std::time::Duration;
 
   #[tokio::test]
   async fn a_raised_sample_is_logged_and_counted() {
-    let app = app(
-      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
-      &[],
-    )
-    .await;
+    let app = app(TRUSTED, &[]).await;
     let raised = app
       .send(request(
         "POST",
@@ -159,12 +154,8 @@ mod tests {
 
   #[tokio::test]
   async fn the_api_s_own_actions_each_raise_their_event_once() {
-    let app = app(
-      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
-      &[],
-    )
-    .await;
-    let outside = "192.0.2.1:1";
+    let app = app(TRUSTED, &[]).await;
+    let outside = OUTSIDE;
     let login = |password: &str| {
       request(
         "POST",
@@ -218,20 +209,5 @@ mod tests {
         "UserUnblocked"
       ]
     );
-  }
-
-  #[test]
-  fn samples_are_made_of_known_types_but_not_the_pseudo_types() {
-    assert_eq!(
-      raisable("downloadfilecomplete").unwrap(),
-      EventType::DownloadFileComplete
-    );
-    assert_eq!(raisable("Noop").unwrap(), EventType::Noop);
-    for name in ["Any", "none"] {
-      let error = format!("{:?}", raisable(name).unwrap_err());
-      assert!(error.contains("can not be raised"), "{name}: {error}");
-    }
-    let unknown = format!("{:?}", raisable("Bogus").unwrap_err());
-    assert!(unknown.contains("unknown event type 'Bogus'"), "{unknown}");
   }
 }

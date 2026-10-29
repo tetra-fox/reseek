@@ -85,16 +85,9 @@ fn on_white(image: &DynamicImage) -> RgbImage {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use image::{ImageEncoder, Rgba, RgbaImage};
+  use image::Rgba;
 
-  fn png(width: u32, height: u32, pixel: Rgba<u8>) -> Vec<u8> {
-    let image = RgbaImage::from_pixel(width, height, pixel);
-    let mut bytes = Vec::new();
-    image::codecs::png::PngEncoder::new(&mut bytes)
-      .write_image(&image, width, height, image::ExtendedColorType::Rgba8)
-      .unwrap();
-    bytes
-  }
+  use crate::testing::png;
 
   fn decoded(jpeg: &[u8]) -> DynamicImage {
     assert_eq!(image::guess_format(jpeg).unwrap(), ImageFormat::Jpeg);

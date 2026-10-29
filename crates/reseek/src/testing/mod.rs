@@ -157,6 +157,23 @@ impl TestApp {
     self.send_from("127.0.0.1:40000", request).await
   }
 
+  /// Sends a `method` request for `uri` with the JSON `body` from the loopback address, and
+  /// gives the status and the JSON answer, null when the answer is empty.
+  pub async fn call(
+    &self,
+    method: &str,
+    uri: &str,
+    body: Option<serde_json::Value>,
+  ) -> (u16, serde_json::Value) {
+    let answer = self.send(request(method, uri, body)).await;
+    let json = if answer.body.is_empty() {
+      serde_json::Value::Null
+    } else {
+      answer.json()
+    };
+    (answer.status.as_u16(), json)
+  }
+
   /// Sends `request` as if from `from` and reads the answer as an event stream.
   pub async fn stream_from(&self, from: &str, mut request: Request<Body>) -> Stream {
     request.extensions_mut().insert(Peer {
@@ -283,6 +300,24 @@ pub fn set_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
     .filter_map(|value| value.to_str().ok())
     .map(|value| value.split(';').next().unwrap_or_default().to_string())
     .find(|pair| pair.starts_with(&format!("{name}=")))
+}
+
+/// A configuration in which loopback is a trusted network, so requests sent with
+/// [`TestApp::send`] come from an administrator.
+pub const TRUSTED: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
+
+/// An address outside every trusted network, for [`TestApp::send_from`].
+pub const OUTSIDE: &str = "192.0.2.1:1";
+
+/// A `width` by `height` PNG of one `pixel` color.
+pub fn png(width: u32, height: u32, pixel: image::Rgba<u8>) -> Vec<u8> {
+  use image::ImageEncoder;
+  let image = image::RgbaImage::from_pixel(width, height, pixel);
+  let mut bytes = Vec::new();
+  image::codecs::png::PngEncoder::new(&mut bytes)
+    .write_image(&image, width, height, image::ExtendedColorType::Rgba8)
+    .unwrap();
+  bytes
 }
 
 /// A request to `uri` with `Host: localhost` and, when given, a JSON body.

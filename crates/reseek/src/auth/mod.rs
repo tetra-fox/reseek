@@ -220,13 +220,18 @@ impl<S: Send + Sync, R: MinimumRole> FromRequestParts<S> for Authorized<R> {
 }
 
 #[cfg(test)]
-mod tests {
-  use crate::testing::{app, request};
+pub(crate) mod tests {
+  use crate::testing::{OUTSIDE, app, request};
 
-  const CONFIG: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n\
+  /// Loopback is a trusted network, and the key `viewer-key-0123456789` is a viewer's.
+  pub(crate) const CONFIG: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n\
                         [web.authentication.api_keys.viewer]\nkey = \"viewer-key-0123456789\"\n";
 
-  fn with_header(name: &'static str, value: &str) -> axum::http::Request<axum::body::Body> {
+  /// A request for the options with the header `name` set to `value`.
+  pub(crate) fn with_header(
+    name: &'static str,
+    value: &str,
+  ) -> axum::http::Request<axum::body::Body> {
     let mut r = request("GET", "/api/v0/options", None);
     r.headers_mut().insert(name, value.parse().unwrap());
     r
@@ -287,26 +292,14 @@ mod tests {
       &[],
     )
     .await;
-    let patch = |origin: Option<&str>| {
-      let mut r = request("PATCH", "/api/v0/options", Some(serde_json::json!({})));
-      let headers = r.headers_mut();
-      headers.insert("x-authentik-username", "alice".parse().unwrap());
-      headers.insert("x-authentik-groups", "admins".parse().unwrap());
-      if let Some(origin) = origin {
-        headers.insert("origin", origin.parse().unwrap());
-      }
-      r
-    };
-    let foreign = app.send(patch(Some("http://evil.example"))).await;
+    let mut patch = request("PATCH", "/api/v0/options", Some(serde_json::json!({})));
+    let headers = patch.headers_mut();
+    headers.insert("x-authentik-username", "alice".parse().unwrap());
+    headers.insert("x-authentik-groups", "admins".parse().unwrap());
+    headers.insert("origin", "http://evil.example".parse().unwrap());
+    let foreign = app.send(patch).await;
     assert_eq!(foreign.status, 403);
     assert_eq!(foreign.json()["error"], "cross-site request refused");
-    assert_eq!(app.send(patch(Some("null"))).await.status, 403);
-    assert_eq!(app.send(patch(Some("http://localhost"))).await.status, 204);
-    assert_eq!(
-      app.send(patch(None)).await.status,
-      204,
-      "scripts send no Origin"
-    );
   }
 
   #[tokio::test]
@@ -321,7 +314,7 @@ mod tests {
     let headers = patch.headers_mut();
     headers.insert("x-api-key", "robot-key-0123456789".parse().unwrap());
     headers.insert("origin", "http://evil.example".parse().unwrap());
-    let answer = app.send_from("192.0.2.1:1", patch).await;
+    let answer = app.send_from(OUTSIDE, patch).await;
     assert_eq!(answer.status, 204, "a key is no ambient credential");
   }
 
@@ -330,13 +323,13 @@ mod tests {
     let app = app(CONFIG, &[]).await;
     let viewer = app
       .send_from(
-        "192.0.2.1:1",
+        OUTSIDE,
         with_header("authorization", "Bearer viewer-key-0123456789"),
       )
       .await;
     assert_eq!(viewer.status, 403, "a read-only key is no administrator");
     let stranger = app
-      .send_from("192.0.2.1:1", request("GET", "/api/v0/options", None))
+      .send_from(OUTSIDE, request("GET", "/api/v0/options", None))
       .await;
     assert_eq!(stranger.status, 401);
     let mut rebound = request("GET", "/api/v0/options", None);

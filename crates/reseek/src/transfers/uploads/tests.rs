@@ -17,7 +17,7 @@ use super::{InFlight, OVERWHELMED};
 use crate::network::resolvers::tests::{edges, exposed, from};
 use crate::network::resolvers::{enqueue_download, place_in_queue};
 use crate::sync::lock;
-use crate::testing::{TestApp, app, request};
+use crate::testing::{TestApp, app};
 use crate::transfers::fixtures::{Row, insert};
 use crate::transfers::{Record, store};
 
@@ -52,16 +52,6 @@ async fn asked(app: &TestApp, username: &str, filename: &str) -> Option<String> 
   }
 }
 
-async fn send(app: &TestApp, method: &str, uri: &str, body: Option<Value>) -> (u16, Value) {
-  let answer = app.send(request(method, uri, body)).await;
-  let json = if answer.body.is_empty() {
-    Value::Null
-  } else {
-    serde_json::from_slice(&answer.body).unwrap_or(Value::Null)
-  };
-  (answer.status.as_u16(), json)
-}
-
 /// The value of the metric `name` in `app`'s exposition.
 fn metric(app: &TestApp, name: &str) -> String {
   exposed(app)
@@ -85,7 +75,9 @@ async fn every_refusal_a_peer_can_be_told_and_what_triggers_it() {
     not_shared
   );
   let block = json!({ "scopes": ["uploads"] });
-  let (status, _) = send(&app, "PUT", "/api/v0/users/mallory/block", Some(block)).await;
+  let (status, _) = app
+    .call("PUT", "/api/v0/users/mallory/block", Some(block))
+    .await;
   assert_eq!(status, 200);
   assert_eq!(asked(&app, "mallory", SHARED).await, not_shared);
 
@@ -209,7 +201,7 @@ async fn a_privileged_user_is_queued_past_the_limits() {
   );
   app.state.users.privileged_listed(&["vip".to_string()]);
   assert_eq!(asked(&app, "vip", SHARED).await, None);
-  let (status, body) = send(&app, "GET", "/api/v0/transfers/uploads/vip", None).await;
+  let (status, body) = app.call("GET", "/api/v0/transfers/uploads/vip", None).await;
   assert_eq!(status, 200);
   let user: UserResponse = serde_json::from_value(body).unwrap();
   let files: Vec<&str> = user.directories[0]
@@ -239,7 +231,9 @@ async fn a_running_upload_stands_for_a_new_request_and_an_ended_one_is_supersede
     },
   );
   let listed = async || -> Vec<Uuid> {
-    let (_, body) = send(&app, "GET", "/api/v0/transfers/uploads/alice", None).await;
+    let (_, body) = app
+      .call("GET", "/api/v0/transfers/uploads/alice", None)
+      .await;
     let user: UserResponse = serde_json::from_value(body).unwrap();
     user
       .directories
@@ -284,7 +278,9 @@ async fn a_peer_first_in_line_is_told_place_one() {
 #[tokio::test]
 async fn the_upload_calls_find_an_upload_by_its_user_and_id() {
   let (_files, app) = shared_app("").await;
-  let (status, body) = send(&app, "GET", "/api/v0/transfers/uploads/nobody", None).await;
+  let (status, body) = app
+    .call("GET", "/api/v0/transfers/uploads/nobody", None)
+    .await;
   assert_eq!(status, 200, "a user without uploads has none");
   assert_eq!(body, json!({ "username": "nobody", "directories": [] }));
 
@@ -316,16 +312,16 @@ async fn the_upload_calls_find_an_upload_by_its_user_and_id() {
       format!("/api/v0/transfers/uploads/alice/{unknown}/bump"),
     ),
   ] {
-    let (status, _) = send(&app, method, &uri, None).await;
+    let (status, _) = app.call(method, &uri, None).await;
     assert_eq!(status, 404, "{method} {uri}");
   }
-  let (status, why) = send(
-    &app,
-    "GET",
-    &format!("/api/v0/transfers/uploads/alice/{id}/why"),
-    None,
-  )
-  .await;
+  let (status, why) = app
+    .call(
+      "GET",
+      &format!("/api/v0/transfers/uploads/alice/{id}/why"),
+      None,
+    )
+    .await;
   assert_eq!(status, 200);
   assert_eq!(why["position"], Value::Null, "not in the queue");
   assert_eq!(why["group"], "default");
@@ -335,22 +331,22 @@ async fn the_upload_calls_find_an_upload_by_its_user_and_id() {
     why["limits"]["daily"]["files"],
     json!({ "used": 0, "limit": null })
   );
-  let (status, _) = send(
-    &app,
-    "POST",
-    &format!("/api/v0/transfers/uploads/alice/{id}/bump"),
-    None,
-  )
-  .await;
+  let (status, _) = app
+    .call(
+      "POST",
+      &format!("/api/v0/transfers/uploads/alice/{id}/bump"),
+      None,
+    )
+    .await;
   assert_eq!(status, 409, "a finished upload waits for nothing");
 
-  let (status, _) = send(
-    &app,
-    "DELETE",
-    &format!("/api/v0/transfers/uploads/alice/{id}?remove=true"),
-    None,
-  )
-  .await;
+  let (status, _) = app
+    .call(
+      "DELETE",
+      &format!("/api/v0/transfers/uploads/alice/{id}?remove=true"),
+      None,
+    )
+    .await;
   assert_eq!(status, 204);
   let removed = app
     .state
@@ -375,7 +371,7 @@ async fn the_grouped_uploads_take_a_range_of_request_times_and_a_limit() {
     .collect();
   insert(&app.state.transfers, rows).await;
   let uri = "/api/v0/transfers/uploads?since=2026-01-01T00:02:00Z&limit=1";
-  let (status, body) = send(&app, "GET", uri, None).await;
+  let (status, body) = app.call("GET", uri, None).await;
   assert_eq!(status, 200);
   assert_eq!(
     body[0]["directories"][0]["files"][0]["filename"],
@@ -389,23 +385,23 @@ async fn a_group_we_put_a_user_in_takes_effect_at_once() {
   let (_files, app) =
     shared_app("[transfers.groups.user_defined.vip.upload]\npriority = 5\n").await;
   assert_eq!(app.state.users.group("zoe"), "default");
-  let (status, _) = send(
-    &app,
-    "PUT",
-    "/api/v0/users/zoe/group",
-    Some(json!({ "group": "vip" })),
-  )
-  .await;
+  let (status, _) = app
+    .call(
+      "PUT",
+      "/api/v0/users/zoe/group",
+      Some(json!({ "group": "vip" })),
+    )
+    .await;
   assert_eq!(status, 204);
   assert_eq!(app.state.users.group("zoe"), "vip");
   assert_eq!(app.state.uploads.forecast("zoe").group, "vip");
-  let (status, _) = send(
-    &app,
-    "PUT",
-    "/api/v0/users/zoe/group",
-    Some(json!({ "group": null })),
-  )
-  .await;
+  let (status, _) = app
+    .call(
+      "PUT",
+      "/api/v0/users/zoe/group",
+      Some(json!({ "group": null })),
+    )
+    .await;
   assert_eq!(status, 204);
   assert_eq!(app.state.users.group("zoe"), "default");
 }
@@ -429,7 +425,9 @@ async fn blocking_a_user_cancels_their_queued_uploads() {
     );
   }
   let block = json!({ "scopes": ["uploads"] });
-  let (status, _) = send(&app, "PUT", "/api/v0/users/mallory/block", Some(block)).await;
+  let (status, _) = app
+    .call("PUT", "/api/v0/users/mallory/block", Some(block))
+    .await;
   assert_eq!(status, 200);
   assert!(cancel.is_cancelled());
   assert!(!kept.is_cancelled());

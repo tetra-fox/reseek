@@ -7,20 +7,8 @@ use api_types::transfers::{TransferStates, UserResponse};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::testing::{TestApp, app, request};
+use crate::testing::{TRUSTED, TestApp, app, request};
 use crate::transfers::{Record, store};
-
-const CONFIG: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
-
-async fn send(app: &TestApp, method: &str, uri: &str, body: Option<Value>) -> (u16, Value) {
-  let answer = app.send(request(method, uri, body)).await;
-  let json = if answer.body.is_empty() {
-    Value::Null
-  } else {
-    serde_json::from_slice(&answer.body).unwrap_or(Value::Null)
-  };
-  (answer.status.as_u16(), json)
-}
 
 /// Writes `record` into the daemon's `transfers.db`.
 async fn insert(app: &TestApp, record: &Record) {
@@ -52,56 +40,60 @@ fn done(username: &str, filename: &str) -> Record {
 
 #[tokio::test]
 async fn a_download_is_found_by_its_peer_and_id_with_its_history() {
-  let app = app(CONFIG, &[]).await;
+  let app = app(TRUSTED, &[]).await;
   let record = Record::download("alice", "@@abcde\\Music\\01.flac", 10, None);
   insert(&app, &record).await;
   let id = record.id;
-  let (status, _) = send(
-    &app,
-    "GET",
-    &format!("/api/v0/transfers/downloads/bob/{id}"),
-    None,
-  )
-  .await;
+  let (status, _) = app
+    .call(
+      "GET",
+      &format!("/api/v0/transfers/downloads/bob/{id}"),
+      None,
+    )
+    .await;
   assert_eq!(status, 404, "the peer is part of the path");
   let uri = format!("/api/v0/transfers/downloads/alice/{id}?includeHistory=true");
-  let (status, body) = send(&app, "GET", &uri, None).await;
+  let (status, body) = app.call("GET", &uri, None).await;
   assert_eq!(status, 200);
   assert_eq!(body["stateHistory"][0]["state"], "Queued, Locally");
   assert_eq!(body["localPath"], Value::Null);
-  let (status, body) = send(&app, "GET", "/api/v0/transfers/downloads/alice", None).await;
+  let (status, body) = app
+    .call("GET", "/api/v0/transfers/downloads/alice", None)
+    .await;
   assert_eq!(status, 200);
   let user: UserResponse = serde_json::from_value(body).unwrap();
   assert_eq!(user.directories[0].directory, "@@abcde\\Music");
-  let (status, _) = send(&app, "GET", "/api/v0/transfers/downloads/carol", None).await;
+  let (status, _) = app
+    .call("GET", "/api/v0/transfers/downloads/carol", None)
+    .await;
   assert_eq!(status, 404, "a user without downloads");
 }
 
 #[tokio::test]
 async fn canceling_a_download_no_task_runs_ends_it_and_can_remove_it() {
-  let app = app(CONFIG, &[]).await;
+  let app = app(TRUSTED, &[]).await;
   let stuck = Record::download("alice", "a.flac", 10, None);
   insert(&app, &stuck).await;
   let id = stuck.id;
   let unknown = Uuid::new_v4();
-  let (status, _) = send(
-    &app,
-    "DELETE",
-    &format!("/api/v0/transfers/downloads/alice/{unknown}"),
-    None,
-  )
-  .await;
+  let (status, _) = app
+    .call(
+      "DELETE",
+      &format!("/api/v0/transfers/downloads/alice/{unknown}"),
+      None,
+    )
+    .await;
   assert_eq!(status, 404);
-  let (status, _) = send(
-    &app,
-    "DELETE",
-    &format!("/api/v0/transfers/downloads/bob/{id}"),
-    None,
-  )
-  .await;
+  let (status, _) = app
+    .call(
+      "DELETE",
+      &format!("/api/v0/transfers/downloads/bob/{id}"),
+      None,
+    )
+    .await;
   assert_eq!(status, 404);
   let uri = format!("/api/v0/transfers/downloads/alice/{id}?remove=true");
-  let (status, _) = send(&app, "DELETE", &uri, None).await;
+  let (status, _) = app.call("DELETE", &uri, None).await;
   assert_eq!(status, 204);
   let ended = read(&app, id).await;
   assert_eq!(
@@ -113,43 +105,35 @@ async fn canceling_a_download_no_task_runs_ends_it_and_can_remove_it() {
     Some("The operation was canceled.")
   );
   assert!(ended.ended_at.is_some() && ended.removed);
-  let (_, listed) = send(&app, "GET", "/api/v0/transfers/downloads", None).await;
+  let (_, listed) = app.call("GET", "/api/v0/transfers/downloads", None).await;
   assert_eq!(listed, json!([]), "removed downloads are not listed");
-  let (_, listed) = send(
-    &app,
-    "GET",
-    "/api/v0/transfers/downloads?includeRemoved=true",
-    None,
-  )
-  .await;
+  let (_, listed) = app
+    .call(
+      "GET",
+      "/api/v0/transfers/downloads?includeRemoved=true",
+      None,
+    )
+    .await;
   assert_eq!(listed[0]["username"], "alice");
 }
 
 #[tokio::test]
 async fn removing_completed_downloads_leaves_running_ones() {
-  let app = app(CONFIG, &[]).await;
+  let app = app(TRUSTED, &[]).await;
   let finished = done("alice", "a.flac");
   let waiting = Record::download("alice", "b.flac", 10, None);
   insert(&app, &finished).await;
   insert(&app, &waiting).await;
-  let (status, _) = send(
-    &app,
-    "DELETE",
-    "/api/v0/transfers/downloads/all/completed",
-    None,
-  )
-  .await;
+  let (status, _) = app
+    .call("DELETE", "/api/v0/transfers/downloads/all/completed", None)
+    .await;
   assert_eq!(status, 204);
   assert!(read(&app, finished.id).await.removed);
   assert!(!read(&app, waiting.id).await.removed);
   let request = json!({ "ids": [waiting.id, finished.id, Uuid::new_v4()], "action": "cancel" });
-  let (status, result) = send(
-    &app,
-    "POST",
-    "/api/v0/transfers/downloads/bulk",
-    Some(request),
-  )
-  .await;
+  let (status, result) = app
+    .call("POST", "/api/v0/transfers/downloads/bulk", Some(request))
+    .await;
   assert_eq!(status, 200);
   assert_eq!(result["ok"], json!([waiting.id]));
   assert_eq!(result["failed"].as_array().unwrap().len(), 2);
@@ -157,31 +141,31 @@ async fn removing_completed_downloads_leaves_running_ones() {
 
 #[tokio::test]
 async fn the_place_in_queue_is_asked_only_of_a_download_the_peer_queued() {
-  let app = app(CONFIG, &[]).await;
+  let app = app(TRUSTED, &[]).await;
   let waiting = Record::download("alice", "a.flac", 10, None);
   insert(&app, &waiting).await;
   let uri = format!("/api/v0/transfers/downloads/alice/{}/position", waiting.id);
-  let (status, body) = send(&app, "GET", &uri, None).await;
+  let (status, body) = app.call("GET", &uri, None).await;
   assert_eq!(status, 409);
   assert_eq!(body["error"], "Transfer is not queued remotely");
 }
 
 #[tokio::test]
 async fn an_unknown_batch_is_not_found() {
-  let app = app(CONFIG, &[]).await;
-  let (status, _) = send(
-    &app,
-    "GET",
-    &format!("/api/v0/transfers/downloads/batches/{}", Uuid::new_v4()),
-    None,
-  )
-  .await;
+  let app = app(TRUSTED, &[]).await;
+  let (status, _) = app
+    .call(
+      "GET",
+      &format!("/api/v0/transfers/downloads/batches/{}", Uuid::new_v4()),
+      None,
+    )
+    .await;
   assert_eq!(status, 404);
 }
 
 #[tokio::test]
 async fn a_finished_downloads_file_is_served_from_where_it_was_moved() {
-  let app = app(CONFIG, &[]).await;
+  let app = app(TRUSTED, &[]).await;
   let downloads = app.state.paths.downloads.clone();
   std::fs::create_dir_all(downloads.join("album")).unwrap();
   let file = downloads.join("album").join("01.flac");
@@ -197,12 +181,14 @@ async fn a_finished_downloads_file_is_served_from_where_it_was_moved() {
     .await;
   assert_eq!(answer.status, 200);
   assert_eq!(&answer.body[..], b"abc");
-  let (status, _) = send(&app, "GET", &content("bob", moved.id), None).await;
+  let (status, _) = app.call("GET", &content("bob", moved.id), None).await;
   assert_eq!(status, 404, "the peer is part of the path");
-  let (status, _) = send(&app, "GET", &content("alice", unmoved.id), None).await;
+  let (status, _) = app.call("GET", &content("alice", unmoved.id), None).await;
   assert_eq!(status, 404, "a download without a file");
   let token = json!({ "transferId": moved.id });
-  let (status, body) = send(&app, "POST", "/api/v0/session/file-token", Some(token)).await;
+  let (status, body) = app
+    .call("POST", "/api/v0/session/file-token", Some(token))
+    .await;
   assert_eq!(status, 200, "{body}");
   let token = body["token"].as_str().unwrap();
   let linked = format!("{}?t={token}", content("alice", moved.id));
@@ -212,13 +198,13 @@ async fn a_finished_downloads_file_is_served_from_where_it_was_moved() {
   assert_eq!(answer.status, 200, "the link's token alone lets it in");
   assert_eq!(&answer.body[..], b"abc");
   std::fs::remove_file(&file).unwrap();
-  let (status, _) = send(&app, "GET", &content("alice", moved.id), None).await;
+  let (status, _) = app.call("GET", &content("alice", moved.id), None).await;
   assert_eq!(status, 404, "a file that is gone");
 }
 
 #[tokio::test]
 async fn removals_and_updates_are_pushed_on_the_transfers_topic() {
-  let app = app(CONFIG, &[]).await;
+  let app = app(TRUSTED, &[]).await;
   let finished = done("alice", "a.flac");
   let stuck = Record::download("alice", "b.flac", 10, None);
   insert(&app, &finished).await;
@@ -230,13 +216,9 @@ async fn removals_and_updates_are_pushed_on_the_transfers_topic() {
     )
     .await;
   assert_eq!(stream.next().await.unwrap().event, "hello");
-  let (status, _) = send(
-    &app,
-    "DELETE",
-    "/api/v0/transfers/downloads/all/completed",
-    None,
-  )
-  .await;
+  let (status, _) = app
+    .call("DELETE", "/api/v0/transfers/downloads/all/completed", None)
+    .await;
   assert_eq!(status, 204);
   let removed = stream.next().await.unwrap();
   assert_eq!(removed.event, "transfers.removed");
@@ -245,7 +227,7 @@ async fn removals_and_updates_are_pushed_on_the_transfers_topic() {
     json!({ "id": finished.id, "username": "alice", "direction": "Download" })
   );
   let uri = format!("/api/v0/transfers/downloads/alice/{}", stuck.id);
-  send(&app, "DELETE", &uri, None).await;
+  app.call("DELETE", &uri, None).await;
   let updated = stream.next().await.unwrap();
   assert_eq!(updated.event, "transfers.updated");
   assert_eq!(updated.data["state"], "Completed, Cancelled");

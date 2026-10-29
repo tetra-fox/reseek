@@ -271,11 +271,7 @@ mod tests {
 
   #[tokio::test]
   async fn a_query_sqlite_cannot_read_is_the_callers_mistake() {
-    let app = crate::testing::app(
-      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
-      &[],
-    )
-    .await;
+    let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
     let get =
       |q: &str| crate::testing::request("GET", &format!("/api/v0/messages/search?q={q}"), None);
     let bad = app.send(get("%22open")).await;

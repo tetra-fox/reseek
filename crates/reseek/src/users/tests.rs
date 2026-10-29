@@ -6,7 +6,7 @@ use super::store::Change;
 use super::touch;
 use super::*;
 use crate::services::BlockingService;
-use crate::testing::{TestApp, app, request};
+use crate::testing::{app, request};
 use crate::transfers::fixtures::{Row, insert};
 use api_types::blocking::BlockSource;
 use api_types::events::EventType;
@@ -20,16 +20,6 @@ const CONFIG: &str = "[soulseek]\nusername = \"me\"\n\
                       [transfers.groups.blacklisted]\nmembers = [\"mallory\"]\n\
                       [transfers.groups.user_defined.friends]\nmembers = [\"bob\"]\n\
                       [transfers.groups.user_defined.vip]\nmembers = []\n";
-
-async fn send(app: &TestApp, method: &str, uri: &str, body: Option<Value>) -> (u16, Value) {
-  let answer = app.send(request(method, uri, body)).await;
-  let json = if answer.body.is_empty() {
-    Value::Null
-  } else {
-    answer.json()
-  };
-  (answer.status.as_u16(), json)
-}
 
 fn query() -> UserListQuery {
   serde_json::from_value(json!({})).unwrap()
@@ -126,7 +116,9 @@ async fn the_directory_filters_and_sorts_with_pinned_users_first() {
   let mut pinned = query();
   pinned.pinned = Some(true);
   assert_eq!(names(directory.list(pinned).await.unwrap()), ["alice"]);
-  let (status, _) = send(&app, "PUT", "/api/v0/users/carol/block", Some(json!({}))).await;
+  let (status, _) = app
+    .call("PUT", "/api/v0/users/carol/block", Some(json!({})))
+    .await;
   assert_eq!(status, 200);
   let mut blocked = query();
   blocked.blocked = Some(true);
@@ -173,16 +165,18 @@ async fn a_block_request_is_checked_before_it_is_made() {
     json!({ "scopes": ["everything"] }),
     json!({ "scopes": [] }),
   ] {
-    let (status, _) = send(&app, "PUT", "/api/v0/users/alice/block", Some(body.clone())).await;
+    let (status, _) = app
+      .call("PUT", "/api/v0/users/alice/block", Some(body.clone()))
+      .await;
     assert_eq!(status, 400, "{body}");
   }
-  let (status, block) = send(
-    &app,
-    "PUT",
-    "/api/v0/users/alice/block",
-    Some(json!({ "expiresIn": "1h", "scopes": ["downloads"] })),
-  )
-  .await;
+  let (status, block) = app
+    .call(
+      "PUT",
+      "/api/v0/users/alice/block",
+      Some(json!({ "expiresIn": "1h", "scopes": ["downloads"] })),
+    )
+    .await;
   assert_eq!(status, 200);
   assert_eq!(block["scopes"], json!(["downloads"]));
 }
@@ -197,13 +191,13 @@ async fn writes_push_the_users_summary_and_forgetting_pushes_the_removal() {
     )
     .await;
   stream.until("hello").await;
-  let (status, _) = send(
-    &app,
-    "PUT",
-    "/api/v0/users/alice/notes",
-    Some(json!({ "notes": "kind\r\nhelpful\nslow at night" })),
-  )
-  .await;
+  let (status, _) = app
+    .call(
+      "PUT",
+      "/api/v0/users/alice/notes",
+      Some(json!({ "notes": "kind\r\nhelpful\nslow at night" })),
+    )
+    .await;
   assert_eq!(status, 204);
   let updated = stream.until("users.updated").await.pop().unwrap();
   assert_eq!(updated.data["username"], "alice");
@@ -216,7 +210,7 @@ async fn writes_push_the_users_summary_and_forgetting_pushes_the_removal() {
     json!(null),
     "no info was ever fetched"
   );
-  let (status, _) = send(&app, "DELETE", "/api/v0/users/alice", None).await;
+  let (status, _) = app.call("DELETE", "/api/v0/users/alice", None).await;
   assert_eq!(status, 204);
   let removed = stream.until("users.removed").await.pop().unwrap();
   assert_eq!(removed.data, json!({ "username": "alice" }));
@@ -268,17 +262,23 @@ async fn users_not_seen_for_the_retention_are_forgotten_unless_they_hold_somethi
 async fn a_group_the_configuration_contradicts_is_refused() {
   let app = app(CONFIG, &[]).await;
   let group = |name: &str| Some(json!({ "group": name }));
-  let (status, body) = send(&app, "PUT", "/api/v0/users/bob/group", group("vip")).await;
+  let (status, body) = app
+    .call("PUT", "/api/v0/users/bob/group", group("vip"))
+    .await;
   assert_eq!(status, 409);
   assert!(
     body["error"].as_str().unwrap().contains("friends"),
     "{body}"
   );
-  let (status, _) = send(&app, "PUT", "/api/v0/users/bob/group", group("friends")).await;
+  let (status, _) = app
+    .call("PUT", "/api/v0/users/bob/group", group("friends"))
+    .await;
   assert_eq!(status, 204, "the group the configuration puts the user in");
-  let (status, _) = send(&app, "PUT", "/api/v0/users/alice/group", group("vip")).await;
+  let (status, _) = app
+    .call("PUT", "/api/v0/users/alice/group", group("vip"))
+    .await;
   assert_eq!(status, 204);
-  let (_, summary) = send(&app, "GET", "/api/v0/users/alice/summary", None).await;
+  let (_, summary) = app.call("GET", "/api/v0/users/alice/summary", None).await;
   assert_eq!(
     summary["group"],
     json!({ "name": "vip", "source": "override", "priority": 1, "color": "blue" })
@@ -288,7 +288,7 @@ async fn a_group_the_configuration_contradicts_is_refused() {
   let without_vip = CONFIG.replace("[transfers.groups.user_defined.vip]\nmembers = []\n", "");
   std::fs::write(app.dir.path().join("config.toml"), without_vip).unwrap();
   app.state.config.reload().await.unwrap();
-  let (_, profile) = send(&app, "GET", "/api/v0/users/alice/profile", None).await;
+  let (_, profile) = app.call("GET", "/api/v0/users/alice/profile", None).await;
   assert_eq!(profile["group"]["source"], "builtin");
   assert_eq!(
     profile["groupOverride"], "vip",
@@ -314,16 +314,20 @@ fn sources(listed: &Value) -> Vec<(&str, &str)> {
 #[tokio::test]
 async fn blocking_ourselves_or_a_configured_block_is_a_conflict() {
   let app = app(CONFIG, &[]).await;
-  let (status, _) = send(&app, "PUT", "/api/v0/users/me/block", Some(json!({}))).await;
+  let (status, _) = app
+    .call("PUT", "/api/v0/users/me/block", Some(json!({})))
+    .await;
   assert_eq!(status, 409);
-  let (status, body) = send(&app, "DELETE", "/api/v0/users/mallory/block", None).await;
+  let (status, body) = app
+    .call("DELETE", "/api/v0/users/mallory/block", None)
+    .await;
   assert_eq!(status, 409);
   assert_eq!(body["error"], "blocked by configuration");
-  let (status, _) = send(&app, "DELETE", "/api/v0/users/alice/block", None).await;
+  let (status, _) = app.call("DELETE", "/api/v0/users/alice/block", None).await;
   assert_eq!(status, 404);
 
   let expiring = Some(json!({ "expiresIn": "1h" }));
-  let (status, block) = send(&app, "PUT", "/api/v0/users/alice/block", expiring).await;
+  let (status, block) = app.call("PUT", "/api/v0/users/alice/block", expiring).await;
   assert_eq!(status, 200);
   assert_eq!(
     block["scopes"],
@@ -336,19 +340,21 @@ async fn blocking_ourselves_or_a_configured_block_is_a_conflict() {
       .users
       .is_blocked("alice", None, BlockScope::Messages)
   );
-  let (_, listed) = send(&app, "GET", "/api/v0/users/blocked", None).await;
+  let (_, listed) = app.call("GET", "/api/v0/users/blocked", None).await;
   assert_eq!(sources(&listed), [("alice", "api"), ("mallory", "config")]);
-  let (_, summary) = send(&app, "GET", "/api/v0/users/mallory/summary", None).await;
+  let (_, summary) = app.call("GET", "/api/v0/users/mallory/summary", None).await;
   assert_eq!(summary["block"]["source"], "config");
-  let (status, _) = send(&app, "PUT", "/api/v0/users/mallory/block", Some(json!({}))).await;
+  let (status, _) = app
+    .call("PUT", "/api/v0/users/mallory/block", Some(json!({})))
+    .await;
   assert_eq!(status, 200);
-  let (_, listed) = send(&app, "GET", "/api/v0/users/blocked", None).await;
+  let (_, listed) = app.call("GET", "/api/v0/users/blocked", None).await;
   assert_eq!(
     sources(&listed),
     [("alice", "api"), ("mallory", "api")],
     "a member we also block is listed once"
   );
-  let (status, _) = send(&app, "DELETE", "/api/v0/users/alice/block", None).await;
+  let (status, _) = app.call("DELETE", "/api/v0/users/alice/block", None).await;
   assert_eq!(status, 204);
   assert!(
     !app
@@ -393,7 +399,7 @@ async fn an_expired_block_is_swept_with_its_event() {
     !directory.is_blocked("alice", None, BlockScope::Uploads),
     "expired already"
   );
-  let (status, _) = send(&app, "DELETE", "/api/v0/users/alice/block", None).await;
+  let (status, _) = app.call("DELETE", "/api/v0/users/alice/block", None).await;
   assert_eq!(
     status, 404,
     "an expired block is not lifted, the sweep ends it"
@@ -420,7 +426,9 @@ async fn an_expired_block_is_swept_with_its_event() {
 #[tokio::test]
 async fn an_import_counts_what_it_added_and_skipped() {
   let app = app(CONFIG, &[]).await;
-  send(&app, "PUT", "/api/v0/users/carol/block", Some(json!({}))).await;
+  app
+    .call("PUT", "/api/v0/users/carol/block", Some(json!({})))
+    .await;
   let mut import = request("POST", "/api/v0/users/blocked/import", None);
   *import.body_mut() = axum::body::Body::from("alice\n# spam\nme\ncarol\nbob\n");
   import
@@ -453,10 +461,14 @@ async fn an_import_counts_what_it_added_and_skipped() {
 #[tokio::test]
 async fn forgetting_a_user_drops_their_block_and_purges_their_transfers() {
   let app = app(CONFIG, &[]).await;
-  send(&app, "PUT", "/api/v0/users/alice/block", Some(json!({}))).await;
+  app
+    .call("PUT", "/api/v0/users/alice/block", Some(json!({})))
+    .await;
   let download = Row::new("alice", TransferDirection::Download, 48);
   insert(&app.state.transfers, vec![download]).await;
-  let (status, _) = send(&app, "DELETE", "/api/v0/users/alice?purge=true", None).await;
+  let (status, _) = app
+    .call("DELETE", "/api/v0/users/alice?purge=true", None)
+    .await;
   assert_eq!(status, 204);
   assert!(
     !app
@@ -464,14 +476,14 @@ async fn forgetting_a_user_drops_their_block_and_purges_their_transfers() {
       .users
       .is_blocked("alice", None, BlockScope::Uploads)
   );
-  let (_, listing) = send(&app, "GET", "/api/v0/users/alice/transfers", None).await;
+  let (_, listing) = app.call("GET", "/api/v0/users/alice/transfers", None).await;
   assert_eq!(listing["transfers"][0]["removed"], true);
-  let (status, _) = send(&app, "DELETE", "/api/v0/users/alice", None).await;
+  let (status, _) = app.call("DELETE", "/api/v0/users/alice", None).await;
   assert_eq!(status, 404);
-  let (_, profile) = send(&app, "GET", "/api/v0/users/alice/profile", None).await;
+  let (_, profile) = app.call("GET", "/api/v0/users/alice/profile", None).await;
   assert_eq!(profile["known"], false);
   let refresh = "/api/v0/users/alice/profile?refresh=true";
-  let (status, body) = send(&app, "GET", refresh, None).await;
+  let (status, body) = app.call("GET", refresh, None).await;
   assert_eq!(status, 200, "offline, nothing could be asked");
   assert_eq!(body["known"], false);
 }

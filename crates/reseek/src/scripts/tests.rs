@@ -4,11 +4,11 @@ use api_types::events::ScriptRunCompleted;
 use tokio::sync::mpsc;
 
 use super::*;
-use crate::testing::{TestApp, app, request};
+use crate::testing::{TRUSTED, TestApp, app, request};
 
 /// The daemon with `scripts`, the `[integrations.scripts.*]` tables, and the runs it records.
 async fn with_scripts(scripts: &str) -> (TestApp, mpsc::UnboundedReceiver<ScriptRunCompleted>) {
-  let config = format!("[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n{scripts}");
+  let config = format!("{TRUSTED}{scripts}");
   let app = app(&config, &[]).await;
   let (sender, runs) = mpsc::unbounded_channel();
   app
@@ -299,11 +299,7 @@ async fn a_script_taken_out_of_the_options_lets_its_task_end_at_once() {
   let (app, mut runs) = with_scripts(&script("gone", r#""Noop""#, "true", "")).await;
   raise(&app, "Noop", "").await;
   next(&mut runs).await;
-  std::fs::write(
-    app.dir.path().join("config.toml"),
-    "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
-  )
-  .unwrap();
+  std::fs::write(app.dir.path().join("config.toml"), TRUSTED).unwrap();
   app.state.config.reload().await.unwrap();
   let started = std::time::Instant::now();
   // no event comes after the change, so only the options' own change can close the queue

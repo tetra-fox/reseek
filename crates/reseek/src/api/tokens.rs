@@ -263,11 +263,7 @@ fn raise(app: &AppState, token: &StoredToken, by: &str, created: bool) {
 mod tests {
   use serde_json::json;
 
-  use crate::testing::{TestApp, app, request, with};
-
-  /// Loopback is a trusted network, an administrator at the UI.
-  const TRUSTED: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
-  const OUTSIDE: &str = "192.0.2.1:1";
+  use crate::testing::{OUTSIDE, TRUSTED, TestApp, app, request, with};
 
   async fn create(app: &TestApp, body: serde_json::Value) -> serde_json::Value {
     let answer = app

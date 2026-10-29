@@ -362,16 +362,8 @@ fn presented_credential(headers: &HeaderMap) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
-  use crate::testing::{app, request};
-
-  const CONFIG: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n\
-                        [web.authentication.api_keys.viewer]\nkey = \"viewer-key-0123456789\"\n";
-
-  fn with_header(name: &'static str, value: &str) -> axum::http::Request<axum::body::Body> {
-    let mut r = request("GET", "/api/v0/options", None);
-    r.headers_mut().insert(name, value.parse().unwrap());
-    r
-  }
+  use crate::auth::tests::{CONFIG, with_header};
+  use crate::testing::{OUTSIDE, app, request};
 
   #[tokio::test]
   async fn twenty_failed_credentials_from_an_address_are_answered_429() {
@@ -474,10 +466,7 @@ mod tests {
       "network:127.0.0.0/8"
     );
     let untrusted = app
-      .send_from(
-        "192.0.2.1:1",
-        proxied(request("GET", "/api/v0/session", None)),
-      )
+      .send_from(OUTSIDE, proxied(request("GET", "/api/v0/session", None)))
       .await;
     assert_eq!(untrusted.status, 401, "only a trusted proxy is believed");
   }
@@ -530,7 +519,7 @@ mod tests {
       "no forwarded user"
     );
     let stranger = app
-      .send_from("192.0.2.1:1", groups(proxied(request("GET", "/", None))))
+      .send_from(OUTSIDE, groups(proxied(request("GET", "/", None))))
       .await;
     assert!(
       set_cookie(&stranger.headers, "reseek_session").is_none(),
