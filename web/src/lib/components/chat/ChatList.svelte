@@ -28,6 +28,7 @@
   import { chatHref, roomHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { disclose } from "#lib/ui/motion.js";
   import { nameColor } from "#lib/users/colors.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -231,6 +232,7 @@
         <div
           role="row"
           {...list.line(line, i)}
+          transition:disclose
           aria-current={current === line.key ? "page" : undefined}
           class={[
             "group/row flex items-center gap-2 rounded-control px-2 py-1.5 hover:bg-hover",

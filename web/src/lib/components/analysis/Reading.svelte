@@ -1,6 +1,9 @@
 <script lang="ts">
+  import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
+
   import { FLAGS, type Report, VERDICTS } from "#lib/analysis/analysis.js";
   import { formatDuration } from "#lib/format.js";
+  import { disclose } from "#lib/ui/motion.js";
 
   // the analyzer's own reading, under the spectrogram and folded away until asked for: its
   // verdict and summary, the cutoffs it found, every measure with what it tells, and what made
@@ -67,67 +70,80 @@
   const tallest = $derived(Math.max(1, ...m.cutoffHzHistogram.map(([, count]) => count)));
 </script>
 
-<details class="group rounded-control border" bind:open>
-  <summary class="cursor-pointer px-3 py-2 text-sm font-medium">Analyzer reading</summary>
-  <div class="flex flex-col gap-3 border-t px-3 py-3 text-sm">
-    <p>
-      <span class="font-medium">{VERDICTS[report.verdict]}</span>
-      <span class="text-fg-muted">
-        · {Math.round(report.confidence * 100)}% confidence{report.encoderGuess
-          ? ` · ${report.encoderGuess.profile}`
-          : ""}</span>
-    </p>
-    <p>{report.summary}</p>
-    {#if report.flags.length}
-      <ul class="list-disc pl-5">
-        {#each report.flags as flag (flag)}<li>{FLAGS[flag]}</li>{/each}
-      </ul>
-    {/if}
-    {#if m.cutoffHzHistogram.length}
+<section class="rounded-control border">
+  <button
+    type="button"
+    class="flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm font-medium"
+    aria-expanded={open}
+    onclick={() => (open = !open)}>
+    <ChevronRightIcon
+      class={[
+        "size-4 text-fg-muted transition-transform duration-(--motion-fast)",
+        open && "rotate-90"
+      ]} />
+    Analyzer reading
+  </button>
+  {#if open}
+    <div class="flex flex-col gap-3 border-t px-3 py-3 text-sm" transition:disclose>
+      <p>
+        <span class="font-medium">{VERDICTS[report.verdict]}</span>
+        <span class="text-fg-muted">
+          · {Math.round(report.confidence * 100)}% confidence{report.encoderGuess
+            ? ` · ${report.encoderGuess.profile}`
+            : ""}</span>
+      </p>
+      <p>{report.summary}</p>
+      {#if report.flags.length}
+        <ul class="list-disc pl-5">
+          {#each report.flags as flag (flag)}<li>{FLAGS[flag]}</li>{/each}
+        </ul>
+      {/if}
+      {#if m.cutoffHzHistogram.length}
+        <div class="flex flex-col gap-1">
+          <h4 class="text-xs font-medium text-fg-muted uppercase">Cutoff distribution</h4>
+          <ul class="flex flex-col gap-0.5" aria-label="Cutoffs by share of windows">
+            {#each m.cutoffHzHistogram as [hz, count] (hz)}
+              <li class="grid grid-cols-[5rem_1fr_3rem] items-center gap-2 text-xs">
+                <span class="tabular-nums">{kHz(hz)}</span>
+                <span class="rounded-sm h-2 bg-accent" style:width={`${(count / tallest) * 100}%`}
+                ></span>
+                <span class="text-right text-fg-muted tabular-nums"
+                  >{Math.round((count / counted) * 100)}%</span>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
       <div class="flex flex-col gap-1">
-        <h4 class="text-xs font-medium text-fg-muted uppercase">Cutoff distribution</h4>
-        <ul class="flex flex-col gap-0.5" aria-label="Cutoffs by share of windows">
-          {#each m.cutoffHzHistogram as [hz, count] (hz)}
-            <li class="grid grid-cols-[5rem_1fr_3rem] items-center gap-2 text-xs">
-              <span class="tabular-nums">{kHz(hz)}</span>
-              <span class="rounded-sm h-2 bg-accent" style:width={`${(count / tallest) * 100}%`}
-              ></span>
-              <span class="text-right text-fg-muted tabular-nums"
-                >{Math.round((count / counted) * 100)}%</span>
-            </li>
+        <h4 class="text-xs font-medium text-fg-muted uppercase">Measures</h4>
+        <dl class="flex flex-col gap-1.5">
+          {#each rows as [name, value, meaning] (name)}
+            <div>
+              <dt class="flex justify-between gap-2">
+                <span class="font-medium">{name}</span><span class="tabular-nums">{value}</span>
+              </dt>
+              <dd class="text-xs text-fg-muted">{meaning}</dd>
+            </div>
           {/each}
-        </ul>
+        </dl>
       </div>
-    {/if}
-    <div class="flex flex-col gap-1">
-      <h4 class="text-xs font-medium text-fg-muted uppercase">Measures</h4>
-      <dl class="flex flex-col gap-1.5">
-        {#each rows as [name, value, meaning] (name)}
-          <div>
-            <dt class="flex justify-between gap-2">
-              <span class="font-medium">{name}</span><span class="tabular-nums">{value}</span>
-            </dt>
-            <dd class="text-xs text-fg-muted">{meaning}</dd>
-          </div>
-        {/each}
-      </dl>
-    </div>
-    <p class="text-xs text-fg-muted">
-      {report.claimed.codec.toUpperCase()} · {report.claimed.sampleRate.toLocaleString()} Hz{report
-        .claimed.bitDepth
-        ? ` · ${report.claimed.bitDepth}-bit`
-        : ""}{report.claimed.bitrateKbps ? ` · ${report.claimed.bitrateKbps} kbps` : ""} · {formatDuration(
-        report.durationSeconds
-      )}
-    </p>
-    {#if report.limitations.length}
-      <div class="flex flex-col gap-1">
-        <h4 class="text-xs font-medium text-fg-muted uppercase">Limitations</h4>
+      <p class="text-xs text-fg-muted">
+        {report.claimed.codec.toUpperCase()} · {report.claimed.sampleRate.toLocaleString()} Hz{report
+          .claimed.bitDepth
+          ? ` · ${report.claimed.bitDepth}-bit`
+          : ""}{report.claimed.bitrateKbps ? ` · ${report.claimed.bitrateKbps} kbps` : ""} · {formatDuration(
+          report.durationSeconds
+        )}
+      </p>
+      {#if report.limitations.length}
+        <div class="flex flex-col gap-1">
+          <h4 class="text-xs font-medium text-fg-muted uppercase">Limitations</h4>
 
-        <ul class="list-disc pl-5 text-fg-muted">
-          {#each report.limitations as limit (limit)}<li>{limit}</li>{/each}
-        </ul>
-      </div>
-    {/if}
-  </div>
-</details>
+          <ul class="list-disc pl-5 text-fg-muted">
+            {#each report.limitations as limit (limit)}<li>{limit}</li>{/each}
+          </ul>
+        </div>
+      {/if}
+    </div>
+  {/if}
+</section>

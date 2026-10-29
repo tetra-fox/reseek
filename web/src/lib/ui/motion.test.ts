@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { setMedia } from "#lib/testing/media.js";
 
-import { chartMotion, crossFade, motionFast } from "./motion";
+import { chartMotion, crossFade, easeOutSoft, motionFast } from "./motion";
 
 const REDUCE = "prefers-reduced-motion: reduce";
 
@@ -45,5 +45,13 @@ describe("motion", () => {
     await crossFade(update);
     expect(start).toHaveBeenCalledOnce();
     expect(update).toHaveBeenCalledTimes(2);
+  });
+
+  it("eases out along the soft curve, from rest to rest", () => {
+    expect([easeOutSoft(0), easeOutSoft(1)]).toEqual([0, 1]);
+    // cubic-bezier(0.2, 0, 0, 1) at a quarter, half and three quarters of the time
+    expect(easeOutSoft(0.25)).toBeCloseTo(0.6072, 3);
+    expect(easeOutSoft(0.5)).toBeCloseTo(0.8778, 3);
+    expect(easeOutSoft(0.75)).toBeCloseTo(0.9755, 3);
   });
 });
