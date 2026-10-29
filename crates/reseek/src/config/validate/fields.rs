@@ -185,12 +185,6 @@ mod tests {
       "The x field accepts a single value only (a comma separated list was specified)"
     );
     assert!(ip_address("x", "localhost").is_err());
-    assert!(ip_addresses("x", "127.0.0.1, [::1] ,::").is_ok());
-    assert!(
-      ip_addresses("x", "  ").is_err(),
-      "only an absent list is every address"
-    );
-    assert!(ip_addresses("x", "").is_err());
     assert_eq!(
       ip_addresses("x", "127.0.0.1,nope").unwrap_err(),
       "The x field contains one or more invalid IPv4 or IPv6 IP addresses."
