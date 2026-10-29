@@ -2,9 +2,15 @@
   import { Axis, Chart, Grid, Spline, Svg } from "layerchart";
   import { onMount } from "svelte";
 
-  import { axisTicks, binHz, type Curve, formatHz, heightOn } from "#lib/analysis/frequency.js";
-  import type { Scope } from "#lib/analysis/scope.svelte.js";
-  import { formatTime } from "#lib/analysis/timeview.js";
+  import {
+    axisTicks,
+    binHz,
+    type Curve,
+    formatHz,
+    heightOn
+  } from "#lib/analysis/spectrogram/frequency.js";
+  import type { Scope } from "#lib/analysis/spectrogram/scope.svelte.js";
+  import { formatTime } from "#lib/analysis/spectrogram/timeview.js";
   import { chartCurve, tickLabel } from "#lib/dashboard/chart.js";
 
   // the spectrum of the window the cursor is in on LayerChart: level against frequency, on the

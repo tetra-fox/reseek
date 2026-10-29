@@ -9,11 +9,11 @@
     type Stage,
     stageOf,
     wantsDetail
-  } from "#lib/analysis/draw.js";
-  import { type Palette, readPalette } from "#lib/analysis/paint.js";
-  import type { ScaleMotion } from "#lib/analysis/scalemotion.svelte.js";
-  import type { Scope } from "#lib/analysis/scope.svelte.js";
-  import { acrossOf, formatTime, showsAll, timeAt } from "#lib/analysis/timeview.js";
+  } from "#lib/analysis/spectrogram/draw.js";
+  import { type Palette, readPalette } from "#lib/analysis/spectrogram/paint.js";
+  import type { ScaleMotion } from "#lib/analysis/spectrogram/scalemotion.svelte.js";
+  import type { Scope } from "#lib/analysis/spectrogram/scope.svelte.js";
+  import { acrossOf, formatTime, showsAll, timeAt } from "#lib/analysis/spectrogram/timeview.js";
 
   // the spectrogram over the waveform on one time axis, drawn on one canvas at device pixels,
   // with the cursor across both. Pressing on the cursor and dragging moves it; pressing

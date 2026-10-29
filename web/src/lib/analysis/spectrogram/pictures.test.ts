@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Layout } from "./analysis";
+import type { Layout } from "#lib/analysis/analysis.js";
+
 import { Pictures } from "./pictures.svelte";
 
 const layout: Layout = {

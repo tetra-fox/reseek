@@ -13,7 +13,7 @@
   } from "#lib/analysis/analysis.js";
   import { jobs } from "#lib/analysis/jobs.svelte.js";
   import { marks } from "#lib/analysis/marks.svelte.js";
-  import { Scope } from "#lib/analysis/scope.svelte.js";
+  import { Scope } from "#lib/analysis/spectrogram/scope.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";

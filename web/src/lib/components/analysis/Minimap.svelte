@@ -1,11 +1,16 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  import { Rasters } from "#lib/analysis/draw.js";
-  import { levelColors, loudest, type Palette, readPalette } from "#lib/analysis/paint.js";
-  import type { ScaleMotion } from "#lib/analysis/scalemotion.svelte.js";
-  import type { Scope } from "#lib/analysis/scope.svelte.js";
-  import { acrossOf, whole } from "#lib/analysis/timeview.js";
+  import { Rasters } from "#lib/analysis/spectrogram/draw.js";
+  import {
+    levelColors,
+    loudest,
+    type Palette,
+    readPalette
+  } from "#lib/analysis/spectrogram/paint.js";
+  import type { ScaleMotion } from "#lib/analysis/spectrogram/scalemotion.svelte.js";
+  import type { Scope } from "#lib/analysis/spectrogram/scope.svelte.js";
+  import { acrossOf, whole } from "#lib/analysis/spectrogram/timeview.js";
 
   // the whole file's spectrogram in a strip, the part in view outlined and the rest dimmed, with
   // the cursor; dragging the outline pans the view, and pressing elsewhere centers it there

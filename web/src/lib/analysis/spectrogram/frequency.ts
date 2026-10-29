@@ -1,4 +1,4 @@
-import { type Scale, SCALES } from "./analysis";
+import { type Scale, SCALES } from "#lib/analysis/analysis.js";
 
 /** The lowest frequency a log axis shows, in Hz; linear and mel axes start at 0 */
 export const LOG_MIN_HZ = 20;

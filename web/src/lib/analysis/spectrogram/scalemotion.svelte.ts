@@ -1,8 +1,8 @@
 import { cubicOut } from "svelte/easing";
 
+import type { Scale } from "#lib/analysis/analysis.js";
 import { motionSlow } from "#lib/ui/motion.js";
 
-import type { Scale } from "./analysis";
 import { type Curve, mix, pure } from "./frequency";
 
 /** The frequency axis on its way from one curve to a scale, over `duration` ms from `start` */

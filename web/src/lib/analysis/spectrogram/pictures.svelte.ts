@@ -1,7 +1,6 @@
+import { analysisRoute, type Layout, type Target } from "#lib/analysis/analysis.js";
 import { root, type Schemas, sessionGone } from "#lib/api/client.js";
 import { type Outcome, reason, UNREACHABLE } from "#lib/request.js";
-
-import { analysisRoute, type Layout, type Target } from "./analysis";
 
 /** A run of cells the analysis did not read: the first and one past the last */
 type Run = [number, number];

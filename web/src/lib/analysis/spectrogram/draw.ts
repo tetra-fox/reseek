@@ -1,4 +1,5 @@
-import type { Guide, Scale } from "./analysis";
+import type { Guide, Scale } from "#lib/analysis/analysis.js";
+
 import {
   axisTicks,
   type Curve,

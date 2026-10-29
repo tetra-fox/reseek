@@ -10,12 +10,12 @@
   import { type Component, untrack } from "svelte";
 
   import { DISCLAIMER, SCALES } from "#lib/analysis/analysis.js";
-  import { guideColor, guideKey } from "#lib/analysis/draw.js";
-  import { formatHz } from "#lib/analysis/frequency.js";
-  import { ScaleMotion } from "#lib/analysis/scalemotion.svelte.js";
-  import type { Scope } from "#lib/analysis/scope.svelte.js";
-  import { formatTime, MIN_SPAN, showsAll } from "#lib/analysis/timeview.js";
-  import { spectrogramView } from "#lib/analysis/view.svelte.js";
+  import { guideColor, guideKey } from "#lib/analysis/spectrogram/draw.js";
+  import { formatHz } from "#lib/analysis/spectrogram/frequency.js";
+  import { ScaleMotion } from "#lib/analysis/spectrogram/scalemotion.svelte.js";
+  import type { Scope } from "#lib/analysis/spectrogram/scope.svelte.js";
+  import { formatTime, MIN_SPAN, showsAll } from "#lib/analysis/spectrogram/timeview.js";
+  import { spectrogramView } from "#lib/analysis/spectrogram/view.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { playable, player, type Track } from "#lib/files/player.svelte.js";
