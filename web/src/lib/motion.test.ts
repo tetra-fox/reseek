@@ -17,6 +17,9 @@ describe("motion", () => {
   it("takes no time when reduced motion is asked for", () => {
     document.documentElement.style.setProperty("--motion-fast", "150ms");
     expect(motionFast()).toBe(150);
+    // as the built stylesheet writes it
+    document.documentElement.style.setProperty("--motion-fast", ".15s");
+    expect(motionFast()).toBe(150);
     setMedia(REDUCE, true);
     flushSync();
     expect(motionFast()).toBe(0);

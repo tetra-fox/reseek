@@ -1,5 +1,3 @@
-import type { Scale } from "./analysis";
-import { binsAt } from "./frequency";
 import type { Cells } from "./pictures.svelte";
 import type { View } from "./timeview";
 
@@ -79,35 +77,23 @@ const readAt = (cells: Cells, index: number) => {
 };
 
 /**
- * Spectrogram columns as an image `height` pixels tall on `scale`, one pixel a column: each
- * row reads its frequency between the two linear bins around it, and a column the analysis did
- * not read is left clear
+ * Spectrogram columns as an image one pixel a column and one row a linear bin, bin 0 on row 0,
+ * which an axis on any scale is drawn from by `warp`. A column the analysis did not read is left
+ * clear
  */
-export const rasterize = (
-  cells: Cells,
-  scale: Scale,
-  maxHz: number,
-  height: number,
-  colors: Uint8ClampedArray
-): HTMLCanvasElement => {
+export const binRaster = (cells: Cells, colors: Uint8ClampedArray): HTMLCanvasElement => {
   const canvas = document.createElement("canvas");
+  const bins = cells.width;
   canvas.width = Math.max(1, cells.count);
-  canvas.height = Math.max(1, height);
+  canvas.height = Math.max(1, bins);
   const context = canvas.getContext("2d");
   if (!context || !cells.count) return canvas;
-  const image = context.createImageData(cells.count, height);
-  const bins = cells.width;
-  const rows = Array.from({ length: height }, (_, y) =>
-    binsAt(scale, maxHz, bins, (y + 0.5) / height)
-  );
+  const image = context.createImageData(cells.count, bins);
   for (let x = 0; x < cells.count; x++) {
     if (!readAt(cells, x)) continue;
-    const column = x * bins;
-    for (let y = 0; y < height; y++) {
-      const { below, above, share } = rows[y];
-      const a = cells.bytes[column + below];
-      const level = Math.round(a + (cells.bytes[column + above] - a) * share);
-      const at = (y * cells.count + x) * 4;
+    for (let bin = 0; bin < bins; bin++) {
+      const level = cells.bytes[x * bins + bin];
+      const at = (bin * cells.count + x) * 4;
       image.data[at] = colors[level * 4];
       image.data[at + 1] = colors[level * 4 + 1];
       image.data[at + 2] = colors[level * 4 + 2];
@@ -121,30 +107,62 @@ export const rasterize = (
 /** A rectangle on a canvas, in device pixels */
 export type Rect = { x: number; y: number; width: number; height: number };
 
-/** Draws the part of `raster` (made from `cells`) that falls in `view` into `rect` */
+/**
+ * Draws columns `from` to `to` of a bin raster into `rect`, a row of pixels at a time: row `y`
+ * reads the bin position `rows[y]`, which the canvas's smoothing blends from the two bins around
+ * it. `rows` has a row for each of the rect's
+ */
+export const warp = (
+  context: CanvasRenderingContext2D,
+  raster: HTMLCanvasElement,
+  rows: Float32Array,
+  from: number,
+  to: number,
+  rect: Rect
+) => {
+  for (let y = 0; y < rows.length; y++) {
+    context.drawImage(raster, from, rows[y], to - from, 1, rect.x, rect.y + y, rect.width, 1);
+  }
+};
+
+/**
+ * Draws the part of `raster` (made from `cells`) that falls in `view` into `rect`: the image as
+ * it is, or with `rows` a bin raster warped onto the axis they were made for
+ */
 export const drawRaster = (
   context: CanvasRenderingContext2D,
   raster: HTMLCanvasElement,
   cells: Cells,
   view: View,
-  rect: Rect
+  rect: Rect,
+  rows?: Float32Array
 ) => {
   const from = Math.max(view.start, cells.from);
   const to = Math.min(view.start + view.span, cells.to);
   if (to <= from || !cells.count) return;
   const seconds = (cells.to - cells.from) / cells.count;
-  const x = rect.x + ((from - view.start) / view.span) * rect.width;
-  const width = ((to - from) / view.span) * rect.width;
+  const target = {
+    x: rect.x + ((from - view.start) / view.span) * rect.width,
+    y: rect.y,
+    width: ((to - from) / view.span) * rect.width,
+    height: rect.height
+  };
+  const first = (from - cells.from) / seconds;
+  const end = (to - cells.from) / seconds;
+  if (rows) {
+    warp(context, raster, rows, first, end, target);
+    return;
+  }
   context.drawImage(
     raster,
-    (from - cells.from) / seconds,
+    first,
     0,
-    (to - from) / seconds,
+    end - first,
     raster.height,
-    x,
-    rect.y,
-    width,
-    rect.height
+    target.x,
+    target.y,
+    target.width,
+    target.height
   );
 };
 

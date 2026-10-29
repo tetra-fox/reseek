@@ -315,6 +315,130 @@ test("pans a zoomed five-minute file at sixty frames a second", async ({ page })
   expect(task).toBeLessThan(1000 / 60);
 });
 
+/** The rows the MP3 128k guide line is drawn on, sampled every frame until `ms` have passed */
+const guideRows = (plot: Locator, ms: number) =>
+  plot.evaluate(
+    (canvas: HTMLCanvasElement, ms) =>
+      new Promise<number[]>((done) => {
+        const [x, y, width, height] = canvas.dataset.plot!.split(" ").map(Number);
+        const ratio = canvas.width / canvas.clientWidth;
+        const context = canvas.getContext("2d")!;
+        const rows: number[] = [];
+        const start = performance.now();
+        const tick = () => {
+          const column = context.getImageData(
+            Math.floor((x + width / 2) * ratio),
+            Math.round(y * ratio),
+            1,
+            Math.round(height * ratio)
+          ).data;
+          for (let row = 0; row < column.length / 4; row++) {
+            const at = row * 4;
+            if (column[at] === 90 && column[at + 1] === 210 && column[at + 2] === 255) {
+              rows.push(row);
+              break;
+            }
+          }
+          if (performance.now() - start < ms) requestAnimationFrame(tick);
+          else done(rows);
+        };
+        requestAnimationFrame(tick);
+      }),
+    ms
+  );
+
+test("the frequency scale moves between linear and mel through the frames between", async ({
+  page
+}) => {
+  await fakeDownloads(page);
+  await fakeAnalysis(page);
+  await login(page, "/downloads");
+  await page.getByRole("button", { name: "More for 2.flac" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
+  const drawer = page.getByRole("complementary", { name: "Transfer details" });
+  const plot = drawer.getByRole("slider", { name: "Cursor" });
+  const scales = drawer.getByRole("radiogroup", { name: "Frequency scale" });
+  await expect(scales.getByRole("radio", { name: "Linear" })).toHaveAttribute(
+    "aria-checked",
+    "true"
+  );
+  const row = async (scale: "linear" | "mel") => {
+    const { height } = await rect(plot);
+    const ratio = await plot.evaluate((c: HTMLCanvasElement) => c.width / c.clientWidth);
+    return Math.round((await guideRow(plot, 16_000, scale)) * height * ratio - 0.5);
+  };
+  const linear = await row("linear");
+  const mel = await row("mel");
+  await expect.poll(async () => (await guideRows(plot, 0)).at(-1)).toBe(linear);
+
+  const watched = guideRows(plot, 600);
+  await scales.getByRole("radio", { name: "Mel" }).click();
+  // the choice is saved at the click, while the plot is still on its way
+  expect(await page.evaluate(() => localStorage.getItem("analysis.spectrogram"))).toContain("mel");
+  const rows = await watched;
+  // the line climbs a row at a time or more, never back, through rows of neither scale
+  const between = new Set(rows.filter((r) => r < linear && r > mel));
+  expect(between.size).toBeGreaterThan(3);
+  for (let i = 1; i < rows.length; i++) expect(rows[i]).toBeLessThanOrEqual(rows[i - 1]);
+  expect(rows.at(-1)).toBe(mel);
+});
+
+test("moves between scales at sixty frames a second on a five-minute file", async ({ page }) => {
+  await fakeDownloads(page);
+  await fakeAnalysis(page, { duration: 300 });
+  await login(page, "/downloads");
+  await page.getByRole("button", { name: "More for 2.flac" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
+  const drawer = page.getByRole("complementary", { name: "Transfer details" });
+  await drawer.getByRole("button", { name: "Open large" }).click();
+  const dialog = page.getByRole("dialog", { name: "2.flac" });
+  const detail = page.waitForResponse((r) => r.url().includes("/analysis/spectrogram?tile="));
+  for (let i = 0; i < 4; i++) await dialog.getByRole("button", { name: "Zoom in" }).click();
+  await detail;
+  await settled(dialog.getByRole("slider", { name: "Cursor" }));
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Performance.enable");
+  const work = async () => {
+    const { metrics } = await cdp.send("Performance.getMetrics");
+    const value = (name: string) => metrics.find((m) => m.name === name)!.value * 1000;
+    return { task: value("TaskDuration"), script: value("ScriptDuration") };
+  };
+  const scales = dialog.getByRole("radiogroup", { name: "Frequency scale" });
+  const before = await work();
+  const frames = page.evaluate(
+    () =>
+      new Promise<number[]>((done) => {
+        const times: number[] = [];
+        const tick = (t: number) => {
+          times.push(t);
+          if (times.length < 121) requestAnimationFrame(tick);
+          else done(times.slice(1).map((t, i) => t - times[i]));
+        };
+        requestAnimationFrame(tick);
+      })
+  );
+  // a new scale every 200 ms, each before the last has landed, so every frame is a moving one
+  let counted = false;
+  void frames.then(() => (counted = true));
+  for (let i = 0; !counted; i++) {
+    await scales.getByRole("radio", { name: ["Log", "Mel", "Linear"][i % 3] }).click();
+    await page.waitForTimeout(200);
+  }
+  const gaps = (await frames).toSorted((a, b) => a - b);
+  const after = await work();
+  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  const p95 = gaps[Math.floor(gaps.length * 0.95)];
+  const task = (after.task - before.task) / gaps.length;
+  const script = (after.script - before.script) / gaps.length;
+  test.info().annotations.push({
+    type: "scale moves",
+    description:
+      `frames ${mean.toFixed(1)} ms on average, p95 ${p95.toFixed(1)} ms; main thread ` +
+      `${task.toFixed(1)} ms a frame, ${script.toFixed(1)} ms of it script`
+  });
+  expect(task).toBeLessThan(1000 / 60);
+});
+
 test("the cursor follows playback and a click seeks it", async ({ page }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);

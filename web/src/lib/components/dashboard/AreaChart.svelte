@@ -2,15 +2,21 @@
   import { Area, Axis, Chart, Grid, Highlight, LinearGradient, Svg, Tooltip } from "layerchart";
   import { SvelteSet } from "svelte/reactivity";
 
-  import { axisPadding, tickLabel, timeLabel, valueLabel } from "#lib/dashboard/chart.js";
+  import {
+    axisPadding,
+    chartCurve,
+    tickLabel,
+    timeLabel,
+    valueLabel
+  } from "#lib/dashboard/chart.js";
   import type { Point } from "#lib/dashboard/reports.js";
   import type { Series } from "#lib/dashboard/series.js";
   import { chartMotion } from "#lib/motion.js";
   import { rem } from "#lib/viewport.svelte.js";
 
-  // transfer history as areas over time on LayerChart, each a line over a fill that fades toward
-  // the floor, with the axes and the tooltip of the bucket under the pointer; the buttons above
-  // show and hide each series
+  // transfer history as areas over time on LayerChart, each a smooth line over a fill that fades
+  // toward the floor, with the axes and the tooltip of the bucket under the pointer; the buttons
+  // above show and hide each series
   type Props = {
     data: Point[];
     series: Series[];
@@ -90,6 +96,7 @@
               <Area
                 y1={(d: (typeof rows)[number]) => d[s.key]}
                 fill={gradient}
+                curve={chartCurve}
                 line={{ stroke: s.color, strokeWidth: 1.5 }}
                 {motion} />
             {/snippet}
