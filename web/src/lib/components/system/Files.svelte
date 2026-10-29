@@ -2,17 +2,13 @@
   import { goto } from "$app/navigation";
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
-  import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
-  import CopyIcon from "@lucide/svelte/icons/copy";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
-  import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import FileIcon from "@lucide/svelte/icons/file";
   import FileArchiveIcon from "@lucide/svelte/icons/file-archive";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import PlayIcon from "@lucide/svelte/icons/play";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
-  import SaveIcon from "@lucide/svelte/icons/save";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import { type Component, untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
@@ -27,6 +23,7 @@
   import AnalysisJobs from "#lib/components/analysis/AnalysisJobs.svelte";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
   import FileTree from "#lib/components/files/FileTree.svelte";
+  import LocalFileItems from "#lib/components/files/LocalFileItems.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -37,6 +34,7 @@
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { isAudio } from "#lib/files/kinds.js";
   import { player } from "#lib/files/player.svelte.js";
   import { folderCaption } from "#lib/files/summary.js";
@@ -357,25 +355,25 @@
     </Menu.Trigger>
     <Menu.Content align="end">
       {#if e.kind === "file"}
-        <Menu.Item onSelect={() => void open(e)}><ExternalLinkIcon />Open</Menu.Item>
-        {#if isAudio(e.name)}
-          <Menu.Item onSelect={() => preview(e)}><PlayIcon />Preview</Menu.Item>
-        {/if}
-        {#if analyzable(e.name)}
-          <Menu.Item onSelect={() => (analyzing = { entry: e, start: write, large: shiftHeld() })}
-            ><AudioLinesIcon />Analyze</Menu.Item>
-        {/if}
-        <Menu.Item onSelect={() => void save(e)}><SaveIcon />Download to device</Menu.Item>
+        <LocalFileItems
+          onopen={() => void open(e)}
+          onpreview={isAudio(e.name) ? () => preview(e) : undefined}
+          onanalyze={analyzable(e.name)
+            ? () => (analyzing = { entry: e, start: write, large: shiftHeld() })
+            : undefined}
+          onsave={() => void save(e)}
+          path={e.path} />
       {:else}
         <Menu.Item onSelect={() => void open(e)}><FolderOpenIcon />Open</Menu.Item>
         <Menu.Item onSelect={() => window.location.assign(archiveUrl(root, e.path))}
           ><FileArchiveIcon />Download as zip</Menu.Item>
         {#if write && analyzerOffered()}
           <Menu.Item onSelect={() => void analyzeFolder(e)}
-            ><AudioLinesIcon />Analyze folder</Menu.Item>
+            ><A.analyze.icon />{A.analyze.label}</Menu.Item>
         {/if}
+        <Menu.Item onSelect={() => void copyText(e.path)}
+          ><A.copyPath.icon />{A.copyPath.label}</Menu.Item>
       {/if}
-      <Menu.Item onSelect={() => void copyText(e.path)}><CopyIcon />Copy path</Menu.Item>
       {#if canDelete}
         <Menu.Separator />
         <Menu.Item onSelect={() => askRemove([e])}><Trash2Icon />Delete</Menu.Item>
@@ -520,7 +518,7 @@
       {#if isAudio(e.name)}
         {@render tool("Preview", PlayIcon, () => preview(e))}
       {/if}
-      {@render tool("Download to device", SaveIcon, () => void save(e))}
+      {@render tool(A.save.label, A.save.icon, () => void save(e))}
       {#if canDelete}
         {@render tool("Delete", Trash2Icon, () => askRemove([e]))}
       {/if}

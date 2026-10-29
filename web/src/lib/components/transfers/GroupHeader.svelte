@@ -1,6 +1,5 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
   import BanIcon from "@lucide/svelte/icons/ban";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import FileArchiveIcon from "@lucide/svelte/icons/file-archive";
@@ -22,6 +21,7 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { folderLinks, remoteFolder } from "#lib/files/links.js";
   import { formatBytes, formatDuration, plural } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
@@ -144,10 +144,8 @@
       run: zip
     },
     {
-      get label() {
-        return group.kind === "folder" ? "Analyze folder" : "Analyze the group";
-      },
-      icon: AudioLinesIcon,
+      label: A.analyze.label,
+      icon: A.analyze.icon,
       shown: () =>
         write &&
         direction === "download" &&

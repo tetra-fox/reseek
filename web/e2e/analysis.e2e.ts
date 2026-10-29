@@ -543,7 +543,7 @@ test("queues a user's downloads, a folder and a selection for analysis", async (
   const header = (name: string) => grid.getByRole("rowheader").filter({ hasText: name });
 
   // alice's running download is not finished and her other one is analyzed already
-  await header("alice").getByRole("button", { name: "Analyze the group" }).click();
+  await header("alice").getByRole("button", { name: "Analyze" }).click();
   await expect(
     page.getByText(
       "No files queued for analysis. 2 files skipped: 1 not finished and 1 already analyzed or queued."
@@ -551,7 +551,7 @@ test("queues a user's downloads, a folder and a selection for analysis", async (
   ).toBeVisible();
   expect(queued).toEqual([]);
 
-  await header("Big").getByRole("button", { name: "Analyze folder" }).click();
+  await header("Big").getByRole("button", { name: "Analyze" }).click();
   await expect(page.getByText("1 file queued for analysis", { exact: true })).toBeVisible();
   expect(queued).toHaveLength(1);
 
@@ -679,11 +679,11 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   await expect(drawer.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
   // the file's own actions sit beside its name
   await expect(drawer.getByRole("button", { name: "Preview" })).toBeVisible();
-  await expect(drawer.getByRole("button", { name: "Download to device" })).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "Save to this device" })).toBeVisible();
   await drawer.getByRole("button", { name: "Close the analysis" }).click();
 
   await page.getByRole("button", { name: "More for Album" }).click();
-  await page.getByRole("menuitem", { name: "Analyze folder" }).click();
+  await page.getByRole("menuitem", { name: "Analyze", exact: true }).click();
   await expect(
     page.getByText("2 files queued for analysis. 1 file skipped: 1 not an audio type.")
   ).toBeVisible();
