@@ -240,7 +240,7 @@ impl Searches {
     };
     let reason = match result {
       Ok(search) => state(search.state) - SearchStates::Completed,
-      Err(ClientError::Cancelled) if running.cancelled.load(Ordering::Relaxed) => {
+      Err(ClientError::Canceled) if running.cancelled.load(Ordering::Relaxed) => {
         SearchStates::Cancelled
       }
       Err(error) => {
@@ -383,7 +383,7 @@ mod tests {
     searches.tasks.spawn(async move {
       let search = async move {
         cancel.cancelled().await;
-        Err(ClientError::Cancelled)
+        Err(ClientError::Canceled)
       };
       following.follow(running, search).await;
     });

@@ -22,7 +22,7 @@ use crate::error::{ClientError, ConnectionErrorKind};
 use crate::waiter::WaitKey;
 
 impl Client {
-  /// Opens a transfer connection to `username` for the transfer `token`: the user is dialled
+  /// Opens a transfer connection to `username` for the transfer `token`: the user is dialed
   /// directly and asked through the server to dial us, and whichever connects first carries the
   /// transfer. The token is written on it before it is returned.
   pub async fn get_transfer_connection(
@@ -60,7 +60,7 @@ impl Client {
       )
     })?;
     tracing::debug!(username, token, ?via, "transfer connection established");
-    // a connection the user dialled needs no introduction, only the transfer token
+    // a connection the user dialed needs no introduction, only the transfer token
     let mut init = via
       .introduction(&own, PeerConnectionType::Transfer)
       .unwrap_or_default();

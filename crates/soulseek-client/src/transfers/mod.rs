@@ -106,7 +106,7 @@ pub(crate) struct Registration {
   token: u32,
   key: FileKey,
   pub(crate) record: Arc<Mutex<Record>>,
-  /// stops the transfer: cancelled with the caller's cancellation or when the client is disposed
+  /// stops the transfer: canceled with the caller's cancellation or when the client is disposed
   pub(crate) cancel: CancellationToken,
 }
 
@@ -239,7 +239,7 @@ impl Transfers {
   pub(crate) fn cancel_all(&self) {
     let table = self.table();
     if !table.by_token.is_empty() {
-      tracing::debug!(count = table.by_token.len(), "transfers cancelled");
+      tracing::debug!(count = table.by_token.len(), "transfers canceled");
     }
     for tracked in table.by_token.values() {
       tracked.cancel.cancel();

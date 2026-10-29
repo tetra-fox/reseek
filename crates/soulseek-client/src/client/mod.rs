@@ -70,7 +70,7 @@ struct Inner {
   /// written only while `session` is locked, so transitions and their events stay in order
   state: watch::Sender<ClientState>,
   session: Mutex<Session>,
-  /// serialises `connect` and `reconfigure_options`
+  /// serializes `connect` and `reconfigure_options`
   state_lock: tokio::sync::Mutex<()>,
   server_info: Mutex<ServerInfo>,
   waiter: Waiter,
@@ -84,14 +84,14 @@ struct Inner {
   searches: Searches,
   /// how many connections peers opened to our listener so far
   inbound: watch::Sender<u64>,
-  /// cancelled when the client is disposed or dropped
+  /// canceled when the client is disposed or dropped
   lifetime: CancellationToken,
 }
 
 /// What exists only while a server session does
 #[derive(Default)]
 struct Session {
-  /// the `connect` in progress, cancelled by an explicit disconnect
+  /// the `connect` in progress, canceled by an explicit disconnect
   attempt: Option<CancellationToken>,
   listener: Option<Listener>,
   server: Option<MessageConn>,
@@ -216,7 +216,7 @@ impl Client {
     self.inner.emit(event);
   }
 
-  /// cancelled when the client is disposed or dropped; long-lived tasks stop with it
+  /// canceled when the client is disposed or dropped; long-lived tasks stop with it
   pub fn cancellation(&self) -> &CancellationToken {
     &self.inner.lifetime
   }
@@ -292,7 +292,7 @@ impl Client {
     Ok(())
   }
 
-  /// Queues a message to the server without waiting for the write, for acknowledgements,
+  /// Queues a message to the server without waiting for the write, for acknowledgments,
   /// probes and reports whose failure only matters to the connection itself.
   pub(crate) fn send_server_message(&self, message: &ServerRequest) {
     let result = self
@@ -306,8 +306,8 @@ impl Client {
     }
   }
 
-  /// Disconnects and stops the client for good: every transfer is cancelled, every wait is
-  /// cancelled, every connection to another user is closed and every task tied to the client
+  /// Disconnects and stops the client for good: every transfer is canceled, every wait is
+  /// canceled, every connection to another user is closed and every task tied to the client
   /// stops. Later calls fail with `Disposed`.
   pub async fn dispose(&self) {
     self

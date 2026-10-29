@@ -32,7 +32,7 @@ pub struct ConnectToPeerResponse {
   /// send back in `PierceFirewall`
   pub token: u32,
   pub privileged: bool,
-  /// never dialled
+  /// never dialed
   pub obfuscation: Option<Obfuscation>,
 }
 
@@ -79,7 +79,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 1001: tells the server we could not honour a peer's `ConnectToPeer`, so the server
+  /// Server code 1001: tells the server we could not honor a peer's `ConnectToPeer`, so the server
   /// can tell that peer.
   pub struct CannotConnectRequest {
     pub token: u32,

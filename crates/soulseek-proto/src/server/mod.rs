@@ -1,7 +1,7 @@
 //! The server connection: [`ServerRequest`] is what the client sends, [`ServerResponse`] what the
 //! server sends, pushed or in reply. A code whose layout differs between the two directions has a
 //! `...Request` and a `...Response` struct; a code with one layout both ways has one struct used by
-//! both enums. Each message lives in the file of its topic; this file holds only the catalogue.
+//! both enums. Each message lives in the file of its topic; this file holds only the catalog.
 
 pub(crate) mod distributed;
 pub(crate) mod interests;

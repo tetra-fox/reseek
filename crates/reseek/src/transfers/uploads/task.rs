@@ -56,7 +56,7 @@ fn input_error(error: &ClientError) -> Option<&std::io::Error> {
 /// The outcome flag an upload that ended with `error` is written with.
 fn outcome(error: &ClientError) -> TransferStates {
   match error {
-    ClientError::Cancelled => TransferStates::Cancelled,
+    ClientError::Canceled => TransferStates::Cancelled,
     ClientError::Timeout(_) => TransferStates::TimedOut,
     ClientError::TransferRejected(_) => TransferStates::Rejected,
     ClientError::NotFound(_) => TransferStates::Aborted,
@@ -84,7 +84,7 @@ fn reason(error: &ClientError) -> String {
 fn relayed(result: &Result<Snapshot, ClientError>, record: &Record) -> (RelayUploadOutcome, u64) {
   match result {
     Ok(transfer) => (RelayUploadOutcome::Succeeded, transfer.bytes_transferred),
-    Err(ClientError::Cancelled) => (RelayUploadOutcome::Cancelled, record.bytes_transferred),
+    Err(ClientError::Canceled) => (RelayUploadOutcome::Cancelled, record.bytes_transferred),
     Err(_) => (RelayUploadOutcome::Failed, record.bytes_transferred),
   }
 }
@@ -247,7 +247,7 @@ impl Uploads {
         let start = start.map_err(|e| ClientError::client(e.to_string(), None))?;
         tokio::select! {
           biased;
-          () = cancel.cancelled() => Err(ClientError::Cancelled),
+          () = cancel.cancelled() => Err(ClientError::Canceled),
           started = start => started.map_err(|_| {
             ClientError::client(format!("upload {id} left the queue before its slot"), None)
           }),
@@ -422,7 +422,7 @@ mod tests {
   #[test]
   fn each_client_error_ends_in_its_outcome() {
     let cases = [
-      (ClientError::Cancelled, TransferStates::Cancelled),
+      (ClientError::Canceled, TransferStates::Cancelled),
       (ClientError::Timeout("t".into()), TransferStates::TimedOut),
       (
         ClientError::TransferRejected("Queued".into()),

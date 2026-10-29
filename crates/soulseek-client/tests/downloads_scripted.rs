@@ -129,7 +129,7 @@ async fn a_transfer_request_answered_with_a_refusal_rejects_the_download_and_que
 }
 
 #[tokio::test]
-async fn a_peer_that_sends_at_once_is_dialled_with_our_own_token() {
+async fn a_peer_that_sends_at_once_is_dialed_with_our_own_token() {
   let mut scripted = Scripted::start().await;
   let mut events = scripted.client().subscribe();
   let running = scripted.download("@@share\\now.mp3", |request| {

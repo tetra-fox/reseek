@@ -54,7 +54,7 @@ pub enum Event {
   PrivilegeNotificationReceived {
     username: String,
     id: Option<u32>,
-    requires_acknowledgement: bool,
+    requires_acknowledgment: bool,
   },
   /// every privileged user, pushed after login
   PrivilegedUserListReceived(Vec<String>),

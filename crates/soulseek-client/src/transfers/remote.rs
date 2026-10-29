@@ -20,7 +20,7 @@ use crate::waiter::WaitKey;
 impl Client {
   /// An uploader is about to send us a file. A download of that file from that user takes the
   /// offer when it waits for one; a file we do not download is refused, which is also how a
-  /// cancelled download tells the uploader to drop it.
+  /// canceled download tells the uploader to drop it.
   pub(crate) async fn upload_offered(
     &self,
     conn: &MessageConn,

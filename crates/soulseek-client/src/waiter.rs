@@ -241,7 +241,7 @@ impl Waiter {
 
   /// Registers a wait under `key` now and returns the future that resolves with the value the
   /// key is completed with. It fails with `Timeout` after `timeout`, or the default timeout when
-  /// `None`, counted from now; with `Cancelled` when `cancel` fires; or with the error the key is
+  /// `None`, counted from now; with `Canceled` when `cancel` fires; or with the error the key is
   /// faulted with. Dropping the future withdraws the wait. Register before sending the request,
   /// so a fast reply cannot arrive first.
   pub fn wait<T: Send + 'static>(
@@ -257,7 +257,7 @@ impl Waiter {
     )
   }
 
-  /// [`Waiter::wait`] without a timeout: it ends only when completed, faulted or cancelled
+  /// [`Waiter::wait`] without a timeout: it ends only when completed, faulted or canceled
   pub fn wait_indefinitely<T: Send + 'static>(
     &self,
     key: WaitKey,
@@ -312,7 +312,7 @@ impl Waiter {
             "The wait timed out after {millis} milliseconds"
           )));
         }
-        () = cancel.cancelled() => return Err(ClientError::Cancelled),
+        () = cancel.cancelled() => return Err(ClientError::Canceled),
       };
       match outcome {
         Ok(Ok(value)) => value.downcast::<T>().map(|value| *value).map_err(|_| {
@@ -322,8 +322,8 @@ impl Waiter {
           ClientError::client(format!("Failed to bind wait types for key {key:?}"), None)
         }),
         Ok(Err(error)) => Err(error),
-        // the waiter cancelled every wait, or was dropped
-        Err(_) => Err(ClientError::Cancelled),
+        // the waiter canceled every wait, or was dropped
+        Err(_) => Err(ClientError::Canceled),
       }
     }
   }
@@ -400,7 +400,7 @@ impl Waiter {
     for (_, queue) in self.shared.lock().drain() {
       for pending in queue {
         // a wait whose future is already gone needs no answer
-        let _ = pending.settle.send(Err(ClientError::Cancelled));
+        let _ = pending.settle.send(Err(ClientError::Canceled));
       }
     }
   }
@@ -503,13 +503,13 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn cancelling_a_newer_wait_leaves_the_older_one() {
+  async fn canceling_a_newer_wait_leaves_the_older_one() {
     let waiter = waiter();
     let older = waiter.wait::<u32>(key("a"), None, CancellationToken::new());
     let cancel = CancellationToken::new();
     let newer = waiter.wait::<u32>(key("a"), None, cancel.clone());
     cancel.cancel();
-    assert!(matches!(newer.await, Err(ClientError::Cancelled)));
+    assert!(matches!(newer.await, Err(ClientError::Canceled)));
     assert!(waiter.complete(&key("a"), 7u32));
     assert_eq!(older.await.unwrap(), 7);
   }

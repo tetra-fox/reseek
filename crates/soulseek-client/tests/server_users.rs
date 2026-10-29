@@ -63,7 +63,7 @@ async fn the_address_reply_keeps_its_obfuscation_trailer() {
       }),
     )
     .await;
-  // soulfind sends the trailer, empty; it is kept and never dialled
+  // soulfind sends the trailer, empty; it is kept and never dialed
   assert_eq!(
     address.obfuscation,
     Some(PeerAddressObfuscation {

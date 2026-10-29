@@ -1,6 +1,6 @@
 //! Taking a response into a search: only while the search runs, only what its filters let
 //! through, files filtered out of both lists, and the counts and the idle deadline moved on.
-//! Locked files are counted apart and do not count towards the file limit, since they cannot be
+//! Locked files are counted apart and do not count toward the file limit, since they cannot be
 //! downloaded.
 
 use std::sync::Arc;

@@ -68,7 +68,7 @@ impl Client {
 pub(crate) fn failed(verb: &str, error: ClientError) -> ClientError {
   match error {
     ClientError::Timeout(_)
-    | ClientError::Cancelled
+    | ClientError::Canceled
     | ClientError::UserOffline(_)
     | ClientError::UserNotFound(_)
     | ClientError::Room { .. }

@@ -1,5 +1,5 @@
 //! Downloads from a scripted peer that drops its connections, never connects back, stops
-//! sending or lies about the file, and downloads cancelled at each stage.
+//! sending or lies about the file, and downloads canceled at each stage.
 
 mod support;
 
@@ -110,9 +110,9 @@ async fn waits_that_take_too_long_time_the_download_out() {
 }
 
 #[tokio::test]
-async fn a_download_cancelled_at_any_stage_ends_cancelled() {
-  let cancelled =
-    |result: Result<Transfer, ClientError>| matches!(result, Err(ClientError::Cancelled));
+async fn a_download_canceled_at_any_stage_ends_canceled() {
+  let canceled =
+    |result: Result<Transfer, ClientError>| matches!(result, Err(ClientError::Canceled));
 
   // waiting for a download slot
   let mut options = listening_options();
@@ -138,7 +138,7 @@ async fn a_download_cancelled_at_any_stage_ends_cancelled() {
   .await;
   assert_eq!(state, TransferState::QUEUED_LOCALLY);
   second.cancel.cancel();
-  assert!(cancelled(second.task.await.unwrap()));
+  assert!(canceled(second.task.await.unwrap()));
 
   // waiting for the answer to a transfer request
   let mut scripted = Scripted::start().await;
@@ -148,14 +148,14 @@ async fn a_download_cancelled_at_any_stage_ends_cancelled() {
   let mut bob = scripted.connected().await;
   let _ = bob.read_peer().await;
   running.cancel.cancel();
-  assert!(cancelled(running.result().await));
+  assert!(canceled(running.result().await));
 
   // waiting for bob to connect: bob connecting afterwards is turned away
   let mut scripted = Scripted::start().await;
   let (running, mut bob) = scripted.queued_download("@@share\\init.mp3").await;
   offer(&mut bob, "@@share\\init.mp3", 17, Some(SIZE)).await;
   running.cancel.cancel();
-  assert!(cancelled(running.result().await));
+  assert!(canceled(running.result().await));
   let mut late = scripted.connect_for_transfer(17).await;
   late.closed().await;
 
@@ -168,7 +168,7 @@ async fn a_download_cancelled_at_any_stage_ends_cancelled() {
   tokio::time::sleep(Duration::from_millis(100)).await;
   running.cancel.cancel();
   let destination = running.destination.clone();
-  assert!(cancelled(running.result().await));
+  assert!(canceled(running.result().await));
   transfer.closed().await;
   assert_eq!(std::fs::read(destination).unwrap(), content(3000));
 }
@@ -178,8 +178,5 @@ async fn disposing_the_client_cancels_its_transfers() {
   let mut scripted = Scripted::start().await;
   let (running, _bob) = scripted.queued_download("@@share\\disposed.mp3").await;
   scripted.client().dispose().await;
-  assert!(matches!(
-    running.result().await,
-    Err(ClientError::Cancelled)
-  ));
+  assert!(matches!(running.result().await, Err(ClientError::Canceled)));
 }

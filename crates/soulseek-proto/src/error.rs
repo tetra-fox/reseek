@@ -2,7 +2,7 @@
 /// logged as is.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum DecodeError {
-  /// the length prefix is smaller than the code; the stream cannot be resynchronised, close the
+  /// the length prefix is smaller than the code; the stream cannot be resynchronized, close the
   /// connection
   #[error("frame length {len} is below the code width {code_width}")]
   FrameTooShort { len: u32, code_width: usize },

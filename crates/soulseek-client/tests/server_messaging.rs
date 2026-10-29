@@ -1,4 +1,4 @@
-//! Private messages and the public chat feed on soulfind: delivery, the acknowledgement that
+//! Private messages and the public chat feed on soulfind: delivery, the acknowledgment that
 //! stops the server replaying a message at every login (sent at once, or by the application
 //! later), and messages kept for an offline user.
 
@@ -9,7 +9,7 @@ use soulseek_proto::RoomType;
 use support::options;
 use support::soulfind::{self, PASSWORD, User};
 
-fn without_acknowledgement() -> ClientOptions {
+fn without_acknowledgment() -> ClientOptions {
   ClientOptions {
     auto_acknowledge_private_messages: false,
     ..options()
@@ -48,7 +48,7 @@ async fn an_unacknowledged_message_is_replayed_at_the_next_login() {
     return;
   };
   let alice = server.login("alice", options()).await;
-  let mut bob = server.login("bob", without_acknowledgement()).await;
+  let mut bob = server.login("bob", without_acknowledgment()).await;
   message(&bob, &alice, "hello").await;
   let live = received(&mut bob).await;
   assert_eq!(live.username, alice.username);
@@ -71,7 +71,7 @@ async fn an_acknowledged_message_is_not_replayed() {
   let mut bob = server.login("bob", options()).await;
   message(&bob, &alice, "first").await;
   assert_eq!(received(&mut bob).await.message, "first");
-  // the acknowledgement is queued before this request, so it has reached the server once this
+  // the acknowledgment is queued before this request, so it has reached the server once this
   // is answered
   bob.settle().await;
 
@@ -144,7 +144,7 @@ async fn a_message_the_application_acknowledges_later_is_not_replayed() {
     return;
   };
   let alice = server.login("alice", options()).await;
-  let mut bob = server.login("bob", without_acknowledgement()).await;
+  let mut bob = server.login("bob", without_acknowledgment()).await;
   message(&bob, &alice, "first").await;
   let first = received(&mut bob).await;
   bob

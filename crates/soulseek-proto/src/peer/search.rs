@@ -216,7 +216,7 @@ pub(crate) mod tests {
   }
 
   #[test]
-  fn search_response_honours_configured_limits() {
+  fn search_response_honors_configured_limits() {
     let response = PeerMessage::SearchResponse(SearchResponse {
       username: "bob".into(),
       token: 1,

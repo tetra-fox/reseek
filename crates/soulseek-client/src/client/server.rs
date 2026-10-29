@@ -243,7 +243,7 @@ impl Client {
       R::AddPrivilegedUser(user) => self.emit(Event::PrivilegeNotificationReceived {
         username: user.username,
         id: None,
-        requires_acknowledgement: false,
+        requires_acknowledgment: false,
       }),
       R::CheckPrivileges(privileges) => self.complete(
         WaitKey::Server(ServerCode::CheckPrivileges),
@@ -286,7 +286,7 @@ impl Client {
         self.emit(Event::PrivilegeNotificationReceived {
           username: notification.username,
           id: Some(id),
-          requires_acknowledgement: true,
+          requires_acknowledgment: true,
         });
         if inner.options().auto_acknowledge_privilege_notifications {
           self.send_server_message(&ServerRequest::AcknowledgeNotifyPrivileges(
@@ -451,7 +451,7 @@ impl Client {
 
   /// A peer asks, through the server, that we connect to it: for messages, for a file it is about
   /// to upload to us, or to become our distributed child. Each is handled away from the read
-  /// loop, and a request we cannot honour is reported back so the peer stops waiting.
+  /// loop, and a request we cannot honor is reported back so the peer stops waiting.
   fn connect_to_peer(&self, request: ConnectToPeerResponse) {
     tracing::debug!(
       username = request.username,

@@ -1,6 +1,6 @@
 //! Our searches between clients on soulfind: every scope, the states a search goes through, the
 //! limits and filters on what it takes, the one way our own search reaches our own answers,
-//! searches waiting their turn, tokens taken once, and a disconnect cancelling them.
+//! searches waiting their turn, tokens taken once, and a disconnect canceling them.
 
 mod support;
 
@@ -358,7 +358,7 @@ async fn a_disconnect_cancels_every_search() {
       .await
       .unwrap()
       .unwrap();
-    assert!(matches!(result, Err(ClientError::Cancelled)), "{result:?}");
+    assert!(matches!(result, Err(ClientError::Canceled)), "{result:?}");
   }
   let mut ended = Vec::new();
   while ended.len() < 2 {
@@ -377,6 +377,6 @@ async fn a_disconnect_cancels_every_search() {
     }
   }
   ended.sort_unstable_by_key(|(token, _)| *token);
-  let cancelled = SearchState::COMPLETED | SearchState::CANCELLED;
-  assert_eq!(ended, [(1, cancelled), (2, cancelled)]);
+  let canceled = SearchState::COMPLETED | SearchState::CANCELLED;
+  assert_eq!(ended, [(1, canceled), (2, canceled)]);
 }

@@ -23,7 +23,7 @@ bitflags::bitflags! {
     const IN_PROGRESS = 2;
     /// over, with one of the reasons below
     const COMPLETED = 4;
-    /// the caller cancelled, or the client disconnected
+    /// the caller canceled, or the client disconnected
     const CANCELLED = 8;
     /// no response came for the search timeout: the usual end of a search
     const TIMED_OUT = 16;

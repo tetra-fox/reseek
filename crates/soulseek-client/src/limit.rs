@@ -77,7 +77,7 @@ impl Limiter {
     }
   }
 
-  /// waits for a permit under a bound of `size`, or fails with `Cancelled`
+  /// waits for a permit under a bound of `size`, or fails with `Canceled`
   pub(crate) async fn acquire(
     &self,
     size: u32,
@@ -87,7 +87,7 @@ impl Limiter {
     let semaphore = self.shared.semaphore.clone();
     tokio::select! {
       biased;
-      () = cancel.cancelled() => Err(ClientError::Cancelled),
+      () = cancel.cancelled() => Err(ClientError::Canceled),
       permit = semaphore.acquire_owned() => {
         Ok(self.permit(permit.expect("the limiter never closes its semaphore")))
       }
@@ -171,7 +171,7 @@ mod tests {
     cancel.cancel();
     assert!(matches!(
       limiter.acquire(1, &cancel).await,
-      Err(ClientError::Cancelled)
+      Err(ClientError::Canceled)
     ));
   }
 }

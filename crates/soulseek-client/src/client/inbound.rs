@@ -74,10 +74,10 @@ impl Client {
   }
 
   /// A user answered a solicitation after its solicitor stopped waiting, usually because
-  /// dialling the user directly won meanwhile. Some clients then count the answering
-  /// connection as their connection to us and drop the one we dialled, so for messages it
+  /// dialing the user directly won meanwhile. Some clients then count the answering
+  /// connection as their connection to us and drop the one we dialed, so for messages it
   /// replaces ours, as when the user introduces itself on a new connection. A transfer already
-  /// runs on the connection that won, and a parent candidate keeps the connection we dialled as
+  /// runs on the connection that won, and a parent candidate keeps the connection we dialed as
   /// its link to us, so those are closed.
   async fn late_answer(
     &self,
@@ -97,7 +97,7 @@ impl Client {
         );
         self.add_or_update_message_connection(username, conn, Via::Indirect.kind())?;
         // a search answer for the user kept under this token, its delivery having failed after
-        // dialling won, goes out now
+        // dialing won, goes out now
         self.try_respond_cached(token).await;
         Ok(())
       }

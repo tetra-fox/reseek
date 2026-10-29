@@ -23,7 +23,7 @@ async fn ping_completes_its_wait_and_an_unsolicited_one_is_dropped() {
 }
 
 #[tokio::test]
-async fn add_privileged_user_is_a_notification_without_acknowledgement() {
+async fn add_privileged_user_is_a_notification_without_acknowledgment() {
   let mut session = Session::start().await;
   session
     .server
@@ -36,8 +36,8 @@ async fn add_privileged_user_is_a_notification_without_acknowledgement() {
       Event::PrivilegeNotificationReceived {
         username,
         id,
-        requires_acknowledgement,
-      } => Some((username, id, requires_acknowledgement)),
+        requires_acknowledgment,
+      } => Some((username, id, requires_acknowledgment)),
       _ => None,
     })
     .await;
@@ -59,8 +59,8 @@ async fn notify_privileges_is_raised_and_acknowledged() {
       Event::PrivilegeNotificationReceived {
         username,
         id,
-        requires_acknowledgement,
-      } => Some((username, id, requires_acknowledgement)),
+        requires_acknowledgment,
+      } => Some((username, id, requires_acknowledgment)),
       _ => None,
     })
     .await;

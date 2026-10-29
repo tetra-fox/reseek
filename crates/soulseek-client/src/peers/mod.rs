@@ -63,7 +63,7 @@ impl Entry {
       .outcome
       .wait_for(Option::is_some)
       .await
-      .map_err(|_| ClientError::Cancelled)?;
+      .map_err(|_| ClientError::Canceled)?;
     outcome
       .clone()
       .expect("wait_for returned once the outcome is set")

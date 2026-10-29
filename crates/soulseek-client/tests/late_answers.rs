@@ -1,6 +1,6 @@
-//! A scripted peer answering, late, the connection request the server relayed for us: dialling
+//! A scripted peer answering, late, the connection request the server relayed for us: dialing
 //! it directly already won, but the peer connects to us anyway with the request's token. For
-//! messages, the answering connection replaces the one we dialled, and the one it replaced is
+//! messages, the answering connection replaces the one we dialed, and the one it replaced is
 //! still read; for a transfer it is refused, since the transfer runs on the connection that won;
 //! after the time the request was awaited for, it is unknown.
 
@@ -55,17 +55,17 @@ async fn current(scripted: &Scripted, side: &PeerSide) {
 }
 
 #[tokio::test]
-async fn a_late_answer_replaces_the_dialled_connection_and_carries_the_offer() {
+async fn a_late_answer_replaces_the_dialed_connection_and_carries_the_offer() {
   let mut scripted = Scripted::start().await;
   let running = scripted.download("@@share\\late.mp3", |_| {});
-  let mut dialled = scripted.connected().await;
-  queued(&mut dialled, "@@share\\late.mp3").await;
+  let mut dialed = scripted.connected().await;
+  queued(&mut dialed, "@@share\\late.mp3").await;
   // bob acts on the relayed request after all, counts that connection as its connection to us
-  // and drops the one we dialled
+  // and drops the one we dialed
   let token = relayed(&mut scripted, PeerConnectionType::Peer).await;
   let mut answered = answer(&scripted, token).await;
   current(&scripted, &answered).await;
-  drop(dialled);
+  drop(dialed);
   offer(&mut answered, "@@share\\late.mp3", 77, Some(SIZE)).await;
   let mut transfer = scripted.connect_for_transfer(77).await;
   send_file(&mut transfer, 0, SIZE as usize).await;
@@ -79,14 +79,14 @@ async fn a_late_answer_replaces_the_dialled_connection_and_carries_the_offer() {
 async fn the_replaced_connection_is_still_read_and_answered() {
   let mut scripted = Scripted::start().await;
   let _running = scripted.download("@@share\\late.mp3", |_| {});
-  let mut dialled = scripted.connected().await;
-  queued(&mut dialled, "@@share\\late.mp3").await;
+  let mut dialed = scripted.connected().await;
+  queued(&mut dialed, "@@share\\late.mp3").await;
   let token = relayed(&mut scripted, PeerConnectionType::Peer).await;
   let answered = answer(&scripted, token).await;
   current(&scripted, &answered).await;
   // what bob sent on the first connection before it moved over still reaches the client
-  dialled.send(&PeerMessage::InfoRequest.encode()).await;
-  let PeerMessage::InfoResponse(UserInfo { .. }) = dialled.read_peer().await else {
+  dialed.send(&PeerMessage::InfoRequest.encode()).await;
+  let PeerMessage::InfoResponse(UserInfo { .. }) = dialed.read_peer().await else {
     panic!("expected user info on the replaced connection");
   };
   current(&scripted, &answered).await;
@@ -99,10 +99,10 @@ async fn an_answer_after_the_request_was_awaited_for_is_refused() {
   options.peer_connection_options.connect_timeout = Duration::from_millis(300);
   let mut scripted = Scripted::with_options(options).await;
   let _running = scripted.download("@@share\\late.mp3", |_| {});
-  let mut dialled = scripted.connected().await;
-  queued(&mut dialled, "@@share\\late.mp3").await;
+  let mut dialed = scripted.connected().await;
+  queued(&mut dialed, "@@share\\late.mp3").await;
   let token = relayed(&mut scripted, PeerConnectionType::Peer).await;
-  // the request would have been given up by now even if dialling had failed
+  // the request would have been given up by now even if dialing had failed
   tokio::time::sleep(Duration::from_millis(400)).await;
   let mut answered = answer(&scripted, token).await;
   answered.closed().await;
@@ -112,7 +112,7 @@ async fn an_answer_after_the_request_was_awaited_for_is_refused() {
       &format!("Unknown PierceFirewall attempt with token {token}"),
     ])
     .await;
-  current(&scripted, &dialled).await;
+  current(&scripted, &dialed).await;
 }
 
 #[tokio::test]

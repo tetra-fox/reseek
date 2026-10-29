@@ -27,9 +27,9 @@ bitflags::bitflags! {
     const OUTBOUND = 1;
     /// the remote connected to us
     const INBOUND = 2;
-    /// the connecting side dialled the other directly
+    /// the connecting side dialed the other directly
     const DIRECT = 4;
-    /// the connecting side dialled because the server relayed a request from the other
+    /// the connecting side dialed because the server relayed a request from the other
     const INDIRECT = 8;
   }
 }
@@ -108,7 +108,7 @@ struct Shared {
   kind: ConnKind,
   options: ConnectionOptions,
   state: watch::Sender<ConnState>,
-  /// cancelled when the connection is disconnected; stops its tasks and in-flight I/O
+  /// canceled when the connection is disconnected; stops its tasks and in-flight I/O
   closed: CancellationToken,
   activity: Activity,
   span: tracing::Span,
@@ -213,7 +213,7 @@ impl ConnHandle {
     self.shared.activity.last().elapsed()
   }
 
-  /// cancelled once the connection is disconnected
+  /// canceled once the connection is disconnected
   pub fn cancellation(&self) -> &CancellationToken {
     &self.shared.closed
   }
@@ -399,7 +399,7 @@ mod tests {
     let (conn, _remote) = pair(ConnectionOptions::default()).await;
     let handle = conn.handle().clone();
     assert!(handle.disconnect("first", None));
-    assert!(!handle.disconnect("second", Some(ClientError::Cancelled)));
+    assert!(!handle.disconnect("second", Some(ClientError::Canceled)));
     let reason = handle.disconnected().await;
     assert_eq!(reason.message, "first");
     assert!(reason.error.is_none());

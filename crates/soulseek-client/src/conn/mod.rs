@@ -60,7 +60,7 @@ impl Conn {
     let attempt = timeout(connect_timeout, socket::connect(remote, handle.options()));
     let result = tokio::select! {
       biased;
-      () = cancel.cancelled() => Err(ClientError::Cancelled),
+      () = cancel.cancelled() => Err(ClientError::Canceled),
       attempt = attempt.instrument(span.clone()) => attempt.unwrap_or_else(|_| {
         Err(ClientError::Timeout(format!(
           "Operation timed out after {} milliseconds",
@@ -80,7 +80,7 @@ impl Conn {
       Err(error) => {
         handle.disconnect(format!("Connection Error: {error}"), Some(error.clone()));
         Err(match error {
-          ClientError::Timeout(_) | ClientError::Cancelled => error,
+          ClientError::Timeout(_) | ClientError::Canceled => error,
           error => {
             let message = format!("Failed to connect to {remote}: {error}");
             ClientError::Connection {

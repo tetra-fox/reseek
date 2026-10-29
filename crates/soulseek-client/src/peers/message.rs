@@ -62,7 +62,7 @@ impl Client {
             Some(endpoint) => endpoint,
             None => tokio::select! {
               biased;
-              () = cancel.cancelled() => return Err(ClientError::Cancelled),
+              () = cancel.cancelled() => return Err(ClientError::Canceled),
               endpoint = self.get_user_endpoint(username) => endpoint?,
             },
           };
@@ -72,7 +72,7 @@ impl Client {
       let id = entry.id;
       let conn = tokio::select! {
         biased;
-        () = cancel.cancelled() => return Err(ClientError::Cancelled),
+        () = cancel.cancelled() => return Err(ClientError::Canceled),
         settled = entry.settled() => settled?,
       };
       let current = PeerConnections::is_current(&self.peers().cache(), username, id);
@@ -131,7 +131,7 @@ impl Client {
   }
 
   /// dials `username` and asks the server to have the user dial us, keeping whichever connects
-  /// first, then introduces us on a connection we dialled
+  /// first, then introduces us on a connection we dialed
   async fn establish_message_connection(
     &self,
     username: &str,
@@ -297,7 +297,7 @@ impl Client {
         match &result {
           Ok(conn) => client.start_peer_reading(conn),
           // a direct connection from the user replaced this one
-          Err(ClientError::Cancelled) => {
+          Err(ClientError::Canceled) => {
             tracing::debug!("inbound indirect message connection superseded")
           }
           Err(error) => {

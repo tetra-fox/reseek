@@ -1,5 +1,5 @@
 //! Answering other users' searches. The application's resolver finds what matches; the answer
-//! goes to the searcher over a message connection, dialled directly and requested through the
+//! goes to the searcher over a message connection, dialed directly and requested through the
 //! server at once. An answer that cannot be delivered is kept for a few minutes under the token
 //! of that connection request, so it still reaches a searcher who acts on the request late. How
 //! many searches are worked out at once is bounded; past the bound a request is dropped.

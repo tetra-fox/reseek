@@ -132,7 +132,7 @@ pub async fn approached(candidate: &FakePeer) -> PeerSide {
     connection_type, ..
   }) = connection.read_init().await
   else {
-    panic!("a candidate is dialled directly");
+    panic!("a candidate is dialed directly");
   };
   assert_eq!(connection_type, PeerConnectionType::Distributed);
   connection

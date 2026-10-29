@@ -1,4 +1,4 @@
-//! The message code catalogue of every connection kind. A code being listed here does not mean
+//! The message code catalog of every connection kind. A code being listed here does not mean
 //! it has a codec: some peer codes are named by the protocol reference without a layout, and the
 //! decoders treat those like unknown codes.
 
@@ -15,7 +15,7 @@ macro_rules! codes {
       #[cfg(test)]
       pub(crate) const ALL: &[Self] = &[$(Self::$variant,)*];
 
-      /// `None` for a code the catalogue does not know
+      /// `None` for a code the catalog does not know
       pub fn from_code(code: u32) -> Option<Self> {
         match code {
           $($value => Some(Self::$variant),)*

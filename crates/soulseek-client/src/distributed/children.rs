@@ -191,7 +191,7 @@ impl Tree {
       Ok(conn) => {
         conn.handle().disconnect("Superseded.", None);
       }
-      Err(ClientError::Cancelled) => {}
+      Err(ClientError::Canceled) => {}
       Err(error) => {
         tracing::debug!(username, %error, "Failed to establish an inbound indirect child connection");
         client.send_cannot_connect(token, &username);

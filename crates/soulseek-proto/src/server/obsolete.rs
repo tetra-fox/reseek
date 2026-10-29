@@ -124,7 +124,7 @@ impl Wire for GlobalUserListResponse {
 }
 
 wire_struct! {
-  /// Server code 68: a message tunnelled through the server to a peer we cannot reach; the field
+  /// Server code 68: a message tunneled through the server to a peer we cannot reach; the field
   /// order differs from the response. Obsolete.
   pub struct TunneledMessageRequest {
     pub username: String,
@@ -135,7 +135,7 @@ wire_struct! {
 }
 
 wire_struct! {
-  /// Server code 68: a message a peer tunnelled to us through the server. Obsolete: the live server
+  /// Server code 68: a message a peer tunneled to us through the server. Obsolete: the live server
   /// no longer sends it.
   pub struct TunneledMessageResponse {
     pub username: String,

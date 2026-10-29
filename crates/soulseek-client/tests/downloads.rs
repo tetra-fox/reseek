@@ -231,7 +231,7 @@ async fn a_download_waits_in_the_queue_and_hears_its_place_until_the_upload_star
 }
 
 #[tokio::test]
-async fn a_download_cancelled_in_the_queue_refuses_the_upload_offered_later() {
+async fn a_download_canceled_in_the_queue_refuses_the_upload_offered_later() {
   let Some(server) = soulfind::server() else {
     return;
   };
@@ -252,8 +252,8 @@ async fn a_download_cancelled_in_the_queue_refuses_the_upload_offered_later() {
     .unwrap();
   serve(&uploader, &mut requests, source.clone(), false).await;
   cancel.cancel();
-  let cancelled = task.await.unwrap_err();
-  assert!(matches!(cancelled, soulseek_client::ClientError::Cancelled));
+  let canceled = task.await.unwrap_err();
+  assert!(matches!(canceled, soulseek_client::ClientError::Canceled));
   assert!(!dir.join("destination.flac").exists(), "nothing was opened");
   let request = UploadRequest::new(&downloader.username, REMOTE, UploadInput::File(source));
   let refused = uploader

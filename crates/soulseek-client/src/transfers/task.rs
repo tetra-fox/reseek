@@ -128,7 +128,7 @@ impl Stop {
     &self.cancel
   }
 
-  /// Runs `step` unless the transfer is stopped first, which fails it with `Cancelled` or the
+  /// Runs `step` unless the transfer is stopped first, which fails it with `Canceled` or the
   /// peer's refusal or failure
   pub(super) async fn run<T>(
     &mut self,
@@ -140,7 +140,7 @@ impl Stop {
     } = self;
     tokio::select! {
       biased;
-      () = cancel.cancelled() => Err(ClientError::Cancelled),
+      () = cancel.cancelled() => Err(ClientError::Canceled),
       error = failed(remote_failure) => Err(error),
       result = step => result,
     }
@@ -167,7 +167,7 @@ async fn failed(remote_failure: &mut Option<RemoteFailures>) -> ClientError {
 pub(super) fn outcome(error: &ClientError) -> TransferState {
   TransferState::COMPLETED
     | match error {
-      ClientError::Cancelled => TransferState::CANCELLED,
+      ClientError::Canceled => TransferState::CANCELLED,
       ClientError::Timeout(_) => TransferState::TIMED_OUT,
       ClientError::TransferRejected(_) => TransferState::REJECTED,
       ClientError::SizeMismatch { .. } => TransferState::ABORTED,
@@ -207,7 +207,7 @@ mod tests {
   #[test]
   fn each_error_ends_in_its_state() {
     let cases = [
-      (ClientError::Cancelled, TransferState::CANCELLED),
+      (ClientError::Canceled, TransferState::CANCELLED),
       (
         ClientError::Timeout("late".into()),
         TransferState::TIMED_OUT,

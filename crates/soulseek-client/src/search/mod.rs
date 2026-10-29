@@ -206,7 +206,7 @@ impl Searches {
   pub(crate) fn cancel_all(&self) {
     let running: Vec<_> = self.running().values().cloned().collect();
     if !running.is_empty() {
-      tracing::debug!(count = running.len(), "searches cancelled");
+      tracing::debug!(count = running.len(), "searches canceled");
     }
     for search in running {
       search.complete(SearchState::CANCELLED);
@@ -222,7 +222,7 @@ impl Searches {
 impl Client {
   /// Searches for `text` in `scope` and returns the search as it ended with every response it
   /// took, in the order they arrived. The search's own end, a timeout or a limit, is a success;
-  /// a search cancelled by the caller or by a disconnect fails with `Cancelled`.
+  /// a search canceled by the caller or by a disconnect fails with `Canceled`.
   pub async fn search(
     &self,
     text: &str,
@@ -294,7 +294,7 @@ impl Client {
     let slot = tokio::select! {
       biased;
       () = ended(&mut outcome) => {
-        return Err(self.end_search(search, SearchState::CANCELLED, ClientError::Cancelled));
+        return Err(self.end_search(search, SearchState::CANCELLED, ClientError::Canceled));
       }
       slot = self.searches().slots.acquire(limit, cancel) => match slot {
         Ok(slot) => slot,
@@ -305,7 +305,7 @@ impl Client {
     let sent = tokio::select! {
       biased;
       () = ended(&mut outcome) => {
-        return Err(self.end_search(search, SearchState::CANCELLED, ClientError::Cancelled));
+        return Err(self.end_search(search, SearchState::CANCELLED, ClientError::Canceled));
       }
       sent = self.write_server_messages(&requests) => sent,
     };
@@ -339,7 +339,7 @@ impl Client {
     };
     drop(slot);
     if reason == SearchState::CANCELLED {
-      return Err(self.end_search(search, reason, ClientError::Cancelled));
+      return Err(self.end_search(search, reason, ClientError::Canceled));
     }
     self.set_search_state(search, SearchState::COMPLETED | reason);
     let snapshot = search.snapshot(&lock(&search.counts));

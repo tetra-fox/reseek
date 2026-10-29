@@ -1,6 +1,6 @@
 //! Uploads to a scripted downloader, for what a real downloader does not do on demand: refusing,
 //! never answering, asking to resume past the end or with Soulseek NS's broken offset, closing
-//! early or never, the upload's turn, slot and source misbehaving, and the upload cancelled at
+//! early or never, the upload's turn, slot and source misbehaving, and the upload canceled at
 //! each stage, with what the downloader is told afterwards.
 
 mod support;
@@ -130,7 +130,7 @@ fn told_failed(message: PeerMessage, filename: &str) -> bool {
     })
 }
 
-fn told_cancelled(message: PeerMessage, filename: &str) -> bool {
+fn told_canceled(message: PeerMessage, filename: &str) -> bool {
   message
     == PeerMessage::UploadDenied(UploadDenied {
       filename: filename.into(),
@@ -336,7 +336,7 @@ async fn a_downloader_that_never_closes_is_closed_after_the_linger_and_the_uploa
     1
   );
 
-  // cancelling during the linger leaves a delivered upload succeeded, and the peer untold
+  // canceling during the linger leaves a delivered upload succeeded, and the peer untold
   let running = upload(&scripted, "@@share\\linger2.mp3", |request| {
     request.options.maximum_linger_time = Duration::from_secs(30);
   });
@@ -349,7 +349,7 @@ async fn a_downloader_that_never_closes_is_closed_after_the_linger_and_the_uploa
 }
 
 #[tokio::test]
-async fn an_upload_cancelled_at_any_stage_tells_the_downloader_to_drop_it() {
+async fn an_upload_canceled_at_any_stage_tells_the_downloader_to_drop_it() {
   // waiting for its turn behind another upload to bob
   let mut scripted = Scripted::start().await;
   let (_first, mut bob) = offered_upload(&mut scripted, "@@share\\first.mp3").await;
@@ -375,9 +375,9 @@ async fn an_upload_cancelled_at_any_stage_tells_the_downloader_to_drop_it() {
   second.cancel.cancel();
   assert!(matches!(
     second.result().await.unwrap_err(),
-    ClientError::Cancelled
+    ClientError::Canceled
   ));
-  assert!(told_cancelled(bob.read_peer().await, "@@share\\second.mp3"));
+  assert!(told_canceled(bob.read_peer().await, "@@share\\second.mp3"));
 
   // waiting for the downloader's answer
   let mut scripted = Scripted::start().await;
@@ -386,9 +386,9 @@ async fn an_upload_cancelled_at_any_stage_tells_the_downloader_to_drop_it() {
   running.cancel.cancel();
   assert!(matches!(
     running.result().await.unwrap_err(),
-    ClientError::Cancelled
+    ClientError::Canceled
   ));
-  assert!(told_cancelled(bob.read_peer().await, "@@share\\asked.mp3"));
+  assert!(told_canceled(bob.read_peer().await, "@@share\\asked.mp3"));
 
   // waiting for the downloader to say where to start
   let mut scripted = Scripted::start().await;
@@ -397,10 +397,10 @@ async fn an_upload_cancelled_at_any_stage_tells_the_downloader_to_drop_it() {
   running.cancel.cancel();
   assert!(matches!(
     running.result().await.unwrap_err(),
-    ClientError::Cancelled
+    ClientError::Canceled
   ));
   transfer.closed().await;
-  assert!(told_cancelled(bob.read_peer().await, "@@share\\init.mp3"));
+  assert!(told_canceled(bob.read_peer().await, "@@share\\init.mp3"));
 
   // with bytes moving, held back by a governor that allows nothing after the first chunk
   let mut scripted = Scripted::start().await;
@@ -413,9 +413,9 @@ async fn an_upload_cancelled_at_any_stage_tells_the_downloader_to_drop_it() {
   assert_eq!(transfer.raw(1000).await, content(1000));
   running.cancel.cancel();
   let error = running.result().await.unwrap_err();
-  assert!(matches!(error, ClientError::Cancelled), "{error:?}");
+  assert!(matches!(error, ClientError::Canceled), "{error:?}");
   transfer.closed().await;
-  assert!(told_cancelled(bob.read_peer().await, "@@share\\moving.mp3"));
+  assert!(told_canceled(bob.read_peer().await, "@@share\\moving.mp3"));
 }
 
 #[tokio::test]

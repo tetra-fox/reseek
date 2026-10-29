@@ -76,7 +76,7 @@ pub struct GetPeerAddressResponse {
   /// `0.0.0.0` when the user is offline
   pub ip: Ipv4Addr,
   pub port: u32,
-  /// absent from older servers; never dialled
+  /// absent from older servers; never dialed
   pub obfuscation: Option<PeerAddressObfuscation>,
 }
 

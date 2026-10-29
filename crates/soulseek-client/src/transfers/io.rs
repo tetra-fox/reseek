@@ -36,7 +36,7 @@ impl Pace<'_> {
           let transfer = self.tracker.snapshot();
           tokio::select! {
             biased;
-            () = self.cancel.cancelled() => return Err(ClientError::Cancelled),
+            () = self.cancel.cancelled() => return Err(ClientError::Canceled),
             permitted = governor(&transfer, want, self.cancel.clone()) => permitted,
           }
         }
@@ -50,7 +50,7 @@ impl Pace<'_> {
       tracing::trace!("governor permitted nothing, asking again");
       tokio::select! {
         biased;
-        () = self.cancel.cancelled() => return Err(ClientError::Cancelled),
+        () = self.cancel.cancelled() => return Err(ClientError::Canceled),
         () = sleep(INTERVAL) => {}
       }
     }
@@ -148,8 +148,8 @@ pub(super) enum Linger {
   Closed,
   /// the downloader kept it open past the deadline, so we closed it
   Forced,
-  /// the caller cancelled while waiting
-  Cancelled,
+  /// the caller canceled while waiting
+  Canceled,
 }
 
 /// Waits up to `maximum` for the downloader to close the connection after the last byte, which
@@ -164,7 +164,7 @@ pub(super) async fn linger(
   loop {
     tokio::select! {
       biased;
-      () = cancel.cancelled() => return Linger::Cancelled,
+      () = cancel.cancelled() => return Linger::Canceled,
       read = read.read(&mut stray) => match read {
         // a byte the downloader had no reason to send; keep waiting for the close
         Ok(_) => {}
@@ -195,7 +195,7 @@ pub(super) fn connection_failure(handle: &ConnHandle, error: ClientError) -> Cli
   };
   match reason.error {
     Some(ClientError::Timeout(message)) => ClientError::Timeout(message),
-    Some(ClientError::Cancelled) => ClientError::Cancelled,
+    Some(ClientError::Canceled) => ClientError::Canceled,
     _ => ClientError::connection(
       ConnectionErrorKind::Other,
       format!("Transfer failed: {}", reason.message),

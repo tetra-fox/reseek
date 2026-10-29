@@ -105,7 +105,7 @@ pub(super) fn failure(error: &ClientError) -> Failure {
     retryable: true,
   };
   match error {
-    ClientError::Cancelled => Failure::cancelled(),
+    ClientError::Canceled => Failure::cancelled(),
     ClientError::Timeout(message) => retry(TransferStates::TimedOut, message.clone()),
     ClientError::TransferRejected(reason) => Failure {
       state: TransferStates::Rejected,
@@ -463,7 +463,7 @@ mod tests {
   fn each_client_error_ends_in_its_outcome() {
     let cases = [
       (
-        ClientError::Cancelled,
+        ClientError::Canceled,
         TransferStates::Cancelled,
         "Operation cancelled",
         false,

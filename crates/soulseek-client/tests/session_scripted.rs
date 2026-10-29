@@ -1,6 +1,6 @@
 //! The session against a scripted server, for what soulfind cannot show: the bytes the client
 //! writes at login and after it, a login refused with a detail, a server that never answers the
-//! login or closes the connection, cancelling a login in progress, the write-liveness ping, and
+//! login or closes the connection, canceling a login in progress, the write-liveness ping, and
 //! the configuration re-sent when the options change.
 
 mod support;
@@ -142,7 +142,7 @@ async fn the_server_closing_during_login_is_a_connect_error() {
 }
 
 #[tokio::test]
-async fn cancelling_the_connect_while_logging_in() {
+async fn canceling_the_connect_while_logging_in() {
   let fake = FakeServer::start().await;
   let client = Client::new(options()).unwrap();
   let mut events = client.subscribe();
@@ -152,10 +152,10 @@ async fn cancelling_the_connect_while_logging_in() {
   server.read_login().await;
   cancel.cancel();
   let error = connecting.await.unwrap().unwrap_err();
-  assert!(matches!(error, ClientError::Cancelled), "{error:?}");
+  assert!(matches!(error, ClientError::Canceled), "{error:?}");
   assert!(matches!(
     disconnected(&drain(&mut events)).1,
-    Some(ClientError::Cancelled)
+    Some(ClientError::Canceled)
   ));
   assert_eq!(client.state(), ClientState::DISCONNECTED);
   server.closed().await;
@@ -171,7 +171,7 @@ async fn disconnecting_cancels_a_connect_in_progress() {
   server.read_login().await;
   client.disconnect(Some("user asked"), None).await;
   let error = connecting.await.unwrap().unwrap_err();
-  assert!(matches!(error, ClientError::Cancelled), "{error:?}");
+  assert!(matches!(error, ClientError::Canceled), "{error:?}");
   let (message, cause) = disconnected(&drain(&mut events));
   assert_eq!(message, "user asked");
   assert!(cause.is_none());

@@ -24,7 +24,7 @@ bitflags::bitflags! {
     const COMPLETED = 16;
     /// every byte moved
     const SUCCEEDED = 32;
-    /// the caller cancelled
+    /// the caller canceled
     const CANCELLED = 64;
     /// a wait, a connect or the transfer connection's inactivity timed out
     const TIMED_OUT = 128;

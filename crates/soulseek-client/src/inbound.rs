@@ -13,7 +13,7 @@ use crate::error::{ClientError, ConnectionErrorKind};
 /// The first message is at most a username and a connection type; anything longer is not one.
 const MAX_INIT_BYTES: u32 = 1024;
 
-/// how many leading bytes of an unrecognised first message an error shows
+/// how many leading bytes of an unrecognized first message an error shows
 const SHOWN_BYTES: usize = 16;
 
 /// An accepted connection and what its first message says it is for

@@ -1,5 +1,5 @@
 //! Message connections between two clients on soulfind: made directly, made through the server's
-//! relay when the other side cannot be dialled, shared by concurrent callers, cached, replaced
+//! relay when the other side cannot be dialed, shared by concurrent callers, cached, replaced
 //! on request or when the cache is full, and carrying peer messages both ways.
 
 mod support;
@@ -19,7 +19,7 @@ pub fn listening() -> ClientOptions {
   }
 }
 
-/// a client that advertises a port nothing listens on, so dialling it fails at once
+/// a client that advertises a port nothing listens on, so dialing it fails at once
 pub fn unreachable() -> ClientOptions {
   ClientOptions {
     listen_port: free_port(),
@@ -117,7 +117,7 @@ async fn a_direct_connection_carries_messages_both_ways() {
 }
 
 #[tokio::test]
-async fn a_user_that_cannot_be_dialled_is_reached_through_the_server() {
+async fn a_user_that_cannot_be_dialed_is_reached_through_the_server() {
   let Some(server) = soulfind::server() else {
     return;
   };

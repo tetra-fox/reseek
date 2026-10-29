@@ -98,14 +98,14 @@ impl TokenBucket {
 
   /// Grants up to `requested` bytes, never more than one interval's capacity: what is left in
   /// the bucket, or what the next interval brings when it is empty. Asking for 0 returns 0 at
-  /// once. Fails with `Cancelled`, taking nothing, when `cancel` fires first.
+  /// once. Fails with `Canceled`, taking nothing, when `cancel` fires first.
   pub async fn get(&self, requested: u32, cancel: &CancellationToken) -> Result<u32, ClientError> {
     if requested == 0 {
       return Ok(0);
     }
     let _turn = tokio::select! {
       biased;
-      () = cancel.cancelled() => return Err(ClientError::Cancelled),
+      () = cancel.cancelled() => return Err(ClientError::Canceled),
       turn = self.turn.lock() => turn,
     };
     loop {
@@ -124,7 +124,7 @@ impl TokenBucket {
       };
       tokio::select! {
         biased;
-        () = cancel.cancelled() => return Err(ClientError::Cancelled),
+        () = cancel.cancelled() => return Err(ClientError::Canceled),
         () = sleep_until(next_boundary) => {}
       }
     }
@@ -232,7 +232,7 @@ mod tests {
   }
 
   #[tokio::test(start_paused = true)]
-  async fn a_cancelled_waiter_takes_nothing() {
+  async fn a_canceled_waiter_takes_nothing() {
     let bucket = Arc::new(TokenBucket::new(100));
     assert_eq!(bucket.get(100, &never()).await.unwrap(), 100);
     let cancel = CancellationToken::new();
@@ -243,10 +243,7 @@ mod tests {
     });
     tokio::task::yield_now().await;
     cancel.cancel();
-    assert!(matches!(
-      waiting.await.unwrap(),
-      Err(ClientError::Cancelled)
-    ));
+    assert!(matches!(waiting.await.unwrap(), Err(ClientError::Canceled)));
     tokio::time::advance(INTERVAL).await;
     assert_eq!(bucket.get(1000, &never()).await.unwrap(), 100);
   }

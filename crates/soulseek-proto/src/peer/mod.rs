@@ -1,5 +1,5 @@
 //! Messages on a `P` connection between two clients, the same layout in both directions. Each
-//! message lives in the file of its topic; this file holds the catalogue and the zlib handling that
+//! message lives in the file of its topic; this file holds the catalog and the zlib handling that
 //! browse, search and folder responses share, since each of them is one zlib stream after the code.
 
 pub(crate) mod browse;
@@ -129,7 +129,7 @@ pub(crate) mod tests {
   }
 
   #[test]
-  fn inflate_round_trips_and_honours_the_limit() {
+  fn inflate_round_trips_and_honors_the_limit() {
     let body = vec![7; 1000];
     let compressed = compress(&body);
     assert_eq!(compressed[0], 0x78, "zlib header, not raw deflate or gzip");

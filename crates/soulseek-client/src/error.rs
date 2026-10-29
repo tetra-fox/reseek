@@ -23,9 +23,9 @@ pub enum ClientError {
   /// a wait, a connect or an inactivity deadline expired
   #[error("{0}")]
   Timeout(String),
-  /// the caller cancelled, or the client was disconnected while the operation ran
-  #[error("the operation was cancelled")]
-  Cancelled,
+  /// the caller canceled, or the client was disconnected while the operation ran
+  #[error("the operation was canceled")]
+  Canceled,
   /// the server address could not be resolved
   #[error("{0}")]
   Address(String),
@@ -107,7 +107,7 @@ pub enum ClientError {
   /// the local file to upload does not exist
   #[error("local file not found: {0}")]
   NotFound(String),
-  /// the peer refused or cancelled a transfer, with its reason, which is kept as it was sent
+  /// the peer refused or canceled a transfer, with its reason, which is kept as it was sent
   #[error("transfer rejected: {0}")]
   TransferRejected(String),
   /// the uploader reported that the upload of a file to us failed

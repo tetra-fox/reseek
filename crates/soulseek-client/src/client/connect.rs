@@ -29,7 +29,7 @@ const PING_INTERVAL: Duration = Duration::from_secs(60);
 impl Client {
   /// Connects to the server at `address:port` and logs in. The listener starts first, so a busy
   /// listen port fails the connect before the server is contacted. `cancel`, or a call to
-  /// [`Client::disconnect`] while this runs, ends it with `Cancelled`. Any failure after the
+  /// [`Client::disconnect`] while this runs, ends it with `Canceled`. Any failure after the
   /// state changed leaves the client disconnected, with a `Disconnected` event naming the error.
   pub async fn connect(
     &self,
@@ -44,14 +44,14 @@ impl Client {
     self.check_not_connected()?;
     let remote = tokio::select! {
       biased;
-      () = cancel.cancelled() => return Err(ClientError::Cancelled),
+      () = cancel.cancelled() => return Err(ClientError::Canceled),
       resolved = resolve(address, port) => resolved.map_err(|error| {
         ClientError::Address(format!("Failed to resolve address '{address}': {error}"))
       })?,
     };
     let _connecting = tokio::select! {
       biased;
-      () = cancel.cancelled() => return Err(ClientError::Cancelled),
+      () = cancel.cancelled() => return Err(ClientError::Canceled),
       guard = self.inner.state_lock.lock() => guard,
     };
     // another caller connected while this one waited for the lock
@@ -62,7 +62,7 @@ impl Client {
     let mut state = self.inner.state.subscribe();
     tokio::select! {
       biased;
-      () = cancel.cancelled() => return Err(ClientError::Cancelled),
+      () = cancel.cancelled() => return Err(ClientError::Canceled),
       _ = state.wait_for(|state| !state.contains(ClientState::DISCONNECTING)) => {}
     }
     let attempt = cancel.child_token();
@@ -85,7 +85,7 @@ impl Client {
       return Ok(());
     };
     let error = if attempt.is_cancelled() {
-      ClientError::Cancelled
+      ClientError::Canceled
     } else {
       connect_error(error)
     };
@@ -162,14 +162,14 @@ impl Client {
     Ok(())
   }
 
-  /// fails when the attempt was cancelled or a disconnect moved the state on
+  /// fails when the attempt was canceled or a disconnect moved the state on
   fn check_attempt(
     &self,
     attempt: &CancellationToken,
     expected: ClientState,
   ) -> Result<(), ClientError> {
     if attempt.is_cancelled() {
-      return Err(ClientError::Cancelled);
+      return Err(ClientError::Canceled);
     }
     let state = self.state();
     if state != expected {
@@ -388,7 +388,7 @@ fn connect_error(error: ClientError) -> ClientError {
   match error {
     ClientError::LoginRejected(_)
     | ClientError::LoginNoResponse(_)
-    | ClientError::Cancelled
+    | ClientError::Canceled
     | ClientError::Timeout(_)
     | ClientError::Listen { .. } => error,
     error => ClientError::Connect {
@@ -431,8 +431,8 @@ mod tests {
   #[test]
   fn connect_failures_keep_their_own_outcomes() {
     assert!(matches!(
-      connect_error(ClientError::Cancelled),
-      ClientError::Cancelled
+      connect_error(ClientError::Canceled),
+      ClientError::Canceled
     ));
     let wrapped = connect_error(ClientError::connection(
       ConnectionErrorKind::Other,

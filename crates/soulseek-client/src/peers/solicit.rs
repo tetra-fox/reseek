@@ -1,7 +1,7 @@
-//! Reaching a peer two ways at once: dialling it directly, and asking the server to have it dial
+//! Reaching a peer two ways at once: dialing it directly, and asking the server to have it dial
 //! us (a solicitation, answered by a connection that opens with `PierceFirewall` and the
 //! solicitation's token). Whichever connects first is kept; the other is dropped. A peer may
-//! still answer a solicitation after dialling won, within the time the solicitation would have
+//! still answer a solicitation after dialing won, within the time the solicitation would have
 //! been waited for, so its token stays known until then. When a peer asks the server for us
 //! instead, we dial it and open with `PierceFirewall` and the token of its request.
 
@@ -52,7 +52,7 @@ impl Solicitation {
 pub(crate) enum Answer {
   /// the solicitor still waits for it
   Awaited,
-  /// the solicitor stopped waiting, usually because dialling the user directly won, but the
+  /// the solicitor stopped waiting, usually because dialing the user directly won, but the
   /// user acted on the relayed request within the time the solicitor would have waited
   Late,
 }
@@ -129,7 +129,7 @@ impl Solicitations {
 
 /// Ends the wait for a solicitation however the wait ends. A solicitation that was not answered
 /// stays known until its solicitor would have given up, so a user acting on the relayed request
-/// after the solicitor stopped waiting is still recognised.
+/// after the solicitor stopped waiting is still recognized.
 struct Pending<'a> {
   solicitations: &'a Solicitations,
   token: u32,
@@ -164,8 +164,8 @@ impl Via {
     }
   }
 
-  /// What we write first on a connection made this way. One we dialled introduces us with our
-  /// name, what the connection is for and token 0; one the peer dialled answers our request and
+  /// What we write first on a connection made this way. One we dialed introduces us with our
+  /// name, what the connection is for and token 0; one the peer dialed answers our request and
   /// is known to it already.
   pub(crate) fn introduction(
     self,
@@ -358,11 +358,11 @@ mod tests {
 
   #[tokio::test]
   async fn both_ready_keeps_the_users_connection() {
-    // an unordered choice would pick the dialled one in about half of these
+    // an unordered choice would pick the dialed one in about half of these
     for _ in 0..64 {
-      let (dialled, _a) = crate::conn::tests::pair(ConnectionOptions::default()).await;
+      let (dialed, _a) = crate::conn::tests::pair(ConnectionOptions::default()).await;
       let (answered, _b) = crate::conn::tests::pair(ConnectionOptions::default()).await;
-      let result = race(async { Ok(dialled) }, async { Ok(answered) }).await;
+      let result = race(async { Ok(dialed) }, async { Ok(answered) }).await;
       assert_eq!(result.unwrap().1, Via::Indirect);
     }
   }

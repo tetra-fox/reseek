@@ -109,7 +109,7 @@ impl Client {
       return Ok(endpoint);
     }
     let lookup_failed = |error: ClientError| match error {
-      ClientError::Timeout(_) | ClientError::Cancelled => error,
+      ClientError::Timeout(_) | ClientError::Canceled => error,
       error => ClientError::UserEndPoint {
         message: format!("Failed to retrieve endpoint for user {username}: {error}"),
         source: Some(Arc::new(error)),
@@ -243,7 +243,7 @@ mod tests {
     assert!(unreachable(&ClientError::Timeout(
       "Operation timed out after 10000 milliseconds".into()
     )));
-    assert!(!unreachable(&ClientError::Cancelled));
+    assert!(!unreachable(&ClientError::Canceled));
     assert!(!unreachable(&ClientError::connection(
       crate::error::ConnectionErrorKind::Read,
       "Remote connection closed"

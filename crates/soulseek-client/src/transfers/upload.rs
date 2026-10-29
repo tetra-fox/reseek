@@ -3,7 +3,7 @@
 //! file to the peer; once it accepts we open the transfer connection, the peer says where to
 //! start, and we write the rest of the file. The peer closes the connection when it has every
 //! byte; we close it ourselves only after a grace period. An upload that does not succeed tells
-//! the peer, which queues the file again unless we cancelled it.
+//! the peer, which queues the file again unless we canceled it.
 
 use std::io::SeekFrom;
 use std::sync::Arc;
@@ -277,7 +277,7 @@ impl Upload {
     let slot = awaiter(&transfer, self.stop.cancel().clone());
     match self.stop.run(slot).await {
       Ok(()) => Ok(()),
-      Err(ClientError::Cancelled) => Err(ClientError::Cancelled),
+      Err(ClientError::Canceled) => Err(ClientError::Canceled),
       Err(error) => Err(ClientError::Transfer {
         message: format!(
           "Failed to acquire an upload slot for {} to {}: {error}",
@@ -297,7 +297,7 @@ impl Upload {
     // the downloader or the linger may have closed it already; the first reason given stands
     match &result {
       Ok(()) => handle.disconnect("Transfer complete", None),
-      Err(ClientError::Cancelled) => handle.disconnect("Transfer cancelled", None),
+      Err(ClientError::Canceled) => handle.disconnect("Transfer canceled", None),
       Err(error) => handle.disconnect(error.to_string(), Some(error.clone())),
     };
     result
@@ -308,7 +308,7 @@ impl Upload {
     let mut offset = [0; 8];
     self.stop.run(read.read_exact(&mut offset)).await.map_err(
       |error| match io::connection_failure(handle, error) {
-        error @ (ClientError::Timeout(_) | ClientError::Cancelled) => error,
+        error @ (ClientError::Timeout(_) | ClientError::Canceled) => error,
         error => ClientError::Message {
           kind: MessageErrorKind::Read,
           message: "Failed to read transfer start offset".into(),
@@ -353,7 +353,7 @@ impl Upload {
     match io::linger(&mut read, self.options.maximum_linger_time, &cancel).await {
       Linger::Closed | Linger::Forced => {}
       // every byte was written, so the upload counts as delivered
-      Linger::Cancelled => tracing::debug!("cancelled after the last byte; the upload stands"),
+      Linger::Canceled => tracing::debug!("canceled after the last byte; the upload stands"),
     }
     Ok(())
   }
@@ -441,7 +441,7 @@ impl Upload {
     drop(held.running);
   }
 
-  /// Tells the peer an upload did not succeed: that we cancelled it, so it drops the file, or
+  /// Tells the peer an upload did not succeed: that we canceled it, so it drops the file, or
   /// that it failed, so it queues the file again. Best effort and bounded; skipped while the
   /// client disconnects or once it is disposed, but not because the server session was lost.
   async fn tell_peer(&mut self, error: &ClientError) {
@@ -457,7 +457,7 @@ impl Upload {
       return;
     }
     let message = match error {
-      ClientError::Cancelled => PeerMessage::UploadDenied(UploadDenied {
+      ClientError::Canceled => PeerMessage::UploadDenied(UploadDenied {
         filename: self.filename.clone(),
         reason: "Cancelled".into(),
       }),

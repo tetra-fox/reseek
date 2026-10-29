@@ -87,7 +87,7 @@ pub enum BrowseReply {
   Encoded(EncodedFrame),
 }
 
-/// Every callback the application can supply. An unset resolver falls back to the behaviour
+/// Every callback the application can supply. An unset resolver falls back to the behavior
 /// each one documents.
 #[derive(Clone, Default)]
 pub struct Resolvers {

@@ -39,7 +39,7 @@ pub type StateChanged = Arc<dyn Fn(TransferState, &Transfer) + Send + Sync>;
 pub type ProgressUpdated = Arc<dyn Fn(u64, &Transfer) + Send + Sync>;
 
 /// `(transfer, cancel)`: resolves once the application's upload slot policy lets the upload
-/// start. It must hold nothing when it fails; failing with `Cancelled` cancels the upload, any
+/// start. It must hold nothing when it fails; failing with `Canceled` cancels the upload, any
 /// other error fails it.
 pub type SlotAwaiter =
   Arc<dyn Fn(&Transfer, CancellationToken) -> ResolverFuture<()> + Send + Sync>;

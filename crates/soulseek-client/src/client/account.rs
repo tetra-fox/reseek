@@ -107,7 +107,7 @@ impl Client {
   }
 
   /// Acknowledges the privilege notification `id`. Allowed while logging in too, like private
-  /// message acknowledgements.
+  /// message acknowledgments.
   pub async fn acknowledge_privilege_notification(&self, id: u32) -> Result<(), ClientError> {
     let verb = format!("acknowledge privilege notification with ID {id}");
     self.require_logging_in_or_logged_in(&verb)?;

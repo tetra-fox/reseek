@@ -1,6 +1,6 @@
 //! A client on the scripted server whose transfers go to a scripted peer, for the transfer paths
 //! two real clients never take: refusals with every reason, failures, peers that lie or vanish
-//! at each stage, and cancelling at each stage.
+//! at each stage, and canceling at each stage.
 
 use std::path::PathBuf;
 

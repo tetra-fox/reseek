@@ -1,5 +1,5 @@
-//! Connection requests relayed by a scripted server: we answer a peer's request by dialling it,
-//! report the ones we cannot honour so the peer stops waiting, retry when a peer asks again as
+//! Connection requests relayed by a scripted server: we answer a peer's request by dialing it,
+//! report the ones we cannot honor so the peer stops waiting, retry when a peer asks again as
 //! older clients do, and give up our own request at once when the peer reports it cannot
 //! connect.
 
@@ -91,7 +91,7 @@ async fn transfer_and_child_requests_we_do_not_take_are_refused_at_once() {
 }
 
 #[tokio::test]
-async fn a_peer_asking_again_after_a_failure_is_dialled_again() {
+async fn a_peer_asking_again_after_a_failure_is_dialed_again() {
   let mut session = Session::start().await;
   session
     .server
@@ -143,7 +143,7 @@ async fn a_request_from_a_peer_we_are_connected_to_is_ignored() {
       36,
     ))
     .await;
-  // neither dialled nor refused
+  // neither dialed nor refused
   assert!(
     tokio::time::timeout(Duration::from_millis(300), elsewhere.accept())
       .await
