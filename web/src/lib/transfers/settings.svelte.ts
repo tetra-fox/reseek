@@ -41,8 +41,7 @@ export const defaults = (direction: Direction): ViewSettings => ({
 /**
  * What was saved as far as it fits: every column of the direction once, in the saved order with
  * new columns after, and anything unknown dropped. A column keeps only a width the user dragged,
- * so one never dragged follows its default as that changes; the `width` older builds saved held
- * every default too, so it is not read. The text filter is never saved
+ * so one never dragged follows its default as that changes. The text filter is never saved
  */
 const read = (direction: Direction, saved: unknown): ViewSettings => {
   const base = defaults(direction);
