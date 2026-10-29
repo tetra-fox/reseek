@@ -37,6 +37,39 @@ fn version_and_help_print_and_exit_zero() {
   assert!(text(&envars.stdout).contains("RESEEK_HTTP_PORT <int>"));
 }
 
+/// The one-shot commands into a pipe whose reader closed before they wrote, as `| head -c1`
+/// leaves it: they stop quietly with 0.
+#[test]
+fn one_shot_output_into_a_closed_pipe_exits_zero() {
+  for args in [
+    &["--help"][..],
+    &["man"],
+    &["completions", "zsh"],
+    &["--version"],
+  ] {
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+    let output = Command::new(PROGRAM)
+      .args(args)
+      .env_clear()
+      .stdout(writer)
+      .stderr(Stdio::piped())
+      .output()
+      .unwrap();
+    assert_eq!(
+      output.status.code(),
+      Some(0),
+      "{args:?}: {}",
+      text(&output.stderr)
+    );
+    assert!(
+      output.stderr.is_empty(),
+      "{args:?}: {}",
+      text(&output.stderr)
+    );
+  }
+}
+
 #[test]
 fn usage_errors_exit_two() {
   for args in [

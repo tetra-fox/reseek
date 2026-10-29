@@ -11,6 +11,7 @@ mod startup;
 mod tasks;
 
 use std::ffi::OsString;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -419,40 +420,42 @@ pub fn main() -> ExitCode {
       return ExitCode::from(EXIT_USAGE);
     }
   };
-  match command {
-    Command::Version => println!("{}", version::info().full),
+  let output = match command {
+    Command::Version => format!("{}\n", version::info().full),
     Command::Help {
       flags,
       envars,
       no_logo,
     } => {
+      let mut text = String::new();
       if !no_logo {
-        print!("{}", cli::banner());
+        text.push_str(&cli::banner());
       }
       if flags {
-        print!("{}", cli::help(&schema));
+        text.push_str(&cli::help(&schema));
       }
       if envars {
-        print!("{}", cli::envars(&schema));
+        text.push_str(&cli::envars(&schema));
       }
+      text
     }
     Command::GenerateCert { path } => match cli::generate_cert(path.as_deref()) {
-      Ok(text) => println!("{text}"),
+      Ok(text) => format!("{text}\n"),
       Err(e) => {
         eprintln!("{e}");
         return ExitCode::from(EXIT_FATAL);
       }
     },
-    Command::GenerateSecret { length } => println!("{}", cli::generate_secret(length)),
+    Command::GenerateSecret { length } => format!("{}\n", cli::generate_secret(length)),
     Command::HashPassword => match cli::hash_password() {
-      Ok(hash) => println!("{hash}"),
+      Ok(hash) => format!("{hash}\n"),
       Err(e) => {
         eprintln!("{e}");
         return ExitCode::from(EXIT_FATAL);
       }
     },
-    Command::Completions(shell) => print!("{}", cli::completions(shell, &schema)),
-    Command::Man => print!("{}", cli::man(&schema)),
+    Command::Completions(shell) => cli::completions(shell, &schema),
+    Command::Man => cli::man(&schema),
     Command::Run(invocation) => {
       let supervised = invocation
         .supervised
@@ -463,8 +466,25 @@ pub fn main() -> ExitCode {
       }
       return ExitCode::from(code);
     }
+  };
+  one_shot(&output)
+}
+
+/// Writes what a one-shot command printed. A reader that stopped reading early, as `| head`
+/// does, has what it wanted, so that is a success too.
+fn one_shot(text: &str) -> ExitCode {
+  let mut stdout = std::io::stdout().lock();
+  match stdout
+    .write_all(text.as_bytes())
+    .and_then(|()| stdout.flush())
+  {
+    Ok(()) => ExitCode::SUCCESS,
+    Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
+    Err(e) => {
+      eprintln!("the output could not be written: {e}");
+      ExitCode::from(EXIT_FATAL)
+    }
   }
-  ExitCode::SUCCESS
 }
 
 /// Starts the daemon and serves until it is told to stop.
