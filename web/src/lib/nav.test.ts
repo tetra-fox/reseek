@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  changesScreen,
-  redirectFor,
-  route,
-  safeReturn,
-  unknownTarget,
-  userHref
-} from "./nav";
+import { changesScreen, redirectFor, route, safeReturn, unknownTarget, userHref } from "./nav";
 
 describe("routes after the hash", () => {
   it("read the path and the query from the hash", () => {
