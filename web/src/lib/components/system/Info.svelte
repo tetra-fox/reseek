@@ -21,10 +21,10 @@
   import { serverStateText } from "#lib/reachability.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
+  import { diagnostics, latestProblems } from "#lib/system/diagnostics.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { RESTART } from "#lib/wording.js";
 
-  import { diagnostics, latestProblems } from "./diagnostics";
   import Uptime from "./Uptime.svelte";
 
   // the daemon's state at a glance, its whole state document, and the process controls

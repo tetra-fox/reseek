@@ -25,8 +25,7 @@
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-
-  import { contentsText } from "./shares";
+  import { contentsText } from "#lib/system/shares.js";
 
   // the shared directories by host, the exclusions, and the scan that counts them
   type Row = Schemas["Share"] & { host: string };

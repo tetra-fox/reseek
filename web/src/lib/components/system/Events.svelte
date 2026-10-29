@@ -26,8 +26,7 @@
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
   import { reason, UNREACHABLE } from "#lib/request.js";
-
-  import { EVENT_TYPES } from "./events";
+  import { EVENT_TYPES } from "#lib/system/events.js";
 
   // the event log, newest first, a page at a time, with its type filter and page size in the URL
   type Props = { page: number; perPage: number; types: string[] };

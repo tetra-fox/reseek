@@ -40,19 +40,18 @@
   import { isAudio } from "#lib/files/links.js";
   import { player } from "#lib/files/player.svelte.js";
   import { dateTime, formatBytes, plural } from "#lib/format.js";
-  import { archiveUrl, fileTrack, fileUrl, joinPath, type Root } from "#lib/localfiles.js";
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
+  import { type Entry, entries, type SortBy } from "#lib/system/explorer.js";
+  import { archiveUrl, fileTrack, fileUrl, joinPath, type Root } from "#lib/system/localfiles.js";
   import { encodePath } from "#lib/transfers/content.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
   import { TICK_REM } from "#lib/tree/indent.js";
   import { shiftHeld } from "#lib/ui/keys.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
-
-  import { type Entry, entries, type SortBy } from "./explorer";
 
   // the downloads or incomplete directory as a file explorer: browse, open, play, delete
   let { root, path }: { root: Root; path: string } = $props();

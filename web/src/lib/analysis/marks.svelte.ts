@@ -3,9 +3,9 @@ import { SvelteMap } from "svelte/reactivity";
 import { api } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
-import type { Root } from "#lib/localfiles.js";
 import { call } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
+import type { Root } from "#lib/system/localfiles.js";
 
 import type { Report } from "./analysis";
 import { type Mark, markOf } from "./marks";

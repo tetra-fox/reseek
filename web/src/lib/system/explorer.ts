@@ -1,5 +1,6 @@
 import type { Schemas } from "#lib/api/client.js";
-import { joinPath } from "#lib/localfiles.js";
+
+import { joinPath } from "./localfiles";
 
 /** A line of the file explorer: the way up, a directory or a file */
 export type Entry = {

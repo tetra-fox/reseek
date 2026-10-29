@@ -16,8 +16,7 @@
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { call } from "#lib/request.js";
-
-  import { LEVELS, type Line, logLine, logTime, numbered } from "./logs";
+  import { LEVELS, type Line, logLine, logTime, numbered } from "#lib/system/logs.js";
 
   // the daemon's newest log records as they are written, newest first
   const MAX = 500;

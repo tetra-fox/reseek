@@ -1,6 +1,6 @@
 import { api, type Schemas } from "#lib/api/client.js";
-import type { Root } from "#lib/localfiles.js";
 import { call, type Outcome } from "#lib/request.js";
+import type { Root } from "#lib/system/localfiles.js";
 import { encodePath } from "#lib/transfers/content.js";
 
 export type Report = Schemas["AudioAnalysis"];
