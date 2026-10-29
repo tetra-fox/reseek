@@ -87,3 +87,12 @@ export const hold = (id: number, cause: HoldCause, on: boolean) => {
     run(id, countdown);
   }
 };
+
+/**
+ * Keeps why a list's load failed in `error`. A failed first load is the page's to show; a failed
+ * reload says so in a toast once per outage, the first time since a load succeeded
+ */
+export const loadFailed = (list: { loaded: boolean; error: string }, error: string) => {
+  if (list.loaded && !list.error) toast(error, "error");
+  list.error = error;
+};

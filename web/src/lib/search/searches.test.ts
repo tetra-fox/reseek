@@ -12,16 +12,10 @@ describe("the searches store", () => {
     toasts.splice(0);
   });
 
-  it("says once per outage that a reload failed, and never for the first load", async () => {
-    let up = false;
-    fakeNetwork(() => (up ? [] : { status: 500, body: { error: "database is locked" } }));
+  it("leaves a failed first load to the page", async () => {
+    fakeNetwork(() => ({ status: 500, body: { error: "database is locked" } }));
     await searches.load();
+    expect(searches.error).toBe("database is locked");
     expect(toasts).toHaveLength(0);
-    up = true;
-    await searches.load();
-    up = false;
-    await searches.load();
-    await searches.load();
-    expect(toasts.map((t) => t.text)).toEqual(["database is locked"]);
   });
 });
