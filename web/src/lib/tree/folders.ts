@@ -6,7 +6,9 @@ import { getDirectoryName, getFileName } from "#lib/format.js";
  * everything below
  */
 export type FolderNode<T> = {
-  /** the full path, which also keys the node */
+  /** what keys its line and whether it is open: its path, made unique when trees share a list */
+  key: string;
+  /** the full path */
   path: string;
   /** what its line shows: the path from the parent node down to this one */
   label: string;
@@ -47,6 +49,31 @@ export const itemsUnder = <T>(node: FolderNode<T>): T[] => {
   return found;
 };
 
+/**
+ * A folder with what it holds counted from its items and the folders under it. It is locked as
+ * `at` says, or when every item under it is, by `lockedOf`
+ */
+export const folderNode = <T>(
+  at: { key: string; path: string; label: string; locked?: boolean },
+  items: T[],
+  children: FolderNode<T>[],
+  sizeOf: (item: T) => number,
+  lockedOf?: (item: T) => boolean
+): FolderNode<T> => {
+  const free = lockedOf ? items.filter((item) => !lockedOf(item)).length : items.length;
+  return {
+    ...at,
+    items,
+    children,
+    count: items.length + children.reduce((n, c) => n + c.count, 0),
+    bytes:
+      items.reduce((n, item) => n + sizeOf(item), 0) + children.reduce((n, c) => n + c.bytes, 0),
+    folders: children.reduce((n, c) => n + 1 + c.folders, 0),
+    unlocked: free + children.reduce((n, c) => n + c.unlocked, 0),
+    locked: at.locked ?? (!!lockedOf && items.every(lockedOf) && children.every((c) => c.locked))
+  };
+};
+
 type Trie<T> = { path: string; segment: string; items: T[]; children: Map<string, Trie<T>> };
 
 /**
@@ -54,13 +81,15 @@ type Trie<T> = { path: string; segment: string; items: T[]; children: Map<string
  * `pathOf` gives an item's full path, its folder being everything before the last separator. A
  * chain of folders that hold nothing but the next one is one node, labeled with the whole chain,
  * so a share's `@@abc\Music\Artist` doesn't take three levels before anything shows. A folder is
- * locked when every item under it is, by `lockedOf`
+ * locked when every item under it is, by `lockedOf`. With a `scope`, the folders' keys are unique
+ * to it, for a list that holds several trees
  */
 export const folderTree = <T>(
   items: T[],
   pathOf: (item: T) => string,
   sizeOf: (item: T) => number,
-  lockedOf?: (item: T) => boolean
+  lockedOf?: (item: T) => boolean,
+  scope?: string
 ): FolderNode<T>[] => {
   const root: Trie<T> = { path: "", segment: "", items: [], children: new Map() };
   for (const item of items) {
@@ -87,21 +116,8 @@ export const folderTree = <T>(
       return build(only, label + separatorOf(only.path) + only.segment);
     }
     const children = [...trie.children.values()].map((child) => build(child, child.segment));
-    const count = trie.items.length + children.reduce((n, c) => n + c.count, 0);
-    const free = lockedOf ? trie.items.filter((item) => !lockedOf(item)).length : trie.items.length;
-    return {
-      path: trie.path,
-      label,
-      items: trie.items,
-      children,
-      count,
-      bytes:
-        trie.items.reduce((n, item) => n + sizeOf(item), 0) +
-        children.reduce((n, c) => n + c.bytes, 0),
-      folders: children.reduce((n, c) => n + 1 + c.folders, 0),
-      unlocked: free + children.reduce((n, c) => n + c.unlocked, 0),
-      locked: !!lockedOf && trie.items.every(lockedOf) && children.every((c) => c.locked)
-    };
+    const key = scope === undefined ? trie.path : `${scope}\u0000${trie.path}`;
+    return folderNode({ key, path: trie.path, label }, trie.items, children, sizeOf, lockedOf);
   };
   return [...root.children.values()].map((top) => build(top, top.segment));
 };
@@ -140,6 +156,7 @@ export const listingTree = (directories: RemoteDirectory[], separator: Separator
     let files: RemoteFile[] | null = null;
     const locked = !!d.locked;
     byPath.set(d.name, {
+      key: d.name,
       path: d.name,
       label: getFileName(d.name),
       get items() {
@@ -220,15 +237,15 @@ export type TreeFilter<T> = {
 
 /**
  * The tree as lines, depth first: each folder, then while it is open its items and the folders
- * under it. `siblings` lists the paths of the folders beside a folder, itself included, which
- * Alt-click opens or closes together.
+ * under it, by their keys. `siblings` lists the keys of the folders beside a folder, itself
+ * included, which Alt-click opens or closes together.
  *
  * With a `filter` the open folders are ignored: a folder shows, open, when it or a folder under
  * it matches, so the way to every match is in view, and of its items those the filter keeps
  */
 export const treeLines = <T>(
   roots: FolderNode<T>[],
-  isOpen: (path: string) => boolean,
+  isOpen: (key: string) => boolean,
   keyOf: (item: T) => string,
   filter?: TreeFilter<T> | null
 ): TreeLine<T>[] => {
@@ -245,10 +262,10 @@ export const treeLines = <T>(
   };
   const walk = (nodes: FolderNode<T>[], depth: number) => {
     const kept = filter ? nodes.filter(shown) : nodes;
-    const siblings = kept.map((n) => n.path);
+    const siblings = kept.map((n) => n.key);
     for (const node of kept) {
-      lines.push({ kind: "folder", key: `folder:${node.path}`, node, depth, siblings });
-      if (!filter && !isOpen(node.path)) continue;
+      lines.push({ kind: "folder", key: `folder:${node.key}`, node, depth, siblings });
+      if (!filter && !isOpen(node.key)) continue;
       for (const item of node.items) {
         if (filter && !filter.item(item)) continue;
         lines.push({ kind: "item", key: keyOf(item), item, depth: depth + 1, folder: node });

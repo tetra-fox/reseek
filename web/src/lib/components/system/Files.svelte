@@ -26,7 +26,7 @@
   import AnalysisDrawer from "#lib/components/analysis/AnalysisDrawer.svelte";
   import AnalysisJobs from "#lib/components/analysis/AnalysisJobs.svelte";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
-  import FolderTree from "#lib/components/tree/FolderTree.svelte";
+  import FileTree from "#lib/components/files/FileTree.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -39,6 +39,7 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { isAudio } from "#lib/files/kinds.js";
   import { player } from "#lib/files/player.svelte.js";
+  import { folderCaption } from "#lib/files/summary.js";
   import { dateTime, formatBytes, plural } from "#lib/format.js";
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
@@ -48,7 +49,7 @@
   import { archiveUrl, fileTrack, fileUrl, joinPath, type Root } from "#lib/system/localfiles.js";
   import { encodePath } from "#lib/transfers/content.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
-  import { type FolderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
+  import { type FolderNode, folderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
   import { TICK_REM } from "#lib/tree/indent.js";
   import { shiftHeld } from "#lib/ui/keys.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
@@ -113,33 +114,20 @@
     const inside = read ? entries(read, folder.path.split("/"), sort.by, sort.dir) : [];
     const children = inside.filter((e) => e.kind === "directory").map(nodeOf);
     const items = inside.filter((e) => e.kind === "file" && shows(e));
-    return {
-      path: folder.path,
-      label: folder.name,
-      items,
-      children,
-      count: items.length + children.reduce((n, c) => n + c.count, 0),
-      bytes:
-        items.reduce((n, e) => n + (e.size ?? 0), 0) + children.reduce((n, c) => n + c.bytes, 0),
-      folders: children.reduce((n, c) => n + 1 + c.folders, 0),
-      unlocked: items.length + children.reduce((n, c) => n + c.unlocked, 0),
-      locked: false
-    };
+    const at = { key: folder.path, path: folder.path, label: folder.name };
+    return folderNode(at, items, children, (e) => e.size ?? 0);
   };
   const top = $derived(listing ? entries(listing, parts, sort.by, sort.dir) : []);
   const roots = $derived(top.filter((e) => e.kind === "directory").map(nodeOf));
   /** the shown folder itself, which its own files and the way up belong to */
-  const here = $derived<FolderNode<Entry>>({
-    path,
-    label: parts.at(-1) ?? root,
-    items: top.filter((e) => e.kind !== "directory" && shows(e)),
-    children: roots,
-    count: 0,
-    bytes: 0,
-    folders: 0,
-    unlocked: 0,
-    locked: false
-  });
+  const here = $derived(
+    folderNode(
+      { key: path, path, label: parts.at(-1) ?? root },
+      top.filter((e) => e.kind !== "directory" && shows(e)),
+      roots,
+      (e) => e.size ?? 0
+    )
+  );
   const lines = $derived<TreeLine<Entry>[]>([
     ...top
       .filter((e) => e.kind === "up")
@@ -421,11 +409,8 @@
     {/each}
   </div>
 {:else}
-  <FolderTree
-    class={[
-      "overflow-x-auto rounded-card border bg-surface shadow-card",
-      loading && "opacity-60"
-    ].join(" ")}
+  <FileTree
+    class={["shadow-card", loading && "opacity-60"]}
     {lines}
     {expansion}
     label={`Files in /${root}/${path}`}
@@ -436,9 +421,11 @@
     onopen={(e) => void open(e)}
     onopenfolder={(node) => go(node.path.split("/"))}
     {onkey}
-    ontoggle={(opened, paths) => {
+    nameOf={(line) => (line.kind === "folder" ? line.node.label : line.item.name)}
+    ontoggle={(opened, keys) => {
+      // a folder's key is its path
       if (!opened) return;
-      for (const at of paths) if (!listings.has(at)) void read(at);
+      for (const at of keys) if (!listings.has(at)) void read(at);
     }}>
     {#snippet header()}
       <span role="columnheader"></span>
@@ -457,9 +444,7 @@
         title={node.path}
         onclick={() => go(node.path.split("/"))}>{node.label}</button>
       {#if listings.has(node.path)}
-        <span class="shrink-0 text-xs text-fg-subtle tabular-nums">
-          {node.count} · {formatBytes(node.bytes)}
-        </span>
+        <span class="shrink-0 text-xs text-fg-subtle tabular-nums">{folderCaption(node)}</span>
       {/if}
       <span class="ml-auto w-40 shrink-0 text-xs text-fg-muted max-md:hidden">
         {e?.modifiedAt ? dateTime(e.modifiedAt) : ""}
@@ -501,7 +486,7 @@
       <span role="gridcell" class="flex justify-end"
         >{#if e.kind !== "up"}{@render menu(e)}{/if}</span>
     {/snippet}
-  </FolderTree>
+  </FileTree>
   {#if lines.every((l) => l.kind === "item" && l.item.kind === "up")}
     <p class="px-4 py-6 text-center text-sm text-fg-subtle">
       {only

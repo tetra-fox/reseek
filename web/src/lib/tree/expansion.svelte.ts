@@ -2,23 +2,35 @@ import { SvelteSet } from "svelte/reactivity";
 
 /**
  * Which folders of a tree, or sections of an accordion, are open. Each starts as `openByDefault`
- * says and is toggled on its own; Alt-click toggles it and every sibling to the same state, as
- * file managers do
+ * says, or as `defaultFor` says for the keys it answers, and is toggled on its own; Alt-click
+ * toggles it and every sibling to the same state, as file managers do
  */
 export class Expansion {
   openByDefault = $state(true);
-  /** the keys whose state differs from the default */
+  /** the keys whose state differs from their default */
   #flipped = new SvelteSet<string>();
+  #defaultFor: (key: string) => boolean | undefined;
 
-  constructor(openByDefault: boolean) {
+  constructor(
+    openByDefault: boolean,
+    defaultFor: (key: string) => boolean | undefined = () => undefined
+  ) {
     this.openByDefault = openByDefault;
+    this.#defaultFor = defaultFor;
   }
 
-  isOpen = (key: string) => this.#flipped.has(key) !== this.openByDefault;
+  #default = (key: string) => this.#defaultFor(key) ?? this.openByDefault;
+
+  isOpen = (key: string) => this.#flipped.has(key) !== this.#default(key);
 
   set(key: string, open: boolean) {
-    if (open === this.openByDefault) this.#flipped.delete(key);
+    if (open === this.#default(key)) this.#flipped.delete(key);
     else this.#flipped.add(key);
+  }
+
+  /** The keys `test` picks back to their default */
+  forget(test: (key: string) => boolean) {
+    for (const key of this.#flipped) if (test(key)) this.#flipped.delete(key);
   }
 
   /**

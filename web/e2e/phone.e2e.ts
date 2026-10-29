@@ -161,7 +161,7 @@ const everyScreen = async (page: Page) => {
   await fits(page, "/searches", shows("No searches yet"));
   await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
   // the whole folder's dialog keeps its buttons on the screen
-  await page.getByRole("button", { name: "Show whole folder" }).first().click();
+  await page.getByRole("button", { name: "View all files in this folder" }).first().click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("04 A Long Track Name.flac")).toBeVisible();
   for (const button of await dialog.getByRole("button").all()) {
@@ -172,7 +172,7 @@ const everyScreen = async (page: Page) => {
   await page.keyboard.press("Escape");
   await page.getByRole("radio", { name: "Dense" }).click();
   await holds(page, "the dense results", shows("02 Two.flac"));
-  await page.getByRole("radio", { name: "Cards" }).click();
+  await page.getByRole("radio", { name: "Tree" }).click();
   await fits(page, "/downloads", shows("3.flac"));
   // a phone shows no Columns menu, and sorts by any column from the Sort menu
   await expect(page.getByRole("button", { name: "Columns" })).toHaveCount(0);
@@ -272,7 +272,7 @@ test.describe("at a 24 px text size", () => {
       await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
       await page.getByRole("radio", { name: "Dense" }).click();
       await holds(page, "the dense results", shows("02 Two.flac"));
-      await page.getByRole("radio", { name: "Cards" }).click();
+      await page.getByRole("radio", { name: "Tree" }).click();
       await fits(page, "/downloads", shows("3.flac"));
       await page.getByRole("button", { name: "More for 2.flac" }).click();
       await page.getByRole("menuitem", { name: "Analyze" }).click();

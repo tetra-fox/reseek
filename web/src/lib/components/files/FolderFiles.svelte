@@ -1,34 +1,31 @@
-<script lang="ts" module>
-  import { gridView } from "#lib/lists/table.svelte.js";
-
-  /** the whole-folder list's sort and column widths, kept in this browser */
-  const view = gridView("reseek.folder.files", ["path", "size", "attributes"], {
-    id: "path",
-    dir: "asc"
-  });
-</script>
-
 <script lang="ts">
   import DownloadIcon from "@lucide/svelte/icons/download";
   import { SvelteSet } from "svelte/reactivity";
 
   import type { Schemas } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
-  import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
-  import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { asItem, enqueue } from "#lib/files/downloads.js";
-  import { formatAttributes, formatBytes, plural } from "#lib/format.js";
-  import { Grid, keptIn } from "#lib/lists/table.svelte.js";
-  import { ListWindow } from "#lib/lists/virtual.svelte.js";
+  import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
+  import { asItem, type Enqueued, enqueue } from "#lib/files/downloads.js";
   import { fileMatches, parseFilters } from "#lib/search/filters.js";
-  import { separatorOf } from "#lib/search/results.js";
   import { session } from "#lib/session.svelte.js";
-  import { rem, viewport } from "#lib/ui/viewport.svelte.js";
+  import { Expansion } from "#lib/tree/expansion.svelte.js";
+  import {
+    folderTree,
+    itemsUnder,
+    separatorOf,
+    tickedCounts,
+    treeLines
+  } from "#lib/tree/folders.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
 
-  import Suspect from "./Suspect.svelte";
+  import FileCells from "./FileCells.svelte";
+  import FileHeader from "./FileHeader.svelte";
+  import FileTree from "./FileTree.svelte";
+  import FolderLine from "./FolderLine.svelte";
+  import SelectionBar from "./SelectionBar.svelte";
 
   type Props = {
     open: boolean;
@@ -44,61 +41,36 @@
   let { open = $bindable(), username, folder, files, connected }: Props = $props();
 
   let text = $state("");
-  let busy = $state(false);
-  let headerHeight = $state(0);
   const selected = new SvelteSet<string>();
+  /** every folder opens, so the dialog shows every file */
+  const expansion = new Expansion(true);
+  const write = $derived(session.can("ReadWrite") && connected);
 
-  const prefix = $derived(folder + separatorOf(folder));
-  const relative = (path: string) => (path.startsWith(prefix) ? path.slice(prefix.length) : path);
   const shown = $derived.by(() => {
     const filters = parseFilters(text);
     return files.filter((f) => fileMatches(filters, f));
   });
-  type File = Schemas["File"];
-  const grid = new Grid<File>({
-    columns: () => [
-      { id: "select", label: "Select", width: "2.5rem", quiet: true, fixed: true },
-      // a phone gives the path whatever the size leaves, and has no room for the attributes
-      {
-        id: "path",
-        label: "Path",
-        width: viewport.phone ? "0rem" : "16rem",
-        grow: true,
-        value: (f) => relative(f.filename).toLowerCase()
-      },
-      { id: "size", label: "Size", width: "6rem", end: true, value: (f) => f.size },
-      { id: "attributes", label: "Attributes", width: "9rem", value: (f) => f.bitRate ?? -1 }
-    ],
-    data: () => shown,
-    shown: () => ["select", "path", "size", ...(viewport.phone ? [] : ["attributes"])],
-    ...keptIn(view)
-  });
-  const rows = $derived(grid.rows);
-  // every file is listed, the window drawing those in view; a long path wraps, so each row's
-  // height is measured
-  const lines = new ListWindow(
-    () => rows,
-    (f) => f.filename,
-    () => ({
-      estimateSize: () => 2 * rem.px,
-      overscan: 8,
-      scrollMargin: headerHeight,
-      scrollPaddingStart: headerHeight,
-      sizes: rem.px
-    })
+  const lines = $derived(
+    treeLines(
+      folderTree(
+        shown,
+        (f) => f.filename,
+        (f) => f.size
+      ),
+      expansion.isOpen,
+      (f) => f.filename
+    )
   );
-  const ticked = $derived(rows.filter((f) => selected.has(f.filename)).length);
+  const columns = $derived(fileColumns({ quality: true, phone: viewport.phone }));
+  const chosen = $derived(shown.filter((f) => selected.has(f.filename)));
+  const ticked = $derived(tickedCounts(selected, (id) => id));
   /** the downloads land in a folder named like the remote one */
   const destination = $derived(folder.split(separatorOf(folder)).filter(Boolean).pop());
 
-  const download = async (chosen: Schemas["File"][]) => {
-    busy = true;
-    const result = await enqueue({
-      username,
-      files: chosen.map((f) => asItem(f)),
-      destination
-    });
-    busy = false;
+  const download = (list: Schemas["File"][]): Promise<Enqueued> =>
+    enqueue({ username, files: list.map((f) => asItem(f)), destination });
+  const downloadNow = async (list: Schemas["File"][]) => {
+    const result = await download(list);
     toast(result.text, result.kind === "done" ? "info" : "error");
   };
 </script>
@@ -109,69 +81,55 @@
   description={`Every file in this folder and its subfolders, from ${username}`}
   class="w-[min(56rem,calc(100vw-2rem))]">
   <Input bind:value={text} type="search" placeholder="Filter files" aria-label="Filter" />
-  <div
-    class="-mx-5 max-h-[min(55vh,32rem)] overflow-auto border-y text-sm"
-    role="grid"
-    aria-label="Files"
-    aria-rowcount={rows.length}
-    {@attach lines.attach}>
-    <div class="sticky top-0 z-10" style:min-width={grid.width} bind:offsetHeight={headerHeight}>
-      <GridHeader {grid} class="h-8 border-b bg-surface-muted font-medium text-fg-muted">
-        {#snippet cell()}
-          <Checkbox
-            aria-label="Select every file listed"
-            checked={rows.length > 0 && ticked === rows.length}
-            indeterminate={ticked > 0 && ticked < rows.length}
-            onCheckedChange={(on) => {
-              for (const f of rows) {
-                if (on) selected.add(f.filename);
-                else selected.delete(f.filename);
-              }
-            }} />
-        {/snippet}
-      </GridHeader>
-    </div>
-    <div class="relative" style:height={`${lines.total}px`} style:min-width={grid.width}>
-      {#each lines.drawn as { line: file, index, start } (file.filename)}
-        <div
-          role="row"
-          class="absolute inset-x-0 top-0 grid items-center list-row py-1"
-          style:transform={`translateY(${start - headerHeight}px)`}
-          style:grid-template-columns={grid.template}
-          data-index={index}
-          data-last={index === rows.length - 1 || undefined}
-          {@attach lines.measure}>
-          <span role="gridcell" class="flex justify-center">
-            <Checkbox
-              aria-label={`Select ${relative(file.filename)}`}
-              checked={selected.has(file.filename)}
-              onCheckedChange={(on) =>
-                on ? selected.add(file.filename) : selected.delete(file.filename)} />
-          </span>
-          <span role="gridcell" class="min-w-0 px-2 font-mono text-xs wrap-anywhere">
-            {relative(file.filename)}
-          </span>
-          <span role="gridcell" class="truncate px-2 text-right tabular-nums"
-            >{formatBytes(file.size)}</span>
-          {#if !viewport.phone}
-            <span role="gridcell" class="flex min-w-0 items-center gap-1 px-2 text-fg-muted">
-              {#if file.suspect}<Suspect suspect={file.suspect} />{/if}
-              <span class="truncate">{formatAttributes(file)}</span>
-            </span>
-          {/if}
-        </div>
-      {/each}
-    </div>
-  </div>
+  <FileTree
+    {lines}
+    {expansion}
+    label="Files"
+    columns={fileTemplate(columns)}
+    width={fileWidth(columns)}
+    height="min(55vh, 32rem)"
+    {selected}
+    idOf={(f) => f.filename}
+    onopen={write ? (f) => void downloadNow([f]) : undefined}>
+    {#snippet header()}
+      <FileHeader {columns} />
+    {/snippet}
+    {#snippet folder(node, depth)}
+      <FolderLine
+        {node}
+        open={expansion.isOpen(node.key)}
+        {depth}
+        tick={{
+          checked: (ticked.get(node.path) ?? 0) === node.count,
+          indeterminate:
+            (ticked.get(node.path) ?? 0) > 0 && (ticked.get(node.path) ?? 0) < node.count,
+          ontick: (on) => {
+            for (const f of itemsUnder(node)) {
+              if (on) selected.add(f.filename);
+              else selected.delete(f.filename);
+            }
+          }
+        }} />
+    {/snippet}
+    {#snippet item(file, _depth, tick)}
+      <FileCells
+        {file}
+        {username}
+        {columns}
+        selected={selected.has(file.filename)}
+        ontick={tick}
+        ondownload={write ? () => void downloadNow([file]) : undefined} />
+    {/snippet}
+  </FileTree>
+  {#if write && chosen.length}
+    <SelectionBar
+      files={chosen}
+      ondownload={() => download(chosen)}
+      onclear={() => selected.clear()} />
+  {/if}
   {#snippet footer()}
     {#if session.can("ReadWrite")}
-      <Button
-        variant="outline"
-        disabled={busy || !connected || !ticked}
-        onclick={() => void download(rows.filter((f) => selected.has(f.filename)))}>
-        <DownloadIcon />Download {plural(ticked, "file", "files")}
-      </Button>
-      <Button disabled={busy || !connected || !files.length} onclick={() => void download(files)}>
+      <Button disabled={!connected || !files.length} onclick={() => void downloadNow(files)}>
         <DownloadIcon />Download all
       </Button>
     {/if}

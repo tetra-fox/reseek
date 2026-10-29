@@ -77,7 +77,7 @@ describe("search results", () => {
     document.body.innerHTML = "";
   });
 
-  it("stream in without replacing the cards already shown, also once stored", async () => {
+  it("stream in without replacing the lines already shown, also once stored", async () => {
     const stored = [response("alice", 300), response("bob", 200), response("carol", 100)];
     const net = fakeNetwork((url) => {
       if (url.pathname.endsWith("/api/v0/users")) return { users: [], total: 0 };
@@ -96,13 +96,19 @@ describe("search results", () => {
     net.frame("search.response", { searchId: ID, response: stored[0] });
     net.frame("search.response", { searchId: ID, response: stored[1] });
     await flushFaked();
-    const cards = () => [...document.querySelectorAll("section[data-key]")];
-    expect(cards().map((c) => c.getAttribute("data-key"))).toEqual(["0:alice", "0:bob"]);
+    const cards = () => [
+      ...document.querySelectorAll('[role=treegrid] [role=rowgroup] [data-line^="folder:user:"]')
+    ];
+    expect(cards().map((c) => c.getAttribute("data-line"))).toEqual([
+      "folder:user:0:alice",
+      "folder:user:0:bob"
+    ]);
     const [alice, bob] = cards();
-    const row = alice.querySelector("[role=row][aria-selected]")!;
+    const rowOf = () => document.querySelector("[role=treegrid] [role=row][aria-selected]")!;
+    const row = rowOf();
     expect(row.textContent).toContain("01 One.flac");
 
-    // a selection across the two cards
+    // a selection across the two users' lines
     const selection = document.getSelection()!;
     selection.setBaseAndExtent(alice, 0, bob, bob.childNodes.length);
     const selected = selection.toString();
@@ -113,10 +119,10 @@ describe("search results", () => {
     expect(cards()).toHaveLength(3);
     expect(cards()[0]).toBe(alice);
     expect(cards()[1]).toBe(bob);
-    expect(alice.querySelector("[role=row][aria-selected]")).toBe(row);
+    expect(rowOf()).toBe(row);
     expect(document.getSelection()!.toString()).toBe(selected);
 
-    // completed: the stored responses replace the streamed ones, and the cards stay
+    // completed: the stored responses replace the streamed ones, and the lines stay
     net.frame(
       "search.update",
       search({
@@ -133,7 +139,7 @@ describe("search results", () => {
     expect(cards()).toHaveLength(3);
     expect(cards()[0]).toBe(alice);
     expect(cards()[1]).toBe(bob);
-    expect(alice.querySelector("[role=row][aria-selected]")).toBe(row);
+    expect(rowOf()).toBe(row);
     expect(document.getSelection()!.toString()).toBe(selected);
   });
 
@@ -208,7 +214,7 @@ describe("search results", () => {
     const toggle = (name: string) =>
       document.querySelector<HTMLButtonElement>(`button[aria-label$=" ${name}"][aria-expanded]`)!;
     const files = () =>
-      [...document.querySelectorAll("section [role=row][aria-selected]")].map(
+      [...document.querySelectorAll("[role=treegrid] [role=row][aria-selected]")].map(
         (r) => r.textContent?.match(/\d\.flac/)?.[0]
       );
     expect(files()).toEqual(["1.flac", "2.flac", "3.flac"]);
@@ -274,7 +280,7 @@ describe("search results", () => {
     net.frame("search.response", { searchId: ID, response: mixed });
     await flushFaked();
     const names = () =>
-      [...document.querySelectorAll("section [role=row][aria-selected]")].map(
+      [...document.querySelectorAll("[role=treegrid] [role=row][aria-selected]")].map(
         (r) => r.textContent?.match(/\d\.\w+/)?.[0]
       );
     expect(names()).toEqual(["1.flac", "2.mp3"]);

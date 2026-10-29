@@ -74,9 +74,11 @@ for (const [width, height] of [
       expect(await apart(folder, note), "Files").toBeLessThan(0.5);
 
       await page.goto(`./#/searches/${SEARCH_ID}`);
-      const card = page.locator('section[data-key="0:alice"]');
-      const bonus = card.getByTitle("@@a\\Music\\Album\\Bonus", { exact: true });
-      const track = card.getByText("01 One.flac", { exact: true });
+      const results = page.getByRole("treegrid", { name: "Search results" });
+      const bonus = results
+        .locator("[role=rowgroup]")
+        .getByTitle("@@a\\Music\\Album\\Bonus", { exact: true });
+      const track = results.getByText("01 One.flac", { exact: true });
       await expect(track).toBeVisible();
       expect(await apart(bonus, track), "search results").toBeLessThan(0.5);
 

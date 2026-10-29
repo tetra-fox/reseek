@@ -46,8 +46,8 @@
     onkey?: (e: KeyboardEvent, line: TreeLine<T>) => boolean;
     /** a middle click on an item, which acts without leaving the page, as a new tab would */
     onmiddleclick?: (item: T) => void;
-    /** folders opened or closed, for a tree that reads a folder when it opens */
-    ontoggle?: (open: boolean, paths: string[]) => void;
+    /** folders opened or closed, by their keys, for a tree that reads a folder when it opens */
+    ontoggle?: (open: boolean, keys: string[]) => void;
     /** a folder line after its toggle: its name, counts, actions */
     folder: Snippet<[FolderNode<T>, number]>;
     /**
@@ -67,7 +67,10 @@
     slot?: (depth: number) => number;
     /** the scroll box's height, a CSS length */
     height?: string;
-    /** the rows' least width, a CSS length, past which the box scrolls sideways */
+    /**
+     * The item columns' least width, a CSS length; with the deepest line's inset added, the lines'
+     * least width, past which the box scrolls sideways
+     */
     width?: string;
     /** classes of a line of the screen's own, such as a tint for a failed transfer */
     lineClass?: (line: TreeLine<T>) => ClassValue;
@@ -136,9 +139,9 @@
 
   /** Opens or closes a folder from the keys, as its toggle would */
   const show = (node: FolderNode<T>, open: boolean) => {
-    if (expansion.isOpen(node.path) === open) return;
-    expansion.set(node.path, open);
-    ontoggle?.(open, [node.path]);
+    if (expansion.isOpen(node.key) === open) return;
+    expansion.set(node.key, open);
+    ontoggle?.(open, [node.key]);
   };
 
   const list = new ListControl<TreeLine<T>>({
@@ -152,7 +155,7 @@
     onopen: (line) => {
       if (line.kind === "item") onopen?.(line.item);
       else if (onopenfolder) onopenfolder(line.node);
-      else show(line.node, !expansion.isOpen(line.node.path));
+      else show(line.node, !expansion.isOpen(line.node.key));
     },
     // Right opens a folder and Left closes it, as in a file manager's tree
     onkey: (e, line) => {
@@ -212,11 +215,11 @@
       return;
     }
     if (!document.getSelection()?.isCollapsed) return;
-    const path = line.node.path;
+    const key = line.node.key;
     const all = withSiblings(e);
-    const open = !expansion.isOpen(path);
-    expansion.toggle(path, line.siblings, all);
-    ontoggle?.(open, all ? line.siblings : [path]);
+    const open = !expansion.isOpen(key);
+    expansion.toggle(key, line.siblings, all);
+    ontoggle?.(open, all ? line.siblings : [key]);
   };
 
   /** Gives the tree DOM focus, without scrolling */
@@ -240,6 +243,11 @@
     view.scrollTo(index, "center");
   };
 
+  /** the lines' least width: the columns' set in as far as the deepest item */
+  const least = $derived(
+    width ? `calc(${width} + ${inset(lines.length ? nest.deepest + 1 : 0, "item")})` : undefined
+  );
+
   const pinnedId = (index: number) => `${list.uid}-pinned-${index}`;
   const focusedPin = $derived(pinned.find((pin) => pin.line.key === list.focusedKey));
   const activeId = $derived(focusedPin ? pinnedId(focusedPin.index) : list.activeId);
@@ -254,7 +262,7 @@
   <div role="gridcell" class="flex min-w-0 flex-1 items-center" style:column-gap={`${GAP_REM}rem`}>
     <TreeToggle
       {expansion}
-      key={line.node.path}
+      key={line.node.key}
       siblings={line.siblings}
       name={line.node.label}
       {ontoggle} />
@@ -283,7 +291,7 @@
   {@attach list.attach}>
   <!-- the pinned folder lines are drawn under the column header, which a pushed one goes under,
        and over the lines -->
-  <div class="sticky top-0 z-10" style:min-width={width} bind:offsetHeight={rowsTop}>
+  <div class="sticky top-0 z-10" style:min-width={least} bind:offsetHeight={rowsTop}>
     {#if header}
       <div
         role="row"
@@ -306,7 +314,7 @@
         style:z-index={n - pinned.length}
         style:padding-left={inset(pin.line.depth, "folder")}
         aria-level={pin.line.depth + 1}
-        aria-expanded={expansion.isOpen(pin.line.node.path)}
+        aria-expanded={expansion.isOpen(pin.line.node.key)}
         data-line={pin.line.key}
         data-focused={list.isFocused(pin.line) || undefined}
         data-pinned="true">
@@ -317,7 +325,7 @@
   <div
     class="relative"
     style:height={`${view.total}px`}
-    style:min-width={width}
+    style:min-width={least}
     role="rowgroup"
     {@attach freezesWhileUsed}>
     {#each view.drawn as { line, index, start } (line.key)}
@@ -336,7 +344,7 @@
           style:height={`${row}px`}
           style:padding-left={inset(line.depth, "folder")}
           aria-level={line.depth + 1}
-          aria-expanded={expansion.isOpen(line.node.path)}
+          aria-expanded={expansion.isOpen(line.node.key)}
           onclick={(e) => toggleOnClick(e, line)}>
           {@render folderLine(line)}
         </div>

@@ -29,7 +29,7 @@
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { undoable } from "#lib/feedback/undo.js";
-  import { fileColumns, fileTemplate } from "#lib/files/columns.js";
+  import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
   import {
     asItem,
     downloadPlan,
@@ -441,6 +441,7 @@
       {expansion}
       label="Shared folders"
       columns={fileTemplate(columns)}
+      width={fileWidth(columns)}
       height="max(20rem, calc(var(--content-h) - 16rem))"
       selected={browser.selected}
       idOf={(f) => f.filename}

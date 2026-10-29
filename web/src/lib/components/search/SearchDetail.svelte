@@ -7,9 +7,7 @@
   import SearchXIcon from "@lucide/svelte/icons/search-x";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import { untrack } from "svelte";
-  import { cubicOut } from "svelte/easing";
   import { SvelteSet } from "svelte/reactivity";
-  import { fly } from "svelte/transition";
 
   import { app } from "#lib/app.svelte.js";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
@@ -21,7 +19,6 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { undoable } from "#lib/feedback/undo.js";
   import { plural } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
@@ -35,18 +32,13 @@
   import { LONG_QUEUE, searchOptions } from "#lib/settings.svelte.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
-  import { motionFast } from "#lib/ui/motion.js";
-  import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
   import DenseResults from "./DenseResults.svelte";
-  import ResponseCard from "./ResponseCard.svelte";
   import ResultsToolbar from "./ResultsToolbar.svelte";
+  import ResultsTree from "./ResultsTree.svelte";
   import StatusIcon from "./StatusIcon.svelte";
   import Unreachable from "./Unreachable.svelte";
-
-  /** how many results show at first and how many more each press adds */
-  const STEP = 5;
 
   // one search; the route mounts a fresh one for every id, so nothing here outlives it
   let { id }: { id: string } = $props();
@@ -68,14 +60,14 @@
   const refused = $derived(searches.refused.get(id));
   let missing = $state(false);
   let working = $state(false);
-  let shown = $state(STEP);
   let filterText = $state("");
   let typed = $state("");
   let showBlocked = $state(false);
-  let toolbarHeight = $state(0);
   let blocked = $state.raw<Set<string>>(new Set());
   const dismissed = new SvelteSet<string>();
-  const cards = new Expansion(!searchOptions.fold);
+  /** whether a user's line is open unless toggled, which folding every result sets */
+  let usersOpen = $state(!searchOptions.fold);
+  const expansion = new Expansion(true, (key) => (key.startsWith("user:") ? usersOpen : undefined));
 
   useCrumbs(() => (search ? [{ label: search.searchText }] : []));
 
@@ -154,8 +146,6 @@
     searchOptions.hideOffline = false;
     searchOptions.hideLongQueues = false;
   };
-  const remaining = $derived(Math.max(view.length - shown, 0));
-  const cardKeys = $derived(view.slice(0, shown).map((r) => r.key));
   const rows = $derived(searchOptions.view === "dense" ? denseRows(view) : []);
   const counts = $derived({
     files: view.reduce((n, r) => n + r.response.fileCount + r.response.lockedFileCount, 0),
@@ -195,8 +185,6 @@
       () => dismissed.delete(username)
     );
   };
-
-  const motion = () => ({ duration: motionFast(), easing: cubicOut, y: -6 });
 </script>
 
 <!-- what is out of view and how to bring each part back -->
@@ -289,44 +277,17 @@
       sortable={results.stored}
       blockedCount={blocked.size}
       bind:showBlocked
-      bind:height={toolbarHeight}
-      onfold={(fold) => cards.reset(!fold)} />
+      onfold={(fold) => {
+        usersOpen = !fold;
+        expansion.forget((key) => key.startsWith("user:"));
+      }} />
 
     {#if searchOptions.view === "dense"}
       {#if rows.length}
         <DenseResults {rows} searchId={id} canDownload={canWrite && connected} />
       {/if}
-    {:else}
-      <!-- a card's pinned lines start under the toolbar where it stays in view, at the top on a
-           phone, where it scrolls away -->
-      <div
-        class="flex flex-col gap-3"
-        style:--results-top={viewport.phone ? "0px" : `${toolbarHeight}px`}
-        {@attach freezesWhileUsed}>
-        {#each view.slice(0, shown) as result (result.key)}
-          <div in:fly={motion()} out:fly={motion()}>
-            <ResponseCard
-              {result}
-              searchId={id}
-              {cards}
-              siblings={cardKeys}
-              {connected}
-              {canWrite}
-              ondismiss={() => dismiss(result.response.username)} />
-          </div>
-        {/each}
-      </div>
-
-      {#if remaining > 0}
-        <div class="flex gap-inline">
-          <Button size="default" class="h-11 flex-1" onclick={() => (shown += STEP)}>
-            Show {Math.min(STEP, remaining)} more results ({remaining} left)
-          </Button>
-          <Button variant="outline" class="h-11" onclick={() => (shown = view.length)}>
-            Show all
-          </Button>
-        </div>
-      {/if}
+    {:else if view.length}
+      <ResultsTree {view} searchId={id} {expansion} {connected} {canWrite} ondismiss={dismiss} />
     {/if}
     {#if !view.length}
       <EmptyState icon={SearchXIcon} title="All results are hidden">

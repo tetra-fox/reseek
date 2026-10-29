@@ -11,25 +11,27 @@ test("shows search results as cards and as dense rows walked by key", async ({ p
   await expect(crumbs).toContainText("Search");
   await expect(crumbs).toContainText("album");
 
-  // cards: one per user, folders as a tree under the chain they share
-  const alice = page.locator('section[data-key="0:alice"]');
-  await expect(alice.getByRole("button", { name: "Close @@a\\Music" })).toBeVisible();
-  await expect(alice.getByText("01 One.flac")).toBeVisible();
+  // one tree: a line per user, their folders under the chain they share
+  const tree = page.getByRole("treegrid", { name: "Search results" });
+  const user = (name: string) => tree.locator(`[data-line="folder:user:0:${name}"]`);
+  await expect(user("alice")).toBeVisible();
+  await expect(tree.getByRole("button", { name: "Close @@a\\Music" })).toBeVisible();
+  await expect(tree.getByText("01 One.flac")).toBeVisible();
 
   // a filter token keeps only what it matches, and the clear button empties the box
   const filter = page.getByLabel("Filter", { exact: true });
   await filter.fill("type:mp3");
-  await expect(alice.getByText("03 Three.mp3")).toBeVisible();
+  await expect(tree.getByText("03 Three.mp3")).toBeVisible();
   // a result's row acts on a click and shows it; the count above them is plain text
-  await expect(alice.locator("[role=row][data-line]").last()).toHaveCSS("cursor", "pointer");
+  await expect(tree.locator("[role=row][aria-selected]").last()).toHaveCSS("cursor", "pointer");
   await expect(page.getByRole("status").filter({ hasText: "files from" })).toHaveCSS(
     "cursor",
     "default"
   );
-  await expect(page.locator('section[data-key="0:bob"]')).toHaveCount(0);
+  await expect(user("bob")).toHaveCount(0);
   await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(filter).toHaveValue("");
-  await expect(page.locator('section[data-key="0:bob"]')).toBeVisible();
+  await expect(user("bob")).toBeVisible();
 
   // the dense view: one row per file, walked with the keys
   await page.getByRole("radio", { name: "Dense" }).click();
