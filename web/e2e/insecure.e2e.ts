@@ -60,13 +60,13 @@ test("copies a message by selecting it, and says notifications need HTTPS", asyn
   await fakeChat(page);
   const errors = await insecure(page, "/chat");
   await page.goto("./#/chat/rooms/indie");
-  await expect(page.getByText(/Browsers only show notifications over HTTPS/)).toBeVisible();
+  await expect(page.getByText(/Browsers show desktop notifications only over HTTPS/)).toBeVisible();
   const log = page.getByRole("log");
   await log.getByText("thanks bob, grabbing it now").hover();
   await page.getByRole("button", { name: "Copy the text" }).last().click();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { copied?: string }).copied))
     .toBe("thanks bob, grabbing it now");
-  await expect(page.getByRole("alert").filter({ hasText: "Couldn't copy" })).toHaveCount(0);
+  await expect(page.getByRole("alert").filter({ hasText: "Could not copy" })).toHaveCount(0);
   expect(errors).toEqual([]);
 });

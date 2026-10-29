@@ -133,7 +133,7 @@ test("a toast sits above the docked activity log", async ({ page }) => {
   await expect.poll(async () => (await dock.boundingBox())?.height).toBe(288);
   await log.getByText("thanks bob, grabbing it now").hover();
   await page.getByRole("button", { name: "Copy the text" }).last().click();
-  const toast = page.getByRole("alert").filter({ hasText: "Couldn't copy" });
+  const toast = page.getByRole("alert").filter({ hasText: "Could not copy" });
   await expect(toast).toBeVisible();
   const [above, top] = [(await toast.boundingBox())!, (await dock.boundingBox())!];
   expect(above.y + above.height).toBeLessThanOrEqual(top.y);

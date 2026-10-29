@@ -112,7 +112,7 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
  */
 const drawerHolds = async (page: Page, name: string) => {
   const drawer = page.getByRole("complementary", { name });
-  await expect(drawer.getByText(/This is a tool to help you judge, not proof/)).toBeVisible();
+  await expect(drawer.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
   const cut = await drawer.evaluate((aside) => {
     const { left, right } = aside.getBoundingClientRect();
     if (left < -0.5 || right > innerWidth + 0.5) return "the drawer runs off the screen";
@@ -186,7 +186,7 @@ const everyScreen = async (page: Page) => {
   // a finished download's analysis, with its reading open, fits the drawer
   await page.getByRole("button", { name: "More for 2.flac" }).click();
   await page.getByRole("menuitem", { name: "Analyze" }).click();
-  await page.getByText("The analyzer's reading", { exact: true }).click();
+  await page.getByText("Analyzer reading", { exact: true }).click();
   await page.getByRole("radio", { name: "Mel" }).click();
   await expect(page.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
   await drawerHolds(page, "Transfer details");
@@ -203,7 +203,7 @@ const everyScreen = async (page: Page) => {
   await page.getByLabel("Username").press("Enter");
   await page.getByRole("treeitem", { name: /Bootlegs/ }).click();
   await holds(page, "a browse with a folder open", shows("2.flac"));
-  await fits(page, "/profile", shows("How others see you"));
+  await fits(page, "/profile", shows("Public view"));
   for (const [tab, text] of [
     ["info", "Process ID"],
     ["settings", "Listen port"],
@@ -289,7 +289,7 @@ test.describe("at a large text size", () => {
         await fits(page, "/downloads", shows("3.flac"));
         await page.getByRole("button", { name: "More for 2.flac" }).click();
         await page.getByRole("menuitem", { name: "Analyze" }).click();
-        await page.getByText("The analyzer's reading", { exact: true }).click();
+        await page.getByText("Analyzer reading", { exact: true }).click();
         await drawerHolds(page, "Transfer details");
         await page.keyboard.press("Escape");
         await fits(page, "/system/info", shows("Process ID"));
@@ -331,7 +331,7 @@ test("a toast's countdown runs along its foot and holds under the pointer", asyn
   const log = page.getByRole("log");
   await log.getByText("thanks bob, grabbing it now").hover();
   await page.getByRole("button", { name: "Copy the text" }).last().click();
-  const toast = page.getByRole("alert").filter({ hasText: "Couldn't copy" });
+  const toast = page.getByRole("alert").filter({ hasText: "Could not copy" });
   await expect(toast).toBeVisible();
   const bar = toast.locator(".countdown");
   const [box, line] = [(await toast.boundingBox())!, (await bar.boundingBox())!];
