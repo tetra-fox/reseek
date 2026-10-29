@@ -100,7 +100,7 @@ config-view:
 # fail if api/openapi.json no longer matches the handlers, the UI's types no longer match it, or
 # the settings fixture no longer matches the daemon's options
 api-check: web-install
-    cargo nextest run -p reseek -E "test(the_committed_openapi_document_is_current)"
+    cargo nextest run --workspace --all-features -E "package(reseek) & test(the_committed_openapi_document_is_current)"
     pnpm --dir web api-check
     @view="$({{ just_executable() }} --justfile {{ justfile() }} config-view)" \
       || { echo "the settings fixture could not be generated" >&2; exit 1; }; \
@@ -147,7 +147,7 @@ e2e:
 # what it looks for and where
 [doc("the daemon's smoke run against the real Soulseek server, run by hand only")]
 live-smoke:
-    cargo nextest run -p reseek --test smoke --run-ignored only --no-capture -E "test(real_network)"
+    cargo nextest run --workspace --all-features --run-ignored only --no-capture -E "binary_id(reseek::smoke) & test(real_network)"
 
 # Prints the soulfind to test against: SOULFIND_BIN, else soulfind on PATH, else nothing, which
 # the callers take as a skip. With SOULFIND_REQUIRED=1 a missing soulfind fails instead
