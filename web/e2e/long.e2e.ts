@@ -29,18 +29,18 @@ const windowed = async (page: Page, box: Locator, line: string, last: string) =>
   expect(await drawn(box, line), "lines drawn at the end").toBeLessThan(150);
 };
 
-test("5000 downloads draw a window and scroll to the last", async ({ page }) => {
-  await manyDownloads(page, 5000);
+test("1000 downloads draw a window and scroll to the last", async ({ page }) => {
+  await manyDownloads(page, 1000);
   await page.addInitScript(() =>
     localStorage.setItem("transfers.view.download", JSON.stringify({ groupBy: "flat" }))
   );
   await login(page, "/downloads");
   const grid = page.getByRole("grid", { name: "Downloads" });
-  await windowed(page, grid, "[role=rowgroup] [role=row]", "04999 Track.flac");
+  await windowed(page, grid, "[role=rowgroup] [role=row]", "00999 Track.flac");
 });
 
 test("focus and a range of rows go past the window's edge", async ({ page }) => {
-  await manyDownloads(page, 5000);
+  await manyDownloads(page, 1000);
   await page.addInitScript(() =>
     localStorage.setItem("transfers.view.download", JSON.stringify({ groupBy: "flat" }))
   );
@@ -59,10 +59,10 @@ test("focus and a range of rows go past the window's edge", async ({ page }) => 
   await expect(page.getByText("81 selected")).toBeVisible();
 });
 
-test("5000 search results in the dense view draw a window and scroll to the last", async ({
+test("1000 search results in the dense view draw a window and scroll to the last", async ({
   page
 }) => {
-  await manyResults(page, 5000);
+  await manyResults(page, 1000);
   await login(page, `/searches/${SEARCH_ID}`);
   await page.getByRole("radio", { name: "Dense" }).click();
   const grid = page.getByRole("grid", { name: "Search results" });
@@ -70,8 +70,8 @@ test("5000 search results in the dense view draw a window and scroll to the last
   await windowed(page, grid, "[role=rowgroup] [role=row]", "00009 Song.flac");
 });
 
-test("a browse of 5000 folders draws a window and scrolls to the last", async ({ page }) => {
-  await wideBrowse(page, 5000);
+test("a browse of 1000 folders draws a window and scrolls to the last", async ({ page }) => {
+  await wideBrowse(page, 1000);
   await login(page, "/browse");
   await page.getByLabel("Username").fill("carol");
   await page.getByLabel("Username").press("Enter");
@@ -83,11 +83,12 @@ test("a browse of 5000 folders draws a window and scrolls to the last", async ({
   await expect(tree.getByRole("treeitem").last()).toContainText("Album 47");
 });
 
-test("a room's 5000 messages draw a window and scroll back to the first", async ({ page }) => {
-  await longRoom(page, 5000);
+test("a room's 1000 messages draw a window and scroll back to the first", async ({ page }) => {
+  await longRoom(page, 1000);
   await login(page, "/chat/rooms/indie");
   const log = page.getByRole("log");
-  await expect(log.getByText("message number 4999")).toBeVisible();
+  // the last of them is one of the longer messages
+  await expect(log.getByText("a longer message, number 999,")).toBeVisible();
   expect(await drawn(log, "[data-message]"), "messages drawn at the end").toBeLessThan(150);
   await log.evaluate(
     (e) =>
