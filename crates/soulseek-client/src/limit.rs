@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::ClientError;
@@ -93,21 +93,25 @@ impl Limiter {
       }
     }
   }
-
-  /// a permit under a bound of `size` if one is free now
-  pub(crate) fn try_acquire(&self, size: u32) -> Option<Permit> {
-    self.resize(size);
-    match self.shared.semaphore.clone().try_acquire_owned() {
-      Ok(permit) => Some(self.permit(permit)),
-      Err(TryAcquireError::NoPermits) => None,
-      Err(TryAcquireError::Closed) => unreachable!("the limiter never closes its semaphore"),
-    }
-  }
 }
 
 #[cfg(test)]
 mod tests {
+  use tokio::sync::TryAcquireError;
+
   use super::*;
+
+  impl Limiter {
+    /// a permit under a bound of `size` if one is free now
+    fn try_acquire(&self, size: u32) -> Option<Permit> {
+      self.resize(size);
+      match self.shared.semaphore.clone().try_acquire_owned() {
+        Ok(permit) => Some(self.permit(permit)),
+        Err(TryAcquireError::NoPermits) => None,
+        Err(TryAcquireError::Closed) => unreachable!("the limiter never closes its semaphore"),
+      }
+    }
+  }
 
   #[test]
   fn permits_run_out_at_the_size() {

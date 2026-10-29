@@ -254,7 +254,6 @@
         "distributed_parent_negotiation_timeout": "5s",
         "max_cached_peer_connections": 1000,
         "max_concurrent_peer_connects": 50,
-        "max_concurrent_search_responses": 20,
         "max_message_size": "256.0 MiB",
         "search_response_cache_size": 1000,
         "user_endpoint_cache_size": 10000
@@ -2543,21 +2542,6 @@
       "secret": false,
       "notApplied": null
     },
-    "soulseek.limits.max_concurrent_search_responses": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": null,
-      "cliFlag": null,
-      "kind": "integer",
-      "doc": "Maximum number of searches from the distributed network answered at once.",
-      "choices": null,
-      "default": 20,
-      "apply": "live",
-      "secret": false,
-      "notApplied": null
-    },
     "soulseek.limits.max_message_size": {
       "source": {
         "layer": "default"
@@ -2791,7 +2775,7 @@
       "envVar": "RESEEK_THROTTLING_SEARCH_INCOMING_CIRCUIT_BREAKER",
       "cliFlag": "--throttling-search-incoming-circuit-breaker",
       "kind": "integer",
-      "doc": "Maximum number of incoming searches waiting to be answered. Further searches are dropped.",
+      "doc": "Maximum number of incoming searches waiting to be answered. Further searches are dropped and counted as dropped searches.",
       "choices": null,
       "default": 500,
       "apply": "live",

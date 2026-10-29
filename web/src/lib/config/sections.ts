@@ -156,11 +156,6 @@ export const sections: Section[] = [
         ...AT_LEAST_1
       },
       {
-        key: "soulseek.limits.max_concurrent_search_responses",
-        label: "Concurrent distributed search responses",
-        ...AT_LEAST_1
-      },
-      {
         key: "soulseek.limits.search_response_cache_size",
         label: "Cached search responses",
         ...AT_LEAST_1

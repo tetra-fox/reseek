@@ -118,10 +118,7 @@ impl Client {
       )),
       waiter,
       tokens: TokenGenerator::new(options.starting_token),
-      responder: SearchResponder::new(
-        options.limits.search_response_cache_size,
-        options.limits.max_concurrent_search_responses,
-      ),
+      responder: SearchResponder::new(options.limits.search_response_cache_size),
       endpoints: endpoint::Endpoints::new(options.limits.user_endpoint_cache_size),
       transfers: Arc::new(Transfers::new(&options)),
       searches: Searches::new(options.maximum_concurrent_searches),

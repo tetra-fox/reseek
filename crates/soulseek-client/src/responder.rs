@@ -2,7 +2,7 @@
 //! goes to the searcher over a message connection, dialed directly and requested through the
 //! server at once. An answer that cannot be delivered is kept for a few minutes under the token
 //! of that connection request, so it still reaches a searcher who acts on the request late. How
-//! many searches are worked out at once is bounded; past the bound a request is dropped.
+//! many requests wait for an answer at once is the resolver's to bound.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -15,14 +15,10 @@ use crate::cache::BoundedCache;
 use crate::client::Client;
 use crate::conn::MessageConn;
 use crate::events::{Event, SearchDelivery};
-use crate::limit::{Limiter, Permit};
-use crate::log::LogLimiter;
 use crate::resolvers::SearchReply;
 
 /// how long an undelivered answer waits for its searcher to connect
 const KEEP_UNDELIVERED: Duration = Duration::from_secs(180);
-
-static RESPONDERS_BUSY: LogLimiter = LogLimiter::new();
 
 /// An answer we could not deliver, kept under the token of the connection request it rode on
 #[derive(Clone)]
@@ -40,16 +36,13 @@ pub(crate) struct SearchResponder {
   /// connection requests the searcher refused while we were still trying to reach it, so the
   /// answer they carried is not kept
   refused: Mutex<BoundedCache<u32, ()>>,
-  /// searches being answered at once
-  responding: Limiter,
 }
 
 impl SearchResponder {
-  pub(crate) fn new(cache_size: u32, max_concurrent: u32) -> Self {
+  pub(crate) fn new(cache_size: u32) -> Self {
     Self {
       undelivered: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
       refused: Mutex::new(BoundedCache::new(cache_size as usize, KEEP_UNDELIVERED)),
-      responding: Limiter::new(max_concurrent),
     }
   }
 
@@ -84,35 +77,12 @@ impl Client {
     self.responder().undelivered().len()
   }
 
-  /// A permit to answer `username`'s search, or `None` when the bound on searches being answered
-  /// at once is reached and the request is to be dropped
-  fn responding(&self, username: &str, token: u32) -> Option<Permit> {
-    let limit = self.options().limits.max_concurrent_search_responses;
-    let permit = self.responder().responding.try_acquire(limit);
-    if permit.is_none()
-      && let Some(suppressed) = RESPONDERS_BUSY.allow()
-    {
-      tracing::debug!(
-        username,
-        token,
-        suppressed,
-        "too many searches being answered, request dropped"
-      );
-    }
-    permit
-  }
-
-  /// Answers another user's search on a task of its own, unless the bound on searches being
-  /// answered at once is reached, when the request is dropped.
+  /// Answers another user's search on a task of its own.
   pub(crate) fn respond_to_search(&self, username: String, token: u32, query: String) {
-    let Some(permit) = self.responding(&username, token) else {
-      return;
-    };
     let client = self.clone();
     let span = tracing::debug_span!("search_request", username, token);
     tokio::spawn(
       async move {
-        let _permit = permit;
         client.try_respond(&username, token, &query).await;
       }
       .instrument(span),
@@ -226,9 +196,6 @@ impl Client {
     token: u32,
     query: &str,
   ) {
-    let Some(_permit) = self.responding(username, token) else {
-      return;
-    };
     if let Some(reply) = self.resolve_search(username, token, query).await {
       self
         .deliver(conn, username, token, query, Arc::new(reply))

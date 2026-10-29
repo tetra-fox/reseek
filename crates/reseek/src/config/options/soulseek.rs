@@ -291,8 +291,6 @@ pub struct SoulseekLimits {
   pub max_concurrent_peer_connects: u32,
   /// Maximum number of message connections to other users kept open.
   pub max_cached_peer_connections: u32,
-  /// Maximum number of searches from the distributed network answered at once.
-  pub max_concurrent_search_responses: u32,
   /// Maximum number of search responses held for searchers that cannot be reached yet.
   pub search_response_cache_size: u32,
   /// Maximum number of user addresses remembered between connections.
@@ -309,7 +307,6 @@ impl Default for SoulseekLimits {
       max_message_size: bytesize::ByteSize::mib(256),
       max_concurrent_peer_connects: 50,
       max_cached_peer_connections: 1000,
-      max_concurrent_search_responses: 20,
       search_response_cache_size: 1000,
       user_endpoint_cache_size: 10_000,
       distributed_parent_negotiation_timeout: Duration::from_secs(5),

@@ -235,8 +235,6 @@ pub struct ClientLimits {
   pub max_concurrent_peer_connects: u32,
   /// peer message connections kept open at once
   pub max_cached_peer_connections: u32,
-  /// searches from other users we answer at once
-  pub max_concurrent_search_responses: u32,
   /// undelivered search responses kept for a late connection from the searcher
   pub search_response_cache_size: u32,
   /// user addresses remembered between connects
@@ -251,7 +249,6 @@ impl Default for ClientLimits {
       max_message_size: 256 << 20,
       max_concurrent_peer_connects: 50,
       max_cached_peer_connections: 1000,
-      max_concurrent_search_responses: 20,
       search_response_cache_size: 1000,
       user_endpoint_cache_size: 10_000,
       distributed_parent_negotiation_timeout: Duration::from_secs(5),
@@ -283,10 +280,6 @@ impl ClientLimits {
     at_least_one(
       "limits.max_cached_peer_connections",
       self.max_cached_peer_connections,
-    )?;
-    at_least_one(
-      "limits.max_concurrent_search_responses",
-      self.max_concurrent_search_responses,
     )?;
     at_least_one(
       "limits.search_response_cache_size",

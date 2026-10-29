@@ -232,7 +232,7 @@ pub struct IncomingSearchThrottling {
   )]
   pub concurrency: u32,
   /// Maximum number of incoming searches waiting to be answered. Further searches are
-  /// dropped.
+  /// dropped and counted as dropped searches.
   #[cascade(
     env = "RESEEK_THROTTLING_SEARCH_INCOMING_CIRCUIT_BREAKER",
     cli = "--throttling-search-incoming-circuit-breaker"

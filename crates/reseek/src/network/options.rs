@@ -80,7 +80,6 @@ pub fn client_options(options: &Options) -> Result<ClientOptions, String> {
         .map_err(|_| "soulseek.limits.max_message_size: more than 4 GiB".to_string())?,
       max_concurrent_peer_connects: limits.max_concurrent_peer_connects,
       max_cached_peer_connections: limits.max_cached_peer_connections,
-      max_concurrent_search_responses: limits.max_concurrent_search_responses,
       search_response_cache_size: limits.search_response_cache_size,
       user_endpoint_cache_size: limits.user_endpoint_cache_size,
       distributed_parent_negotiation_timeout: limits.distributed_parent_negotiation_timeout,

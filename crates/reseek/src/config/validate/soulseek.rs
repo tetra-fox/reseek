@@ -158,10 +158,6 @@ fn check_limits(soulseek: &Soulseek, report: &mut Report) {
       limits.max_cached_peer_connections,
     ),
     (
-      "soulseek.limits.max_concurrent_search_responses",
-      limits.max_concurrent_search_responses,
-    ),
-    (
       "soulseek.limits.search_response_cache_size",
       limits.search_response_cache_size,
     ),
