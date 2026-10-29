@@ -1,3 +1,12 @@
+<script lang="ts" module>
+  /**
+   * The width of a first column holding a tick, for a tree whose folder lines start with one too:
+   * the tick and the gap after it, so an item's cells after it line up under what follows the
+   * tick on a folder line
+   */
+  export const TICK_COLUMN = "1.375rem";
+</script>
+
 <script lang="ts" generics="T">
   import type { Snippet } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
@@ -7,6 +16,7 @@
   import { ListControl } from "#lib/list.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import type { FolderNode, TreeLine } from "#lib/tree/folders.js";
+  import { viewport } from "#lib/viewport.svelte.js";
 
   import TreeToggle from "./TreeToggle.svelte";
 
@@ -40,11 +50,11 @@
     /** a folder line after its toggle: its name, counts, actions */
     folder: Snippet<[FolderNode<T>, number]>;
     /**
-     * An item line's cells, each a `gridcell`, its depth as `--depth` on the row for the first
-     * cell's indent
+     * An item line's cells, each a `gridcell`, set in so the first starts where the content after
+     * a folder's toggle does at the same depth
      */
     item: Snippet<[T, number]>;
-    /** the column headers over the item rows */
+    /** the column headers over the item rows, each a `columnheader`, set in as a top item is */
     header?: Snippet;
     /** lines drawn before a "Show all", so a folder of thousands doesn't stall the page */
     cap?: number;
@@ -75,6 +85,14 @@
   let more = $state(0);
   const shown = $derived(all ? lines : lines.slice(0, cap + more));
   const hidden = $derived(lines.length - shown.length);
+
+  /**
+   * How far a line at `depth` is set in: a step a level, a phone's shorter so a deep name keeps
+   * its room. An item also passes the room of the toggle and the gap after it that start a folder
+   * line, so an item's cells line up under the content of a folder line at its depth
+   */
+  const inset = (depth: number, kind: "folder" | "item") =>
+    `calc(${depth} * ${viewport.phone ? 0.75 : 1.25}rem + 0.5rem${kind === "item" ? " + 1.625rem" : ""})`;
 
   /** the ids of every item in a folder and the folders below it */
   const under = (node: FolderNode<T>): string[] => [
@@ -124,7 +142,15 @@
   tabindex="0"
   {@attach list.attach}
   {@attach freezesWhileUsed}>
-  {#if header}{@render header()}{/if}
+  {#if header}
+    <div
+      role="row"
+      class="grid min-w-max items-center border-b bg-surface-muted py-1.5 text-xs font-medium text-fg-muted"
+      style:grid-template-columns={columns}
+      style:padding-left={inset(0, "item")}>
+      {@render header()}
+    </div>
+  {/if}
   {#each shown as line, i (line.key)}
     {#if line.kind === "folder"}
       <div
@@ -139,7 +165,7 @@
         ]}
         aria-level={line.depth + 1}
         aria-expanded={expansion.isOpen(line.node.path)}
-        style:padding-left={`calc(${line.depth} * 1.25rem + 0.5rem)`}>
+        style:padding-left={inset(line.depth, "folder")}>
         <div role="gridcell" class="flex min-w-0 flex-1 items-center gap-1.5">
           <TreeToggle
             {expansion}
@@ -161,7 +187,7 @@
         ]}
         aria-level={line.depth + 1}
         style:grid-template-columns={columns}
-        style:--depth={line.depth}
+        style:padding-left={inset(line.depth, "item")}
         onmousedown={(e) => {
           // the middle button scrolls the page by dragging, unless kept from it
           if (e.button === 1 && onmiddleclick) e.preventDefault();
