@@ -1,3 +1,5 @@
+import { curveMonotoneX } from "d3-shape";
+
 import { formatBytes, formatSpeed, formatWait } from "#lib/format.js";
 
 /** What a series measures, which decides how its values read */
@@ -15,6 +17,12 @@ export const timeLabel = (min: number, max: number) => {
   const years = new Date(min).getFullYear() !== new Date(max).getFullYear();
   return (t: number) => (years ? DATE_YEAR : DATE).format(t);
 };
+
+/**
+ * How every line and area chart joins its points: a smooth curve through each one that never
+ * overshoots them, so a rate never dips below 0 or rises past its peak between two points
+ */
+export const chartCurve = curveMonotoneX;
 
 /** The size of a chart's axis labels, in rem */
 const LABEL_REM = 0.6875;

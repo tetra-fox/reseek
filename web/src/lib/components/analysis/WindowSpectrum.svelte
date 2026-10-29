@@ -5,7 +5,7 @@
   import { axisTicks, binHz, type Curve, formatHz, heightOn } from "#lib/analysis/frequency.js";
   import type { Scope } from "#lib/analysis/scope.svelte.js";
   import { formatTime } from "#lib/analysis/timeview.js";
-  import { tickLabel } from "#lib/dashboard/chart.js";
+  import { chartCurve, tickLabel } from "#lib/dashboard/chart.js";
 
   // the spectrum of the window the cursor is in on LayerChart: level against frequency, on the
   // frequency axis the spectrogram uses, moving with it. Every window's spectrum loads with the
@@ -75,7 +75,7 @@
                 style={tickLabel.style}>{formatHz(tick.hz)}</text>
             </g>
           {/each}
-          <Spline class="stroke-accent" strokeWidth={1.5} />
+          <Spline class="stroke-accent" strokeWidth={1.5} curve={chartCurve} />
         </Svg>
       </Chart>
     </div>

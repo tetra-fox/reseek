@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Area, Chart, Svg } from "layerchart";
 
+  import { chartCurve } from "#lib/dashboard/chart.js";
   import { SPARKLINE_WIDTH } from "#lib/transfers/columns.js";
 
   // the last speeds a transfer reported, as a small area on LayerChart, still and without axes;
@@ -22,6 +23,7 @@
         <Area
           fill="var(--color-accent)"
           fillOpacity={0.2}
+          curve={chartCurve}
           line={{ stroke: "var(--color-accent)", strokeWidth: 1.25 }} />
       </Svg>
     </Chart>
