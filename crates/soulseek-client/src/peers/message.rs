@@ -1,8 +1,9 @@
 //! Message connections to other users: the one we open, which dials the user and asks the server
-//! to have the user dial us at the same time; one a user opens to us directly, which replaces
-//! whatever we had; and one we open because a user asked the server to have us connect. A
-//! replaced connection is not closed: what is queued on it is still written and what the user
-//! sends on it is still read and answered, until it goes idle or the user closes it.
+//! to have the user dial us at the same time; one a user opens to us, introducing itself or
+//! answering our request late, which replaces whatever we had; and one we open because a user
+//! asked the server to have us connect. A replaced connection is not closed: what is queued on it
+//! is still written and what the user sends on it is still read and answered, until it goes idle
+//! or the user closes it.
 
 use std::net::SocketAddr;
 
@@ -180,13 +181,15 @@ impl Client {
     Ok(conn)
   }
 
-  /// A peer connected to us directly for messages. Its connection replaces whatever we had for
-  /// that user, since the peer considers this one current, and takes our writes from now on;
-  /// the one it replaces stays open until it goes idle.
+  /// A peer connected to us for messages, introducing itself or answering a connection
+  /// request of ours. Its connection replaces whatever we had for that user, since the peer
+  /// considers this one current, and takes our writes from now on; the one it replaces stays
+  /// open until it goes idle. `kind` says how it was made.
   pub(crate) fn add_or_update_message_connection(
     &self,
     username: &str,
     provisional: Conn,
+    kind: ConnKind,
   ) -> Result<(), ClientError> {
     self.check_not_disposed()?;
     let remote = provisional.handle().remote();
@@ -196,7 +199,7 @@ impl Client {
         Conn::from_handoff(
           stream,
           Some(username.to_owned()),
-          ConnKind::INBOUND | ConnKind::DIRECT,
+          kind,
           self.options().peer_connection_options.clone(),
         )
       })
@@ -230,10 +233,11 @@ impl Client {
       Some(old) => tracing::debug!(
         username,
         %remote,
+        ?kind,
         replaced = %old.handle().remote(),
         "message connection replaced"
       ),
-      None => tracing::debug!(username, %remote, "inbound message connection"),
+      None => tracing::debug!(username, %remote, ?kind, "inbound message connection"),
     }
     Ok(())
   }

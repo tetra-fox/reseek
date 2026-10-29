@@ -12,7 +12,7 @@ mod transfer;
 
 pub use dispatch::IncomingBrowse;
 pub(crate) use message::request_endpoint;
-pub(crate) use solicit::{Solicitations, Via, both_failed, race};
+pub(crate) use solicit::{Answer, Solicitation, Solicitations, Via, both_failed, race};
 
 use std::collections::HashMap;
 use std::net::SocketAddr;

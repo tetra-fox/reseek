@@ -1,8 +1,9 @@
 //! Reaching a peer two ways at once: dialling it directly, and asking the server to have it dial
 //! us (a solicitation, answered by a connection that opens with `PierceFirewall` and the
-//! solicitation's token). Whichever connects first is kept; the other is dropped. When a peer
-//! asks the server for us instead, we dial it and open with `PierceFirewall` and the token of
-//! its request.
+//! solicitation's token). Whichever connects first is kept; the other is dropped. A peer may
+//! still answer a solicitation after dialling won, within the time the solicitation would have
+//! been waited for, so its token stays known until then. When a peer asks the server for us
+//! instead, we dial it and open with `PierceFirewall` and the token of its request.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -13,6 +14,7 @@ use std::time::Duration;
 use soulseek_proto::init::{PeerInit, PierceFirewall};
 use soulseek_proto::server::ConnectToPeerRequest;
 use soulseek_proto::{InitMessage, PeerConnectionType, ServerRequest};
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
 use super::lock;
@@ -26,32 +28,71 @@ use crate::waiter::WaitKey;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Solicitation {
   pub(crate) username: String,
-  /// a distributed connection; otherwise a message or transfer connection
-  pub(crate) distributed: bool,
+  /// what the connection is for
+  pub(crate) connection_type: PeerConnectionType,
 }
 
 impl Solicitation {
   /// the wait the answering connection completes
   pub(crate) fn key(&self, token: u32) -> WaitKey {
     let username = self.username.clone();
-    if self.distributed {
-      WaitKey::SolicitedDistributedConnection { username, token }
-    } else {
-      WaitKey::SolicitedPeerConnection { username, token }
+    match self.connection_type {
+      PeerConnectionType::Distributed => {
+        WaitKey::SolicitedDistributedConnection { username, token }
+      }
+      PeerConnectionType::Peer | PeerConnectionType::Transfer => {
+        WaitKey::SolicitedPeerConnection { username, token }
+      }
     }
   }
 }
 
-/// The solicitations still waiting, by token
+/// Whether a connection answering a solicitation is still awaited
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Answer {
+  /// the solicitor still waits for it
+  Awaited,
+  /// the solicitor stopped waiting, usually because dialling the user directly won, but the
+  /// user acted on the relayed request within the time the solicitor would have waited
+  Late,
+}
+
+struct Entry {
+  solicitation: Solicitation,
+  awaited: bool,
+  /// when the solicitor would have given up waiting; an answer after this is unknown
+  answerable_until: Instant,
+}
+
+/// The solicitations still waiting, and those the solicitor stopped waiting for whose answer
+/// may still arrive, by token
 #[derive(Default)]
 pub(crate) struct Solicitations {
-  pending: Mutex<HashMap<u32, Solicitation>>,
+  pending: Mutex<HashMap<u32, Entry>>,
 }
 
 impl Solicitations {
-  /// the solicitation `token` belongs to
-  pub(crate) fn get(&self, token: u32) -> Option<Solicitation> {
-    lock(&self.pending).get(&token).cloned()
+  /// Forgets the solicitation `token` belongs to, which the user said it cannot answer, and
+  /// returns it while its answer was still awaited
+  pub(crate) fn refused(&self, token: u32) -> Option<Solicitation> {
+    let entry = lock(&self.pending).remove(&token)?;
+    entry.awaited.then_some(entry.solicitation)
+  }
+
+  /// Takes the solicitation a connection answering `token` belongs to, and whether the
+  /// solicitor still waits for it. A token answered once, or past the time its solicitor would
+  /// have waited, is unknown.
+  pub(crate) fn take(&self, token: u32) -> Option<(Solicitation, Answer)> {
+    let entry = lock(&self.pending).remove(&token)?;
+    if entry.answerable_until <= Instant::now() {
+      return None;
+    }
+    let answer = if entry.awaited {
+      Answer::Awaited
+    } else {
+      Answer::Late
+    };
+    Some((entry.solicitation, answer))
   }
 
   /// forgets every solicitation, for when the server session that relayed them ends
@@ -65,8 +106,20 @@ impl Solicitations {
     }
   }
 
-  fn insert(&self, token: u32, solicitation: Solicitation) -> Pending<'_> {
-    lock(&self.pending).insert(token, solicitation);
+  /// Records a solicitation whose answer is awaited for `timeout`. Solicitations whose time is
+  /// up leave the table here.
+  fn insert(&self, token: u32, solicitation: Solicitation, timeout: Duration) -> Pending<'_> {
+    let now = Instant::now();
+    let mut pending = lock(&self.pending);
+    pending.retain(|_, entry| entry.awaited || entry.answerable_until > now);
+    pending.insert(
+      token,
+      Entry {
+        solicitation,
+        awaited: true,
+        answerable_until: now + timeout,
+      },
+    );
     Pending {
       solicitations: self,
       token,
@@ -74,7 +127,9 @@ impl Solicitations {
   }
 }
 
-/// removes a solicitation from the table however the wait for it ends
+/// Ends the wait for a solicitation however the wait ends. A solicitation that was not answered
+/// stays known until its solicitor would have given up, so a user acting on the relayed request
+/// after the solicitor stopped waiting is still recognised.
 struct Pending<'a> {
   solicitations: &'a Solicitations,
   token: u32,
@@ -82,7 +137,15 @@ struct Pending<'a> {
 
 impl Drop for Pending<'_> {
   fn drop(&mut self) {
-    lock(&self.solicitations.pending).remove(&self.token);
+    let mut pending = lock(&self.solicitations.pending);
+    let Some(entry) = pending.get_mut(&self.token) else {
+      return;
+    };
+    if entry.answerable_until <= Instant::now() {
+      pending.remove(&self.token);
+    } else {
+      entry.awaited = false;
+    }
   }
 }
 
@@ -212,10 +275,13 @@ impl Client {
   ) -> Result<Conn, ClientError> {
     let solicitation = Solicitation {
       username: username.to_owned(),
-      distributed: connection_type == PeerConnectionType::Distributed,
+      connection_type,
     };
     let key = solicitation.key(token);
-    let _pending = self.peers().solicitations.insert(token, solicitation);
+    let _pending = self
+      .peers()
+      .solicitations
+      .insert(token, solicitation, timeout);
     let pierced = self
       .waiter()
       .wait::<Conn>(key, Some(timeout), cancel.clone());
@@ -298,18 +364,62 @@ mod tests {
     assert_eq!(result.unwrap().1, Via::Indirect);
   }
 
-  #[test]
-  fn a_solicitation_leaves_the_table_when_its_wait_ends() {
+  fn bob(connection_type: PeerConnectionType) -> Solicitation {
+    Solicitation {
+      username: "bob".into(),
+      connection_type,
+    }
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn an_unanswered_solicitation_is_known_late_until_its_time_is_up() {
     let solicitations = Solicitations::default();
-    let pending = solicitations.insert(
-      7,
-      Solicitation {
-        username: "bob".into(),
-        distributed: false,
-      },
+    let timeout = Duration::from_secs(10);
+    drop(solicitations.insert(7, bob(PeerConnectionType::Peer), timeout));
+    tokio::time::advance(Duration::from_secs(9)).await;
+    assert_eq!(
+      solicitations.take(7),
+      Some((bob(PeerConnectionType::Peer), Answer::Late))
     );
-    assert!(solicitations.get(7).is_some());
+    // answered once, it is unknown to a second answer
+    assert_eq!(solicitations.take(7), None);
+
+    drop(solicitations.insert(8, bob(PeerConnectionType::Transfer), timeout));
+    tokio::time::advance(timeout).await;
+    assert_eq!(solicitations.take(8), None);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_solicitation_is_awaited_while_its_wait_lasts() {
+    let solicitations = Solicitations::default();
+    let pending = solicitations.insert(7, bob(PeerConnectionType::Peer), Duration::from_secs(10));
+    assert_eq!(
+      solicitations.take(7),
+      Some((bob(PeerConnectionType::Peer), Answer::Awaited))
+    );
+    // the answer took it, so the end of the wait leaves nothing behind
     drop(pending);
-    assert!(solicitations.get(7).is_none());
+    assert_eq!(solicitations.take(7), None);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_refused_solicitation_is_not_answered_late() {
+    let solicitations = Solicitations::default();
+    let pending = solicitations.insert(7, bob(PeerConnectionType::Peer), Duration::from_secs(10));
+    assert_eq!(
+      solicitations.refused(7),
+      Some(bob(PeerConnectionType::Peer))
+    );
+    drop(pending);
+    assert_eq!(solicitations.take(7), None);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn solicitations_past_their_time_leave_the_table() {
+    let solicitations = Solicitations::default();
+    drop(solicitations.insert(1, bob(PeerConnectionType::Peer), Duration::from_secs(1)));
+    tokio::time::advance(Duration::from_secs(2)).await;
+    let _waiting = solicitations.insert(2, bob(PeerConnectionType::Peer), Duration::from_secs(1));
+    assert!(!lock(&solicitations.pending).contains_key(&1));
   }
 }

@@ -470,7 +470,7 @@ impl Client {
 
   /// A peer could not act on a connection request we had the server relay. A search answer
   /// kept under that token is given up, and a solicitation still waiting fails at once rather
-  /// than at its timeout.
+  /// than at its timeout; a connection answering it afterwards is unknown.
   fn cannot_connect(&self, failure: &CannotConnectResponse) {
     let token = failure.token;
     if let Some(username) = &failure.username {
@@ -483,7 +483,7 @@ impl Client {
     let solicited = self
       .peers()
       .solicitations
-      .get(token)
+      .refused(token)
       .is_some_and(|solicitation| {
         self.waiter().fault(
           &solicitation.key(token),
