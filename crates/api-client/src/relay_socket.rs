@@ -1,5 +1,5 @@
-//! The relay socket an agent keeps open to its controller, opened with the client's API key and
-//! the relay protocol. It carries one [`RelayEnvelope`] per text frame.
+//! The relay socket an agent keeps open to its controller, opened with the client's API key or
+//! token and the relay protocol. It carries one [`RelayEnvelope`] per text frame.
 
 use api_types::relay::{RELAY_SUBPROTOCOL, RelayEnvelope};
 use futures_util::{SinkExt, StreamExt};
