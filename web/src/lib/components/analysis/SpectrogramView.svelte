@@ -87,6 +87,19 @@
   $effect(() => () => clearTimeout(hintTimer));
 
   const all = $derived(showsAll(scope.view, scope.duration));
+  /** the mouse and keyboard controls, shown under the graph; the drawer zooms on Ctrl+scroll */
+  const controls = $derived([
+    ["Click", "place the cursor"],
+    ["Drag line", "move the cursor"],
+    ["Drag", "pan"],
+    [large ? "Scroll" : "Ctrl+scroll", "zoom"],
+    ["Shift+scroll", "pan"],
+    ["+ / −", "zoom"],
+    ["← / →", "step a window"],
+    ["Shift+← / →", "step ten"],
+    ["Home / End", "first / last"],
+    ...(canPlay ? [["Space", "play / pause"]] : [])
+  ]);
   const deepest = $derived(scope.view.span <= Math.min(MIN_SPAN, scope.duration) + 1e-9);
 </script>
 
@@ -203,13 +216,23 @@
   </div>
   <WindowSpectrum {scope} curve={motion.curve} />
   <div class={["flex flex-col gap-2", large && "xl:col-span-2"]}>
-    <p class="text-xs text-fg-muted">
-      Drag the line or click to move the cursor; the arrow keys step it a window at a time, with
-      Shift ten. The lines mark where common encoder settings cut off by default; other encoders and
-      settings cut elsewhere.{layout.sampled
-        ? ` The file is long, so ${scope.starts.length} one-second samples spread over its ${formatDuration(layout.durationSeconds)} were analyzed; the hatched stretches between them were not read.`
-        : ""}
-    </p>
+    <dl
+      class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted"
+      aria-label="Mouse and keyboard">
+      {#each controls as [keys, action] (keys)}
+        <div class="flex items-center gap-1">
+          <dt><kbd class="rounded-badge border px-1 font-sans">{keys}</kbd></dt>
+          <dd>{action}</dd>
+        </div>
+      {/each}
+    </dl>
+    {#if layout.sampled}
+      <p class="text-xs text-fg-muted">
+        The file is long, so {scope.starts.length} one-second samples spread over its {formatDuration(
+          layout.durationSeconds
+        )} were analyzed; the hatched stretches between them were not read.
+      </p>
+    {/if}
     <p
       class="rounded-control border border-warning/40 bg-warning-soft p-2 text-sm text-warning-soft-fg">
       {DISCLAIMER}
