@@ -459,7 +459,7 @@ pub fn main() -> ExitCode {
     Command::Run(invocation) => {
       let supervised = invocation
         .supervised
-        .unwrap_or_else(|| restart::supervised_by_default());
+        .unwrap_or_else(restart::supervised_by_default);
       let code = run(invocation);
       if code == EXIT_RESTART && !supervised {
         return ExitCode::from(restart::start_again());
