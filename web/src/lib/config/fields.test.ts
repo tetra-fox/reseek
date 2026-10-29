@@ -122,7 +122,7 @@ describe("editability", () => {
     expect(editability(view, "soulseek.description")).toEqual({ mode: "save", notice: null });
     expect(editability(view, "web.port")).toEqual({
       mode: "save",
-      notice: "Needs a restart to take effect"
+      notice: "Requires a restart to take effect"
     });
   });
 
@@ -154,7 +154,8 @@ describe("editability", () => {
     v.files[0].readOnlyReason = "permission denied";
     expect(editability(v, "soulseek.description")).toEqual({
       mode: "runtime",
-      notice: "config.toml isn't writable (permission denied). Changes apply now but won't persist."
+      notice:
+        "config.toml is not writable (permission denied). Changes apply immediately but do not persist."
     });
   });
 });

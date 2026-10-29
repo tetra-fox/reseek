@@ -105,20 +105,24 @@ export const sections: Section[] = [
       { key: "soulseek.picture", label: "Profile picture" },
       { key: "soulseek.listen_ip_address", label: "Listen address" },
       { key: "soulseek.listen_port", label: "Listen port", min: 1024, max: 65535 },
-      { key: "soulseek.port_mapping", label: "Ask the router to forward the port" },
+      { key: "soulseek.port_mapping", label: "Port mapping" },
       { key: "rooms", label: "Rooms to join" },
       {
         key: "soulseek.diagnostic_level",
         label: "Protocol diagnostics"
       },
-      { key: "soulseek.distributed_network.disabled", label: "Leave the distributed network" },
-      { key: "soulseek.distributed_network.disable_children", label: "Refuse children" },
-      { key: "soulseek.distributed_network.child_limit", label: "Most children", ...AT_LEAST_1 },
+      { key: "soulseek.distributed_network.disabled", label: "Disable distributed network" },
+      { key: "soulseek.distributed_network.disable_children", label: "Refuse child connections" },
+      {
+        key: "soulseek.distributed_network.child_limit",
+        label: "Maximum child connections",
+        ...AT_LEAST_1
+      },
       { key: "soulseek.distributed_network.logging", label: "Distributed network diagnostics" },
       { key: "soulseek.connection.timeout.connect", label: "Connect timeout" },
       { key: "soulseek.connection.timeout.inactivity", label: "Idle timeout" },
       { key: "soulseek.connection.timeout.transfer", label: "Transfer stall timeout" },
-      { key: "soulseek.connection.timeout.transfer_response", label: "Transfer answer timeout" },
+      { key: "soulseek.connection.timeout.transfer_response", label: "Transfer response timeout" },
       { key: "soulseek.connection.buffer.read", label: "Read buffer (bytes)", min: 1024 },
       { key: "soulseek.connection.buffer.write", label: "Write buffer (bytes)", min: 1024 },
       { key: "soulseek.connection.buffer.transfer", label: "Transfer buffer (bytes)", min: 81920 },
@@ -128,7 +132,7 @@ export const sections: Section[] = [
         label: "Server connection MTU",
         min: 576,
         max: 65535,
-        placeholder: "the system's"
+        placeholder: "system default"
       },
       { key: "soulseek.connection.proxy.enabled", label: "SOCKS5 proxy" },
       ...(["address", "port", "username", "password"] as const).map((part): Field => ({
@@ -145,30 +149,30 @@ export const sections: Section[] = [
         ...(part === "probes" ? AT_LEAST_1 : {}),
         enabledWhen: { key: "soulseek.server_keepalive.enabled", values: [true] }
       })),
-      { key: "soulseek.limits.max_message_size", label: "Largest peer message" },
+      { key: "soulseek.limits.max_message_size", label: "Maximum peer message size" },
       {
         key: "soulseek.limits.max_concurrent_peer_connects",
-        label: "Peer connections opening at once",
+        label: "Concurrent peer connection attempts",
         ...AT_LEAST_1
       },
       {
         key: "soulseek.limits.max_cached_peer_connections",
-        label: "Peer connections kept",
+        label: "Cached peer connections",
         ...AT_LEAST_1
       },
       {
         key: "soulseek.limits.max_concurrent_search_responses",
-        label: "Distributed searches answered at once",
+        label: "Concurrent distributed search responses",
         ...AT_LEAST_1
       },
       {
         key: "soulseek.limits.search_response_cache_size",
-        label: "Search responses kept",
+        label: "Cached search responses",
         ...AT_LEAST_1
       },
       {
         key: "soulseek.limits.user_endpoint_cache_size",
-        label: "User addresses remembered",
+        label: "Cached user addresses",
         ...AT_LEAST_1
       },
       {
@@ -194,12 +198,12 @@ export const sections: Section[] = [
         }
       },
       { key: "shares.share_downloads", label: "Share the downloads folder" },
-      { key: "shares.filters", label: "Files not shared", control: "regex-list" },
-      { key: "shares.follow_symlinks", label: "Follow links" },
-      { key: "shares.cache.retention", label: "Scan again every", placeholder: "never" },
+      { key: "shares.filters", label: "Excluded files", control: "regex-list" },
+      { key: "shares.follow_symlinks", label: "Follow symbolic links" },
+      { key: "shares.cache.retention", label: "Rescan interval", placeholder: "never" },
       {
         key: "shares.cache.storage_mode",
-        label: "Share index"
+        label: "Share index storage"
       },
       { key: "shares.cache.workers", label: "Scan workers", min: 1, max: 128 }
     ]
@@ -233,27 +237,27 @@ export const sections: Section[] = [
         label: "Download request style"
       },
       { key: "transfers.download.retry.attempts", label: "Download attempts", ...AT_LEAST_1 },
-      { key: "transfers.download.retry.delay", label: "First retry after" },
-      { key: "transfers.download.retry.max_delay", label: "Longest retry wait" },
+      { key: "transfers.download.retry.delay", label: "First retry delay" },
+      { key: "transfers.download.retry.max_delay", label: "Maximum retry delay" },
       {
         key: "transfers.download.retry.partial",
         label: "Partial file on retry"
       },
       {
         key: "transfers.download.destination.subdirectory",
-        label: "Save under",
+        label: "Download subdirectory",
         placeholder: "${SOURCE_DIRECTORY}"
       },
       {
         key: "transfers.download.destination.exists",
-        label: "When the file exists"
+        label: "If the file exists"
       },
       {
         key: "transfers.download.destination.permissions.mode",
         label: "File mode",
-        placeholder: "the system's"
+        placeholder: "system default"
       },
-      { key: "transfers.ui.queue_refresh", label: "Refresh queue positions every" }
+      { key: "transfers.ui.queue_refresh", label: "Queue position refresh interval" }
     ]
   },
   {
@@ -264,12 +268,12 @@ export const sections: Section[] = [
       ...groupUpload("transfers.groups.leechers", "Leechers"),
       {
         key: "transfers.groups.leechers.thresholds.files",
-        label: "Leechers: fewest shared files",
+        label: "Leechers: minimum shared files",
         ...AT_LEAST_1
       },
       {
         key: "transfers.groups.leechers.thresholds.directories",
-        label: "Leechers: fewest shared folders",
+        label: "Leechers: minimum shared folders",
         ...AT_LEAST_1
       },
       { key: "transfers.groups.blacklisted.members", label: "Blocked users" },
@@ -283,11 +287,11 @@ export const sections: Section[] = [
         label: "Blocked networks",
         control: "cidr-list"
       },
-      { key: "transfers.groups.user_defined", label: "Your groups" },
-      { key: "blacklist.enabled", label: "Blocklist file" },
+      { key: "transfers.groups.user_defined", label: "User-defined groups" },
+      { key: "blacklist.enabled", label: "Address blocklist" },
       {
         key: "blacklist.file",
-        label: "Blocklist path",
+        label: "Blocklist file",
         enabledWhen: { key: "blacklist.enabled", values: [true] }
       }
     ]
@@ -313,19 +317,19 @@ export const sections: Section[] = [
     title: "Web",
     fields: [
       { key: "web.port", label: "HTTP port", ...PORT },
-      { key: "web.ip_address", label: "HTTP addresses", placeholder: "every address" },
+      { key: "web.ip_address", label: "HTTP addresses", placeholder: "all addresses" },
       { key: "web.socket", label: "Unix socket" },
       { key: "web.url_base", label: "URL base" },
-      { key: "web.external_url", label: "Public URL", placeholder: "from each request" },
+      { key: "web.external_url", label: "Public URL", placeholder: "derived from each request" },
       { key: "web.hostnames", label: "Host names" },
       { key: "web.trusted_proxies", label: "Trusted proxies", control: "cidr-list" },
-      { key: "web.ui", label: "Serve the web UI" },
-      { key: "web.content_path", label: "UI directory", placeholder: "the built-in UI" },
+      { key: "web.ui", label: "Web UI" },
+      { key: "web.content_path", label: "UI directory", placeholder: "built-in UI" },
       { key: "web.cors.allowed_origins", label: "Allowed origins" },
-      { key: "web.logging", label: "Log every request" },
-      { key: "web.https.disabled", label: "No HTTPS" },
+      { key: "web.logging", label: "Request logging" },
+      { key: "web.https.disabled", label: "Disable HTTPS" },
       { key: "web.https.port", label: "HTTPS port", ...PORT },
-      { key: "web.https.ip_address", label: "HTTPS addresses", placeholder: "every address" },
+      { key: "web.https.ip_address", label: "HTTPS addresses", placeholder: "all addresses" },
       { key: "web.https.force", label: "Redirect to HTTPS" },
       { key: "web.https.certificate.cert", label: "Certificate (PEM)" },
       { key: "web.https.certificate.key", label: "Private key (PEM)" },
@@ -333,14 +337,14 @@ export const sections: Section[] = [
       { key: "web.https.certificate.password", label: "PKCS#12 password", control: "secret" },
       { key: "web.live.max_streams_per_principal", label: "Event streams per user", ...AT_LEAST_1 },
       { key: "web.files.serve", label: "Serve downloaded files" },
-      { key: "web.files.archive_max_bytes", label: "Largest zip of a folder" },
+      { key: "web.files.archive_max_bytes", label: "Maximum folder zip size" },
       {
         key: "web.files.serve_speed_limit",
-        label: "Serving speed limit (KiB/s)",
+        label: "File serving speed limit (KiB/s)",
         ...AT_LEAST_1,
         placeholder: NO_LIMIT
       },
-      { key: "feature.swagger", label: "Serve the API browser" }
+      { key: "feature.swagger", label: "API browser" }
     ]
   },
   {
@@ -356,9 +360,9 @@ export const sections: Section[] = [
         label: "Password login from",
         control: "cidr-list"
       },
-      { key: "web.authentication.local.users", label: "More accounts" },
-      { key: "web.authentication.session_ttl", label: "Sessions last" },
-      { key: "web.authentication.session_idle", label: "Unused sessions end after" },
+      { key: "web.authentication.local.users", label: "Additional accounts" },
+      { key: "web.authentication.session_ttl", label: "Session lifetime" },
+      { key: "web.authentication.session_idle", label: "Session idle timeout" },
       {
         key: "web.authentication.trusted_networks",
         label: "Trusted networks",
@@ -368,9 +372,9 @@ export const sections: Section[] = [
         key: "web.authentication.trusted_role",
         label: "Trusted network role"
       },
-      { key: "web.authentication.disabled", label: "No authentication" },
+      { key: "web.authentication.disabled", label: "Disable authentication" },
       { key: "web.authentication.oidc", label: "OpenID Connect providers" },
-      { key: "web.authentication.proxy.enabled", label: "Proxy identity" },
+      { key: "web.authentication.proxy.enabled", label: "Proxy authentication" },
       ...(["user_header", "email_header", "groups_header"] as const).map((part): Field => ({
         key: `web.authentication.proxy.${part}`,
         label: `Proxy ${part.replace("_", " ")}`,
@@ -388,7 +392,7 @@ export const sections: Section[] = [
       })),
       {
         key: "web.authentication.proxy.role_mapping.default",
-        label: "Proxy users in no group",
+        label: "Proxy default role",
         enabledWhen: { key: "web.authentication.proxy.enabled", values: [true] }
       },
       { key: "web.authentication.api_key", label: "API key", control: "secret" },
@@ -399,7 +403,7 @@ export const sections: Section[] = [
     id: "search-filters",
     title: "Search filters",
     fields: [
-      { key: "filters.search.request", label: "Searches not answered", control: "regex-list" },
+      { key: "filters.search.request", label: "Ignored incoming searches", control: "regex-list" },
       { key: "search.filter_presets", label: "Filter presets" }
     ]
   },
@@ -416,15 +420,15 @@ export const sections: Section[] = [
         placeholder: "kept"
       },
       { key: "retention.files.complete", label: "Downloaded files", placeholder: "kept" },
-      { key: "retention.files.incomplete", label: "Unfinished files", placeholder: "kept" },
+      { key: "retention.files.incomplete", label: "Incomplete files", placeholder: "kept" },
       { key: "retention.events", label: "Events" },
-      { key: "retention.events_max_rows", label: "Most events", min: 0 },
+      { key: "retention.events_max_rows", label: "Maximum events", min: 0 },
       { key: "retention.logs", label: "Log files" },
       { key: "retention.messages.private", label: "Private messages" },
-      { key: "retention.messages.max_per_conversation", label: "Most per conversation", min: 0 },
+      { key: "retention.messages.max_per_conversation", label: "Maximum per conversation", min: 0 },
       { key: "retention.messages.rooms", label: "Room messages" },
-      { key: "retention.messages.mentions", label: "Messages that mention you" },
-      { key: "retention.messages.max_per_room", label: "Most per room", min: 0 },
+      { key: "retention.messages.mentions", label: "Mentions" },
+      { key: "retention.messages.max_per_room", label: "Maximum per room", min: 0 },
       { key: "retention.users", label: "Users not seen" }
     ]
   },
@@ -434,13 +438,13 @@ export const sections: Section[] = [
     fields: [
       {
         key: "throttling.search.incoming.concurrency",
-        label: "Searches answered at once",
+        label: "Concurrent search responses",
         min: 1,
         max: 100
       },
       {
         key: "throttling.search.incoming.circuit_breaker",
-        label: "Searches waiting",
+        label: "Search queue size",
         min: 100,
         max: 10000
       },
@@ -463,11 +467,11 @@ export const sections: Section[] = [
     fields: [
       {
         key: "logging.level",
-        label: "Level"
+        label: "Log level"
       },
-      { key: "logging.targets", label: "Levels by module" },
-      { key: "logger.no_disk", label: "No log files" },
-      { key: "logger.no_color", label: "No color" },
+      { key: "logging.targets", label: "Module log levels" },
+      { key: "logger.no_disk", label: "Disable log files" },
+      { key: "logger.no_color", label: "Disable console color" },
       { key: "logger.loki", label: "Loki URL" }
     ]
   },
@@ -483,7 +487,7 @@ export const sections: Section[] = [
       },
       {
         key: "metrics.authentication.disabled",
-        label: "No credentials",
+        label: "Disable metrics authentication",
         enabledWhen: { key: "metrics.enabled", values: [true] }
       },
       {
@@ -503,19 +507,19 @@ export const sections: Section[] = [
     id: "relay",
     title: "Relay",
     fields: [
-      { key: "relay.enabled", label: "Relay" },
+      { key: "relay.enabled", label: "Relay mode" },
       {
         key: "relay.mode",
-        label: "Mode"
+        label: "Relay role"
       },
       { key: "instance_name", label: "Instance name" },
       { key: "relay.agents", label: "Agents" },
       ...(
         [
-          ["controller_timeouts.file_info", "Wait for a file's details"],
-          ["controller_timeouts.file_ack", "Wait for a file to be acknowledged"],
-          ["controller_timeouts.file_stream", "Wait for a file's bytes"],
-          ["controller_timeouts.sync_deferral", "Wait for a scanning agent's shares"],
+          ["controller_timeouts.file_info", "File info timeout"],
+          ["controller_timeouts.file_ack", "File acknowledgment timeout"],
+          ["controller_timeouts.file_stream", "File stream timeout"],
+          ["controller_timeouts.sync_deferral", "Share sync deferral"],
           ["limits.share_database_max", "Largest share database"]
         ] as const
       ).map(([part, label]): Field => ({
@@ -530,7 +534,7 @@ export const sections: Section[] = [
           ["secret", "Controller secret"],
           ["ignore_certificate_errors", "Accept any certificate"],
           ["downloads", "Fetch finished downloads"],
-          ["downloads_filter", "Only downloads matching"]
+          ["downloads_filter", "Download filter"]
         ] as const
       ).map(([part, label]): Field => ({
         key: `relay.controller.${part}`,
@@ -544,29 +548,29 @@ export const sections: Section[] = [
     id: "flags",
     title: "Flags",
     fields: [
-      { key: "remote_configuration", label: "Change settings from the UI" },
-      { key: "remote_file_management", label: "Delete files from the UI" },
+      { key: "remote_configuration", label: "Remote configuration" },
+      { key: "remote_file_management", label: "Remote file management" },
       { key: "debug", label: "Debug mode" },
       { key: "headless", label: "Headless" },
-      { key: "shutdown_timeout", label: "Shutdown waits" },
+      { key: "shutdown_timeout", label: "Shutdown timeout" },
       ...(
         [
-          ["no_connect", "Don't connect at startup"],
-          ["no_share_scan", "Don't scan shares at startup"],
+          ["no_connect", "Do not connect at startup"],
+          ["no_share_scan", "Skip share scan at startup"],
           ["force_share_scan", "Full share scan at startup"],
-          ["no_version_check", "No version check"],
-          ["no_config_watch", "Don't watch the configuration"],
-          ["config_watch_poll", "Poll the configuration files"],
+          ["no_version_check", "Disable version check"],
+          ["no_config_watch", "Disable configuration watch"],
+          ["config_watch_poll", "Poll configuration files"],
           ["case_sensitive_regex", "Case-sensitive patterns"],
-          ["volatile", "Keep nothing on disk"],
+          ["volatile", "In-memory databases"],
           ["log_sql", "Log SQL"],
           ["log_unobserved_exceptions", "Log background failures"],
           ["experimental", "Experimental features"],
-          ["optimistic_relay_file_info", "Trust agents' listings"],
+          ["optimistic_relay_file_info", "Trust agent share listings"],
           ["force_migrations", "Force migrations"],
           ["legacy_windows_tcp_keepalive", "Legacy Windows keep-alive"],
-          ["no_logo", "No startup banner"],
-          ["no_start", "Check and exit"]
+          ["no_logo", "Hide startup banner"],
+          ["no_start", "Check configuration and exit"]
         ] as const
       ).map(([flag, label]): Field => ({ key: `flags.${flag}`, label }))
     ]

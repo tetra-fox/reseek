@@ -107,7 +107,7 @@ describe("a settings section", () => {
       b.textContent?.includes("Test discovery: home")
     )!;
     button.click();
-    await vi.waitFor(() => expect(auth.textContent).toContain("passed"));
+    await vi.waitFor(() => expect(auth.textContent).toContain("Passed"));
     expect(new URL(fetcher.mock.calls[0][0].url).pathname).toBe("/api/v0/auth/oidc/home/test");
     expect(auth.textContent).toContain("https://id.example/auth");
     vi.unstubAllGlobals();

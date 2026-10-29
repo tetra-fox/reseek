@@ -58,7 +58,7 @@
         id={field.key}
         type="password"
         autocomplete="new-password"
-        placeholder={cleared ? "Cleared when you save" : "New value"}
+        placeholder={cleared ? "Cleared on save" : "New value"}
         aria-describedby={described}
         aria-invalid={invalid || undefined}
         value={draft === kept || cleared ? "" : String(draft)}
