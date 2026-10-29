@@ -1,5 +1,5 @@
 //! `analysis.db`: the newest report of each file, the user's judgement of each file, and the
-//! spectrogram images kept on disk with when each was last viewed.
+//! spectrogram and waveform files kept on disk with when each was last viewed.
 
 use api_types::analysis::{
   AnalysisListQuery, AnalysisMeasures, AnalysisOverride, AnalysisVerdict, AudioAnalysis,
@@ -14,11 +14,14 @@ use super::report::spectrogram_url;
 use crate::db::{self, Database, DbError, Schema};
 
 /// The analysis database's migrations.
-pub static SCHEMA: Schema = db::schema!("analysis", ["0001_initial", "0002_report_format"]);
+pub static SCHEMA: Schema = db::schema!(
+  "analysis",
+  ["0001_initial", "0002_report_format", "0003_spectra"]
+);
 
 /// The shape of the report JSON this version writes. Raise it with any change a stored report
 /// could not be read back through: a report stored in another shape reads as stale.
-pub(super) const REPORT_FORMAT: i64 = 1;
+pub(super) const REPORT_FORMAT: i64 = 2;
 
 /// What a stale report says in place of a reading.
 pub(super) const STALE_SUMMARY: &str =
@@ -33,8 +36,8 @@ pub(super) struct Stored {
   pub size: u64,
   /// when the file had last changed when analysed, as stored
   pub modified: String,
-  /// the name the spectrogram images are kept under
-  pub image: String,
+  /// the name the report's spectrogram and waveform are kept under
+  pub kept: String,
   /// why a report stored in this version's own shape could not be read, so it reads as stale
   pub unreadable: Option<String>,
 }
@@ -50,7 +53,7 @@ pub(super) struct Listed {
 pub(super) struct NewReport<'a> {
   pub report: &'a AudioAnalysis,
   pub modified: &'a str,
-  pub image: &'a str,
+  pub kept: &'a str,
 }
 
 /// A value of one of the API's enums as its JSON spells it, which the database stores.
@@ -167,7 +170,7 @@ fn stale(row: &rusqlite::Row<'_>) -> rusqlite::Result<AudioAnalysis> {
   })
 }
 
-const JUDGED: &str = "SELECT r.report, r.size, r.modified, r.image, j.verdict, j.note, j.by, j.at, \
+const JUDGED: &str = "SELECT r.report, r.size, r.modified, r.spectra, j.verdict, j.note, j.by, j.at, \
                       r.root, r.relative, r.transfer_id, r.path, r.analysed_at, r.verdict, \
                       r.format \
                       FROM reports r LEFT JOIN judgements j ON j.path = r.path";
@@ -189,14 +192,14 @@ pub(super) async fn save(db: &Database, new: NewReport<'_>) -> Result<(), DbErro
     new.report.transfer_id.map(|id| id.to_string()),
     db::timestamp(new.report.analysed_at),
     spelled(&new.report.verdict),
-    new.image.to_string(),
+    new.kept.to_string(),
     json,
   );
   db.write(move |conn| {
     conn.execute(
       "INSERT OR REPLACE INTO reports \
-       (path, root, relative, size, modified, transfer_id, analysed_at, verdict, image, report, \
-       format) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+       (path, root, relative, size, modified, transfer_id, analysed_at, verdict, spectra, \
+       report, format) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
       params![
         row.0,
         row.1,
@@ -229,7 +232,7 @@ pub(super) async fn find(db: &Database, path: &str) -> Result<Option<Stored>, Db
           // written from a u64, so never negative
           size: u64::try_from(row.get::<_, i64>(1)?).unwrap_or_default(),
           modified: row.get(2)?,
-          image: row.get(3)?,
+          kept: row.get(3)?,
         })
       })
       .optional()
@@ -290,8 +293,9 @@ pub(super) async fn unjudge(db: &Database, path: &str) -> Result<bool, DbError> 
     .await
 }
 
-/// Records that the images named `name` take `bytes` and were made or viewed `at`.
-pub(super) async fn used_image(
+/// Records that the spectrogram and waveform file named `name` takes `bytes` and was made or
+/// viewed `at`.
+pub(super) async fn used(
   db: &Database,
   name: &str,
   bytes: Option<u64>,
@@ -302,11 +306,11 @@ pub(super) async fn used_image(
   db.write(move |conn| {
     match bytes {
       Some(bytes) => conn.execute(
-        "INSERT OR REPLACE INTO images (name, bytes, used_at) VALUES (?1, ?2, ?3)",
+        "INSERT OR REPLACE INTO spectra (name, bytes, used_at) VALUES (?1, ?2, ?3)",
         params![name, bytes, at],
       )?,
       None => conn.execute(
-        "UPDATE images SET used_at = ?2 WHERE name = ?1",
+        "UPDATE spectra SET used_at = ?2 WHERE name = ?1",
         params![name, at],
       )?,
     };
@@ -315,14 +319,15 @@ pub(super) async fn used_image(
   .await
 }
 
-/// Forgets the least recently used images until the rest take no more than `limit` bytes,
-/// keeping the most recently used whatever its size; returns the names forgotten, whose
-/// files are to go.
+/// Forgets the least recently used spectrogram and waveform files until the rest take no more
+/// than `limit` bytes, keeping the most recently used whatever its size; returns the names
+/// forgotten, whose files are to go.
 pub(super) async fn evict(db: &Database, limit: u64) -> Result<Vec<String>, DbError> {
   db.write(move |conn| {
     let transaction = conn.transaction()?;
-    let images: Vec<(String, u64)> = {
-      let mut statement = transaction.prepare("SELECT name, bytes FROM images ORDER BY used_at")?;
+    let kept: Vec<(String, u64)> = {
+      let mut statement =
+        transaction.prepare("SELECT name, bytes FROM spectra ORDER BY used_at")?;
       statement
         .query_map([], |row| {
           Ok((
@@ -333,13 +338,13 @@ pub(super) async fn evict(db: &Database, limit: u64) -> Result<Vec<String>, DbEr
         })?
         .collect::<rusqlite::Result<_>>()?
     };
-    let mut total: u64 = images.iter().map(|(_, bytes)| bytes).sum();
+    let mut total: u64 = kept.iter().map(|(_, bytes)| bytes).sum();
     let mut gone = Vec::new();
-    for (name, bytes) in images.iter().take(images.len().saturating_sub(1)) {
+    for (name, bytes) in kept.iter().take(kept.len().saturating_sub(1)) {
       if total <= limit {
         break;
       }
-      transaction.execute("DELETE FROM images WHERE name = ?1", [name])?;
+      transaction.execute("DELETE FROM spectra WHERE name = ?1", [name])?;
       total -= bytes;
       gone.push(name.clone());
     }

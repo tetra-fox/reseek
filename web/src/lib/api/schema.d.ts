@@ -534,15 +534,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v0/files/{root}/files/{path}/analysis/spectrogram.png": {
+    "/api/v0/files/{root}/files/{path}/analysis/spectra": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** A file's spectrogram as a PNG image. A link token does not load it; the session does. */
+        /** The spectrum of every analyzed window of a file, in the order of its report's windows. */
+        get: operations["spectra_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/files/{root}/files/{path}/analysis/spectrogram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A file's spectrogram: the overview of its whole length, or with `tile` that tile at full
+         *     detail. A link token does not load it; the session does.
+         */
         get: operations["spectrogram_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/files/{root}/files/{path}/analysis/waveform": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A file's waveform: the overview of its whole length, or with `tile` that tile at full
+         *     detail.
+         */
+        get: operations["waveform_file"];
         put?: never;
         post?: never;
         delete?: never;
@@ -558,7 +598,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The spectrum of one window of a file's analysis, as the spectrogram's column shows it. */
+        /** The spectrum of one window of a file's analysis, over linear frequency bins. */
         get: operations["window_file"];
         put?: never;
         post?: never;
@@ -2068,15 +2108,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v0/transfers/downloads/{username}/{id}/analysis/spectrogram.png": {
+    "/api/v0/transfers/downloads/{username}/{id}/analysis/spectra": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** A succeeded download's spectrogram as a PNG image. */
+        /** The spectrum of every analyzed window of a succeeded download. */
+        get: operations["spectra_download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/transfers/downloads/{username}/{id}/analysis/spectrogram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A succeeded download's spectrogram: the overview, or with `tile` that tile at full detail. */
         get: operations["spectrogram_download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/transfers/downloads/{username}/{id}/analysis/waveform": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A succeeded download's waveform: the overview, or with `tile` that tile at full detail. */
+        get: operations["waveform_download"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3057,7 +3131,7 @@ export interface components {
              */
             size: number;
             spectrogram?: null | components["schemas"]["SpectrogramLayout"];
-            /** @description where the spectrogram image of this report is served */
+            /** @description where the overview of this report's spectrogram is served */
             spectrogramUrl: string;
             /**
              * @description true when an older version of reseek analysed the file and this one cannot show its
@@ -6351,70 +6425,109 @@ export interface components {
             version: number;
         };
         /**
-         * @description Where the plot sits in a spectrogram image and how its axes map to time and frequency, so
-         *     a client can draw the guide lines over the image served without them.
+         * @description How a report's spectrogram and waveform are served and how their axes run. Both span the
+         *     file's whole length from 0 seconds. The spectrogram's columns hold levels over linear
+         *     frequency bins from 0 Hz to `maxHz`, which a viewer lays out on the frequency axis it
+         *     shows; each is served as an overview of the whole file and as tiles at full detail.
          */
         SpectrogramLayout: {
             /**
-             * Format: double
-             * @description the time at the plot's right edge, in seconds: the file's length, the left edge being 0
+             * Format: int32
+             * @description how many frequency bins a column has; bin `b` spans `b` to `b + 1` times `maxHz / bins`
              */
-            durationSeconds: number;
-            /** @description the lines drawn across the plot in the image served with guides, lowest first */
-            guides: components["schemas"]["GuideLine"][];
+            bins: number;
             /**
              * Format: int32
-             * @description the whole image's height in pixels
+             * @description how many spectrogram columns a second takes in a tile
              */
-            height: number;
+            columnsPerSecond: number;
             /**
              * Format: double
-             * @description the frequency at the plot's top edge, in Hz: half the sample rate
+             * @description the file's length in seconds, which the time axis spans
+             */
+            durationSeconds: number;
+            /** @description the lines worth drawing across the spectrogram, lowest first */
+            guides: components["schemas"]["GuideLine"][];
+            /**
+             * Format: double
+             * @description the frequency at the top of the highest bin, in Hz: half the sample rate
              */
             maxHz: number;
             /**
-             * Format: double
-             * @description the frequency at the plot's bottom edge, in Hz
-             */
-            minHz: number;
-            /**
              * Format: int32
-             * @description the plot's height in pixels
+             * @description how many waveform buckets a second takes in a tile
              */
-            plotHeight: number;
+            peaksPerSecond: number;
             /**
-             * Format: int32
-             * @description the plot's width in pixels, which spans the file's whole length in time
-             */
-            plotWidth: number;
-            /**
-             * Format: int32
-             * @description the plot's left edge, in pixels from the image's left
-             */
-            plotX: number;
-            /**
-             * Format: int32
-             * @description the plot's top edge, in pixels from the image's top
-             */
-            plotY: number;
-            /**
-             * @description whether the windows are samples spread over a long file, the stretches between them drawn
-             *     as unread, rather than every second of it
+             * @description whether the windows are samples spread over a long file, the stretches between them
+             *     unread, rather than every second of it
              */
             sampled: boolean;
-            /** @description how the frequency axis runs */
+            /** @description the frequency axis a viewer shows until its user picks one, from the daemon's options */
             scale: components["schemas"]["SpectrogramScale"];
             /**
              * Format: int32
-             * @description the whole image's width in pixels
+             * @description how many seconds a tile spans; tile `n` starts at `n` times this
              */
-            width: number;
+            tileSeconds: number;
+            /**
+             * Format: int32
+             * @description how many tiles the file's length takes
+             */
+            tiles: number;
         };
         /**
          * @description How a spectrogram's frequency axis runs.
          * @enum {string}
          */
         SpectrogramScale: "log" | "linear" | "mel";
+        /**
+         * @description The header of a spectrogram response, which the columns follow: `columns` times `bins`
+         *     bytes, column after column, each column's bins lowest first. A byte is a level from `minDb`
+         *     (0) to `maxDb` (255) on a straight scale.
+         */
+        SpectrogramTile: {
+            /**
+             * Format: int32
+             * @description how many frequency bins a column has, from 0 Hz to `maxHz`
+             */
+            bins: number;
+            /**
+             * Format: int32
+             * @description how many columns follow, evenly spread from `fromSeconds` to `toSeconds`
+             */
+            columns: number;
+            /**
+             * Format: double
+             * @description when the first column starts, in seconds from the start of the file
+             */
+            fromSeconds: number;
+            /**
+             * Format: double
+             * @description the level of byte 255, in dB relative to a full-scale sine
+             */
+            maxDb: number;
+            /**
+             * Format: double
+             * @description the frequency at the top of the highest bin, in Hz
+             */
+            maxHz: number;
+            /**
+             * Format: double
+             * @description the level of byte 0, in dB relative to a full-scale sine
+             */
+            minDb: number;
+            /**
+             * Format: double
+             * @description when the last column ends, in seconds from the start of the file
+             */
+            toSeconds: number;
+            /**
+             * @description runs of columns the analysis did not read, as the first and one past the last; their
+             *     bytes are 0
+             */
+            unread: number[][];
+        };
         /**
          * @description The daemon's state, as `GET /application` returns it and `application.state` frames carry
          *     it.
@@ -7444,11 +7557,66 @@ export interface components {
             /** @enum {string} */
             kind: "trustedNetwork";
         };
+        /**
+         * @description The header of a waveform response, which the buckets follow: two signed bytes each, the
+         *     lowest and the highest sample over the channels from -127 (full scale below) to 127.
+         */
+        WaveformTile: {
+            /**
+             * Format: double
+             * @description when the first bucket starts, in seconds from the start of the file
+             */
+            fromSeconds: number;
+            /**
+             * Format: int32
+             * @description how many buckets follow, evenly spread from `fromSeconds` to `toSeconds`
+             */
+            peaks: number;
+            /**
+             * Format: double
+             * @description when the last bucket ends, in seconds from the start of the file
+             */
+            toSeconds: number;
+            /** @description runs of buckets the analysis did not read, as the first and one past the last */
+            unread: number[][];
+        };
+        /**
+         * @description The header of a window spectra response, which every analyzed window's spectrum over its
+         *     second follows, in the order of the report's windows: `bins` bytes each, lowest first, a
+         *     byte a level from `minDb` (0) to `maxDb` (255).
+         */
+        WindowSpectra: {
+            /**
+             * Format: int32
+             * @description how many frequency bins a spectrum has, from 0 Hz to `maxHz`
+             */
+            bins: number;
+            /**
+             * Format: double
+             * @description the level of byte 255, in dB relative to a full-scale sine
+             */
+            maxDb: number;
+            /**
+             * Format: double
+             * @description the frequency at the top of the highest bin, in Hz
+             */
+            maxHz: number;
+            /**
+             * Format: double
+             * @description the level of byte 0, in dB relative to a full-scale sine
+             */
+            minDb: number;
+            /**
+             * Format: int32
+             * @description how many windows follow
+             */
+            windows: number;
+        };
         /** @description The spectrum of one analysed window, as `GET .../analysis/windows/{index}` answers it. */
         WindowSpectrum: {
             /** @description the level at each point, in dB relative to a full-scale sine, at least -160 */
             db: number[];
-            /** @description the frequency of each point, in Hz, highest first: the middle of each spectrogram row */
+            /** @description the frequency of each point, in Hz, lowest first: the middle of each frequency bin */
             hz: number[];
             /**
              * Format: int32
@@ -9148,8 +9316,6 @@ export interface operations {
             query?: {
                 /** @description include the per-window measures, true when left out */
                 windows?: boolean;
-                /** @description the frequency axis the report's spectrogram layout is given on, the option's when left out */
-                scale?: components["schemas"]["SpectrogramScale"];
             };
             header?: never;
             path: {
@@ -9409,13 +9575,75 @@ export interface operations {
             };
         };
     };
+    spectra_file: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the directory root */
+                root: components["schemas"]["FileRoot"];
+                /** @description the file's path under the root, base64 */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a four-byte little-endian length, a WindowSpectra header as JSON, then the spectra */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": components["schemas"]["FileContent"];
+                };
+            };
+            /** @description the caller has these bytes already, by their ETag */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     spectrogram_file: {
         parameters: {
             query?: {
-                /** @description draw the encoder cutoff guide lines into the image, true when left out */
-                guides?: boolean;
-                /** @description the frequency axis to draw the image on, the option's when left out */
-                scale?: components["schemas"]["SpectrogramScale"];
+                /** @description the tile at full detail, from 0; the overview of the whole file when left out */
+                tile?: number;
             };
             header?: never;
             path: {
@@ -9428,13 +9656,88 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description a four-byte little-endian length, a SpectrogramTile header as JSON, then its columns */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "image/png": components["schemas"]["FileContent"];
+                    "application/octet-stream": components["schemas"]["FileContent"];
                 };
+            };
+            /** @description the caller has these bytes already, by their ETag */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    waveform_file: {
+        parameters: {
+            query?: {
+                /** @description the tile at full detail, from 0; the overview of the whole file when left out */
+                tile?: number;
+            };
+            header?: never;
+            path: {
+                /** @description the directory root */
+                root: components["schemas"]["FileRoot"];
+                /** @description the file's path under the root, base64 */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a four-byte little-endian length, a WaveformTile header as JSON, then its buckets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": components["schemas"]["FileContent"];
+                };
+            };
+            /** @description the caller has these bytes already, by their ETag */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: {
                 headers: {
@@ -9472,10 +9775,7 @@ export interface operations {
     };
     window_file: {
         parameters: {
-            query?: {
-                /** @description the frequency axis whose rows the spectrum is given at, the option's when left out */
-                scale?: components["schemas"]["SpectrogramScale"];
-            };
+            query?: never;
             header?: never;
             path: {
                 /** @description the directory root */
@@ -14855,8 +15155,6 @@ export interface operations {
             query?: {
                 /** @description include the per-window measures, true when left out */
                 windows?: boolean;
-                /** @description the frequency axis the report's spectrogram layout is given on, the option's when left out */
-                scale?: components["schemas"]["SpectrogramScale"];
             };
             header?: never;
             path: {
@@ -15116,13 +15414,75 @@ export interface operations {
             };
         };
     };
+    spectra_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the peer */
+                username: string;
+                /** @description the download's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a four-byte little-endian length, a WindowSpectra header as JSON, then the spectra */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": components["schemas"]["FileContent"];
+                };
+            };
+            /** @description the caller has these bytes already, by their ETag */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     spectrogram_download: {
         parameters: {
             query?: {
-                /** @description draw the encoder cutoff guide lines into the image, true when left out */
-                guides?: boolean;
-                /** @description the frequency axis to draw the image on, the option's when left out */
-                scale?: components["schemas"]["SpectrogramScale"];
+                /** @description the tile at full detail, from 0; the overview of the whole file when left out */
+                tile?: number;
             };
             header?: never;
             path: {
@@ -15135,13 +15495,88 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description a four-byte little-endian length, a SpectrogramTile header as JSON, then its columns */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "image/png": components["schemas"]["FileContent"];
+                    "application/octet-stream": components["schemas"]["FileContent"];
                 };
+            };
+            /** @description the caller has these bytes already, by their ETag */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    waveform_download: {
+        parameters: {
+            query?: {
+                /** @description the tile at full detail, from 0; the overview of the whole file when left out */
+                tile?: number;
+            };
+            header?: never;
+            path: {
+                /** @description the peer */
+                username: string;
+                /** @description the download's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a four-byte little-endian length, a WaveformTile header as JSON, then its buckets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": components["schemas"]["FileContent"];
+                };
+            };
+            /** @description the caller has these bytes already, by their ETag */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: {
                 headers: {
@@ -15179,10 +15614,7 @@ export interface operations {
     };
     window_download: {
         parameters: {
-            query?: {
-                /** @description the frequency axis whose rows the spectrum is given at, the option's when left out */
-                scale?: components["schemas"]["SpectrogramScale"];
-            };
+            query?: never;
             header?: never;
             path: {
                 /** @description the peer */

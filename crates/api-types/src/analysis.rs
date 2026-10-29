@@ -85,10 +85,10 @@ pub struct AudioAnalysis {
   pub measures: AnalysisMeasures,
   /// the measures of each analysed window, null where the per-window list was left out
   pub windows: Option<Vec<AnalysisWindow>>,
-  /// where the spectrogram image of this report is served
+  /// where the overview of this report's spectrogram is served
   pub spectrogram_url: String,
-  /// where in the spectrogram image the plot is and how its axes run, for drawing over it;
-  /// null when the file could not be read as audio and has no spectrogram
+  /// how the spectrogram and the waveform are served and how their axes run; null when the file
+  /// could not be read as audio and has neither
   pub spectrogram: Option<SpectrogramLayout>,
   /// the user's judgement, shown in place of the verdict; null until the user sets one
   #[serde(rename = "override")]
@@ -191,36 +191,34 @@ pub enum SpectrogramScale {
   Mel,
 }
 
-/// Where the plot sits in a spectrogram image and how its axes map to time and frequency, so
-/// a client can draw the guide lines over the image served without them.
+/// How a report's spectrogram and waveform are served and how their axes run. Both span the
+/// file's whole length from 0 seconds. The spectrogram's columns hold levels over linear
+/// frequency bins from 0 Hz to `maxHz`, which a viewer lays out on the frequency axis it
+/// shows; each is served as an overview of the whole file and as tiles at full detail.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SpectrogramLayout {
-  /// the whole image's width in pixels
-  pub width: u32,
-  /// the whole image's height in pixels
-  pub height: u32,
-  /// the plot's left edge, in pixels from the image's left
-  pub plot_x: u32,
-  /// the plot's top edge, in pixels from the image's top
-  pub plot_y: u32,
-  /// the plot's width in pixels, which spans the file's whole length in time
-  pub plot_width: u32,
-  /// the plot's height in pixels
-  pub plot_height: u32,
-  /// how the frequency axis runs
+  /// the frequency axis a viewer shows until its user picks one, from the daemon's options
   pub scale: SpectrogramScale,
-  /// the frequency at the plot's bottom edge, in Hz
-  pub min_hz: f64,
-  /// the frequency at the plot's top edge, in Hz: half the sample rate
+  /// the frequency at the top of the highest bin, in Hz: half the sample rate
   pub max_hz: f64,
-  /// the time at the plot's right edge, in seconds: the file's length, the left edge being 0
+  /// the file's length in seconds, which the time axis spans
   pub duration_seconds: f64,
-  /// whether the windows are samples spread over a long file, the stretches between them drawn
-  /// as unread, rather than every second of it
+  /// whether the windows are samples spread over a long file, the stretches between them
+  /// unread, rather than every second of it
   pub sampled: bool,
-  /// the lines drawn across the plot in the image served with guides, lowest first
+  /// the lines worth drawing across the spectrogram, lowest first
   pub guides: Vec<GuideLine>,
+  /// how many frequency bins a column has; bin `b` spans `b` to `b + 1` times `maxHz / bins`
+  pub bins: u32,
+  /// how many spectrogram columns a second takes in a tile
+  pub columns_per_second: u32,
+  /// how many waveform buckets a second takes in a tile
+  pub peaks_per_second: u32,
+  /// how many seconds a tile spans; tile `n` starts at `n` times this
+  pub tile_seconds: u32,
+  /// how many tiles the file's length takes
+  pub tiles: u32,
 }
 
 /// A horizontal line across the spectrogram at a frequency worth comparing the content with.
@@ -303,32 +301,74 @@ pub struct AnalysisReportQuery {
   /// include the per-window measures, true when left out
   #[serde(default = "yes")]
   pub windows: bool,
-  /// the frequency axis the report's spectrogram layout is given on, the option's when left out
-  #[serde(default)]
-  pub scale: Option<SpectrogramScale>,
 }
 
-/// The query of `GET .../analysis/spectrogram.png`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
+/// The query of the spectrogram and waveform routes.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
 #[into_params(parameter_in = Query)]
-pub struct SpectrogramQuery {
-  /// draw the encoder cutoff guide lines into the image, true when left out
-  #[serde(default = "yes")]
-  pub guides: bool,
-  /// the frequency axis to draw the image on, the option's when left out
+pub struct TileQuery {
+  /// the tile at full detail, from 0; the overview of the whole file when left out
   #[serde(default)]
-  pub scale: Option<SpectrogramScale>,
+  pub tile: Option<u32>,
 }
 
-/// The query of `GET .../analysis/windows/{index}`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
+/// The header of a spectrogram response, which the columns follow: `columns` times `bins`
+/// bytes, column after column, each column's bins lowest first. A byte is a level from `minDb`
+/// (0) to `maxDb` (255) on a straight scale.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-#[into_params(parameter_in = Query)]
-pub struct WindowSpectrumQuery {
-  /// the frequency axis whose rows the spectrum is given at, the option's when left out
-  #[serde(default)]
-  pub scale: Option<SpectrogramScale>,
+pub struct SpectrogramTile {
+  /// when the first column starts, in seconds from the start of the file
+  pub from_seconds: f64,
+  /// when the last column ends, in seconds from the start of the file
+  pub to_seconds: f64,
+  /// how many columns follow, evenly spread from `fromSeconds` to `toSeconds`
+  pub columns: u32,
+  /// how many frequency bins a column has, from 0 Hz to `maxHz`
+  pub bins: u32,
+  /// the frequency at the top of the highest bin, in Hz
+  pub max_hz: f64,
+  /// the level of byte 0, in dB relative to a full-scale sine
+  pub min_db: f64,
+  /// the level of byte 255, in dB relative to a full-scale sine
+  pub max_db: f64,
+  /// runs of columns the analysis did not read, as the first and one past the last; their
+  /// bytes are 0
+  pub unread: Vec<[u32; 2]>,
+}
+
+/// The header of a waveform response, which the buckets follow: two signed bytes each, the
+/// lowest and the highest sample over the channels from -127 (full scale below) to 127.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WaveformTile {
+  /// when the first bucket starts, in seconds from the start of the file
+  pub from_seconds: f64,
+  /// when the last bucket ends, in seconds from the start of the file
+  pub to_seconds: f64,
+  /// how many buckets follow, evenly spread from `fromSeconds` to `toSeconds`
+  pub peaks: u32,
+  /// runs of buckets the analysis did not read, as the first and one past the last
+  pub unread: Vec<[u32; 2]>,
+}
+
+/// The header of a window spectra response, which every analyzed window's spectrum over its
+/// second follows, in the order of the report's windows: `bins` bytes each, lowest first, a
+/// byte a level from `minDb` (0) to `maxDb` (255).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowSpectra {
+  /// how many windows follow
+  pub windows: u32,
+  /// how many frequency bins a spectrum has, from 0 Hz to `maxHz`
+  pub bins: u32,
+  /// the frequency at the top of the highest bin, in Hz
+  pub max_hz: f64,
+  /// the level of byte 0, in dB relative to a full-scale sine
+  pub min_db: f64,
+  /// the level of byte 255, in dB relative to a full-scale sine
+  pub max_db: f64,
 }
 
 fn yes() -> bool {
@@ -400,7 +440,7 @@ pub struct WindowSpectrum {
   pub index: u32,
   /// where the window starts, in seconds from the start of the file
   pub t: f64,
-  /// the frequency of each point, in Hz, highest first: the middle of each spectrogram row
+  /// the frequency of each point, in Hz, lowest first: the middle of each frequency bin
   pub hz: Vec<f64>,
   /// the level at each point, in dB relative to a full-scale sine, at least -160
   pub db: Vec<f64>,

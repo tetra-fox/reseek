@@ -1,14 +1,15 @@
-//! What the analyser measures in each one-second window: its loudness, its spectrum averaged
+//! What the analyzer measures in each one-second window: its loudness, its spectrum averaged
 //! over short overlapping frames, where that spectrum stops (the cutoff) and how steeply, gaps
 //! in the band just below the cutoff, a step inside a full band, and how strongly the noise
 //! repeats at a lossy codec's frame length. Each window's samples are also added to the
-//! file-wide totals.
+//! file-wide totals, and what the spectrogram and the waveform show of it is kept.
 
 use std::sync::Arc;
 
 use realfft::num_complex::Complex;
 use realfft::{RealFftPlanner, RealToComplex};
 
+use super::picture::{self, BINS, Shown};
 use super::thresholds::{
   CUTOFF_RANGE_DB, FLOOR_MARGIN_DB, FULL_BAND, HOLE_DEPTH_DB, HOLES_FROM_HZ, HOLES_TO_HZ,
   INNER_SHELF_FROM_HZ, SHARP_SHELF_DB, SHELF_GAP_HZ, SHELF_SPAN_HZ, SILENCE_DBFS,
@@ -19,16 +20,10 @@ use super::totals::Totals;
 pub(super) const FFT_SIZE: usize = 4096;
 /// How far one frame starts after the one before: half a frame.
 const HOP: usize = FFT_SIZE / 2;
-/// How many frequency rows a spectrogram column has.
-pub(super) const ROWS: usize = 512;
-/// The lowest frequency a log-scale spectrogram shows.
-pub(super) const LOG_MIN_HZ: f64 = 20.0;
 /// How wide the band is that a spectrum is smoothed over, either side of a bin.
 const SMOOTH_HZ: f64 = 50.0;
 /// The lowest level a spectrum is measured down to, in dB; anything quieter reads as this.
 const FLOOR_DB: f64 = -200.0;
-/// The quietest a spectrogram cell can be stored as, in dB.
-pub(super) const COLUMN_FLOOR_DB: f64 = -160.0;
 /// The length of the blocks a window's noise envelope is measured in, in samples.
 const ENVELOPE_BLOCK: usize = 64;
 /// Lossy codecs' frame lengths in samples, as envelope blocks: 1024 (AAC), 1152 (MP3) and 2048
@@ -38,63 +33,6 @@ const CODEC_PERIODS: [usize; 3] = [
   1152 / ENVELOPE_BLOCK,
   2048 / ENVELOPE_BLOCK,
 ];
-
-/// How a spectrogram's rows map to frequencies.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Scale {
-  /// every hertz takes the same height
-  Linear,
-  /// octaves take the same height
-  Log,
-  /// equal steps of pitch as heard take the same height
-  Mel,
-}
-
-/// The mel pitch of `hz`, by O'Shaughnessy's formula: 2595 log10(1 + f / 700).
-fn mel(hz: f64) -> f64 {
-  2595.0 * (1.0 + hz / 700.0).log10()
-}
-
-/// The frequency of `mel` pitch, the inverse of [`mel`].
-fn hz_of_mel(mel: f64) -> f64 {
-  700.0 * (10f64.powf(mel / 2595.0) - 1.0)
-}
-
-impl Scale {
-  /// Every scale, in the order a window's columns are kept in.
-  pub const ALL: [Scale; 3] = [Scale::Linear, Scale::Log, Scale::Mel];
-
-  /// Where this scale's column is among a window's columns.
-  pub fn index(self) -> usize {
-    self as usize
-  }
-
-  /// Where `hz` falls on the axis from `min` to `max`, from 0 at the bottom to 1 at the top.
-  pub fn position(self, hz: f64, min: f64, max: f64) -> f64 {
-    match self {
-      Scale::Linear => (hz - min) / (max - min),
-      Scale::Log => (hz.max(min) / min).ln() / (max / min).ln(),
-      Scale::Mel => (mel(hz.max(min)) - mel(min)) / (mel(max) - mel(min)),
-    }
-  }
-
-  /// The frequency at `position` on the axis from `min` to `max`.
-  pub fn frequency(self, position: f64, min: f64, max: f64) -> f64 {
-    match self {
-      Scale::Linear => min + position * (max - min),
-      Scale::Log => min * (max / min).powf(position),
-      Scale::Mel => hz_of_mel(mel(min) + position * (mel(max) - mel(min))),
-    }
-  }
-
-  /// The frequency at the bottom of the axis for a file whose band ends at `nyquist`.
-  pub fn min_hz(self) -> f64 {
-    match self {
-      Scale::Linear | Scale::Mel => 0.0,
-      Scale::Log => LOG_MIN_HZ,
-    }
-  }
-}
 
 /// A step down in level inside a band that reaches the top.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -132,17 +70,11 @@ pub(super) struct Window {
   pub frame_score: Option<f64>,
   /// the power above half the band, and in the whole band
   pub energy: (f64, f64),
-  /// the spectrogram column on each scale, in [`Scale::ALL`] order: each row's level, top row
-  /// first, scaled into a byte from [`COLUMN_FLOOR_DB`] to 0 dB
-  pub columns: [Vec<u8>; 3],
+  /// what the spectrogram and the waveform show of the window
+  pub shown: Shown,
 }
 
 impl Window {
-  /// The window's spectrogram column on `scale`.
-  pub fn column(&self, scale: Scale) -> &[u8] {
-    &self.columns[scale.index()]
-  }
-
   /// Whether the window stops with an encoder's low-pass rather than a natural roll-off: its
   /// shelf drops by [`SHARP_SHELF_DB`] or more.
   pub fn sharp(&self) -> bool {
@@ -155,8 +87,7 @@ impl Window {
   }
 }
 
-/// The spectrum analyser for one sample rate: the frame transform, the window function, and
-/// where each spectrogram row's bins are.
+/// The spectrum analyzer for one sample rate: the frame transform and the window function.
 pub(super) struct Analyser {
   fft: Arc<dyn RealToComplex<f32>>,
   hann: Vec<f32>,
@@ -166,9 +97,6 @@ pub(super) struct Analyser {
   rate: f64,
   /// the width of one bin in Hz
   bin_hz: f64,
-  /// for each scale in [`Scale::ALL`] order and each of its spectrogram rows, top first, the
-  /// bins the row averages
-  rows: [Vec<(usize, usize)>; 3],
   /// scratch spectra: per frame, the power of every bin over the channels
   frames: Vec<Vec<f64>>,
   /// the level of one bin of the quantisation noise integer samples carry, when they are
@@ -176,32 +104,8 @@ pub(super) struct Analyser {
   quantisation_db: Option<f64>,
 }
 
-/// For each spectrogram row on `scale`, top first, the first and last bin it averages.
-fn rows(scale: Scale, rate: f64, bin_hz: f64) -> Vec<(usize, usize)> {
-  let nyquist = rate / 2.0;
-  let bins = FFT_SIZE / 2 + 1;
-  let min = scale.min_hz();
-  (0..ROWS)
-    .map(|row| {
-      let top = 1.0 - row as f64 / ROWS as f64;
-      let bottom = 1.0 - (row + 1) as f64 / ROWS as f64;
-      let low = scale.frequency(bottom, min, nyquist) / bin_hz;
-      let high = scale.frequency(top, min, nyquist) / bin_hz;
-      let first = (low.ceil() as usize).min(bins - 1);
-      let last = (high.floor() as usize).min(bins - 1);
-      if first <= last {
-        (first, last)
-      } else {
-        // a row narrower than a bin takes the bin nearest its middle
-        let nearest = (((low + high) / 2.0).round() as usize).min(bins - 1);
-        (nearest, nearest)
-      }
-    })
-    .collect()
-}
-
 impl Analyser {
-  /// An analyser for audio at `rate` samples per second, drawing columns on every scale.
+  /// An analyzer for audio at `rate` samples per second.
   pub fn new(rate: u32, bits: Option<u32>) -> Self {
     let fft = RealFftPlanner::<f32>::new().plan_fft_forward(FFT_SIZE);
     let hann = (0..FFT_SIZE)
@@ -212,7 +116,6 @@ impl Analyser {
       .collect();
     let rate = f64::from(rate);
     let bin_hz = rate / FFT_SIZE as f64;
-    let rows = Scale::ALL.map(|scale| rows(scale, rate, bin_hz));
     Self {
       input: fft.make_input_vec(),
       output: fft.make_output_vec(),
@@ -221,7 +124,6 @@ impl Analyser {
       hann,
       rate,
       bin_hz,
-      rows,
       frames: Vec::new(),
       quantisation_db: bits.map(quantisation_db),
     }
@@ -241,7 +143,7 @@ impl Analyser {
     let rms_dbfs = (10.0 * (squares / count).log10()).max(FLOOR_DB);
     let frame_score = frame_score(channels);
     let spectrum = self.spectrum(channels);
-    let columns = Scale::ALL.map(|scale| self.column(scale, spectrum.as_deref()));
+    let shown = self.shown(channels, spectrum.as_deref());
     let mut window = Window {
       t,
       seconds: length as f64 / self.rate,
@@ -252,7 +154,7 @@ impl Analyser {
       inner_shelf: None,
       frame_score: None,
       energy: (0.0, 0.0),
-      columns,
+      shown,
     };
     let Some(power) = spectrum else {
       return window;
@@ -329,19 +231,16 @@ impl Analyser {
     Some(total)
   }
 
-  /// The spectrogram column of a window's spectrum on `scale`; the quietest value for a window
-  /// too short for one.
-  fn column(&self, scale: Scale, spectrum: Option<&[f64]>) -> Vec<u8> {
-    let Some(power) = spectrum else {
-      return vec![0; ROWS];
-    };
-    self.rows[scale.index()]
-      .iter()
-      .map(|&(first, last)| {
-        let mean = power[first..=last].iter().sum::<f64>() / (last - first + 1) as f64;
-        column_byte(db(mean))
-      })
-      .collect()
+  /// What the spectrogram and the waveform show of a window of `channels`, from its spectrum
+  /// and its frames' spectra; silence for a window too short for a spectrum.
+  fn shown(&self, channels: &[Vec<f32>], spectrum: Option<&[f64]>) -> Shown {
+    let length = channels[0].len();
+    let rate = self.rate as usize;
+    Shown {
+      spectrum: spectrum.map_or_else(|| vec![0; BINS], picture::spectrum_bytes),
+      columns: picture::columns(&self.frames, length, rate, FFT_SIZE, HOP),
+      peaks: picture::peaks(channels, rate),
+    }
   }
 
   /// The bins from `low` to `high` Hz, clamped to the spectrum.
@@ -442,18 +341,6 @@ fn db(power: f64) -> f64 {
   } else {
     FLOOR_DB
   }
-}
-
-/// A level in dB as a spectrogram byte: [`COLUMN_FLOOR_DB`] and below is 0, 0 dB and above
-/// is 255.
-pub(super) fn column_byte(level: f64) -> u8 {
-  let scaled = (level - COLUMN_FLOOR_DB) / -COLUMN_FLOOR_DB * 255.0;
-  scaled.round().clamp(0.0, 255.0) as u8
-}
-
-/// The level in dB of a spectrogram byte.
-pub(super) fn column_db(byte: u8) -> f64 {
-  COLUMN_FLOOR_DB + f64::from(byte) / 255.0 * -COLUMN_FLOOR_DB
 }
 
 /// `power` averaged over `radius` bins either side of each bin, in dB.

@@ -531,6 +531,7 @@
   {@const e = analysing.entry}
   <AnalysisDrawer
     target={{ kind: "file", root, path: e.path }}
+    track={fileTrack(root, e.path)}
     name={e.name}
     start={analysing.start}
     onclose={() => (analysing = null)}>

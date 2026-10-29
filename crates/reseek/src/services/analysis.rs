@@ -3,10 +3,11 @@
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
-  SetAnalysisOverride, SpectrogramQuery, WindowSpectrum, WindowSpectrumQuery,
+  SetAnalysisOverride, WindowSpectrum,
 };
 use api_types::auth::Principal;
 use async_trait::async_trait;
+use axum::http::HeaderMap;
 use axum::response::Response;
 use uuid::Uuid;
 
@@ -14,6 +15,17 @@ use super::{FileTarget, not_yet};
 use crate::api::error::ApiError;
 
 const DOMAIN: &str = "analysis";
+
+/// A piece of a report's pictures a viewer loads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Piece {
+  /// the spectrogram's overview, or the tile at full detail
+  Spectrogram(Option<u32>),
+  /// the waveform's overview, or the tile at full detail
+  Waveform(Option<u32>),
+  /// every window's spectrum
+  Spectra,
+}
 
 /// Running analyses, their reports and spectrograms, and the user's own verdict.
 #[async_trait]
@@ -36,11 +48,13 @@ pub trait AnalysisService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// A file's spectrogram image as the whole response.
-  async fn spectrogram(
+  /// A piece of a file's spectrogram or waveform as the whole response, or 304 when the
+  /// request's headers show the caller has it already.
+  async fn piece(
     &self,
     target: FileTarget,
-    query: SpectrogramQuery,
+    piece: Piece,
+    headers: &HeaderMap,
   ) -> Result<Response, ApiError> {
     Err(not_yet(DOMAIN))
   }
@@ -78,12 +92,7 @@ pub trait AnalysisService: Send + Sync {
 
   /// The spectrum of one window of a file's report; 404 when there is no such window or it is
   /// no longer kept.
-  async fn window(
-    &self,
-    target: FileTarget,
-    index: u32,
-    query: WindowSpectrumQuery,
-  ) -> Result<WindowSpectrum, ApiError> {
+  async fn window(&self, target: FileTarget, index: u32) -> Result<WindowSpectrum, ApiError> {
     Err(not_yet(DOMAIN))
   }
 }

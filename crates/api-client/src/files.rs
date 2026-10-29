@@ -3,7 +3,8 @@
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
-  RunAnalysisQuery, SetAnalysisOverride, SpectrogramQuery, WindowSpectrum, WindowSpectrumQuery,
+  RunAnalysisQuery, SetAnalysisOverride, SpectrogramTile, TileQuery, WaveformTile, WindowSpectra,
+  WindowSpectrum,
 };
 use api_types::files::{
   ArchiveQuery, ContentQuery, DirectoryListingQuery, FileRoot, FileToken, FileTokenRequest,
@@ -17,7 +18,7 @@ use uuid::Uuid;
 use reqwest::Method;
 use reqwest::header::HeaderMap;
 
-use super::{Client, Result, Route, bytes, done, json, send};
+use super::{Client, Framed, Result, Route, bytes, done, framed, json, send};
 
 /// A file under a root, or the file a succeeded download was moved to.
 #[derive(Clone, Copy, Debug)]
@@ -127,14 +128,29 @@ impl Client {
     json(self.get(route)).await
   }
 
-  /// `GET .../analysis/spectrogram.png`: a file's spectrogram.
+  /// `GET .../analysis/spectrogram`: a file's spectrogram, the overview or a tile.
   pub async fn spectrogram(
     &self,
     target: LocalFile<'_>,
-    query: &SpectrogramQuery,
-  ) -> Result<Bytes> {
-    let route = file(target).then("analysis/spectrogram.png").query(query)?;
-    bytes(self.get(route)).await
+    query: &TileQuery,
+  ) -> Result<Framed<SpectrogramTile>> {
+    let route = file(target).then("analysis/spectrogram").query(query)?;
+    framed(self.get(route)).await
+  }
+
+  /// `GET .../analysis/waveform`: a file's waveform, the overview or a tile.
+  pub async fn waveform(
+    &self,
+    target: LocalFile<'_>,
+    query: &TileQuery,
+  ) -> Result<Framed<WaveformTile>> {
+    let route = file(target).then("analysis/waveform").query(query)?;
+    framed(self.get(route)).await
+  }
+
+  /// `GET .../analysis/spectra`: the spectrum of every window of a file's analysis.
+  pub async fn window_spectra(&self, target: LocalFile<'_>) -> Result<Framed<WindowSpectra>> {
+    framed(self.get(file(target).then("analysis/spectra"))).await
   }
 
   /// `PUT .../analysis/override`: records our verdict on a file.
@@ -168,16 +184,10 @@ impl Client {
   }
 
   /// `GET .../analysis/windows/{index}`: the spectrum of one window of a file's analysis.
-  pub async fn analysis_window(
-    &self,
-    target: LocalFile<'_>,
-    index: u32,
-    query: &WindowSpectrumQuery,
-  ) -> Result<WindowSpectrum> {
+  pub async fn analysis_window(&self, target: LocalFile<'_>, index: u32) -> Result<WindowSpectrum> {
     let route = file(target)
       .then("analysis/windows")
-      .then(&index.to_string())
-      .query(query)?;
+      .then(&index.to_string());
     json(self.get(route)).await
   }
 }

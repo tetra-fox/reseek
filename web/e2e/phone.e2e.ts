@@ -186,7 +186,7 @@ const everyScreen = async (page: Page) => {
   // a finished download's analysis, with its reading open, fits the drawer
   await page.getByRole("button", { name: "More for 2.flac" }).click();
   await page.getByRole("menuitem", { name: "Analyse" }).click();
-  await page.getByText("The analyser's reading", { exact: true }).click();
+  await page.getByText("The analyzer's reading", { exact: true }).click();
   await page.getByRole("radio", { name: "Mel" }).click();
   await expect(page.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
   await drawerHolds(page, "Transfer details");
@@ -289,7 +289,7 @@ test.describe("at a large text size", () => {
         await fits(page, "/downloads", shows("3.flac"));
         await page.getByRole("button", { name: "More for 2.flac" }).click();
         await page.getByRole("menuitem", { name: "Analyse" }).click();
-        await page.getByText("The analyser's reading", { exact: true }).click();
+        await page.getByText("The analyzer's reading", { exact: true }).click();
         await drawerHolds(page, "Transfer details");
         await page.keyboard.press("Escape");
         await fits(page, "/system/info", shows("Process ID"));

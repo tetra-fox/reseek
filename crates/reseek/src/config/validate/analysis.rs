@@ -9,8 +9,8 @@ use crate::config::{Analysis, MAX_ANALYSIS_WORKERS};
 
 /// The fewest windows a sampled file is analysed at: fewer can not give a reading.
 const MIN_SAMPLED_WINDOWS: u32 = 20;
-/// The most windows a sampled file is analysed at: the spectrogram has a column for each, at
-/// most this many.
+/// The most windows a sampled file is analyzed at: each window's spectrogram and waveform are
+/// kept on disk and held while the file is analyzed.
 const MAX_SAMPLED_WINDOWS: u32 = 2000;
 
 pub(super) fn check(analysis: &Analysis, report: &mut Report) {

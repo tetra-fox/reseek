@@ -1,17 +1,11 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
-
   import { FLAGS, type Report, VERDICTS } from "#lib/analysis/analysis.js";
   import { formatDuration } from "#lib/format.js";
 
-  // the analyser's own reading, under the spectrogram and folded away until asked for: its
+  // the analyzer's own reading, under the spectrogram and folded away until asked for: its
   // verdict and summary, the cutoffs it found, every measure with what it tells, and what made
   // the reading less sure
-  let {
-    report,
-    open = $bindable(false),
-    children
-  }: { report: Report; open?: boolean; children?: Snippet } = $props();
+  let { report, open = $bindable(false) }: { report: Report; open?: boolean } = $props();
 
   const m = $derived(report.measures);
   const kHz = (hz: number | null | undefined) =>
@@ -74,7 +68,7 @@
 </script>
 
 <details class="group rounded-control border" bind:open>
-  <summary class="cursor-pointer px-3 py-2 text-sm font-medium">The analyser's reading</summary>
+  <summary class="cursor-pointer px-3 py-2 text-sm font-medium">The analyzer's reading</summary>
   <div class="flex flex-col gap-3 border-t px-3 py-3 text-sm">
     <p>
       <span class="font-medium">{VERDICTS[report.verdict]}</span>
@@ -105,7 +99,6 @@
         </ul>
       </div>
     {/if}
-    {@render children?.()}
     <div class="flex flex-col gap-1">
       <h4 class="text-xs font-medium text-fg-muted uppercase">Measures</h4>
       <dl class="flex flex-col gap-1.5">

@@ -470,7 +470,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "size",
-      "doc": "How much disk the spectrogram images may take; the least recently viewed go first.",
+      "doc": "How much disk the spectrograms and waveforms of analyzed files may take; the least recently viewed go first.",
       "choices": null,
       "default": "476.8 MiB",
       "apply": "live",
@@ -540,7 +540,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "string",
-      "doc": "The frequency axis the spectrogram is drawn on unless a viewer asks for another: `log`, `linear` or `mel`.",
+      "doc": "The frequency axis the browser shows the spectrogram on until its user picks another: `log`, `linear` or `mel`.",
       "choices": [
         "log",
         "linear",

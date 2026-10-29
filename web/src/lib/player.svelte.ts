@@ -33,19 +33,45 @@ class Player {
   src = $state<string | null>(null);
   playing = $state(false);
   volume = $state(1);
+  /** the audio element the bar plays through, while it is on the page */
+  element = $state.raw<HTMLAudioElement | null>(null);
+  /** where to start the next track once it has loaded, in seconds */
+  #startAt = 0;
 
   get current(): Track | null {
     return this.tracks[this.index] ?? null;
   }
 
-  /** Plays `track`, with `folder` (the finished files of its folder) as what comes before and after */
-  play = async (track: Track, folder: Track[] = [track]) => {
+  /**
+   * Plays `track` from `startAt` seconds, with `folder` (the finished files of its folder) as what
+   * comes before and after
+   */
+  play = async (track: Track, folder: Track[] = [track], startAt = 0) => {
     const tracks = folder.filter((t) => playable(t.filename));
     if (!playable(track.filename)) return this.#offerDownload(track);
     const at = tracks.findIndex((t) => t.key === track.key);
     this.tracks = at === -1 ? [track] : tracks;
     this.index = Math.max(at, 0);
+    this.#startAt = startAt;
     await this.#load();
+  };
+
+  /** Whether the player has `key` loaded, playing or paused */
+  holds = (key: string) => !!this.src && this.current?.key === key;
+
+  /** Where the track is, in seconds, read from the element as it plays */
+  position = (): number => this.element?.currentTime ?? 0;
+
+  /** Moves the track to `seconds` */
+  seek = (seconds: number) => {
+    if (this.element) this.element.currentTime = seconds;
+  };
+
+  /** Where a track that has just loaded starts, taken once */
+  takeStart = (): number => {
+    const at = this.#startAt;
+    this.#startAt = 0;
+    return at;
   };
 
   next = () => this.#move(1);
@@ -68,6 +94,7 @@ class Player {
     const to = this.index + step;
     if (to < 0 || to >= this.tracks.length) return;
     this.index = to;
+    this.#startAt = 0;
     await this.#load();
   }
 

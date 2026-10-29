@@ -4,6 +4,7 @@
   import { tick, untrack } from "svelte";
 
   import {
+    DISCLAIMER,
     loadReport,
     queue,
     type Report,
@@ -12,47 +13,69 @@
   } from "#lib/analysis/analysis.js";
   import { jobs } from "#lib/analysis/jobs.svelte.js";
   import { marks } from "#lib/analysis/marks.svelte.js";
-  import { spectrogramView } from "#lib/analysis/view.svelte.js";
+  import { Scope } from "#lib/analysis/scope.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
+  import { player, type Track } from "#lib/player.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
 
   import Judgement from "./Judgement.svelte";
   import Reading from "./Reading.svelte";
-  import Spectrogram, { DISCLAIMER } from "./Spectrogram.svelte";
-  import WindowSpectrum from "./WindowSpectrum.svelte";
-  import WindowStrip from "./WindowStrip.svelte";
+  import SpectrogramView from "./SpectrogramView.svelte";
 
-  // one file's analysis, top to bottom: the spectrogram with its guide lines and the disclaimer,
-  // the user's judgement, then the analyser's reading folded away; while the file waits or runs
-  // in the queue, how far it is with a way to cancel it
+  // one file's analysis, top to bottom: the spectrogram, the waveform and the spectrum at the
+  // cursor with the disclaimer, the user's judgement, then the analyzer's reading folded away;
+  // while the file waits or runs in the queue, how far it is with a way to cancel it
   type Props = {
     target: Target;
-    /** queue the file at once when it has no report yet, as the Analyse action does */
+    /** the file as the player plays it, null when it is not one the player can be given */
+    track?: Track | null;
+    /** queue the file at once when it has no report yet, as the Analyze action does */
     start?: boolean;
     /** called once a file's report, or the lack of one, is on the page */
     onshown?: () => void;
   };
 
-  let { target, start = false, onshown }: Props = $props();
+  let { target, track = null, start = false, onshown }: Props = $props();
 
   /** undefined while loading, null when the file has no report */
   let report = $state.raw<Report | null | undefined>(undefined);
   let error = $state("");
-  let picked = $state<number | null>(null);
   let readingOpen = $state(false);
-  let windowsShown = $state<HTMLElement | null>(null);
   const write = $derived(session.can("ReadWrite"));
+
+  /** what the drawer and the large view show of the report, kept while the report is the same */
+  let scope = $state.raw<Scope | null>(null);
+  $effect(() => {
+    const layout = report?.spectrogram;
+    if (!report || !layout) {
+      scope = null;
+      return;
+    }
+    const same = untrack(() => scope);
+    if (same?.report.path === report.path && same.report.analysedAt === report.analysedAt) return;
+    const made = new Scope(target, report, layout);
+    scope = made;
+    void made.pictures.start();
+  });
+
+  // while the player plays this file, the cursor follows it once a frame
+  $effect(() => {
+    const shown = scope;
+    const key = track?.key;
+    if (!shown || !key || !player.playing || !player.holds(key)) return;
+    let frame = requestAnimationFrame(function followed() {
+      shown.played(player.position());
+      frame = requestAnimationFrame(followed);
+    });
+    return () => cancelAnimationFrame(frame);
+  });
 
   let asked = 0;
   const load = async () => {
     const ask = ++asked;
-    // the scale is read here but reloads through its own effect, which keeps the picked window
-    const outcome = await loadReport(
-      target,
-      untrack(() => spectrogramView.scale)
-    );
+    const outcome = await loadReport(target);
     if (ask !== asked) return;
     if (outcome.ok) {
       report = outcome.data;
@@ -63,11 +86,11 @@
       error = outcome.error;
     }
   };
-  const analyse = async (force: boolean) => {
+  const analyze = async (force: boolean) => {
     const outcome = await queue(target, force);
     // a file queued already shows its job once the queue is read
     if (outcome.ok || outcome.status === 409) void jobs.refresh();
-    else toast(`Couldn't analyse the file: ${outcome.error}`, "error");
+    else toast(`Couldn't analyze the file: ${outcome.error}`, "error");
   };
 
   $effect(() => jobs.retain());
@@ -75,7 +98,6 @@
   $effect(() => {
     void targetKey(target);
     report = undefined;
-    picked = null;
     readingOpen = false;
     void load().then(() => tick().then(() => onshown?.()));
   });
@@ -88,12 +110,7 @@
     const none = report === null || report?.stale === true;
     if (!start || !none || !write || started === key) return;
     started = key;
-    void analyse(false);
-  });
-  // another scale is the same report with its layout on that scale
-  $effect(() => {
-    void spectrogramView.scale;
-    if (untrack(() => report)) void load();
+    void analyze(false);
   });
   /** the spectrogram shown across the whole screen */
   let large = $state(false);
@@ -103,15 +120,6 @@
   });
 
   const job = $derived(jobs.of(target));
-  const starts = $derived(report?.windows?.map((w) => w.t) ?? []);
-  /** A window picked on the spectrogram opens the reading at that window's spectrum */
-  const pickOnPlot = async (index: number) => {
-    picked = index;
-    readingOpen = true;
-    await tick();
-    // the spectrum loads under the strip, so the strip goes to the top to leave room for it
-    windowsShown?.scrollIntoView({ block: "start" });
-  };
 </script>
 
 <div class="flex flex-col gap-3">
@@ -120,8 +128,8 @@
       <div class="flex flex-1 flex-col gap-1">
         <span>
           {job.state === "running"
-            ? `Analysing: ${Math.round((job.progress ?? 0) * 100)}%`
-            : "Waiting for the analyser"}
+            ? `Analyzing: ${Math.round((job.progress ?? 0) * 100)}%`
+            : "Waiting for the analyzer"}
         </span>
         <div class="h-1.5 overflow-hidden rounded-full bg-surface-muted">
           <div
@@ -137,11 +145,11 @@
     </div>
   {:else if report === null && write}
     <div class="flex flex-col items-start gap-2 text-sm">
-      <p class="text-fg-muted">This file hasn't been analysed yet.</p>
-      <Button size="sm" onclick={() => void analyse(false)}>Analyse</Button>
+      <p class="text-fg-muted">This file hasn't been analyzed yet.</p>
+      <Button size="sm" onclick={() => void analyze(false)}>Analyze</Button>
     </div>
   {:else if report === null}
-    <p class="text-sm text-fg-muted">This file hasn't been analysed yet.</p>
+    <p class="text-sm text-fg-muted">This file hasn't been analyzed yet.</p>
   {/if}
 
   {#if error}
@@ -152,33 +160,22 @@
     {#if !job}
       <div class="flex flex-col items-start gap-2 text-sm">
         <p class="text-fg-muted">
-          This was analysed by an older version of reseek. Analyse again to see it.
+          This was analyzed by an older version of reseek. Analyze again to see it.
         </p>
         {#if write}
-          <Button size="sm" onclick={() => void analyse(false)}>Analyse</Button>
+          <Button size="sm" onclick={() => void analyze(false)}>Analyze</Button>
         {/if}
       </div>
     {/if}
     <Judgement {target} {report} onsaved={() => void load()} />
   {:else if report}
-    {#if report.spectrogram}
-      <Spectrogram
-        {target}
-        layout={report.spectrogram}
-        {starts}
-        {picked}
-        onpick={(i) => void pickOnPlot(i)}
-        onlarge={() => (large = true)} />
+    {#if scope}
+      <SpectrogramView {scope} {track} onlarge={() => (large = true)} />
       <Dialog
         bind:open={large}
         title={report.relativePath.split("/").at(-1) ?? report.relativePath}
         class="w-[calc(100vw-2rem)] max-w-[120rem]">
-        <Spectrogram
-          {target}
-          layout={report.spectrogram}
-          {starts}
-          {picked}
-          onpick={(i) => (picked = i)} />
+        <SpectrogramView {scope} {track} large />
       </Dialog>
     {:else}
       <p class="text-sm">{report.summary}</p>
@@ -188,32 +185,10 @@
       </p>
     {/if}
     <Judgement {target} {report} onsaved={() => void load()} />
-    <Reading {report} bind:open={readingOpen}>
-      {#if report.spectrogram && report.windows?.length}
-        <div class="flex flex-col gap-1" bind:this={windowsShown}>
-          <h4 class="text-xs font-medium text-fg-muted uppercase">Each window</h4>
-          <p class="text-xs text-fg-muted">
-            How high each second's content reaches. Pick one to see its spectrum.
-          </p>
-          <WindowStrip
-            layout={report.spectrogram}
-            windows={report.windows}
-            {picked}
-            onpick={(i) => (picked = i)} />
-          {#if picked !== null}
-            <WindowSpectrum
-              {target}
-              layout={report.spectrogram}
-              {starts}
-              {picked}
-              onpick={(i) => (picked = i)} />
-          {/if}
-        </div>
-      {/if}
-    </Reading>
+    <Reading {report} bind:open={readingOpen} />
     {#if write && !job}
-      <Button variant="ghost" size="sm" class="self-start" onclick={() => void analyse(true)}
-        ><RefreshCwIcon />Analyse again</Button>
+      <Button variant="ghost" size="sm" class="self-start" onclick={() => void analyze(true)}
+        ><RefreshCwIcon />Analyze again</Button>
     {/if}
   {/if}
 </div>

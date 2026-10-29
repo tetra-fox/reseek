@@ -19,6 +19,11 @@
 
   const track = $derived(player.current);
 
+  // the element is the player's while it is on the page, so a view can follow and move it
+  $effect(() => {
+    player.element = audio;
+    return () => (player.element = null);
+  });
   $effect(() => {
     if (!audio || !player.src) return;
     if (player.playing) void audio.play().catch(() => (player.playing = false));
@@ -37,6 +42,10 @@
       bind:currentTime={time}
       bind:duration
       bind:volume={player.volume}
+      onloadedmetadata={() => {
+        const at = player.takeStart();
+        if (at > 0 && audio) audio.currentTime = at;
+      }}
       onplay={() => (player.playing = true)}
       onpause={() => (player.playing = false)}
       onended={() => (player.index < player.tracks.length - 1 ? player.next() : null)}
