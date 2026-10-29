@@ -45,7 +45,7 @@
     data-fill={flash ? "flash" : fill}>
     {#if fill === "moving"}
       <span
-        class="block h-full bg-accent/20 transition-[width] duration-(--motion-slow) ease-(--ease-out-soft)"
+        class="block h-full bg-accent/15 transition-[width] duration-(--motion-slow) ease-(--ease-out-soft)"
         style:width={`${transfer?.percentComplete ?? 0}%`}></span>
     {/if}
   </span>

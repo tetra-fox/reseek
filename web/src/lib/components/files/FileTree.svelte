@@ -291,7 +291,7 @@
       {@render folder(line.node, line.depth)}
     </div>
   {:else}
-    {@render folder(line.node, line.depth)}
+    <div class="h-full min-w-0 flex-1">{@render folder(line.node, line.depth)}</div>
   {/if}
 {/snippet}
 
@@ -332,7 +332,8 @@
       <div
         role="row"
         class={[
-          "group absolute inset-x-0 flex items-center list-row pr-3",
+          "group absolute inset-x-0 flex items-center list-row",
+          framed && "pr-3",
           folderTint(pin.line.node)
         ]}
         id={pinnedId(pin.index)}
@@ -361,7 +362,8 @@
           role="row"
           {...list.line(line, index)}
           class={[
-            "group absolute inset-x-0 top-0 flex items-center list-row pr-3",
+            "group absolute inset-x-0 top-0 flex items-center list-row",
+            framed && "pr-3",
             !folderId && "cursor-pointer",
             folderTint(line.node),
             arrivals.isFresh(line.key) && "animate-line-in",
