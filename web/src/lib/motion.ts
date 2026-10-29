@@ -1,11 +1,21 @@
 import { cubicOut } from "svelte/easing";
 import { prefersReducedMotion } from "svelte/motion";
 
-/** The --motion-fast token in ms, for motion run from script. 0 when reduced motion is asked for */
-export const motionFast = () =>
-  prefersReducedMotion.current
-    ? 0
-    : parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--motion-fast"));
+/**
+ * A motion token in ms, for motion run from script. 0 when reduced motion is asked for. The
+ * built stylesheet may write it in seconds (".25s")
+ */
+const token = (name: string) => {
+  if (prefersReducedMotion.current) return 0;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return parseFloat(value) * (value.endsWith("ms") ? 1 : 1000);
+};
+
+/** The --motion-fast token in ms, for a small thing appearing or leaving */
+export const motionFast = () => token("--motion-fast");
+
+/** The --motion-slow token in ms, for something larger moving into place */
+export const motionSlow = () => token("--motion-slow");
 
 /**
  * How a chart's marks grow in as it first shows and move to new figures: a short tween, or none
