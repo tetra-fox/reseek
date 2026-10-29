@@ -21,7 +21,7 @@ export const analyzableDownload = (t: Transfer) =>
   isSucceeded(t.state) && analyzable(getFileName(t.filename));
 
 /** What queuing a batch came to: how many were queued and why the rest were not */
-export type BatchResult = {
+type BatchResult = {
   queued: number;
   /** downloads that have not succeeded */
   unfinished: number;
@@ -37,7 +37,7 @@ export type BatchResult = {
  * Queues every finished candidate whose extension the analyzer is offered for, one call each in
  * turn, so the queue keeps the order they were given in
  */
-export const queueBatch = async (candidates: Candidate[]): Promise<BatchResult> => {
+const queueBatch = async (candidates: Candidate[]): Promise<BatchResult> => {
   const result: BatchResult = { queued: 0, unfinished: 0, otherType: 0, current: 0, failed: [] };
   for (const c of candidates) {
     if (!c.finished) {
@@ -58,7 +58,7 @@ export const queueBatch = async (candidates: Candidate[]): Promise<BatchResult> 
 };
 
 /** A batch's result in words: what was queued, then what was skipped and why */
-export const batchSummary = (r: BatchResult): string => {
+const batchSummary = (r: BatchResult): string => {
   const reasons = [
     r.unfinished ? `${r.unfinished} not finished` : "",
     r.otherType ? `${r.otherType} not an audio type` : "",
