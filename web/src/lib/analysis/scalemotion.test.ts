@@ -19,10 +19,10 @@ describe("moving between scales", () => {
   it("eases from one scale to the next and lands on it", () => {
     const move = moveTo(still, "log", 1000, 250);
     expect(curveAt(move, 1000)).toEqual(pure("linear"));
-    // half way through the time is half way, as the easing is even about the middle
-    expect(curveAt(move, 1125)).toEqual({ linear: 0.5, log: 0.5, mel: 0 });
-    // eased, a tenth of the time is less than a tenth of the way
-    expect(curveAt(move, 1025).log).toBeLessThan(0.1);
+    // eased out, half the time is seven eighths of the way
+    expect(curveAt(move, 1125)).toEqual({ linear: 0.125, log: 0.875, mel: 0 });
+    // and a tenth of the time is more than a tenth of the way
+    expect(curveAt(move, 1025).log).toBeGreaterThan(0.1);
     expect(curveAt(move, 1250)).toEqual(pure("log"));
     expect(curveAt(move, 9000)).toEqual(pure("log"));
   });
@@ -32,8 +32,8 @@ describe("moving between scales", () => {
     const there = curveAt(first, 100);
     const second = moveTo(first, "mel", 100, 250);
     expect(curveAt(second, 100)).toEqual(there);
-    // a little later the axis has moved on from there, not jumped
-    const next = curveAt(second, 110);
+    // a moment later the axis has moved on from there, not jumped
+    const next = curveAt(second, 101);
     for (const scale of ["linear", "log", "mel"] as const) {
       expect(Math.abs(next[scale] - there[scale])).toBeLessThan(0.05);
     }

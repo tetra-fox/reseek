@@ -1,4 +1,4 @@
-import { cubicInOut } from "svelte/easing";
+import { cubicOut } from "svelte/easing";
 
 import { motionSlow } from "#lib/motion.js";
 
@@ -8,11 +8,11 @@ import { type Curve, mix, pure } from "./frequency";
 /** The frequency axis on its way from one curve to a scale, over `duration` ms from `start` */
 export type Move = { from: Curve; to: Scale; start: number; duration: number };
 
-/** Where `move` has the axis at `now`, eased in and out, the target scale once it is over */
+/** Where `move` has the axis at `now`, eased out, the target scale once it is over */
 export const curveAt = (move: Move, now: number): Curve => {
   const t = move.duration > 0 ? (now - move.start) / move.duration : 1;
   if (t >= 1) return pure(move.to);
-  return mix(move.from, pure(move.to), cubicInOut(Math.max(0, t)));
+  return mix(move.from, pure(move.to), cubicOut(Math.max(0, t)));
 };
 
 /** A move to `scale` from `now`, starting where `move` has the axis then */
