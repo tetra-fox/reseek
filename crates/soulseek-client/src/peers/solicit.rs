@@ -358,10 +358,13 @@ mod tests {
 
   #[tokio::test]
   async fn both_ready_keeps_the_users_connection() {
-    let (dialled, _a) = crate::conn::tests::pair(ConnectionOptions::default()).await;
-    let (answered, _b) = crate::conn::tests::pair(ConnectionOptions::default()).await;
-    let result = race(async { Ok(dialled) }, async { Ok(answered) }).await;
-    assert_eq!(result.unwrap().1, Via::Indirect);
+    // an unordered choice would pick the dialled one in about half of these
+    for _ in 0..64 {
+      let (dialled, _a) = crate::conn::tests::pair(ConnectionOptions::default()).await;
+      let (answered, _b) = crate::conn::tests::pair(ConnectionOptions::default()).await;
+      let result = race(async { Ok(dialled) }, async { Ok(answered) }).await;
+      assert_eq!(result.unwrap().1, Via::Indirect);
+    }
   }
 
   fn bob(connection_type: PeerConnectionType) -> Solicitation {
