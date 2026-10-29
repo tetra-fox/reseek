@@ -227,8 +227,7 @@ async fn get_file(
   Ok(Json(ConfigFile {
     name: file.name.clone(),
     path: file.path.display().to_string(),
-    // the revision of the text as the configuration last read it, which a write is
-    // checked against
+    // the text's revision as the configuration last read it, which a write is checked against
     revision: file.revision.clone(),
     text,
   }))

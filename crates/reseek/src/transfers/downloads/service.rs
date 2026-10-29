@@ -20,7 +20,7 @@ use crate::api::error::ApiError;
 use crate::services::TransferService;
 use crate::transfers::{Record, listing, removal, store};
 
-/// What a refused enqueue call is told when two run already.
+/// What a refused enqueue call is told when every one allowed at once runs already.
 const BUSY: &str =
   "Only one concurrent operation is permitted. Wait until the previous request completes";
 
@@ -46,7 +46,7 @@ fn client_transfer(transfer: &soulseek_client::Transfer) -> serde_json::Value {
 }
 
 impl Downloads {
-  /// Takes one of the two enqueue calls that may run at once; 429 when both run.
+  /// Takes one of the enqueue calls that may run at once; 429 when all of them run.
   fn enqueue_call(&self) -> Result<tokio::sync::SemaphorePermit<'_>, ApiError> {
     self
       .enqueue_calls

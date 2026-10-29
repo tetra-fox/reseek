@@ -177,7 +177,6 @@
   {#if recentError}<p class="text-sm text-danger">
       Could not load recent errors: {recentError}
     </p>{/if}
-  <!-- a phone scrolls the table sideways rather than squeeze the messages into slivers -->
   <div class="overflow-x-auto">
     <table class="w-full min-w-[36rem] text-sm">
       <thead class="text-xs text-fg-muted">

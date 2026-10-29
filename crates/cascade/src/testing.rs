@@ -163,7 +163,6 @@ pub(crate) struct Flags {
   pub(crate) volatile: bool,
 }
 
-/// The schema of [`Example`].
 pub(crate) fn example_schema() -> Schema {
   Schema::of::<Example>()
 }
@@ -218,12 +217,10 @@ pub(crate) fn watched_layers(dir: &Path) -> Layers<Example> {
     })
 }
 
-/// A watcher of [`watched_layers`].
 pub(crate) fn watched(dir: &Path) -> Watcher<Example> {
   Watcher::new(watched_layers(dir)).unwrap()
 }
 
-/// Keys and their values.
 pub(crate) fn values(pairs: &[(&str, Value)]) -> BTreeMap<Key, Value> {
   pairs
     .iter()

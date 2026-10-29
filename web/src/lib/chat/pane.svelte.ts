@@ -115,7 +115,7 @@ export class MessagePane {
     this.hasMore = page.data.hasMore;
   };
 
-  /** Reads older pages until the message `localId` is in the pane, a few at most */
+  /** Reads older pages until the message `localId` is in the pane, twenty pages at most */
   reach = async (localId: number) => {
     for (
       let pages = 0;
@@ -177,7 +177,7 @@ export class MessagePane {
     }
   };
 
-  /** a read is being told to the daemon; another asked for meanwhile is the same */
+  /** a read is being told to the daemon; another asked for meanwhile is skipped */
   #reading = false;
   /** room messages the daemon took that the server never echoed, shown as not sent */
   #unechoed = new Set<number>();

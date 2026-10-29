@@ -10,7 +10,6 @@ test("a room reads like a chat: names, actions, links and the wall", async ({ pa
   const log = page.getByRole("log");
   await expect(log.getByText("anyone have the new boards of canada rip?")).toBeVisible();
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/room.png` });
-  // the breadcrumb names the room
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("#indie");
   // bob's two lines are one group under one name, colored the same everywhere
   await expect(log.getByRole("link", { name: "bob", exact: true })).toHaveCount(1);
@@ -42,7 +41,6 @@ test("a room reads like a chat: names, actions, links and the wall", async ({ pa
   const panel = await page.getByRole("complementary", { name: "Room users" }).boundingBox();
   expect(box!.y + box!.height).toBeLessThanOrEqual(panel!.y + panel!.height + 1);
 
-  // the wall lists the tickers
   await page.getByRole("tab", { name: /Wall/ }).click();
   await expect(page.getByRole("region", { name: "Room wall" })).toContainText(
     "listening to Geogaddi"

@@ -82,7 +82,7 @@ pub(super) async fn start(shares: Arc<Shares>, settings: Arc<Settings>) -> Optio
     let mut watched = Vec::new();
     for (root, alias) in roots {
       if !root.is_dir() {
-        // the scan has warned that the share is not a directory
+        // the scan warns that the share is not a directory
         debug!(share = alias, "share not watched: it is not a directory");
         continue;
       }
@@ -386,8 +386,8 @@ pub(super) async fn apply(
   counted(shares).await.map_err(scanner::ScanError::from)
 }
 
-/// Counts the shares the index was filled from after a change and lets the totals, the server's counts and the browse
-/// cache follow, the last two at most once a minute.
+/// Counts the shares the index was filled from after a change and lets the totals, the
+/// server's counts and the browse cache follow, the last two at most once a minute.
 async fn counted(shares: &Arc<Shares>) -> Result<(), DbError> {
   let totals = shares.count_shares(&shares.filled_from().shares).await?;
   shares.publish(|status| {

@@ -70,7 +70,6 @@ pub fn send(port: u16, method: &str, path: &str) -> Option<String> {
 
 /// The daemon running for a test.
 pub struct Daemon {
-  /// the process
   pub child: Child,
   /// the loopback port it serves HTTP on
   pub port: u16,

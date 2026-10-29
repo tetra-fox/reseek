@@ -15,7 +15,8 @@ pub struct Logger {
   /// Disables log files.
   #[cascade(env = "RESEEK_NO_DISK_LOGGER", cli = "--no-disk-logger")]
   pub no_disk: bool,
-  /// Disables color in the console log. Setting `NO_COLOR` to any value has the same effect.
+  /// Disables color in the console log. Setting `NO_COLOR` to any non-empty value has the same
+  /// effect.
   #[cascade(env = "RESEEK_NO_COLOR", cli = "--no-color")]
   pub no_color: bool,
 }

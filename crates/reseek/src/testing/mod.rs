@@ -246,7 +246,7 @@ impl Stream {
     }
   }
 
-  /// The type of each event until `stop` is seen, `stop` included.
+  /// Each event up to and including the first of type `stop`.
   pub async fn until(&mut self, stop: &str) -> Vec<Sse> {
     let mut seen = Vec::new();
     while let Some(sse) = self.next().await {
@@ -292,7 +292,7 @@ pub fn with(mut request: Request<Body>, name: &'static str, value: &str) -> Requ
   request
 }
 
-/// The `name=value` part of each `Set-Cookie` of `headers` naming `name`.
+/// The `name=value` part of the first `Set-Cookie` of `headers` naming `name`.
 pub fn set_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
   headers
     .get_all("set-cookie")

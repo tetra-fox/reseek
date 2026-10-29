@@ -18,9 +18,8 @@ use tracing::debug;
 use super::{Client, Error, Result, Route, refused};
 
 /// How long to wait before opening the stream again, until the daemon says otherwise. The
-/// daemon's own `retry: 1000` comes in a block without data, which eventsource-stream 0.2
-/// drops along with its `retry` (`EventStream::dispatch`), so it is not seen and this matches
-/// it.
+/// daemon's `retry: 1000` comes in a block without data, which eventsource-stream 0.2 drops
+/// with its `retry` (`EventStream::dispatch`), so this matches it.
 const RETRY: Duration = Duration::from_secs(1);
 
 /// One frame of the event stream with its sequence number.

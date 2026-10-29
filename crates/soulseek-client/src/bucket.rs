@@ -1,7 +1,8 @@
 //! A speed limit: a bucket of bytes refilled to its capacity at each 100 ms boundary. The client
 //! keeps one for each direction, shared by every transfer going that way; an application can
-//! keep its own, such as one per group of users, and govern transfers with it. A transfer asks for what its next chunk needs and gets what
-//! is left, at most one interval's worth; when the bucket is empty it waits for the next boundary.
+//! keep its own, such as one per group of users, and govern transfers with it. A transfer asks
+//! for what its next chunk needs and gets what is left, at most one interval's worth; when the
+//! bucket is empty it waits for the next boundary.
 //! Requesters are served one at a time in arrival order. Bytes granted but not moved are given
 //! back, which lets an interval spend up to twice its capacity; the refill drops any surplus.
 

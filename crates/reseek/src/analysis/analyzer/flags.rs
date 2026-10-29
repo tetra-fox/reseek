@@ -10,7 +10,6 @@ use super::thresholds::{CLUSTER_HZ, LOWER_RATE_EDGES, MONO_CORRELATION, MONO_SID
 
 /// What was found beside the reading.
 pub(in crate::analysis) struct Findings {
-  /// the flags
   pub flags: Vec<AnalysisFlag>,
   /// a sentence for the summary per finding
   pub notes: Vec<String>,

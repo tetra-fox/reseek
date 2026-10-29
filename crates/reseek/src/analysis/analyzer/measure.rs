@@ -18,7 +18,7 @@ use super::totals::Totals;
 
 /// The length of one spectrum frame in samples.
 pub(in crate::analysis) const FFT_SIZE: usize = 4096;
-/// How far one frame starts after the one before: half a frame.
+/// How far one frame starts after the one before.
 const HOP: usize = FFT_SIZE / 2;
 /// How wide the band is that a spectrum is smoothed over, either side of a bin.
 const SMOOTH_HZ: f64 = 50.0;

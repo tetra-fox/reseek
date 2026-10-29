@@ -1,4 +1,4 @@
-//! Operational and development switches, all read once at startup.
+//! Operational and development switches.
 
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,8 @@ pub struct Flags {
   /// Runs a full share scan at startup, even when the share cache is current.
   #[cascade(env = "RESEEK_FORCE_SHARE_SCAN", cli = "--force-share-scan")]
   pub force_share_scan: bool,
-  /// Applies every database migration, including those that appear applied.
+  /// Has no effect, and is accepted for compatibility: migrations apply by version and none runs
+  /// twice.
   #[cascade(env = "RESEEK_FORCE_MIGRATIONS", cli = "--force-migrations")]
   pub force_migrations: bool,
   /// Disables the check for a newer release.
@@ -55,7 +56,7 @@ pub struct Flags {
   /// Makes user-defined regular expressions case-sensitive.
   #[cascade(env = "RESEEK_CASE_SENSITIVE_REGEX", cli = "--case-sensitive-regex")]
   pub case_sensitive_regex: bool,
-  /// Uses the older TCP keep-alive socket option on Windows versions before 10 1709.
+  /// Has no effect, and is accepted for compatibility.
   #[cascade(
     env = "RESEEK_LEGACY_WINDOWS_TCP_KEEPALIVE",
     cli = "--legacy-windows-tcp-keepalive"

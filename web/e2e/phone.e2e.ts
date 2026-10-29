@@ -311,7 +311,6 @@ test("a toast's countdown runs along its foot and holds under the pointer", asyn
   await page.getByRole("button", { name: "Copy the text" }).last().click();
   const toast = page.getByRole("alert").filter({ hasText: "Could not copy" });
   await expect(toast).toBeVisible();
-  // measured once it has flown in, as the toast and its bar are read one after the other
   await toast.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished)));
   const bar = toast.locator(".countdown");
   // measured once it has flown in, as the two boxes are read one after the other

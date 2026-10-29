@@ -1,6 +1,6 @@
-//! A download's place in its peer's queue: asked of the peer, at most once every ten seconds
-//! per download, and taken when the peer says it on its own. The place is kept on the record
-//! until the download leaves the peer's queue.
+//! A download's place in its peer's queue: asked of the peer, at most once every
+//! [`ASK_EVERY`] per download, and taken when the peer says it on its own. The place is kept
+//! on the record until the download leaves the peer's queue.
 
 use std::time::Duration;
 
@@ -23,7 +23,7 @@ const ASK_EVERY: Duration = Duration::from_secs(10);
 impl Downloads {
   /// The place of the download `id` of `username` in the peer's queue, asked of the peer and
   /// kept on the record. A download not queued by its peer is a conflict and a peer that does
-  /// not answer in time a 504; within ten seconds of the last answer that answer is given
+  /// not answer in time a 504; within `ASK_EVERY` of the last answer that answer is given
   /// again.
   pub async fn place_in_queue(&self, username: &str, id: Uuid) -> Result<u32, ApiError> {
     if self.users.is_blocked(username, None, BlockScope::Downloads) {

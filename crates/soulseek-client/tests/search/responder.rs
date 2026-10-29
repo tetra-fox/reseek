@@ -34,8 +34,7 @@ fn answer(token: u32) -> SearchResponse {
   }
 }
 
-/// a responder that answers every search and gives up on a peer after
-/// `connect_timeout`
+/// a responder that answers every search and gives up on a peer after `connect_timeout`
 async fn responder(connect_timeout: Duration) -> Session {
   let mut options = listening_options();
   options.peer_connection_options.connect_timeout = connect_timeout;

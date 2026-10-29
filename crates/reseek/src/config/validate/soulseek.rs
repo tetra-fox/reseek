@@ -99,7 +99,6 @@ pub(super) fn check(soulseek: &Soulseek, report: &mut Report) {
   ] {
     report.check(key, length(key, value.as_deref(), 1, 255));
   }
-  // the proxy is offered both or neither
   if proxy.username.is_some() != proxy.password.is_some() {
     report.add(
       "soulseek.connection.proxy.username",

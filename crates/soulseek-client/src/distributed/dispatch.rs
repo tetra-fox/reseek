@@ -47,7 +47,7 @@ impl Client {
         }
         self.search_from_parent(conn, link, &embedded.inner_frame());
       }
-      // only filtered out above
+      // handled above, before decoding
       Ok(DistributedMessage::SearchRequest(_)) => {}
       Ok(DistributedMessage::Ping(ping)) => {
         let key = WaitKey::Distributed {

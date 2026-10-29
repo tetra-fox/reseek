@@ -23,7 +23,6 @@ let seq = 0;
  * reload starts without it
  */
 export class RoomMembers {
-  /** the room */
   readonly name: string;
   /** who is in it now, by username */
   readonly users = new Keyed<RoomUser>((u) => u.username);

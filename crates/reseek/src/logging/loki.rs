@@ -34,9 +34,9 @@ const BATCH: usize = 1000;
 /// How long lines are gathered into a batch after the first.
 const GATHERING: Duration = Duration::from_secs(1);
 
-/// How often a batch is pushed before it is dropped, and the wait before the first retry,
-/// doubled for each later one.
+/// How often a batch is pushed before it is dropped.
 const TRIES: u32 = 3;
+/// The wait before the first retry, doubled for each later one.
 const RETRY: Duration = Duration::from_secs(1);
 
 /// The span the pushing task runs in. Its own lines stay out of Loki, where a failing push would

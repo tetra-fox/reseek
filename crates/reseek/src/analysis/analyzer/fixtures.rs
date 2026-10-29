@@ -106,7 +106,7 @@ pub fn combed(hz: f64) -> f64 {
 }
 
 /// `seconds` of orchestral-like stereo at 44.1 kHz: falling 6 dB an octave from 2 kHz and
-/// 36 dB an octave from 15 kHz, notes every 3 s decaying over 2.5 s, phrases swelling from -45
+/// 24 dB an octave from 15 kHz, notes every 3 s decaying over 2.5 s, phrases swelling from -45
 /// to -15 dBFS over 40 s, so its tails sit near the quantization noise.
 pub fn classical(seconds: usize) -> Audio {
   let rate = 44_100u32;

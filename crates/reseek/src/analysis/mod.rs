@@ -61,7 +61,7 @@ pub struct Analysis {
   /// where the spectrogram and waveform files are kept
   dir: PathBuf,
   queue: Mutex<Queue>,
-  /// the reports whose JSON and the spectrogram files that could not be read, said once each
+  /// paths of reports and spectrogram files that did not read, so each is warned about once
   unreadable: Mutex<HashSet<String>>,
   /// woken when a job is queued or one ends
   wake: Notify,

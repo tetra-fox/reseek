@@ -88,8 +88,9 @@ fn probe(path: &Path) -> Result<Vec<FileAttribute>, lofty::error::FileParseError
 /// How far into an MPEG file the first frame is looked for, after any ID3v2 tag.
 const FRAME_SEARCH: usize = 64 * 1024;
 
-/// Whether an MPEG audio file's first frame carries a Xing or VBRI header with a size, which
-/// marks a stream whose bit rate varies. An `Info` header marks a constant one.
+/// Whether an MPEG audio file's first frame carries a Xing header with a frame count or byte
+/// size, or a VBRI header with a byte size, which marks a stream whose bit rate varies. An
+/// `Info` header marks a constant one.
 fn mpeg_is_variable(path: &Path) -> bool {
   let Ok(mut file) = File::open(path) else {
     return false;

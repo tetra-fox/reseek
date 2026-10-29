@@ -130,7 +130,7 @@ impl<T: Root> State<T> {
       return Err(error);
     }
     let changed = changed_in_file(&schema, &old, &text);
-    // what wins each key before the edit: a file beats env, so after it the file would
+    // the sources before the edit: after it, the file would win over an env var
     let before = self.declared();
     for key in &changed {
       if let Some(by) = before.sources.get(key).and_then(Source::fixed_by) {

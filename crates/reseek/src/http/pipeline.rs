@@ -259,8 +259,9 @@ async fn health() -> &'static str {
   "Healthy"
 }
 
-/// A request no route took: 404 with no body under `/api`, else the web UI. The app's page
-/// carries the cookies the page response sets, such as a reverse proxy user's new session.
+/// A request no route took: 404 with no body under `/api`, the metrics path or `/swagger`,
+/// else the web UI. The app's page carries the cookies the page response sets, such as a
+/// reverse proxy user's new session.
 async fn fallback(app: &AppState, ui: &Ui, request: Request) -> Response {
   let path = request.uri().path();
   let under = |prefix: &str| path == prefix || path.starts_with(&format!("{prefix}/"));

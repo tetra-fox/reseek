@@ -31,7 +31,6 @@ pub struct NatPmp {
   held: Mutex<Option<(PortMapping, Mapped)>>,
 }
 
-/// The address of the default gateway.
 async fn default_gateway() -> Result<IpAddr, String> {
   let found = tokio::task::spawn_blocking(netdev::get_default_gateway)
     .await

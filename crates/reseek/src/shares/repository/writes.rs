@@ -8,7 +8,6 @@ use tracing::{debug, warn};
 
 use super::{DirectoryRows, FileRow, upper};
 
-/// Records the start of a scan.
 pub fn insert_scan(conn: &Connection, started_at: i64, options: &str) -> rusqlite::Result<()> {
   conn
     .execute(
@@ -18,7 +17,6 @@ pub fn insert_scan(conn: &Connection, started_at: i64, options: &str) -> rusqlit
     .map(drop)
 }
 
-/// Records the end of a scan.
 pub fn end_scan(conn: &Connection, started_at: i64, ended_at: i64) -> rusqlite::Result<()> {
   conn
     .execute(
@@ -38,7 +36,6 @@ pub fn mark_suspect(conn: &Connection, started_at: i64) -> rusqlite::Result<()> 
     .map(drop)
 }
 
-/// Marks the latest scan as suspect.
 pub fn mark_latest_suspect(conn: &Connection) -> rusqlite::Result<()> {
   conn
     .execute(

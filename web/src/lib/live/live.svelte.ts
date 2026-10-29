@@ -216,8 +216,8 @@ export class Live {
     if (!this.#running) return;
     const now = Date.now();
     this.#failures = [...this.#failures.filter((t) => now - t < BURST_MS), now];
-    // three losses within the window start the growing wait; from then on every loss until the
-    // stream greets again doubles it, however far apart the losses fall
+    // once the growing wait starts, every loss until the stream greets again doubles it, however
+    // far apart the losses fall
     if (this.#streak > 0 || this.#failures.length >= 3) this.#streak += 1;
     let delay = this.#streak > 0 ? Math.min(RETRY_MS * 2 ** this.#streak, MAX_RETRY_MS) : RETRY_MS;
     if (end.kind === "refused" && end.retryAfterMs !== null)

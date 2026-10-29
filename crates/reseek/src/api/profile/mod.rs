@@ -194,7 +194,7 @@ async fn put_profile_picture(
       ApiError::invalid("Could not read the picture", e.to_string()).logged()
     })?;
   let _writing = app.profile_writes.lock().await;
-  // again, with the file as the change before this one left it
+  // checked again under the lock, against the file as the change before this one left it
   let target = target(&app.config.current(), &admin.principal, PICTURE, false)?;
   let path = profile::stored_path(&app.paths.data);
   let pointed = Value::String(path.display().to_string());
@@ -223,8 +223,7 @@ async fn put_profile_picture(
     tokio::fs::rename(&staged, &path).await.map_err(replaced)?;
   } else {
     // the option is checked against a readable file, so the first picture goes in place first;
-    // nothing pointed at it before, and no other change runs, so a refusal takes it away again,
-    // while a picture the option names once written is kept
+    // nothing pointed at it before and no other change runs, so only a refused write removes it
     tokio::fs::rename(&staged, &path).await.map_err(replaced)?;
     match write(&app, &admin.principal, PICTURE, target, Some(pointed)).await {
       Ok(()) => {}

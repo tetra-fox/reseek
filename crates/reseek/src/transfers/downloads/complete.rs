@@ -1,9 +1,9 @@
 //! What follows a download whose file arrived: the file is moved from the incomplete
 //! directory to its destination under the downloads directory and the record learns where it
 //! is, then `DownloadFileComplete` is raised, the file is queued for analysis when the options
-//! ask for it, and `DownloadDirectoryComplete` is raised too when no other download from the same
-//! remote directory of the same user is left. A move that fails keeps
-//! the download succeeded with the move's error, and raises `DownloadFileFailed`.
+//! ask for it, and `DownloadDirectoryComplete` is raised too when no other download from the
+//! same remote directory of the same user is left. A move that fails keeps the download
+//! succeeded with the move's error, and raises `DownloadFileFailed`.
 
 use std::path::{Path, PathBuf};
 

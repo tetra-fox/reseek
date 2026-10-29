@@ -25,8 +25,8 @@ use crate::transfers::removal::{self, Removed};
 use crate::transfers::{Record, direction_text, store};
 use crate::users::Touch;
 
-/// Up to this many files, every one of a request asks its peer at once; more than this, five
-/// at a time, since some peers drop connections asked for dozens of files at once.
+/// Up to this many files, every one of a request asks its peer at once; more than this,
+/// [`AT_ONCE`] at a time, since some peers drop connections asked for dozens of files at once.
 const ALL_AT_ONCE: usize = 30;
 /// How many files of a larger request ask their peer at once.
 const AT_ONCE: usize = 5;

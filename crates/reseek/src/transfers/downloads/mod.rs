@@ -111,9 +111,9 @@ pub struct Downloads {
 impl Downloads {
   /// The engine over `transfers.db`, reaching peers through `network`, asking `users` who is
   /// blocked, marking the files it writes in `files`, reading what a batch searched for from
-  /// `searches`, raising its events on `events`, pushing
-  /// its records to `live`, counting the downloads that end in `telemetry` and telling `relay`
-  /// and `analysis` of each that finished. Its tasks end when `shutdown` is canceled.
+  /// `searches`, raising its events on `events`, pushing its records to `live`, counting the
+  /// downloads that end in `telemetry` and telling `relay` and `analysis` of each that
+  /// finished. Its tasks end when `shutdown` is canceled.
   #[allow(
     clippy::too_many_arguments,
     reason = "the engine takes each part of the daemon it uses"

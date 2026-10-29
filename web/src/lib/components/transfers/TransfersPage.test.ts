@@ -308,7 +308,7 @@ describe("the transfers table", () => {
       net.frame("transfers.removed", { id: b.id, username: b.username, direction: "Download" });
       await flushFaked();
       expect(row(b.id)).toBeNull();
-      // c took b's place, so ↓ has nowhere further to go and ↑ reaches a
+      // c took b's place, so Down has nowhere further to go and Up reaches a
       press(grid(), " ");
       expect(ticked()).toEqual([c.id]);
       press(grid(), "ArrowUp");

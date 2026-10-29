@@ -178,8 +178,7 @@
    declares one */
 :root {
   color-scheme: light;
-  /* the accent's hue, which every accent color in both themes takes; the color is the owner's
-     to choose, so choosing it is this one line */
+  /* the accent's hue, which every accent color in both themes takes */
   --accent-hue: 252;
   --elevation-card: 0 1px 2px 0 oklch(0.2 0.01 255 / 0.04), 0 1px 3px 0 oklch(0.2 0.01 255 / 0.03);
   --elevation-raised:
@@ -305,7 +304,7 @@
     cursor: text;
   }
 
-  /* tailwind v4's preflight no longer gives buttons a pointer, and :where keeps the disabled rule
+  /* tailwind v4's preflight gives buttons no pointer, and :where keeps the disabled rule
      below winning. A list's rows select or open on click: the list controller marks each with
      aria-selected, which is what gives them the pointer here */
   :where(

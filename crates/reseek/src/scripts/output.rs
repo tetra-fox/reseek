@@ -23,7 +23,7 @@ pub struct Tail {
 }
 
 impl Tail {
-  /// Adds one line, dropping the oldest past the limits. A line longer than all of them keeps
+  /// Adds one line, dropping the oldest past the limits. A line longer than [`BYTES`] keeps
   /// its end.
   pub fn push(&mut self, mut line: String) {
     if line.len() > BYTES {

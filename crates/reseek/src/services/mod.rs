@@ -2,8 +2,8 @@
 //! domain's service and turns the result into a response; what a call does is the service's
 //! business.
 //!
-//! Every method has a body that answers `503 soulseek_unavailable` with "<domain> not
-//! implemented yet", so [`Unavailable`] implements every trait without a line of its own and
+//! Every method has a body that answers `503 soulseek_unavailable` with `"<domain> not
+//! implemented yet"`, so [`Unavailable`] implements every trait without a line of its own and
 //! an engine overrides the methods it does. [`Services::unavailable`] installs it for every
 //! domain; an engine replaces its domain's entry.
 

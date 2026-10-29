@@ -1,8 +1,8 @@
 //! One upload's task: the user is watched, the file found again, and the client's upload run
 //! with the queue's slot, the group's speed limit and every state written as it comes, the
-//! progress at most every 250 ms. How it ended is written, counted and, for a success, raised as
-//! `UploadFileComplete`; whatever the end, the upload leaves the queue. A stop of the daemon
-//! leaves the record as it is, for the stop to end.
+//! progress at most every [`PROGRESS_EVERY`]. How it ended is written, counted and, for a
+//! success, raised as `UploadFileComplete`; whatever the end, the upload leaves the queue. A
+//! stop of the daemon leaves the record as it is, for the stop to end.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,7 +41,7 @@ const FILE_GONE: &str = "File could not be found";
 /// Progress not written, which a failing database would repeat four times a second.
 static PROGRESS_UNWRITTEN: LogLimiter = LogLimiter::new();
 
-/// The kind of the input error `error` ended with, when it ended with one: a relay agent's
+/// The I/O error from the input that `error` ended with, when it ended with one: a relay agent's
 /// file that is not there, or did not come in time, fails its upload as such.
 fn input_error(error: &ClientError) -> Option<&std::io::Error> {
   match error {

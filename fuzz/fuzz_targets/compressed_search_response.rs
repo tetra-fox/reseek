@@ -4,7 +4,7 @@ use libfuzzer_sys::fuzz_target;
 use reseek_fuzz::{LIMITS, check_peer, compressed_frame};
 use soulseek_proto::{PeerMessage, peek_search_response};
 
-// first byte: 0 = the rest is a body to compress, 1 = the rest is a raw zlib stream
+// first byte: bit 0 picks a body to compress (0) or a raw zlib stream (1)
 fuzz_target!(|data: &[u8]| {
   let Some((&mode, rest)) = data.split_first() else {
     return;

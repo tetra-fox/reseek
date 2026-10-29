@@ -57,7 +57,6 @@ pub struct FileRow {
 pub struct DirectoryRows {
   /// the remote name
   pub name: String,
-  /// its files
   pub files: Vec<FileRow>,
 }
 
@@ -116,7 +115,6 @@ fn scan(row: &rusqlite::Row) -> rusqlite::Result<Scan> {
   })
 }
 
-/// The latest scan.
 pub fn latest_scan(conn: &Connection) -> rusqlite::Result<Option<Scan>> {
   conn
     .query_row(
@@ -340,7 +338,6 @@ pub fn find_file(conn: &Connection, masked: &str) -> rusqlite::Result<Option<(Pa
     .optional()
 }
 
-/// Whether the index has the directory `masked`.
 pub fn has_directory(conn: &Connection, masked: &str) -> rusqlite::Result<bool> {
   conn
     .query_row(

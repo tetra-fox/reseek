@@ -10,8 +10,8 @@
 //!
 //! Stopping, once the HTTP host has stopped: the running searches end as canceled, the
 //! watchdog stops, the port mapping is removed, the client disconnects and is disposed, the
-//! events this raised are handled, the session is closed, the statistics fetched again and the
-//! transfer tasks end, the transfers still unfinished are ended as shut down, the scripts' tasks
+//! events this raised are handled, the session is closed, the statistics fetches and the transfer
+//! tasks end, the transfers still unfinished are ended as shut down, the scripts' tasks
 //! end with the runs the shutdown killed recorded, and last the event bus delivers what was
 //! raised and stops.
 

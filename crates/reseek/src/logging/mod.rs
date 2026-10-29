@@ -61,7 +61,7 @@ pub struct Logging {
 pub struct Sinks {
   /// the log directory, `None` for no log files
   pub files: Option<PathBuf>,
-  /// whether `NO_COLOR` is set to anything
+  /// whether `NO_COLOR` is set to a non-empty value
   pub no_color_env: bool,
   /// the Grafana Loki instance to push to, `None` for none
   pub loki: Option<String>,

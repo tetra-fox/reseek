@@ -76,8 +76,8 @@ pub enum Error {
     /// why it can not be written
     reason: String,
   },
-  /// the key's value comes from an env var, a flag or a later file, which the change would not
-  /// beat
+  /// the key's value comes from an env var or a flag, which nothing at run time changes, or from
+  /// a later file, which the change would not beat
   #[error("{key} is set by {by}")]
   SetBy {
     /// the key

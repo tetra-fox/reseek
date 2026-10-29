@@ -1,5 +1,5 @@
 //! The user's scripts: every raised event runs each script whose `on` names its type. A script
-//! runs once at a time, in the order its events were raised, from a bounded queue that drops the
+//! has one run at a time, in the order its events were raised, from a bounded queue that drops the
 //! oldest waiting run when it is full, so a burst of events never piles up processes and a
 //! script never holds up an event. Every run is recorded as `ScriptRunCompleted`, which itself
 //! runs no script.
@@ -232,7 +232,6 @@ enum Stage {
 }
 
 impl Queue {
-  /// A queue holding `job`.
   fn holding(job: Job) -> Self {
     let queue = Self::default();
     lock(&queue.waiting).jobs.push_back(job);

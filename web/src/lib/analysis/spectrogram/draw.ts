@@ -273,7 +273,6 @@ export const drawTimeline = (
   const shown = detail ? tilesIn(pictures, "spectrogram", view) : [];
   shown.forEach(paint);
 
-  // the guide lines across it
   context.lineWidth = Math.max(1, Math.round(dpr));
   for (const guide of layout.guides) {
     if (scene.hidden.has(guideKey(guide))) continue;
@@ -342,7 +341,6 @@ export const drawTimeline = (
     });
   }
 
-  // the time axis under both
   context.textAlign = "center";
   context.textBaseline = "top";
   const ticks = timeTicks(view, (5 * rem) / axis.width);
@@ -367,7 +365,6 @@ export const drawTimeline = (
     context.globalAlpha = 1;
   }
 
-  // the cursor across both, with its time on the time axis
   const across = acrossOf(view, scene.cursor);
   if (across >= 0 && across <= 1) {
     const x = Math.round(spec.x + across * spec.width);

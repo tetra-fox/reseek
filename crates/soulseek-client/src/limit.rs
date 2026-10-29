@@ -54,7 +54,6 @@ impl Limiter {
     }
   }
 
-  /// makes the bound `size`
   pub(crate) fn resize(&self, size: u32) {
     let mut sizing = lock(&self.shared.sizing);
     if size > sizing.size {
