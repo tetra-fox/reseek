@@ -13,7 +13,6 @@ use std::time::{Duration, Instant};
 
 use api_client::{Client, LocalFile};
 use api_types::analysis::{AnalysisReportQuery, AudioAnalysis};
-use api_types::events::EventsQuery;
 use api_types::files::ContentQuery;
 use api_types::options::OptionsPatch;
 use api_types::transfers::{
@@ -403,7 +402,7 @@ async fn a_finished_download_is_analyzed_while_the_option_is_on() {
   };
   let mut download = async |name: &str| {
     let remote = format!("@@share\\analyzed\\{name}");
-    let id = enqueue(&api, &peer, &remote, SIZE).await;
+    let id = enqueue(&api, &peer, &remote, SIZE as u64).await;
     serve(&uploader, &mut requests, &remote, &one).await;
     download_when(&api, &peer, id, "moved", |t| t.local_path.is_some()).await;
     id

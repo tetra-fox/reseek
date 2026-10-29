@@ -375,7 +375,7 @@ export const transfer = (
 });
 
 /** The finished download of alice's 2.flac, which `fakeAnalysis` has a report of */
-const ANALYZED_DOWNLOAD = "2f1ac000-0000-4000-8000-000000000002";
+export const ANALYZED_DOWNLOAD = "2f1ac000-0000-4000-8000-000000000002";
 
 /**
  * Answers the downloads list with alice's two folders, one download running and one done, and
