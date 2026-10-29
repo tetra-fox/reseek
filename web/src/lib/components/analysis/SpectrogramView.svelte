@@ -49,6 +49,10 @@
     if (loaded) player.playing = !player.playing;
     else void player.play(track, [track], scope.cursor);
   };
+  /** A reason the daemon gave, as a sentence */
+  const sentence = (reason: string) =>
+    `${reason.charAt(0).toUpperCase()}${reason.slice(1)}${/[.!?]$/.test(reason) ? "" : "."}`;
+
   /** The user put the cursor somewhere: playback moves there too */
   const seek = (t: number) => {
     if (loaded) player.seek(t);
@@ -142,8 +146,9 @@
       {/each}
     </div>
     {#if scope.pictures.error}
+      <!-- the daemon's reason says what to do, such as analyzing the file again -->
       <p class="rounded-control bg-plot p-4 text-sm text-plot-fg">
-        The spectrogram isn't available: {scope.pictures.error}. Analyze the file again to see it.
+        {sentence(scope.pictures.error)}
       </p>
     {:else}
       <Timeline
@@ -155,7 +160,17 @@
         ontoggle={toggle}
         onwheelhint={showHint} />
       <Minimap {scope} {scale} />
-      <p class="flex flex-wrap items-baseline gap-x-2 text-xs text-fg-muted" aria-live="polite">
+      {#if scope.pictures.lost}
+        <p class="text-xs text-fg-muted" role="status">
+          Part of the spectrogram couldn't be loaded, so it shows less detail: {sentence(
+            scope.pictures.lost
+          )}
+        </p>
+      {/if}
+      <!-- read out as the user moves the cursor, not as playback moves it every frame -->
+      <p
+        class="flex flex-wrap items-baseline gap-x-2 text-xs text-fg-muted"
+        aria-live={playing ? "off" : "polite"}>
         <span class="font-medium text-fg tabular-nums">{readout}</span>
         {#if hint}<span>Hold Ctrl and scroll to zoom.</span>{/if}
       </p>

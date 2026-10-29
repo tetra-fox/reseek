@@ -23,7 +23,7 @@ export type Cells = {
   maxDb?: number;
 };
 
-/** The spectrum of every analysed window over its second, `bins` level bytes each */
+/** The spectrum of every analyzed window over its second, `bins` level bytes each */
 export type Spectra = Schemas["WindowSpectra"] & { bytes: Uint8Array };
 
 /** What a binary answer is: a four-byte little-endian header length, the header, then bytes */
@@ -100,10 +100,14 @@ export class Pictures {
   spectra = $state.raw<Spectra | null>(null);
   /** why the overview could not be loaded, empty while it loads or once it has */
   error = $state("");
+  /** why a piece beside the overview could not be loaded: the waveform, the spectra or a tile */
+  lost = $state("");
   version = $state(0);
   readonly #tiles = new Map<string, Cells>();
   readonly #wanted: string[] = [];
   readonly #loading = new Set<string>();
+  /** tiles whose load failed, which are not asked for again */
+  readonly #failed = new Set<string>();
 
   constructor(target: Target, layout: Layout) {
     this.target = target;
@@ -122,10 +126,14 @@ export class Pictures {
       return;
     }
     this.spectrogram = spectrogramCells(spectrogram.data);
+    // without the waveform its strip stays hatched as unread, and the view says why
     if (waveform.ok) this.waveform = waveformCells(waveform.data);
+    else this.lost = waveform.error;
     if (spectra.ok) {
       const { header, bytes } = unframe<Schemas["WindowSpectra"]>(spectra.data);
       this.spectra = { ...header, bytes };
+    } else {
+      this.lost = spectra.error;
     }
     this.version++;
   }
@@ -148,7 +156,11 @@ export class Pictures {
           // drawn again, so the most recently used
           this.#tiles.delete(key);
           this.#tiles.set(key, kept);
-        } else if (!this.#loading.has(key) && !this.#wanted.includes(key)) {
+        } else if (
+          !this.#loading.has(key) &&
+          !this.#failed.has(key) &&
+          !this.#wanted.includes(key)
+        ) {
           this.#wanted.push(key);
         }
       }
@@ -163,8 +175,12 @@ export class Pictures {
       const [kind, tile] = key.split(":") as ["spectrogram" | "waveform", string];
       void load(this.target, kind, Number(tile)).then((outcome) => {
         this.#loading.delete(key);
-        // a tile that failed is asked for again when the view next needs it
-        if (outcome.ok) {
+        // a tile that failed would fail again, most often as its kept file is gone, so the view
+        // keeps the overview there and says why
+        if (!outcome.ok) {
+          this.#failed.add(key);
+          this.lost = outcome.error;
+        } else {
           this.#tiles.set(
             key,
             kind === "spectrogram" ? spectrogramCells(outcome.data) : waveformCells(outcome.data)
