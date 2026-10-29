@@ -5,11 +5,12 @@
   import ScanIcon from "@lucide/svelte/icons/scan";
   import ZoomInIcon from "@lucide/svelte/icons/zoom-in";
   import ZoomOutIcon from "@lucide/svelte/icons/zoom-out";
-  import type { Component } from "svelte";
+  import { type Component, untrack } from "svelte";
 
   import { DISCLAIMER, SCALES } from "#lib/analysis/analysis.js";
   import { guideColor, guideKey } from "#lib/analysis/draw.js";
   import { formatHz } from "#lib/analysis/frequency.js";
+  import { ScaleMotion } from "#lib/analysis/scalemotion.svelte.js";
   import type { Scope } from "#lib/analysis/scope.svelte.js";
   import { formatTime, MIN_SPAN, showsAll } from "#lib/analysis/timeview.js";
   import { spectrogramView } from "#lib/analysis/view.svelte.js";
@@ -39,6 +40,10 @@
 
   const layout = $derived(scope.layout);
   const scale = $derived(spectrogramView.scale ?? layout.scale);
+  // the plots move to a new scale together; the choice itself is saved at the click
+  const motion = new ScaleMotion(untrack(() => scale));
+  $effect(() => motion.to(scale));
+  $effect(() => () => motion.stop());
   const canPlay = $derived(!!track && playable(track.filename));
   const loaded = $derived(!!track && player.holds(track.key));
   const playing = $derived(loaded && player.playing);
@@ -153,13 +158,13 @@
     {:else}
       <Timeline
         {scope}
-        {scale}
+        {motion}
         {large}
         {readout}
         onseek={seek}
         ontoggle={toggle}
         onwheelhint={showHint} />
-      <Minimap {scope} {scale} />
+      <Minimap {scope} {motion} />
       {#if scope.pictures.lost}
         <p class="text-xs text-fg-muted" role="status">
           Part of the spectrogram couldn't be loaded, so it shows less detail: {sentence(
@@ -181,7 +186,7 @@
       {/if}
     {/if}
   </div>
-  <WindowSpectrum {scope} {scale} />
+  <WindowSpectrum {scope} curve={motion.curve} />
   <div class={["flex flex-col gap-2", large && "xl:col-span-2"]}>
     <p class="text-xs text-fg-muted">
       Drag the line or click to move the cursor; the arrow keys step it a window at a time, with

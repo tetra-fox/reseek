@@ -1,14 +1,24 @@
 import type { Guide, Scale } from "./analysis";
-import { formatHz, frequencyTicks, heightOf, hzAt } from "./frequency";
 import {
+  axisTicks,
+  type Curve,
+  formatHz,
+  heightOn,
+  hzOn,
+  pure,
+  rowBins,
+  scaleOf
+} from "./frequency";
+import {
+  binRaster,
   drawRaster,
   levelAt,
   levelColors,
   loudest,
   type Palette,
   peakBetween,
-  rasterize,
-  type Rect
+  type Rect,
+  warp
 } from "./paint";
 import type { Cells, Pictures } from "./pictures.svelte";
 import { acrossOf, formatTime, timeAt, timeTicks, type View } from "./timeview";
@@ -88,7 +98,8 @@ export const guideKey = (guide: Guide) => `${guide.kind}:${guide.hz}`;
 export type Scene = {
   pictures: Pictures;
   view: View;
-  scale: Scale;
+  /** the frequency axis, a scale or on its way between two */
+  curve: Curve;
   cursor: number;
   hidden: ReadonlySet<string>;
   palette: Palette;
@@ -96,11 +107,25 @@ export type Scene = {
   hover: { x: number; y: number } | null;
 };
 
-/** The spectrogram images drawn from each set of columns, kept for the scale and height drawn */
+/**
+ * The images spectrograms are drawn from, kept for each set of columns: the bin raster, and the
+ * image warped from it for the scale and height drawn
+ */
 export class Rasters {
+  readonly #bins = new WeakMap<Cells, { top: number; canvas: HTMLCanvasElement }>();
   readonly #kept = new WeakMap<Cells, { key: string; canvas: HTMLCanvasElement }>();
+  /** the rows of the axis last drawn between scales, made once a frame */
+  #rows: { curve: Curve; key: string; table: Float32Array } | null = null;
 
-  of(
+  #binsOf(cells: Cells, colors: () => Uint8ClampedArray, top: number) {
+    const kept = this.#bins.get(cells);
+    if (kept?.top === top) return kept.canvas;
+    const canvas = binRaster(cells, colors());
+    this.#bins.set(cells, { top, canvas });
+    return canvas;
+  }
+
+  #of(
     cells: Cells,
     scale: Scale,
     maxHz: number,
@@ -111,9 +136,44 @@ export class Rasters {
     const key = `${scale}:${height}:${top}`;
     const kept = this.#kept.get(cells);
     if (kept?.key === key) return kept.canvas;
-    const canvas = rasterize(cells, scale, maxHz, height, colors());
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, cells.count);
+    canvas.height = Math.max(1, height);
+    const context = canvas.getContext("2d");
+    if (context && cells.count) {
+      const rows = rowBins(pure(scale), maxHz, cells.width, height);
+      const rect = { x: 0, y: 0, width: cells.count, height };
+      warp(context, this.#binsOf(cells, colors, top), rows, 0, cells.count, rect);
+    }
     this.#kept.set(cells, { key, canvas });
     return canvas;
+  }
+
+  /**
+   * Draws the part of `cells` in `view` into `rect` on `curve`: the image kept for a scale, or,
+   * while the axis is between scales, the bin raster warped onto it
+   */
+  draw(
+    context: CanvasRenderingContext2D,
+    cells: Cells,
+    curve: Curve,
+    maxHz: number,
+    colors: () => Uint8ClampedArray,
+    top: number,
+    view: View,
+    rect: Rect
+  ) {
+    const scale = scaleOf(curve);
+    if (scale) {
+      const raster = this.#of(cells, scale, maxHz, rect.height, colors, top);
+      drawRaster(context, raster, cells, view, rect);
+      return;
+    }
+    const key = `${maxHz}:${cells.width}:${rect.height}`;
+    if (this.#rows?.curve !== curve || this.#rows.key !== key) {
+      this.#rows = { curve, key, table: rowBins(curve, maxHz, cells.width, rect.height) };
+    }
+    drawRaster(context, this.#binsOf(cells, colors, top), cells, view, rect, this.#rows.table);
   }
 }
 
@@ -183,7 +243,7 @@ export const drawTimeline = (
   scene: Scene,
   rasters: Rasters
 ) => {
-  const { pictures, view, scale, palette } = scene;
+  const { pictures, view, curve, palette } = scene;
   const { layout } = pictures;
   const { spectrogram: spec, waveform: wave, axis, rem, dpr } = stage;
   context.clearRect(0, 0, stage.width, stage.height);
@@ -200,13 +260,7 @@ export const drawTimeline = (
   const colors = () => levelColors(palette.levels, top, dbPerByte);
   context.imageSmoothingEnabled = true;
   const paint = (cells: Cells) =>
-    drawRaster(
-      context,
-      rasters.of(cells, scale, layout.maxHz, spec.height, colors, top),
-      cells,
-      view,
-      spec
-    );
+    rasters.draw(context, cells, curve, layout.maxHz, colors, top, view, spec);
   paint(overview);
   const detail = wantsDetail(
     overview,
@@ -223,7 +277,7 @@ export const drawTimeline = (
   for (const guide of layout.guides) {
     if (scene.hidden.has(guideKey(guide))) continue;
     const y =
-      Math.round(spec.y + heightOf(scale, layout.maxHz, guide.hz) * (spec.height - 1)) + 0.5;
+      Math.round(spec.y + heightOn(curve, layout.maxHz, guide.hz) * (spec.height - 1)) + 0.5;
     context.strokeStyle = guideColor(guide, layout.guides);
     context.setLineDash(guide.kind === "cutoff" ? [4 * dpr, 3 * dpr] : []);
     context.beginPath();
@@ -238,15 +292,14 @@ export const drawTimeline = (
   context.textAlign = "right";
   context.textBaseline = "middle";
   context.fillStyle = palette.muted;
-  let lastY = Number.POSITIVE_INFINITY;
-  for (const hz of frequencyTicks(scale, layout.maxHz)) {
-    const y = spec.y + heightOf(scale, layout.maxHz, hz) * spec.height;
-    if (lastY - y < 0.9 * rem) continue;
-    lastY = y;
+  for (const { hz, at, alpha } of axisTicks(curve, layout.maxHz, spec.height, 0.9 * rem)) {
+    const y = spec.y + at * spec.height;
+    context.globalAlpha = alpha;
     context.fillRect(spec.x - 0.25 * rem, Math.round(y), 0.2 * rem, dpr);
     const label = Math.min(spec.y + spec.height - 0.4 * rem, Math.max(spec.y + 0.4 * rem, y));
     context.fillText(formatHz(hz), spec.x - 0.35 * rem, label);
   }
+  context.globalAlpha = 1;
 
   // the waveform, from the tiles at full detail where they have arrived, else the overview
   const waves = pictures.waveform;
@@ -367,7 +420,7 @@ const readout = (
   if (inside(spec, x, y)) {
     const t = timeAt(scene.view, acrossRect(spec, x));
     const height = (y - spec.y) / spec.height;
-    const hz = hzAt(scene.scale, layout.maxHz, height);
+    const hz = hzOn(scene.curve, layout.maxHz, height);
     const bin = Math.min(layout.bins - 1, Math.floor((hz / layout.maxHz) * layout.bins));
     const source = (detail && tiles.find((c) => c.from <= t && t < c.to)) || overview;
     const byte = levelAt(source, t, bin);

@@ -1,23 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  import type { Scale } from "#lib/analysis/analysis.js";
   import { Rasters } from "#lib/analysis/draw.js";
-  import {
-    drawRaster,
-    levelColors,
-    loudest,
-    type Palette,
-    readPalette
-  } from "#lib/analysis/paint.js";
+  import { levelColors, loudest, type Palette, readPalette } from "#lib/analysis/paint.js";
+  import type { ScaleMotion } from "#lib/analysis/scalemotion.svelte.js";
   import type { Scope } from "#lib/analysis/scope.svelte.js";
   import { acrossOf, whole } from "#lib/analysis/timeview.js";
 
   // the whole file's spectrogram in a strip, the part in view outlined and the rest dimmed, with
   // the cursor; dragging the outline pans the view, and pressing elsewhere centers it there
-  type Props = { scope: Scope; scale: Scale };
+  type Props = { scope: Scope; motion: ScaleMotion };
 
-  let { scope, scale }: Props = $props();
+  let { scope, motion }: Props = $props();
 
   let canvas = $state<HTMLCanvasElement | null>(null);
   let width = $state(0);
@@ -32,20 +26,22 @@
   });
 
   let frame = 0;
-  const draw = () => {
+  const draw = (now: number) => {
     frame = 0;
     const context = canvas?.getContext("2d");
     const overview = scope.pictures.spectrogram;
     if (!context || !palette || !overview) return;
+    // a moving axis draws again next frame
+    if (motion.moving(now)) frame = requestAnimationFrame(draw);
     const w = Math.round(width * dpr);
     const h = Math.round(height * dpr);
     context.clearRect(0, 0, w, h);
     const top = loudest(overview);
     const dbPerByte = ((overview.maxDb ?? 0) - (overview.minDb ?? -160)) / 255;
     const colors = () => levelColors(palette!.levels, top, dbPerByte);
-    const raster = rasters.of(overview, scale, scope.layout.maxHz, h, colors, top);
     const all = whole(scope.duration);
-    drawRaster(context, raster, overview, all, { x: 0, y: 0, width: w, height: h });
+    const rect = { x: 0, y: 0, width: w, height: h };
+    rasters.draw(context, overview, motion.at(now), scope.layout.maxHz, colors, top, all, rect);
     const from = acrossOf(all, scope.view.start) * w;
     const to = acrossOf(all, scope.view.start + scope.view.span) * w;
     context.fillStyle = palette.plot;
@@ -60,7 +56,16 @@
     context.fillRect(Math.round(acrossOf(all, scope.cursor) * w), 0, dpr, h);
   };
   $effect(() => {
-    void [width, height, dpr, scale, palette, scope.view, scope.cursor, scope.pictures.version];
+    void [
+      width,
+      height,
+      dpr,
+      motion.target,
+      palette,
+      scope.view,
+      scope.cursor,
+      scope.pictures.version
+    ];
     if (!frame) frame = requestAnimationFrame(draw);
   });
   $effect(() => () => cancelAnimationFrame(frame));

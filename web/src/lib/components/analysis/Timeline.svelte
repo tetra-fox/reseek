@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  import type { Scale } from "#lib/analysis/analysis.js";
   import {
     acrossRect,
     drawTimeline,
@@ -12,6 +11,7 @@
     wantsDetail
   } from "#lib/analysis/draw.js";
   import { type Palette, readPalette } from "#lib/analysis/paint.js";
+  import type { ScaleMotion } from "#lib/analysis/scalemotion.svelte.js";
   import type { Scope } from "#lib/analysis/scope.svelte.js";
   import { acrossOf, formatTime, showsAll, timeAt } from "#lib/analysis/timeview.js";
 
@@ -22,7 +22,8 @@
   // pointer, and the arrow keys step the cursor a window at a time
   type Props = {
     scope: Scope;
-    scale: Scale;
+    /** the frequency axis, drawn where it is at each frame's time */
+    motion: ScaleMotion;
     /** the large view: taller plots, and the plain wheel zooms as nothing scrolls under it */
     large?: boolean;
     /** what the cursor reads as, for assistive technology */
@@ -35,7 +36,7 @@
     onwheelhint?: () => void;
   };
 
-  let { scope, scale, large = false, readout, onseek, ontoggle, onwheelhint }: Props = $props();
+  let { scope, motion, large = false, readout, onseek, ontoggle, onwheelhint }: Props = $props();
 
   let canvas = $state<HTMLCanvasElement | null>(null);
   let width = $state(0);
@@ -62,17 +63,19 @@
   });
 
   let frame = 0;
-  const draw = () => {
+  const draw = (now: number) => {
     frame = 0;
     const context = canvas?.getContext("2d");
     if (!context || !palette || !width) return;
+    // a moving axis draws again next frame
+    if (motion.moving(now)) frame = requestAnimationFrame(draw);
     drawTimeline(
       context,
       stage,
       {
         pictures: scope.pictures,
         view: scope.view,
-        scale,
+        curve: motion.at(now),
         cursor: scope.cursor,
         hidden: scope.hidden,
         palette,
@@ -83,7 +86,7 @@
   };
   // everything drawn is read here, so any change draws again, once a frame
   $effect(() => {
-    void [stage, scale, palette, hover, scope.view, scope.cursor, scope.pictures.version];
+    void [stage, motion.target, palette, hover, scope.view, scope.cursor, scope.pictures.version];
     void [...scope.hidden];
     if (!frame) frame = requestAnimationFrame(draw);
   });
