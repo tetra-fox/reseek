@@ -174,10 +174,12 @@ export class Scope {
 
   /** Puts the cursor at `t` and the view follows it again */
   place(t: number) {
-    this.#stop();
     this.cursor = Math.min(this.duration, Math.max(0, t));
     this.following = true;
-    this.view = follow(this.view, this.cursor, this.duration);
+    // a cursor sent out of sight (Home, End, a step past the edge) slides the view to it
+    const base = this.#zooming?.to ?? this.view;
+    const next = follow(base, this.cursor, this.duration);
+    if (next !== base) this.#ease(next, 0.5);
   }
 
   /** Moves the cursor to `t` under the user's pointer, which keeps it in sight itself */
