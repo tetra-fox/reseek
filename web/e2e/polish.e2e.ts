@@ -171,3 +171,37 @@ test("shows a list's focus ring for the keys, not after a click", async ({ page 
   await expect(list.locator("[data-focused]")).toHaveCount(1);
   await expect(list.locator("[data-focused]")).not.toHaveCSS("box-shadow", "none");
 });
+
+test("fades between screens without morphing the content area", async ({ page }) => {
+  await fakeChat(page);
+  await login(page, "/dashboard");
+  // the size each named part of a transition starts and ends at, as the transitions run
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    Object.assign(window, { seen });
+    const watch = () => {
+      for (const a of document.getAnimations()) {
+        const effect = a.effect as KeyframeEffect;
+        if (!effect.pseudoElement?.startsWith("::view-transition-group")) continue;
+        const frames = effect.getKeyframes();
+        const size = (k: Keyframe) => `${k.width} x ${k.height}`;
+        seen.push(`${effect.pseudoElement}: ${size(frames[0])} to ${size(frames.at(-1)!)}`);
+      }
+      requestAnimationFrame(watch);
+    };
+    watch();
+  });
+  const seen = () => page.evaluate(() => (window as unknown as { seen: string[] }).seen);
+  // from a padded screen to the full-height chat, and back
+  await page.getByRole("link", { name: "Chat" }).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+  await page.getByRole("link", { name: "Dashboard" }).click();
+  await expect(page).toHaveURL(/#\/dashboard$/);
+  await expect
+    .poll(async () => (await seen()).some((s) => s.startsWith("::view-transition-group(page)")))
+    .toBe(true);
+  for (const s of await seen()) {
+    const [from, to] = s.split(": ")[1].split(" to ");
+    expect(to, s).toBe(from);
+  }
+});

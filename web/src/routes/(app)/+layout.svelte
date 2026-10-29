@@ -48,10 +48,11 @@
     if (prefersReducedMotion.current || typeof document.startViewTransition !== "function") return;
     const { from, to } = navigation;
     if (!from?.url || !to?.url || !changesScreen(route(from.url).path, route(to.url).path)) return;
-    // the page is named only while the transition runs: a name makes the page a stacking
-    // context of its own, which would put the fixed layers drawn in a screen, such as the
-    // transfer details drawer, under the header
-    const page = content.scroller?.querySelector("main");
+    // the content area fades, not the screen in it: its box is the same on every screen, where a
+    // padded screen's and a full-height one's differ and would be morphed into each other. It is
+    // named only while the transition runs, as a name makes it a stacking context that would put
+    // a screen's fixed layers, such as the transfer details drawer, under the header
+    const page = content.scroller;
     if (page) page.style.viewTransitionName = "page";
     return new Promise((ready) => {
       const transition = document.startViewTransition(async () => {
