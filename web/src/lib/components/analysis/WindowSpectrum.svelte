@@ -15,6 +15,8 @@
   let { scope, curve }: Props = $props();
 
   const PADDING = { left: 40, bottom: 20, top: 4, right: 8 };
+  /** how many pixels of the axis one plotted point stands for */
+  const SMOOTH_PX = 3;
   let width = $state(0);
   let height = $state(0);
   let rem = $state(16);
@@ -27,16 +29,34 @@
   const maxHz = $derived(scope.layout.maxHz);
   /** across the axis from its lowest frequency (0) to its highest (1), as the spectrogram runs */
   const across = (hz: number) => 1 - heightOn(curve, maxHz, hz);
+  const inner = $derived(Math.max(0, width - PADDING.left - PADDING.right));
+  /**
+   * The window's levels as the line draws them: bins that fall within the same few pixels on
+   * the current axis are averaged by power into one point, so the crowded top of a log or mel
+   * axis reads as a curve rather than a comb of single-bin spikes
+   */
   const points = $derived.by(() => {
     if (!spectra || index < 0 || index >= spectra.windows) return [];
     const { bins, minDb, maxDb, bytes } = spectra;
     const row = bytes.subarray(index * bins, (index + 1) * bins);
-    return Array.from(row, (byte, bin) => ({
-      x: across(binHz(bin, bins, maxHz)),
-      db: minDb + (byte / 255) * (maxDb - minDb)
-    }));
+    const buckets = Math.max(1, Math.round(inner / SMOOTH_PX));
+    const power = new Float64Array(buckets);
+    const xs = new Float64Array(buckets);
+    const count = new Uint32Array(buckets);
+    row.forEach((byte, bin) => {
+      const x = across(binHz(bin, bins, maxHz));
+      const b = Math.min(buckets - 1, Math.max(0, Math.floor(x * buckets)));
+      power[b] += 10 ** ((minDb + (byte / 255) * (maxDb - minDb)) / 10);
+      xs[b] += x;
+      count[b] += 1;
+    });
+    const out: { x: number; db: number }[] = [];
+    for (let b = 0; b < buckets; b++) {
+      if (!count[b]) continue;
+      out.push({ x: xs[b] / count[b], db: Math.max(minDb, 10 * Math.log10(power[b] / count[b])) });
+    }
+    return out;
   });
-  const inner = $derived(Math.max(0, width - PADDING.left - PADDING.right));
   // a label is up to two and a quarter rem wide
   const ticks = $derived(axisTicks(curve, maxHz, inner, 2.75 * rem));
   const at = $derived(index >= 0 ? formatTime(scope.starts[index] ?? 0) : "");
