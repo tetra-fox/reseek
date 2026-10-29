@@ -2,9 +2,9 @@
   import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
   import CircleXIcon from "@lucide/svelte/icons/circle-x";
 
-  import Linked from "#lib/components/Linked.svelte";
+  import Avatar from "#lib/components/users/Avatar.svelte";
 
-  import Avatar from "./Avatar.svelte";
+  import Linked from "./Linked.svelte";
 
   // a user's profile as a peer is sent it: the picture, the text and the upload figures. The
   // same view shows other users' profiles and the preview of our own

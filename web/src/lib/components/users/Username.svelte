@@ -11,7 +11,6 @@
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import { DropdownMenu, Popover } from "bits-ui";
 
-  import { nameColor } from "#lib/colors.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
@@ -19,13 +18,14 @@
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { cn } from "#lib/ui/cn.js";
-  import { users } from "#lib/users.svelte.js";
+  import { links, pin } from "#lib/users/actions.js";
+  import { blocking, unblock } from "#lib/users/block.svelte.js";
+  import { nameColor } from "#lib/users/colors.js";
+  import { CLOSE_DELAY_MS, LONG_PRESS_MS, OPEN_DELAY_MS, open } from "#lib/users/hover.svelte.js";
+  import { users } from "#lib/users/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";
 
-  import { links, pin } from "./actions";
-  import { blocking, unblock } from "./block.svelte";
   import GroupBadge from "./GroupBadge.svelte";
-  import { CLOSE_DELAY_MS, LONG_PRESS_MS, OPEN_DELAY_MS, open } from "./hover.svelte";
   import UserCard from "./UserCard.svelte";
 
   type Props = {

@@ -5,8 +5,8 @@ import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { blocking } from "#lib/users/block.svelte.js";
 
-import { blocking } from "./block.svelte";
 import BlockDialog from "./BlockDialog.svelte";
 
 describe("the block dialog", () => {

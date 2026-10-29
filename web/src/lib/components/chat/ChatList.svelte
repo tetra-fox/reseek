@@ -15,7 +15,6 @@
   import { sortedConversations, sortedRooms } from "#lib/chat/order.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { actionOf } from "#lib/chat/rich.js";
-  import { nameColor } from "#lib/colors.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
@@ -29,7 +28,8 @@
   import { chatHref, roomHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { users } from "#lib/users.svelte.js";
+  import { nameColor } from "#lib/users/colors.js";
+  import { users } from "#lib/users/users.svelte.js";
 
   import ChatMenuItems from "./ChatMenuItems.svelte";
 

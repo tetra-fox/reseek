@@ -13,16 +13,17 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
-  import ProfileView from "#lib/components/users/ProfileView.svelte";
   import UserCard from "#lib/components/users/UserCard.svelte";
   import { editability } from "#lib/config/editability.js";
   import { valueAt } from "#lib/config/sections.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
-  import { ownProfile } from "#lib/profile.svelte.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { users } from "#lib/users.svelte.js";
+  import { ownProfile } from "#lib/users/profile.svelte.js";
+  import { users } from "#lib/users/users.svelte.js";
+
+  import ProfileView from "./ProfileView.svelte";
 
   // our own profile: the text and picture on the left, and on the right how others see them
   const PICTURE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];

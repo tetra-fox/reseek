@@ -4,7 +4,8 @@ import { toast } from "#lib/feedback/toast.svelte.js";
 import { plural } from "#lib/format.js";
 import { call } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
-import { users } from "#lib/users.svelte.js";
+
+import { users } from "./users.svelte";
 
 export type BlockScope = Schemas["BlockScope"];
 export type BlockRequest = Schemas["BlockRequest"];

@@ -2,8 +2,8 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { interaction } from "#lib/lists/interaction.svelte.js";
+import { CLOSE_DELAY_MS, OPEN_DELAY_MS } from "#lib/users/hover.svelte.js";
 
-import { CLOSE_DELAY_MS, OPEN_DELAY_MS } from "./hover.svelte";
 import Username from "./Username.svelte";
 
 const summary = {

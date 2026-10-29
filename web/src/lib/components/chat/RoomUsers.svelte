@@ -12,7 +12,6 @@
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
-  import { flag } from "#lib/components/users/hover.svelte.js";
   import Presence from "#lib/components/users/Presence.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
@@ -23,7 +22,8 @@
   import { userHref } from "#lib/nav.js";
   import type { Outcome } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { users } from "#lib/users.svelte.js";
+  import { flag } from "#lib/users/hover.svelte.js";
+  import { users } from "#lib/users/users.svelte.js";
 
   // who is in a room: operators then members, online first, a filter and the counts; in a private
   // room its owner and operators also manage who belongs from here

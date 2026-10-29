@@ -37,7 +37,7 @@
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { motionFast } from "#lib/ui/motion.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
-  import { users } from "#lib/users.svelte.js";
+  import { users } from "#lib/users/users.svelte.js";
 
   import DenseResults from "./DenseResults.svelte";
   import ResponseCard from "./ResponseCard.svelte";

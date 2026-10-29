@@ -23,8 +23,8 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { unblock, unblockMany } from "#lib/users/block.svelte.js";
 
-  import { unblock, unblockMany } from "./block.svelte";
   import Username from "./Username.svelte";
 
   // the blocks in force: ours, and the configuration's, which only the configuration lifts

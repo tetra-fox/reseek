@@ -24,14 +24,14 @@
   import { actionOf } from "#lib/chat/rich.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
-  import { links } from "#lib/components/users/actions.js";
-  import { blocking } from "#lib/components/users/block.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { plural } from "#lib/format.js";
   import { chatHref, href, roomHref, userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { searches } from "#lib/search/searches.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
+  import { links } from "#lib/users/actions.js";
+  import { blocking } from "#lib/users/block.svelte.js";
 
   type Props = {
     pane: MessagePane;

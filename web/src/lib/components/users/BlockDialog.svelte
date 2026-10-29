@@ -8,7 +8,6 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-
   import {
     ALSO_SCOPES,
     block,
@@ -16,7 +15,7 @@
     blocking,
     defaultScopes,
     STOP_SCOPES
-  } from "./block.svelte";
+  } from "#lib/users/block.svelte.js";
 
   // the page's one block dialog: reason, how long, and what the block stops
   const DURATIONS = [

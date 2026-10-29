@@ -4,7 +4,7 @@ import { api, byRoom, byUser, type Schemas } from "#lib/api/client.js";
 import { Keyed } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
-import { users } from "#lib/users.svelte.js";
+import { users } from "#lib/users/users.svelte.js";
 
 import { notifier } from "./notify.svelte";
 

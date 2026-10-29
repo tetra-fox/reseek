@@ -9,7 +9,6 @@
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
 
   import { app } from "#lib/app.svelte.js";
-  import { nameColor } from "#lib/colors.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
@@ -18,16 +17,17 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, formatSpeed, plural } from "#lib/format.js";
   import { userHref } from "#lib/nav.js";
-  import { firstLines, ownProfile } from "#lib/profile.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { type UserSummary, users } from "#lib/users.svelte.js";
+  import { links, pin } from "#lib/users/actions.js";
+  import { nameColor } from "#lib/users/colors.js";
+  import { flag } from "#lib/users/hover.svelte.js";
+  import { firstLines, ownProfile } from "#lib/users/profile.svelte.js";
+  import { type UserSummary, users } from "#lib/users/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";
 
-  import { links, pin } from "./actions";
   import Avatar from "./Avatar.svelte";
   import GroupBadge from "./GroupBadge.svelte";
-  import { flag } from "./hover.svelte";
 
   type Props = {
     name: string;

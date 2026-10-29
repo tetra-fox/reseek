@@ -12,7 +12,6 @@
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
-  import { blocking } from "#lib/components/users/block.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatBytes, getDirectoryName, getFileName, plural } from "#lib/format.js";
   import { heldOrder } from "#lib/lists/interaction.svelte.js";
@@ -34,7 +33,8 @@
   import { unseen } from "#lib/transfers/unseen.svelte.js";
   import { inStates, type Item, layout, type MarkLookup, textFilter } from "#lib/transfers/view.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
-  import { users } from "#lib/users.svelte.js";
+  import { blocking } from "#lib/users/block.svelte.js";
+  import { users } from "#lib/users/users.svelte.js";
 
   import AddDownload from "./AddDownload.svelte";
   import DetailsDrawer from "./DetailsDrawer.svelte";

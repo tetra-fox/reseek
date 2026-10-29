@@ -17,7 +17,6 @@
 
   import { api, byUser, type Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
-  import { nameColor } from "#lib/colors.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
@@ -25,6 +24,9 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import Avatar from "#lib/components/users/Avatar.svelte";
+  import GroupBadge from "#lib/components/users/GroupBadge.svelte";
+  import Presence from "#lib/components/users/Presence.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, formatBytes, formatSpeed, plural } from "#lib/format.js";
@@ -32,14 +34,11 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { assignGroup, links, pin, userGroups } from "#lib/users/actions.js";
+  import { blocking, unblock } from "#lib/users/block.svelte.js";
+  import { nameColor } from "#lib/users/colors.js";
+  import { flag } from "#lib/users/hover.svelte.js";
   import { BUDDY } from "#lib/wording.js";
-
-  import { assignGroup, links, pin, userGroups } from "./actions";
-  import Avatar from "./Avatar.svelte";
-  import { blocking, unblock } from "./block.svelte";
-  import GroupBadge from "./GroupBadge.svelte";
-  import { flag } from "./hover.svelte";
-  import Presence from "./Presence.svelte";
 
   type Props = {
     profile: Schemas["UserProfile"];

@@ -6,9 +6,8 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { users } from "#lib/users.svelte.js";
-
-  import { assignGroup, userGroups } from "./actions";
+  import { assignGroup, userGroups } from "#lib/users/actions.js";
+  import { users } from "#lib/users/users.svelte.js";
 
   // puts users in one of the user-defined upload groups, or takes them out
   let { open = $bindable(), usernames }: { open: boolean; usernames: string[] } = $props();

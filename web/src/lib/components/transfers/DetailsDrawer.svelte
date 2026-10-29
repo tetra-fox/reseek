@@ -28,7 +28,7 @@
   import { endpoint, type Transfers } from "#lib/transfers/transfers.svelte.js";
   import { keepsKey, layerOpen, withModifier } from "#lib/ui/keys.js";
   import { motionFast } from "#lib/ui/motion.js";
-  import { users } from "#lib/users.svelte.js";
+  import { users } from "#lib/users/users.svelte.js";
 
   import RowMenu from "./RowMenu.svelte";
 

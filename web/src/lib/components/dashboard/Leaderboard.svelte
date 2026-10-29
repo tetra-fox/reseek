@@ -8,10 +8,10 @@
   import type { Schemas } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
-  import { links } from "#lib/components/users/actions.js";
   import Username from "#lib/components/users/Username.svelte";
   import { type RangeLabel, reports, type Window } from "#lib/dashboard/reports.js";
   import { columnWidth, formatBytes, formatSpeed, plural, WIDEST } from "#lib/format.js";
+  import { links } from "#lib/users/actions.js";
 
   // who moved the most with us each way, by count, bytes or speed
   let { span, range }: { span: Window; range: RangeLabel } = $props();

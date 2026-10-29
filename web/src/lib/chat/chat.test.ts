@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fakeNetwork } from "#lib/testing/network.js";
-import { users } from "#lib/users.svelte.js";
+import { users } from "#lib/users/users.svelte.js";
 
 import { chat } from "./chat.svelte";
 

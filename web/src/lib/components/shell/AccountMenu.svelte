@@ -12,9 +12,9 @@
   import Avatar from "#lib/components/users/Avatar.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { href } from "#lib/nav.js";
-  import { ownProfile } from "#lib/profile.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { sidebar } from "#lib/shell/sidebar.svelte.js";
+  import { ownProfile } from "#lib/users/profile.svelte.js";
 
   const name = $derived(session.principal?.name ?? "");
   const role = $derived(session.principal?.role ?? "");

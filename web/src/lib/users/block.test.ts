@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { toasts } from "#lib/feedback/toast.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
-import { users } from "#lib/users.svelte.js";
 
 import { unblockMany } from "./block.svelte";
+import { users } from "./users.svelte";
 
 describe("unblocking several users", () => {
   afterEach(() => {

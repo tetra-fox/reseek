@@ -7,7 +7,7 @@ import { call } from "#lib/request.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { downloads, uploads } from "#lib/transfers/transfers.svelte.js";
-import { users } from "#lib/users.svelte.js";
+import { users } from "#lib/users/users.svelte.js";
 
 export type AppState = Schemas["State"];
 export type Metrics = Schemas["TransferMetrics"];

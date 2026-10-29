@@ -24,8 +24,7 @@
   import { act, storeOf } from "#lib/transfers/actions.js";
   import { isActive, isCancelable, stateChip, type Transfer } from "#lib/transfers/states.js";
   import { uploads } from "#lib/transfers/transfers.svelte.js";
-
-  import { blocking } from "./block.svelte";
+  import { blocking } from "#lib/users/block.svelte.js";
 
   // the transfers with one user, both directions or one, newest first, live
   let { username }: { username: string } = $props();

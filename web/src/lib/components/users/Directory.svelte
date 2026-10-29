@@ -36,12 +36,12 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { type UserSummary, users as usersStore } from "#lib/users.svelte.js";
+  import { links, pin, userGroups } from "#lib/users/actions.js";
+  import { blocking, unblock, unblockMany } from "#lib/users/block.svelte.js";
+  import { type UserSummary, users as usersStore } from "#lib/users/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";
 
-  import { links, pin, userGroups } from "./actions";
   import Avatar from "./Avatar.svelte";
-  import { blocking, unblock, unblockMany } from "./block.svelte";
   import GroupBadge from "./GroupBadge.svelte";
   import GroupDialog from "./GroupDialog.svelte";
   import Presence from "./Presence.svelte";

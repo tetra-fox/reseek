@@ -1,4 +1,4 @@
-import { users } from "#lib/users.svelte.js";
+import { users } from "#lib/users/users.svelte.js";
 
 import { chat } from "./chat.svelte";
 import type { Target } from "./pane.svelte";

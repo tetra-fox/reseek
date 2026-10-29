@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
 
-  import ProfilePage, { type ProfileTab } from "#lib/components/users/ProfilePage.svelte";
+  import ProfilePage, { type ProfileTab } from "#lib/components/users/profile/ProfilePage.svelte";
   import { route } from "#lib/nav.js";
 
   // /users/<name>[/shares|transfers|messages|activity], the Shares tab taking ?path=
