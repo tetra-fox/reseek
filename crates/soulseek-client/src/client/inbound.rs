@@ -102,12 +102,24 @@ impl Client {
         Ok(())
       }
       PeerConnectionType::Transfer => {
+        tracing::debug!(
+          username,
+          token,
+          %remote,
+          "late answer to a transfer connection request refused"
+        );
         conn
           .handle()
           .disconnect("Transfer connection request already answered", None);
         Ok(())
       }
       PeerConnectionType::Distributed => {
+        tracing::debug!(
+          username,
+          token,
+          %remote,
+          "late answer to a distributed connection request refused"
+        );
         conn
           .handle()
           .disconnect("Distributed connection request already answered", None);
