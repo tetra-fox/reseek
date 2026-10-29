@@ -2,17 +2,15 @@
 //! answers from the application's resolvers, refusals, and what a hostile or vanishing peer
 //! causes.
 
-mod support;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use crate::support::peer::PeerSide;
+use crate::support::{Logs, PATIENCE, Session, listening_options};
 use soulseek_client::{ClientError, ClientOptions, MessageErrorKind, Resolvers, WaitKey};
 use soulseek_proto::peer::*;
 use soulseek_proto::{PeerCode, PeerMessage, RemoteFilename, TransferDirection};
-use support::peer::PeerSide;
-use support::{Logs, PATIENCE, Session, listening_options};
 use tokio_util::sync::CancellationToken;
 
 fn resolvers() -> Resolvers {

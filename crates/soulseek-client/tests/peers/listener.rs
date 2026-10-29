@@ -3,17 +3,15 @@
 //! reason when nothing does, and counted, whatever it is for. The listener stops with the
 //! session.
 
-mod support;
-
 use std::net::{Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
+use crate::support::peer::PeerSide;
+use crate::support::soulfind::{self, User};
+use crate::support::{Logs, free_port};
 use soulseek_client::ClientOptions;
 use soulseek_proto::init::{FileTransferInit, PeerInit, PierceFirewall};
 use soulseek_proto::{InitMessage, PeerConnectionType, PeerMessage};
-use support::peer::PeerSide;
-use support::soulfind::{self, User};
-use support::{Logs, free_port};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 

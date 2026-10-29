@@ -2,15 +2,13 @@
 //! over a message connection to the searcher: an empty answer is never sent, an encoded one is
 //! sent as it is, and a search sent straight over a message connection is answered on it.
 
-mod support;
-
 use std::sync::{Arc, Mutex};
 
+use crate::support::soulfind::{self, Soulfind, User};
+use crate::support::{Logs, free_port};
 use soulseek_client::{ClientOptions, Event, SearchReply, SearchResponseResolver, SearchScope};
 use soulseek_proto::peer::{File, SearchRequest, SearchResponse};
 use soulseek_proto::{PeerMessage, SearchQuery};
-use support::soulfind::{self, Soulfind, User};
-use support::{Logs, free_port};
 use tokio_util::sync::CancellationToken;
 
 /// what the responder's resolver was asked, in order

@@ -2,12 +2,10 @@
 //! stops the server replaying a message at every login (sent at once, or by the application
 //! later), and messages kept for an offline user.
 
-mod support;
-
+use crate::support::options;
+use crate::support::soulfind::{self, PASSWORD, User};
 use soulseek_client::{ClientError, ClientOptions, Event, PrivateMessage};
 use soulseek_proto::RoomType;
-use support::options;
-use support::soulfind::{self, PASSWORD, User};
 
 fn without_acknowledgment() -> ClientOptions {
   ClientOptions {

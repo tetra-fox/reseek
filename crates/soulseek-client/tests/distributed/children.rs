@@ -4,10 +4,13 @@
 //! lowered by our upload speed, is never overshot even by children arriving together; a child
 //! replaced under the same name, or one that leaves, is accounted for exactly once.
 
-mod support;
-
 use std::time::Duration;
 
+use crate::support::peer::{FakePeer, PeerSide};
+use crate::support::tree::{
+  branch_information, child_requests, embedded_search, join_as_child, search, status,
+};
+use crate::support::{FakeServer, Logs, Session, USERNAME, listening_options, next_event};
 use soulseek_client::{ClientOptions, Event};
 use soulseek_proto::distributed::Ping;
 use soulseek_proto::frame::FrameKind;
@@ -17,11 +20,6 @@ use soulseek_proto::server::{
 use soulseek_proto::{
   DistributedMessage, InitMessage, PeerConnectionType, ServerRequest, ServerResponse,
 };
-use support::peer::{FakePeer, PeerSide};
-use support::tree::{
-  branch_information, child_requests, embedded_search, join_as_child, search, status,
-};
-use support::{FakeServer, Logs, Session, USERNAME, listening_options, next_event};
 
 /// a client the server made a branch root, so it takes up to `limit` children
 async fn branch_root(limit: u32) -> Session {

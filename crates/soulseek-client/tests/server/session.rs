@@ -2,17 +2,15 @@
 //! events, a refused login, being kicked by a second login with our name, and a server
 //! connection that stays up however long it is idle.
 
-mod support;
-
 use std::time::Duration;
 
+use crate::support::soulfind::{self, PASSWORD};
+use crate::support::{disconnected, drain, free_port, next_event, options, transitions, user_key};
 use soulseek_client::{
   Client, ClientError, ClientOptions, ClientState, ConnectionErrorKind, Event, WaitKey,
 };
 use soulseek_proto::server::{GetPeerAddressRequest, GetPeerAddressResponse, GetStatusRequest};
 use soulseek_proto::{PeerCode, ServerCode, ServerRequest};
-use support::soulfind::{self, PASSWORD};
-use support::{disconnected, drain, free_port, next_event, options, transitions, user_key};
 use tokio_util::sync::CancellationToken;
 
 #[tokio::test]

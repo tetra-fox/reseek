@@ -2,13 +2,11 @@
 //! relay when the other side cannot be dialed, shared by concurrent callers, cached, replaced
 //! on request or when the cache is full, and carrying peer messages both ways.
 
-mod support;
-
+use crate::support::PATIENCE;
+use crate::support::soulfind::{self, Soulfind, User};
 use soulseek_client::{Client, ClientError, ClientOptions, ConnKind, MessageConn, WaitKey};
 use soulseek_proto::peer::UserInfo;
 use soulseek_proto::{PeerCode, PeerMessage};
-use support::PATIENCE;
-use support::soulfind::{self, Soulfind, User};
 use tokio_util::sync::CancellationToken;
 
 async fn connect(from: &Client, to: &User) -> MessageConn {

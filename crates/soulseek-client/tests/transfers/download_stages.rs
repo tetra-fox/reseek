@@ -1,15 +1,13 @@
 //! Downloads from a scripted peer that drops its connections, never connects back, stops
 //! sending or lies about the file, and downloads canceled at each stage.
 
-mod support;
-
 use std::time::Duration;
 
+use crate::support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
+use crate::support::transfers::{content, states};
+use crate::support::{listening_options, next_event};
 use soulseek_client::{ClientError, Event, RequestStyle, Transfer, TransferState};
 use soulseek_proto::TransferDirection;
-use support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
-use support::transfers::{content, states};
-use support::{listening_options, next_event};
 
 #[tokio::test]
 async fn a_queued_download_outlives_the_message_connection() {

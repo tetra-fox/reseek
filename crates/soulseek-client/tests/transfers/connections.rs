@@ -2,14 +2,12 @@
 //! the uploader has the server relay its request and the downloader dials it; a download waits
 //! no longer than the connect timeout, and a relayed request nothing expects is refused.
 
-mod support;
-
 use std::time::Duration;
 
+use crate::support::soulfind;
+use crate::support::{Logs, PATIENCE};
 use soulseek_client::{ClientError, ConnKind};
 use soulseek_proto::RemoteFilename;
-use support::soulfind;
-use support::{Logs, PATIENCE};
 use tokio_util::sync::CancellationToken;
 
 fn file() -> RemoteFilename {

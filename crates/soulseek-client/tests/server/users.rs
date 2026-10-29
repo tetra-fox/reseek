@@ -1,17 +1,15 @@
 //! Other users on soulfind: their address, watching them, their status as asked for and as
 //! pushed, and their statistics as asked for and as pushed to members of a shared room.
 
-mod support;
-
 use std::net::SocketAddr;
 
+use crate::support::soulfind;
+use crate::support::{free_port, options, user_key};
 use soulseek_client::{ClientError, ClientOptions, Event};
 use soulseek_proto::server::{
   GetPeerAddressRequest, GetPeerAddressResponse, PeerAddressObfuscation,
 };
 use soulseek_proto::{RoomType, ServerCode, ServerRequest, UserPresence};
-use support::soulfind;
-use support::{free_port, options, user_key};
 
 #[tokio::test]
 async fn the_address_of_an_online_user_and_of_an_unknown_one() {

@@ -2,13 +2,11 @@
 //! room list, a join refused because a private room holds the name, and the checks made before
 //! anything is sent.
 
-mod support;
-
+use crate::support::options;
+use crate::support::soulfind::{self, User};
 use soulseek_client::{ClientError, ClientState, Event, RoomErrorKind};
 use soulseek_proto::RoomType;
 use soulseek_proto::server::{RoomInfo, UserData};
-use support::options;
-use support::soulfind::{self, User};
 
 /// waits for the event telling `user` that `username` joined `room`
 async fn joined(user: &mut User, room: &str, username: &str) -> UserData {

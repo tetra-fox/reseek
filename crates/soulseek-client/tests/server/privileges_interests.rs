@@ -2,13 +2,11 @@
 //! privileges, another user's flag, interests, recommendations, similar users,
 //! and changing the password.
 
-mod support;
-
 use std::time::Duration;
 
+use crate::support::options;
+use crate::support::soulfind::{self, PASSWORD, User};
 use soulseek_client::{Client, ClientError, Event};
-use support::options;
-use support::soulfind::{self, PASSWORD, User};
 
 /// `user` likes `liked` and hates `hated`, and the server has recorded both
 async fn interests(user: &User, liked: &str, hated: &str) {

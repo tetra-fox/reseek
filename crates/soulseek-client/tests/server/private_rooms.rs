@@ -1,13 +1,11 @@
 //! Private rooms on soulfind: creating one, the invitation setting, members and operators added
 //! and removed as the owner and the member each see it, and giving a room up.
 
-mod support;
-
+use crate::support::options;
+use crate::support::soulfind::{self, User};
 use soulseek_client::{Event, RoomMembers, WaitKey};
 use soulseek_proto::server::*;
 use soulseek_proto::{RoomType, ServerCode, ServerRequest};
-use support::options;
-use support::soulfind::{self, User};
 
 async fn join(user: &User, room: &str, room_type: RoomType) -> RoomData {
   user.client.join_room(room, room_type).await.unwrap()

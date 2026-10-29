@@ -3,18 +3,16 @@
 //! queued and then started, resumed from an offset, returned early once queued, and told its
 //! place in the queue.
 
-mod support;
-
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::support::PATIENCE;
+use crate::support::soulfind::{self, User};
+use crate::support::transfers::{self, Asked, asked, content, file, scratch, states};
 use soulseek_client::{
   DownloadOutput, DownloadRequest, Event, RequestStyle, TransferState, UploadInput, UploadRequest,
 };
 use soulseek_proto::TransferDirection;
-use support::PATIENCE;
-use support::soulfind::{self, User};
-use support::transfers::{self, Asked, asked, content, file, scratch, states};
 use tokio_util::sync::CancellationToken;
 
 const SIZE: usize = 300_000;

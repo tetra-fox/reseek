@@ -3,23 +3,21 @@
 //! early or never, the upload's turn, slot and source misbehaving, and the upload canceled at
 //! each stage, with what the downloader is told afterwards.
 
-mod support;
-
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
+use crate::support::peer::PeerSide;
+use crate::support::scripted::{BOB, Scripted};
+use crate::support::transfers::{self, content, file, scratch, states};
+use crate::support::{Logs, PATIENCE, listening_options};
 use soulseek_client::{
   ClientError, Event, Governor, InputFactory, Transfer, TransferState, UploadInput, UploadRequest,
 };
 use soulseek_proto::peer::{QueueDownload, TransferResponse, UploadDenied, UploadFailed};
 use soulseek_proto::server::{GetPeerAddressRequest, GetPeerAddressResponse};
 use soulseek_proto::{PeerMessage, ServerRequest, ServerResponse, TransferDirection};
-use support::peer::PeerSide;
-use support::scripted::{BOB, Scripted};
-use support::transfers::{self, content, file, scratch, states};
-use support::{Logs, PATIENCE, listening_options};
 use tokio::io::AsyncWriteExt;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;

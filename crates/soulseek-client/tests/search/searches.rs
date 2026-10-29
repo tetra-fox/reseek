@@ -2,19 +2,17 @@
 //! limits and filters on what it takes, the one way our own search reaches our own answers,
 //! searches waiting their turn, tokens taken once, and a disconnect canceling them.
 
-mod support;
-
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::support::soulfind::{self, Soulfind, User};
+use crate::support::{PATIENCE, next_event};
 use soulseek_client::{
   ClientError, ClientOptions, Event, Search, SearchOptions, SearchReply, SearchResponseResolver,
   SearchScope, SearchState,
 };
 use soulseek_proto::peer::{File, SearchResponse};
 use soulseek_proto::{RoomType, SearchQuery};
-use support::soulfind::{self, Soulfind, User};
-use support::{PATIENCE, next_event};
 use tokio_util::sync::CancellationToken;
 
 /// a resolver that answers every search as `username` with `files` files

@@ -2,17 +2,15 @@
 //! a scripted peer for the bounds on what a peer may send, a response that never starts or stops
 //! halfway, and two browses of one user at once.
 
-mod support;
-
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::support::scripted::{BOB, Scripted};
+use crate::support::soulfind::{self, User};
+use crate::support::{PATIENCE, free_port, listening_options};
 use soulseek_client::{BrowseOptions, BrowseProgress, ClientError, ClientOptions, Event};
 use soulseek_proto::peer::{BrowseResponse, Directory, File, UserInfo};
 use soulseek_proto::{PeerMessage, RemoteFilename};
-use support::scripted::{BOB, Scripted};
-use support::soulfind::{self, User};
-use support::{PATIENCE, free_port, listening_options};
 use tokio_util::sync::CancellationToken;
 
 fn mp3(name: &str) -> File {
@@ -84,7 +82,7 @@ async fn a_browse_brings_the_whole_listing_and_reports_its_progress() {
     return;
   };
   let sharer = sharer(&server).await;
-  let mut browser = server.login("browser", support::options()).await;
+  let mut browser = server.login("browser", crate::support::options()).await;
   let seen = Arc::new(Mutex::new(Vec::new()));
   let options = BrowseOptions {
     progress_updated: Some(Arc::new({
@@ -117,7 +115,7 @@ async fn a_folder_comes_with_the_folders_below_it_and_info_says_who_may_upload()
     return;
   };
   let sharer = sharer(&server).await;
-  let asker = server.login("asker", support::options()).await;
+  let asker = server.login("asker", crate::support::options()).await;
   let folder = asker
     .client
     .get_directory_contents(

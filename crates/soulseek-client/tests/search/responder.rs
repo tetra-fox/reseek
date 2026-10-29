@@ -2,11 +2,11 @@
 //! searcher: an answer that could not be delivered is kept, and goes out when the searcher acts
 //! on our connection request late; one the searcher says it cannot fetch is given up.
 
-mod support;
-
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::support::peer::PeerSide;
+use crate::support::{Logs, Session, free_port, listening_options};
 use soulseek_client::{ClientOptions, Event, SearchReply};
 use soulseek_proto::init::PierceFirewall;
 use soulseek_proto::peer::{File, SearchResponse};
@@ -15,12 +15,10 @@ use soulseek_proto::server::{
   GetPeerAddressResponse,
 };
 use soulseek_proto::{InitMessage, PeerMessage, ServerRequest, ServerResponse};
-use support::peer::PeerSide;
-use support::{Logs, Session, free_port, listening_options};
 
 fn answer(token: u32) -> SearchResponse {
   SearchResponse {
-    username: support::USERNAME.into(),
+    username: crate::support::USERNAME.into(),
     token,
     files: vec![File {
       code: 1,

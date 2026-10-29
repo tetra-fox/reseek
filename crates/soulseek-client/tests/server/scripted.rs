@@ -2,12 +2,10 @@
 //! the distributed tree's tuning values, the shapes older or newer servers send, codes nothing
 //! handles, malformed frames and unread bytes.
 
-mod support;
-
+use crate::support::{Logs, Session, options};
 use soulseek_client::{ClientOptions, Event, ServerInfo, WaitKey};
 use soulseek_proto::server::*;
 use soulseek_proto::{ServerCode, ServerRequest, ServerResponse};
-use support::{Logs, Session, options};
 
 #[tokio::test]
 async fn ping_completes_its_wait_and_an_unsolicited_one_is_dropped() {
@@ -118,7 +116,7 @@ async fn tuning_values_merge_into_the_server_info() {
     parent_speed_ratio: Some(50),
     wishlist_interval: Some(720),
     is_supporter: Some(true),
-    own_public_ip: Some(support::PUBLIC_IP),
+    own_public_ip: Some(crate::support::PUBLIC_IP),
     ..ServerInfo::default()
   };
   assert_eq!(merged, expected);

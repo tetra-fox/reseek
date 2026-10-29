@@ -4,19 +4,17 @@
 //! children and are answered, and losing the parent, a reset from the server or a long time
 //! without one all lead back to asking the server.
 
-mod support;
-
 use std::time::Duration;
 
-use soulseek_client::{ClientOptions, DistributedParent, Event, WaitKey};
-use soulseek_proto::distributed::Ping;
-use soulseek_proto::{DistributedCode, DistributedMessage, ServerResponse};
-use support::peer::{FakePeer, PeerSide};
-use support::tree::{
+use crate::support::peer::{FakePeer, PeerSide};
+use crate::support::tree::{
   Status, approached, branch_information, branch_level, branch_root, child_requests, join_as_child,
   net_info, search, status, wrapped_search,
 };
-use support::{FakeServer, Logs, Session, USERNAME, listening_options, next_event};
+use crate::support::{FakeServer, Logs, Session, USERNAME, listening_options, next_event};
+use soulseek_client::{ClientOptions, DistributedParent, Event, WaitKey};
+use soulseek_proto::distributed::Ping;
+use soulseek_proto::{DistributedCode, DistributedMessage, ServerResponse};
 use tokio_util::sync::CancellationToken;
 
 fn parent_options() -> ClientOptions {

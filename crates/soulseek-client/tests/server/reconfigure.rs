@@ -2,16 +2,14 @@
 //! hands the new one out, a taken port keeps the old listener and options, and changes that need
 //! a new session say so.
 
-mod support;
-
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
+use crate::support::soulfind::{self, Soulfind, User};
+use crate::support::{free_port, options, user_key};
 use soulseek_client::{ClientError, ClientOptions, ClientOptionsPatch};
 use soulseek_proto::server::{GetPeerAddressRequest, GetPeerAddressResponse};
 use soulseek_proto::{ServerCode, ServerRequest};
-use support::soulfind::{self, Soulfind, User};
-use support::{free_port, options, user_key};
 use tokio::net::TcpStream;
 
 fn local(port: u16) -> SocketAddr {

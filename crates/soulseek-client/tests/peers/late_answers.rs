@@ -4,18 +4,16 @@
 //! still read; for a transfer it is refused, since the transfer runs on the connection that won;
 //! after the time the request was awaited for, it is unknown.
 
-mod support;
-
 use std::time::Duration;
 
+use crate::support::peer::PeerSide;
+use crate::support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
+use crate::support::{Logs, PATIENCE, listening_options};
 use soulseek_client::{ClientOptions, RequestStyle};
 use soulseek_proto::init::PierceFirewall;
 use soulseek_proto::peer::{TransferResponse, UserInfo};
 use soulseek_proto::server::ConnectToPeerRequest;
 use soulseek_proto::{InitMessage, PeerConnectionType, PeerMessage, ServerRequest};
-use support::peer::PeerSide;
-use support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
-use support::{Logs, PATIENCE, listening_options};
 
 /// the token of the next request the client has the server relay to bob for `connection_type`
 async fn relayed(scripted: &mut Scripted, connection_type: PeerConnectionType) -> u32 {

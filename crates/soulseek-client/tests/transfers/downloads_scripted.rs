@@ -3,20 +3,18 @@
 //! once, sending what does not decode; and how the download asks: governed, with fresh tokens,
 //! once per file.
 
-mod support;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
+use crate::support::PATIENCE;
+use crate::support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
+use crate::support::transfers::{content, scratch, states};
 use soulseek_client::{
   ClientError, DownloadOutput, DownloadRequest, Event, RequestStyle, TransferState,
 };
 use soulseek_proto::peer::{TransferRequest, TransferResponse, UploadDenied, UploadFailed};
 use soulseek_proto::{PeerMessage, TransferDirection};
-use support::PATIENCE;
-use support::scripted::{BOB, SIZE, Scripted, offer, queued, send_file};
-use support::transfers::{content, scratch, states};
 use tokio_util::sync::CancellationToken;
 
 fn rejected(reason: &str) -> impl Fn(&ClientError) -> bool + '_ {
@@ -124,7 +122,7 @@ async fn a_transfer_request_answered_with_a_refusal_rejects_the_download_and_que
   transfer.closed().await;
   let done = running.result().await.unwrap();
   assert_eq!(done.remote_token, Some(77));
-  let (_, last) = support::transfers::states(&mut events, TransferDirection::Download).await;
+  let (_, last) = crate::support::transfers::states(&mut events, TransferDirection::Download).await;
   assert!(last.state.succeeded());
 }
 

@@ -3,19 +3,17 @@
 //! older clients do, and give up our own request at once when the peer reports it cannot
 //! connect.
 
-mod support;
-
 use std::net::Ipv4Addr;
 use std::time::Duration;
 
+use crate::support::peer::FakePeer;
+use crate::support::{Session, free_port, listening_options, options};
 use soulseek_client::ClientError;
 use soulseek_proto::init::PierceFirewall;
 use soulseek_proto::server::{
   CannotConnectRequest, CannotConnectResponse, ConnectToPeerRequest, ConnectToPeerResponse,
 };
 use soulseek_proto::{InitMessage, PeerConnectionType, PeerMessage, ServerRequest, ServerResponse};
-use support::peer::FakePeer;
-use support::{Session, free_port, listening_options, options};
 use tokio_util::sync::CancellationToken;
 
 fn request(

@@ -3,10 +3,11 @@
 //! login or closes the connection, canceling a login in progress, the write-liveness ping, and
 //! the configuration re-sent when the options change.
 
-mod support;
-
 use std::time::Duration;
 
+use crate::support::{
+  FakeServer, PASSWORD, Session, USERNAME, disconnected, drain, next_event, options,
+};
 use soulseek_client::{
   Client, ClientError, ClientOptions, ClientOptionsPatch, ClientState, ConnectionErrorKind, Event,
 };
@@ -17,7 +18,6 @@ use soulseek_proto::server::{
 use soulseek_proto::{
   PROTOCOL_MAJOR_VERSION, PROTOCOL_MINOR_VERSION, ServerRequest, ServerResponse,
 };
-use support::{FakeServer, PASSWORD, Session, USERNAME, disconnected, drain, next_event, options};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -59,7 +59,7 @@ async fn the_login_and_the_configuration_sent_after_it() {
     client.state(),
     ClientState::CONNECTED | ClientState::LOGGING_IN
   );
-  server.send(&support::login_success()).await;
+  server.send(&crate::support::login_success()).await;
 
   assert_eq!(
     server.read_configuration().await,
@@ -82,7 +82,10 @@ async fn the_login_and_the_configuration_sent_after_it() {
     ]
   );
   connecting.await.unwrap().unwrap();
-  assert_eq!(client.server_info().own_public_ip, Some(support::PUBLIC_IP));
+  assert_eq!(
+    client.server_info().own_public_ip,
+    Some(crate::support::PUBLIC_IP)
+  );
 }
 
 async fn rejected_login(response: LoginResponse) -> ClientError {
@@ -252,7 +255,7 @@ async fn a_busy_listen_port_fails_the_connect_before_the_server_is_contacted() {
 #[tokio::test]
 async fn a_reconfigure_resends_the_configuration_and_the_status_only_when_it_changed() {
   let mut session = Session::start().await;
-  let port = support::free_port();
+  let port = crate::support::free_port();
   session
     .client
     .reconfigure_options(ClientOptionsPatch {
