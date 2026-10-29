@@ -108,7 +108,7 @@ for (const [width, height] of [
       // the downloads, each user a group and their folders under it. A phone's row has no tick of
       // its own, so its icon starts under the tick of a header at its depth
       await page.goto("./#/downloads");
-      const grid = page.getByRole("grid", { name: "Downloads" });
+      const grid = page.getByRole("treegrid", { name: "Downloads" });
       const download = grid.getByTitle("@@a\\Music\\Album\\01 One.flac", { exact: true });
       await expect(download).toBeVisible();
       if (width < 768) {

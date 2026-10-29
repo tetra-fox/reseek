@@ -34,9 +34,9 @@ test("keeps a selection across two transfers while real ones are added and finis
   await login(page, "/downloads");
   test.skip(!(await connected(page)), "no soulfind and soulseek-rs: the daemon is not connected");
 
-  const table = page.getByRole("grid", { name: "Downloads" });
+  const table = page.getByRole("treegrid", { name: "Downloads" });
   // a transfer's own row, not the header of the folder it is grouped under
-  const ROW = "[role=row][data-id]:not(:has([role=rowheader]))";
+  const ROW = "[role=rowgroup] [role=row][aria-selected]";
   const rows = table.locator(ROW);
   const succeeded = rows.filter({ hasText: "Succeeded" });
   // the peer can take a moment to come online after the daemon

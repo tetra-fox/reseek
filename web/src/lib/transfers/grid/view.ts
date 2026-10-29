@@ -1,7 +1,13 @@
 import { type Mark, markToken, passes } from "#lib/analysis/marks.js";
 import { getDirectoryName, getFileName } from "#lib/format.js";
 import { type ChipId, STATE_CHIPS, type Transfer } from "#lib/transfers/states.js";
-import { type FolderNode, folderTree, itemsUnder } from "#lib/tree/folders.js";
+import {
+  type FolderNode,
+  folderNode,
+  folderTree,
+  itemsUnder,
+  type TreeLine
+} from "#lib/tree/folders.js";
 
 export type GroupBy = "user" | "folder" | "batch" | "flat";
 
@@ -180,4 +186,46 @@ export const layout = (
     }
   }
   return items;
+};
+
+const size = (t: Transfer) => t.size;
+
+/** The node rows of a list grouped by nothing are under */
+const FLAT: FolderNode<Transfer> = folderNode({ key: "", path: "", label: "" }, [], [], size);
+
+/**
+ * The table's lines as a tree's: a group header as a folder line holding every transfer under
+ * the group, a row as an item line, each keyed as its line is; and each group by its key
+ */
+export const treeOf = (items: Item[]) => {
+  const groups = new Map<string, Group>();
+  const nodes = new Map<Group, FolderNode<Transfer>>();
+  const nodeOf = (group: Group) => {
+    let node = nodes.get(group);
+    if (!node) {
+      const at = { key: group.key, path: group.folder ?? group.label, label: group.label };
+      node = folderNode(at, group.transfers, [], size);
+      nodes.set(group, node);
+      groups.set(group.key, group);
+    }
+    return node;
+  };
+  const lines = items.map((item): TreeLine<Transfer> =>
+    item.type === "group"
+      ? {
+          kind: "folder",
+          key: item.key,
+          node: nodeOf(item.group),
+          depth: item.group.depth,
+          siblings: item.group.siblings
+        }
+      : {
+          kind: "item",
+          key: item.key,
+          item: item.transfer,
+          depth: depthOf(item),
+          folder: item.group ? nodeOf(item.group) : FLAT
+        }
+  );
+  return { lines, groups };
 };

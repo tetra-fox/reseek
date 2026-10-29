@@ -35,7 +35,7 @@ test("1000 downloads draw a window and scroll to the last", async ({ page }) => 
     localStorage.setItem("transfers.view.download", JSON.stringify({ groupBy: "flat" }))
   );
   await login(page, "/downloads");
-  const grid = page.getByRole("grid", { name: "Downloads" });
+  const grid = page.getByRole("treegrid", { name: "Downloads" });
   await windowed(page, grid, "[role=rowgroup] [role=row]", "00999 Track.flac");
 });
 
@@ -45,7 +45,7 @@ test("focus and a range of rows go past the window's edge", async ({ page }) => 
     localStorage.setItem("transfers.view.download", JSON.stringify({ groupBy: "flat" }))
   );
   await login(page, "/downloads");
-  const grid = page.getByRole("grid", { name: "Downloads" });
+  const grid = page.getByRole("treegrid", { name: "Downloads" });
   await grid.locator('[data-line="00000000-0000-4000-8000-000000000000"]').click({
     position: { x: 2, y: 5 }
   });

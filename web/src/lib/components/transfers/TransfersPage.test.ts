@@ -63,16 +63,17 @@ describe("the transfers table", () => {
     await flushFaked();
     return net;
   };
-  const row = (id: string) => document.querySelector(`[role=row][data-id="${id}"]`);
+  const row = (id: string) =>
+    document.querySelector(`[role=rowgroup] [role=row][data-line="${id}"]`);
   const order = () =>
     [...document.querySelectorAll("[role=rowgroup] [role=row]")]
       .toSorted(
         (a, b) =>
           parseFloat((a as HTMLElement).style.top) - parseFloat((b as HTMLElement).style.top)
       )
-      .map((r) => r.getAttribute("data-id"));
+      .map((r) => r.getAttribute("data-line"));
 
-  const grid = () => document.querySelector("[role=grid]")!;
+  const grid = () => document.querySelector("[role=treegrid]")!;
   const signIn = () =>
     (session.principal = {
       name: "a",
@@ -209,7 +210,7 @@ describe("the transfers table", () => {
       expect(bulk(net)).toEqual([]);
     });
 
-    it("select a group from its header with Ctrl+A and Space, and nothing else", async () => {
+    it("select a group from its header with Ctrl+A and Space, and close it with Enter", async () => {
       signIn();
       Object.assign(views.download, { groupBy: "user" });
       const a = transfer({ username: "alice" });
@@ -224,12 +225,15 @@ describe("the transfers table", () => {
       expect(ticked()).toEqual([]);
       press(grid(), " ");
       expect(ticked()).toEqual([b.id]);
-      for (const key of ["Delete", "r", "c", "o", "Enter"]) {
+      for (const key of ["Delete", "r", "c", "o"]) {
         expect(press(grid(), key).defaultPrevented).toBe(false);
       }
       await flushFaked();
       expect(bulk(net)).toEqual([]);
       expect(drawer()).toBeNull();
+      // a header is a folder line: Enter closes its group
+      press(grid(), "Enter");
+      expect(row(b.id)).toBeNull();
     });
 
     it("select only the group's transfers still listed", async () => {
@@ -260,7 +264,7 @@ describe("the transfers table", () => {
       press(grid(), " ");
       expect(ticked()).toEqual([b.id]);
       const active = grid().getAttribute("aria-activedescendant")!;
-      expect(document.getElementById(active)?.getAttribute("data-id")).toBe(b.id);
+      expect(document.getElementById(active)?.getAttribute("data-line")).toBe(b.id);
     });
 
     it("move past a folded group to the next row", async () => {
@@ -275,9 +279,14 @@ describe("the transfers table", () => {
       (fold as HTMLButtonElement).click();
       flushSync();
       expect(row(b.id)).toBeNull();
+      // carol's header, then her row
+      press(grid(), "ArrowDown");
       press(grid(), "ArrowDown");
       press(grid(), " ");
       expect(ticked()).toEqual([c.id]);
+      // her header, bob's folded one, then alice's row
+      press(grid(), "ArrowUp");
+      press(grid(), "ArrowUp");
       press(grid(), "ArrowUp");
       press(grid(), " ");
       expect(ticked().toSorted()).toEqual([a.id, c.id].toSorted());
@@ -377,7 +386,7 @@ describe("the transfers table", () => {
       grid().dispatchEvent(new Event("scroll"));
       flushSync();
       const pinned = document.querySelector(
-        '[data-line="user:alice"]:not([role=row]) [role="checkbox"]'
+        '[data-pinned][data-line="user:alice"] [role="checkbox"]'
       )!;
       pinned.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       press(pinned, "a", { ctrlKey: true });

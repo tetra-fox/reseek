@@ -7,9 +7,11 @@
     transfer?: Transfer;
     /** the file was just asked for and its download hasn't shown yet */
     starting?: boolean;
+    /** a waiting download shows its empty track, where waiting is news */
+    track?: boolean;
   };
 
-  let { transfer, starting = false }: Props = $props();
+  let { transfer, starting = false, track = true }: Props = $props();
 
   const fill = $derived(fillOf(transfer, starting));
   // a download that finishes while its row is shown flashes once, unless reduced motion is asked
@@ -31,7 +33,7 @@
 
 <!-- behind the row's cells: the row is an isolated stacking context, so this paints over its
      own tint and under its content -->
-{#if fill && (fill !== "done" || flash)}
+{#if fill && (fill !== "done" || flash) && (fill !== "waiting" || track)}
   <span
     aria-hidden="true"
     class={[

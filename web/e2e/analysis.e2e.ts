@@ -70,7 +70,7 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   await fakeDownloads(page);
   await fakeAnalysis(page);
   await login(page, "/downloads");
-  const table = page.getByRole("grid", { name: "Downloads" });
+  const table = page.getByRole("treegrid", { name: "Downloads" });
   // the analyzed download says so in its row, muted, with the reading in its tooltip
   await expect(table.getByText("Analyzed", { exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "More for 2.flac" }).click();
@@ -497,7 +497,7 @@ test("filters downloads by their analysis, by chip and by word", async ({ page }
   await fakeDownloads(page);
   await fakeAnalysis(page);
   await login(page, "/downloads");
-  const table = page.getByRole("grid", { name: "Downloads" });
+  const table = page.getByRole("treegrid", { name: "Downloads" });
   const shown = (name: string) => table.getByRole("button", { name: `More for ${name}` });
   await expect(shown("3.flac")).toBeVisible();
 
@@ -539,7 +539,7 @@ test("queues a user's downloads, a folder and a selection for analysis", async (
     }
   );
   await login(page, "/downloads");
-  const grid = page.getByRole("grid", { name: "Downloads" });
+  const grid = page.getByRole("treegrid", { name: "Downloads" });
   const header = (name: string) => grid.getByRole("rowheader").filter({ hasText: name });
 
   // alice's running download is not finished and her other one is analyzed already

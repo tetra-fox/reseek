@@ -12,6 +12,7 @@
 
   import { marks } from "#lib/analysis/marks.svelte.js";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
+  import DownloadFill from "#lib/components/files/DownloadFill.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
@@ -140,6 +141,8 @@
   {/if}
 {/snippet}
 
+<!-- behind the cells, the transfer's bytes as a fill, its finish as a pulse, a failure as a tint -->
+<DownloadFill transfer={t} track={false} />
 {#each columns as column (column)}
   <div
     role="gridcell"

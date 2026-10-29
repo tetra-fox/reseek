@@ -112,7 +112,7 @@ for (const [width, height] of [
             })
         );
         await login(page, "/downloads");
-        const grid = page.getByRole("grid", { name: "Downloads" });
+        const grid = page.getByRole("treegrid", { name: "Downloads" });
         const titles = () => shownPins(grid);
         await expect(
           grid.getByTitle(`${ALBUM}\\CD1\\01 Track.flac`, { exact: true })

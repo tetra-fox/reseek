@@ -74,6 +74,13 @@
     width?: string;
     /** classes of a line of the screen's own, such as a tint for a failed transfer */
     lineClass?: (line: TreeLine<T>) => ClassValue;
+    /**
+     * Whether the tree draws each folder's toggle and sets each line in by its depth, and puts the
+     * column headers in a row of its own; a screen whose snippets do all three passes false
+     */
+    framed?: boolean;
+    /** a layer of the screen's own is open, such as a drawer, which Escape closes first */
+    layer?: () => boolean;
     class?: ClassValue;
   };
 
@@ -100,6 +107,8 @@
     height = "max(20rem, calc(var(--content-h) - 14rem))",
     width,
     lineClass,
+    framed = true,
+    layer,
     class: className
   }: Props = $props();
 
@@ -135,7 +144,7 @@
    * start a folder line, so an item's cells line up under the content of a folder line at its depth
    */
   const inset = (depth: number, kind: "folder" | "item") =>
-    `${lineStart(depth) + (kind === "item" ? TOGGLE_REM + GAP_REM : 0)}rem`;
+    framed ? `${lineStart(depth) + (kind === "item" ? TOGGLE_REM + GAP_REM : 0)}rem` : undefined;
 
   /** Opens or closes a folder from the keys, as its toggle would */
   const show = (node: FolderNode<T>, open: boolean) => {
@@ -148,10 +157,13 @@
     lines: () => lines,
     key: (line) => line.key,
     id: (line) => (line.kind === "item" ? idOf(line.item) : (folderId?.(line.node) ?? null)),
-    group: (line) =>
-      itemsUnder(line.kind === "folder" ? line.node : line.folder)
+    // the items under the line's folder; a line with none there, as a flat list's, selects all
+    group: (line) => {
+      const ids = itemsUnder(line.kind === "folder" ? line.node : line.folder)
         .filter(tickable)
-        .map(idOf),
+        .map(idOf);
+      return ids.length ? ids : null;
+    },
     onopen: (line) => {
       if (line.kind === "item") onopen?.(line.item);
       else if (onopenfolder) onopenfolder(line.node);
@@ -166,6 +178,7 @@
       return !!onkey?.(e, line);
     },
     headersFocus: true,
+    layer: () => !!layer?.(),
     typeahead: (line) => nameOf(line),
     page: () => Math.max(1, Math.floor((boxHeight - rowsTop) / row) - 1),
     // the pinned copy of a folder line is rendered only while it is pinned
@@ -225,6 +238,9 @@
   /** Gives the tree DOM focus, without scrolling */
   export const focus = list.focus;
 
+  /** Whether `element` is inside the tree */
+  export const has = list.has;
+
   /** The line with focus, or none */
   export const focused = () => list.focused;
 
@@ -245,7 +261,9 @@
 
   /** the lines' least width: the columns' set in as far as the deepest item */
   const least = $derived(
-    width ? `calc(${width} + ${inset(lines.length ? nest.deepest + 1 : 0, "item")})` : undefined
+    width && framed
+      ? `calc(${width} + ${inset(lines.length ? nest.deepest + 1 : 0, "item")})`
+      : width
   );
 
   const pinnedId = (index: number) => `${list.uid}-pinned-${index}`;
@@ -259,15 +277,22 @@
 </script>
 
 {#snippet folderLine(line: TreeLine<T> & { kind: "folder" })}
-  <div role="gridcell" class="flex min-w-0 flex-1 items-center" style:column-gap={`${GAP_REM}rem`}>
-    <TreeToggle
-      {expansion}
-      key={line.node.key}
-      siblings={line.siblings}
-      name={line.node.label}
-      {ontoggle} />
+  {#if framed}
+    <div
+      role="gridcell"
+      class="flex min-w-0 flex-1 items-center"
+      style:column-gap={`${GAP_REM}rem`}>
+      <TreeToggle
+        {expansion}
+        key={line.node.key}
+        siblings={line.siblings}
+        name={line.node.label}
+        {ontoggle} />
+      {@render folder(line.node, line.depth)}
+    </div>
+  {:else}
     {@render folder(line.node, line.depth)}
-  </div>
+  {/if}
 {/snippet}
 
 <!-- every line has the same height, so the window never measures one and the pinned folder lines
@@ -292,7 +317,9 @@
   <!-- the pinned folder lines are drawn under the column header, which a pushed one goes under,
        and over the lines -->
   <div class="sticky top-0 z-10" style:min-width={least} bind:offsetHeight={rowsTop}>
-    {#if header}
+    {#if header && !framed}
+      {@render header()}
+    {:else if header}
       <div
         role="row"
         class="grid items-center border-b bg-surface-muted py-1.5 text-xs font-medium text-fg-muted"
