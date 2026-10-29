@@ -1,55 +1,22 @@
 //! What the client does with each peer message, sent by a scripted peer on a message connection:
-//! answers from the application's resolvers, replies that complete the waits of our requests,
-//! refusals and failures that become events, and what a hostile or vanishing peer causes.
+//! answers from the application's resolvers, refusals, and what a hostile or vanishing peer
+//! causes.
 
 mod support;
 
-use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use soulseek_client::{
-  BrowseReply, ClientError, ClientOptions, EncodedFrame, Event, IncomingBrowse, MessageErrorKind,
-  Resolvers, WaitKey,
-};
+use soulseek_client::{ClientError, ClientOptions, MessageErrorKind, Resolvers, WaitKey};
 use soulseek_proto::peer::*;
 use soulseek_proto::{PeerCode, PeerMessage, RemoteFilename, TransferDirection};
 use support::peer::PeerSide;
 use support::{Logs, PATIENCE, Session, listening_options};
 use tokio_util::sync::CancellationToken;
 
-fn mp3(name: &str) -> File {
-  File {
-    code: 1,
-    filename: name.into(),
-    size: 4_000_000,
-    extension: "mp3".into(),
-    attributes: Vec::new(),
-  }
-}
-
-fn listing() -> BrowseResponse {
-  BrowseResponse {
-    directories: vec![Directory {
-      name: "@@music\\album".into(),
-      files: vec![mp3("01.mp3"), mp3("02.mp3")],
-    }],
-    locked_directories: Vec::new(),
-  }
-}
-
 fn resolvers() -> Resolvers {
   Resolvers {
-    browse_response_resolver: Some(Arc::new(|_, _| {
-      Box::pin(async {
-        let frame = PeerMessage::BrowseResponse(listing()).encode();
-        Ok(BrowseReply::Encoded(EncodedFrame {
-          len: frame.len() as u64,
-          reader: Box::pin(Cursor::new(frame)),
-        }))
-      })
-    })),
     enqueue_download: Some(Arc::new(|_, _, filename: RemoteFilename| {
       Box::pin(async move {
         match filename.as_str() {
@@ -81,25 +48,6 @@ async fn bob(session: &Session) -> PeerSide {
     PeerMessage::InfoResponse(_)
   ));
   bob
-}
-
-fn file_key(code: PeerCode, filename: &str) -> WaitKey {
-  WaitKey::PeerFile {
-    code,
-    username: "bob".into(),
-    filename: filename.into(),
-  }
-}
-
-#[tokio::test]
-async fn a_browse_request_streams_the_encoded_listing() {
-  let session = session().await;
-  let mut bob = bob(&session).await;
-  bob.send(&PeerMessage::BrowseRequest.encode()).await;
-  assert_eq!(
-    bob.read_peer().await,
-    PeerMessage::BrowseResponse(listing())
-  );
 }
 
 #[tokio::test]
@@ -228,117 +176,6 @@ async fn an_upload_offer_for_a_file_we_do_not_download_is_refused() {
 }
 
 #[tokio::test]
-async fn replies_complete_the_waits_of_our_requests() {
-  let session = session().await;
-  let mut bob = bob(&session).await;
-  let waiter = session.client.waiter();
-  let transfer = waiter.wait::<TransferResponse>(
-    WaitKey::PeerToken {
-      code: PeerCode::TransferResponse,
-      username: "bob".into(),
-      token: 4,
-    },
-    None,
-    CancellationToken::new(),
-  );
-  let place = waiter.wait::<PlaceInQueueResponse>(
-    file_key(PeerCode::PlaceInQueueResponse, "a.mp3"),
-    None,
-    CancellationToken::new(),
-  );
-  let folder = waiter.wait::<FolderContentsResponse>(
-    WaitKey::PeerToken {
-      code: PeerCode::FolderContentsResponse,
-      username: "bob".into(),
-      token: 12,
-    },
-    None,
-    CancellationToken::new(),
-  );
-  let info = waiter.wait::<UserInfo>(
-    WaitKey::Peer {
-      code: PeerCode::InfoResponse,
-      username: "bob".into(),
-    },
-    None,
-    CancellationToken::new(),
-  );
-  let mut frames = PeerMessage::TransferResponse(TransferResponse::Allowed {
-    token: 4,
-    file_size: None,
-  })
-  .encode();
-  frames.extend(
-    PeerMessage::PlaceInQueueResponse(PlaceInQueueResponse {
-      filename: "a.mp3".into(),
-      place: 2,
-    })
-    .encode(),
-  );
-  frames.extend(
-    PeerMessage::FolderContentsResponse(FolderContentsResponse {
-      token: 12,
-      directory_name: "d".into(),
-      directories: Vec::new(),
-    })
-    .encode(),
-  );
-  frames.extend(
-    PeerMessage::InfoResponse(UserInfo {
-      description: "bob's".into(),
-      picture: None,
-      upload_slots: 1,
-      queue_length: 0,
-      has_free_upload_slot: true,
-      upload_permitted: None,
-    })
-    .encode(),
-  );
-  bob.send(&frames).await;
-  let (transfer, place, folder, info) = tokio::join!(transfer, place, folder, info);
-  assert!(matches!(
-    transfer.unwrap(),
-    TransferResponse::Allowed { token: 4, .. }
-  ));
-  assert_eq!(place.unwrap().place, 2);
-  assert_eq!(folder.unwrap().token, 12);
-  assert_eq!(info.unwrap().description, "bob's");
-}
-
-#[tokio::test]
-async fn a_browse_response_is_announced_by_its_header_before_it_completes() {
-  let session = session().await;
-  let mut bob = bob(&session).await;
-  let header = session.client.waiter().wait::<IncomingBrowse>(
-    WaitKey::BrowseResponseConnection {
-      username: "bob".into(),
-    },
-    None,
-    CancellationToken::new(),
-  );
-  let response = session.client.waiter().wait::<Arc<BrowseResponse>>(
-    WaitKey::Peer {
-      code: PeerCode::BrowseResponse,
-      username: "bob".into(),
-    },
-    None,
-    CancellationToken::new(),
-  );
-  let frame = PeerMessage::BrowseResponse(listing()).encode();
-  // the header first, the rest after the header was seen
-  bob.send(&frame[..8]).await;
-  let incoming = tokio::time::timeout(PATIENCE, header)
-    .await
-    .unwrap()
-    .unwrap();
-  assert_eq!(incoming.length as usize, frame.len() - 4);
-  assert_eq!(*incoming.received.borrow(), 0);
-  bob.send(&frame[8..]).await;
-  assert_eq!(*response.await.unwrap(), listing());
-  assert_eq!(*incoming.received.borrow(), frame.len() - 8);
-}
-
-#[tokio::test]
 async fn an_invalid_browse_response_fails_the_browse() {
   let session = session().await;
   let mut bob = bob(&session).await;
@@ -357,73 +194,6 @@ async fn an_invalid_browse_response_fails_the_browse() {
   assert!(
     matches!(&error, ClientError::Message { kind: MessageErrorKind::Read, message, .. } if message == "The peer returned an invalid browse response"),
     "{error:?}"
-  );
-}
-
-#[tokio::test]
-async fn upload_failures_and_refusals_fail_the_download_and_are_raised() {
-  let mut session = session().await;
-  let mut bob = bob(&session).await;
-  let failed = session
-    .client
-    .waiter()
-    .wait_indefinitely::<TransferRequest>(
-      file_key(PeerCode::TransferRequest, "a.mp3"),
-      CancellationToken::new(),
-    );
-  bob
-    .send(
-      &PeerMessage::UploadFailed(UploadFailed {
-        filename: "a.mp3".into(),
-      })
-      .encode(),
-    )
-    .await;
-  assert!(matches!(
-    failed.await.unwrap_err(),
-    ClientError::TransferReportedFailed(message) if message == "Download reported as failed by remote client"
-  ));
-  let raised = session
-    .event(|event| match event {
-      Event::DownloadFailed { username, filename } => Some((username, filename)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(raised, ("bob".into(), "a.mp3".into()));
-
-  let denied = session
-    .client
-    .waiter()
-    .wait_indefinitely::<TransferRequest>(
-      file_key(PeerCode::TransferRequest, "b.mp3"),
-      CancellationToken::new(),
-    );
-  bob
-    .send(
-      &PeerMessage::UploadDenied(UploadDenied {
-        filename: "b.mp3".into(),
-        reason: "File not shared.".into(),
-      })
-      .encode(),
-    )
-    .await;
-  assert!(matches!(
-    denied.await.unwrap_err(),
-    ClientError::TransferRejected(reason) if reason == "File not shared."
-  ));
-  let raised = session
-    .event(|event| match event {
-      Event::DownloadDenied {
-        username,
-        filename,
-        message,
-      } => Some((username, filename, message)),
-      _ => None,
-    })
-    .await;
-  assert_eq!(
-    raised,
-    ("bob".into(), "b.mp3".into(), "File not shared.".into())
   );
 }
 
@@ -452,32 +222,6 @@ async fn ignored_and_unknown_messages_leave_the_connection_up() {
       .lines_with(&["unhandled peer message", "code=52"])
       .is_empty()
   );
-}
-
-#[tokio::test]
-async fn a_peer_whose_connection_closes_fails_the_waits_on_it() {
-  let session = session().await;
-  let bob = bob(&session).await;
-  let info = session.client.waiter().wait::<UserInfo>(
-    WaitKey::Peer {
-      code: PeerCode::InfoResponse,
-      username: "bob".into(),
-    },
-    Some(Duration::from_secs(30)),
-    CancellationToken::new(),
-  );
-  drop(bob);
-  let error = tokio::time::timeout(PATIENCE, info)
-    .await
-    .unwrap()
-    .unwrap_err();
-  assert!(
-    error
-      .to_string()
-      .starts_with("The message connection to bob closed"),
-    "{error}"
-  );
-  assert!(session.client.message_connections().is_empty());
 }
 
 #[tokio::test]

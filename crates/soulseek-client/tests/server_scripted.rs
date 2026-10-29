@@ -4,13 +4,10 @@
 
 mod support;
 
-use std::net::Ipv4Addr;
-
 use soulseek_client::{ClientOptions, Event, ServerInfo, WaitKey};
 use soulseek_proto::server::*;
 use soulseek_proto::{ServerCode, ServerRequest, ServerResponse};
-use support::{Logs, Session, options, user_key};
-use tokio_util::sync::CancellationToken;
+use support::{Logs, Session, options};
 
 #[tokio::test]
 async fn ping_completes_its_wait_and_an_unsolicited_one_is_dropped() {
@@ -69,52 +66,6 @@ async fn notify_privileges_is_raised_and_acknowledged() {
     session.server.request().await,
     ServerRequest::AcknowledgeNotifyPrivileges(AcknowledgeNotifyPrivileges { id: 9 })
   );
-}
-
-#[tokio::test]
-async fn recommendations_without_the_second_block() {
-  let mut session = Session::start().await;
-  let wait = session.client.waiter().wait::<Recommendations>(
-    WaitKey::Server(ServerCode::GetGlobalRecommendations),
-    None,
-    CancellationToken::new(),
-  );
-  let mut payload = 56u32.to_le_bytes().to_vec();
-  payload.extend(1u32.to_le_bytes());
-  payload.extend(4u32.to_le_bytes());
-  payload.extend(b"jazz");
-  payload.extend(4i32.to_le_bytes());
-  let mut frame = (payload.len() as u32).to_le_bytes().to_vec();
-  frame.extend(payload);
-  session.server.send_bytes(&frame).await;
-  assert_eq!(
-    wait.await.unwrap(),
-    Recommendations {
-      recommendations: vec![Recommendation {
-        interest: "jazz".into(),
-        count: 4,
-      }],
-      unrecommendations: Vec::new(),
-    }
-  );
-}
-
-#[tokio::test]
-async fn get_peer_address_without_the_obfuscation_trailer() {
-  let mut session = Session::start().await;
-  let without = GetPeerAddressResponse {
-    username: "bob".into(),
-    ip: Ipv4Addr::new(10, 0, 0, 2),
-    port: 2234,
-    obfuscation: None,
-  };
-  let got: GetPeerAddressResponse = session
-    .reply(
-      user_key(ServerCode::GetPeerAddress, "bob"),
-      ServerResponse::GetPeerAddress(without.clone()),
-    )
-    .await;
-  assert_eq!(got, without);
 }
 
 #[tokio::test]

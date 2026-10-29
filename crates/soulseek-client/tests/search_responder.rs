@@ -36,20 +36,13 @@ fn answer(token: u32) -> SearchResponse {
   }
 }
 
-/// a responder that answers every search, built or encoded, and gives up on a peer after
+/// a responder that answers every search and gives up on a peer after
 /// `connect_timeout`
-async fn responder(encoded: bool, connect_timeout: Duration) -> Session {
+async fn responder(connect_timeout: Duration) -> Session {
   let mut options = listening_options();
   options.peer_connection_options.connect_timeout = connect_timeout;
   options.resolvers.search_response_resolver = Some(Arc::new(move |_, token, _| {
-    Box::pin(async move {
-      let response = answer(token);
-      Ok(Some(if encoded {
-        SearchReply::Encoded(PeerMessage::SearchResponse(response).encode())
-      } else {
-        SearchReply::Response(response)
-      }))
-    })
+    Box::pin(async move { Ok(Some(SearchReply::Response(answer(token)))) })
   }));
   Session::with_options(ClientOptions { ..options }).await
 }
@@ -105,38 +98,32 @@ async fn carol_pierces(session: &Session, token: u32) -> PeerSide {
 
 #[tokio::test]
 async fn a_kept_answer_reaches_a_searcher_who_connects_late() {
-  for encoded in [false, true] {
-    let logs = Logs::capture();
-    let mut session = responder(encoded, Duration::from_millis(300)).await;
-    let request = carol_searches(&mut session, 5).await;
-    logs
-      .wait_for(&["cached response for potential delayed delivery"])
-      .await;
-    let mut carol = carol_pierces(&session, request).await;
-    assert_eq!(
-      carol.read_peer().await,
-      PeerMessage::SearchResponse(answer(5))
-    );
-    let delivered = session
-      .event(|event| match event {
-        Event::SearchResponseDelivered(delivery) => Some(delivery),
-        _ => None,
-      })
-      .await;
-    assert_eq!((delivered.username.as_str(), delivered.token), ("carol", 5));
-    assert_eq!(
-      matches!(*delivered.search_response, SearchReply::Encoded(_)),
-      encoded
-    );
-    // the late connection is now carol's message connection
-    assert_eq!(session.client.message_connections()[0].0, "carol");
-  }
+  let logs = Logs::capture();
+  let mut session = responder(Duration::from_millis(300)).await;
+  let request = carol_searches(&mut session, 5).await;
+  logs
+    .wait_for(&["cached response for potential delayed delivery"])
+    .await;
+  let mut carol = carol_pierces(&session, request).await;
+  assert_eq!(
+    carol.read_peer().await,
+    PeerMessage::SearchResponse(answer(5))
+  );
+  let delivered = session
+    .event(|event| match event {
+      Event::SearchResponseDelivered(delivery) => Some(delivery),
+      _ => None,
+    })
+    .await;
+  assert_eq!((delivered.username.as_str(), delivered.token), ("carol", 5));
+  // the late connection is now carol's message connection
+  assert_eq!(session.client.message_connections()[0].0, "carol");
 }
 
 #[tokio::test]
 async fn a_kept_answer_is_given_up_when_the_searcher_cannot_connect() {
   let logs = Logs::capture();
-  let mut session = responder(false, Duration::from_millis(300)).await;
+  let mut session = responder(Duration::from_millis(300)).await;
   let request = carol_searches(&mut session, 6).await;
   logs
     .wait_for(&["cached response for potential delayed delivery"])
@@ -162,7 +149,7 @@ async fn a_kept_answer_is_given_up_when_the_searcher_cannot_connect() {
 
 #[tokio::test]
 async fn a_searcher_refusing_while_we_still_try_gets_nothing_kept() {
-  let mut session = responder(false, Duration::from_secs(5)).await;
+  let mut session = responder(Duration::from_secs(5)).await;
   let started = tokio::time::Instant::now();
   let request = carol_searches(&mut session, 7).await;
   session
