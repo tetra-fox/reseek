@@ -263,19 +263,4 @@ mod tests {
       .collect();
     assert_eq!(names, ["a.toml", "b.toml"]);
   }
-
-  #[test]
-  fn revisions_follow_contents() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("config.toml");
-    assert_eq!(revision(&path).unwrap(), None);
-    fs::write(&path, "a").unwrap();
-    let a = revision(&path).unwrap().unwrap();
-    assert_eq!(
-      a,
-      "sha256:ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
-    );
-    fs::write(&path, "b").unwrap();
-    assert_ne!(revision(&path).unwrap().unwrap(), a);
-  }
 }

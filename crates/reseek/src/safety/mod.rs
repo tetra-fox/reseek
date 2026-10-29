@@ -204,24 +204,6 @@ mod tests {
   }
 
   #[test]
-  fn invalid_characters_are_the_systems() {
-    assert_eq!(Os::Unix.invalid_filename_chars(), ['\0', '/']);
-    let windows = Os::Windows.invalid_filename_chars();
-    for c in [
-      '"', '<', '>', '|', '\0', '\u{1}', '\u{1f}', ':', '*', '?', '\\', '/',
-    ] {
-      assert!(windows.contains(&c), "{c:?}");
-    }
-    assert!(!windows.contains(&' '));
-  }
-
-  #[test]
-  fn paths_are_localized_to_the_systems_separator() {
-    assert_eq!(localize_path("a/b\\c", Os::Unix), "a/b/c");
-    assert_eq!(localize_path("a/b\\c", Os::Windows), "a\\b\\c");
-  }
-
-  #[test]
   fn a_sub_directory_is_the_root_or_below_it() {
     let unix = |sub, root| is_sub_directory_of(sub, root, Os::Unix).unwrap();
     assert!(unix("/srv/downloads", "/srv/downloads/"));

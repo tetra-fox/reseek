@@ -15,8 +15,8 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use super::AgentClient;
+use crate::backoff;
 use crate::relay::credential::Purpose;
-use crate::relay::frames;
 use crate::safety::traverses;
 
 /// How many times a download is fetched before it is given up.
@@ -111,7 +111,7 @@ impl AgentClient {
       if attempt > 0 {
         tokio::select! {
           () = self.shutdown.cancelled() => break,
-          () = tokio::time::sleep(frames::backoff(attempt, ATTEMPT_BACKOFF)) => {}
+          () = tokio::time::sleep(backoff::wait(attempt, ATTEMPT_BACKOFF)) => {}
         }
       }
       let fetched = tokio::select! {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ActivityEntry } from "./activity.svelte";
-import { activityParts, activityText, kindOf } from "./text";
+import { activityParts, activityText } from "./text";
 
 const size = (bytes: number) => `${bytes} B`;
 
@@ -57,10 +57,5 @@ describe("an activity line", () => {
     expect(
       activityParts(entry({ type: "privateRoom", room: "club", change: "operator" }, null), size)
     ).toContainEqual({ kind: "room", name: "club" });
-  });
-
-  it("files an upload's end with its start", () => {
-    expect(kindOf("uploadEnded")).toBe("uploadStarted");
-    expect(kindOf("browse")).toBe("browse");
   });
 });

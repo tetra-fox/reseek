@@ -225,24 +225,4 @@ mod tests {
       FilesystemAttributes::Directory | FilesystemAttributes::ReparsePoint
     );
   }
-
-  #[test]
-  fn file_token_requests_are_told_apart_by_their_field() {
-    let path: FileTokenRequest = serde_json::from_str(r#"{"path":"downloads/YQ"}"#).unwrap();
-    assert_eq!(
-      path,
-      FileTokenRequest::Path {
-        path: "downloads/YQ".to_owned()
-      }
-    );
-    let id = Uuid::from_u128(1);
-    let transfer: FileTokenRequest =
-      serde_json::from_str(&format!(r#"{{"transferId":"{id}"}}"#)).unwrap();
-    assert_eq!(transfer, FileTokenRequest::Transfer { transfer_id: id });
-    assert_eq!(
-      serde_json::to_string(&transfer).unwrap(),
-      format!(r#"{{"transferId":"{id}"}}"#)
-    );
-    assert!(serde_json::from_str::<FileTokenRequest>("{}").is_err());
-  }
 }

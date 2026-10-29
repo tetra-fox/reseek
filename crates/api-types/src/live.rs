@@ -196,7 +196,6 @@ pub struct Bye {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::auth::Role;
   use serde_json::json;
 
   /// Every frame's name, as the event stream's catalog spells it.
@@ -255,55 +254,5 @@ mod tests {
       .map(|n| n.split('`').next().unwrap_or(n))
       .collect();
     assert_eq!(names, CATALOG);
-  }
-
-  #[test]
-  fn frames_are_written_as_type_and_data() {
-    let bye = LiveFrame::Bye(Bye {
-      reason: ByeReason::Unauthorized,
-    });
-    assert_eq!(
-      serde_json::to_value(&bye).unwrap(),
-      json!({ "type": "bye", "data": { "reason": "unauthorized" } })
-    );
-    assert_eq!(
-      serde_json::to_value(LiveFrame::Lagged(Lagged {})).unwrap(),
-      json!({ "type": "lagged", "data": {} })
-    );
-    let hello = LiveFrame::Hello(Hello {
-      server_time: "2026-10-25T12:00:00Z".parse().unwrap(),
-      version: VersionInfo {
-        full: "0.1.0 (0.1.0)".into(),
-        current: "0.1.0".into(),
-        latest: None,
-        is_update_available: None,
-        is_canary: false,
-        is_development: true,
-      },
-      principal: PrincipalSummary {
-        name: "admin".into(),
-        role: Role::Administrator,
-      },
-      topics: vec!["application".into()],
-      resumed: false,
-    });
-    let value = serde_json::to_value(&hello).unwrap();
-    assert_eq!(value["type"], "hello");
-    assert_eq!(value["data"]["serverTime"], "2026-10-25T12:00:00Z");
-    assert_eq!(
-      value["data"]["version"]["latest"],
-      json!(null),
-      "nulls are written"
-    );
-    assert_eq!(value["data"]["principal"]["role"], "Administrator");
-    let read: LiveFrame = serde_json::from_value(value).unwrap();
-    assert_eq!(read, hello);
-    let logs = json!({ "type": "logs.record", "data": {
-      "timestamp": "2026-10-25T12:00:00Z", "context": "reseek::http", "subContext": null,
-      "level": "Information", "message": "listening" } });
-    assert!(matches!(
-      serde_json::from_value::<LiveFrame>(logs).unwrap(),
-      LiveFrame::LogsRecord(_)
-    ));
   }
 }

@@ -515,13 +515,9 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn filter_presets_are_one_live_list_whose_removed_default_stays_off() {
+  async fn filter_presets_are_one_live_list_replaced_whole() {
     let app = app(TRUSTED, &[]).await;
     let get = || request("GET", "/api/v0/options", None);
-    let presets = app.send(get()).await.json()["search"]["filter_presets"].clone();
-    assert_eq!(presets.as_array().map(Vec::len), Some(7));
-    assert_eq!(presets[1], json!({ "name": "FLAC", "filter": "type:flac" }));
-
     let mine = json!([
       { "name": "FLAC", "filter": "type:flac" },
       { "name": "Big", "filter": "size:100m" }
@@ -586,11 +582,7 @@ mod tests {
 
   #[tokio::test]
   async fn changing_anything_needs_remote_configuration() {
-    let app = app(
-      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
-      &[],
-    )
-    .await;
+    let app = app(crate::testing::TRUSTED, &[]).await;
     assert_eq!(
       app
         .send(request("GET", "/api/v0/options", None))

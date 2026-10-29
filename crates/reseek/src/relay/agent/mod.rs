@@ -23,7 +23,8 @@ use tokio::sync::{Notify, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 
-use super::frames::{self, close};
+use super::frames::close;
+use crate::backoff;
 use crate::config::{Options, RelayController};
 use crate::shares::Shares;
 use crate::state::StateOwner;
@@ -166,9 +167,9 @@ impl AgentClient {
       }
       if failures > 0 {
         let mut delay = if refused {
-          frames::backoff(u32::MAX, BACKOFF_CAP)
+          backoff::wait(u32::MAX, BACKOFF_CAP)
         } else {
-          frames::backoff(failures, BACKOFF_CAP)
+          backoff::wait(failures, BACKOFF_CAP)
         };
         if shut_down {
           delay = delay.max(AFTER_SHUTDOWN);

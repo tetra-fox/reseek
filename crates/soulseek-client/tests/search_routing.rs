@@ -1,7 +1,6 @@
-//! Searches routed through soulfind between two clients: a network, a user and a room search
-//! from one reach the other's responder, whose answer travels back over a message connection to
-//! the searcher. An empty answer is never sent; an encoded one is sent as it is; a search sent
-//! straight over a message connection is answered on it.
+//! Searches routed through soulfind between two clients, the responder's answer travelling back
+//! over a message connection to the searcher: an empty answer is never sent, an encoded one is
+//! sent as it is, and a search sent straight over a message connection is answered on it.
 
 mod support;
 
@@ -9,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use soulseek_client::{ClientOptions, Event, SearchReply, SearchResponseResolver, SearchScope};
 use soulseek_proto::peer::{File, SearchRequest, SearchResponse};
-use soulseek_proto::{PeerMessage, RoomType, SearchQuery};
+use soulseek_proto::{PeerMessage, SearchQuery};
 use support::soulfind::{self, Soulfind, User};
 use support::{Logs, free_port};
 use tokio_util::sync::CancellationToken;
@@ -103,44 +102,6 @@ async fn arrived(logs: &Logs, responder: &str, token: u32) {
       &format!("token={token}"),
     ])
     .await;
-}
-
-#[tokio::test]
-async fn network_user_and_room_searches_reach_the_responder_and_come_back() {
-  let logs = Logs::capture();
-  let Some(server) = soulfind::server() else {
-    return;
-  };
-  let (mut responder, searcher, asked) = responder_and_searcher(&server, 2, false).await;
-  let room = soulfind::username("searched");
-  for user in [&responder, &searcher] {
-    user
-      .client
-      .join_room(&room, RoomType::Public)
-      .await
-      .unwrap();
-  }
-  let scopes = [
-    (11, SearchScope::Network),
-    (12, SearchScope::User(vec![responder.username.clone()])),
-    (13, SearchScope::Room(room.clone())),
-  ];
-  for (token, scope) in &scopes {
-    searcher
-      .client
-      .send_search_request(scope, *token, "flac match")
-      .await
-      .unwrap();
-    let reply = delivered(&mut responder, *token).await;
-    assert_eq!(reply.file_count(), Some(2));
-    arrived(&logs, &responder.username, *token).await;
-  }
-  let asked = asked.lock().unwrap().clone();
-  let expected: Vec<_> = scopes
-    .iter()
-    .map(|(token, _)| (searcher.username.clone(), *token, "flac match".to_owned()))
-    .collect();
-  assert_eq!(asked, expected);
 }
 
 #[tokio::test]

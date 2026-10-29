@@ -137,14 +137,6 @@ pub fn kind(message: &RelayMessage) -> &'static str {
   }
 }
 
-/// How long to wait before the `attempt`th retry of a loop that backs off: half of one less
-/// than two to that power, in seconds, at most `cap`, plus up to a second at random. The
-/// first retry follows at once, then after 1, 3, 7, 15 seconds and so on.
-pub fn backoff(attempt: u32, cap: Duration) -> Duration {
-  let seconds = (2u64.saturating_pow(attempt).saturating_sub(1)) / 2;
-  Duration::from_secs(seconds).min(cap) + Duration::from_millis(rand::random_range(0..1000))
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -166,13 +158,5 @@ mod tests {
       decode(&encode(Some(id), RelayMessage::Pong {})).unwrap().id,
       Some(id)
     );
-  }
-
-  #[test]
-  fn retries_back_off_to_the_cap() {
-    let whole = |attempt| backoff(attempt, Duration::from_secs(30)).as_secs();
-    let delays: Vec<u64> = (1..=7).map(whole).collect();
-    assert_eq!(delays, [0, 1, 3, 7, 15, 30, 30]);
-    assert_eq!(whole(200), 30);
   }
 }

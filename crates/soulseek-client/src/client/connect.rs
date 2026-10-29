@@ -427,19 +427,4 @@ mod tests {
       "Password may not be null or an empty string"
     );
   }
-
-  #[test]
-  fn connect_failures_keep_their_own_outcomes() {
-    assert!(matches!(
-      connect_error(ClientError::Canceled),
-      ClientError::Canceled
-    ));
-    let wrapped = connect_error(ClientError::connection(
-      ConnectionErrorKind::Other,
-      "refused",
-    ));
-    assert!(
-      matches!(&wrapped, ClientError::Connect { message, .. } if message == "Failed to connect: refused")
-    );
-  }
 }

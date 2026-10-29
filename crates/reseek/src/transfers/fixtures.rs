@@ -7,7 +7,7 @@ use rusqlite::params;
 use uuid::Uuid;
 
 use super::direction_text;
-use crate::db::{Database, Location, timestamp};
+use crate::db::{Database, timestamp};
 
 /// One row of `Transfers`, everything but the user, direction and state defaulted.
 #[derive(Clone, Debug)]
@@ -66,13 +66,7 @@ impl Row {
 
 /// An empty `transfers.db` in memory.
 pub async fn transfers() -> Database {
-  let location = Location {
-    data: std::env::temp_dir(),
-    backups: std::env::temp_dir(),
-    volatile: true,
-    log_sql: false,
-  };
-  super::open(&location).await.unwrap()
+  Database::memory(&super::SCHEMA).await
 }
 
 /// Writes `rows` into `db`.

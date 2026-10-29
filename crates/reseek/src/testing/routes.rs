@@ -104,7 +104,7 @@ pub fn probe(operation: &Operation) -> Request<Body> {
     }
     Some(Payload::Picture) => {
       let mut r = request(method, &uri, None);
-      *r.body_mut() = Body::from(picture());
+      *r.body_mut() = Body::from(super::png(1, 1, image::Rgba([0, 0, 0, 255])));
       with(r, "content-type", "image/png")
     }
     Some(Payload::Form) => {
@@ -131,16 +131,6 @@ enum Payload {
   Form,
   /// a small PNG
   Picture,
-}
-
-/// A one-pixel PNG.
-fn picture() -> Vec<u8> {
-  use image::ImageEncoder;
-  let mut bytes = Vec::new();
-  image::codecs::png::PngEncoder::new(&mut bytes)
-    .write_image(&[0, 0, 0, 255], 1, 1, image::ExtendedColorType::Rgba8)
-    .unwrap();
-  bytes
 }
 
 /// The query a route needs to be let through.

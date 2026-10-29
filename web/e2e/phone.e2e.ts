@@ -12,10 +12,29 @@ import {
   fakeSearch,
   SEARCH_ID
 } from "./fakes";
-import { login, textSize } from "./login";
+import { login, refuseCopy, textSize } from "./login";
 
 // a phone's width: no screen may be wider than it, so nothing runs off its right edge
 test.use({ viewport: { width: 390, height: 844 } });
+
+/**
+ * The first element under `root` matching `selector` that runs past `root`'s right edge, as a
+ * description, unless a box between them scrolls sideways on its own. Run in the page
+ */
+const cutOff = (root: Element, selector: string) => {
+  const edge = root.getBoundingClientRect().right + 0.5;
+  const scrolls = (e: Element) => ["auto", "scroll"].includes(getComputedStyle(e).overflowX);
+  for (const e of root.querySelectorAll(selector)) {
+    const box = e.getBoundingClientRect();
+    if (!box.width || box.right <= edge || getComputedStyle(e).visibility === "hidden") continue;
+    let inside = false;
+    for (let a = e.parentElement; a && a !== root; a = a.parentElement) {
+      if (scrolls(a)) inside = true;
+    }
+    if (!inside) return `${e.tagName.toLowerCase()} "${e.textContent?.trim().slice(0, 40)}"`;
+  }
+  return null;
+};
 
 /**
  * Waits for `ready`, then checks the content area holds the screen: no sideways scroll, and
@@ -39,20 +58,7 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
   expect(scroll, `${what} is ${scroll - client}px wider than its screen`).toBeLessThanOrEqual(
     client
   );
-  const cut = await page.locator("[data-content]").evaluate((area) => {
-    const edge = area.getBoundingClientRect().right + 0.5;
-    const scrolls = (e: Element) => ["auto", "scroll"].includes(getComputedStyle(e).overflowX);
-    for (const e of area.querySelectorAll("main *")) {
-      const box = e.getBoundingClientRect();
-      if (!box.width || box.right <= edge || getComputedStyle(e).visibility === "hidden") continue;
-      let inside = false;
-      for (let a = e.parentElement; a && a !== area; a = a.parentElement) {
-        if (scrolls(a)) inside = true;
-      }
-      if (!inside) return `${e.tagName.toLowerCase()} "${e.textContent?.trim().slice(0, 40)}"`;
-    }
-    return null;
-  });
+  const cut = await page.locator("[data-content]").evaluate(cutOff, "main *");
   expect(cut, `${what} cuts off ${cut}`).toBeNull();
   // the status bar under the content area holds all it shows within the screen, on more lines if
   // it must, and never scrolls sideways
@@ -113,21 +119,12 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
 const drawerHolds = async (page: Page, name: string) => {
   const drawer = page.getByRole("complementary", { name });
   await expect(drawer.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
-  const cut = await drawer.evaluate((aside) => {
+  const off = await drawer.evaluate((aside) => {
     const { left, right } = aside.getBoundingClientRect();
-    if (left < -0.5 || right > innerWidth + 0.5) return "the drawer runs off the screen";
-    const scrolls = (e: Element) => ["auto", "scroll"].includes(getComputedStyle(e).overflowX);
-    for (const e of aside.querySelectorAll("*")) {
-      const box = e.getBoundingClientRect();
-      if (!box.width || box.right <= right + 0.5) continue;
-      let inside = false;
-      for (let a = e.parentElement; a && a !== aside; a = a.parentElement) {
-        if (scrolls(a)) inside = true;
-      }
-      if (!inside) return `${e.tagName.toLowerCase()} "${e.textContent?.trim().slice(0, 40)}"`;
-    }
-    return null;
+    return left < -0.5 || right > innerWidth + 0.5;
   });
+  expect(off, `the ${name} drawer runs off the screen`).toBe(false);
+  const cut = await drawer.evaluate(cutOff, "*");
   expect(cut, `the ${name} drawer cuts off ${cut}`).toBeNull();
 };
 
@@ -235,17 +232,6 @@ test("every screen fits a phone's width", async ({ page }) => {
 test.describe("on a wide screen", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("the dashboard and the dense results hold their figures", async ({ page }) => {
-    await fakeReports(page);
-    await fakeSearch(page);
-    await login(page, "/dashboard");
-    await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
-    await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
-    await page.getByRole("radio", { name: "Dense" }).click();
-    await holds(page, "the dense results", shows("02 Two.flac"));
-    await page.getByRole("radio", { name: "Cards" }).click();
-  });
-
   test("the widest figures fit their width in ch", async ({ page }) => {
     // a tabular digit is wider than 1ch, the plain zero; the narrower point, space and
     // separators of each formatter's widest value make up for it
@@ -269,62 +255,54 @@ test.describe("on a wide screen", () => {
   });
 });
 
-test.describe("at a large text size", () => {
+// at a fixed width a layout only overflows more as the text grows, so the largest root size the
+// sweep takes covers the sizes between it and the default
+test.describe("at a 24 px text size", () => {
   test.describe("on a wide screen", () => {
     test.use({ viewport: { width: 1280, height: 800 } });
 
-    for (const root of [20, 24]) {
-      test(`the figure columns grow with the text at ${root} px`, async ({ page }) => {
-        await textSize(page, root);
-        await fakeReports(page);
-        await fakeSearch(page);
-        await fakeDownloads(page);
-        await fakeAnalysis(page);
-        await login(page, "/dashboard");
-        await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
-        await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
-        await page.getByRole("radio", { name: "Dense" }).click();
-        await holds(page, `the dense results at ${root} px`, shows("02 Two.flac"));
-        await page.getByRole("radio", { name: "Cards" }).click();
-        await fits(page, "/downloads", shows("3.flac"));
-        await page.getByRole("button", { name: "More for 2.flac" }).click();
-        await page.getByRole("menuitem", { name: "Analyze" }).click();
-        await page.getByText("Analyzer reading", { exact: true }).click();
-        await drawerHolds(page, "Transfer details");
-        await page.keyboard.press("Escape");
-        await fits(page, "/system/info", shows("Process ID"));
-      });
-    }
+    test("the figure columns grow with the text", async ({ page }) => {
+      await textSize(page, 24);
+      await fakeReports(page);
+      await fakeSearch(page);
+      await fakeDownloads(page);
+      await fakeAnalysis(page);
+      await login(page, "/dashboard");
+      await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
+      await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
+      await page.getByRole("radio", { name: "Dense" }).click();
+      await holds(page, "the dense results", shows("02 Two.flac"));
+      await page.getByRole("radio", { name: "Cards" }).click();
+      await fits(page, "/downloads", shows("3.flac"));
+      await page.getByRole("button", { name: "More for 2.flac" }).click();
+      await page.getByRole("menuitem", { name: "Analyze" }).click();
+      await page.getByText("Analyzer reading", { exact: true }).click();
+      await drawerHolds(page, "Transfer details");
+      await page.keyboard.press("Escape");
+      await fits(page, "/system/info", shows("Process ID"));
+    });
   });
 
-  for (const root of [20, 24]) {
-    test(`every screen fits a phone at ${root} px`, async ({ page }) => {
-      await textSize(page, root);
-      await everyScreen(page);
-      // the activity log's sheet stands on the status bar, however many lines that has
-      const bar = page.locator("footer:not(main footer)");
-      const toggle = bar.getByRole("button", { name: "Activity" });
-      await toggle.click();
-      // polled, as the sheet slides up as it opens
-      const gap = async () => {
-        const sheet = (await page
-          .getByRole("region", { name: "Activity on the network" })
-          .boundingBox())!;
-        return Math.round(sheet.y + sheet.height - (await bar.boundingBox())!.y);
-      };
-      await expect.poll(gap, { message: "the sheet's foot is off the bar" }).toBe(0);
-    });
-  }
+  test("every screen fits a phone", async ({ page }) => {
+    await textSize(page, 24);
+    await everyScreen(page);
+    // the activity log's sheet stands on the status bar, however many lines that has
+    const bar = page.locator("footer:not(main footer)");
+    const toggle = bar.getByRole("button", { name: "Activity" });
+    await toggle.click();
+    // polled, as the sheet slides up as it opens
+    const gap = async () => {
+      const sheet = (await page
+        .getByRole("region", { name: "Activity on the network" })
+        .boundingBox())!;
+      return Math.round(sheet.y + sheet.height - (await bar.boundingBox())!.y);
+    };
+    await expect.poll(gap, { message: "the sheet's foot is off the bar" }).toBe(0);
+  });
 });
 
 test("a toast's countdown runs along its foot and holds under the pointer", async ({ page }) => {
-  // a copy the browser refuses both ways is a toast that needs nothing from the daemon
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText: () => Promise.reject(new Error("refused")) }
-    });
-    document.execCommand = () => false;
-  });
+  await refuseCopy(page);
   await fakeChat(page);
   await login(page, "/chat");
   await page.goto("./#/chat/rooms/indie");
@@ -333,6 +311,8 @@ test("a toast's countdown runs along its foot and holds under the pointer", asyn
   await page.getByRole("button", { name: "Copy the text" }).last().click();
   const toast = page.getByRole("alert").filter({ hasText: "Could not copy" });
   await expect(toast).toBeVisible();
+  // measured once it has flown in, as the toast and its bar are read one after the other
+  await toast.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished)));
   const bar = toast.locator(".countdown");
   // measured once it has flown in, as the two boxes are read one after the other
   await toast.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished)));

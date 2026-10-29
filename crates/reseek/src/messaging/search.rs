@@ -197,15 +197,7 @@ mod tests {
 
   #[tokio::test]
   async fn private_and_room_messages_are_found_with_their_match_marked() {
-    let location = crate::db::Location {
-      data: std::env::temp_dir(),
-      backups: std::env::temp_dir(),
-      volatile: true,
-      log_sql: false,
-    };
-    let db = crate::db::Database::open(&crate::messaging::SCHEMA, &location)
-      .await
-      .unwrap();
+    let db = crate::db::Database::memory(&crate::messaging::SCHEMA).await;
     db.write(|conn| {
       store::receive(
         conn,
@@ -271,11 +263,7 @@ mod tests {
 
   #[tokio::test]
   async fn a_query_sqlite_cannot_read_is_the_callers_mistake() {
-    let app = crate::testing::app(
-      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
-      &[],
-    )
-    .await;
+    let app = crate::testing::app(crate::testing::TRUSTED, &[]).await;
     let get =
       |q: &str| crate::testing::request("GET", &format!("/api/v0/messages/search?q={q}"), None);
     let bad = app.send(get("%22open")).await;

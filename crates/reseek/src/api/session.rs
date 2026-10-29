@@ -419,9 +419,7 @@ mod tests {
   use api_types::events::{Event, EventType};
   use serde_json::json;
 
-  use crate::testing::{app, request, set_cookie, with};
-
-  const OUTSIDE: &str = "192.0.2.1:1";
+  use crate::testing::{OUTSIDE, app, request, set_cookie, with};
 
   fn credentials(password: &str) -> serde_json::Value {
     json!({ "username": "reseek", "password": password })

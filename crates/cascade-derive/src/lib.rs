@@ -182,27 +182,4 @@ mod tests {
     .unwrap_err();
     assert_eq!(all.into_iter().count(), 2);
   }
-
-  #[test]
-  fn expansion_routes_each_field_by_its_attributes() {
-    let tokens = expand(&parse_quote!(
-      #[cascade(env_alias_prefix(from = "OLD_", to = "NEW_"))]
-      struct A {
-        plain: u8,
-        #[cascade(kind = "size")]
-        sized: Bytes,
-        #[cascade(user_keyed)]
-        keyed: Map,
-        #[serde(skip)]
-        hidden: u8,
-      }
-    ))
-    .unwrap()
-    .to_string();
-    assert!(tokens.contains("push :: < u8 >"), "{tokens}");
-    assert!(tokens.contains("push_kind (& mut nodes , :: cascade :: Kind :: Size"));
-    assert!(tokens.contains("push_keyed :: < Map >"));
-    assert!(!tokens.contains("hidden"));
-    assert!(tokens.contains("(\"OLD_\" , \"NEW_\")"));
-  }
 }

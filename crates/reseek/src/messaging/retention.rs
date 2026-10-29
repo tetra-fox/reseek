@@ -155,15 +155,7 @@ mod tests {
   use crate::messaging::rooms::history::{self, Arrived};
 
   async fn db() -> crate::db::Database {
-    let location = crate::db::Location {
-      data: std::env::temp_dir(),
-      backups: std::env::temp_dir(),
-      volatile: true,
-      log_sql: false,
-    };
-    crate::db::Database::open(&crate::messaging::SCHEMA, &location)
-      .await
-      .unwrap()
+    crate::db::Database::memory(&crate::messaging::SCHEMA).await
   }
 
   fn days(n: u64) -> Duration {

@@ -302,15 +302,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn the_url_base_gets_a_leading_slash_and_loses_trailing_ones() {
-    assert_eq!(url_base("/"), "");
-    assert_eq!(url_base(""), "");
-    assert_eq!(url_base("reseek"), "/reseek");
-    assert_eq!(url_base("/reseek/"), "/reseek");
-    assert_eq!(url_base("/a/b//"), "/a/b");
-  }
-
-  #[test]
   fn the_base_comes_off_paths_under_it_only() {
     let strip = |uri: &str| {
       without_base(
@@ -367,7 +358,7 @@ mod tests {
 
 #[cfg(test)]
 mod app_tests {
-  use crate::testing::{app, request};
+  use crate::testing::{OUTSIDE, app, request};
 
   #[tokio::test]
   async fn health_unknown_api_paths_and_the_url_base() {
@@ -519,7 +510,7 @@ mod app_tests {
       plain.headers["location"],
       "https://reseek.example.net:8443/health"
     );
-    let untrusted = app.send_from("192.0.2.1:1", proxied("https")).await;
+    let untrusted = app.send_from(OUTSIDE, proxied("https")).await;
     assert_eq!(untrusted.status, 307, "only a trusted proxy is believed");
   }
 }

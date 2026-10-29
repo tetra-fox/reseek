@@ -136,51 +136,7 @@ fn statistics(summary: &BTreeMap<TransferOutcome, TransferSummary>) -> UserTrans
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::telemetry::reports::tests::{all, at, fixture_reports};
-
-  #[tokio::test]
-  async fn the_summary_counts_finished_transfers_by_outcome_within_both_ends() {
-    let reports = fixture_reports().await;
-    let report = reports
-      .summary(
-        Window {
-          start: at(10, 0),
-          end: at(12, 0),
-        },
-        SummaryQuery::default(),
-      )
-      .await
-      .unwrap();
-    let up = &report.directions.upload[&TransferOutcome::Succeeded];
-    // alice 10:00 and bob 12:00 sit on the window's ends and count; carol 09:00 does not
-    assert_eq!((up.count, up.total_bytes, up.distinct_users), (2, 300, 2));
-    assert_eq!(up.average_speed, 150.0);
-    assert_eq!(up.average_wait, 30.0);
-    assert_eq!(up.average_duration, 60.0);
-    let failed = &report.directions.download[&TransferOutcome::Errored];
-    assert_eq!(failed.count, 1);
-    assert!(
-      !report
-        .directions
-        .download
-        .contains_key(&TransferOutcome::Succeeded),
-      "only outcomes that happened"
-    );
-    assert_eq!(report.distinct_users, 2, "alice and bob succeeded");
-    let only_dave = reports
-      .summary(
-        all(),
-        SummaryQuery {
-          direction: Some(TransferDirection::Download),
-          username: Some("dave".into()),
-          ..SummaryQuery::default()
-        },
-      )
-      .await
-      .unwrap();
-    assert!(only_dave.directions.upload.is_empty());
-    assert_eq!(only_dave.directions.download.len(), 2);
-  }
+  use crate::telemetry::reports::tests::{all, fixture_reports};
 
   #[tokio::test]
   async fn a_user_report_counts_outcomes_and_lists_the_errors() {

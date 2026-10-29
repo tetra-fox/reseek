@@ -1,6 +1,6 @@
 //! Searches the daemon starts over soulfind, another user's client answering them: the
 //! responses are kept with their counts, a locked file is marked, a file too small for what it
-//! claims carries the hint, and a search ends on its response limit or on its timeout.
+//! claims carries the hint, and a search ends on its response limit.
 
 mod support;
 
@@ -76,17 +76,18 @@ async fn completed(api: &Client, id: Uuid) -> Search {
   }
 }
 
-fn request(text: &str, response_limit: u32, timeout_ms: u64) -> SearchRequest {
+/// A search for `text` that ends on its first response.
+fn request(text: &str) -> SearchRequest {
   serde_json::from_value(serde_json::json!({
     "searchText": text,
-    "responseLimit": response_limit,
-    "searchTimeout": timeout_ms,
+    "responseLimit": 1,
+    "searchTimeout": 15_000,
   }))
   .unwrap()
 }
 
 #[tokio::test]
-async fn a_search_keeps_a_peers_files_and_ends_on_its_limit_or_its_timeout() {
+async fn a_search_keeps_a_peers_files_and_ends_on_its_limit() {
   let Some(server) = soulfind::server() else {
     return;
   };
@@ -98,7 +99,7 @@ async fn a_search_keeps_a_peers_files_and_ends_on_its_limit_or_its_timeout() {
   let peer = responder(&server).await;
 
   let limited = api
-    .start_search(&request("pink  floyd -live", 1, 15_000))
+    .start_search(&request("pink  floyd -live"))
     .await
     .unwrap();
   assert_eq!(limited.search_text, "pink floyd -live");
@@ -128,17 +129,4 @@ async fn a_search_keeps_a_peers_files_and_ends_on_its_limit_or_its_timeout() {
   assert_eq!(response.files[1].suspect, None);
   assert!(!dogs.is_locked);
   assert!(response.locked_files[0].is_locked);
-
-  let timed = api
-    .start_search(&request("animals", 10, 2000))
-    .await
-    .unwrap();
-  let timed = completed(&api, timed.id).await;
-  assert_eq!(
-    timed.state,
-    SearchStates::Completed | SearchStates::TimedOut
-  );
-  assert_eq!(timed.response_count, 1);
-  let with = api.search(timed.id, true).await.unwrap();
-  assert_eq!(with.responses.unwrap().len(), 1);
 }

@@ -14,10 +14,15 @@ test("logs in, shows where it is and moves between screens", async ({ page }) =>
   await page.getByRole("button", { name: "Log in", exact: true }).click();
   await expect(page).toHaveURL(/#\/downloads$/);
   await expect(page.getByText("No downloads yet")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add" })).toBeVisible();
   // no badge for the live connection: only its loss is shown
   await expect(page.getByRole("status", { name: /^Updates/ })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveText("Downloads");
   await expect(page.locator("footer")).toContainText("Disconnected");
+
+  await page.getByRole("link", { name: "Uploads" }).click();
+  await expect(page.getByText("No uploads yet")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add" })).toHaveCount(0);
 
   await page.getByRole("link", { name: "Search" }).click();
   await expect(page).toHaveURL(/#\/searches$/);

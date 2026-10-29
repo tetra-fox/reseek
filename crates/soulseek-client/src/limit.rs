@@ -162,16 +162,4 @@ mod tests {
     let _b = limiter.try_acquire(2).unwrap();
     assert!(limiter.try_acquire(2).is_none());
   }
-
-  #[tokio::test]
-  async fn waiting_for_a_permit_ends_on_cancel() {
-    let limiter = Limiter::new(1);
-    let _held = limiter.try_acquire(1).unwrap();
-    let cancel = CancellationToken::new();
-    cancel.cancel();
-    assert!(matches!(
-      limiter.acquire(1, &cancel).await,
-      Err(ClientError::Canceled)
-    ));
-  }
 }

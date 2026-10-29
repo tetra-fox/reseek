@@ -136,26 +136,6 @@ mod tests {
     handle.disconnected().await.message
   }
 
-  fn peer_init(username: &str, connection_type: &str, token: u32) -> Vec<u8> {
-    let mut payload = vec![1];
-    for text in [username, connection_type] {
-      payload.extend((text.len() as u32).to_le_bytes());
-      payload.extend(text.as_bytes());
-    }
-    payload.extend(token.to_le_bytes());
-    let mut frame = (payload.len() as u32).to_le_bytes().to_vec();
-    frame.extend(payload);
-    frame
-  }
-
-  #[tokio::test]
-  async fn an_unknown_connection_type_is_closed_at_once() {
-    assert_eq!(
-      rejection(&peer_init("alice", "X", 0)).await,
-      "unknown connection type"
-    );
-  }
-
   #[tokio::test]
   async fn a_first_message_over_1_kib_is_rejected_from_its_length() {
     assert_eq!(

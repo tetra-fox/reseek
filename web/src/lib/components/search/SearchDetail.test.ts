@@ -7,6 +7,7 @@ import { live } from "#lib/live/live.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { searchOptions } from "#lib/settings.svelte.js";
+import { flushFaked } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { toasts } from "#lib/toast.svelte.js";
 import { UNDO_MS } from "#lib/undo.js";
@@ -59,11 +60,6 @@ const search = (fields: Partial<Schemas["Search"]>): Schemas["Search"] => ({
   ...fields
 });
 
-const flush = async () => {
-  await vi.advanceTimersByTimeAsync(0);
-  flushSync();
-};
-
 describe("search results", () => {
   let component: ReturnType<typeof mount> | null = null;
 
@@ -95,11 +91,11 @@ describe("search results", () => {
     net.frame("hello", {
       principal: { name: "a", role: "ReadOnly" }
     } as unknown as Schemas["Hello"]);
-    await flush();
+    await flushFaked();
 
     net.frame("search.response", { searchId: ID, response: stored[0] });
     net.frame("search.response", { searchId: ID, response: stored[1] });
-    await flush();
+    await flushFaked();
     const cards = () => [...document.querySelectorAll("section[data-key]")];
     expect(cards().map((c) => c.getAttribute("data-key"))).toEqual(["0:alice", "0:bob"]);
     const [alice, bob] = cards();
@@ -113,7 +109,7 @@ describe("search results", () => {
     expect(selected).toContain("01 One.flac");
 
     net.frame("search.response", { searchId: ID, response: stored[2] });
-    await flush();
+    await flushFaked();
     expect(cards()).toHaveLength(3);
     expect(cards()[0]).toBe(alice);
     expect(cards()[1]).toBe(bob);
@@ -131,8 +127,8 @@ describe("search results", () => {
         fileCount: 6
       })
     );
-    await flush();
-    await flush();
+    await flushFaked();
+    await flushFaked();
     expect(net.requests.map((r) => r.url.pathname)).toContain(`/api/v0/searches/${ID}/responses`);
     expect(cards()).toHaveLength(3);
     expect(cards()[0]).toBe(alice);
@@ -156,7 +152,7 @@ describe("search results", () => {
     net.frame("hello", {
       principal: { name: "a", role: "ReadOnly" }
     } as unknown as Schemas["Hello"]);
-    await flush();
+    await flushFaked();
     return net;
   };
 
@@ -166,7 +162,7 @@ describe("search results", () => {
     const net = await open(stored);
     net.frame("search.response", { searchId: ID, response: stored[0] });
     net.frame("search.response", { searchId: ID, response: stored[1] });
-    await flush();
+    await flushFaked();
     const grid = document.querySelector('[role=grid][aria-label^="Search results"]')!;
     const rows = () => [...grid.querySelectorAll("[role=row][data-line]")];
     expect(rows()).toHaveLength(4);
@@ -178,7 +174,7 @@ describe("search results", () => {
     expect(selected).toContain("01 One.flac");
 
     net.frame("search.response", { searchId: ID, response: stored[2] });
-    await flush();
+    await flushFaked();
     expect(rows()).toHaveLength(6);
     expect(rows()[0]).toBe(first);
     expect(rows()[2]).toBe(third);
@@ -193,8 +189,8 @@ describe("search results", () => {
         responseCount: 3
       })
     );
-    await flush();
-    await flush();
+    await flushFaked();
+    await flushFaked();
     expect(rows()[0]).toBe(first);
     expect(rows()[2]).toBe(third);
     expect(selection.toString()).toBe(selected);
@@ -208,7 +204,7 @@ describe("search results", () => {
     ]);
     const net = await open([two]);
     net.frame("search.response", { searchId: ID, response: two });
-    await flush();
+    await flushFaked();
     const toggle = (name: string) =>
       document.querySelector<HTMLButtonElement>(`button[aria-label$=" ${name}"][aria-expanded]`)!;
     const files = () =>
@@ -217,15 +213,15 @@ describe("search results", () => {
       );
     expect(files()).toEqual(["1.flac", "2.flac", "3.flac"]);
     toggle("Two").click();
-    await flush();
+    await flushFaked();
     expect(files()).toEqual(["1.flac", "3.flac"]);
     expect(toggle("Two").getAttribute("aria-expanded")).toBe("false");
     // Alt on a closed one opens it and every sibling; on an open one closes them all
     toggle("Two").dispatchEvent(new MouseEvent("click", { bubbles: true, altKey: true }));
-    await flush();
+    await flushFaked();
     expect(files()).toEqual(["1.flac", "2.flac", "3.flac"]);
     toggle("One").dispatchEvent(new MouseEvent("click", { bubbles: true, altKey: true }));
-    await flush();
+    await flushFaked();
     expect(files()).toEqual([]);
     expect(toggle("Three").getAttribute("aria-expanded")).toBe("false");
   });
@@ -234,14 +230,14 @@ describe("search results", () => {
     const stored = [response("alice", 300), response("bob", 200)];
     const net = await open(stored);
     for (const r of stored) net.frame("search.response", { searchId: ID, response: r });
-    await flush();
+    await flushFaked();
     const text = () => document.body.textContent?.replace(/\s+/g, " ") ?? "";
     const button = (label: string) =>
       [...document.querySelectorAll("button")].filter((b) => b.textContent?.trim() === label);
 
     // a dismissed result is counted as dismissed, not as hidden by filters
     document.querySelector<HTMLButtonElement>('button[aria-label="Hide this result"]')!.click();
-    await flush();
+    await flushFaked();
     expect(text()).toContain("1 dismissed");
     expect(text()).not.toContain("hidden by filters");
 
@@ -276,7 +272,7 @@ describe("search results", () => {
     ]);
     const net = await open([mixed]);
     net.frame("search.response", { searchId: ID, response: mixed });
-    await flush();
+    await flushFaked();
     const names = () =>
       [...document.querySelectorAll("section [role=row][aria-selected]")].map(
         (r) => r.textContent?.match(/\d\.\w+/)?.[0]
@@ -304,7 +300,7 @@ describe("search results", () => {
     const one = response("alice", 1);
     const net = await open([one]);
     net.frame("search.response", { searchId: ID, response: one });
-    await flush();
+    await flushFaked();
     const chips = () =>
       [...document.querySelectorAll('[aria-label="Filter presets"] button[aria-pressed]')].map(
         (b) => b.textContent?.trim()
@@ -313,13 +309,13 @@ describe("search results", () => {
     const remove = (name: string) =>
       document.querySelector<HTMLButtonElement>(`button[aria-label="Remove preset ${name}"]`)!;
     remove("Big").click();
-    await flush();
+    await flushFaked();
     remove("No small files").click();
-    await flush();
+    await flushFaked();
     expect(chips()).toEqual(["FLAC"]);
     // Undo on the second puts back the second alone
     toasts.find((t) => t.text.includes("No small files"))!.action!.run();
-    await flush();
+    await flushFaked();
     expect(chips()).toEqual(["No small files", "FLAC"]);
     await vi.advanceTimersByTimeAsync(UNDO_MS);
     flushSync();
@@ -350,7 +346,7 @@ describe("search results", () => {
     const one = response("alice", 1);
     const net = await open([one]);
     net.frame("search.response", { searchId: ID, response: one });
-    await flush();
+    await flushFaked();
     const chips = () =>
       [...document.querySelectorAll('[aria-label="Filter presets"] button[aria-pressed]')].map(
         (b) => b.textContent?.trim()

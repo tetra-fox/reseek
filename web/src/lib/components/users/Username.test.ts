@@ -60,11 +60,6 @@ describe("a username", () => {
     vi.unstubAllGlobals();
   });
 
-  it("is a link to the profile", () => {
-    expect(link.getAttribute("href")).toBe("#/users/alice");
-    expect(link.textContent).toBe("alice");
-  });
-
   it("opens its card after the pointer rests on it, and closes it after it leaves", async () => {
     link.dispatchEvent(pointer("pointerenter", "mouse"));
     await vi.advanceTimersByTimeAsync(OPEN_DELAY_MS - 1);

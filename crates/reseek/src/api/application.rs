@@ -328,7 +328,7 @@ async fn debug_transfers(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::testing::{app, request, with};
+  use crate::testing::{OUTSIDE, app, request, with};
 
   /// Loopback is a trusted network, so it is an administrator at the UI; the key is not.
   const ADMIN: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n\
@@ -343,7 +343,7 @@ mod tests {
       "x-api-key",
       "robot-key-0123456789",
     );
-    assert_eq!(app.send_from("192.0.2.1:1", by_key).await.status, 403);
+    assert_eq!(app.send_from(OUTSIDE, by_key).await.status, 403);
     assert!(!app.state.shutdown.is_cancelled());
     let answer = app.send(request("PUT", "/api/v0/application", None)).await;
     assert_eq!(answer.status, 204);
@@ -397,7 +397,7 @@ mod tests {
     assert_eq!(app.send(vacuum("transfers")).await.status, 204);
     assert_eq!(app.send(vacuum("nothing")).await.status, 404);
     let by_key = with(vacuum("events"), "x-api-key", "robot-key-0123456789");
-    assert_eq!(app.send_from("192.0.2.1:1", by_key).await.status, 204);
+    assert_eq!(app.send_from(OUTSIDE, by_key).await.status, 204);
   }
 
   #[test]

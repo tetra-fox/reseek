@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { dismiss, hold, toast, toasts } from "./toast.svelte";
+import { dismiss, hold, loadFailed, toast, toasts } from "./toast.svelte";
 
 describe("toast countdowns", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -60,5 +60,23 @@ describe("toast countdowns", () => {
     dismiss(id);
     expect(toasts).toHaveLength(0);
     expect(gone).toHaveBeenCalledOnce();
+  });
+});
+
+describe("a failed load", () => {
+  afterEach(() => toasts.splice(0));
+
+  it("is the page's to show the first time, and says so once per outage after that", () => {
+    const list = { loaded: false, error: "" };
+    loadFailed(list, "database is locked");
+    expect(list.error).toBe("database is locked");
+    expect(toasts).toHaveLength(0);
+    Object.assign(list, { loaded: true, error: "" });
+    loadFailed(list, "database is locked");
+    loadFailed(list, "database is locked");
+    expect(toasts.map((t) => t.text)).toEqual(["database is locked"]);
+    list.error = "";
+    loadFailed(list, "database is locked");
+    expect(toasts).toHaveLength(2);
   });
 });

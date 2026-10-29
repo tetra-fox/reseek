@@ -5,7 +5,7 @@ import { newId } from "#lib/ids.js";
 import { Keyed } from "#lib/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
-import { toast } from "#lib/toast.svelte.js";
+import { loadFailed, toast } from "#lib/toast.svelte.js";
 import { undoable } from "#lib/undo.js";
 
 export type Search = Schemas["Search"];
@@ -62,9 +62,7 @@ class Searches {
   load = async () => {
     const outcome = await call(() => api.GET("/api/v0/searches"));
     if (outcome.ok) return this.#set(outcome.data);
-    // a failed first load is the page's to show; a failed reload says so once per outage
-    if (this.loaded && !this.error) toast(outcome.error, "error");
-    this.error = outcome.error;
+    loadFailed(this, outcome.error);
   };
 
   /**

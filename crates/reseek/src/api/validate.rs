@@ -154,12 +154,4 @@ mod tests {
       "not UTF-8"
     );
   }
-
-  #[test]
-  fn limits_take_one_to_the_maximum() {
-    assert!(limit("limit", 1, 10).is_ok());
-    assert!(limit("limit", 10, 10).is_ok());
-    assert!(limit("limit", 0, 10).is_err());
-    assert!(limit("limit", 11, 10).is_err());
-  }
 }

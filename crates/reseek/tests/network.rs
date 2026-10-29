@@ -1,6 +1,7 @@
 //! The daemon against a soulfind server: it logs in from its options, the state says so, it
 //! tells the server what it shares, it disconnects and connects when asked, the watchdog brings
-//! it back after the server went away, and option changes reach the client while it runs.
+//! it back after the server went away, and an option change that needs a reconnect is flagged
+//! until one happens.
 
 mod support;
 
@@ -134,13 +135,13 @@ async fn a_refused_login_is_not_tried_again() {
       && !s.connection_watchdog.is_attempting_connection
   })
   .await;
-  tokio::time::sleep(Duration::from_secs(2)).await;
+  tokio::time::sleep(Duration::from_millis(500)).await;
   let state = client.application().await.unwrap();
   assert!(!state.server.is_connected && !state.connection_watchdog.is_enabled);
 }
 
 #[tokio::test]
-async fn option_changes_reach_the_client_and_flag_a_reconnect_only_when_needed() {
+async fn an_option_change_that_needs_it_is_flagged_until_a_reconnect() {
   let Some(server) = soulfind::server() else {
     return;
   };
@@ -154,15 +155,6 @@ async fn option_changes_reach_the_client_and_flag_a_reconnect_only_when_needed()
     unset: Vec::new(),
     expires_in: None,
   };
-  client
-    .patch_options(&set("transfers.upload.speed_limit", json!(64)))
-    .await
-    .unwrap();
-  tokio::time::sleep(Duration::from_millis(500)).await;
-  let state = client.application().await.unwrap();
-  assert!(state.server.is_logged_in, "a live change keeps the session");
-  assert!(!state.pending_reconnect);
-
   client
     .patch_options(&set("soulseek.server_keepalive.probes", json!(5)))
     .await

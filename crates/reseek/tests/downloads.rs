@@ -24,7 +24,10 @@ use serde_json::json;
 use soulseek_client::{ClientOptions, UploadInput, UploadRequest};
 use support::soulfind::{self, Soulfind, User};
 use support::transfers::{self, Asked, asked, content, file, scratch};
-use support::{Daemon, PATIENCE, daemon, free_port, logged_in, signed_in, until};
+use support::{
+  Daemon, PATIENCE, completed, daemon, download_when, enqueue, events, free_port, logged_in,
+  signed_in, until,
+};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -54,63 +57,6 @@ async fn serve(uploader: &User, requests: &mut Asked, remote: &str, path: &Path)
   });
 }
 
-/// The download `id` from `username` once `ready` holds for it.
-async fn download_when(
-  api: &Client,
-  username: &str,
-  id: Uuid,
-  what: &str,
-  ready: impl Fn(&Transfer) -> bool,
-) -> Transfer {
-  let started = Instant::now();
-  loop {
-    let transfer = api
-      .transfer(TransferDirection::Download, username, id, true)
-      .await
-      .unwrap();
-    if ready(&transfer) {
-      return transfer;
-    }
-    assert!(
-      started.elapsed() < PATIENCE * 2,
-      "never {what}: {transfer:?}"
-    );
-    tokio::time::sleep(Duration::from_millis(50)).await;
-  }
-}
-
-/// The logged events of `types` as JSON, once there are `count` of them.
-async fn events(api: &Client, types: &str, count: usize) -> Vec<serde_json::Value> {
-  let query: EventsQuery = serde_json::from_value(json!({ "type": types })).unwrap();
-  let started = Instant::now();
-  loop {
-    let page = api.events(&query).await.unwrap();
-    if page.items.len() >= count {
-      return page
-        .items
-        .iter()
-        .map(|e| serde_json::to_value(e).unwrap())
-        .collect();
-    }
-    assert!(started.elapsed() < PATIENCE, "{types}: {:?}", page.items);
-    tokio::time::sleep(Duration::from_millis(50)).await;
-  }
-}
-
-fn completed(outcome: TransferStates) -> TransferStates {
-  TransferStates::Completed | outcome
-}
-
-async fn enqueue(api: &Client, username: &str, filename: &str, size: usize) -> Uuid {
-  let files = [QueueDownloadRequest {
-    filename: filename.to_string(),
-    size: size as u64,
-  }];
-  let answer = api.enqueue(username, &files).await.unwrap();
-  assert!(answer.failed.is_empty(), "{:?}", answer.failed);
-  answer.enqueued[0].id
-}
-
 /// The daemon in `dir` for `server`, logged in, and its client.
 async fn started(dir: &Path, server: &Arc<Soulfind>, name: &str) -> (Daemon, Client) {
   let daemon = daemon(dir, server, name, &[]);
@@ -131,7 +77,7 @@ async fn a_download_lands_at_its_destination_and_a_failed_move_keeps_it() {
   let one = file(&source, "one.flac", SIZE);
   let peer = uploader.username.clone();
 
-  let id = enqueue(&api, &peer, ALBUM, SIZE).await;
+  let id = enqueue(&api, &peer, ALBUM, SIZE as u64).await;
   serve(&uploader, &mut requests, ALBUM, &one).await;
   let done = download_when(&api, &peer, id, "moved", |t| t.local_path.is_some()).await;
   assert_eq!(done.state, completed(TransferStates::Succeeded));
@@ -176,8 +122,7 @@ async fn a_download_lands_at_its_destination_and_a_failed_move_keeps_it() {
     .await
     .unwrap();
   assert_eq!(served.len(), SIZE);
-  let complete = events(&api, "DownloadFileComplete,DownloadDirectoryComplete", 2).await;
-  let data: Vec<&serde_json::Value> = complete.iter().map(|event| &event["data"]).collect();
+  let data = events(&api, "DownloadFileComplete,DownloadDirectoryComplete", 2).await;
   assert!(
     data.iter().any(
       |d| d["localFilename"] == landed.to_str().unwrap() && d["transfer"]["id"] == id.to_string()
@@ -198,7 +143,7 @@ async fn a_download_lands_at_its_destination_and_a_failed_move_keeps_it() {
     "x",
   )
   .unwrap();
-  let id = enqueue(&api, &peer, blocked, SIZE).await;
+  let id = enqueue(&api, &peer, blocked, SIZE as u64).await;
   serve(&uploader, &mut requests, blocked, &one).await;
   let kept = download_when(&api, &peer, id, "failed to move", |t| t.exception.is_some()).await;
   assert_eq!(
@@ -216,7 +161,7 @@ async fn a_download_lands_at_its_destination_and_a_failed_move_keeps_it() {
   );
   assert_eq!(kept.local_path, None);
   let failed = events(&api, "DownloadFileFailed", 1).await;
-  assert_eq!(failed[0]["data"]["stage"], "move");
+  assert_eq!(failed[0]["stage"], "move");
   let incomplete = dir
     .path()
     .join("data")
@@ -224,10 +169,7 @@ async fn a_download_lands_at_its_destination_and_a_failed_move_keeps_it() {
     .join(&peer)
     .join("in the way")
     .join("02 song.flac");
-  assert_eq!(
-    failed[0]["data"]["localFilename"],
-    incomplete.to_str().unwrap()
-  );
+  assert_eq!(failed[0]["localFilename"], incomplete.to_str().unwrap());
   assert!(incomplete.exists(), "the file stays where it arrived");
 }
 
@@ -278,9 +220,8 @@ async fn a_cancel_removes_once_ended_and_a_block_cancels_with_its_reason() {
     .await
     .unwrap_err();
   assert_eq!(refused.status().map(|s| s.as_u16()), Some(409));
-  let query: EventsQuery = serde_json::from_value(json!({ "type": "DownloadFileFailed" })).unwrap();
   assert!(
-    api.events(&query).await.unwrap().items.is_empty(),
+    events(&api, "DownloadFileFailed", 0).await.is_empty(),
     "a cancel raises nothing"
   );
 }

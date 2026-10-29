@@ -9,31 +9,23 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use soulseek_client::{
-  ClientOptions, DownloadOutput, DownloadRequest, Event, RequestStyle, TransferState, UploadInput,
-  UploadRequest,
+  DownloadOutput, DownloadRequest, Event, RequestStyle, TransferState, UploadInput, UploadRequest,
 };
 use soulseek_proto::TransferDirection;
+use support::PATIENCE;
 use support::soulfind::{self, User};
 use support::transfers::{self, Asked, asked, content, file, scratch, states};
-use support::{PATIENCE, free_port};
 use tokio_util::sync::CancellationToken;
 
 const SIZE: usize = 300_000;
 const REMOTE: &str = "@@share\\album\\01 song.flac";
 
-fn listening() -> ClientOptions {
-  ClientOptions {
-    listen_port: free_port(),
-    ..ClientOptions::default()
-  }
-}
-
 /// a downloader and an uploader that queues every request the downloader makes
 async fn pair(server: &Arc<soulfind::Soulfind>) -> (User, User, Asked) {
-  let mut options = listening();
+  let mut options = soulfind::listening();
   let requests = transfers::queueing(&mut options);
   let uploader = server.login("up", options).await;
-  let downloader = server.login("down", listening()).await;
+  let downloader = server.login("down", soulfind::listening()).await;
   (downloader, uploader, requests)
 }
 
@@ -179,12 +171,12 @@ async fn a_download_waits_in_the_queue_and_hears_its_place_until_the_upload_star
   let Some(server) = soulfind::server() else {
     return;
   };
-  let mut options = listening();
+  let mut options = soulfind::listening();
   let mut requests = transfers::queueing(&mut options);
   options.resolvers.place_in_queue_resolver =
     Some(Arc::new(|_, _, _| Box::pin(async { Ok(Some(2)) })));
   let uploader = server.login("up", options).await;
-  let mut downloader = server.login("down", listening()).await;
+  let mut downloader = server.login("down", soulfind::listening()).await;
   let dir = scratch();
   let source = file(&dir, "source.flac", SIZE);
   let request = DownloadRequest::new(
@@ -278,8 +270,8 @@ async fn a_peer_that_shares_nothing_refuses_the_download() {
     return;
   };
   // no upload queue at all, so nothing is shared
-  let uploader = server.login("up", listening()).await;
-  let downloader = server.login("down", listening()).await;
+  let uploader = server.login("up", soulfind::listening()).await;
+  let downloader = server.login("down", soulfind::listening()).await;
   for style in [RequestStyle::Queue, RequestStyle::TransferRequest] {
     let mut request = DownloadRequest::new(
       &uploader.username,

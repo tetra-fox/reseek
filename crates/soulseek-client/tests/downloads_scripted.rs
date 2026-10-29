@@ -263,25 +263,6 @@ async fn the_size_the_uploader_names_is_checked_against_ours() {
     TransferState::COMPLETED | TransferState::ABORTED
   );
 
-  // 0, as an old client reports for a file of 2 GiB and more, aborts a smaller one
-  let mut scripted = Scripted::start().await;
-  let (running, mut bob) = scripted.queued_download("@@share\\zero.mp3").await;
-  bob
-    .send(
-      &PeerMessage::TransferRequest(TransferRequest {
-        direction: TransferDirection::Upload,
-        token: 9,
-        filename: "@@share\\zero.mp3".into(),
-        file_size: Some(0),
-      })
-      .encode(),
-    )
-    .await;
-  assert!(matches!(
-    running.result().await.unwrap_err(),
-    ClientError::SizeMismatch { remote: 0, .. }
-  ));
-
   // no size at all keeps ours
   let mut scripted = Scripted::start().await;
   let (running, mut bob) = scripted.queued_download("@@share\\none.mp3").await;

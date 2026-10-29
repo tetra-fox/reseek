@@ -19,3 +19,12 @@ export const textSize = (page: Page, root: number) =>
       document.documentElement.style.fontSize = `${px}px`;
     });
   }, root);
+
+/** A clipboard the browser refuses both ways, so a copy is a toast that needs nothing from the daemon */
+export const refuseCopy = (page: Page) =>
+  page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: () => Promise.reject(new Error("refused")) }
+    });
+    document.execCommand = () => false;
+  });

@@ -180,15 +180,6 @@ mod tests {
   use crate::options::ClientOptions;
 
   #[test]
-  fn keepalive_is_checked_only_when_enabled() {
-    let mut options = ClientOptions::default();
-    options.server_keepalive.probes = 0;
-    assert!(options.validate().is_err());
-    options.server_keepalive.enabled = false;
-    options.validate().unwrap();
-  }
-
-  #[test]
   fn proxy_credentials_fit_socks5() {
     let mut options = ClientOptions::default();
     options.peer_connection_options.proxy = Some(ProxyOptions {

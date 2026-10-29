@@ -14,7 +14,7 @@ use soulseek_client::{
 use soulseek_proto::peer::{File, SearchResponse};
 use soulseek_proto::{RoomType, SearchQuery};
 use support::soulfind::{self, Soulfind, User};
-use support::{PATIENCE, free_port, next_event};
+use support::{PATIENCE, next_event};
 use tokio_util::sync::CancellationToken;
 
 /// a resolver that answers every search as `username` with `files` files
@@ -41,17 +41,10 @@ fn answering(username: String, files: usize) -> SearchResponseResolver {
   })
 }
 
-fn listening() -> ClientOptions {
-  ClientOptions {
-    listen_port: free_port(),
-    ..ClientOptions::default()
-  }
-}
-
 /// a user that answers every search with `files` files
 async fn responder(server: &Arc<Soulfind>, prefix: &str, files: usize) -> User {
   let username = soulfind::username(prefix);
-  let mut options = listening();
+  let mut options = soulfind::listening();
   options.resolvers.search_response_resolver = Some(answering(username.clone(), files));
   server.login_as(username, options).await
 }
@@ -168,7 +161,7 @@ async fn a_wishlist_search_goes_out_like_a_network_search() {
     return;
   };
   let responder = responder(&server, "responder", 1).await;
-  let searcher = server.login("searcher", listening()).await;
+  let searcher = server.login("searcher", soulfind::listening()).await;
   let (done, responses) = search(&searcher, SearchScope::Wishlist, quick()).await;
   assert_eq!(done.state, SearchState::COMPLETED | SearchState::TIMED_OUT);
   assert_eq!(responses[0].username, responder.username);
@@ -181,7 +174,7 @@ async fn a_search_ends_once_it_has_enough_responses_or_files() {
   };
   let _first = responder(&server, "responder", 5).await;
   let _second = responder(&server, "responder", 5).await;
-  let searcher = server.login("searcher", listening()).await;
+  let searcher = server.login("searcher", soulfind::listening()).await;
   let options = SearchOptions {
     response_limit: 1,
     search_timeout: Duration::from_secs(30),
@@ -212,7 +205,7 @@ async fn filtered_out_responses_are_not_taken() {
     return;
   };
   let _responder = responder(&server, "responder", 2).await;
-  let searcher = server.login("searcher", listening()).await;
+  let searcher = server.login("searcher", soulfind::listening()).await;
   let mut options = quick();
   options.minimum_peer_upload_speed = 1_000_000;
   let (done, responses) = search(&searcher, SearchScope::Network, options).await;
@@ -230,7 +223,7 @@ async fn searches_past_the_bound_wait_their_turn_and_a_token_is_taken_once() {
       "searcher",
       ClientOptions {
         maximum_concurrent_searches: 1,
-        ..listening()
+        ..soulfind::listening()
       },
     )
     .await;
@@ -311,7 +304,7 @@ async fn a_disconnect_cancels_every_search() {
       "searcher",
       ClientOptions {
         maximum_concurrent_searches: 1,
-        ..listening()
+        ..soulfind::listening()
       },
     )
     .await;

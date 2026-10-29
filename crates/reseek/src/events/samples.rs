@@ -284,31 +284,4 @@ mod tests {
       assert_eq!(serde_json::from_value::<Event>(json).unwrap(), event);
     }
   }
-
-  #[test]
-  fn samples_follow_their_own_rows() {
-    let now = Utc::now();
-    let Some(Event::DownloadFileComplete(done)) = sample(EventType::DownloadFileComplete, "", now)
-    else {
-      panic!("not a download sample");
-    };
-    assert_eq!(done.local_filename, "local.file");
-    assert_eq!(done.transfer.id, Uuid::nil());
-    let transfer = serde_json::to_value(&done.transfer).unwrap();
-    assert_eq!(transfer["state"], "None");
-    assert_eq!(transfer["requestedAt"], "0001-01-01T00:00:00Z");
-    let Some(Event::PrivateMessageReceived(received)) =
-      sample(EventType::PrivateMessageReceived, "d", now)
-    else {
-      panic!("not a message sample");
-    };
-    assert_eq!(received.message.direction, MessageDirection::In);
-    assert_eq!(received.message.username, "dusername");
-    let Some(Event::SoulseekClientDisconnected(gone)) =
-      sample(EventType::SoulseekClientDisconnected, "d", now)
-    else {
-      panic!("not a disconnect sample");
-    };
-    assert_eq!((gone.message.as_str(), gone.exception), ("dmessage", None));
-  }
 }

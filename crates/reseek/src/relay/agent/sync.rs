@@ -19,6 +19,7 @@ use uuid::Uuid;
 
 use super::AgentClient;
 use super::session::Link;
+use crate::backoff;
 use crate::relay::credential::Purpose;
 use crate::relay::frames;
 use crate::shares::Shares;
@@ -160,7 +161,7 @@ impl AgentClient {
     let mut token = None;
     for attempt in 0..TOKEN_ATTEMPTS {
       if attempt > 0 {
-        tokio::time::sleep(frames::backoff(attempt, TOKEN_BACKOFF)).await;
+        tokio::time::sleep(backoff::wait(attempt, TOKEN_BACKOFF)).await;
       }
       let asked = RelayMessage::SharesBegin {
         schema_version: Shares::schema_version(),

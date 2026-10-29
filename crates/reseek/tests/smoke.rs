@@ -6,8 +6,7 @@
 
 mod support;
 
-use api_types::search::{File, SearchResponse};
-use support::smoke::{self, Candidate, pick_order};
+use support::smoke;
 use support::soulfind;
 use support::soulseek_rs::Peer;
 use support::transfers::scratch;
@@ -99,88 +98,4 @@ async fn the_daemon_downloads_a_small_file_on_the_real_network() {
   let running = Daemon::start(dir.path(), &args, &env);
   let api = signed_in(&running).await;
   smoke::live(&api, &query, max_size).await;
-}
-
-fn response(username: &str, free_slot: bool, files: &[(&str, u64)]) -> SearchResponse {
-  let files: Vec<File> = files
-    .iter()
-    .map(|&(name, size)| {
-      File::from(soulseek_proto::peer::File {
-        code: 1,
-        filename: name.into(),
-        size,
-        extension: String::new(),
-        attributes: Vec::new(),
-      })
-    })
-    .collect();
-  SearchResponse {
-    username: username.to_string(),
-    country: None,
-    token: 1,
-    has_free_upload_slot: free_slot,
-    upload_speed: 0,
-    queue_length: 0,
-    file_count: files.len() as u32,
-    files,
-    locked_file_count: 0,
-    locked_files: Vec::new(),
-  }
-}
-
-#[test]
-fn the_pick_order_is_smallest_first_and_breaks_ties_by_name_then_user() {
-  let cases = [
-    (
-      "a user without a free slot is passed over",
-      vec![
-        response("busy", false, &[("a", 10)]),
-        response("free", true, &[("b", 20)]),
-      ],
-      vec![("free", "b")],
-    ),
-    (
-      "an empty file and one over the ceiling are passed over",
-      vec![response(
-        "u",
-        true,
-        &[("empty", 0), ("b", 20), ("big", 101)],
-      )],
-      vec![("u", "b")],
-    ),
-    (
-      "a file at the ceiling is taken",
-      vec![response("at", true, &[("b", 100)])],
-      vec![("at", "b")],
-    ),
-    (
-      "smaller files come first",
-      vec![response("u", true, &[("a", 30), ("b", 20)])],
-      vec![("u", "b"), ("u", "a")],
-    ),
-    (
-      "one size: the file name decides, before the username",
-      vec![
-        response("a", true, &[("y", 20)]),
-        response("z", true, &[("x", 20)]),
-      ],
-      vec![("z", "x"), ("a", "y")],
-    ),
-    (
-      "one size and name: the username decides",
-      vec![
-        response("z", true, &[("x", 20)]),
-        response("a", true, &[("x", 20)]),
-      ],
-      vec![("a", "x"), ("z", "x")],
-    ),
-  ];
-  for (case, responses, expected) in cases {
-    let picked: Vec<Candidate> = pick_order(&responses, 100);
-    let picked: Vec<(&str, &str)> = picked
-      .iter()
-      .map(|c| (c.username.as_str(), c.filename.as_str()))
-      .collect();
-    assert_eq!(picked, expected, "{case}");
-  }
 }

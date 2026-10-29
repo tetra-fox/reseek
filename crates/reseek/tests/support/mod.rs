@@ -13,9 +13,9 @@ use std::time::{Duration, Instant};
 
 use api_client::Client;
 use api_types::state::State;
+use api_types::transfers::{QueueDownloadRequest, Transfer, TransferDirection, TransferStates};
 use soulfind::{PASSWORD, Soulfind};
-use soulseek_client::{ClientOptions, Event};
-use tokio::sync::broadcast;
+use uuid::Uuid;
 
 /// The client's test harness: the Soulseek server the network tests run against, a scripted
 /// server and scripted peers for what a real one never does, and files to send.
@@ -23,29 +23,13 @@ use tokio::sync::broadcast;
 pub mod client;
 
 #[allow(unused_imports, reason = "each test binary uses a part of it")]
-pub use client::{free_port, peer, soulfind, soulseek_rs, transfers};
+pub use client::{free_port, options as quiet, peer, soulfind, soulseek_rs, transfers};
 
 /// The smoke run through the API, shared with the smoke program.
 pub mod smoke;
 
 /// How long a test waits for something that should happen promptly.
 pub const PATIENCE: Duration = Duration::from_secs(20);
-
-/// The next client event `pick` accepts, skipping the others.
-pub async fn next_event<T>(
-  events: &mut broadcast::Receiver<Event>,
-  mut pick: impl FnMut(Event) -> Option<T>,
-) -> T {
-  tokio::time::timeout(PATIENCE, async {
-    loop {
-      if let Some(picked) = pick(events.recv().await.unwrap()) {
-        return picked;
-      }
-    }
-  })
-  .await
-  .expect("the event is raised")
-}
 
 /// The data of the events of `kind` in the daemon's event log, oldest first, once there are at
 /// least `count`.
@@ -350,14 +334,6 @@ pub async fn until(client: &Client, what: &str, ready: impl Fn(&State) -> bool) 
   }
 }
 
-/// Options for a client of the test's own, which takes no listening port.
-pub fn quiet() -> ClientOptions {
-  ClientOptions {
-    enable_listener: false,
-    ..ClientOptions::default()
-  }
-}
-
 /// Whether the daemon is logged in to the server.
 pub fn logged_in(state: &State) -> bool {
   state.server.is_logged_in
@@ -397,4 +373,46 @@ pub async fn scripted_login(dir: &Path) -> (Daemon, client::ServerSide) {
   let running = Daemon::start(dir, &args, &ACCOUNT);
   let server = fake.accept().await;
   (running, server)
+}
+
+/// Asks the daemon to download `filename` of `size` bytes from `username`, and returns the
+/// download's id.
+pub async fn enqueue(api: &Client, username: &str, filename: &str, size: u64) -> Uuid {
+  let files = [QueueDownloadRequest {
+    filename: filename.to_string(),
+    size,
+  }];
+  let answer = api.enqueue(username, &files).await.unwrap();
+  assert!(answer.failed.is_empty(), "{:?}", answer.failed);
+  answer.enqueued[0].id
+}
+
+/// The download `id` from `username`, with its history, once `ready` holds for it.
+pub async fn download_when(
+  api: &Client,
+  username: &str,
+  id: Uuid,
+  what: &str,
+  ready: impl Fn(&Transfer) -> bool,
+) -> Transfer {
+  let started = Instant::now();
+  loop {
+    let transfer = api
+      .transfer(TransferDirection::Download, username, id, true)
+      .await
+      .unwrap();
+    if ready(&transfer) {
+      return transfer;
+    }
+    assert!(
+      started.elapsed() < PATIENCE * 2,
+      "never {what}: {transfer:?}"
+    );
+    tokio::time::sleep(Duration::from_millis(20)).await;
+  }
+}
+
+/// The state of a transfer that ended with `outcome`.
+pub fn completed(outcome: TransferStates) -> TransferStates {
+  TransferStates::Completed | outcome
 }

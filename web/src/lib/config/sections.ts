@@ -77,16 +77,11 @@ const groupUpload = (prefix: string, group: string): Field[] => [
   ...limits(`${prefix}.upload`, group)
 ];
 
-/** The four outcome ages of one transfer direction's retention, by option key and label word */
+/** The four outcome ages of one transfer direction's retention, by the option key's outcome */
 const transferRetention = (direction: "upload" | "download"): Field[] =>
-  [
-    ["succeeded", "succeeded"],
-    ["errored", "errored"],
-    ["cancelled", "canceled"],
-    ["failed", "failed"]
-  ].map(([outcome, word]) => ({
+  ["succeeded", "errored", "canceled", "failed"].map((outcome) => ({
     key: `retention.transfers.${direction}.${outcome}`,
-    label: `${direction === "upload" ? "Uploads" : "Downloads"} ${word}`,
+    label: `${direction === "upload" ? "Uploads" : "Downloads"} ${outcome}`,
     placeholder: "kept"
   }));
 

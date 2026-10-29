@@ -2,14 +2,11 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { live } from "#lib/live/live.svelte.js";
+import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import LiveLogs from "./LiveLogs.svelte";
 
-const flush = async () => {
-  for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
 const record = (message: string, second: number) =>
   ({
     timestamp: `2026-10-26T10:00:${String(second).padStart(2, "0")}Z`,

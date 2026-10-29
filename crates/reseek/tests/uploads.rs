@@ -1,5 +1,5 @@
-//! Uploads by the daemon over soulfind to other users' clients: a file is queued and sent; and
-//! with one slot, a second request waits its place, the forecast says so in search responses
+//! Uploads by the daemon over soulfind to other users' clients: with one slot, files are queued
+//! and sent in turn, a second request waits its place, the forecast says so in search responses
 //! and the user info, why it waits is told, a canceled upload leaves the listings once it
 //! ended, and a live change of the group's speed lets the running upload finish and the queued
 //! one start; an upload that fails once started is queued anew when its peer, told of the
@@ -13,7 +13,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use api_client::Client;
-use api_types::events::EventsQuery;
 use api_types::options::OptionsPatch;
 use api_types::transfers::{Transfer, TransferStates, UploadsQuery};
 use serde_json::json;
@@ -22,7 +21,7 @@ use soulseek_client::{
 };
 use support::soulfind::{self, Soulfind, User};
 use support::transfers::{content, file, scratch};
-use support::{PATIENCE, daemon, free_port, logged_in, signed_in, until};
+use support::{PATIENCE, daemon, events, free_port, logged_in, signed_in, until};
 use tokio_util::sync::CancellationToken;
 
 /// A user of the test's, taking the daemon's transfer connections.
@@ -120,64 +119,6 @@ async fn metric(api: &Client, name: &str) -> f64 {
 
 fn succeeded() -> TransferStates {
   TransferStates::Completed | TransferStates::Succeeded
-}
-
-#[tokio::test]
-async fn a_peer_queues_and_downloads_a_file_from_the_daemon() {
-  let Some(server) = soulfind::server() else {
-    return;
-  };
-  let dir = tempfile::tempdir().unwrap();
-  let size = 200_000;
-  let album = dir.path().join("share").join("album");
-  std::fs::create_dir_all(&album).unwrap();
-  file(&album, "one.flac", size);
-  let name = soulfind::username("daemon");
-  let (_daemon, api) = sharing(dir.path(), &server, &name, "", 1).await;
-  let other = peer(&server, "other").await;
-  let remote = "share\\album\\one.flac";
-
-  let (task, into) = download(&other, &name, remote, size);
-  let done = tokio::time::timeout(PATIENCE, task)
-    .await
-    .expect("the download ends")
-    .unwrap()
-    .unwrap();
-  assert_eq!(done.bytes_transferred, size as u64);
-  assert_eq!(std::fs::read(&into).unwrap(), content(size));
-
-  let upload = upload_when(&api, &other.username, remote, "succeeded", |t| {
-    t.state == succeeded()
-  })
-  .await;
-  assert_eq!(upload.bytes_transferred, size as u64);
-  assert!(upload.enqueued_at.is_some() && upload.started_at.is_some());
-  assert_eq!(metric(&api, "reseek_enqueue_requests_accepted").await, 1.0);
-  assert_eq!(
-    metric(&api, "reseek_transfers_uploads_completed_succeeded").await,
-    1.0
-  );
-  assert_eq!(
-    metric(&api, "reseek_transfers_uploads_completed_bytes").await,
-    size as f64
-  );
-  let query: EventsQuery = serde_json::from_value(json!({ "type": "UploadFileComplete" })).unwrap();
-  let started = Instant::now();
-  let event = loop {
-    let page = api.events(&query).await.unwrap();
-    if let Some(event) = page.items.first() {
-      break serde_json::to_value(event).unwrap();
-    }
-    assert!(started.elapsed() < PATIENCE, "no UploadFileComplete");
-    tokio::time::sleep(Duration::from_millis(50)).await;
-  };
-  assert_eq!(event["data"]["remoteFilename"], remote);
-  assert!(
-    event["data"]["localFilename"]
-      .as_str()
-      .unwrap()
-      .ends_with("one.flac")
-  );
 }
 
 #[tokio::test]
@@ -322,11 +263,13 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
     .unwrap()
     .unwrap();
   assert_eq!(std::fs::read(&into).unwrap(), content(small));
-  for (user, filename) in [(&first, big_name), (&second, small_name)] {
-    upload_when(&api, &user.username, filename, "succeeded", |t| {
+  for (user, filename, size) in [(&first, big_name, big), (&second, small_name, small)] {
+    let upload = upload_when(&api, &user.username, filename, "succeeded", |t| {
       t.state == succeeded()
     })
     .await;
+    assert_eq!(upload.bytes_transferred, size as u64);
+    assert!(upload.enqueued_at.is_some() && upload.started_at.is_some());
   }
   assert!(
     api.application().await.unwrap().server.is_logged_in,
@@ -339,6 +282,22 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
   assert_eq!(
     metric(&api, "reseek_transfers_uploads_completed_failed").await,
     1.0
+  );
+  assert_eq!(
+    metric(&api, "reseek_transfers_uploads_completed_bytes").await,
+    (big + small) as f64
+  );
+  assert_eq!(metric(&api, "reseek_enqueue_requests_accepted").await, 3.0);
+  let complete = events(&api, "UploadFileComplete", 2).await;
+  assert!(
+    complete
+      .iter()
+      .any(|data| data["remoteFilename"] == small_name
+        && data["localFilename"]
+          .as_str()
+          .unwrap()
+          .ends_with("small.flac")),
+    "{complete:?}"
   );
 }
 

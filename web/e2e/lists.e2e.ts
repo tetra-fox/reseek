@@ -6,7 +6,7 @@ import { login } from "./login";
  * Answers the chat calls with two conversations, `alpha` with `messages` unread ones, a page at
  * a time; an older page takes `slow` milliseconds
  */
-const fakeChat = async (page: Page, messages: number, slow = 0) => {
+const fakeUnread = async (page: Page, messages: number, slow = 0) => {
   const message = (n: number) => ({
     localId: n,
     id: n,
@@ -68,7 +68,7 @@ test("selects a range with Shift-click in a real browser", async ({ page }) => {
 });
 
 test("keeps keyboard focus on the chat list when a click opens a chat", async ({ page }) => {
-  await fakeChat(page, 2);
+  await fakeUnread(page, 2);
   await login(page, "/chat");
   const grid = page.getByRole("grid", { name: "Rooms and conversations" });
   await grid.locator('[data-line="user:alpha"]').click();
@@ -80,7 +80,7 @@ test("keeps keyboard focus on the chat list when a click opens a chat", async ({
 });
 
 test("doesn't acknowledge a conversation opened at an old message", async ({ page }) => {
-  const acknowledged = await fakeChat(page, 80);
+  const acknowledged = await fakeUnread(page, 80);
   await login(page, "/chat");
   await page.goto("./#/chat/alpha?at=3");
   await expect(page.locator('[data-message="3"]')).toBeVisible();
@@ -126,7 +126,7 @@ const watched = async (page: Page, older: string) => {
 };
 
 test("keeps the message in view still while an older page loads above it", async ({ page }) => {
-  await fakeChat(page, 250, 400);
+  await fakeUnread(page, 250, 400);
   await login(page, "/chat/alpha");
   const log = page.getByRole("log");
   await expect(page.locator('[data-message="250"]')).toBeVisible();
@@ -144,7 +144,7 @@ test("keeps the message in view still while an older page loads above it", async
 test("keeps the message in view still after a jump to the top loads older ones", async ({
   page
 }) => {
-  await fakeChat(page, 250, 400);
+  await fakeUnread(page, 250, 400);
   await login(page, "/chat/alpha");
   const log = page.getByRole("log");
   await expect(page.locator('[data-message="250"]')).toBeVisible();

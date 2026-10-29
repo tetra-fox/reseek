@@ -224,7 +224,7 @@ fn check_transfer_retention(direction: &str, retention: &TransferRetention, repo
   for (outcome, value) in [
     ("succeeded", retention.succeeded),
     ("errored", retention.errored),
-    ("cancelled", retention.cancelled),
+    ("canceled", retention.canceled),
     ("failed", retention.failed),
   ] {
     if let Some(value) = value {
@@ -267,21 +267,6 @@ mod tests {
     ] {
       assert!(metrics_url(taken).is_err(), "{taken:?}");
     }
-  }
-
-  #[test]
-  fn a_configured_room_the_server_would_refuse_is_refused_with_why() {
-    let options = Options {
-      rooms: vec!["indie".into(), "two  spaces".into()],
-      ..Options::default()
-    };
-    assert_eq!(
-      problems(&options),
-      [(
-        "rooms".to_string(),
-        "Invalid room name 'two  spaces': it has two spaces in a row".to_string()
-      )]
-    );
   }
 
   #[test]

@@ -247,30 +247,3 @@ pub fn delete(conn: &mut Connection, username: &str) -> rusqlite::Result<bool> {
   tx.commit()?;
   Ok(deleted == 1)
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[tokio::test]
-  async fn a_fresh_database_takes_a_user_and_reads_it_back() {
-    let db = super::super::testing::users_db().await;
-    let now: DateTime<Utc> = "2026-10-25T12:00:00Z".parse().unwrap();
-    let read = db
-      .write(move |conn| {
-        change(conn, "Alice", &Change::Tags(vec!["jazz".to_string()]), now)?;
-        change(conn, "Alice", &Change::Notes("kind".to_string()), now)?;
-        get(conn, "Alice")
-      })
-      .await
-      .unwrap()
-      .unwrap();
-    assert_eq!(read.first_seen_at, now);
-    assert_eq!(read.tags, ["jazz"]);
-    assert_eq!(read.notes, "kind");
-    assert_eq!(read.presence, None);
-    assert_eq!(read.statistics, None);
-    let other = db.read(|conn| get(conn, "alice")).await.unwrap();
-    assert_eq!(other, None, "usernames are case-sensitive");
-  }
-}

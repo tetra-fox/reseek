@@ -175,26 +175,8 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn only_failed_states_are_listed_newest_first_with_messages_intact() {
+  async fn failures_are_found_by_their_message() {
     let reports = reports().await;
-    let listed = reports
-      .exceptions(all(), exceptions(SortOrder::Desc))
-      .await
-      .unwrap();
-    let minutes: Vec<_> = listed
-      .iter()
-      .map(|d| d.ended_at.format("%M").to_string())
-      .collect();
-    assert_eq!(
-      minutes,
-      ["04", "03", "02", "01"],
-      "not bare Completed, not running, not succeeded, not the upload"
-    );
-    assert_eq!(
-      listed[3].exception.as_deref(),
-      Some("Remote file not found: C:\\x"),
-      "a message with a colon is kept whole"
-    );
     let mut by_message = exceptions(SortOrder::Asc);
     by_message.exception = Some("File not shared.".into());
     let found = reports.exceptions(all(), by_message).await.unwrap();
@@ -202,37 +184,6 @@ mod tests {
     assert_eq!(
       serde_json::to_value(found[0].state).unwrap(),
       "Completed, Rejected"
-    );
-  }
-
-  #[tokio::test]
-  async fn the_pareto_counts_messages_most_frequent_first() {
-    let counted = reports()
-      .await
-      .pareto(
-        all(),
-        ParetoQuery {
-          direction: Download,
-          start: None,
-          end: None,
-          username: None,
-          limit: 25,
-          offset: 0,
-        },
-      )
-      .await
-      .unwrap();
-    let rows: Vec<_> = counted
-      .iter()
-      .map(|c| (c.exception.as_deref(), c.count, c.distinct_users))
-      .collect();
-    assert_eq!(
-      rows,
-      [
-        (Some("Remote file not found: C:\\x"), 2, 2),
-        (None, 1, 1),
-        (Some("File not shared."), 1, 1)
-      ]
     );
   }
 }

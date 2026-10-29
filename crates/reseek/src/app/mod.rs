@@ -460,7 +460,7 @@ pub fn main() -> ExitCode {
     Command::Run(invocation) => {
       let supervised = invocation
         .supervised
-        .unwrap_or_else(|| restart::supervised_by_default(|n| std::env::var_os(n)));
+        .unwrap_or_else(restart::supervised_by_default);
       let code = run(invocation);
       if code == EXIT_RESTART && !supervised {
         return ExitCode::from(restart::start_again());

@@ -5,7 +5,7 @@ import { plural } from "#lib/format.js";
 import { Keyed } from "#lib/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
-import { toast } from "#lib/toast.svelte.js";
+import { loadFailed, toast } from "#lib/toast.svelte.js";
 import { undoable } from "#lib/undo.js";
 
 import { type BulkAction, summary } from "./bulk";
@@ -61,12 +61,7 @@ export class Transfers {
       this.direction === "download"
         ? await call(() => api.GET("/api/v0/transfers/downloads"))
         : await call(() => api.GET("/api/v0/transfers/uploads"));
-    if (!outcome.ok) {
-      // a failed first load is the page's to show; a failed reload says so once per outage
-      if (this.loaded && !this.error) toast(outcome.error, "error");
-      this.error = outcome.error;
-      return;
-    }
+    if (!outcome.ok) return loadFailed(this, outcome.error);
     this.list.reconcile(outcome.data.flatMap((u) => u.directories.flatMap((d) => d.files)));
     this.loaded = true;
     this.error = "";

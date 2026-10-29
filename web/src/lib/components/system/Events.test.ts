@@ -1,7 +1,8 @@
-import { flushSync, mount, unmount } from "svelte";
+import { mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { live } from "#lib/live/live.svelte.js";
+import { flush } from "#lib/testing/flush.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
@@ -9,10 +10,6 @@ import Events from "./Events.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
 
-const flush = async () => {
-  for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
 const event = (id: string, minute: number) => ({
   id,
   timestamp: `2026-10-26T10:${String(minute).padStart(2, "0")}:00Z`,

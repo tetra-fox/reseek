@@ -6,25 +6,11 @@ mod support;
 
 use std::time::Duration;
 
-use soulseek_client::{ClientError, ClientOptions, ConnKind};
+use soulseek_client::{ClientError, ConnKind};
 use soulseek_proto::RemoteFilename;
 use support::soulfind;
-use support::{Logs, PATIENCE, free_port, options};
+use support::{Logs, PATIENCE};
 use tokio_util::sync::CancellationToken;
-
-fn listening() -> ClientOptions {
-  ClientOptions {
-    listen_port: free_port(),
-    ..ClientOptions::default()
-  }
-}
-
-fn unreachable() -> ClientOptions {
-  ClientOptions {
-    listen_port: free_port(),
-    ..options()
-  }
-}
 
 fn file() -> RemoteFilename {
   "@@music\\artist\\01 intro.flac".into()
@@ -35,8 +21,8 @@ async fn an_uploader_that_cannot_dial_the_download_asks_the_server_to_have_it_di
   let Some(server) = soulfind::server() else {
     return;
   };
-  let downloader = server.login("down", unreachable()).await;
-  let uploader = server.login("up", listening()).await;
+  let downloader = server.login("down", soulfind::unreachable()).await;
+  let uploader = server.login("up", soulfind::listening()).await;
   let incoming = downloader.client.await_transfer_connection(
     &uploader.username,
     file(),
@@ -79,7 +65,7 @@ async fn a_download_waits_no_longer_than_the_connect_timeout() {
   let Some(server) = soulfind::server() else {
     return;
   };
-  let mut options = listening();
+  let mut options = soulfind::listening();
   options.transfer_connection_options.connect_timeout = Duration::from_millis(200);
   let downloader = server.login("down", options).await;
   let error = downloader
@@ -101,8 +87,8 @@ async fn a_relayed_transfer_request_nothing_expects_is_refused() {
   let Some(server) = soulfind::server() else {
     return;
   };
-  let downloader = server.login("down", unreachable()).await;
-  let mut uploader_options = listening();
+  let downloader = server.login("down", soulfind::unreachable()).await;
+  let mut uploader_options = soulfind::listening();
   uploader_options.transfer_connection_options.connect_timeout = Duration::from_secs(5);
   let uploader = server.login("up", uploader_options).await;
   let endpoint = uploader

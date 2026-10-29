@@ -240,16 +240,10 @@ pub fn decompress(stored: &[u8]) -> std::io::Result<Vec<SearchResponse>> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::db::{Database, Location};
+  use crate::db::Database;
 
   async fn db() -> Database {
-    let location = Location {
-      data: std::env::temp_dir(),
-      backups: std::env::temp_dir(),
-      volatile: true,
-      log_sql: false,
-    };
-    Database::open(&SCHEMA, &location).await.unwrap()
+    Database::memory(&SCHEMA).await
   }
 
   fn requested(at: &str) -> Search {

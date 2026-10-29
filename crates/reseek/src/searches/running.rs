@@ -291,7 +291,7 @@ mod tests {
 
   use super::*;
   use crate::services::SearchService;
-  use crate::testing::app;
+  use crate::testing::{TRUSTED, app};
 
   fn record() -> Search {
     Search {
@@ -398,11 +398,7 @@ mod tests {
 
   #[tokio::test]
   async fn a_response_carries_the_country_the_directory_has_for_its_peer() {
-    let app = app(
-      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
-      &[],
-    )
-    .await;
+    let app = app(TRUSTED, &[]).await;
     let notes = crate::testing::request(
       "PUT",
       "/api/v0/users/alice/notes",

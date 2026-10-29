@@ -1,3 +1,4 @@
+import type { Conversation, JoinedRoom } from "#lib/chat/chat.svelte.js";
 import { newId } from "#lib/ids.js";
 import type { Transfer } from "#lib/transfers/states.js";
 
@@ -33,3 +34,28 @@ export const STATES = [
   "Completed, Rejected",
   "Completed, Aborted"
 ];
+
+/** A joined room with nothing unread, `fields` over it */
+export const joinedRoom = (name: string, fields: Partial<JoinedRoom> = {}): JoinedRoom => ({
+  name,
+  unread: 0,
+  mentions: 0,
+  notify: "mentions",
+  userCount: 3,
+  lastMessageAt: null,
+  lastReadId: 0,
+  ...fields
+});
+
+/** An open conversation with `username` with nothing unread */
+export const conversation = (username: string): Conversation => ({
+  username,
+  isActive: true,
+  isServerNotice: false,
+  unAcknowledgedMessageCount: 0,
+  hasUnAcknowledgedMessages: false,
+  notify: "all",
+  draft: "",
+  lastMessage: null,
+  messages: null
+});

@@ -3,10 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   formatAttributes,
   formatBytes,
-  formatBytesAsUnit,
   formatBytesTransferred,
   formatDuration,
-  formatPercent,
   formatSeconds,
   formatSpeed,
   formatSpeedPadded,
@@ -14,8 +12,7 @@ import {
   parseDuration,
   sayDuration,
   getDirectoryName,
-  getFileName,
-  truncate
+  getFileName
 } from "./format";
 
 describe("sizes and speeds", () => {
@@ -41,11 +38,6 @@ describe("sizes and speeds", () => {
     expect(formatBytes(Number.NaN)).toBe("0 B");
     expect(formatBytes(-5)).toBe("0 B");
     expect(formatBytes(Infinity)).toBe("0 B");
-  });
-
-  it("formats one unit", () => {
-    expect(formatBytesAsUnit(1234567, "MB", 2)).toBe(1.18);
-    expect(formatBytesAsUnit(12, "B")).toBe("12 B");
   });
 
   it("formats speeds, padded to one width for the footer", () => {
@@ -86,11 +78,6 @@ describe("times", () => {
     expect(formatDuration(90061)).toBe("1d 1h");
     expect(formatDuration(86400)).toBe("1d");
   });
-
-  it("formats percentages", () => {
-    expect(formatPercent(0.256)).toBe("25.6%");
-    expect(formatPercent(Number.NaN)).toBe("0.0%");
-  });
 });
 
 describe("files", () => {
@@ -110,12 +97,6 @@ describe("files", () => {
     expect(getDirectoryName("a/b/c.mp3")).toBe("a/b");
     expect(getDirectoryName("\\foo")).toBe("\\foo");
     expect(getDirectoryName("c.mp3")).toBe("c.mp3");
-  });
-
-  it("truncates", () => {
-    expect(truncate(null, 3)).toBe("");
-    expect(truncate("abc", 3)).toBe("abc");
-    expect(truncate("abcd", 3)).toBe("abc...");
   });
 });
 

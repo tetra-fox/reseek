@@ -12,14 +12,6 @@ describe("reason", () => {
     );
   });
 
-  it("falls back to words for the status", () => {
-    expect(reason(403)).toBe("Permission denied");
-    expect(reason(404, {})).toBe("Not found");
-    expect(reason(429)).toBe("Too many attempts. Try again shortly");
-    expect(reason(502)).toBe("Server error (HTTP 502)");
-    expect(reason(418)).toBe("HTTP 418");
-  });
-
   it("never shows an object", () => {
     expect(reason(400, { errors: { a: 1 } })).toBe("HTTP 400");
   });

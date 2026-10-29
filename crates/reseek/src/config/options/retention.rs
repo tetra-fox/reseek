@@ -83,7 +83,7 @@ pub struct TransferRetention {
   pub errored: Option<Duration>,
   /// Age after which canceled transfers are removed. Minimum: 5 minutes.
   #[serde(with = "humantime_serde")]
-  pub cancelled: Option<Duration>,
+  pub canceled: Option<Duration>,
   /// Age after which errored or canceled transfers are removed. Minimum: 5 minutes.
   #[serde(with = "humantime_serde")]
   pub failed: Option<Duration>,

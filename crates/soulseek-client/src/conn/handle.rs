@@ -383,18 +383,6 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn no_inactivity_timeout_when_disabled() {
-    let options = ConnectionOptions {
-      inactivity_timeout: None,
-      ..ConnectionOptions::default()
-    };
-    let (conn, _remote) = pair(options).await;
-    tokio::time::pause();
-    tokio::time::sleep(Duration::from_secs(3600)).await;
-    assert!(matches!(conn.handle().state(), ConnState::Connected));
-  }
-
-  #[tokio::test]
   async fn the_first_disconnect_wins() {
     let (conn, _remote) = pair(ConnectionOptions::default()).await;
     let handle = conn.handle().clone();

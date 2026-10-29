@@ -3,16 +3,12 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import fixture from "#lib/config/fixtures/view.json";
+import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import RawFile from "./RawFile.svelte";
 
 vi.mock("$app/navigation", () => ({ beforeNavigate: () => {} }));
-
-const flush = async () => {
-  for (let i = 0; i < 4; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
 
 describe("the raw configuration file", () => {
   let component: ReturnType<typeof mount> | null = null;

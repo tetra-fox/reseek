@@ -4,7 +4,7 @@ import { newId } from "../src/lib/ids";
 import { layout, spectra, spectrogram, waveform } from "./pictures";
 
 /** A time on the evening the fakes take place */
-export const at = (minute: number, second = 0) =>
+const at = (minute: number, second = 0) =>
   new Date(Date.UTC(2026, 9, 27, 18, minute, second)).toISOString();
 
 /** One event stream frame as the daemon writes it */
@@ -375,7 +375,7 @@ export const transfer = (
 });
 
 /** The finished download of alice's 2.flac, which `fakeAnalysis` has a report of */
-export const ANALYZED_DOWNLOAD = "2f1ac000-0000-4000-8000-000000000002";
+const ANALYZED_DOWNLOAD = "2f1ac000-0000-4000-8000-000000000002";
 
 /**
  * Answers the downloads list with alice's two folders, one download running and one done, and

@@ -97,8 +97,7 @@ export type DenseSort = { id: DenseColumn; dir: "asc" | "desc" } | null;
 
 /**
  * The dense view's sort and the widths the user dragged columns to, in pixels, in this browser.
- * Only a drag is kept, so a column never dragged follows its default as that changes. Widths saved
- * under `widths` by older builds held every default too, so they are not read
+ * Only a drag is kept, so a column never dragged follows its default as that changes
  */
 export const denseView = stored("reseek.search.dense", (saved) => {
   const s = fields(saved);

@@ -3,16 +3,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { activity, type ActivityEntry } from "#lib/activity/activity.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
+import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import ActivityDock from "./ActivityDock.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
 
-const flush = async () => {
-  for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
 const entry = (id: number, username: string, kind: ActivityEntry["kind"]): ActivityEntry => ({
   id,
   at: `2026-10-27T18:00:${String(id).padStart(2, "0")}Z`,

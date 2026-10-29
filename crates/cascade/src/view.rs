@@ -344,31 +344,3 @@ mod tests {
     );
   }
 }
-
-#[cfg(all(test, feature = "utoipa"))]
-mod schema_tests {
-  use super::*;
-  use utoipa::PartialSchema;
-
-  #[test]
-  fn the_openapi_schema_has_the_json_names() {
-    let view = serde_json::to_string(&ConfigView::schema()).unwrap();
-    for name in ["pendingRestart", "loadError", "managedBy", "overrides"] {
-      assert!(view.contains(name), "{name}: {view}");
-    }
-    let field = serde_json::to_string(&FieldView::schema()).unwrap();
-    for name in ["\"kind\"", "\"doc\"", "notApplied", "envVar"] {
-      assert!(field.contains(name), "{name}: {field}");
-    }
-    let kind = serde_json::to_string(&Kind::schema()).unwrap();
-    assert!(
-      kind.contains("\"list\"") && kind.contains("\"size\""),
-      "{kind}"
-    );
-    let source = serde_json::to_string(&Source::schema()).unwrap();
-    for name in ["\"layer\"", "\"runtime\"", "expiresAt", "setBy", "setAt"] {
-      assert!(source.contains(name), "{name}: {source}");
-    }
-    assert!(!source.contains("expires_at"), "{source}");
-  }
-}

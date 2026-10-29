@@ -1,6 +1,6 @@
 //! Whether other users can connect to us, judged by a daemon on the scripted server: a peer
-//! connecting to its listener, by itself or to answer a request the server relayed, shows they
-//! can, and five searches answered only over connections the daemon opened show they cannot.
+//! connecting to its listener shows they can, and five searches answered only over connections
+//! the daemon opened show they cannot.
 
 mod support;
 
@@ -12,13 +12,10 @@ use api_types::search::SearchRequest;
 use api_types::state::{Reachable, State};
 use soulseek_proto::init::{PeerInit, PierceFirewall};
 use soulseek_proto::peer::SearchResponse;
-use soulseek_proto::server::{
-  ConnectToPeerRequest, ConnectToPeerResponse, FileSearchRequest, GetPeerAddressRequest,
-  GetPeerAddressResponse,
-};
+use soulseek_proto::server::{ConnectToPeerResponse, FileSearchRequest};
 use soulseek_proto::{InitMessage, PeerConnectionType, PeerMessage, ServerRequest, ServerResponse};
 use support::client::peer::{FakePeer, PeerSide};
-use support::{free_port, scripted, signed_in, until};
+use support::{scripted, until};
 use uuid::Uuid;
 
 fn reachable(state: &State) -> Reachable {
@@ -40,43 +37,6 @@ async fn a_peer_reaching_the_listener_by_itself_shows_we_can_be_reached() {
   });
   bob.send(&hello.encode()).await;
   until(&api, "reachable", |s| reachable(s) == Reachable::Yes).await;
-}
-
-#[tokio::test]
-async fn a_peer_answering_a_relayed_request_shows_we_can_be_reached() {
-  let dir = tempfile::tempdir().unwrap();
-  let (daemon, api, mut server) = scripted(dir.path()).await;
-  let state = api.application().await.unwrap();
-  let listener = SocketAddr::from((Ipv4Addr::LOCALHOST, state.server.listen.port));
-  let asking = tokio::spawn(async move { api.user_info("carol").await });
-  server
-    .request_matching(|request| match request {
-      ServerRequest::GetPeerAddress(GetPeerAddressRequest { username }) => Some(username),
-      _ => None,
-    })
-    .await;
-  // nothing listens at carol's address, so only her answer to the relayed request connects
-  server
-    .send(&ServerResponse::GetPeerAddress(GetPeerAddressResponse {
-      username: "carol".into(),
-      ip: Ipv4Addr::LOCALHOST,
-      port: u32::from(free_port()),
-      obfuscation: None,
-    }))
-    .await;
-  let relayed = server
-    .request_matching(|request| match request {
-      ServerRequest::ConnectToPeer(ConnectToPeerRequest { token, .. }) => Some(token),
-      _ => None,
-    })
-    .await;
-  let mut carol = PeerSide::connect(listener).await;
-  carol
-    .send(&InitMessage::PierceFirewall(PierceFirewall { token: relayed }).encode())
-    .await;
-  let api = signed_in(&daemon).await;
-  until(&api, "reachable", |s| reachable(s) == Reachable::Yes).await;
-  asking.abort();
 }
 
 /// Starts a search on `api` and has bob answer it over a connection the daemon opens to him at

@@ -11,16 +11,6 @@ export const formatBytes = (bytes: number, decimals = 2, padding = 0, padChar = 
   return `${String(n).padStart(padding, padChar)} ${UNITS[i]}`;
 };
 
-/** A byte count in one given unit: a number, or for "B" the text "<n> B" */
-export const formatBytesAsUnit = (
-  bytes: number,
-  unit: (typeof UNITS)[number],
-  decimals = 2
-): number | string => {
-  if (unit === "B") return `${bytes} B`;
-  return parseFloat((bytes / 1024 ** UNITS.indexOf(unit)).toFixed(decimals));
-};
-
 /**
  * Bytes moved of a size in the size's unit, both to one decimal: "3.2/10.5 MB", "0 B/0 B"
  * for an empty file
@@ -143,10 +133,6 @@ export const sayDuration = (ms: number): string => {
   const words = plural(n, unit, `${unit}s`);
   return n * size === ms ? words : `about ${words}`;
 };
-
-/** A fraction as a percentage to one decimal, 0.256 as "25.6%" */
-export const formatPercent = (fraction: number): string =>
-  `${(Number.isFinite(fraction) ? fraction * 100 : 0).toFixed(1)}%`;
 
 const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 

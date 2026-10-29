@@ -35,9 +35,7 @@ async fn get_activity(
 mod tests {
   use api_types::activity::ActivityKind;
 
-  use crate::testing::{app, request};
-
-  const TRUSTED: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
+  use crate::testing::{TRUSTED, app, request};
 
   #[tokio::test]
   async fn the_log_is_read_whole_then_followed_entry_by_entry() {

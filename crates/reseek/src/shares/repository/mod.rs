@@ -358,13 +358,7 @@ pub(super) mod tests {
 
   /// An empty index in memory.
   pub async fn index() -> crate::db::Database {
-    let location = crate::db::Location {
-      data: std::env::temp_dir(),
-      backups: std::env::temp_dir(),
-      volatile: true,
-      log_sql: false,
-    };
-    crate::db::Database::open(&SCHEMA, &location).await.unwrap()
+    crate::db::Database::memory(&SCHEMA).await
   }
 
   /// A file row of `masked` with no attributes.

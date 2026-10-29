@@ -155,14 +155,14 @@
       "search": null,
       "transfers": {
         "download": {
-          "cancelled": null,
+          "canceled": null,
           "errored": null,
           "failed": null,
           "succeeded": null
         },
         "purge_removed_after": null,
         "upload": {
-          "cancelled": null,
+          "canceled": null,
           "errored": null,
           "failed": null,
           "succeeded": null
@@ -1823,7 +1823,7 @@
       "secret": false,
       "notApplied": null
     },
-    "retention.transfers.download.cancelled": {
+    "retention.transfers.download.canceled": {
       "source": {
         "layer": "default"
       },
@@ -1898,7 +1898,7 @@
       "secret": false,
       "notApplied": null
     },
-    "retention.transfers.upload.cancelled": {
+    "retention.transfers.upload.canceled": {
       "source": {
         "layer": "default"
       },

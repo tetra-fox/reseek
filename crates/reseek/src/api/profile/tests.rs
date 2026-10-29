@@ -3,23 +3,17 @@
 //! picture is refused without changing the picture peers get.
 
 use axum::body::Body;
-use image::{ImageEncoder, Rgba, RgbaImage};
+use image::Rgba;
 use serde_json::json;
 
-use crate::testing::{TestApp, app, request, with};
+use crate::testing::{TestApp, app, png, request, with};
+
+/// The color of the pictures uploaded.
+const BLUE: Rgba<u8> = Rgba([20, 120, 220, 255]);
 
 /// Loopback is a trusted administrator, and changes are allowed.
 const CONFIG: &str =
   "remote_configuration = true\n[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
-
-fn png(width: u32, height: u32) -> Vec<u8> {
-  let image = RgbaImage::from_pixel(width, height, Rgba([20, 120, 220, 255]));
-  let mut bytes = Vec::new();
-  image::codecs::png::PngEncoder::new(&mut bytes)
-    .write_image(&image, width, height, image::ExtendedColorType::Rgba8)
-    .unwrap();
-  bytes
-}
 
 /// A `PUT /profile/picture` of `bytes` sent as `content_type`.
 async fn upload(app: &TestApp, bytes: Vec<u8>, content_type: &str) -> crate::testing::Answer {
@@ -54,7 +48,7 @@ async fn the_text_and_the_picture_round_trip_through_the_file() {
     .send(request("PUT", "/api/v0/profile", Some(text)))
     .await;
   assert_eq!(put.status, 204, "{:?}", put.body);
-  let uploaded = upload(&app, png(1200, 300), "image/png").await;
+  let uploaded = upload(&app, png(1200, 300, BLUE), "image/png").await;
   assert_eq!(uploaded.status, 204, "{:?}", uploaded.body);
 
   let changed = profile(&app).await;
@@ -108,7 +102,7 @@ async fn a_managed_file_takes_the_profile_as_an_override() {
   assert_eq!(changed["sources"]["description"]["layer"], "runtime");
   let overrides = std::fs::read_to_string(app.dir.path().join("overrides.toml")).unwrap();
   assert!(overrides.contains("from the page"), "{overrides}");
-  let uploaded = upload(&app, png(8, 8), "image/png").await;
+  let uploaded = upload(&app, png(8, 8, BLUE), "image/png").await;
   assert_eq!(uploaded.status, 204, "{:?}", uploaded.body);
   assert_eq!(
     profile(&app).await["sources"]["picture"]["layer"],
@@ -136,7 +130,7 @@ async fn what_is_locked_too_large_or_no_picture_is_refused() {
     .await;
   assert_eq!(locked.status, 409);
   assert_eq!(locked.json()["error"], "set by RESEEK_SLSK_DESCRIPTION");
-  let picture = upload(&app, png(8, 8), "image/png").await;
+  let picture = upload(&app, png(8, 8, BLUE), "image/png").await;
   assert_eq!(picture.status, 409);
   assert_eq!(picture.json()["error"], "set by RESEEK_SLSK_PICTURE");
   let removing = app
@@ -145,19 +139,21 @@ async fn what_is_locked_too_large_or_no_picture_is_refused() {
   assert_eq!(removing.status, 409);
 
   let open = crate::testing::app(CONFIG, &[]).await;
-  assert_eq!(upload(&open, png(8, 8), "text/plain").await.status, 415);
-  assert_eq!(upload(&open, png(8, 8), "image/svg+xml").await.status, 415);
+  assert_eq!(
+    upload(&open, png(8, 8, BLUE), "text/plain").await.status,
+    415
+  );
+  assert_eq!(
+    upload(&open, png(8, 8, BLUE), "image/svg+xml").await.status,
+    415
+  );
   let huge = vec![0; super::MAX_UPLOAD + 1];
   assert_eq!(upload(&open, huge, "image/jpeg").await.status, 413);
   let garbage = upload(&open, b"not a picture".to_vec(), "image/png").await;
   assert_eq!(garbage.status, 400);
   assert!(!open.state.paths.data.join("profile/picture.jpg").exists());
 
-  let closed = crate::testing::app(
-    "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
-    &[],
-  )
-  .await;
+  let closed = crate::testing::app(crate::testing::TRUSTED, &[]).await;
   let text = json!({ "description": "x" });
   let refused = closed
     .send(request("PUT", "/api/v0/profile", Some(text)))
@@ -184,15 +180,18 @@ async fn a_stored_api_key_changes_no_file_and_a_refused_upload_no_picture() {
   let app = app(&keyed(), &[]).await;
   let stored = app.state.paths.data.join("profile/picture.jpg");
   let mut put = request("PUT", "/api/v0/profile/picture", None);
-  *put.body_mut() = Body::from(png(16, 16));
+  *put.body_mut() = Body::from(png(16, 16, BLUE));
   let first = by_key(&app, with(put, "content-type", "image/png")).await;
   assert_eq!(first.status, 403, "{:?}", first.body);
   assert!(!stored.exists(), "no picture is made for a refused upload");
 
-  assert_eq!(upload(&app, png(64, 64), "image/png").await.status, 204);
+  assert_eq!(
+    upload(&app, png(64, 64, BLUE), "image/png").await.status,
+    204
+  );
   let before = std::fs::read(&stored).unwrap();
   let mut put = request("PUT", "/api/v0/profile/picture", None);
-  *put.body_mut() = Body::from(png(300, 300));
+  *put.body_mut() = Body::from(png(300, 300, BLUE));
   let refused = by_key(&app, with(put, "content-type", "image/png")).await;
   assert_eq!(refused.status, 403, "{:?}", refused.body);
   assert_eq!(
@@ -215,7 +214,10 @@ async fn a_stored_api_key_changes_no_file_and_a_refused_upload_no_picture() {
 #[tokio::test]
 async fn a_write_removes_an_override_of_the_key_so_its_value_is_in_effect() {
   let app = app(CONFIG, &[]).await;
-  assert_eq!(upload(&app, png(32, 32), "image/png").await.status, 204);
+  assert_eq!(
+    upload(&app, png(32, 32, BLUE), "image/png").await.status,
+    204
+  );
   let path = app.state.paths.data.join("profile/picture.jpg");
   let text = json!({ "description": "in the file" });
   let put = app
@@ -262,8 +264,8 @@ async fn a_write_removes_an_override_of_the_key_so_its_value_is_in_effect() {
 async fn uploads_at_once_each_leave_a_whole_picture() {
   let app = app(CONFIG, &[]).await;
   let (a, b) = tokio::join!(
-    upload(&app, png(600, 200), "image/png"),
-    upload(&app, png(200, 600), "image/png")
+    upload(&app, png(600, 200, BLUE), "image/png"),
+    upload(&app, png(200, 600, BLUE), "image/png")
   );
   assert_eq!(a.status, 204, "{:?}", a.body);
   assert_eq!(b.status, 204, "{:?}", b.body);
@@ -289,17 +291,20 @@ async fn a_picture_whose_option_write_is_refused_is_not_kept() {
   let stored = app.state.paths.data.join("profile/picture.jpg");
   let staged = || std::fs::read_dir(stored.parent().unwrap()).unwrap().count();
   edit_by_hand(&app);
-  let first = upload(&app, png(16, 16), "image/png").await;
+  let first = upload(&app, png(16, 16, BLUE), "image/png").await;
   assert_eq!(first.status, 409, "{:?}", first.body);
   assert_eq!(first.json()["error"], "config file changed on disk");
   assert!(!stored.exists(), "a first picture is taken away again");
   assert_eq!(staged(), 0);
 
   app.state.config.reload().await.unwrap();
-  assert_eq!(upload(&app, png(64, 64), "image/png").await.status, 204);
+  assert_eq!(
+    upload(&app, png(64, 64, BLUE), "image/png").await.status,
+    204
+  );
   let before = std::fs::read(&stored).unwrap();
   edit_by_hand(&app);
-  let second = upload(&app, png(300, 300), "image/png").await;
+  let second = upload(&app, png(300, 300, BLUE), "image/png").await;
   assert_eq!(second.status, 409, "{:?}", second.body);
   assert_eq!(
     std::fs::read(&stored).unwrap(),
@@ -316,7 +321,10 @@ async fn removing_a_picture_a_read_only_file_sets_under_an_override_is_refused()
     concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")
   );
   let app = app(&managed, &[("RESEEK_CONFIG_MANAGED_BY", "nixos")]).await;
-  assert_eq!(upload(&app, png(32, 32), "image/png").await.status, 204);
+  assert_eq!(
+    upload(&app, png(32, 32, BLUE), "image/png").await.status,
+    204
+  );
   let uploaded = profile(&app).await;
   assert_eq!(uploaded["sources"]["picture"]["layer"], "runtime");
   let removing = app

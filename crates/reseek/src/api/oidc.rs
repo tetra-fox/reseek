@@ -410,9 +410,7 @@ mod tests {
   use serde_json::{Value, json};
 
   use crate::testing::issuer::{CLIENT_ID, CLIENT_SECRET, Grant, Issuer};
-  use crate::testing::{Answer, TestApp, app, request, set_cookie, with};
-
-  const OUTSIDE: &str = "192.0.2.1:1";
+  use crate::testing::{Answer, OUTSIDE, TestApp, app, request, set_cookie, with};
 
   async fn setup(default: &str) -> (Issuer, TestApp) {
     let issuer = Issuer::start().await;

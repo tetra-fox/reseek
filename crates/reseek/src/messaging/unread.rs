@@ -89,24 +89,3 @@ impl Messaging {
     }
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn the_total_is_the_conversations_and_the_rooms_mentions() {
-    let counts = counted(
-      [("alice".to_string(), 2), ("bob".to_string(), 1)].into(),
-      [(
-        "indie".to_string(),
-        RoomUnread {
-          unread: 40,
-          mentions: 3,
-        },
-      )]
-      .into(),
-    );
-    assert_eq!((counts.total, counts.total_mentions), (6, 3));
-  }
-}

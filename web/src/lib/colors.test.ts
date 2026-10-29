@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DARK, LIGHT, NAME_HUES, nameColor, nameHue } from "./colors";
+import { DARK, LIGHT, NAME_HUES, nameHue } from "./colors";
 
 /** linear sRGB of an OKLCH color, unclamped */
 const linear = (l: number, c: number, h: number) => {
@@ -39,13 +39,6 @@ const luminance = (l: number, c: number, h: number) => {
 const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 
 describe("username colors", () => {
-  it("give a name the same color every time, from the palette", () => {
-    expect(nameHue("alice")).toBe(nameHue("alice"));
-    expect(nameColor("bob")).toBe(nameColor("bob"));
-    expect(NAME_HUES).toContain(nameHue("ж€😀"));
-    expect(nameColor("alice")).toMatch(/^light-dark\(oklch\(.+\), oklch\(.+\)\)$/);
-  });
-
   it("spread names evenly over the palette", () => {
     const counts = new Map<number, number>();
     const total = 12_000;

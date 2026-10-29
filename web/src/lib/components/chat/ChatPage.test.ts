@@ -4,22 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { chat } from "#lib/chat/chat.svelte.js";
 import { session } from "#lib/session.svelte.js";
+import { joinedRoom } from "#lib/testing/fixtures.js";
 import { installMedia } from "#lib/testing/media.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import ChatPage from "./ChatPage.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn(), afterNavigate: vi.fn() }));
-
-const room = (name: string, lastMessageAt: string) => ({
-  name,
-  unread: 0,
-  mentions: 0,
-  notify: "mentions" as const,
-  userCount: 3,
-  lastMessageAt,
-  lastReadId: 0
-});
 
 describe("the chat page", () => {
   let component: ReturnType<typeof mount> | null = null;
@@ -38,8 +29,8 @@ describe("the chat page", () => {
     session.principal = { name: "me", role: "ReadWrite" } as never;
     fakeNetwork(() => undefined);
     chat.rooms.reconcile([
-      room("indie", "2026-10-26T10:00:00Z"),
-      room("jazz", "2026-10-26T11:00:00Z")
+      joinedRoom("indie", { lastMessageAt: "2026-10-26T10:00:00Z" }),
+      joinedRoom("jazz", { lastMessageAt: "2026-10-26T11:00:00Z" })
     ]);
     component = mount(ChatPage, {
       target: document.body,

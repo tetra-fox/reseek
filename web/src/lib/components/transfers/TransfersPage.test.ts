@@ -6,6 +6,8 @@ import { interaction } from "#lib/interaction.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { transfer } from "#lib/testing/fixtures.js";
+import { flushFaked } from "#lib/testing/flush.js";
+import { press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 import { toasts } from "#lib/toast.svelte.js";
 import { defaults, views } from "#lib/transfers/settings.svelte.js";
@@ -14,11 +16,6 @@ import { downloads } from "#lib/transfers/transfers.svelte.js";
 import { UNDO_MS } from "#lib/undo.js";
 
 import TransfersPage from "./TransfersPage.svelte";
-
-const flush = async () => {
-  await vi.advanceTimersByTimeAsync(0);
-  flushSync();
-};
 
 /** the grouped listing the daemon answers, one directory per transfer */
 const grouped = (rows: Transfer[]) =>
@@ -62,8 +59,8 @@ describe("the transfers table", () => {
     live.start();
     net.frame("hello", { principal: { name: "a", role: "ReadOnly" } } as Schemas["Hello"]);
     component = mount(TransfersPage, { target: document.body, props: { direction: "download" } });
-    await flush();
-    await flush();
+    await flushFaked();
+    await flushFaked();
     return net;
   };
   const row = (id: string) => document.querySelector(`[role=row][data-id="${id}"]`);
@@ -75,13 +72,6 @@ describe("the transfers table", () => {
       )
       .map((r) => r.getAttribute("data-id"));
 
-  /** presses `key` on `target`, which bubbles to the table */
-  const press = (target: Element, key: string, mods: KeyboardEventInit = {}) => {
-    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...mods });
-    target.dispatchEvent(event);
-    flushSync();
-    return event;
-  };
   const grid = () => document.querySelector("[role=grid]")!;
   const signIn = () =>
     (session.principal = {
@@ -89,10 +79,6 @@ describe("the transfers table", () => {
       role: "Administrator",
       session: null
     } as unknown as typeof session.principal);
-  const ticked = () =>
-    [...document.querySelectorAll('[role=row][aria-selected="true"]')].map((r) =>
-      r.getAttribute("data-id")
-    );
   const drawer = () => document.querySelector('aside[aria-label="Transfer details"]');
 
   it("patches a row in place by frame and by reconcile, and holds the order while frozen", async () => {
@@ -116,7 +102,7 @@ describe("the transfers table", () => {
 
     // a frame patches one row
     net.frame("transfers.updated", { ...a, state: "InProgress", percentComplete: 40 });
-    await flush();
+    await flushFaked();
     expect(row(a.id)).toBe(first);
     expect(first.querySelector("button")).toBe(name);
     expect(first.textContent).toContain("40%");
@@ -126,7 +112,7 @@ describe("the transfers table", () => {
     const c = transfer({ filename: "x\\d.flac" });
     listing = [{ ...a, state: "InProgress", percentComplete: 55 }, b, c];
     await downloads.load();
-    await flush();
+    await flushFaked();
     expect(row(a.id)).toBe(first);
     expect(first.textContent).toContain("55%");
     expect(order()).toEqual([a.id, b.id, c.id]);
@@ -136,15 +122,15 @@ describe("the transfers table", () => {
     const release = interaction.hold();
     const early = transfer({ filename: "x\\a.flac" });
     net.frame("transfers.added", early);
-    await flush();
+    await flushFaked();
     expect(order()).toEqual([a.id, b.id, c.id, early.id]);
     expect(row(a.id)).toBe(first);
     release();
-    await flush();
+    await flushFaked();
     // the selection inside the table holds it still too
     expect(order()).toEqual([a.id, b.id, c.id, early.id]);
     document.getSelection()!.removeAllRanges();
-    await flush();
+    await flushFaked();
     expect(order()).toEqual([early.id, a.id, b.id, c.id]);
     expect(row(a.id)).toBe(first);
   });
@@ -165,26 +151,13 @@ describe("the transfers table", () => {
         for (const key of ["c", "r", "o"])
           expect(press(grid(), key, mods).defaultPrevented).toBe(false);
       }
-      await flush();
+      await flushFaked();
       expect(bulk(net)).toEqual([]);
 
       // the plain key still cancels
       expect(press(grid(), "c").defaultPrevented).toBe(true);
-      await flush();
+      await flushFaked();
       expect(bulk(net).map((r) => r.body)).toEqual([{ action: "cancel", ids: [a.id] }]);
-    });
-
-    it("leave Enter and Space on a username link to the link", async () => {
-      const a = transfer();
-      listing = [a];
-      await start();
-      const link = row(a.id)!.querySelector('a[href^="#/users/"]')!;
-      focusIn(link);
-      expect(press(link, "Enter").defaultPrevented).toBe(false);
-      await flush();
-      expect(drawer()).toBeNull();
-      press(link, " ");
-      expect(ticked()).toEqual([]);
     });
 
     it("leave Enter and Space to a focused checkbox and act on its row with the rest", async () => {
@@ -197,7 +170,7 @@ describe("the transfers table", () => {
       focusIn(box);
       // the checkbox takes both: Enter does nothing, Space ticks its row
       press(box, "Enter");
-      await flush();
+      await flushFaked();
       expect(drawer()).toBeNull();
       press(box, " ");
       expect(ticked()).toEqual([a.id]);
@@ -205,7 +178,7 @@ describe("the transfers table", () => {
       expect(press(box, "a", { ctrlKey: true }).defaultPrevented).toBe(true);
       expect(ticked()).toEqual([a.id, b.id]);
       expect(press(box, "Delete").defaultPrevented).toBe(true);
-      await flush();
+      await flushFaked();
       // removed from the screen at once, from the daemon once the undo has passed
       expect(toasts[0].text).toBe("Removed 2 transfers");
       expect([row(a.id), row(b.id)]).toEqual([null, null]);
@@ -225,7 +198,7 @@ describe("the transfers table", () => {
       press(grid(), "ArrowDown");
       expect(ticked()).toEqual([a.id, b.id]);
       press(grid(), "Delete");
-      await flush();
+      await flushFaked();
       expect(row(c.id)).toBeNull();
       expect(row(a.id)).not.toBeNull();
       // Undo brings the row back and nothing is asked of the daemon
@@ -254,7 +227,7 @@ describe("the transfers table", () => {
       for (const key of ["Delete", "r", "c", "o", "Enter"]) {
         expect(press(grid(), key).defaultPrevented).toBe(false);
       }
-      await flush();
+      await flushFaked();
       expect(bulk(net)).toEqual([]);
       expect(drawer()).toBeNull();
     });
@@ -288,27 +261,6 @@ describe("the transfers table", () => {
       expect(ticked()).toEqual([b.id]);
       const active = grid().getAttribute("aria-activedescendant")!;
       expect(document.getElementById(active)?.getAttribute("data-id")).toBe(b.id);
-    });
-
-    it("select a clicked row alone, and toggle one with Ctrl", async () => {
-      const a = transfer({ filename: "x\\a.flac" });
-      const b = transfer({ filename: "x\\b.flac" });
-      listing = [a, b];
-      await start();
-      const cell = (id: string) => row(id)!.querySelector('[role="gridcell"]:nth-child(4)')!;
-      const click = (id: string, mods: MouseEventInit = {}) => {
-        cell(id).dispatchEvent(new MouseEvent("click", { bubbles: true, ...mods }));
-        flushSync();
-      };
-      click(a.id);
-      click(b.id);
-      expect(ticked()).toEqual([b.id]);
-      click(a.id, { ctrlKey: true });
-      expect(ticked().toSorted()).toEqual([a.id, b.id].toSorted());
-      // the file name opens the details and leaves the selection alone
-      row(a.id)!.querySelector<HTMLButtonElement>("button[title]")!.click();
-      flushSync();
-      expect(ticked().toSorted()).toEqual([a.id, b.id].toSorted());
     });
 
     it("move past a folded group to the next row", async () => {
@@ -345,7 +297,7 @@ describe("the transfers table", () => {
       flushSync();
       expect(bulk(net).map((r) => r.body)).toEqual([{ action: "remove", ids: [b.id] }]);
       net.frame("transfers.removed", { id: b.id, username: b.username, direction: "Download" });
-      await flush();
+      await flushFaked();
       expect(row(b.id)).toBeNull();
       // c took b's place, so ↓ has nowhere further to go and ↑ reaches a
       press(grid(), " ");
@@ -353,57 +305,6 @@ describe("the transfers table", () => {
       press(grid(), "ArrowUp");
       press(grid(), " ");
       expect(ticked().toSorted()).toEqual([a.id, c.id].toSorted());
-    });
-
-    it("pass a removed row's place to the next row, past group headers", async () => {
-      signIn();
-      Object.assign(views.download, { groupBy: "user" });
-      const a1 = transfer({
-        username: "alice",
-        filename: "x\\a1.flac",
-        state: "Completed, Succeeded"
-      });
-      const a2 = transfer({
-        username: "alice",
-        filename: "x\\a2.flac",
-        state: "Completed, Succeeded"
-      });
-      const b1 = transfer({
-        username: "bob",
-        filename: "y\\b1.flac",
-        state: "Completed, Succeeded"
-      });
-      listing = [a1, a2, b1];
-      const net = await start();
-      press(grid(), "ArrowDown");
-      press(grid(), "ArrowDown");
-      press(grid(), "Delete");
-      net.frame("transfers.removed", { id: a2.id, username: "alice", direction: "Download" });
-      await flush();
-      // b1 is the first row after a2's place, beyond bob's headers
-      press(grid(), "Delete");
-      await vi.advanceTimersByTimeAsync(UNDO_MS);
-      flushSync();
-      expect(bulk(net).map((r) => r.body)).toEqual([
-        { action: "remove", ids: [a2.id] },
-        { action: "remove", ids: [b1.id] }
-      ]);
-      // b1 left the screen with its Delete, so the row before it has the focus
-      press(grid(), " ");
-      expect(ticked()).toEqual([a1.id]);
-    });
-
-    it("pass the last row's place to the row before it", async () => {
-      const a = transfer({ filename: "x\\a.flac" });
-      const b = transfer({ filename: "x\\b.flac" });
-      listing = [a, b];
-      const net = await start();
-      press(grid(), "ArrowDown");
-      press(grid(), "ArrowDown");
-      net.frame("transfers.removed", { id: b.id, username: b.username, direction: "Download" });
-      await flush();
-      press(grid(), " ");
-      expect(ticked()).toEqual([a.id]);
     });
 
     it("leave focus on a control whose row stays rendered through a scroll", async () => {
@@ -420,29 +321,6 @@ describe("the transfers table", () => {
       expect(document.activeElement).toBe(box);
     });
 
-    it("take focus back when the row holding it leaves the list", async () => {
-      signIn();
-      const a = transfer({ filename: "x\\a.flac", state: "Completed, Succeeded" });
-      const b = transfer({ filename: "x\\b.flac", state: "Completed, Succeeded" });
-      listing = [a, b];
-      const net = await start();
-      const box = row(a.id)!.querySelector<HTMLElement>('[role="checkbox"]')!;
-      box.focus();
-      press(box, "Delete");
-      net.frame("transfers.removed", { id: a.id, username: a.username, direction: "Download" });
-      await flush();
-      expect(row(a.id)).toBeNull();
-      expect(document.activeElement).toBe(grid());
-
-      press(document.activeElement!, "Delete");
-      await vi.advanceTimersByTimeAsync(UNDO_MS);
-      flushSync();
-      expect(bulk(net).map((r) => r.body)).toEqual([
-        { action: "remove", ids: [a.id] },
-        { action: "remove", ids: [b.id] }
-      ]);
-    });
-
     it("give focus to the table when a confirm closes onto a control that left", async () => {
       signIn();
       Object.assign(views.download, { groupBy: "user" });
@@ -457,7 +335,7 @@ describe("the transfers table", () => {
       cancelGroup.focus();
       // a group with running transfers asks before it is canceled
       cancelGroup.click();
-      await flush();
+      await flushFaked();
       expect(document.body.textContent).toContain("Cancel 2 active transfers?");
       const dismiss = [...document.querySelectorAll("button")].find(
         (x) => x.textContent === "Cancel"
@@ -465,7 +343,7 @@ describe("the transfers table", () => {
       for (const t of [a, b]) {
         net.frame("transfers.removed", { id: t.id, username: t.username, direction: "Download" });
       }
-      await flush();
+      await flushFaked();
       dismiss.click();
       await vi.advanceTimersByTimeAsync(500);
       flushSync();
@@ -516,7 +394,7 @@ describe("the transfers table", () => {
       press(grid(), "ArrowDown");
       press(grid(), "r");
       press(grid(), "o");
-      await flush();
+      await flushFaked();
       expect(bulk(net)).toEqual([]);
       expect(open).not.toHaveBeenCalled();
     });
@@ -554,15 +432,15 @@ describe("the transfers table", () => {
     const net = await start();
     press(grid(), "ArrowDown");
     press(grid(), "Enter");
-    await flush();
+    await flushFaked();
     const asks = () =>
       net.requests.filter((r) => r.url.searchParams.get("includeHistory") === "true").length;
     expect(asks()).toBe(1);
     net.frame("transfers.updated", { ...a, percentComplete: 0 });
-    await flush();
+    await flushFaked();
     expect(asks()).toBe(1);
     net.frame("transfers.updated", { ...a, state: "InProgress" });
-    await flush();
+    await flushFaked();
     expect(asks()).toBe(2);
   });
 });

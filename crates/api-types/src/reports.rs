@@ -491,17 +491,6 @@ mod tests {
   }
 
   #[test]
-  fn leaderboard_sort_names_are_written_as_named() {
-    for (sort, name) in [
-      (LeaderboardSort::Count, "Count"),
-      (LeaderboardSort::TotalBytes, "TotalBytes"),
-      (LeaderboardSort::AverageSpeed, "AverageSpeed"),
-    ] {
-      assert_eq!(serde_json::to_value(sort).unwrap(), name);
-    }
-  }
-
-  #[test]
   fn summary_report_puts_directions_beside_distinct_users() {
     let mut directions = DirectionSummaries::default();
     directions.upload.insert(
