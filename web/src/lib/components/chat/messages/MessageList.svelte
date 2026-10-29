@@ -58,10 +58,7 @@
   ]);
   const newest = $derived(pane.ordered.at(-1)?.localId ?? null);
 
-  /**
-   * A line's height before it is drawn. A message counts one 20 px line per 80 characters of
-   * each line of its text, plus 2 px of padding, or 32 px with the header of a group's first
-   */
+  /** A line's height before it is drawn */
   const guess = (line: Line | Start) => {
     if (line.kind === "unread") return 24;
     if (line.kind !== "message") return 36;

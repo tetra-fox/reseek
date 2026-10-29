@@ -58,7 +58,6 @@
   const sorted = $derived(hold(grid.rows));
   $effect(() => arrivals.see(sorted.map((r) => r.key)));
 
-  /** one row's height, 1.75rem in pixels */
   const rowHeight = $derived(1.75 * rem.px);
   const chosen = $derived(sorted.filter((r) => selected.has(r.key)));
 

@@ -63,7 +63,7 @@
   const to = $derived(links(t.username, getFileName(folder.folder)));
 </script>
 
-<!-- the whole row's actions; placed in a Menu.Root by the caller -->
+<!-- the whole row's actions; placed in a Menu.Root or Menu.LazyRoot by the caller -->
 <Menu.Content align="end" class="min-w-56">
   {#if can.open}
     <LocalFileItems
