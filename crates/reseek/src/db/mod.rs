@@ -266,7 +266,8 @@ impl Database {
 }
 
 /// Removes the database file at `path` and the `-wal` and `-shm` files SQLite keeps beside it,
-/// each when it is there; one that is there and stays is logged. Runs on a blocking thread.
+/// each when it is there; one that is there and stays is logged. It blocks, so callers run it
+/// on a blocking thread.
 pub fn remove_database(path: &std::path::Path) {
   for suffix in ["", "-wal", "-shm"] {
     let mut file = path.as_os_str().to_owned();

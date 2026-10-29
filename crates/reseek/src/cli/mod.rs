@@ -1,4 +1,4 @@
-//! The command line: the commands that run and exit, the two values read before the
+//! The command line: the commands that run and exit, the values read before the
 //! configuration exists, and every other flag handed to the configuration as it was given.
 //!
 //! A flag's value follows it (`--http-port 5030`) or is attached with `=` (`--http-port=5030`);

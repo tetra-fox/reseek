@@ -55,7 +55,7 @@ regex = "1"
 reqwest = { workspace = true, features = ["multipart", "stream"] }
 rpassword = "7"
 rusqlite = { version = "0.39", features = ["backup", "bundled", "trace"] }
-# embeds the UI build at `WEBUI_DIR`, or a one-line page when it was not built
+# embeds the UI build at `WEBUI_DIR`, and nothing when it was not built
 rust-embed = { version = "8", features = ["interpolate-folder-path", "mime-guess"] }
 rustls.workspace = true
 serde.workspace = true

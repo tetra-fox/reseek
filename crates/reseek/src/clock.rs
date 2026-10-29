@@ -1,7 +1,6 @@
 //! The application clock: jobs that run at one of a fixed set of intervals until shutdown.
 //! Starting the clock runs every job registered by then once, as its first run, and then each on
-//! its interval; a tick that comes while the previous one is late waits for it rather than
-//! running twice.
+//! its interval; ticks missed while the runtime was busy are delayed, not run in a burst.
 
 use std::future::Future;
 use std::pin::Pin;

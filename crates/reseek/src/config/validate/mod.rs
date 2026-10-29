@@ -22,8 +22,8 @@ use super::Options;
 
 /// What validation needs to know besides the options.
 pub struct Context {
-  /// the default downloads and incomplete directories for these options, which are exempt
-  /// from the exists-and-writable check (they are created at startup)
+  /// the default downloads directory for these options, exempt from the exists-and-writable
+  /// check since it is created at startup
   pub default_downloads: PathBuf,
   /// the default incomplete directory, exempt like `default_downloads`
   pub default_incomplete: PathBuf,
