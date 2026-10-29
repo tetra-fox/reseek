@@ -16,7 +16,7 @@ use crate::files::Entry;
 /// several events.
 pub(super) const DEBOUNCE: Duration = Duration::from_millis(250);
 
-/// Waits until `events` has been quiet for `period`. False when cancelled first.
+/// Waits until `events` has been quiet for `period`. False when canceled first.
 pub(super) async fn quiet(events: &Notify, period: Duration, cancel: &CancellationToken) -> bool {
   loop {
     tokio::select! {

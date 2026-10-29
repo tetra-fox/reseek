@@ -100,7 +100,7 @@ impl Schema {
   ///
   /// # Panics
   ///
-  /// When `T` is not a struct deriving `Cascade`, its default does not serialise, or two fields
+  /// When `T` is not a struct deriving `Cascade`, its default does not serialize, or two fields
   /// share a key, an env var or a flag. These are mistakes in the type, found the first time
   /// its schema is built.
   pub fn of<T: Cascade + Default + Serialize>() -> Self {
@@ -108,7 +108,7 @@ impl Schema {
       panic!("a configuration's root is a struct deriving Cascade");
     };
     let defaults = serde_json::to_value(T::default())
-      .unwrap_or_else(|e| panic!("the configuration's default does not serialise: {e}"));
+      .unwrap_or_else(|e| panic!("the configuration's default does not serialize: {e}"));
     let fields: Vec<Field> = nodes
       .into_iter()
       .map(|node| Field::from_node(node, &defaults))
@@ -185,17 +185,17 @@ impl Schema {
     self.field_under(path).is_some_and(Field::may_hold_secret)
   }
 
-  /// The leaf keys whose values differ between `old` and `new`, compared as serialised. A list
+  /// The leaf keys whose values differ between `old` and `new`, compared as serialized. A list
   /// or user-keyed map is one value.
   ///
   /// # Panics
   ///
-  /// When either value does not serialise, which for a type whose default does takes a
+  /// When either value does not serialize, which for a type whose default does takes a
   /// `Serialize` of its own that fails.
   pub fn diff<T: Serialize>(&self, old: &T, new: &T) -> Vec<Key> {
     match (serde_json::to_value(old), serde_json::to_value(new)) {
       (Ok(old), Ok(new)) => self.diff_trees(&old, &new),
-      (Err(e), _) | (_, Err(e)) => panic!("the configuration does not serialise: {e}"),
+      (Err(e), _) | (_, Err(e)) => panic!("the configuration does not serialize: {e}"),
     }
   }
 

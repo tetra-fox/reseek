@@ -1,5 +1,5 @@
 error: unknown cascade attribute, expected one of env, env_alias, cli, negated, apply, kind, doc, secret, user_keyed
  --> tests/ui/unknown_attribute.rs:3:13
   |
-3 |   #[cascade(colour = "red")]
-  |             ^^^^^^
+3 |   #[cascade(color = "red")]
+  |             ^^^^^

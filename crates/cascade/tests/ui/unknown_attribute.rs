@@ -1,6 +1,6 @@
 #[derive(cascade::Cascade)]
 struct Options {
-  #[cascade(colour = "red")]
+  #[cascade(color = "red")]
   port: u16,
 }
 

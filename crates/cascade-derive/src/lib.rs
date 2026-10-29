@@ -166,7 +166,7 @@ mod tests {
       struct A {
         #[cascade(apply = "never")]
         a: u8,
-        #[cascade(kind = "colour")]
+        #[cascade(kind = "color")]
         b: u8,
       }
     ));
@@ -175,7 +175,7 @@ mod tests {
       struct A {
         #[cascade(apply = "never")]
         a: u8,
-        #[cascade(kind = "colour")]
+        #[cascade(kind = "color")]
         b: u8,
       }
     ))

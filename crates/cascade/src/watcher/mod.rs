@@ -159,7 +159,7 @@ impl<T: Root> Watcher<T> {
   }
 
   /// Starts the task that reloads on file changes (as `watch` says) and ends runtime
-  /// overrides when they expire. It stops when `cancel` is cancelled. Call it once.
+  /// overrides when they expire. It stops when `cancel` is canceled. Call it once.
   pub fn start(&self, watch: Watch, cancel: CancellationToken) {
     let _span = info_span!("config_watcher").entered();
     let events = Arc::new(Notify::new());

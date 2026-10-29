@@ -6,8 +6,8 @@ struct Options {
   debug: bool,
   #[cascade(env = "NOT-A-VAR")]
   name: String,
-  #[cascade(kind = "colour")]
-  colour: String,
+  #[cascade(kind = "color")]
+  color: String,
 }
 
 fn main() {}

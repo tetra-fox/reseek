@@ -500,7 +500,7 @@ mod tests {
       "[server]\nprot = 1\n[nope]\nx = 1\n[api_keys.mine]\nkey = \"k\"\n",
     );
     let loaded = example_layers(dir.path())
-      .cli(pairs(&[("--colour", "red")]))
+      .cli(pairs(&[("--color", "red")]))
       .load()
       .unwrap();
     assert_eq!(
@@ -508,7 +508,7 @@ mod tests {
       [
         "config.toml: unknown key `nope`",
         "config.toml: unknown key `server.prot`",
-        "--colour: unknown flag",
+        "--color: unknown flag",
       ]
     );
   }

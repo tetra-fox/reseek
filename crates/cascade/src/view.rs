@@ -1,4 +1,4 @@
-//! Everything a settings page needs about a configuration, as one serialisable document.
+//! Everything a settings page needs about a configuration, as one serializable document.
 
 use std::collections::BTreeMap;
 

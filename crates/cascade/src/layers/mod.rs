@@ -309,7 +309,7 @@ impl<T: Root> Layers<T> {
     }
   }
 
-  /// The configuration with `overrides` on `declared`, deserialised and validated.
+  /// The configuration with `overrides` on `declared`, deserialized and validated.
   pub(crate) fn finish(
     &self,
     declared: &Declared,

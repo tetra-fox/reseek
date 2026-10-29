@@ -69,7 +69,7 @@ mod tests {
   use serde_json::json;
 
   #[test]
-  fn sources_serialise_tagged_by_layer() {
+  fn sources_serialize_tagged_by_layer() {
     let at = DateTime::parse_from_rfc3339("2026-10-24T12:00:00Z")
       .unwrap()
       .with_timezone(&Utc);

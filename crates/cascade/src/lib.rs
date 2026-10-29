@@ -9,7 +9,7 @@
 //! A [`Watcher`] reloads when the files change or when asked, keeps the last good values when
 //! a reload fails, and reports what changed grouped by when it takes effect ([`Apply`]). It
 //! also sets and removes runtime [`Overrides`], and writes the files with [`FileEditor`] so
-//! their comments survive. [`ConfigView`] is all of it in one serialisable document.
+//! their comments survive. [`ConfigView`] is all of it in one serializable document.
 //!
 //! ```
 //! use std::collections::BTreeMap;
@@ -113,7 +113,7 @@ pub use describe::private as __private;
 pub type Key = String;
 
 /// What a whole configuration's type needs: a struct deriving [`Cascade`] that has defaults,
-/// serialises, and is shared between threads.
+/// serializes, and is shared between threads.
 pub trait Root:
   Cascade + Default + Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static
 {

@@ -445,7 +445,7 @@ mod tests {
   fn bad_attributes_say_what_is_wrong() {
     let cases: Vec<(syn::Field, &str)> = vec![
       (
-        named(parse_quote!({ #[cascade(colour = "red")] a: u8 })),
+        named(parse_quote!({ #[cascade(color = "red")] a: u8 })),
         "unknown cascade attribute",
       ),
       (
@@ -453,8 +453,8 @@ mod tests {
         "unknown apply `sometimes`, expected one of live, reconnect, restart",
       ),
       (
-        named(parse_quote!({ #[cascade(kind = "colour")] a: u8 })),
-        "unknown kind `colour`",
+        named(parse_quote!({ #[cascade(kind = "color")] a: u8 })),
+        "unknown kind `color`",
       ),
       (
         named(parse_quote!({ #[cascade(cli = "debug")] a: bool })),
