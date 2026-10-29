@@ -1,10 +1,10 @@
 //! Deciding a peer's request to queue an upload from us, once the network's edge passed it.
-//! Requests are decided one at a time per user and ten at a time over every user; a request
-//! waits for its user's turn before it takes one of the ten, so one user cannot hold them all.
-//! When the requests waiting would take more than three minutes at the pace of the last ones
-//! accepted, a new request is dropped, since its peer would have given up by then. A request
-//! for a file not shared, or shared and gone from disk, is refused, and so is one past the
-//! limits of its user's group, unless the user is privileged.
+//! Requests are decided one at a time per user and [`DECIDING`] at a time over every user; a
+//! request waits for its user's turn before it takes one of those, so one user cannot hold them
+//! all. When the requests waiting would take more than [`BACKLOG_MILLIS`] at the pace of the
+//! last ones accepted, a new request is dropped, since its peer would have given up by then.
+//! A request for a file not shared, or shared and gone from disk, is refused, and so is one
+//! past the limits of its user's group, unless the user is privileged.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -64,7 +64,7 @@ impl Default for Intake {
   }
 }
 
-/// A request's turn: its user's, then one of the ten.
+/// A request's turn: its user's, then one of the deciding turns.
 struct Turn<'a> {
   _user: OwnedSemaphorePermit,
   _deciding: SemaphorePermit<'a>,
@@ -80,8 +80,8 @@ impl Drop for Waiting<'_> {
 }
 
 impl Intake {
-  /// Waits for `username`'s turn, then for one of the ten; returns the turn and how many
-  /// requests still wait.
+  /// Waits for `username`'s turn, then for one of the deciding turns; returns the turn and how
+  /// many requests still wait.
   async fn turn(&self, username: &str) -> (Turn<'_>, usize) {
     self.waiting.fetch_add(1, Ordering::AcqRel);
     let waiting = Waiting(&self.waiting);
@@ -161,8 +161,8 @@ impl Uploads {
     self.telemetry.metrics().enqueue.requests_rejected.inc();
   }
 
-  /// Whether the requests waiting would take more than three minutes at the pace of the last
-  /// ones; a request that finds them so is counted as dropped and refused.
+  /// Whether the requests waiting would take more than `BACKLOG_MILLIS` at the pace of the
+  /// last ones; a request that finds them so is counted as dropped and refused.
   pub fn overwhelmed(&self, username: &str) -> bool {
     let backlog = self.intake.backlog();
     if backlog <= BACKLOG_MILLIS {

@@ -148,7 +148,7 @@ pub(in crate::analysis) fn measure(
       )?;
     }
     None => {
-      // a file is read in full only so far, whatever length it states or does not
+      // reading in full stops at max_full_seconds, whatever length the file states, if any
       let longest = settings.max_full_seconds.ceil() as u64;
       let decoded = whole(
         &mut decoder,

@@ -64,11 +64,8 @@ fn conversion(index: usize) -> impl Fn(serde_plain::Error) -> rusqlite::Error {
 }
 
 /// The report of a row read with [`JUDGED`], and why its JSON could not be read when it was in
-/// this version's shape. The JSON is in column 0 and its shape in column 14; the judgment is in
-/// columns 4 to 7, null when there is none; the file's root, path under it, download, local path,
-/// when it was analyzed and the reading are in columns 8 to 13, which name the file whatever the
-/// JSON holds. A report in another shape, or one that does not read, is a stale stand-in made from
-/// those columns, with the judgment kept.
+/// this version's shape. A report in another shape, or one that does not read, is a stale
+/// stand-in made from the row's columns, with the judgment kept.
 fn judged_report(row: &rusqlite::Row<'_>) -> rusqlite::Result<(AudioAnalysis, Option<String>)> {
   let judgment = match row.get::<_, Option<String>>(4)? {
     Some(verdict) => Some(AnalysisOverride {

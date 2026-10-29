@@ -294,8 +294,6 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
   let below_claim =
     |profile: &Profile| lossless || bitrate.is_some_and(|kbps| profile.kbps * 3 / 2 <= kbps);
 
-  // a cutoff where the highest bitrates cut is also where some recordings are filtered, and
-  // no measure tells the two apart
   if let Some(profile) = lower_profile_at(median).filter(|p| below_claim(p))
     && clustered >= TRANSCODE_SHARE
     && sharp_share >= 0.5

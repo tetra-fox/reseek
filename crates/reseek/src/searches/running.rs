@@ -166,7 +166,7 @@ impl Running {
 
 impl Searches {
   /// Follows `running` until `search`, the client's operation, returns: a state change is
-  /// written and pushed at once, the counts at most every 250 ms. Then writes the end.
+  /// written and pushed at once, the counts at most every [`COUNTS_EVERY`]. Then writes the end.
   pub(super) async fn follow(
     &self,
     running: Arc<Running>,

@@ -77,7 +77,6 @@ pub(super) struct Host {
   pub name: String,
   /// the shares it listed, with its counts
   pub shares: Vec<ApiShare>,
-  /// its index
   pub index: Arc<Index>,
   /// directories over its shares, as it counted them
   pub directories: u32,

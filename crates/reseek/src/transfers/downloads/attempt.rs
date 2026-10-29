@@ -1,6 +1,6 @@
 //! One try of a download: where in the incomplete file it starts, the client's download with
-//! each state written as it comes and the progress at most every 250 ms, and what its outcome
-//! means for the record.
+//! each state written as it comes and the progress at most every [`PROGRESS_EVERY`], and what
+//! its outcome means for the record.
 
 use std::io;
 use std::path::{Path, PathBuf};

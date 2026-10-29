@@ -1,7 +1,7 @@
 //! The download calls of the API against the in-memory daemon, which is not connected: finding
-//! a download by its peer and id, canceling and removing one no task runs, the place in queue
-//! of one the peer has not queued, an unknown batch, and a finished download's file served from
-//! where it was moved.
+//! a download by its peer and id, canceling and removing one no task runs, removing completed
+//! ones, a finished download's file served from where it was moved, and the removals and
+//! updates pushed on the `transfers` topic.
 
 use api_types::transfers::{TransferStates, UserResponse};
 use serde_json::{Value, json};

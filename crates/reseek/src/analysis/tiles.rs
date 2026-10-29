@@ -142,8 +142,9 @@ pub(super) fn tile(kind: Kind, seconds: &[Second<'_>], duration: f64, tile: usiz
 }
 
 /// The whole file's length in at most [`Kind::overview`] cells of `kind`, each made of the cells
-/// at full detail it overlaps, so a file short enough has its overview at full detail: spectrogram columns by their power mean, weighted by how much of
-/// each falls in it, and waveform buckets by their lowest and highest sample.
+/// at full detail it overlaps, so a file short enough has its overview at full detail:
+/// spectrogram columns by their power mean, weighted by how much of each falls in it, and
+/// waveform buckets by their lowest and highest sample.
 pub(super) fn overview(kind: Kind, seconds: &[Second<'_>], duration: f64) -> Cut {
   let detail = total(kind, duration);
   let count = detail.min(kind.overview());

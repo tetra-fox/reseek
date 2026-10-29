@@ -1,8 +1,8 @@
 //! The analysis queue: files wait in the order they were asked for, by the API or by a download
 //! that finished while `analysis.on_download` is on, and as many run as `analysis.workers`
-//! allows, each on a blocking thread of its own. A finished analysis is
-//! stored with its spectrogram and waveform, pushed to the event stream and raised as an event;
-//! one canceled by shutdown leaves nothing behind.
+//! allows, each on a blocking thread of its own. A finished analysis is stored with its
+//! spectrogram and waveform, pushed to the event stream and raised as an event; one canceled by
+//! shutdown leaves nothing behind.
 
 use std::collections::VecDeque;
 use std::path::Path;

@@ -14,11 +14,9 @@ use crate::db::{Database, DbError, Location, remove_database};
 
 /// The local host's share index and where its backup is.
 pub struct Storage {
-  /// the index
   pub db: Database,
   /// the backup file, `None` when nothing is kept between starts
   pub backup: Option<PathBuf>,
-  /// the index is in memory
   pub in_memory: bool,
 }
 

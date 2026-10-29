@@ -1,6 +1,6 @@
 //! Writing transfer records: a new record, a record written whole, what a running transfer
-//! changes, its progress, and the states each transfer entered, of which the newest 64 are
-//! kept.
+//! changes, its progress, and the states each transfer entered, of which the newest
+//! [`HISTORY_KEPT`] are kept.
 
 use api_types::transfers::{TransferStateChange, TransferStates};
 use chrono::{DateTime, Utc};
