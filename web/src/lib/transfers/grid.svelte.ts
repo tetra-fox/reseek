@@ -1,4 +1,4 @@
-import { Grid } from "#lib/table.svelte.js";
+import { Grid } from "#lib/lists/table.svelte.js";
 import { viewport } from "#lib/viewport.svelte.js";
 
 import { type ColumnId, columnsFor, PHONE_COLUMNS } from "./columns";

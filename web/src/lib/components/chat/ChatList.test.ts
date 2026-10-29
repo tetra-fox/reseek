@@ -3,7 +3,7 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { chat } from "#lib/chat/chat.svelte.js";
-import { interaction } from "#lib/interaction.svelte.js";
+import { interaction } from "#lib/lists/interaction.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { conversation, joinedRoom } from "#lib/testing/fixtures.js";
 import { active, press, ticked } from "#lib/testing/keys.js";

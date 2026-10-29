@@ -15,7 +15,7 @@
   import { blocking } from "#lib/components/users/block.svelte.js";
   import { useCrumbs } from "#lib/crumbs.svelte.js";
   import { formatBytes, getDirectoryName, getFileName, plural } from "#lib/format.js";
-  import { heldOrder } from "#lib/interaction.svelte.js";
+  import { heldOrder } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";

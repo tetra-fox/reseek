@@ -1,4 +1,4 @@
-import { interaction } from "#lib/interaction.svelte.js";
+import { interaction } from "#lib/lists/interaction.svelte.js";
 
 import { live, type Topic } from "./live.svelte";
 

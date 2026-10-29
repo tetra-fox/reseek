@@ -10,8 +10,8 @@
   import Input from "#lib/components/ui/Input.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { ago } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";

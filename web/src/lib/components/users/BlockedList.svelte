@@ -15,8 +15,8 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { ago, dateTime, listText, plural } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Keyed } from "#lib/keyed.svelte.js";
+  import type { Keyed } from "#lib/lists/keyed.svelte.js";
 
   // a list rendered the way every list of the app is, for the stable-DOM tests
   let { list }: { list: Keyed<{ id: string; name: string; size: number }> } = $props();

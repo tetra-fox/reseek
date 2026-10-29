@@ -3,7 +3,7 @@
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import type { Snippet } from "svelte";
 
-  import type { Grid, GridColumn } from "#lib/table.svelte.js";
+  import type { Grid, GridColumn } from "#lib/lists/table.svelte.js";
 
   // a grid's header row: a label per column, a click on one sorts by it, and its right edge
   // drags the column's width. A label that doesn't fit is cut, with the whole of it on hover

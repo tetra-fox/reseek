@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import { gridView } from "#lib/table.svelte.js";
+  import { gridView } from "#lib/lists/table.svelte.js";
 
   /** the room list's sort and column widths, kept in this browser */
   const view = gridView("reseek.rooms.available", ["name", "users"], { id: "users", dir: "desc" });
@@ -26,14 +26,14 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
+  import { Grid, keptIn } from "#lib/lists/table.svelte.js";
+  import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { href, roomHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { fields } from "#lib/stored.svelte.js";
-  import { Grid, keptIn } from "#lib/table.svelte.js";
   import { rem } from "#lib/viewport.svelte.js";
-  import { ListWindow } from "#lib/virtual.svelte.js";
 
   // two parts: the server's public rooms, each joined from its row, and a room created by name
   let { open = $bindable(), name: start = "" }: { open: boolean; name?: string } = $props();

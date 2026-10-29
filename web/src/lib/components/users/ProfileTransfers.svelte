@@ -15,9 +15,9 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { dateTime, formatBytes, getDirectoryName, getFileName, plural } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
-  import { Keyed } from "#lib/keyed.svelte.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
+  import { Keyed } from "#lib/lists/keyed.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { call } from "#lib/request.js";

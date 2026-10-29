@@ -4,8 +4,8 @@
   import { type Burst, burstText } from "#lib/chat/presence.js";
   import type { RoomMembers } from "#lib/chat/room.svelte.js";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
 
   import PresenceRow from "./PresenceRow.svelte";
 

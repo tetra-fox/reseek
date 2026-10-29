@@ -26,7 +26,7 @@
   import { asNixSettings } from "#lib/config/nix.js";
   import { type Field, type Section, valueAt } from "#lib/config/sections.js";
   import { plural } from "#lib/format.js";
-  import { same } from "#lib/keyed.svelte.js";
+  import { same } from "#lib/lists/keyed.svelte.js";
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { toast } from "#lib/toast.svelte.js";

@@ -24,8 +24,8 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
   import { ago, plural } from "#lib/format.js";
-  import { freezesWhileUsed, heldOrder, interaction } from "#lib/interaction.svelte.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { freezesWhileUsed, heldOrder, interaction } from "#lib/lists/interaction.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
   import { chatHref, roomHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";

@@ -17,7 +17,7 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Time from "#lib/components/ui/Time.svelte";
   import { NONE } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { href } from "#lib/nav.js";
   import { remember } from "#lib/search/recent.svelte.js";

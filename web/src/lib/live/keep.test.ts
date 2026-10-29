@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { interaction } from "#lib/interaction.svelte.js";
+import { interaction } from "#lib/lists/interaction.svelte.js";
 import Keep from "#lib/testing/Keep.svelte";
 
 import { RECONCILE_MS } from "./keep.svelte";

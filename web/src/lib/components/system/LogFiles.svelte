@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import { gridView } from "#lib/table.svelte.js";
+  import { gridView } from "#lib/lists/table.svelte.js";
 
   /** the log files' sort and column widths, kept in this browser */
   const view = gridView("reseek.logs.files", ["name", "date"], { id: "date", dir: "desc" });
@@ -18,10 +18,10 @@
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { dateTime, formatBytes } from "#lib/format.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
+  import { Grid, keptIn } from "#lib/lists/table.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
-  import { Grid, keptIn } from "#lib/table.svelte.js";
 
   // the log files on disk, newest first, to read in a tab or save
   /** files larger than this are offered for saving only */

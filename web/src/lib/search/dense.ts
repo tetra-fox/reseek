@@ -1,6 +1,6 @@
 import { columnWidth, getDirectoryName, getFileName, WIDEST } from "#lib/format.js";
+import type { GridColumn } from "#lib/lists/table.svelte.js";
 import { fields, stored } from "#lib/stored.svelte.js";
-import type { GridColumn } from "#lib/table.svelte.js";
 
 import { type Result, type ResultFile, resultFiles } from "./results";
 

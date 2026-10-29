@@ -3,8 +3,8 @@
   import { SvelteSet } from "svelte/reactivity";
 
   import Button from "#lib/components/ui/Button.svelte";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import type { FolderNode, TreeLine } from "#lib/tree/folders.js";
   import { FOLDER_LINE_REM, GAP_REM, lineStart, TOGGLE_REM } from "#lib/tree/indent.js";

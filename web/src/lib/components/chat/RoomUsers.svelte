@@ -17,8 +17,8 @@
   import Username from "#lib/components/users/Username.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
   import { formatSpeed, plural } from "#lib/format.js";
-  import { freezesWhileUsed, heldOrder, interaction } from "#lib/interaction.svelte.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { freezesWhileUsed, heldOrder, interaction } from "#lib/lists/interaction.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
   import { userHref } from "#lib/nav.js";
   import type { Outcome } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";

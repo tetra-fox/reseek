@@ -17,9 +17,9 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { plural } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
-  import { Keyed } from "#lib/keyed.svelte.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
+  import { Keyed } from "#lib/lists/keyed.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { href } from "#lib/nav.js";

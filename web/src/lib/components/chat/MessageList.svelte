@@ -12,9 +12,9 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { formatDay, plural } from "#lib/format.js";
-  import { freezesWhileUsed, interaction } from "#lib/interaction.svelte.js";
+  import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
+  import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { motionFast } from "#lib/motion.js";
-  import { ListWindow } from "#lib/virtual.svelte.js";
 
   import GapRow from "./GapRow.svelte";
   import MessageRow from "./MessageRow.svelte";

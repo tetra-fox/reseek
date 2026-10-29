@@ -2,14 +2,15 @@
   import { SvelteSet } from "svelte/reactivity";
 
   import { app } from "#lib/app.svelte.js";
-  import { Arrivals } from "#lib/arrivals.svelte.js";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import { parseDuration } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { Arrivals } from "#lib/lists/arrivals.svelte.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
+  import type { Grid } from "#lib/lists/table.svelte.js";
+  import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
-  import type { Grid } from "#lib/table.svelte.js";
   import type { ColumnId } from "#lib/transfers/columns.js";
   import { depthOf, nesting, pins } from "#lib/transfers/pinned.js";
   import type { ViewSettings } from "#lib/transfers/settings.svelte.js";
@@ -18,7 +19,6 @@
   import type { Group, Item } from "#lib/transfers/view.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import { rem, viewport } from "#lib/viewport.svelte.js";
-  import { ListWindow } from "#lib/virtual.svelte.js";
 
   import GroupHeader from "./GroupHeader.svelte";
   import TransferRow from "./TransferRow.svelte";

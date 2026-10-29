@@ -5,7 +5,6 @@
   import LockIcon from "@lucide/svelte/icons/lock";
   import { SvelteSet } from "svelte/reactivity";
 
-  import { Arrivals } from "#lib/arrivals.svelte.js";
   import FileMenu from "#lib/components/files/FileMenu.svelte";
   import Suspect from "#lib/components/files/Suspect.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -20,14 +19,15 @@
     getFileName,
     plural
   } from "#lib/format.js";
-  import { freezesWhileUsed, heldOrder } from "#lib/interaction.svelte.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { Arrivals } from "#lib/lists/arrivals.svelte.js";
+  import { freezesWhileUsed, heldOrder } from "#lib/lists/interaction.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
+  import { Grid } from "#lib/lists/table.svelte.js";
+  import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { DENSE_COLUMNS, type DenseColumn, type DenseRow, denseView } from "#lib/search/dense.js";
-  import { Grid } from "#lib/table.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
   import { users } from "#lib/users.svelte.js";
   import { rem } from "#lib/viewport.svelte.js";
-  import { ListWindow } from "#lib/virtual.svelte.js";
 
   import Country from "./Country.svelte";
 

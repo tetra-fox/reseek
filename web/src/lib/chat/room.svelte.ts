@@ -1,5 +1,5 @@
 import { api, byRoom, type Schemas } from "#lib/api/client.js";
-import { Keyed } from "#lib/keyed.svelte.js";
+import { Keyed } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
 

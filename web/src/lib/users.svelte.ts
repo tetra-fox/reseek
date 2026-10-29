@@ -1,7 +1,7 @@
 import { SvelteMap } from "svelte/reactivity";
 
 import { api, byUser, type Schemas } from "#lib/api/client.js";
-import { patch } from "#lib/keyed.svelte.js";
+import { patch } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 

@@ -1,9 +1,10 @@
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it } from "vitest";
 
+import Rows from "#lib/testing/Rows.svelte";
+
 import { interaction } from "./interaction.svelte";
 import { Keyed, patch, same } from "./keyed.svelte";
-import Rows from "./testing/Rows.svelte";
 
 type Row = { id: string; name: string; size: number };
 

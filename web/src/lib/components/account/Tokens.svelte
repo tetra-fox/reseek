@@ -10,7 +10,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import { ago, dateTime } from "#lib/format.js";
-  import { Keyed } from "#lib/keyed.svelte.js";
+  import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
 

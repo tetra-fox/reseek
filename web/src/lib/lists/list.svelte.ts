@@ -1,7 +1,7 @@
 import { on } from "svelte/events";
 import { SvelteSet } from "svelte/reactivity";
 
-import { inControl, keepsKey, layerOpen, withModifier } from "./keys";
+import { inControl, keepsKey, layerOpen, withModifier } from "#lib/keys.js";
 
 /** What a list tells the controller about its lines */
 export type ListSpec<L> = {

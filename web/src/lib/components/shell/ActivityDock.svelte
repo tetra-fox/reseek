@@ -28,8 +28,8 @@
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { formatBytes } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { motionFast } from "#lib/motion.js";
   import { roomHref, userHref } from "#lib/nav.js";

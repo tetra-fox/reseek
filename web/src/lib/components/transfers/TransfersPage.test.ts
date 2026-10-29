@@ -2,7 +2,7 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
-import { interaction } from "#lib/interaction.svelte.js";
+import { interaction } from "#lib/lists/interaction.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { transfer } from "#lib/testing/fixtures.js";

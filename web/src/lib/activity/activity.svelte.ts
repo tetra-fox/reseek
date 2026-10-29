@@ -1,5 +1,5 @@
 import { api, type Schemas } from "#lib/api/client.js";
-import { Keyed } from "#lib/keyed.svelte.js";
+import { Keyed } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 import { fields, stored } from "#lib/stored.svelte.js";

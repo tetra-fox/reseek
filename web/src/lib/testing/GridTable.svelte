@@ -1,6 +1,6 @@
 <script lang="ts">
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
-  import { Grid, type GridSort } from "#lib/table.svelte.js";
+  import { Grid, type GridSort } from "#lib/lists/table.svelte.js";
 
   type Row = { key: string; name: string; size: number };
 

@@ -40,11 +40,11 @@
   import { TYPE_AHEAD_MS, typeAhead } from "#lib/browse/typeahead.js";
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
   import { formatBytes, plural } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
   import { keepsKey, withModifier } from "#lib/keys.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
+  import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
   import { rem } from "#lib/viewport.svelte.js";
-  import { ListWindow } from "#lib/virtual.svelte.js";
 
   import { LOCKED_HINT } from "./locked";
 

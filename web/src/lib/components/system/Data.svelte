@@ -13,7 +13,7 @@
   import { sections, valueAt } from "#lib/config/sections.js";
   import { confirmation } from "#lib/confirm.svelte.js";
   import { formatBytes, parseDuration, sayDuration } from "#lib/format.js";
-  import { ListControl } from "#lib/list.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { href } from "#lib/nav.js";

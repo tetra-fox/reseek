@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ListControl } from "#lib/list.svelte.js";
+  import { ListControl } from "#lib/lists/list.svelte.js";
 
   /** a row, or with `header` the header of the group named `group` */
   type Line = { key: string; group: string; header?: boolean };

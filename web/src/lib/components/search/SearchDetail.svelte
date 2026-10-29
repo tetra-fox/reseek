@@ -20,7 +20,7 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { useCrumbs } from "#lib/crumbs.svelte.js";
   import { plural } from "#lib/format.js";
-  import { freezesWhileUsed } from "#lib/interaction.svelte.js";
+  import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { motionFast } from "#lib/motion.js";

@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import { gridView } from "#lib/table.svelte.js";
+  import { gridView } from "#lib/lists/table.svelte.js";
 
   /** the whole-folder list's sort and column widths, kept in this browser */
   const view = gridView("reseek.folder.files", ["path", "size", "attributes"], {
@@ -20,13 +20,13 @@
   import Input from "#lib/components/ui/Input.svelte";
   import { asItem, enqueue } from "#lib/downloads.js";
   import { formatAttributes, formatBytes, plural } from "#lib/format.js";
+  import { Grid, keptIn } from "#lib/lists/table.svelte.js";
+  import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { fileMatches, parseFilters } from "#lib/search/filters.js";
   import { separatorOf } from "#lib/search/results.js";
   import { session } from "#lib/session.svelte.js";
-  import { Grid, keptIn } from "#lib/table.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
   import { rem, viewport } from "#lib/viewport.svelte.js";
-  import { ListWindow } from "#lib/virtual.svelte.js";
 
   import Suspect from "./Suspect.svelte";
 

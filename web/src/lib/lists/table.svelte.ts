@@ -18,8 +18,8 @@ import {
 } from "@tanstack/svelte-table";
 import { flushSync } from "svelte";
 
-import { cssWidth, sumWidths } from "./format";
-import { fields, stored } from "./stored.svelte";
+import { cssWidth, sumWidths } from "#lib/format.js";
+import { fields, stored } from "#lib/stored.svelte.js";
 
 const features = tableFeatures({
   rowSortingFeature,
