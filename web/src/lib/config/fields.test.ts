@@ -21,6 +21,7 @@ describe("the settings forms", () => {
       "Transfers",
       "Groups",
       "Folders",
+      "Analysis",
       "Web",
       "Authentication",
       "Search filters",

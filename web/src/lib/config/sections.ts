@@ -313,6 +313,24 @@ export const sections: Section[] = [
     ]
   },
   {
+    id: "analysis",
+    title: "Analysis",
+    fields: [
+      { key: "analysis.on_download", label: "Analyze finished downloads" },
+      { key: "analysis.extensions", label: "Extensions" },
+      { key: "analysis.workers", label: "Concurrent analyses", min: 1, max: 4 },
+      { key: "analysis.timeout", label: "Time limit per file" },
+      {
+        key: "analysis.max_full_minutes",
+        label: "Longest file analyzed in full (minutes)",
+        min: 1
+      },
+      { key: "analysis.sampled_windows", label: "Windows in a sampled file", min: 20, max: 2000 },
+      { key: "analysis.cache_max_bytes", label: "Spectrogram storage" },
+      { key: "analysis.spectrogram.scale", label: "Default frequency scale" }
+    ]
+  },
+  {
     id: "web",
     title: "Web",
     fields: [
