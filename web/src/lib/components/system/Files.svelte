@@ -24,6 +24,7 @@
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
   import FileTree from "#lib/components/files/FileTree.svelte";
   import LocalFileItems from "#lib/components/files/LocalFileItems.svelte";
+  import SelectionBar from "#lib/components/files/SelectionBar.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -336,10 +337,6 @@
           ...FILE_FILTERS.map((f) => ({ value: f.id, label: f.label }))
         ]} />
     {/if}
-    {#if canDelete && chosen.length}
-      <Button variant="danger" size="sm" onclick={() => askRemove(chosen)}
-        ><Trash2Icon />Delete selected ({chosen.length})</Button>
-    {/if}
     <Button variant="outline" size="sm" disabled={loading} onclick={load}
       ><RefreshCwIcon />Refresh</Button>
   </div>
@@ -485,6 +482,16 @@
         >{#if e.kind !== "up"}{@render menu(e)}{/if}</span>
     {/snippet}
   </FileTree>
+  {#if chosen.length}
+    <SelectionBar files={chosen} noun={["item", "items"]} onclear={() => selected.clear()}>
+      {#snippet actions()}
+        {#if canDelete}
+          <Button variant="danger" size="sm" onclick={() => askRemove(chosen)}
+            ><Trash2Icon />Delete</Button>
+        {/if}
+      {/snippet}
+    </SelectionBar>
+  {/if}
   {#if lines.every((l) => l.kind === "item" && l.item.kind === "up")}
     <p class="px-4 py-6 text-center text-sm text-fg-subtle">
       {only

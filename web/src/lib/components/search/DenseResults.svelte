@@ -1,18 +1,18 @@
 <script lang="ts">
-  import DownloadIcon from "@lucide/svelte/icons/download";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import FolderDownIcon from "@lucide/svelte/icons/folder-down";
   import { SvelteSet } from "svelte/reactivity";
 
   import FileCells from "#lib/components/files/FileCells.svelte";
   import FileMenu from "#lib/components/files/FileMenu.svelte";
+  import SelectionBar from "#lib/components/files/SelectionBar.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import type { FileColumn } from "#lib/files/columns.js";
-  import { asItem, enqueue, followDownloads } from "#lib/files/downloads.js";
+  import { asItem, type Enqueued, enqueue, followDownloads } from "#lib/files/downloads.js";
   import { formatBytes, getFileName, plural } from "#lib/format.js";
   import { Arrivals } from "#lib/lists/arrivals.svelte.js";
   import { freezesWhileUsed, heldOrder } from "#lib/lists/interaction.svelte.js";
@@ -61,7 +61,6 @@
   /** one row's height, 1.75rem in pixels */
   const rowHeight = $derived(1.75 * rem.px);
   const chosen = $derived(sorted.filter((r) => selected.has(r.key)));
-  const chosenBytes = $derived(chosen.reduce((n, r) => n + r.file.size, 0));
 
   /** the files of each user's folder, for a row's "Download folder" */
   const folders = $derived.by(() => {
@@ -84,7 +83,7 @@
   });
 
   /** Enqueues rows, one batch per user, and says what came of it */
-  const download = async (list: DenseRow[]) => {
+  const download = async (list: DenseRow[]): Promise<Enqueued> => {
     const byUser = new Map<string, DenseRow[]>();
     for (const r of list) {
       const mine = byUser.get(r.username);
@@ -102,8 +101,14 @@
       if (result.kind === "done") queued += mine.length;
       else failed.push(`${username}: ${result.text}`);
     }
-    if (!failed.length) toast(`${plural(queued, "file", "files")} queued`);
-    else toast(`${plural(queued, "file", "files")} queued. Failed: ${failed.join("; ")}`, "error");
+    const text = `${plural(queued, "file", "files")} queued`;
+    if (!failed.length) return { kind: "done", text };
+    return { kind: queued ? "partial" : "none", text: `${text}. Failed: ${failed.join("; ")}` };
+  };
+  /** Downloads rows and says what came of it in a toast */
+  const downloadNow = async (list: DenseRow[]) => {
+    const outcome = await download(list);
+    toast(outcome.text, outcome.kind === "done" ? "info" : "error");
   };
 
   const list = new ListControl<DenseRow>({
@@ -111,7 +116,7 @@
     key: (r) => r.key,
     id: (r) => r.key,
     onopen: (r) => {
-      if (canDownload) void download(selected.size > 1 ? chosen : [r]);
+      if (canDownload) void downloadNow(selected.size > 1 ? chosen : [r]);
     },
     rendered: (index) => lines.isDrawn(index),
     reveal: (index) => lines.scrollTo(index),
@@ -179,7 +184,7 @@
             if (e.button === 1 && canDownload) e.preventDefault();
           }}
           onauxclick={(e) => {
-            if (e.button === 1 && canDownload) void download([row]);
+            if (e.button === 1 && canDownload) void downloadNow([row]);
           }}>
           <span role="gridcell" class="flex justify-center">
             <Checkbox
@@ -220,14 +225,14 @@
                 size="icon-sm"
                 aria-label={`Download the folder, ${plural(folder.length, "file", "files")}, ${formatBytes(folder.reduce((n, r) => n + r.file.size, 0))}`}
                 title={`Download the folder: ${plural(folder.length, "file", "files")}, ${formatBytes(folder.reduce((n, r) => n + r.file.size, 0))}`}
-                onclick={() => void download(folder)}>
+                onclick={() => void downloadNow(folder)}>
                 <FolderDownIcon />
               </Button>
             {/if}
             <FileMenu
               path={row.file.filename}
               username={row.username}
-              ondownload={canDownload ? () => void download([row]) : undefined}>
+              ondownload={canDownload ? () => void downloadNow([row]) : undefined}>
               {#snippet trigger({ props })}
                 <Button
                   {...props}
@@ -244,13 +249,9 @@
     </div>
   </div>
   {#if chosen.length}
-    <div class="selection-bar" role="toolbar" aria-label="Selected files">
-      <span class="text-sm"
-        >{plural(chosen.length, "file", "files")} · {formatBytes(chosenBytes)}</span>
-      {#if canDownload}
-        <Button size="sm" onclick={() => void download(chosen)}><DownloadIcon />Download</Button>
-      {/if}
-      <Button size="sm" variant="ghost" onclick={() => selected.clear()}>Clear</Button>
-    </div>
+    <SelectionBar
+      files={chosen.map((r) => r.file)}
+      ondownload={canDownload ? () => download(chosen) : undefined}
+      onclear={() => selected.clear()} />
   {/if}
 </div>

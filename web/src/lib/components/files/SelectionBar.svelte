@@ -17,9 +17,11 @@
     onclear: () => void;
     /** the screen's own actions on the selection */
     actions?: Snippet;
+    /** what the selection is of, one and many: files unless said */
+    noun?: [string, string];
   };
 
-  let { files, ondownload, onclear, actions }: Props = $props();
+  let { files, ondownload, onclear, actions, noun = ["file", "files"] }: Props = $props();
 
   let busy = $state(false);
   let status = $state<Enqueued | null>(null);
@@ -37,7 +39,7 @@
 <!-- what is selected in a list of files and what can be done with it, at the foot of the list -->
 <div class="selection-bar" role="toolbar" aria-label="Selected files">
   <span class="text-sm tabular-nums">
-    {plural(files.length, "file", "files")}{bytes ? `, ${formatBytes(bytes)}` : ""}
+    {plural(files.length, noun[0], noun[1])}{bytes ? `, ${formatBytes(bytes)}` : ""}
   </span>
   {#if ondownload}
     <Button size="sm" disabled={busy} onclick={() => void download()}>
