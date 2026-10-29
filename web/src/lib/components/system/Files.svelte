@@ -122,6 +122,7 @@
       bytes:
         items.reduce((n, e) => n + (e.size ?? 0), 0) + children.reduce((n, c) => n + c.bytes, 0),
       folders: children.reduce((n, c) => n + 1 + c.folders, 0),
+      unlocked: items.length + children.reduce((n, c) => n + c.unlocked, 0),
       locked: false
     };
   };
@@ -136,6 +137,7 @@
     count: 0,
     bytes: 0,
     folders: 0,
+    unlocked: 0,
     locked: false
   });
   const lines = $derived<TreeLine<Entry>[]>([

@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { fakeChat, frame, helloFrame } from "./support/fakes";
+import { fakeChat, fakeConnected } from "./support/fakes";
 import { login } from "./support/login";
 
 // these run on a hostname over plain http that is not localhost, as a LAN address is, where the
@@ -17,25 +17,8 @@ const insecure = async (page: Page, route: string) => {
 };
 
 test("starts a search", async ({ page }) => {
-  // the test daemon never connects to a server, and a search is offered only while it is: the
-  // live stream's application frames carry the daemon's own state, marked connected
-  await page.route("**/api/v0/live**", async (route) => {
-    const url = new URL(route.request().url());
-    const topics = (url.searchParams.get("topics") ?? "").split(",");
-    if (!topics.includes("application")) return route.continue();
-    // read from here, where reseek.test does not resolve; only the browser maps it
-    url.hostname = "127.0.0.1";
-    const read = await route.fetch({
-      url: url.href.replace(/live\?.*$/, "application"),
-      headers: { ...route.request().headers(), accept: "application/json" }
-    });
-    const state = await read.json();
-    const connected = { ...state, server: { ...state.server, isConnected: true } };
-    return route.fulfill({
-      headers: { "content-type": "text/event-stream" },
-      body: helloFrame(topics) + frame(2, "application.state", connected)
-    });
-  });
+  // the test daemon never connects to a server, and a search is offered only while it is
+  await fakeConnected(page);
   const errors = await insecure(page, "/dashboard");
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();
   await page.keyboard.press("ControlOrMeta+k");

@@ -36,7 +36,20 @@ export class Expansion {
     this.openByDefault = openByDefault;
     this.#flipped.clear();
   }
+
+  /** What is open, to keep: the default and the keys that differ from it */
+  snapshot(): ExpansionSnapshot {
+    return { openByDefault: this.openByDefault, flipped: [...this.#flipped] };
+  }
+
+  /** Back to what a snapshot kept */
+  restore({ openByDefault, flipped }: ExpansionSnapshot) {
+    this.reset(openByDefault);
+    for (const key of flipped) this.#flipped.add(key);
+  }
 }
+
+export type ExpansionSnapshot = { openByDefault: boolean; flipped: string[] };
 
 /** Whether a click asks for the siblings too: Alt, or Option on a Mac */
 export const withSiblings = (e: MouseEvent | KeyboardEvent) => e.altKey;

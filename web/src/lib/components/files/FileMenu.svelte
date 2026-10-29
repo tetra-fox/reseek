@@ -5,7 +5,6 @@
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import LinkIcon from "@lucide/svelte/icons/link";
-  import ListIcon from "@lucide/svelte/icons/list";
   import PlayIcon from "@lucide/svelte/icons/play";
   import SaveIcon from "@lucide/svelte/icons/save";
   import type { Snippet } from "svelte";
@@ -42,7 +41,6 @@
       <Menu.Item onSelect={ondownload}><DownloadIcon />Download</Menu.Item>
     {/if}
     {#if folder}
-      <Menu.Item onSelect={() => goto(folder.flat)}><ListIcon />View folder</Menu.Item>
       <Menu.Item onSelect={() => goto(folder.browse)}><FolderOpenIcon />Browse folder</Menu.Item>
     {/if}
     <Menu.Item onSelect={() => void copyText(path)}><CopyIcon />Copy path</Menu.Item>

@@ -48,6 +48,40 @@ describe("a list's selection and focus", () => {
     expect(document.getElementById(grid().getAttribute("aria-activedescendant")!)).toBe(line("a2"));
   });
 
+  it("goes to the ends and a page at a time, and stops on headers that take focus", () => {
+    start(grouped());
+    press(grid(), "End");
+    expect(focused()).toBe("b1");
+    press(grid(), "PageUp");
+    expect(focused()).toBe("a2");
+    press(grid(), "Home");
+    expect(focused()).toBe("a1");
+    if (component) unmount(component);
+    start(grouped(), { headersFocus: true });
+    press(grid(), "ArrowDown");
+    expect(focused()).toBe("h:a");
+    // Space on a header ticks its group, and it stays out of the selection itself
+    press(grid(), " ");
+    expect(ticked()).toEqual(["a1", "a2"]);
+    press(grid(), "PageDown");
+    expect(focused()).toBe("a2");
+  });
+
+  it("finds a line by the letters typed", () => {
+    start(
+      [
+        { key: "apple", group: "x" },
+        { key: "banana", group: "x" },
+        { key: "blueberry", group: "x" }
+      ],
+      { named: true }
+    );
+    press(grid(), "b");
+    expect(focused()).toBe("banana");
+    press(grid(), "l");
+    expect(focused()).toBe("blueberry");
+  });
+
   it("shows the focused line's ring after a key, not after a press, and not once focus leaves", () => {
     start(grouped());
     press(grid(), "ArrowDown");

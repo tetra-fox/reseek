@@ -18,6 +18,9 @@ export const motionFast = () => token("--motion-fast");
 /** The --motion-slow token in ms, for something larger moving into place */
 export const motionSlow = () => token("--motion-slow");
 
+/** The --motion-flash token in ms, for a row's pulse as a download finishes */
+export const motionFlash = () => token("--motion-flash");
+
 /**
  * The --ease-out-soft token, cubic-bezier(0.2, 0, 0, 1), as an easing function for motion run from
  * script: the curve's x solved for `t` by Newton's method, then its y

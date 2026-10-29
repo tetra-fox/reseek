@@ -10,6 +10,7 @@ import {
   itemsUnder,
   listingTree,
   type RemoteDirectory,
+  tickedCounts,
   treeLines
 } from "./folders";
 
@@ -136,6 +137,13 @@ describe("browse listings", () => {
       "2:folder:a\\b\\target",
       "3:a\\b\\target\\x.flac"
     ]);
+  });
+});
+
+describe("ticked counts", () => {
+  it("count each ticked file once in every folder above it", () => {
+    const counts = tickedCounts(["a\\b\\1", "a\\b\\2", "a\\c\\3", "x/4"], (id) => id);
+    expect(Object.fromEntries(counts)).toEqual({ "a": 3, "a\\b": 2, "a\\c": 1, "x": 1 });
   });
 });
 

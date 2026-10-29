@@ -5,6 +5,7 @@ import { toast } from "#lib/feedback/toast.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
+import { Expansion, type ExpansionSnapshot } from "#lib/tree/expansion.svelte.js";
 import {
   detectSeparator,
   type Listing,
@@ -30,15 +31,21 @@ type Meta = {
   errorMessage: string;
   separator: Separator;
   info: BrowseInfo | null;
-  selected: { directoryName: string; files: string[]; subdirectory: string | null } | null;
+  /** the open folders */
+  expansion: ExpansionSnapshot | null;
+  /** full paths of the ticked files */
+  selected: string[];
+  /** a folder to go to once the listing is back, from a screen that showed one folder at a time */
+  target: string | null;
 };
 
 const EMPTY_TREE: Listing = { roots: [], byPath: new Map() };
 
 /**
- * The Browse screen's state: one user's shares at a time, fetched whole, kept as a tree, and
- * remembered in this browser until it is cleared. Progress comes from the `users` topic while a
- * browse arrives, or from polling its status while the stream is down
+ * The Browse screen's state: one user's shares at a time, fetched whole, kept as a tree with the
+ * folders open and the files ticked in it, and remembered in this browser until it is cleared.
+ * Progress comes from the `users` topic while a browse arrives, or from polling its status while
+ * the stream is down
  */
 class Browse {
   username = $state("");
@@ -48,12 +55,12 @@ class Browse {
   tree = $state.raw<Listing>(EMPTY_TREE);
   separator = $state<Separator>("\\");
   info = $state.raw<BrowseInfo | null>(null);
-  /** the folder shown in the selection card */
-  directory = $state<string | null>(null);
-  /** full filenames of the files ticked in it */
+  /** which folders are open */
+  expansion = new Expansion(false);
+  /** full paths of the ticked files */
   selected = new SvelteSet<string>();
-  /** the one child folder expanded in the selection card */
-  subdirectory = $state<string | null>(null);
+  /** a folder the screen goes to once it shows the listing, then forgets */
+  target = $state<string | null>(null);
   /** a saved listing is being read back */
   restoring = $state(false);
   #restored = false;
@@ -75,7 +82,8 @@ class Browse {
     this.phase = "pending";
     this.errorMessage = "";
     this.progress = null;
-    this.#select(null);
+    this.selected.clear();
+    this.target = null;
     const outcome = await call(() =>
       api.GET("/api/v0/users/{username}/browse", { params: byUser(name) })
     );
@@ -83,7 +91,7 @@ class Browse {
     if (!outcome.ok) {
       this.phase = "error";
       this.errorMessage = outcome.error;
-      this.#saveMeta();
+      this.save();
       return;
     }
     const { directories, lockedDirectories } = outcome.data;
@@ -100,9 +108,13 @@ class Browse {
       bytes: all.reduce((n, d) => n + d.files.reduce((m, f) => m + f.size, 0), 0)
     };
     this.#show(name, all, detectSeparator(all), info);
+    // a new listing starts with its first folder open, a hint that folders open
+    this.expansion.reset(false);
+    const first = this.tree.roots[0];
+    if (first?.children.length) this.expansion.set(first.path, true);
     this.phase = "complete";
     rememberBrowsed(name);
-    this.#saveMeta();
+    this.save();
     const listing = { username: name, directories: all, separator: this.separator, info };
     // a listing that can't be kept is browsed again after a reload
     setTimeout(() => void writeListing(listing).catch(() => {}));
@@ -129,25 +141,15 @@ class Browse {
     this.tree = EMPTY_TREE;
     this.separator = "\\";
     this.info = null;
-    this.#select(null);
-    this.#saveMeta();
+    this.expansion.reset(false);
+    this.selected.clear();
+    this.target = null;
+    this.save();
     // nothing to read back when the store is unavailable
     void writeListing(null).catch(() => {});
   };
 
-  /** Shows a folder in the selection card, its first child expanded, nothing ticked */
-  select = (name: string | null) => {
-    this.#select(name);
-    this.#saveMeta();
-  };
-
-  /** Expands one child folder of the selection, or none */
-  expand = (name: string | null) => {
-    this.subdirectory = name;
-    this.#saveMeta();
-  };
-
-  /** Ticks or unticks files of the selection; false when that would pass the limit */
+  /** Ticks or unticks files; false when that would pass the limit */
   tick = (filenames: string[], on: boolean): boolean => {
     if (on) {
       const added = filenames.filter((f) => !this.selected.has(f)).length;
@@ -160,7 +162,6 @@ class Browse {
       if (on) this.selected.add(f);
       else this.selected.delete(f);
     }
-    this.#saveMeta();
     return true;
   };
 
@@ -187,47 +188,28 @@ class Browse {
     this.errorMessage = meta.errorMessage;
     if (listing) {
       this.#show(listing.username, listing.directories, listing.separator, listing.info);
+      if (meta.expansion) this.expansion.restore(meta.expansion);
+      for (const f of meta.selected) this.selected.add(f);
+      this.target = meta.target && this.tree.byPath.has(meta.target) ? meta.target : null;
     } else {
       this.separator = meta.separator;
       this.info = meta.info;
       if (meta.phase === "complete") this.phase = "idle";
     }
-    const chosen = meta.selected;
-    if (chosen && this.tree.byPath.has(chosen.directoryName)) {
-      this.directory = chosen.directoryName;
-      this.subdirectory = chosen.subdirectory;
-      for (const f of chosen.files) this.selected.add(f);
-    }
-    this.#saveMeta();
+    this.save();
   };
 
-  #show(username: string, directories: RemoteDirectory[], separator: Separator, info: BrowseInfo) {
-    this.username = username;
-    this.separator = separator;
-    this.info = info;
-    this.tree = listingTree(directories, separator);
-  }
-
-  #select(name: string | null) {
-    this.directory = name;
-    this.selected.clear();
-    this.subdirectory = name ? (this.tree.byPath.get(name)?.children[0]?.path ?? null) : null;
-  }
-
-  #saveMeta() {
+  /** Keeps the screen as it is in this browser: the user, the open folders, the ticked files */
+  save = () => {
     const meta: Meta = {
       username: this.username,
       phase: this.phase === "pending" ? "idle" : this.phase,
       errorMessage: this.errorMessage,
       separator: this.separator,
       info: this.info,
-      selected: this.directory
-        ? {
-            directoryName: this.directory,
-            files: [...this.selected],
-            subdirectory: this.subdirectory
-          }
-        : null
+      expansion: this.expansion.snapshot(),
+      selected: [...this.selected],
+      target: null
     };
     try {
       localStorage.setItem(META_KEY, JSON.stringify(meta));
@@ -237,31 +219,41 @@ class Browse {
       }
       // other refusals (blocked storage) leave the screen as it is, unsaved
     }
+  };
+
+  #show(username: string, directories: RemoteDirectory[], separator: Separator, info: BrowseInfo) {
+    this.username = username;
+    this.separator = separator;
+    this.info = info;
+    this.tree = listingTree(directories, separator);
   }
 }
 
-/** A saved meta as far as it makes sense; a browse saved as under way comes back as idle */
+const strings = (list: unknown) =>
+  Array.isArray(list) ? list.filter((f): f is string => typeof f === "string") : [];
+
+/**
+ * A saved meta as far as it makes sense; a browse saved as under way comes back as idle. A meta
+ * whose `selected` is an object names a folder in it, which the screen goes to once
+ */
 const readMeta = (saved: unknown): Meta | null => {
   const s = fields(saved);
   if (typeof s.username !== "string") return null;
   const phase = s.phase === "complete" || s.phase === "error" ? s.phase : "idle";
-  const selected = fields(s.selected);
+  const expansion = fields(s.expansion);
+  const older = fields(s.selected);
   return {
     username: s.username,
     phase,
     errorMessage: typeof s.errorMessage === "string" ? s.errorMessage : "",
     separator: s.separator === "/" ? "/" : "\\",
     info: s.info ? (s.info as BrowseInfo) : null,
-    selected:
-      typeof selected.directoryName === "string"
-        ? {
-            directoryName: selected.directoryName,
-            files: Array.isArray(selected.files)
-              ? selected.files.filter((f): f is string => typeof f === "string")
-              : [],
-            subdirectory: typeof selected.subdirectory === "string" ? selected.subdirectory : null
-          }
-        : null
+    expansion:
+      typeof expansion.openByDefault === "boolean"
+        ? { openByDefault: expansion.openByDefault, flipped: strings(expansion.flipped) }
+        : null,
+    selected: Array.isArray(s.selected) ? strings(s.selected) : strings(older.files),
+    target: typeof older.directoryName === "string" ? older.directoryName : null
   };
 };
 

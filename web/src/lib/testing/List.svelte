@@ -8,11 +8,17 @@
   let {
     source,
     onopen = () => {},
-    layer = () => false
+    layer = () => false,
+    headersFocus = false,
+    named = false
   }: {
     source: { value: Line[] };
     onopen?: (line: Line) => void;
     layer?: () => boolean;
+    /** headers take focus as rows do */
+    headersFocus?: boolean;
+    /** each line is named by its key, for type-ahead */
+    named?: boolean;
   } = $props();
 
   // svelte-ignore state_referenced_locally
@@ -23,7 +29,12 @@
     id: (l) => (l.header ? null : l.key),
     group: (l) => lines.value.filter((x) => !x.header && x.group === l.group).map((x) => x.key),
     onopen: (line) => onopen(line),
-    layer: () => layer()
+    layer: () => layer(),
+    // svelte-ignore state_referenced_locally
+    headersFocus,
+    // svelte-ignore state_referenced_locally
+    typeahead: named ? (l) => l.key : undefined,
+    page: () => 2
   });
 </script>
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { STATES, transfer } from "#lib/testing/fixtures.js";
 
-import { rowActions, stateChip } from "./states";
+import { fillOf, rowActions, stateChip } from "./states";
 
 describe("the row menu", () => {
   it("offers per state what the download can take", () => {
@@ -58,5 +58,19 @@ describe("state chips", () => {
     });
     expect(stateChip(transfer({ state: "Completed, TimedOut" })).text).toBe("Timed out");
     expect(stateChip(transfer({ state: "InProgress", percentComplete: 41.6 })).text).toBe("42%");
+  });
+});
+
+describe("a file's download fill", () => {
+  it("waits, moves, ends done or failed, and shows nothing once canceled", () => {
+    const fill = (state: string) => fillOf(transfer({ state }));
+    expect(fillOf(undefined)).toBe(null);
+    expect(fillOf(undefined, true)).toBe("waiting");
+    expect(
+      ["Requested", "Queued, Remotely", "Initializing", "InProgress"].map((s) => fill(s))
+    ).toEqual(["waiting", "waiting", "waiting", "moving"]);
+    expect(
+      ["Completed, Succeeded", "Completed, TimedOut", "Completed, Cancelled"].map((s) => fill(s))
+    ).toEqual(["done", "failed", null]);
   });
 });

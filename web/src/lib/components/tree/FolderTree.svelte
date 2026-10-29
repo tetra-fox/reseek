@@ -2,6 +2,7 @@
   import type { Snippet } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
+  import TreeToggle from "#lib/components/files/TreeToggle.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -9,8 +10,6 @@
   import { type FolderNode, itemsUnder, type TreeLine } from "#lib/tree/folders.js";
   import { FOLDER_LINE_REM, GAP_REM, lineStart, TOGGLE_REM } from "#lib/tree/indent.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
-
-  import TreeToggle from "./TreeToggle.svelte";
 
   type Props = {
     /** the tree laid out, `treeLines` of what the screen shows */

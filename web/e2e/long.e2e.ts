@@ -70,17 +70,18 @@ test("1000 search results in the dense view draw a window and scroll to the last
   await windowed(page, grid, "[role=rowgroup] [role=row]", "00009 Song.flac");
 });
 
-test("a browse of 1000 folders draws a window and scrolls to the last", async ({ page }) => {
-  await wideBrowse(page, 1000);
+test("a browse of 5000 folders draws a window and scrolls to the last", async ({ page }) => {
+  await wideBrowse(page, 5000);
   await login(page, "/browse");
   await page.getByLabel("Username").fill("carol");
   await page.getByLabel("Username").press("Enter");
-  const tree = page.getByRole("tree", { name: "Shared folders" });
-  await expect(tree.getByRole("treeitem").first()).toBeVisible();
+  const tree = page.getByRole("treegrid", { name: "Shared folders" });
+  await expect(tree.locator("[role=rowgroup] [role=row]").first()).toBeVisible();
   await page.getByRole("button", { name: "Expand all" }).click();
-  // the last artist's last album: one folder for the shares, then fifty to each artist
-  await windowed(page, tree, "[role=treeitem]", "Album 47");
-  await expect(tree.getByRole("treeitem").last()).toContainText("Album 47");
+  // the last artist's last album, with its one file: one folder for the shares, then fifty lines
+  // to each artist
+  await windowed(page, tree, "[role=rowgroup] [role=row]", "Album 47");
+  await expect(tree.locator("[role=rowgroup] [role=row]").last()).toContainText("1.flac");
 });
 
 test("a room's 1000 messages draw a window and scroll back to the first", async ({ page }) => {

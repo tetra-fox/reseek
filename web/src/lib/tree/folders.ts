@@ -18,6 +18,8 @@ export type FolderNode<T> = {
   bytes: number;
   /** folders below it, at every depth */
   folders: number;
+  /** items here and below that can be ticked and downloaded: those not locked */
+  unlocked: number;
   /** nothing in it can be downloaded: the user shares it only with some */
   locked: boolean;
 };
@@ -86,6 +88,7 @@ export const folderTree = <T>(
     }
     const children = [...trie.children.values()].map((child) => build(child, child.segment));
     const count = trie.items.length + children.reduce((n, c) => n + c.count, 0);
+    const free = lockedOf ? trie.items.filter((item) => !lockedOf(item)).length : trie.items.length;
     return {
       path: trie.path,
       label,
@@ -96,6 +99,7 @@ export const folderTree = <T>(
         trie.items.reduce((n, item) => n + sizeOf(item), 0) +
         children.reduce((n, c) => n + c.bytes, 0),
       folders: children.reduce((n, c) => n + 1 + c.folders, 0),
+      unlocked: free + children.reduce((n, c) => n + c.unlocked, 0),
       locked: !!lockedOf && trie.items.every(lockedOf) && children.every((c) => c.locked)
     };
   };
@@ -104,10 +108,13 @@ export const folderTree = <T>(
 
 export type RemoteDirectory = Schemas["Directory"] & { locked?: boolean };
 
+/** A file in someone's share, `locked` when they share it only with some */
+export type RemoteFile = Schemas["File"] & { locked?: boolean };
+
 /** A browse listing as a tree, and each of its folders by path */
 export type Listing = {
-  roots: FolderNode<Schemas["File"]>[];
-  byPath: Map<string, FolderNode<Schemas["File"]>>;
+  roots: FolderNode<RemoteFile>[];
+  byPath: Map<string, FolderNode<RemoteFile>>;
 };
 
 /** The separator a share uses: the first folder name with either decides, `\` when none has one */
@@ -130,13 +137,14 @@ export const listingTree = (directories: RemoteDirectory[], separator: Separator
   if (!directories.length || !directories[0].name) return { roots: [], byPath };
   for (const d of directories) {
     if (byPath.has(d.name)) continue;
-    let files: Schemas["File"][] | null = null;
+    let files: RemoteFile[] | null = null;
+    const locked = !!d.locked;
     byPath.set(d.name, {
       path: d.name,
       label: getFileName(d.name),
       get items() {
         files ??= d.files
-          .map((f) => ({ ...f, filename: d.name + separator + f.filename }))
+          .map((f) => ({ ...f, filename: d.name + separator + f.filename, locked }))
           .sort((a, b) => getFileName(a.filename).localeCompare(getFileName(b.filename)));
         return files;
       },
@@ -144,7 +152,8 @@ export const listingTree = (directories: RemoteDirectory[], separator: Separator
       count: d.files.length,
       bytes: d.files.reduce((sum, f) => sum + f.size, 0),
       folders: 0,
-      locked: !!d.locked
+      unlocked: locked ? 0 : d.files.length,
+      locked
     });
   }
   const roots: Listing["roots"] = [];
@@ -166,6 +175,7 @@ export const listingTree = (directories: RemoteDirectory[], separator: Separator
       node.count += child.count;
       node.bytes += child.bytes;
       node.folders += 1 + child.folders;
+      node.unlocked += child.unlocked;
     }
   }
   return { roots, byPath };
@@ -178,6 +188,23 @@ export const ancestors = (path: string, listing: Listing, separator: Separator):
     if (listing.byPath.has(at)) found.unshift(at);
   }
   return found;
+};
+
+/**
+ * How many of the selected items are under each folder, by the folder's path: each selected id
+ * counts once for every folder its path is in. Costs the selection's size times its depth, so a
+ * folder line's tick reads its count rather than walking the items below it
+ */
+export const tickedCounts = (selected: Iterable<string>, pathOf: (id: string) => string) => {
+  const counts = new Map<string, number>();
+  for (const id of selected) {
+    const path = pathOf(id);
+    const separator = separatorOf(path);
+    for (let at = parentOf(path, separator); at; at = parentOf(at, separator)) {
+      counts.set(at, (counts.get(at) ?? 0) + 1);
+    }
+  }
+  return counts;
 };
 
 /** One line of a tree laid out flat: a folder, or an item under it */

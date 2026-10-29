@@ -16,7 +16,7 @@
   import { analyzableDownload, analyzeBatch, downloadCandidate } from "#lib/analysis/batch.js";
   import { analyzerOffered } from "#lib/analysis/marks.svelte.js";
   import { root } from "#lib/api/client.js";
-  import TreeToggle from "#lib/components/tree/TreeToggle.svelte";
+  import TreeToggle from "#lib/components/files/TreeToggle.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";

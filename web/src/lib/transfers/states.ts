@@ -47,6 +47,20 @@ export const endingText = (state: string) => {
 
 export const isActive = (state: string) => state === "InProgress" || state === "Initializing";
 
+/**
+ * What a file's row shows of its download behind it: waiting, moving with its bytes, done, or
+ * failed; nothing for no download or a canceled one. A file just asked for is waiting
+ */
+export type Fill = "waiting" | "moving" | "done" | "failed" | null;
+
+export const fillOf = (t: Transfer | undefined, starting = false): Fill => {
+  if (!t) return starting ? "waiting" : null;
+  if (t.state === "InProgress") return "moving";
+  if (isSucceeded(t.state)) return "done";
+  if (t.state === "Completed, Cancelled") return null;
+  return isRetryable(t.state) ? "failed" : "waiting";
+};
+
 /** The state chips above the table, each with the states it stands for */
 export const STATE_CHIPS = [
   { id: "active", label: "Active", test: isActive },

@@ -16,6 +16,9 @@ export const SPARK_POINTS = 20;
 
 const NAMES = { download: "Download", upload: "Upload" } as const;
 
+/** What finds a transfer of one user's file: the user and the file's full remote path */
+export const fileKey = (username: string, path: string) => `${username}\u0000${path}`;
+
 /**
  * One direction's transfers, kept by id: frames on the `transfers` topic add, patch and drop
  * rows, and a reload reconciles them with the grouped listing. The last speeds each row reported
@@ -32,6 +35,11 @@ export class Transfers {
   queueErrors = new SvelteMap<string, string>();
   /** transfers removed on screen whose removal waits until it can no longer be undone */
   hidden = new SvelteSet<string>();
+  /**
+   * Each transfer by `fileKey`, the newest when a file was transferred more than once. Made again
+   * only when a transfer comes or goes: a transfer's progress patches the row it finds in place
+   */
+  byFile = $derived(new Map(this.list.rows.map((t) => [fileKey(t.username, t.filename), t])));
 
   constructor(direction: Direction) {
     this.direction = direction;

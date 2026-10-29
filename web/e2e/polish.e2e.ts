@@ -75,25 +75,21 @@ test("browses a user, finds a folder by typing and shows where it is", async ({ 
   await login(page, "/browse");
   await page.getByLabel("Username").fill("carol");
   await page.getByLabel("Username").press("Enter");
-  const tree = page.getByRole("tree", { name: "Shared folders" });
-  await expect(tree.getByText("Bootlegs")).toBeVisible();
-  // a folder is a pointer target, not text to select
-  await expect(tree.getByRole("treeitem", { name: /Bootlegs/ })).toHaveCSS("cursor", "pointer");
+  const tree = page.getByRole("treegrid", { name: "Shared folders" });
+  const bootlegs = tree.locator('[data-line$="Bootlegs"]');
+  await expect(bootlegs).toBeVisible();
+  // a folder line is a pointer target, which opens it, not text to select
+  await expect(bootlegs).toHaveCSS("cursor", "pointer");
   await tree.focus();
   await page.keyboard.type("bo");
-  await expect(tree.getByRole("treeitem", { name: /Bootlegs/ })).toHaveAttribute(
-    "aria-selected",
-    "true"
-  );
+  await expect(bootlegs).toHaveAttribute("data-focused", "true");
   const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(crumbs).toContainText("carol");
   await expect(crumbs).toContainText("Bootlegs");
-  await expect(page.getByRole("button", { name: /Download this folder/ })).toBeVisible();
-  // a step back up opens that folder
+  // a step back up goes to that folder's line
   await crumbs.getByRole("button", { name: "Music" }).click();
-  const chosen = tree.locator('[role=treeitem][aria-selected="true"]');
-  await expect(chosen).toContainText("Music");
-  await expect(chosen).not.toContainText("Bootlegs");
+  const active = await tree.getAttribute("aria-activedescendant");
+  await expect(page.locator(`#${active}`)).toHaveAttribute("data-line", "folder:@@c\\Music");
   // carol is remembered on the start screen
   await page.getByRole("button", { name: "Clear" }).first().click();
   await expect(

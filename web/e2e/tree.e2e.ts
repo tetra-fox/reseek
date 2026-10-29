@@ -1,6 +1,6 @@
 import { expect, type Locator, test } from "@playwright/test";
 
-import { fakeFiles, fakeSearch, file, SEARCH_ID, transfer } from "./support/fakes";
+import { dir, fakeFiles, fakeSearch, file, SEARCH_ID, transfer } from "./support/fakes";
 import { login, textSize } from "./support/login";
 
 /** How far apart two names start across the page, in pixels */
@@ -79,6 +79,29 @@ for (const [width, height] of [
       const track = card.getByText("01 One.flac", { exact: true });
       await expect(track).toBeVisible();
       expect(await apart(bonus, track), "search results").toBeLessThan(0.5);
+
+      // a browse, where Music holds a file beside its Albums folder
+      await page.route(
+        (url) => url.pathname.endsWith("/api/v0/users/carol/browse"),
+        (route) =>
+          route.fulfill({
+            json: {
+              directories: [
+                dir("@@c\\Music", ["readme.txt"]),
+                dir("@@c\\Music\\Albums", ["1.flac"])
+              ],
+              directoryCount: 2,
+              lockedDirectories: [],
+              lockedDirectoryCount: 0
+            }
+          })
+      );
+      await page.goto("./#/browse?user=carol");
+      const shares = page.getByRole("treegrid", { name: "Shared folders" });
+      const albums = shares.getByText("Albums", { exact: true });
+      const readme = shares.getByText("readme.txt", { exact: true });
+      await expect(readme).toBeVisible();
+      expect(await apart(albums, readme), "browse").toBeLessThan(0.5);
 
       // the downloads, each user a group and their folders under it. A phone's row has no tick of
       // its own, so its icon starts under the tick of a header at its depth

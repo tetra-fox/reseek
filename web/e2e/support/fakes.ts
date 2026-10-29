@@ -21,6 +21,30 @@ export const helloFrame = (topics: string[]) =>
     version: { current: "0.0.0", full: "0.0.0", latest: null, isUpdateAvailable: false }
   });
 
+/**
+ * Marks the test daemon connected to a server, which it never is, so what is offered only while
+ * connected shows: the live stream's application frames carry the daemon's own state, connected
+ */
+export const fakeConnected = async (page: Page) => {
+  await page.route("**/api/v0/live**", async (route) => {
+    const url = new URL(route.request().url());
+    const topics = (url.searchParams.get("topics") ?? "").split(",");
+    if (!topics.includes("application")) return route.continue();
+    // read from here, where a name the browser maps, as reseek.test, does not resolve
+    url.hostname = "127.0.0.1";
+    const read = await route.fetch({
+      url: url.href.replace(/live\?.*$/, "application"),
+      headers: { ...route.request().headers(), accept: "application/json" }
+    });
+    const state = await read.json();
+    const connected = { ...state, server: { ...state.server, isConnected: true } };
+    return route.fulfill({
+      headers: { "content-type": "text/event-stream" },
+      body: helloFrame(topics) + frame(2, "application.state", connected)
+    });
+  });
+};
+
 const MEMBERS = ["alice", "bob", "carol", "dave", "erin", "frank", "grace", "heidi"];
 
 /** Answers the chat calls with one room, "indie", and one conversation, with "alice" */
@@ -277,7 +301,7 @@ export const fakeReports = async (page: Page) => {
   });
 };
 
-const dir = (name: string, files: string[]) => ({
+export const dir = (name: string, files: string[]) => ({
   name,
   fileCount: files.length,
   files: files.map((f) => file(f))

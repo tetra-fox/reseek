@@ -7,7 +7,6 @@
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import InfoIcon from "@lucide/svelte/icons/info";
-  import ListIcon from "@lucide/svelte/icons/list";
   import ListOrderedIcon from "@lucide/svelte/icons/list-ordered";
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import PlayIcon from "@lucide/svelte/icons/play";
@@ -83,8 +82,6 @@
   <Menu.Item onSelect={() => goto(folder.browse)}>
     <FolderOpenIcon />Browse this folder in {t.username}'s shares
   </Menu.Item>
-  <Menu.Item onSelect={() => goto(folder.flat)}
-    ><ListIcon />View all files in this folder</Menu.Item>
   {#if write}
     <Menu.Item onSelect={() => goto(to.search)}><SearchIcon />More from this user</Menu.Item>
     <Menu.Separator />

@@ -3,6 +3,8 @@ import { SvelteSet } from "svelte/reactivity";
 
 import { inControl, keepsKey, layerOpen, withModifier } from "#lib/ui/keys.js";
 
+import { TYPE_AHEAD_MS, typeAhead } from "./typeahead";
+
 /** What a list tells the controller about its lines */
 export type ListSpec<L> = {
   /** the lines in the order they are shown, rows and group headers */
@@ -33,6 +35,15 @@ export type ListSpec<L> = {
   reveal?: (index: number) => void;
   /** the selection, when the list's page keeps it; the controller makes its own otherwise */
   selected?: SvelteSet<string>;
+  /**
+   * Group headers take focus as rows do: Up and Down stop on them, and Enter and the list's own
+   * keys act on them. They stay out of the selection; Space ticks their group
+   */
+  headersFocus?: boolean;
+  /** a line's name, for finding a line by typing the start of it */
+  typeahead?: (line: L) => string;
+  /** how many lines Page Up and Page Down move by: about a screenful */
+  page?: () => number;
 };
 
 let lists = 0;
@@ -63,9 +74,12 @@ let lists = 0;
  *
  * Keys: a focused control keeps the keys it handles (`keepsKey`); the rest act on the line the
  * control is in. Ctrl/Cmd+A selects the focused line's group, or every row; any other key with
- * Ctrl, Cmd or Alt is the browser's. On a row Space toggles it, Enter opens it and the list's
- * own keys act; on a group header only Ctrl/Cmd+A and Space act. Escape closes what is open
- * first (a menu, a dialog, a card, the list's own layer) and otherwise clears the selection
+ * Ctrl, Cmd or Alt is the browser's. Home, End, Page Up and Page Down move as Up and Down do,
+ * further. On a row Space toggles it, Enter opens it and the list's own keys act; on a group
+ * header only Ctrl/Cmd+A and Space act, unless headers take focus. Letters typed one after
+ * another go to the next line whose name starts with them, in a list that names its lines.
+ * Escape closes what is open first (a menu, a dialog, a card, the list's own layer) and
+ * otherwise clears the selection
  */
 export class ListControl<L> {
   /** the selected rows' ids */
@@ -85,6 +99,9 @@ export class ListControl<L> {
   #lastIndex = 0;
   /** the control in the list that last took DOM focus, null while the container has it */
   #held: Element | null = null;
+  /** what has been typed to find a line, and when the last letter came */
+  #typed = "";
+  #typedAt = 0;
 
   readonly lines = $derived.by(() => this.#spec.lines());
   /** the rows' ids in the order they are shown */
@@ -103,8 +120,8 @@ export class ListControl<L> {
   readonly focusIndex = $derived.by(() => {
     if (this.focusedKey === null || !this.lines.length) return -1;
     if (this.#found !== -1) return this.#found;
-    const after = this.#nextRow(this.#lastIndex - 1, 1);
-    return after !== -1 ? after : this.#nextRow(Math.min(this.#lastIndex, this.lines.length), -1);
+    const after = this.#next(this.#lastIndex - 1, 1);
+    return after !== -1 ? after : this.#next(Math.min(this.#lastIndex, this.lines.length), -1);
   });
   /** the focused line */
   readonly focused = $derived(this.focusIndex === -1 ? null : this.lines[this.focusIndex]);
@@ -272,18 +289,23 @@ export class ListControl<L> {
     if (key !== undefined && key !== null) this.focusedKey = key;
   }
 
-  /** The index of the nearest row after (`step` 1) or before (-1) `from`, -1 when none */
-  #nextRow(from: number, step: 1 | -1) {
+  /** Whether focus stops on a line: every row, and headers when they take focus */
+  #stops(line: L) {
+    return this.#spec.headersFocus || this.#spec.id(line) !== null;
+  }
+
+  /** The index of the nearest line focus stops on after (`step` 1) or before (-1) `from`, -1 when none */
+  #next(from: number, step: 1 | -1) {
     for (let i = from + step; i >= 0 && i < this.lines.length; i += step) {
-      if (this.#spec.id(this.lines[i]) !== null) return i;
+      if (this.#stops(this.lines[i])) return i;
     }
     return -1;
   }
 
-  /** Focuses the row at `index`, the container taking DOM focus, and brings it into view */
+  /** Focuses the line at `index`, the container taking DOM focus, and brings it into view */
   #moveTo(index: number) {
     const line = this.lines[index];
-    if (!line || this.#spec.id(line) === null || !this.#element) return;
+    if (!line || !this.#stops(line) || !this.#element) return;
     this.focusedKey = this.#spec.key(line);
     if (document.activeElement !== this.#element) this.#element.focus({ preventScroll: true });
     if (this.#spec.reveal) this.#spec.reveal(index);
@@ -330,24 +352,53 @@ export class ListControl<L> {
       this.setAll((line && this.#spec.group?.(line)) ?? this.rows, true);
     } else if (withModifier(e)) return;
     else if (e.key === "ArrowDown") {
-      const to = this.#nextRow(this.focusIndex, 1);
+      const to = this.#next(this.focusIndex, 1);
       if (to !== -1) this.#moveTo(to);
     } else if (e.key === "ArrowUp") {
-      const to = this.focusIndex === -1 ? this.#nextRow(-1, 1) : this.#nextRow(this.focusIndex, -1);
+      const to = this.focusIndex === -1 ? this.#next(-1, 1) : this.#next(this.focusIndex, -1);
+      if (to !== -1) this.#moveTo(to);
+    } else if (e.key === "Home" || e.key === "End") {
+      const to = e.key === "Home" ? this.#next(-1, 1) : this.#next(this.lines.length, -1);
+      if (to !== -1) this.#moveTo(to);
+    } else if (e.key === "PageDown" || e.key === "PageUp") {
+      const step = e.key === "PageDown" ? 1 : -1;
+      const by = Math.max(1, this.#spec.page?.() ?? 10);
+      const want = Math.min(Math.max(this.focusIndex + step * by, 0), this.lines.length - 1);
+      // the line a page away, or the nearest one focus stops on past it, else before it
+      const past = this.#next(want - step, step);
+      const to = past !== -1 ? past : this.#next(want, step === 1 ? -1 : 1);
       if (to !== -1) this.#moveTo(to);
     } else if (e.key === "Escape") {
       if (this.#spec.layer?.() || layerOpen()) return;
       this.clear();
+    } else if (this.#findTyped(e)) {
+      // a letter went to the line named by what was typed
     } else if (line === null) return;
-    else if (id === null) {
-      if (e.key !== " ") return;
+    else if (id === null && e.key === " ") {
       const ids = this.#spec.group?.(line) ?? [];
       this.setAll(ids, !ids.every((one) => this.selected.has(one)));
-    } else if (e.key === " ") this.toggle(id);
+    } else if (id === null && !this.#spec.headersFocus) return;
+    else if (e.key === " " && id !== null) this.toggle(id);
     else if (e.key === "Enter") {
       if (!this.#spec.onopen) return;
       this.#spec.onopen(line);
     } else if (!this.#spec.onkey?.(e, line)) return;
     e.preventDefault();
   };
+
+  /**
+   * A letter typed while the list names its lines: what was typed in the last moment, with it,
+   * goes to the next line whose name starts with that. True when a line was found
+   */
+  #findTyped(e: KeyboardEvent) {
+    const name = this.#spec.typeahead;
+    if (!name || e.key.length !== 1 || e.key === " ") return false;
+    const now = Date.now();
+    this.#typed = now - this.#typedAt > TYPE_AHEAD_MS ? e.key : this.#typed + e.key;
+    this.#typedAt = now;
+    const at = typeAhead(this.lines.map(name), this.focusIndex, this.#typed);
+    if (at === -1) return false;
+    this.#moveTo(at);
+    return true;
+  }
 }

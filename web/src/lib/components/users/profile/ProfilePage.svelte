@@ -101,7 +101,7 @@
     {/each}
   </nav>
   {#if tab === "shares"}
-    <BrowsePage user={username} {path} flat={false} />
+    <BrowsePage user={username} {path} />
   {:else if tab === "transfers"}
     <ProfileTransfers {username} />
   {:else if tab === "messages"}

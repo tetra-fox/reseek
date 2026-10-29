@@ -13,8 +13,8 @@
   import FileMenu from "#lib/components/files/FileMenu.svelte";
   import FolderFiles from "#lib/components/files/FolderFiles.svelte";
   import Suspect from "#lib/components/files/Suspect.svelte";
+  import TreeToggle from "#lib/components/files/TreeToggle.svelte";
   import FolderTree from "#lib/components/tree/FolderTree.svelte";
-  import TreeToggle from "#lib/components/tree/TreeToggle.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";

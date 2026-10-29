@@ -9,12 +9,12 @@ globalThis.ResizeObserver ??= class {
   disconnect() {}
 };
 // and gives every box no height, so a virtual list would draw no lines: its scroll box, a grid, tree
-// or log, reports the height of a screen
+// treegrid or log, reports the height of a screen
 const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight")!;
 Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
   configurable: true,
   get(this: HTMLElement) {
-    return ["grid", "tree", "log"].includes(this.getAttribute("role") ?? "")
+    return ["grid", "tree", "treegrid", "log"].includes(this.getAttribute("role") ?? "")
       ? 600
       : offsetHeight.get!.call(this);
   }
