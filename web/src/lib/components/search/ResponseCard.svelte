@@ -36,6 +36,7 @@
   import { toast } from "#lib/toast.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, folderTree, treeLines } from "#lib/tree/folders.js";
+  import { TICK_REM } from "#lib/tree/indent.js";
   import { users } from "#lib/users.svelte.js";
   import { viewport } from "#lib/viewport.svelte.js";
 
@@ -80,9 +81,9 @@
   // files say nothing of their quality has no attributes column. A phone's rows show the tick, the
   // name with its size under it, and the menu
   const columns = $derived(
-    `2.25rem minmax(0, 1fr) ${columnWidth(WIDEST.size)} ${attributed ? "9rem " : ""}${columnWidth(WIDEST.length)} 2.5rem`
+    `${TICK_REM}rem minmax(0, 1fr) ${columnWidth(WIDEST.size)} ${attributed ? "9rem " : ""}${columnWidth(WIDEST.length)} 2.5rem`
   );
-  const PHONE_COLUMNS = "2.25rem minmax(0, 1fr) 2.5rem";
+  const PHONE_COLUMNS = `${TICK_REM}rem minmax(0, 1fr) 2.5rem`;
   const roots = $derived(
     folderTree(
       files,
@@ -249,17 +250,13 @@
         </div>
       {/snippet}
       {#snippet item(file)}
-        <span role="gridcell" class="flex justify-center">
+        <span role="gridcell" class="flex">
           <Checkbox
             aria-label={`Select ${getFileName(file.filename)}`}
             checked={selected.has(file.filename)}
             onCheckedChange={(on) => tick([file.filename], on)} />
         </span>
-        <span
-          role="gridcell"
-          class="flex min-w-0 items-center gap-1 pr-2"
-          style:padding-left="calc((var(--depth) - 1) * 1.25rem + 0.25rem)"
-          title={file.filename}>
+        <span role="gridcell" class="flex min-w-0 items-center gap-1 pr-2" title={file.filename}>
           {#if file.locked}<LockIcon class="size-3.5 shrink-0 text-fg-muted" />{/if}
           {#if viewport.phone}
             <!-- a phone gives the name the row's width, with the size under it -->

@@ -41,9 +41,10 @@
     queuePosition,
     storeOf
   } from "#lib/transfers/actions.js";
-  import type { ColumnId } from "#lib/transfers/columns.js";
+  import { type ColumnId, SELECT_REM } from "#lib/transfers/columns.js";
   import { type Direction, rowActions, stateChip, type Transfer } from "#lib/transfers/states.js";
   import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
+  import { GAP_REM, lineStart, TICK_REM, TOGGLE_REM } from "#lib/tree/indent.js";
   import { users } from "#lib/users.svelte.js";
   import { viewport } from "#lib/viewport.svelte.js";
 
@@ -54,6 +55,8 @@
     transfer: Transfer;
     direction: Direction;
     columns: ColumnId[];
+    /** how deep it is under group headers, 0 when nothing groups it */
+    depth: number;
     /** the folder is shown under the name, where no group header says it */
     showFolder: boolean;
     selected: boolean;
@@ -71,6 +74,7 @@
     transfer: t,
     direction,
     columns,
+    depth,
     showFolder,
     selected,
     speeds,
@@ -89,6 +93,14 @@
   const user = $derived(users.get(t.username));
   const wait = $derived(direction === "upload" ? waits.get(t.id) : undefined);
   const retryIn = $derived(t.nextAttemptAt ? ago(t.nextAttemptAt) : null);
+  // under a group header the file's icon and name start where a header at the row's depth has its
+  // own, past its tick and toggle, the select column holding the row's tick. A phone's row has no
+  // tick or toggle to pass, so it starts under the header's tick and keeps its width for the name
+  const fileInset = $derived(
+    depth
+      ? `${viewport.phone ? lineStart(depth) : lineStart(depth) + TICK_REM + TOGGLE_REM + GAP_REM - SELECT_REM}rem`
+      : undefined
+  );
 </script>
 
 {#snippet name()}
@@ -136,7 +148,8 @@
       "flex min-w-0 items-center gap-1.5 px-2",
       ["size", "speed", "eta", "elapsed", "attempts", "transferred"].includes(column) &&
         "justify-end whitespace-nowrap tabular-nums"
-    ]}>
+    ]}
+    style:padding-left={column === "file" ? fileInset : undefined}>
     {#if column === "select"}
       <Checkbox
         aria-label={`Select ${getFileName(t.filename)}`}

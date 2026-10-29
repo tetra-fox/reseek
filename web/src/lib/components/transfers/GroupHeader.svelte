@@ -35,6 +35,7 @@
   import type { Group } from "#lib/transfers/view.js";
   import { quota, waits } from "#lib/transfers/why.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
+  import { GAP_REM, lineStart } from "#lib/tree/indent.js";
   import { viewport } from "#lib/viewport.svelte.js";
 
   type Props = {
@@ -167,10 +168,10 @@
   const actions = $derived(ACTIONS.filter((a) => a.shown()));
 </script>
 
-<!-- a phone indents each level less, so a nested folder keeps room for its name -->
 <div
-  class="flex h-full items-center gap-2 border-b bg-surface-muted/80 px-2 text-sm"
-  style:padding-left={`${0.5 + group.depth * (viewport.phone ? 0.75 : 1.5)}rem`}
+  class="flex h-full items-center border-b bg-surface-muted/80 px-2 text-sm"
+  style:padding-left={`${lineStart(group.depth)}rem`}
+  style:column-gap={`${GAP_REM}rem`}
   role="rowheader">
   <Checkbox
     aria-label={`Select every transfer in ${group.label}`}

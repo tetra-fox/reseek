@@ -20,7 +20,6 @@
     "/build/",
     "/src/lib/api/schema.d.ts",
     "/src/lib/config/fixtures/view.json",
-    "/test-results/",
-    "/src/lib/vendor/"
+    "/test-results/"
   ]
 }

@@ -48,6 +48,7 @@
   import { encodePath } from "#lib/transfers/content.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
+  import { TICK_REM } from "#lib/tree/indent.js";
   import { viewport } from "#lib/viewport.svelte.js";
 
   import { type Entry, entries, type SortBy } from "./explorer";
@@ -294,11 +295,13 @@
   const sortBy = (by: SortBy) => {
     sort = { by, dir: sort.by === by && sort.dir === "asc" ? "desc" : "asc" };
   };
-  // a phone leaves out the modified date and indents less, so a name keeps the room it needs
+  // a phone leaves out the modified date and puts a file's size under its name, so a name keeps
+  // the room it needs
   const COLUMNS = $derived(
-    viewport.phone ? "2rem minmax(0,1fr) 5rem 2.5rem" : "2.5rem minmax(14rem,1fr) 10rem 7rem 3rem"
+    viewport.phone
+      ? `${TICK_REM}rem minmax(0,1fr) 2.5rem`
+      : `${TICK_REM}rem minmax(14rem,1fr) 10rem 7rem 3rem`
   );
-  const indent = $derived(viewport.phone ? "0.75rem" : "1.25rem");
 </script>
 
 {#snippet sortable(label: string, by: SortBy)}
@@ -443,17 +446,11 @@
       for (const at of paths) if (!listings.has(at)) void read(at);
     }}>
     {#snippet header()}
-      <div
-        role="row"
-        class="grid min-w-max items-center border-b bg-surface-muted py-1.5 text-xs font-medium text-fg-muted"
-        style:grid-template-columns={COLUMNS}>
-        <span role="columnheader"></span>
-        <span role="columnheader">{@render sortable("Name", "name")}</span>
-        <span role="columnheader" class="max-md:hidden"
-          >{@render sortable("Modified", "date")}</span>
-        <span role="columnheader" class="pr-3 text-right">Size</span>
-        <span role="columnheader" class="sr-only">Actions</span>
-      </div>
+      <span role="columnheader"></span>
+      <span role="columnheader">{@render sortable("Name", "name")}</span>
+      <span role="columnheader" class="max-md:hidden">{@render sortable("Modified", "date")}</span>
+      {#if !viewport.phone}<span role="columnheader" class="pr-3 text-right">Size</span>{/if}
+      <span role="columnheader" class="sr-only">Actions</span>
     {/snippet}
     {#snippet folder(node)}
       {@const e = dirEntry(node)}
@@ -476,16 +473,21 @@
       {#if e}<span class="row-action max-md:ml-auto">{@render menu(e)}</span>{/if}
     {/snippet}
     {#snippet item(e)}
-      <span role="gridcell" class="flex justify-center">
+      <span role="gridcell" class="flex">
         {#if e.kind !== "up"}{@render tick(e)}{/if}
       </span>
-      <span
-        role="gridcell"
-        class="flex min-w-0 items-center gap-1.5"
-        style:padding-left={`calc(var(--depth) * ${indent})`}>
+      <span role="gridcell" class="flex min-w-0 items-center gap-1.5">
         {#if e.kind === "file"}
           <FileIcon class="size-4 shrink-0 text-fg-muted" />
-          <span class="truncate" title={e.path}>{e.name}</span>
+          {#if viewport.phone}
+            <span class="flex min-w-0 flex-col py-1">
+              <span class="truncate" title={e.path}>{e.name}</span>
+              <span class="text-xs whitespace-nowrap text-fg-muted tabular-nums"
+                >{e.size ? formatBytes(e.size) : ""}</span>
+            </span>
+          {:else}
+            <span class="truncate" title={e.path}>{e.name}</span>
+          {/if}
           <AnalysisMark mark={marks.file(root, e.path)} />
         {:else}
           <FolderIcon class="size-4 shrink-0 text-fg-muted" />
@@ -497,8 +499,10 @@
       </span>
       <span role="gridcell" class="text-xs text-fg-muted max-md:hidden"
         >{e.modifiedAt ? dateTime(e.modifiedAt) : ""}</span>
-      <span role="gridcell" class="pr-3 text-right tabular-nums"
-        >{e.size ? formatBytes(e.size) : ""}</span>
+      {#if !viewport.phone}
+        <span role="gridcell" class="pr-3 text-right tabular-nums"
+          >{e.size ? formatBytes(e.size) : ""}</span>
+      {/if}
       <span role="gridcell" class="flex justify-end"
         >{#if e.kind !== "up"}{@render menu(e)}{/if}</span>
     {/snippet}

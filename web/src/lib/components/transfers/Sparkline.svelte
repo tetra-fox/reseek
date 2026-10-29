@@ -1,11 +1,10 @@
 <script lang="ts">
-  import { Chart, Html } from "layerchart";
+  import { Area, Chart, Svg } from "layerchart";
 
-  import DitherFill from "#lib/components/charts/DitherFill.svelte";
   import { SPARKLINE_WIDTH } from "#lib/transfers/columns.js";
 
-  // the last speeds a transfer reported, as a small dithered area on LayerChart, still and
-  // without axes; nothing until there are two
+  // the last speeds a transfer reported, as a small area on LayerChart, still and without axes;
+  // nothing until there are two
   let { points }: { points: number[] } = $props();
 
   const HEIGHT = 14;
@@ -14,29 +13,17 @@
 
 {#if points.length >= 2}
   <div
-    class="relative shrink-0"
+    class="shrink-0"
     style:width={`${SPARKLINE_WIDTH}px`}
     style:height={`${HEIGHT}px`}
     aria-hidden="true">
     <Chart {data} x="i" y="speed" yDomain={[0, null]} padding={0} tooltipContext={false}>
-      {#snippet children({ context })}
-        <Html pointerEvents={false}>
-          <DitherFill
-            width={context.width}
-            height={context.height}
-            areas={[
-              {
-                key: "speed",
-                color: "var(--color-accent)",
-                x: data.map((d) => context.xScale(d.i)),
-                top: data.map((d) => context.yScale(d.speed)),
-                floor: data.map(() => context.yScale(0))
-              }
-            ]}
-            animate={false}
-            bloom={false} />
-        </Html>
-      {/snippet}
+      <Svg>
+        <Area
+          fill="var(--color-accent)"
+          fillOpacity={0.2}
+          line={{ stroke: "var(--color-accent)", strokeWidth: 1.25 }} />
+      </Svg>
     </Chart>
   </div>
 {/if}

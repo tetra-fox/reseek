@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { setMedia } from "#lib/testing/media.js";
 
-import { crossFade, motionFast } from "./motion";
+import { chartMotion, crossFade, motionFast } from "./motion";
 
 const REDUCE = "prefers-reduced-motion: reduce";
 
@@ -20,6 +20,13 @@ describe("motion", () => {
     setMedia(REDUCE, true);
     flushSync();
     expect(motionFast()).toBe(0);
+  });
+
+  it("still charts when reduced motion is asked for", () => {
+    expect(chartMotion()).toMatchObject({ type: "tween" });
+    setMedia(REDUCE, true);
+    flushSync();
+    expect(chartMotion()).toBe("none");
   });
 
   it("cross-fades a change only where motion is welcome", async () => {

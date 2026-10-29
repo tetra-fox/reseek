@@ -1,16 +1,16 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { Axis, Chart, Grid, Html, Svg, Tooltip } from "layerchart";
+  import { Axis, Bar, Chart, Grid, Svg, Tooltip } from "layerchart";
 
   import type { Schemas } from "#lib/api/client.js";
-  import DitherFill, { type BarFill } from "#lib/components/charts/DitherFill.svelte";
   import { axisPadding, tickLabel } from "#lib/dashboard/chart.js";
   import { outcomes } from "#lib/dashboard/reports.js";
+  import { chartMotion } from "#lib/motion.js";
   import { href } from "#lib/nav.js";
   import { rem } from "#lib/viewport.svelte.js";
 
-  // how the range's transfers ended, each direction one stacked bar of dither on LayerChart; a
-  // part opens the list of those transfers
+  // how the range's transfers ended, each direction one stacked bar on LayerChart; a part opens
+  // the list of those transfers, and a hover fades the other direction
   let { summary }: { summary: Schemas["SummaryReport"] } = $props();
 
   const data = $derived(outcomes(summary));
@@ -26,6 +26,8 @@
     ...axisPadding(["Downloads", "Uploads"], rem.px),
     top: 0
   });
+
+  const motion = chartMotion();
 
   /** Each part of each bar: its series and where it lies in counts */
   const parts = (d: Row) => {
@@ -72,24 +74,6 @@
         tooltipContext={{ mode: "band" }}>
         {#snippet children({ context })}
           {@const hovered = context.tooltipState.data as Row | null}
-          {@const band = context.yScale.bandwidth?.() ?? 0}
-          <Html pointerEvents={false}>
-            <DitherFill
-              width={context.width}
-              height={context.height}
-              bars={data.flatMap((d, i) =>
-                parts(d).map((p): BarFill => ({
-                  color: p.series.color,
-                  x0: context.xScale(p.from),
-                  x1: context.xScale(p.to),
-                  top: context.yScale(d.direction),
-                  floor: context.yScale(d.direction) + band,
-                  group: i
-                }))
-              )}
-              hovered={!!hovered}
-              group={hovered ? data.indexOf(hovered) : null} />
-          </Html>
           <Svg>
             <Grid x class="stroke-border" />
             <Axis placement="left" tickLabelProps={tickLabel} />
@@ -102,15 +86,13 @@
             <!-- each part takes a click, which opens the list of those transfers -->
             {#each data as d (d.direction)}
               {#each parts(d) as p (p.series.key)}
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <rect
-                  x={context.xScale(p.from)}
-                  y={context.yScale(d.direction)}
-                  width={Math.max(0, context.xScale(p.to) - context.xScale(p.from))}
-                  height={band}
-                  fill="transparent"
-                  class="cursor-pointer"
-                  role="presentation"
+                <Bar
+                  data={d}
+                  x={() => [p.from, p.to]}
+                  fill={p.series.color}
+                  opacity={hovered && hovered !== d ? 0.45 : 1}
+                  class="cursor-pointer transition-opacity"
+                  {motion}
                   onclick={() => open(d.direction, p.series.state)} />
               {/each}
             {/each}

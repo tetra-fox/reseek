@@ -351,7 +351,8 @@ export const fakeFiles = async (page: Page) => {
   );
 };
 
-const transfer = (
+/** A download of `filename` from `username`, finished unless `state` says otherwise */
+export const transfer = (
   filename: string,
   state = "Completed, Succeeded",
   size = 1000,

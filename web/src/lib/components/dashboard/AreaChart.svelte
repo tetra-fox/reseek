@@ -1,15 +1,16 @@
 <script lang="ts">
-  import { Axis, Chart, Grid, Highlight, Html, Legend, Svg, Tooltip } from "layerchart";
+  import { Area, Axis, Chart, Grid, Highlight, LinearGradient, Svg, Tooltip } from "layerchart";
   import { SvelteSet } from "svelte/reactivity";
 
-  import DitherFill, { type AreaFill } from "#lib/components/charts/DitherFill.svelte";
   import { axisPadding, tickLabel, timeLabel, valueLabel } from "#lib/dashboard/chart.js";
   import type { Point } from "#lib/dashboard/reports.js";
   import type { Series } from "#lib/dashboard/series.js";
+  import { chartMotion } from "#lib/motion.js";
   import { rem } from "#lib/viewport.svelte.js";
 
-  // transfer history as dithered areas over time on LayerChart, which lays out the axes, the
-  // legend that shows and hides each series, and the tooltip of the bucket under the pointer
+  // transfer history as areas over time on LayerChart, each a line over a fill that fades toward
+  // the floor, with the axes and the tooltip of the bucket under the pointer; the buttons above
+  // show and hide each series
   type Props = {
     data: Point[];
     series: Series[];
@@ -28,6 +29,7 @@
   const top = $derived(Math.max(0, ...data.flatMap((p) => shown.map((s) => p[s.key]))));
   // the axis labels' room, from the longest one they can show at the text size in use
   const padding = $derived(axisPadding([format(top), format(top * 1.25), format(0)], rem.px));
+  const motion = chartMotion();
   const toggle = (key: string) => (visible.has(key) ? visible.delete(key) : visible.add(key));
 
   /** What the chart says to a screen reader: each series' peak and when it was */
@@ -69,44 +71,45 @@
       yNice
       {padding}
       tooltipContext={{ mode: "bisect-x" }}>
-      {#snippet children({ context })}
-        {@const point = context.tooltipState.data}
-        <Html pointerEvents={false}>
-          <DitherFill
-            width={context.width}
-            height={context.height}
-            areas={shown.map((s): AreaFill => ({
-              key: s.key,
-              color: s.color,
-              x: rows.map((d) => context.xScale(d.at)),
-              top: rows.map((d) => context.yScale(d[s.key])),
-              floor: rows.map(() => context.yScale(0))
-            }))}
-            hovered={!!point}
-            marker={point ? context.xScale(point.at) : null} />
-        </Html>
-        <Svg>
-          <Grid y class="stroke-border" style="stroke-dasharray: 3 3" />
-          <Axis placement="left" {format} tickSpacing={rem.px * 3} tickLabelProps={tickLabel} />
-          <Axis
-            placement="bottom"
-            format={(t: Date) => xLabel(t.getTime())}
-            tickSpacing={rem.px * 6}
-            tickOcclusion
-            tickLabelProps={tickLabel} />
-          <Highlight lines={{ class: "stroke-fg-subtle" }} />
-        </Svg>
-        <Tooltip.Root>
-          {#snippet children({ data: p })}
-            <Tooltip.Header value={xLabel(p.timestamp)} />
-            <Tooltip.List>
-              {#each shown as s (s.key)}
-                <Tooltip.Item label={s.name} color={s.color} value={valueLabel(s.unit)(p[s.key])} />
-              {/each}
-            </Tooltip.List>
-          {/snippet}
-        </Tooltip.Root>
-      {/snippet}
+      <Svg>
+        <Grid y class="stroke-border" style="stroke-dasharray: 3 3" />
+        <Axis placement="left" {format} tickSpacing={rem.px * 3} tickLabelProps={tickLabel} />
+        <Axis
+          placement="bottom"
+          format={(t: Date) => xLabel(t.getTime())}
+          tickSpacing={rem.px * 6}
+          tickOcclusion
+          tickLabelProps={tickLabel} />
+        {#each shown as s (s.key)}
+          <LinearGradient vertical>
+            {#snippet stopsContent()}
+              <stop offset="0%" stop-color={s.color} stop-opacity="0.32" />
+              <stop offset="100%" stop-color={s.color} stop-opacity="0.02" />
+            {/snippet}
+            {#snippet children({ gradient })}
+              <Area
+                y1={(d: (typeof rows)[number]) => d[s.key]}
+                fill={gradient}
+                line={{ stroke: s.color, strokeWidth: 1.5 }}
+                {motion} />
+            {/snippet}
+          </LinearGradient>
+        {/each}
+        <Highlight lines={{ class: "stroke-fg-subtle" }} />
+        {#each shown as s (s.key)}
+          <Highlight y={(d: (typeof rows)[number]) => d[s.key]} points={{ fill: s.color, r: 3 }} />
+        {/each}
+      </Svg>
+      <Tooltip.Root>
+        {#snippet children({ data: p })}
+          <Tooltip.Header value={xLabel(p.timestamp)} />
+          <Tooltip.List>
+            {#each shown as s (s.key)}
+              <Tooltip.Item label={s.name} color={s.color} value={valueLabel(s.unit)(p[s.key])} />
+            {/each}
+          </Tooltip.List>
+        {/snippet}
+      </Tooltip.Root>
     </Chart>
   </div>
 </div>
