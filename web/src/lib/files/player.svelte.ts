@@ -1,7 +1,8 @@
-import { audioType } from "#lib/components/files/links.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { getFileName } from "#lib/format.js";
 import type { Outcome } from "#lib/request.js";
+
+import { audioType } from "./links";
 
 /** A file the player can play: a finished download or a file under the download directories */
 export type Track = {

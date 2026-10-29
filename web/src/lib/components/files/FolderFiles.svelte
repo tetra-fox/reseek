@@ -18,8 +18,8 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Input from "#lib/components/ui/Input.svelte";
-  import { asItem, enqueue } from "#lib/downloads.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { asItem, enqueue } from "#lib/files/downloads.js";
   import { formatAttributes, formatBytes, plural } from "#lib/format.js";
   import { Grid, keptIn } from "#lib/lists/table.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";

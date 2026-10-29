@@ -25,8 +25,9 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
-  import { asItem, type Enqueued, enqueue } from "#lib/downloads.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
+  import { asItem, type Enqueued, enqueue } from "#lib/files/downloads.js";
+  import { slskLink } from "#lib/files/slsk.js";
   import {
     formatAttributes,
     formatBytes,
@@ -34,7 +35,6 @@
     getFileName,
     plural
   } from "#lib/format.js";
-  import { slskLink } from "#lib/slsk.js";
 
   import { LOCKED_HINT } from "./locked";
 

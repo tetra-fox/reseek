@@ -11,10 +11,10 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { parseSlsk, slskBrowse } from "#lib/files/slsk.js";
   import { href } from "#lib/nav.js";
   import { forget, recent, remember, restore, togglePin } from "#lib/search/recent.svelte.js";
   import { type SearchScope, scopeLabel, searches } from "#lib/search/searches.svelte.js";
-  import { parseSlsk, slskBrowse } from "#lib/slsk.js";
 
   type Props = {
     /** where the search goes; the whole network when not given */

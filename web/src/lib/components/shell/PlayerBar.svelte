@@ -8,9 +8,9 @@
   import XIcon from "@lucide/svelte/icons/x";
 
   import Button from "#lib/components/ui/Button.svelte";
+  import { player } from "#lib/files/player.svelte.js";
   import { formatSeconds, getFileName } from "#lib/format.js";
   import { href } from "#lib/nav.js";
-  import { player } from "#lib/player.svelte.js";
 
   // the preview player; it lives in the shell, so it keeps playing while the user moves around
   let audio = $state<HTMLAudioElement | null>(null);

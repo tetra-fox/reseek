@@ -1,5 +1,5 @@
-import type { EnqueueItem } from "#lib/downloads.js";
-import { parseSlsk } from "#lib/slsk.js";
+import type { EnqueueItem } from "#lib/files/downloads.js";
+import { parseSlsk } from "#lib/files/slsk.js";
 
 /** Files to download, by the user they come from */
 export type Wanted = Map<string, EnqueueItem[]>;

@@ -18,8 +18,8 @@
   import { spectrogramView } from "#lib/analysis/view.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { playable, player, type Track } from "#lib/files/player.svelte.js";
   import { formatDuration } from "#lib/format.js";
-  import { playable, player, type Track } from "#lib/player.svelte.js";
 
   import Minimap from "./Minimap.svelte";
   import Timeline from "./Timeline.svelte";

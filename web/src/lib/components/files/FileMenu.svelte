@@ -12,9 +12,8 @@
 
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
-  import { slskLink } from "#lib/slsk.js";
-
-  import { isAudio, remoteFolder } from "./links";
+  import { isAudio, remoteFolder } from "#lib/files/links.js";
+  import { slskLink } from "#lib/files/slsk.js";
 
   type Props = {
     /** the file's path as it is shared, and whose share it is in */

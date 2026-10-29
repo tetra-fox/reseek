@@ -26,7 +26,6 @@
   import AnalysisDrawer from "#lib/components/analysis/AnalysisDrawer.svelte";
   import AnalysisJobs from "#lib/components/analysis/AnalysisJobs.svelte";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
-  import { isAudio } from "#lib/components/files/links.js";
   import FolderTree from "#lib/components/tree/FolderTree.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
@@ -38,10 +37,11 @@
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { isAudio } from "#lib/files/links.js";
+  import { player } from "#lib/files/player.svelte.js";
   import { dateTime, formatBytes, plural } from "#lib/format.js";
   import { archiveUrl, fileTrack, fileUrl, joinPath, type Root } from "#lib/localfiles.js";
   import { href } from "#lib/nav.js";
-  import { player } from "#lib/player.svelte.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";

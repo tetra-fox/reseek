@@ -1,4 +1,4 @@
-import { parseSlsk, type SlskLink } from "#lib/slsk.js";
+import { parseSlsk, type SlskLink } from "#lib/files/slsk.js";
 
 /**
  * A run of a chat message starting at `at`: plain text, a web link, a `slsk://` link, or a

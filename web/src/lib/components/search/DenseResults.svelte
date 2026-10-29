@@ -11,8 +11,8 @@
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { asItem, enqueue } from "#lib/downloads.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { asItem, enqueue } from "#lib/files/downloads.js";
   import {
     formatAttributes,
     formatBytes,

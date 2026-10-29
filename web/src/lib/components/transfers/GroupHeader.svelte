@@ -16,13 +16,13 @@
   import { analyzableDownload, analyzeBatch, downloadCandidate } from "#lib/analysis/batch.js";
   import { analyzerOffered } from "#lib/analysis/marks.svelte.js";
   import { root } from "#lib/api/client.js";
-  import { folderLinks, remoteFolder } from "#lib/components/files/links.js";
   import TreeToggle from "#lib/components/tree/TreeToggle.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { folderLinks, remoteFolder } from "#lib/files/links.js";
   import { formatBytes, formatDuration, plural } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
   import { act, folderOf, openFolder } from "#lib/transfers/actions.js";

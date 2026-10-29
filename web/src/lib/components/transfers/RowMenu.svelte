@@ -20,8 +20,8 @@
   import XIcon from "@lucide/svelte/icons/x";
 
   import { leaf } from "#lib/browse/tree.js";
-  import { isAudio, remoteFolder } from "#lib/components/files/links.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import { isAudio, remoteFolder } from "#lib/files/links.js";
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import {

@@ -1,5 +1,5 @@
 import { api, root as base } from "#lib/api/client.js";
-import type { Track } from "#lib/player.svelte.js";
+import type { Track } from "#lib/files/player.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
 import { session } from "#lib/session.svelte.js";
 import { encodePath } from "#lib/transfers/content.js";

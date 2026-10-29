@@ -20,9 +20,9 @@
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { asItem, type Enqueued, enqueue } from "#lib/downloads.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { fetchFolder } from "#lib/folders.js";
+  import { asItem, type Enqueued, enqueue } from "#lib/files/downloads.js";
+  import { fetchFolder } from "#lib/files/remote.js";
   import {
     columnWidth,
     formatAttributes,
