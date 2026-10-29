@@ -2,8 +2,7 @@
   import type { Schemas } from "#lib/api/client.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { dateTime } from "#lib/format.js";
-  import { UNTIL_RESTART } from "#lib/wording.js";
+  import { lasting } from "#lib/config/editability.js";
 
   // where a value comes from; nothing for a default
   let { source }: { source: Schemas["OptionSource"] } = $props();
@@ -25,11 +24,7 @@
   <Tooltip text={`Applied at runtime by ${source.setBy}`} hint>
     {#snippet child({ props })}
       <Badge {...props} tone="accent">
-        runtime{source.untilRestart
-          ? ` ${UNTIL_RESTART}`
-          : source.expiresAt
-            ? ` until ${dateTime(source.expiresAt)}`
-            : ""}
+        runtime {lasting(source)}
       </Badge>
     {/snippet}
   </Tooltip>

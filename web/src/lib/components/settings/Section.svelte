@@ -223,7 +223,7 @@
 
   /**
    * How long a runtime change lasts: an expiry for `expiresIn`, "restart" for until reseek stops,
-   * null for until removed. Until restart comes first, as the change the read-only notices describe
+   * null for until removed. Until restart comes first, so a change ends by default with the process
    */
   const EXPIRIES = [
     {

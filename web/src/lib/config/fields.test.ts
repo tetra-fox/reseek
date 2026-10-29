@@ -156,8 +156,25 @@ describe("editability", () => {
     expect(editability(v, "soulseek.description")).toEqual({
       mode: "runtime",
       notice:
-        "config.toml is not writable (permission denied). Changes apply immediately but do not persist."
+        "config.toml is not writable (permission denied). Changes made here apply immediately and last until restart or until removed, as chosen when applying."
     });
+  });
+
+  it("says whether a value applied at runtime lasts until restart or until removed", () => {
+    const v = copy();
+    v.files[0].writable = false;
+    const applied = (untilRestart: boolean) => {
+      v.fields["soulseek.description"].source = {
+        layer: "runtime",
+        setBy: "admin",
+        setAt: "2026-10-29T10:00:00Z",
+        expiresAt: null,
+        untilRestart
+      };
+      return editability(v, "soulseek.description").notice;
+    };
+    expect(applied(true)).toContain("The value applied here lasts until restart.");
+    expect(applied(false)).toContain("The value applied here lasts until removed.");
   });
 });
 

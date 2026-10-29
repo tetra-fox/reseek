@@ -8,12 +8,12 @@
   import Card from "#lib/components/ui/Card.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import { lasting } from "#lib/config/editability.js";
   import type { ConfigView } from "#lib/config/fields.js";
   import { valueAt } from "#lib/config/sections.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
-  import { dateTime } from "#lib/format.js";
   import { call } from "#lib/request.js";
-  import { RESTART, UNTIL_RESTART } from "#lib/wording.js";
+  import { RESTART } from "#lib/wording.js";
 
   // what the configuration as a whole says: its files, what was ignored or failed, what waits on
   // a reconnect or a restart, and the runtime overrides in effect
@@ -115,11 +115,7 @@
           <code class="min-w-0 font-medium wrap-anywhere">{key}</code>
           <code class="min-w-0 wrap-anywhere text-fg-muted">{JSON.stringify(override.value)}</code>
           <span class="text-xs text-fg-subtle">
-            by {override.setBy}, {override.untilRestart
-              ? UNTIL_RESTART
-              : override.expiresAt
-                ? `until ${dateTime(override.expiresAt)}`
-                : "until removed"}
+            by {override.setBy}, {lasting(override)}
           </span>
           <Button
             variant="ghost"
