@@ -27,10 +27,11 @@ pub struct Analysis {
   pub max_full_minutes: u32,
   /// How many one-second windows, spread evenly, a sampled file is analysed at.
   pub sampled_windows: u32,
-  /// How much disk the spectrogram images may take; the least recently viewed go first.
+  /// How much disk the spectrograms and waveforms of analyzed files may take; the least recently
+  /// viewed go first.
   #[cascade(kind = "size")]
   pub cache_max_bytes: bytesize::ByteSize,
-  /// The spectrogram image.
+  /// How the spectrogram is shown.
   pub spectrogram: Spectrogram,
 }
 
@@ -50,11 +51,11 @@ impl Default for Analysis {
   }
 }
 
-/// The spectrogram image.
+/// How the spectrogram is shown.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Spectrogram {
-  /// The frequency axis the spectrogram is drawn on unless a viewer asks for another: `log`,
-  /// `linear` or `mel`.
+  /// The frequency axis the browser shows the spectrogram on until its user picks another:
+  /// `log`, `linear` or `mel`.
   pub scale: SpectrogramScale,
 }

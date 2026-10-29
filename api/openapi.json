@@ -2425,15 +2425,6 @@
             "schema": {
               "type": "boolean"
             }
-          },
-          {
-            "name": "scale",
-            "in": "query",
-            "description": "the frequency axis the report's spectrogram layout is given on, the option's when left out",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SpectrogramScale"
-            }
           }
         ],
         "responses": {
@@ -2774,12 +2765,96 @@
         }
       }
     },
-    "/api/v0/files/{root}/files/{path}/analysis/spectrogram.png": {
+    "/api/v0/files/{root}/files/{path}/analysis/spectra": {
       "get": {
         "tags": [
           "analysis"
         ],
-        "summary": "A file's spectrogram as a PNG image. A link token does not load it; the session does.",
+        "summary": "The spectrum of every analysed window of a file, in the order of its report's windows.",
+        "operationId": "spectra_file",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "a four-byte little-endian length, a WindowSpectra header as JSON, then the spectra",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "the caller has these bytes already, by their ETag"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/files/{root}/files/{path}/analysis/spectrogram": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "A file's spectrogram: the overview of its whole length, or with `tile` that tile at full\ndetail. A link token does not load it; the session does.",
         "operationId": "spectrogram_file",
         "parameters": [
           {
@@ -2801,34 +2876,125 @@
             }
           },
           {
-            "name": "guides",
+            "name": "tile",
             "in": "query",
-            "description": "draw the encoder cutoff guide lines into the image, true when left out",
+            "description": "the tile at full detail, from 0; the overview of the whole file when left out",
             "required": false,
             "schema": {
-              "type": "boolean"
-            }
-          },
-          {
-            "name": "scale",
-            "in": "query",
-            "description": "the frequency axis to draw the image on, the option's when left out",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SpectrogramScale"
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "a four-byte little-endian length, a SpectrogramTile header as JSON, then its columns",
             "content": {
-              "image/png": {
+              "application/octet-stream": {
                 "schema": {
                   "$ref": "#/components/schemas/FileContent"
                 }
               }
             }
+          },
+          "304": {
+            "description": "the caller has these bytes already, by their ETag"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/files/{root}/files/{path}/analysis/waveform": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "A file's waveform: the overview of its whole length, or with `tile` that tile at full\ndetail.",
+        "operationId": "waveform_file",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tile",
+            "in": "query",
+            "description": "the tile at full detail, from 0; the overview of the whole file when left out",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "a four-byte little-endian length, a WaveformTile header as JSON, then its buckets",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "the caller has these bytes already, by their ETag"
           },
           "400": {
             "description": "",
@@ -2878,7 +3044,7 @@
         "tags": [
           "analysis"
         ],
-        "summary": "The spectrum of one window of a file's analysis, as the spectrogram's column shows it.",
+        "summary": "The spectrum of one window of a file's analysis, over linear frequency bins.",
         "operationId": "window_file",
         "parameters": [
           {
@@ -2908,15 +3074,6 @@
               "type": "integer",
               "format": "int32",
               "minimum": 0
-            }
-          },
-          {
-            "name": "scale",
-            "in": "query",
-            "description": "the frequency axis whose rows the spectrum is given at, the option's when left out",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SpectrogramScale"
             }
           }
         ],
@@ -10311,15 +10468,6 @@
             "schema": {
               "type": "boolean"
             }
-          },
-          {
-            "name": "scale",
-            "in": "query",
-            "description": "the frequency axis the report's spectrogram layout is given on, the option's when left out",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SpectrogramScale"
-            }
           }
         ],
         "responses": {
@@ -10663,12 +10811,97 @@
         }
       }
     },
-    "/api/v0/transfers/downloads/{username}/{id}/analysis/spectrogram.png": {
+    "/api/v0/transfers/downloads/{username}/{id}/analysis/spectra": {
       "get": {
         "tags": [
           "analysis"
         ],
-        "summary": "A succeeded download's spectrogram as a PNG image.",
+        "summary": "The spectrum of every analysed window of a succeeded download.",
+        "operationId": "spectra_download",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "a four-byte little-endian length, a WindowSpectra header as JSON, then the spectra",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "the caller has these bytes already, by their ETag"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/{username}/{id}/analysis/spectrogram": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "A succeeded download's spectrogram: the overview, or with `tile` that tile at full detail.",
         "operationId": "spectrogram_download",
         "parameters": [
           {
@@ -10691,34 +10924,126 @@
             }
           },
           {
-            "name": "guides",
+            "name": "tile",
             "in": "query",
-            "description": "draw the encoder cutoff guide lines into the image, true when left out",
+            "description": "the tile at full detail, from 0; the overview of the whole file when left out",
             "required": false,
             "schema": {
-              "type": "boolean"
-            }
-          },
-          {
-            "name": "scale",
-            "in": "query",
-            "description": "the frequency axis to draw the image on, the option's when left out",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SpectrogramScale"
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "a four-byte little-endian length, a SpectrogramTile header as JSON, then its columns",
             "content": {
-              "image/png": {
+              "application/octet-stream": {
                 "schema": {
                   "$ref": "#/components/schemas/FileContent"
                 }
               }
             }
+          },
+          "304": {
+            "description": "the caller has these bytes already, by their ETag"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/{username}/{id}/analysis/waveform": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "A succeeded download's waveform: the overview, or with `tile` that tile at full detail.",
+        "operationId": "waveform_download",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tile",
+            "in": "query",
+            "description": "the tile at full detail, from 0; the overview of the whole file when left out",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "a four-byte little-endian length, a WaveformTile header as JSON, then its buckets",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "the caller has these bytes already, by their ETag"
           },
           "400": {
             "description": "",
@@ -10799,15 +11124,6 @@
               "type": "integer",
               "format": "int32",
               "minimum": 0
-            }
-          },
-          {
-            "name": "scale",
-            "in": "query",
-            "description": "the frequency axis whose rows the spectrum is given at, the option's when left out",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SpectrogramScale"
             }
           }
         ],
@@ -14899,13 +15215,13 @@
               },
               {
                 "$ref": "#/components/schemas/SpectrogramLayout",
-                "description": "where in the spectrogram image the plot is and how its axes run, for drawing over it;\nnull when the file could not be read as audio and has no spectrogram"
+                "description": "how the spectrogram and the waveform are served and how their axes run; null when the file\ncould not be read as audio and has neither"
               }
             ]
           },
           "spectrogramUrl": {
             "type": "string",
-            "description": "where the spectrogram image of this report is served"
+            "description": "where the overview of this report's spectrogram is served"
           },
           "stale": {
             "type": "boolean",
@@ -22024,86 +22340,73 @@
       },
       "SpectrogramLayout": {
         "type": "object",
-        "description": "Where the plot sits in a spectrogram image and how its axes map to time and frequency, so\na client can draw the guide lines over the image served without them.",
+        "description": "How a report's spectrogram and waveform are served and how their axes run. Both span the\nfile's whole length from 0 seconds. The spectrogram's columns hold levels over linear\nfrequency bins from 0 Hz to `maxHz`, which a viewer lays out on the frequency axis it\nshows; each is served as an overview of the whole file and as tiles at full detail.",
         "required": [
-          "width",
-          "height",
-          "plotX",
-          "plotY",
-          "plotWidth",
-          "plotHeight",
           "scale",
-          "minHz",
           "maxHz",
           "durationSeconds",
           "sampled",
-          "guides"
+          "guides",
+          "bins",
+          "columnsPerSecond",
+          "peaksPerSecond",
+          "tileSeconds",
+          "tiles"
         ],
         "properties": {
+          "bins": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many frequency bins a column has; bin `b` spans `b` to `b + 1` times `maxHz / bins`",
+            "minimum": 0
+          },
+          "columnsPerSecond": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many spectrogram columns a second takes in a tile",
+            "minimum": 0
+          },
           "durationSeconds": {
             "type": "number",
             "format": "double",
-            "description": "the time at the plot's right edge, in seconds: the file's length, the left edge being 0"
+            "description": "the file's length in seconds, which the time axis spans"
           },
           "guides": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/GuideLine"
             },
-            "description": "the lines drawn across the plot in the image served with guides, lowest first"
-          },
-          "height": {
-            "type": "integer",
-            "format": "int32",
-            "description": "the whole image's height in pixels",
-            "minimum": 0
+            "description": "the lines worth drawing across the spectrogram, lowest first"
           },
           "maxHz": {
             "type": "number",
             "format": "double",
-            "description": "the frequency at the plot's top edge, in Hz: half the sample rate"
+            "description": "the frequency at the top of the highest bin, in Hz: half the sample rate"
           },
-          "minHz": {
-            "type": "number",
-            "format": "double",
-            "description": "the frequency at the plot's bottom edge, in Hz"
-          },
-          "plotHeight": {
+          "peaksPerSecond": {
             "type": "integer",
             "format": "int32",
-            "description": "the plot's height in pixels",
-            "minimum": 0
-          },
-          "plotWidth": {
-            "type": "integer",
-            "format": "int32",
-            "description": "the plot's width in pixels, which spans the file's whole length in time",
-            "minimum": 0
-          },
-          "plotX": {
-            "type": "integer",
-            "format": "int32",
-            "description": "the plot's left edge, in pixels from the image's left",
-            "minimum": 0
-          },
-          "plotY": {
-            "type": "integer",
-            "format": "int32",
-            "description": "the plot's top edge, in pixels from the image's top",
+            "description": "how many waveform buckets a second takes in a tile",
             "minimum": 0
           },
           "sampled": {
             "type": "boolean",
-            "description": "whether the windows are samples spread over a long file, the stretches between them drawn\nas unread, rather than every second of it"
+            "description": "whether the windows are samples spread over a long file, the stretches between them\nunread, rather than every second of it"
           },
           "scale": {
             "$ref": "#/components/schemas/SpectrogramScale",
-            "description": "how the frequency axis runs"
+            "description": "the frequency axis a viewer shows until its user picks one, from the daemon's options"
           },
-          "width": {
+          "tileSeconds": {
             "type": "integer",
             "format": "int32",
-            "description": "the whole image's width in pixels",
+            "description": "how many seconds a tile spans; tile `n` starts at `n` times this",
+            "minimum": 0
+          },
+          "tiles": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many tiles the file's length takes",
             "minimum": 0
           }
         }
@@ -22116,6 +22419,71 @@
           "linear",
           "mel"
         ]
+      },
+      "SpectrogramTile": {
+        "type": "object",
+        "description": "The header of a spectrogram response, which the columns follow: `columns` times `bins`\nbytes, column after column, each column's bins lowest first. A byte is a level from `minDb`\n(0) to `maxDb` (255) on a straight scale.",
+        "required": [
+          "fromSeconds",
+          "toSeconds",
+          "columns",
+          "bins",
+          "maxHz",
+          "minDb",
+          "maxDb",
+          "unread"
+        ],
+        "properties": {
+          "bins": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many frequency bins a column has, from 0 Hz to `maxHz`",
+            "minimum": 0
+          },
+          "columns": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many columns follow, evenly spread from `fromSeconds` to `toSeconds`",
+            "minimum": 0
+          },
+          "fromSeconds": {
+            "type": "number",
+            "format": "double",
+            "description": "when the first column starts, in seconds from the start of the file"
+          },
+          "maxDb": {
+            "type": "number",
+            "format": "double",
+            "description": "the level of byte 255, in dB relative to a full-scale sine"
+          },
+          "maxHz": {
+            "type": "number",
+            "format": "double",
+            "description": "the frequency at the top of the highest bin, in Hz"
+          },
+          "minDb": {
+            "type": "number",
+            "format": "double",
+            "description": "the level of byte 0, in dB relative to a full-scale sine"
+          },
+          "toSeconds": {
+            "type": "number",
+            "format": "double",
+            "description": "when the last column ends, in seconds from the start of the file"
+          },
+          "unread": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              }
+            },
+            "description": "runs of columns the analysis did not read, as the first and one past the last; their\nbytes are 0"
+          }
+        }
       },
       "State": {
         "type": "object",
@@ -24131,6 +24499,86 @@
         ],
         "description": "How a request's identity was established."
       },
+      "WaveformTile": {
+        "type": "object",
+        "description": "The header of a waveform response, which the buckets follow: two signed bytes each, the\nlowest and the highest sample over the channels from -127 (full scale below) to 127.",
+        "required": [
+          "fromSeconds",
+          "toSeconds",
+          "peaks",
+          "unread"
+        ],
+        "properties": {
+          "fromSeconds": {
+            "type": "number",
+            "format": "double",
+            "description": "when the first bucket starts, in seconds from the start of the file"
+          },
+          "peaks": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many buckets follow, evenly spread from `fromSeconds` to `toSeconds`",
+            "minimum": 0
+          },
+          "toSeconds": {
+            "type": "number",
+            "format": "double",
+            "description": "when the last bucket ends, in seconds from the start of the file"
+          },
+          "unread": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              }
+            },
+            "description": "runs of buckets the analysis did not read, as the first and one past the last"
+          }
+        }
+      },
+      "WindowSpectra": {
+        "type": "object",
+        "description": "The header of a window spectra response, which every analysed window's spectrum over its\nsecond follows, in the order of the report's windows: `bins` bytes each, lowest first, a\nbyte a level from `minDb` (0) to `maxDb` (255).",
+        "required": [
+          "windows",
+          "bins",
+          "maxHz",
+          "minDb",
+          "maxDb"
+        ],
+        "properties": {
+          "bins": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many frequency bins a spectrum has, from 0 Hz to `maxHz`",
+            "minimum": 0
+          },
+          "maxDb": {
+            "type": "number",
+            "format": "double",
+            "description": "the level of byte 255, in dB relative to a full-scale sine"
+          },
+          "maxHz": {
+            "type": "number",
+            "format": "double",
+            "description": "the frequency at the top of the highest bin, in Hz"
+          },
+          "minDb": {
+            "type": "number",
+            "format": "double",
+            "description": "the level of byte 0, in dB relative to a full-scale sine"
+          },
+          "windows": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many windows follow",
+            "minimum": 0
+          }
+        }
+      },
       "WindowSpectrum": {
         "type": "object",
         "description": "The spectrum of one analysed window, as `GET .../analysis/windows/{index}` answers it.",
@@ -24155,7 +24603,7 @@
               "type": "number",
               "format": "double"
             },
-            "description": "the frequency of each point, in Hz, highest first: the middle of each spectrogram row"
+            "description": "the frequency of each point, in Hz, lowest first: the middle of each frequency bin"
           },
           "index": {
             "type": "integer",

@@ -22,7 +22,7 @@ mod users;
 
 use std::sync::Arc;
 
-pub use analysis::AnalysisService;
+pub use analysis::{AnalysisService, Piece};
 pub use application::{ApplicationService, Connected};
 pub use blocking::{BlockImport, BlockingService};
 pub use events::EventService;

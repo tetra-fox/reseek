@@ -1,7 +1,7 @@
-//! The analysis calls against the in-memory daemon: a downloaded file analysed by its path and
-//! by its download, its report and its spectrogram, the event and the frame raised once, files
-//! outside the roots refused, unreadable files reported rather than failed, and the user's
-//! judgement kept across a restart.
+//! The analysis calls against the in-memory daemon: a downloaded file analyzed by its path and
+//! by its download, its report, its spectrogram and its waveform, the event and the frame raised
+//! once, files outside the roots refused, unreadable files reported rather than failed, and the
+//! user's judgement kept across a restart.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -38,6 +38,20 @@ fn lossless(app: &TestApp, relative: &str) {
   let path = app.state.paths.downloads.join(relative);
   std::fs::create_dir_all(path.parent().unwrap()).unwrap();
   write_flac(&music(1, 44_100, pink), 16, false, &path);
+}
+
+/// The JSON header of a binary answer and the bytes after it.
+fn framed(body: &[u8]) -> (Value, &[u8]) {
+  let length = u32::from_le_bytes(body[..4].try_into().unwrap()) as usize;
+  let header = serde_json::from_slice(&body[4..4 + length]).unwrap();
+  (header, &body[4 + length..])
+}
+
+/// How many files the analysis directory holds.
+fn kept(app: &TestApp) -> usize {
+  std::fs::read_dir(app.state.paths.data.join("analysis"))
+    .unwrap()
+    .count()
 }
 
 /// Waits until no analysis is queued or running.
@@ -117,7 +131,13 @@ async fn a_download_is_analysed_reported_drawn_and_announced_once() {
   assert!(report["windows"].as_array().unwrap().len() >= 30);
   assert_eq!(report["override"], Value::Null);
   let url = report["spectrogramUrl"].as_str().unwrap();
-  assert_eq!(url, format!("{}/spectrogram.png", route("Album/01.flac")));
+  assert_eq!(url, format!("{}/spectrogram", route("Album/01.flac")));
+  let layout = &report["spectrogram"];
+  assert_eq!(layout["bins"], 512);
+  assert_eq!(
+    layout["scale"], "log",
+    "the option's until a viewer picks one"
+  );
   let by_download = format!("/api/v0/transfers/downloads/alice/{id}/analysis?windows=false");
   let (status, same) = send(&app, "GET", &by_download, None).await;
   assert_eq!(status, 200);
@@ -127,15 +147,54 @@ async fn a_download_is_analysed_reported_drawn_and_announced_once() {
   assert_eq!(listed[0]["relativePath"], "Album/01.flac");
   assert_eq!(listed[0]["transferId"], json!(id));
 
-  let guided = app.send(request("GET", url, None)).await;
-  assert_eq!(guided.status, 200);
-  assert_eq!(guided.headers["content-type"], "image/png");
-  assert!(guided.body.starts_with(b"\x89PNG"));
-  let plain = app
-    .send(request("GET", &format!("{url}?guides=false"), None))
+  let overview = app.send(request("GET", url, None)).await;
+  assert_eq!(overview.status, 200);
+  assert_eq!(overview.headers["content-type"], "application/octet-stream");
+  let (header, columns) = framed(&overview.body);
+  let duration = report["durationSeconds"].as_f64().unwrap();
+  let count = (duration * 16.0).ceil() as usize;
+  assert_eq!(
+    header["columns"], count,
+    "a short file's overview is at full detail"
+  );
+  assert_eq!(header["toSeconds"], count as f64 / 16.0);
+  assert_eq!(columns.len(), count * 512);
+  assert!(columns.iter().any(|b| *b > 128), "music is loud somewhere");
+  // a viewer that has it already is told so
+  let tag = overview.headers["etag"].to_str().unwrap().to_string();
+  let mut again = request("GET", url, None);
+  again
+    .headers_mut()
+    .insert("if-none-match", tag.parse().unwrap());
+  let again = app.send(again).await;
+  assert_eq!(again.status, 304);
+  assert!(again.body.is_empty());
+  let tile = app
+    .send(request("GET", &format!("{url}?tile=0"), None))
     .await;
-  assert!(plain.body.starts_with(b"\x89PNG"));
-  assert_ne!(guided.body, plain.body);
+  assert_eq!(tile.status, 200);
+  assert_ne!(tile.headers["etag"].to_str().unwrap(), tag);
+  assert_eq!(
+    framed(&tile.body).1,
+    &columns[..256 * 512],
+    "the first sixteen seconds, at full detail as a short file's overview is"
+  );
+  let past = app
+    .send(request("GET", &format!("{url}?tile=9"), None))
+    .await;
+  assert_eq!(past.status, 404);
+  let waveform = format!("/api/v0/transfers/downloads/alice/{id}/analysis/waveform");
+  let waveform = app.send(request("GET", &waveform, None)).await;
+  assert_eq!(waveform.status, 200);
+  let (header, peaks) = framed(&waveform.body);
+  assert_eq!(peaks.len(), header["peaks"].as_u64().unwrap() as usize * 2);
+  let spectra = format!("{}/spectra", route("Album/01.flac"));
+  let spectra = app.send(request("GET", &spectra, None)).await;
+  let (header, _) = framed(&spectra.body);
+  assert_eq!(
+    header["windows"],
+    report["windows"].as_array().unwrap().len()
+  );
 
   assert_eq!(events.load(Ordering::SeqCst), 1);
   let (status, _) = send(&app, "POST", &route("Album/01.flac"), None).await;
@@ -210,8 +269,8 @@ async fn unreadable_files_are_reported_inconclusive_not_failed() {
   let (_, noise) = send(&app, "GET", &route("noise.flac"), None).await;
   assert_eq!(noise["claimed"]["codec"], "unknown");
   assert_eq!(noise["spectrogram"], Value::Null);
-  let image = format!("{}/spectrogram.png", route("noise.flac"));
-  let (status, _) = send(&app, "GET", &image, None).await;
+  let pictures = format!("{}/spectrogram", route("noise.flac"));
+  let (status, _) = send(&app, "GET", &pictures, None).await;
   assert_eq!(status, 404);
 }
 
@@ -274,18 +333,12 @@ async fn spectrograms_beyond_the_cache_limit_go_least_recently_viewed_first() {
   settled(&app).await;
   send(&app, "POST", &route("b.flac"), None).await;
   settled(&app).await;
-  let a = format!("{}/spectrogram.png", route("a.flac"));
-  let b = format!("{}/spectrogram.png", route("b.flac"));
+  let a = format!("{}/spectrogram", route("a.flac"));
+  let b = format!("{}/spectrogram", route("b.flac"));
   let (status, gone) = send(&app, "GET", &a, None).await;
   assert_eq!(status, 404, "{gone}");
   assert_eq!(app.send(request("GET", &b, None)).await.status, 200);
-  let images = app.state.paths.data.join("analysis");
-  let kept: Vec<_> = std::fs::read_dir(&images).unwrap().collect();
-  assert_eq!(
-    kept.len(),
-    3,
-    "the newest report's two images and its spectra"
-  );
+  assert_eq!(kept(&app), 1, "the newest report's file");
 }
 
 #[tokio::test]
@@ -322,11 +375,7 @@ async fn a_report_and_its_judgement_outlive_the_file() {
   let (status, _) = send(&app, "GET", &route("Album/02.flac"), None).await;
   assert_eq!(status, 200, "by its path too");
   let image = app
-    .send(request(
-      "GET",
-      &format!("{by_download}/spectrogram.png"),
-      None,
-    ))
+    .send(request("GET", &format!("{by_download}/spectrogram"), None))
     .await;
   assert_eq!(image.status, 200);
   let legit = json!({ "verdict": "legit" });
@@ -347,23 +396,18 @@ async fn lowering_the_cache_limit_removes_spectrograms_at_once() {
     send(&app, "POST", &route(name), None).await;
     settled(&app).await;
   }
-  let images = app.state.paths.data.join("analysis");
-  assert_eq!(std::fs::read_dir(&images).unwrap().count(), 6);
+  assert_eq!(kept(&app), 2);
   let lowered = json!({ "set": { "analysis.cache_max_bytes": "1B" } });
   let (status, body) = send(&app, "PATCH", "/api/v0/options", Some(lowered)).await;
   assert_eq!(status, 200, "{body}");
   for _ in 0..200 {
-    if std::fs::read_dir(&images).unwrap().count() == 3 {
+    if kept(&app) == 1 {
       break;
     }
     tokio::time::sleep(Duration::from_millis(20)).await;
   }
-  assert_eq!(
-    std::fs::read_dir(&images).unwrap().count(),
-    3,
-    "the most recent kept"
-  );
-  let b = format!("{}/spectrogram.png", route("b.flac"));
+  assert_eq!(kept(&app), 1, "the most recent kept");
+  let b = format!("{}/spectrogram", route("b.flac"));
   assert_eq!(app.send(request("GET", &b, None)).await.status, 200);
 }
 
@@ -416,8 +460,10 @@ async fn a_queued_analysis_can_be_cancelled_and_a_window_read() {
   assert_eq!(window["t"], 3.0);
   assert_eq!(window["hz"].as_array().unwrap().len(), 512);
   assert_eq!(window["db"].as_array().unwrap().len(), 512);
-  let top = window["hz"][0].as_f64().unwrap();
-  assert!(top > 20_000.0 && top < 22_050.0, "{top}");
+  // linear bins, lowest first, to the top of the band
+  let hz = |i: usize| window["hz"][i].as_f64().unwrap();
+  assert!((hz(0) - 21.5).abs() < 0.1, "{}", hz(0));
+  assert!((hz(511) - 22_028.5).abs() < 0.1, "{}", hz(511));
   let (status, _) = send(
     &app,
     "GET",
@@ -426,37 +472,23 @@ async fn a_queued_analysis_can_be_cancelled_and_a_window_read() {
   )
   .await;
   assert_eq!(status, 404);
-  // a report read on another scale gives that scale's axis, and its image is drawn on demand and
-  // kept beside the one drawn when the file was analysed
-  let images = app.state.paths.data.join("analysis");
-  let kept = || std::fs::read_dir(&images).unwrap().count();
-  let before = kept();
-  let (_, report) = send(&app, "GET", &format!("{}?scale=mel", route("a.flac")), None).await;
-  assert_eq!(report["spectrogram"]["scale"], "mel");
-  assert_eq!(report["spectrogram"]["minHz"], 0.0);
-  assert_eq!(
-    report["spectrogram"]["durationSeconds"],
-    report["durationSeconds"]
-  );
-  let mel = format!("{}/spectrogram.png?scale=mel&guides=false", route("a.flac"));
-  let drawn = app.send(request("GET", &mel, None)).await;
-  assert_eq!(drawn.status, 200);
-  assert!(drawn.body.starts_with(b"\x89PNG"));
-  assert_eq!(kept(), before + 2, "both mel images kept");
-  let again = app.send(request("GET", &mel, None)).await;
-  assert_eq!(again.body, drawn.body);
-  let (status, window) = send(
-    &app,
-    "GET",
-    &format!("{}/windows/3?scale=mel", route("a.flac")),
-    None,
-  )
-  .await;
-  assert_eq!(status, 200, "{window}");
-  let rows = window["hz"].as_array().unwrap();
-  // mel rows are wider apart at the top than the bottom
-  let gap = |i: usize| rows[i].as_f64().unwrap() - rows[i + 1].as_f64().unwrap();
-  assert!(gap(0) > gap(500) * 10.0, "{} {}", gap(0), gap(500));
+}
+
+#[tokio::test]
+async fn spectrogram_images_an_older_version_kept_are_removed_at_startup() {
+  let app = app(CONFIG, &[]).await;
+  lossless(&app, "a.flac");
+  send(&app, "POST", &route("a.flac"), None).await;
+  settled(&app).await;
+  let dir = app.state.paths.data.join("analysis");
+  for name in ["old.log.png", "old.log.plain.png", "old.png", "old.columns"] {
+    std::fs::write(dir.join(name), b"an image").unwrap();
+  }
+  assert_eq!(kept(&app), 5);
+  let app = app.restarted(&[]).await;
+  assert_eq!(kept(&app), 1, "the report's own file stays");
+  let pictures = format!("{}/spectrogram", route("a.flac"));
+  assert_eq!(app.send(request("GET", &pictures, None)).await.status, 200);
 }
 
 #[tokio::test]
@@ -490,8 +522,8 @@ async fn a_report_from_an_older_version_lists_as_stale_keeps_its_judgement_and_i
   assert_eq!(report["stale"], true);
   assert_eq!(report["override"]["verdict"], "fake");
   assert_eq!(report["spectrogram"], Value::Null);
-  let image = format!("{}/spectrogram.png", route("a.flac"));
-  assert_eq!(app.send(request("GET", &image, None)).await.status, 404);
+  let pictures = format!("{}/spectrogram", route("a.flac"));
+  assert_eq!(app.send(request("GET", &pictures, None)).await.status, 404);
 
   // analysing again needs no force: a stale report is no reading of the file
   let (status, created) = send(&app, "POST", &route("a.flac"), None).await;

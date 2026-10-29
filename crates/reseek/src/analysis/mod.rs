@@ -1,23 +1,24 @@
 //! Audio analysis of downloaded files: a tool the user runs to judge whether a file is what it
 //! claims, such as a FLAC that is really a converted MP3. The file is decoded and its spectrum
-//! measured a second at a time; the main output is a spectrogram with guide lines where
-//! common encoders cut off, and the analyser's own reading comes with it as evidence. The
-//! user's judgement, once recorded, is what counts. The analyser reads files under the
-//! downloads and incomplete directories only and never changes one.
+//! measured a second at a time; the main output is a spectrogram and a waveform, which the
+//! viewer draws with guide lines where common encoders cut off, and the analyzer's own reading
+//! comes with them as evidence. The user's judgement, once recorded, is what counts. The
+//! analyzer reads files under the downloads and incomplete directories only and never changes
+//! one.
 
 mod aggregate;
-mod canvas;
 mod decode;
 mod engine;
 mod flags;
-mod images;
 mod jobs;
+mod kept;
 mod measure;
+mod picture;
 mod reading;
-mod render;
 mod report;
 mod store;
 mod thresholds;
+mod tiles;
 mod totals;
 
 #[cfg(test)]
@@ -34,11 +35,11 @@ use std::time::SystemTime;
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
-  SetAnalysisOverride, SpectrogramQuery, WindowSpectrum, WindowSpectrumQuery,
+  SetAnalysisOverride, WindowSpectrum,
 };
 use api_types::auth::Principal;
 use async_trait::async_trait;
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use cascade::Watcher;
 use chrono::Utc;
@@ -53,24 +54,24 @@ use crate::db::{Database, DbError, Location};
 use crate::events::EventBus;
 use crate::files::Files;
 use crate::live::Live;
-use crate::services::{AnalysisService, FileTarget};
+use crate::services::{AnalysisService, FileTarget, Piece};
 use crate::sync::lock;
 use jobs::{Job, QUEUE_LIMIT, Queue};
 use report::modified_text;
 pub use store::SCHEMA;
 
 /// The analysis service: the queue, the reports and judgements in `analysis.db`, and the
-/// spectrogram images in the data directory.
+/// spectrogram and waveform files in the data directory.
 pub struct Analysis {
   db: Database,
   files: Arc<Files>,
   config: Watcher<Options>,
   live: Live,
   events: EventBus,
-  /// where the spectrogram images are kept
-  images: PathBuf,
+  /// where the spectrogram and waveform files are kept
+  dir: PathBuf,
   queue: Mutex<Queue>,
-  /// the reports whose JSON could not be read, said once each
+  /// the reports whose JSON and the spectrogram files that could not be read, said once each
   unreadable: Mutex<HashSet<String>>,
   /// woken when a job is queued or one ends
   wake: Notify,
@@ -78,8 +79,9 @@ pub struct Analysis {
 }
 
 impl Analysis {
-  /// Opens `analysis.db` at `location`, keeps images under `data`/analysis, and starts the
-  /// queue, which runs until `shutdown`.
+  /// Opens `analysis.db` at `location`, keeps spectrogram and waveform files under
+  /// `data`/analysis, removing what an older version kept there, and starts the queue, which
+  /// runs until `shutdown`.
   pub async fn open(
     location: &Location,
     data: &std::path::Path,
@@ -90,13 +92,18 @@ impl Analysis {
     shutdown: CancellationToken,
   ) -> Result<Arc<Self>, DbError> {
     let db = Database::open(&SCHEMA, location).await?;
+    let dir = data.join("analysis");
+    let older = dir.clone();
+    if let Err(e) = tokio::task::spawn_blocking(move || kept::remove_older(&older)).await {
+      warn!(error = %e, "removing older spectrogram files failed");
+    }
     let analysis = Arc::new(Self {
       db,
       files,
       config,
       live,
       events,
-      images: data.join("analysis"),
+      dir,
       queue: Mutex::new(Queue::default()),
       unreadable: Mutex::default(),
       wake: Notify::new(),
@@ -109,21 +116,6 @@ impl Analysis {
   /// The database, for listing and closing.
   pub fn database(&self) -> &Database {
     &self.db
-  }
-
-  /// The scale a viewer asked for, or the option's.
-  fn scale(&self, asked: Option<api_types::analysis::SpectrogramScale>) -> measure::Scale {
-    match asked {
-      Some(scale) => scale.into(),
-      None => self
-        .config
-        .current()
-        .values
-        .analysis
-        .spectrogram
-        .scale
-        .into(),
-    }
   }
 
   /// Says once that the report of the file at `path` could not be read and why, when it could
@@ -238,53 +230,62 @@ impl AnalysisService for Analysis {
     };
     let mut report = stored.report;
     report.limitations.extend(note.map(str::to_string));
-    let scale = self.scale(query.scale);
-    report.spectrogram = report
-      .spectrogram
-      .map(|layout| render::on_scale(&layout, scale));
+    if let Some(layout) = &mut report.spectrogram {
+      layout.scale = self
+        .config
+        .current()
+        .values
+        .analysis
+        .spectrogram
+        .scale
+        .into();
+    }
     if !query.windows {
       report.windows = None;
     }
     Ok(report)
   }
 
-  async fn spectrogram(
+  async fn piece(
     &self,
     target: FileTarget,
-    query: SpectrogramQuery,
+    piece: Piece,
+    headers: &HeaderMap,
   ) -> Result<Response, ApiError> {
     let file = self.files.local_path(&target).await?;
     let stored = self.stored(&file.path).await?;
-    if stored.report.stale {
-      return Err(ApiError::not_found(
-        "the file was analysed by an older version of reseek; analyse it again to draw it",
-      ));
-    }
-    if stored.report.spectrogram.is_none() {
-      return Err(ApiError::not_found(
-        "no spectrogram was drawn for the file; its report's limitations say why",
-      ));
-    }
-    let scale = self.scale(query.scale);
-    let path = images::image_path(&self.images, &stored.image, scale, query.guides);
-    let bytes = match tokio::fs::read(&path).await {
-      Ok(bytes) => bytes,
-      Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-        self.draw(&stored, scale, query.guides).await?
-      }
-      Err(e) => {
-        return Err(ApiError::internal(format!(
-          "the spectrogram '{}' could not be read: {e}",
-          path.display()
-        )));
-      }
+    let asked = Self::kept_piece(&stored, piece)?;
+    let tag = entity_tag(&stored, piece);
+    let seen = headers
+      .get(header::IF_NONE_MATCH)
+      .and_then(|value| value.to_str().ok())
+      .is_some_and(|seen| {
+        seen
+          .split(',')
+          .map(|tag| tag.trim().trim_start_matches("W/"))
+          .any(|seen| seen == tag || seen == "*")
+      });
+    let bytes = if seen {
+      None
+    } else {
+      Some(self.read_kept(&stored, asked).await?.ok_or_else(|| {
+        ApiError::not_found("the file is not that long; the layout says how many tiles it has")
+      })?)
     };
-    if let Err(e) = store::used_image(&self.db, &stored.image, None, Utc::now()).await {
+    if piece == Piece::Spectrogram(None)
+      && let Err(e) = store::used(&self.db, &stored.kept, None, Utc::now()).await
+    {
       warn!(error = %e, "spectrogram view not recorded");
     }
-    let mut response = (StatusCode::OK, bytes).into_response();
+    let mut response = match bytes {
+      Some(bytes) => (StatusCode::OK, bytes).into_response(),
+      None => StatusCode::NOT_MODIFIED.into_response(),
+    };
     let headers = response.headers_mut();
-    headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
+    headers.insert(
+      header::CONTENT_TYPE,
+      HeaderValue::from_static("application/octet-stream"),
+    );
     headers.insert(
       header::CACHE_CONTROL,
       HeaderValue::from_static("private, no-cache"),
@@ -293,6 +294,9 @@ impl AnalysisService for Analysis {
       header::X_CONTENT_TYPE_OPTIONS,
       HeaderValue::from_static("nosniff"),
     );
+    if let Ok(tag) = HeaderValue::from_str(&tag) {
+      headers.insert(header::ETAG, tag);
+    }
     Ok(response)
   }
 
@@ -375,40 +379,99 @@ impl AnalysisService for Analysis {
     }
   }
 
-  async fn window(
-    &self,
-    target: FileTarget,
-    index: u32,
-    query: WindowSpectrumQuery,
-  ) -> Result<WindowSpectrum, ApiError> {
+  async fn window(&self, target: FileTarget, index: u32) -> Result<WindowSpectrum, ApiError> {
     let file = self.files.local_path(&target).await?;
     let stored = self.stored(&file.path).await?;
     let missing = || ApiError::not_found(format!("the report has no window {index}"));
     let windows = stored.report.windows.as_deref().unwrap_or_default();
     let window = windows.get(index as usize).ok_or_else(missing)?;
-    let layout = stored.report.spectrogram.as_ref().ok_or_else(missing)?;
-    let scale = self.scale(query.scale);
-    let columns = self.columns(&stored, scale).await?;
-    let start = index as usize * measure::ROWS;
-    let column = columns
-      .get(start..start + measure::ROWS)
+    let max_hz = stored
+      .report
+      .spectrogram
+      .as_ref()
+      .ok_or_else(missing)?
+      .max_hz;
+    let asked = Self::kept_piece(&stored, Piece::Spectra)?;
+    let spectra = self.read_kept(&stored, asked).await?.ok_or_else(missing)?;
+    let spectrum = kept::body(&spectra)
+      .and_then(|body| body.as_chunks::<{ picture::BINS }>().0.get(index as usize))
       .ok_or_else(missing)?;
-    let hz = (0..measure::ROWS)
-      .map(|row| {
-        let position = 1.0 - (row as f64 + 0.5) / measure::ROWS as f64;
-        scale
-          .frequency(position, scale.min_hz(), layout.max_hz)
-          .round()
-      })
-      .collect();
     Ok(WindowSpectrum {
       index,
       t: window.t,
-      hz,
-      db: column
+      hz: (0..picture::BINS)
+        .map(|bin| picture::bin_hz(bin, max_hz))
+        .collect(),
+      db: spectrum
         .iter()
-        .map(|byte| measure::column_db(*byte))
+        .map(|byte| picture::byte_level(*byte))
         .collect(),
     })
+  }
+}
+
+/// The tag a piece of a report's pictures is served with: the same file analysed at the same
+/// time gives the same bytes.
+fn entity_tag(stored: &store::Stored, piece: Piece) -> String {
+  let piece = match piece {
+    Piece::Spectrogram(None) => "spectrogram".to_string(),
+    Piece::Spectrogram(Some(tile)) => format!("spectrogram-{tile}"),
+    Piece::Waveform(None) => "waveform".to_string(),
+    Piece::Waveform(Some(tile)) => format!("waveform-{tile}"),
+    Piece::Spectra => "spectra".to_string(),
+  };
+  format!(
+    "\"{}-{}-{piece}\"",
+    &stored.kept[..stored.kept.len().min(16)],
+    stored.report.analysed_at.timestamp_micros()
+  )
+}
+
+impl Analysis {
+  /// What a viewer's `piece` is in a stored report's file, 404 when the report keeps none.
+  fn kept_piece(stored: &store::Stored, piece: Piece) -> Result<kept::Asked, ApiError> {
+    if stored.report.stale {
+      return Err(ApiError::not_found(
+        "the file was analyzed by an older version of reseek; analyze it again to see it",
+      ));
+    }
+    if stored.report.spectrogram.is_none() {
+      return Err(ApiError::not_found(
+        "the file has no spectrogram; its report's limitations say why",
+      ));
+    }
+    Ok(match piece {
+      Piece::Spectrogram(None) => kept::Asked::Overview(tiles::Kind::Spectrogram),
+      Piece::Spectrogram(Some(tile)) => kept::Asked::Tile(tiles::Kind::Spectrogram, tile),
+      Piece::Waveform(None) => kept::Asked::Overview(tiles::Kind::Waveform),
+      Piece::Waveform(Some(tile)) => kept::Asked::Tile(tiles::Kind::Waveform, tile),
+      Piece::Spectra => kept::Asked::Spectra,
+    })
+  }
+
+  /// Reads `asked` from a stored report's file; `None` for a tile past the end of the file, 404
+  /// when the file is no longer kept.
+  async fn read_kept(
+    &self,
+    stored: &store::Stored,
+    asked: kept::Asked,
+  ) -> Result<Option<Vec<u8>>, ApiError> {
+    let path = kept::path(&self.dir, &stored.kept);
+    let reading = path.clone();
+    let read = tokio::task::spawn_blocking(move || kept::read(&reading, asked))
+      .await
+      .map_err(ApiError::internal)?;
+    let not_kept =
+      || ApiError::not_found("the spectrogram is no longer kept; analyze the file again to see it");
+    match read {
+      Ok(bytes) => Ok(bytes),
+      Err(kept::Unkept::Missing) => Err(not_kept()),
+      Err(kept::Unkept::Broken(why)) => {
+        if lock(&self.unreadable).insert(path.to_string_lossy().into_owned()) {
+          warn!(path = %path.display(), error = why, "a spectrogram file does not read");
+        }
+        Err(not_kept())
+      }
+    }
   }
 }

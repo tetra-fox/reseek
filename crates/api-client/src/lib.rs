@@ -327,6 +327,30 @@ async fn bytes(request: RequestBuilder) -> Result<Bytes> {
   Ok(send(request).await?.bytes().await?)
 }
 
+/// A binary answer: a JSON header, then the bytes it describes.
+#[derive(Clone, Debug)]
+pub struct Framed<T> {
+  /// what the bytes are
+  pub header: T,
+  /// the bytes after the header
+  pub body: Bytes,
+}
+
+/// A binary answer read as a four-byte little-endian header length, the header as JSON, and the
+/// bytes it describes.
+async fn framed<T: DeserializeOwned>(request: RequestBuilder) -> Result<Framed<T>> {
+  let mut body = send(request).await?.bytes().await?;
+  let short = || <serde_json::Error as serde::de::Error>::custom("the answer ends in its header");
+  let length = body.get(..4).ok_or_else(short)?;
+  let length = u32::from_le_bytes(length.try_into().expect("four bytes")) as usize;
+  let rest = body.split_off(4);
+  let header = rest.get(..length).ok_or_else(short)?;
+  Ok(Framed {
+    header: serde_json::from_slice(header)?,
+    body: rest.slice(length..),
+  })
+}
+
 /// The answer's body as text.
 async fn text(request: RequestBuilder) -> Result<String> {
   Ok(send(request).await?.text().await?)

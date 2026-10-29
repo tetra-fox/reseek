@@ -1,14 +1,14 @@
-//! The analysis routes: queueing a downloaded file for analysis, reading its report and its
-//! spectrogram, recording the user's own verdict, and listing reports and the queue. A file is
-//! named as the files routes name it, or as a succeeded download.
+//! The analysis routes: queueing a downloaded file for analysis, reading its report, its
+//! spectrogram and its waveform, recording the user's own verdict, and listing reports and the
+//! queue. A file is named as the files routes name it, or as a succeeded download.
 
 use api_types::analysis::{
   AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
-  RunAnalysisQuery, SetAnalysisOverride, SpectrogramQuery, WindowSpectrum, WindowSpectrumQuery,
+  RunAnalysisQuery, SetAnalysisOverride, TileQuery, WindowSpectrum,
 };
 use api_types::files::FileRoot;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use tracing::info;
 use utoipa_axum::router::OpenApiRouter;
@@ -21,17 +21,21 @@ use super::files::root;
 use super::validate;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized, ReadWrite};
-use crate::services::FileTarget;
+use crate::services::{FileTarget, Piece};
 
 /// The analysis routes.
 pub fn routes() -> OpenApiRouter<AppState> {
   OpenApiRouter::new()
     .routes(routes!(run_file, report_file))
     .routes(routes!(spectrogram_file))
+    .routes(routes!(waveform_file))
+    .routes(routes!(spectra_file))
     .routes(routes!(set_override, clear_override))
     .routes(routes!(set_download_override, clear_download_override))
     .routes(routes!(run_download, report_download))
     .routes(routes!(spectrogram_download))
+    .routes(routes!(waveform_download))
+    .routes(routes!(spectra_download))
     .routes(routes!(window_file))
     .routes(routes!(window_download))
     .routes(routes!(list))
@@ -156,16 +160,19 @@ async fn report_download(
   app.services.analysis.report(target, query).await.map(Json)
 }
 
-/// A file's spectrogram as a PNG image. A link token does not load it; the session does.
+/// A file's spectrogram: the overview of its whole length, or with `tile` that tile at full
+/// detail. A link token does not load it; the session does.
 #[utoipa::path(
-  get, path = "/files/{root}/files/{path}/analysis/spectrogram.png", tag = "analysis",
+  get, path = "/files/{root}/files/{path}/analysis/spectrogram", tag = "analysis",
   params(
     ("root" = FileRoot, Path, description = "the directory root"),
     ("path" = String, Path, description = "the file's path under the root, base64"),
-    SpectrogramQuery
+    TileQuery
   ),
   responses(
-    (status = 200, content_type = "image/png", body = api_types::files::FileContent),
+    (status = 200, content_type = "application/octet-stream", body = api_types::files::FileContent,
+      description = "a four-byte little-endian length, a SpectrogramTile header as JSON, then its columns"),
+    (status = 304, description = "the caller has these bytes already, by their ETag"),
     (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
     (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
@@ -174,22 +181,29 @@ async fn spectrogram_file(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
   Path((name, path)): Path<(String, String)>,
-  Query(query): Query<SpectrogramQuery>,
+  Query(query): Query<TileQuery>,
+  headers: HeaderMap,
 ) -> Result<Response, ApiError> {
   let target = file(&name, &path)?;
-  app.services.analysis.spectrogram(target, query).await
+  app
+    .services
+    .analysis
+    .piece(target, Piece::Spectrogram(query.tile), &headers)
+    .await
 }
 
-/// A succeeded download's spectrogram as a PNG image.
+/// A succeeded download's spectrogram: the overview, or with `tile` that tile at full detail.
 #[utoipa::path(
-  get, path = "/transfers/downloads/{username}/{id}/analysis/spectrogram.png", tag = "analysis",
+  get, path = "/transfers/downloads/{username}/{id}/analysis/spectrogram", tag = "analysis",
   params(
     ("username" = String, Path, description = "the peer"),
     ("id" = Uuid, Path, description = "the download's id"),
-    SpectrogramQuery
+    TileQuery
   ),
   responses(
-    (status = 200, content_type = "image/png", body = api_types::files::FileContent),
+    (status = 200, content_type = "application/octet-stream", body = api_types::files::FileContent,
+      description = "a four-byte little-endian length, a SpectrogramTile header as JSON, then its columns"),
+    (status = 304, description = "the caller has these bytes already, by their ETag"),
     (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
     (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
@@ -198,10 +212,136 @@ async fn spectrogram_download(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
   Path((username, id)): Path<(String, Uuid)>,
-  Query(query): Query<SpectrogramQuery>,
+  Query(query): Query<TileQuery>,
+  headers: HeaderMap,
 ) -> Result<Response, ApiError> {
   let target = FileTarget::Download { username, id };
-  app.services.analysis.spectrogram(target, query).await
+  app
+    .services
+    .analysis
+    .piece(target, Piece::Spectrogram(query.tile), &headers)
+    .await
+}
+
+/// A file's waveform: the overview of its whole length, or with `tile` that tile at full
+/// detail.
+#[utoipa::path(
+  get, path = "/files/{root}/files/{path}/analysis/waveform", tag = "analysis",
+  params(
+    ("root" = FileRoot, Path, description = "the directory root"),
+    ("path" = String, Path, description = "the file's path under the root, base64"),
+    TileQuery
+  ),
+  responses(
+    (status = 200, content_type = "application/octet-stream", body = api_types::files::FileContent,
+      description = "a four-byte little-endian length, a WaveformTile header as JSON, then its buckets"),
+    (status = 304, description = "the caller has these bytes already, by their ETag"),
+    (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn waveform_file(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+  Path((name, path)): Path<(String, String)>,
+  Query(query): Query<TileQuery>,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  let target = file(&name, &path)?;
+  app
+    .services
+    .analysis
+    .piece(target, Piece::Waveform(query.tile), &headers)
+    .await
+}
+
+/// A succeeded download's waveform: the overview, or with `tile` that tile at full detail.
+#[utoipa::path(
+  get, path = "/transfers/downloads/{username}/{id}/analysis/waveform", tag = "analysis",
+  params(
+    ("username" = String, Path, description = "the peer"),
+    ("id" = Uuid, Path, description = "the download's id"),
+    TileQuery
+  ),
+  responses(
+    (status = 200, content_type = "application/octet-stream", body = api_types::files::FileContent,
+      description = "a four-byte little-endian length, a WaveformTile header as JSON, then its buckets"),
+    (status = 304, description = "the caller has these bytes already, by their ETag"),
+    (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn waveform_download(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+  Path((username, id)): Path<(String, Uuid)>,
+  Query(query): Query<TileQuery>,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  let target = FileTarget::Download { username, id };
+  app
+    .services
+    .analysis
+    .piece(target, Piece::Waveform(query.tile), &headers)
+    .await
+}
+
+/// The spectrum of every analysed window of a file, in the order of its report's windows.
+#[utoipa::path(
+  get, path = "/files/{root}/files/{path}/analysis/spectra", tag = "analysis",
+  params(
+    ("root" = FileRoot, Path, description = "the directory root"),
+    ("path" = String, Path, description = "the file's path under the root, base64")
+  ),
+  responses(
+    (status = 200, content_type = "application/octet-stream", body = api_types::files::FileContent,
+      description = "a four-byte little-endian length, a WindowSpectra header as JSON, then the spectra"),
+    (status = 304, description = "the caller has these bytes already, by their ETag"),
+    (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn spectra_file(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+  Path((name, path)): Path<(String, String)>,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  let target = file(&name, &path)?;
+  app
+    .services
+    .analysis
+    .piece(target, Piece::Spectra, &headers)
+    .await
+}
+
+/// The spectrum of every analysed window of a succeeded download.
+#[utoipa::path(
+  get, path = "/transfers/downloads/{username}/{id}/analysis/spectra", tag = "analysis",
+  params(
+    ("username" = String, Path, description = "the peer"),
+    ("id" = Uuid, Path, description = "the download's id")
+  ),
+  responses(
+    (status = 200, content_type = "application/octet-stream", body = api_types::files::FileContent,
+      description = "a four-byte little-endian length, a WindowSpectra header as JSON, then the spectra"),
+    (status = 304, description = "the caller has these bytes already, by their ETag"),
+    (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn spectra_download(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+  Path((username, id)): Path<(String, Uuid)>,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  let target = FileTarget::Download { username, id };
+  app
+    .services
+    .analysis
+    .piece(target, Piece::Spectra, &headers)
+    .await
 }
 
 /// Records the user's own verdict on a file.
@@ -361,14 +501,13 @@ async fn cancel_job(
   Ok(StatusCode::NO_CONTENT)
 }
 
-/// The spectrum of one window of a file's analysis, as the spectrogram's column shows it.
+/// The spectrum of one window of a file's analysis, over linear frequency bins.
 #[utoipa::path(
   get, path = "/files/{root}/files/{path}/analysis/windows/{index}", tag = "analysis",
   params(
     ("root" = FileRoot, Path, description = "the directory root"),
     ("path" = String, Path, description = "the file's path under the root, base64"),
-    ("index" = u32, Path, description = "the window's position in the report's windows"),
-    WindowSpectrumQuery
+    ("index" = u32, Path, description = "the window's position in the report's windows")
   ),
   responses(
     (status = 200, body = WindowSpectrum), (status = 400, body = api_types::ErrorBody),
@@ -380,15 +519,9 @@ async fn window_file(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
   Path((name, path, index)): Path<(String, String, u32)>,
-  Query(query): Query<WindowSpectrumQuery>,
 ) -> Result<Json<WindowSpectrum>, ApiError> {
   let target = file(&name, &path)?;
-  app
-    .services
-    .analysis
-    .window(target, index, query)
-    .await
-    .map(Json)
+  app.services.analysis.window(target, index).await.map(Json)
 }
 
 /// The spectrum of one window of a succeeded download's analysis.
@@ -397,8 +530,7 @@ async fn window_file(
   params(
     ("username" = String, Path, description = "the peer"),
     ("id" = Uuid, Path, description = "the download's id"),
-    ("index" = u32, Path, description = "the window's position in the report's windows"),
-    WindowSpectrumQuery
+    ("index" = u32, Path, description = "the window's position in the report's windows")
   ),
   responses(
     (status = 200, body = WindowSpectrum), (status = 400, body = api_types::ErrorBody),
@@ -410,13 +542,7 @@ async fn window_download(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
   Path((username, id, index)): Path<(String, Uuid, u32)>,
-  Query(query): Query<WindowSpectrumQuery>,
 ) -> Result<Json<WindowSpectrum>, ApiError> {
   let target = FileTarget::Download { username, id };
-  app
-    .services
-    .analysis
-    .window(target, index, query)
-    .await
-    .map(Json)
+  app.services.analysis.window(target, index).await.map(Json)
 }

@@ -43,8 +43,11 @@ use crate::auth;
     license(name = "AGPL-3.0-only", identifier = "AGPL-3.0-only")
   ),
   // enums that only query parameters name, which the handlers' descriptions refer to without
-  // listing
+  // listing, and the headers of the binary analysis answers
   components(schemas(
+    api_types::analysis::SpectrogramTile,
+    api_types::analysis::WaveformTile,
+    api_types::analysis::WindowSpectra,
     api_types::chat::ExportFormat,
     api_types::chat::MessageSearchKind,
     api_types::files::ContentDisposition,

@@ -1,9 +1,12 @@
 //! Putting a report together from what was measured and read, and the names a file's report
-//! and images are found by.
+//! and its spectrogram and waveform are found by.
 
 use std::time::SystemTime;
 
-use api_types::analysis::{AnalysisWindow, AudioAnalysis, ClaimedFormat, SpectrogramLayout};
+use api_types::analysis::{
+  AnalysisWindow, AudioAnalysis, ClaimedFormat, GuideKind, GuideLine, SpectrogramLayout,
+  SpectrogramScale,
+};
 use api_types::files::FileRoot;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -11,7 +14,10 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use sha2::{Digest, Sha256};
 
 use super::engine::Measured;
+use super::picture::{BINS, COLUMNS_PER_SECOND, PEAKS_PER_SECOND};
 use super::reading::Reading;
+use super::thresholds::GUIDES;
+use super::tiles::{TILE_SECONDS, tile_count};
 use crate::files::LocalFile;
 
 /// When a file last changed, as stored and hashed.
@@ -19,9 +25,9 @@ pub(super) fn modified_text(time: SystemTime) -> String {
   DateTime::<Utc>::from(time).to_rfc3339_opts(SecondsFormat::Nanos, true)
 }
 
-/// The name a file's spectrogram images are kept under: the SHA-256 of its path, size and
-/// modification time, so a changed file gets new images.
-pub(super) fn image_name(path: &str, size: u64, modified: &str) -> String {
+/// The name a file's spectrogram and waveform are kept under: the SHA-256 of its path, size and
+/// modification time, so a changed file gets a new one.
+pub(super) fn kept_name(path: &str, size: u64, modified: &str) -> String {
   let mut hash = Sha256::new();
   hash.update(path.as_bytes());
   hash.update([0]);
@@ -34,12 +40,68 @@ pub(super) fn image_name(path: &str, size: u64, modified: &str) -> String {
     .collect()
 }
 
-/// Where the spectrogram of the file `relative` under `root` is served.
+/// Where the overview of the spectrogram of the file `relative` under `root` is served.
 pub(super) fn spectrogram_url(root: FileRoot, relative: &str) -> String {
   format!(
-    "/api/v0/files/{root}/files/{}/analysis/spectrogram.png",
+    "/api/v0/files/{root}/files/{}/analysis/spectrogram",
     URL_SAFE_NO_PAD.encode(relative)
   )
+}
+
+impl From<crate::config::enums::SpectrogramScale> for SpectrogramScale {
+  fn from(scale: crate::config::enums::SpectrogramScale) -> Self {
+    match scale {
+      crate::config::enums::SpectrogramScale::Linear => Self::Linear,
+      crate::config::enums::SpectrogramScale::Log => Self::Log,
+      crate::config::enums::SpectrogramScale::Mel => Self::Mel,
+    }
+  }
+}
+
+/// How the spectrogram of audio `duration` seconds long whose band ends at `max_hz` is served,
+/// with a guide line at each common encoder cutoff below the top of the band, one at the top,
+/// and one at the analyzer's cutoff when it found one.
+pub(super) fn layout(
+  duration: f64,
+  max_hz: f64,
+  sampled: bool,
+  cutoff_hz: Option<f64>,
+  scale: SpectrogramScale,
+) -> SpectrogramLayout {
+  let mut guides: Vec<GuideLine> = GUIDES
+    .iter()
+    .filter(|(hz, _)| *hz < max_hz)
+    .map(|(hz, label)| GuideLine {
+      hz: *hz,
+      label: (*label).to_string(),
+      kind: GuideKind::Encoder,
+    })
+    .collect();
+  guides.push(GuideLine {
+    hz: max_hz,
+    label: "file limit".to_string(),
+    kind: GuideKind::FileLimit,
+  });
+  if let Some(cutoff) = cutoff_hz {
+    guides.push(GuideLine {
+      hz: cutoff,
+      label: "analyzer's cutoff".to_string(),
+      kind: GuideKind::Cutoff,
+    });
+  }
+  guides.sort_by(|a, b| a.hz.total_cmp(&b.hz));
+  SpectrogramLayout {
+    scale,
+    max_hz,
+    duration_seconds: duration,
+    sampled,
+    guides,
+    bins: BINS as u32,
+    columns_per_second: COLUMNS_PER_SECOND as u32,
+    peaks_per_second: PEAKS_PER_SECOND as u32,
+    tile_seconds: TILE_SECONDS as u32,
+    tiles: tile_count(duration) as u32,
+  }
 }
 
 /// The report of `file` from what was measured in it and read from that.
