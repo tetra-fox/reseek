@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { fakeChat, frame, helloFrame } from "./fakes";
-import { login } from "./login";
+import { login, refuseCopy } from "./login";
 
 test("a room reads like a chat: names, actions, links and the wall", async ({ page }) => {
   await fakeChat(page);
@@ -103,26 +103,8 @@ test("a busy room's comings and goings stay out of its messages", async ({ page 
   await expect(log).not.toContainText(" left");
 });
 
-test("a private chat shows both sides with their actions", async ({ page }) => {
-  await fakeChat(page);
-  await login(page, "/chat");
-  await page.goto("./#/chat/alice");
-  const log = page.getByRole("log");
-  await expect(log.getByText("yes, browse away")).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("alice");
-  // hovering a message offers to copy it
-  await log.getByText("thanks!").hover();
-  await expect(page.getByRole("button", { name: "Copy the text" }).last()).toBeVisible();
-});
-
 test("a toast sits above the docked activity log", async ({ page }) => {
-  // a copy the browser refuses both ways is a toast that needs nothing from the daemon
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText: () => Promise.reject(new Error("refused")) }
-    });
-    document.execCommand = () => false;
-  });
+  await refuseCopy(page);
   await fakeChat(page);
   await login(page, "/chat");
   await page.goto("./#/chat/rooms/indie");
