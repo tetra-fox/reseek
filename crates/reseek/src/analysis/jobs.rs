@@ -1,5 +1,6 @@
-//! The analysis queue: files wait in the order they were asked for and as many run as
-//! `analysis.workers` allows, each on a blocking thread of its own. A finished analysis is
+//! The analysis queue: files wait in the order they were asked for, by the API or by a download
+//! that finished while `analysis.on_download` is on, and as many run as `analysis.workers`
+//! allows, each on a blocking thread of its own. A finished analysis is
 //! stored with its spectrogram and waveform, pushed to the event stream and raised as an event;
 //! one canceled by shutdown leaves nothing behind.
 
@@ -20,9 +21,11 @@ use uuid::Uuid;
 
 use super::engine::{self, Settings};
 use super::report::{assemble, kept_name, layout, modified_text};
-use super::{Analysis, kept, reading, store};
+use super::{Analysis, current, kept, reading, store};
+use crate::api::error::ApiError;
 use crate::config::Options;
 use crate::files::LocalFile;
+use crate::services::FileTarget;
 use crate::sync::lock;
 
 /// The most files that may wait in the queue.
@@ -80,6 +83,109 @@ impl Queue {
       .chain(&self.running)
       .any(|job| job.file.path == path)
   }
+}
+
+/// What asking for a file's analysis came to.
+pub(super) enum Queued {
+  /// queued as this job
+  Job(Uuid),
+  /// its report is current, so it was left alone
+  Current,
+  /// it is queued or running already
+  Already,
+  /// the queue holds as many files as it may
+  Full,
+}
+
+impl Analysis {
+  /// Queues `file`, unless its report is current and not `force`d, it is in the queue already
+  /// or the queue is full.
+  pub(super) async fn enqueue(&self, file: LocalFile, force: bool) -> Result<Queued, ApiError> {
+    if !force {
+      let path = file.path.to_string_lossy().into_owned();
+      let stored = store::find(&self.db, &path)
+        .await
+        .map_err(ApiError::internal)?;
+      // a stale report is no reading of the file, so it is analyzed again
+      let current =
+        |stored: &store::Stored| !stored.report.stale && current(stored, file.size, file.modified);
+      if stored.as_ref().is_some_and(current) {
+        return Ok(Queued::Current);
+      }
+    }
+    let id = Uuid::new_v4();
+    {
+      let mut queue = lock(&self.queue);
+      if queue.holds(&file.path) {
+        return Ok(Queued::Already);
+      }
+      if queue.waiting.len() >= QUEUE_LIMIT {
+        return Ok(Queued::Full);
+      }
+      debug!(job = %id, path = %file.path.display(), waiting = queue.waiting.len(), "analysis queued");
+      queue.waiting.push_back(Job {
+        id,
+        file,
+        queued_at: Utc::now(),
+        started_at: None,
+        cancel: self.shutdown.child_token(),
+        progress: Arc::default(),
+      });
+    }
+    self.wake.notify_one();
+    Ok(Queued::Job(id))
+  }
+
+  /// Queues the file the download `id` from `username` finished into at `path`, when
+  /// `analysis.on_download` is on and the file's extension is in `analysis.extensions`. A full
+  /// queue drops it, said once until the queue takes a download's file again.
+  pub async fn downloaded(&self, username: &str, id: Uuid, path: &Path) {
+    let options = self.config.current();
+    let analysis = &options.values.analysis;
+    if !analysis.on_download || !listed(&analysis.extensions, path) {
+      return;
+    }
+    let target = FileTarget::Download {
+      username: username.to_string(),
+      id,
+    };
+    let queued = match self.files.local_file(&target).await {
+      Ok(file) => self.enqueue(file, false).await,
+      Err(e) => Err(e),
+    };
+    match queued {
+      Ok(Queued::Job(_)) => {
+        self.full.store(false, Ordering::Relaxed);
+      }
+      Ok(Queued::Current | Queued::Already) => {
+        debug!(path = %path.display(), "finished download analyzed or queued already");
+      }
+      Ok(Queued::Full) => {
+        if !self.full.swap(true, Ordering::Relaxed) {
+          warn!(
+            path = %path.display(),
+            limit = QUEUE_LIMIT,
+            "analysis queue full; finished downloads are not analyzed until it has room"
+          );
+        }
+      }
+      Err(e) => {
+        warn!(path = %path.display(), error = ?e, "finished download not queued for analysis")
+      }
+    }
+  }
+}
+
+/// Whether the extension of `path` is one of `extensions`, ignoring case.
+fn listed(extensions: &[String], path: &Path) -> bool {
+  path
+    .extension()
+    .and_then(|extension| extension.to_str())
+    .is_some_and(|extension| {
+      extensions
+        .iter()
+        .any(|listed| listed.eq_ignore_ascii_case(extension))
+    })
 }
 
 /// Starts queued jobs whenever a worker is free, until the daemon stops.
@@ -301,5 +407,22 @@ async fn evict(analysis: &Analysis) {
   .await;
   if let Err(e) = removed {
     error!(error = %e, "removing spectrograms failed");
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::path::Path;
+
+  use super::listed;
+
+  #[test]
+  fn listed_extensions_match_without_case_and_only_the_last_one() {
+    let extensions = ["flac".to_string(), "wav".to_string()];
+    assert!(listed(&extensions, Path::new("/d/album/01 song.FLAC")));
+    assert!(listed(&extensions, Path::new("/d/a.mp3.wav")));
+    assert!(!listed(&extensions, Path::new("/d/a.flac.mp3")));
+    assert!(!listed(&extensions, Path::new("/d/flac")));
+    assert!(!listed(&[], Path::new("/d/a.flac")));
   }
 }

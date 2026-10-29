@@ -1,17 +1,21 @@
 //! Downloads by the daemon over soulfind from a client that queues every request and uploads
 //! when the test says: a file lands at its destination with its path recorded and its events
 //! raised, a move that fails keeps the download, a cancel and a block end queued downloads,
-//! and a download a stop interrupted is resumed after the next start and finishes.
+//! a download a stop interrupted is resumed after the next start and finishes, and a finished
+//! download is analyzed when the options ask for it.
 
 mod support;
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use api_client::{Client, LocalFile};
+use api_types::analysis::{AnalysisReportQuery, AudioAnalysis};
 use api_types::events::EventsQuery;
 use api_types::files::ContentQuery;
+use api_types::options::OptionsPatch;
 use api_types::transfers::{
   BatchOptions, EnqueueDownloadBatchItem, EnqueueDownloadBatchRequest, QueueDownloadRequest,
   Transfer, TransferDirection, TransferStates,
@@ -406,4 +410,93 @@ async fn a_download_a_stop_interrupted_resumes_after_the_next_start() {
     .await
     .unwrap();
   assert!(superseded.removed, "the old record is superseded");
+}
+
+/// The analysis report of the download `id` from `username`, `None` before there is one.
+async fn report(api: &Client, username: &str, id: Uuid) -> Option<AudioAnalysis> {
+  let query = AnalysisReportQuery { windows: false };
+  match api
+    .analysis(LocalFile::Download(username, id), &query)
+    .await
+  {
+    Ok(report) => Some(report),
+    Err(e) if e.status() == Some(reqwest::StatusCode::NOT_FOUND) => None,
+    Err(e) => panic!("{e}"),
+  }
+}
+
+/// The analysis report of the download `id` from `username` once `ready` holds for it.
+async fn report_when(
+  api: &Client,
+  username: &str,
+  id: Uuid,
+  ready: impl Fn(&AudioAnalysis) -> bool,
+) -> AudioAnalysis {
+  let started = Instant::now();
+  loop {
+    if let Some(report) = report(api, username, id).await
+      && ready(&report)
+    {
+      return report;
+    }
+    assert!(started.elapsed() < PATIENCE * 2, "{id} never analyzed");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  }
+}
+
+#[tokio::test]
+async fn a_finished_download_is_analyzed_while_the_option_is_on() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let (uploader, mut requests) = uploader(&server).await;
+  let dir = tempfile::tempdir().unwrap();
+  let (_daemon, api) = started(dir.path(), &server, &soulfind::username("daemon")).await;
+  let source = scratch();
+  let one = file(&source, "one.flac", SIZE);
+  let peer = uploader.username.clone();
+  let set = |on: bool| OptionsPatch {
+    set: BTreeMap::from([("analysis.on_download".to_string(), json!(on))]),
+    unset: Vec::new(),
+    expires_in: None,
+  };
+  let mut download = async |name: &str| {
+    let remote = format!("@@share\\analyzed\\{name}");
+    let id = enqueue(&api, &peer, &remote, SIZE).await;
+    serve(&uploader, &mut requests, &remote, &one).await;
+    download_when(&api, &peer, id, "moved", |t| t.local_path.is_some()).await;
+    id
+  };
+
+  // the one worker takes files in the order they were queued, so a file queued before one
+  // that was analyzed would have its report by then
+  let off = download("01 off.flac").await;
+  api.patch_options(&set(true)).await.unwrap();
+  let on = download("02 on.flac").await;
+  report_when(&api, &peer, on, |_| true).await;
+  assert!(
+    report(&api, &peer, off).await.is_none(),
+    "analyzed while off"
+  );
+
+  let other = download("03 other.mp3").await;
+  let after = download("04 after.flac").await;
+  report_when(&api, &peer, after, |_| true).await;
+  assert!(
+    report(&api, &peer, other).await.is_none(),
+    "an extension not listed was analyzed"
+  );
+
+  api.patch_options(&set(false)).await.unwrap();
+  let later = download("05 later.flac").await;
+  let before = report(&api, &peer, after).await.unwrap().analyzed_at;
+  api
+    .run_analysis(LocalFile::Download(&peer, after), true)
+    .await
+    .unwrap();
+  report_when(&api, &peer, after, |r| r.analyzed_at > before).await;
+  assert!(
+    report(&api, &peer, later).await.is_none(),
+    "analyzed after the option was turned off"
+  );
 }

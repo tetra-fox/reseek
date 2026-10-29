@@ -12,6 +12,7 @@
         "wv"
       ],
       "max_full_minutes": 15,
+      "on_download": false,
       "sampled_windows": 240,
       "spectrogram": {
         "scale": "log"
@@ -487,7 +488,7 @@
       "kind": {
         "list": "string"
       },
-      "doc": "File extensions, without the dot, that the UI offers to analyze and that are queued when a whole folder is analyzed.",
+      "doc": "File extensions, without the dot, that the UI offers to analyze and that are queued when a whole folder or a finished download is analyzed.",
       "choices": null,
       "default": [
         "flac",
@@ -513,6 +514,21 @@
       "doc": "Maximum length, in minutes, of a file analyzed in full. Longer files are sampled.",
       "choices": null,
       "default": 15,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null
+    },
+    "analysis.on_download": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_ANALYSIS_ON_DOWNLOAD",
+      "cliFlag": "--analysis-on-download",
+      "kind": "bool",
+      "doc": "Analyze each finished download whose file type is listed in Extensions.",
+      "choices": null,
+      "default": false,
       "apply": "live",
       "secret": false,
       "notApplied": null

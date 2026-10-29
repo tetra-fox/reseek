@@ -14,8 +14,11 @@ pub const MAX_ANALYSIS_WORKERS: u32 = 4;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Analysis {
-  /// File extensions, without the dot, that the UI offers to analyze and that are queued when
-  /// a whole folder is analyzed.
+  /// Analyze each finished download whose file type is listed in Extensions.
+  #[cascade(env = "RESEEK_ANALYSIS_ON_DOWNLOAD", cli = "--analysis-on-download")]
+  pub on_download: bool,
+  /// File extensions, without the dot, that the UI offers to analyze and that are queued when a
+  /// whole folder or a finished download is analyzed.
   pub extensions: Vec<String>,
   /// Number of files analyzed at once. Maximum: 4.
   pub workers: u32,
@@ -38,6 +41,7 @@ pub struct Analysis {
 impl Default for Analysis {
   fn default() -> Self {
     Self {
+      on_download: false,
       extensions: ["flac", "wav", "aiff", "alac", "m4a", "ape", "wv"]
         .map(str::to_string)
         .to_vec(),

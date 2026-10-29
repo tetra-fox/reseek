@@ -30,6 +30,7 @@ mod tests;
 
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
@@ -56,7 +57,7 @@ use crate::files::Files;
 use crate::live::Live;
 use crate::services::{AnalysisService, FileTarget, Piece};
 use crate::sync::lock;
-use jobs::{Job, QUEUE_LIMIT, Queue};
+use jobs::{Job, QUEUE_LIMIT, Queue, Queued};
 use report::modified_text;
 pub use store::SCHEMA;
 
@@ -75,6 +76,8 @@ pub struct Analysis {
   unreadable: Mutex<HashSet<String>>,
   /// woken when a job is queued or one ends
   wake: Notify,
+  /// a finished download was dropped from the full queue and not queued since
+  full: AtomicBool,
   shutdown: CancellationToken,
 }
 
@@ -107,6 +110,7 @@ impl Analysis {
       queue: Mutex::new(Queue::default()),
       unreadable: Mutex::default(),
       wake: Notify::new(),
+      full: AtomicBool::new(false),
       shutdown,
     });
     tokio::spawn(jobs::dispatch(analysis.clone()));
@@ -171,47 +175,20 @@ fn current(stored: &store::Stored, size: u64, modified: SystemTime) -> bool {
 impl AnalysisService for Analysis {
   async fn run(&self, target: FileTarget, force: bool) -> Result<AnalysisJobCreated, ApiError> {
     let file = self.files.local_file(&target).await?;
-    if !force {
-      let path = file.path.to_string_lossy().into_owned();
-      let stored = store::find(&self.db, &path)
-        .await
-        .map_err(ApiError::internal)?;
-      // a stale report is no reading of the file, so it is analyzed again
-      let current =
-        |stored: &store::Stored| !stored.report.stale && current(stored, file.size, file.modified);
-      if stored.as_ref().is_some_and(current) {
-        return Err(ApiError::conflict(
-          "the file has been analyzed already",
-          Some("its report is current; ask with force=true to analyze it again".to_string()),
-        ));
-      }
+    match self.enqueue(file, force).await? {
+      Queued::Job(id) => Ok(AnalysisJobCreated { job_id: id }),
+      Queued::Current => Err(ApiError::conflict(
+        "the file has been analyzed already",
+        Some("its report is current; ask with force=true to analyze it again".to_string()),
+      )),
+      Queued::Already => Err(ApiError::conflict(
+        "the file is queued or being analyzed",
+        None,
+      )),
+      Queued::Full => Err(ApiError::too_many(format!(
+        "the analysis queue is full at {QUEUE_LIMIT} files"
+      ))),
     }
-    let id = Uuid::new_v4();
-    {
-      let mut queue = lock(&self.queue);
-      if queue.holds(&file.path) {
-        return Err(ApiError::conflict(
-          "the file is queued or being analyzed",
-          None,
-        ));
-      }
-      if queue.waiting.len() >= QUEUE_LIMIT {
-        return Err(ApiError::too_many(format!(
-          "the analysis queue is full at {QUEUE_LIMIT} files"
-        )));
-      }
-      debug!(job = %id, path = %file.path.display(), waiting = queue.waiting.len(), "analysis queued");
-      queue.waiting.push_back(Job {
-        id,
-        file,
-        queued_at: Utc::now(),
-        started_at: None,
-        cancel: self.shutdown.child_token(),
-        progress: Arc::default(),
-      });
-    }
-    self.wake.notify_one();
-    Ok(AnalysisJobCreated { job_id: id })
   }
 
   async fn report(

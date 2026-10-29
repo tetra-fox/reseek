@@ -285,6 +285,7 @@ impl AppState {
       live.clone(),
       telemetry.clone(),
       relay.controller.clone(),
+      analysis.clone(),
       &paths,
       shutdown.clone(),
     );
