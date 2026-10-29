@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { type ConfigView, leftovers } from "#lib/config/fields.js";
 import fixture from "#lib/config/fixtures/view.json";
+import { helpParts } from "#lib/config/help.js";
 import { sections } from "#lib/config/sections.js";
 
 import Section from "./Section.svelte";
@@ -33,8 +34,12 @@ describe("a settings section", () => {
       const labels = [...target.querySelectorAll("label")].map((l) => l.getAttribute("for"));
       expect(labels).toEqual(section.fields.map((f) => f.key));
       for (const field of section.fields) {
-        expect(target.querySelector(`[id="${field.key}-help"]`)!.textContent).toContain(
-          view.fields[field.key].doc
+        // the help reads as written, with what is between backticks set as code
+        const parts = helpParts(view.fields[field.key].doc);
+        const help = target.querySelector(`[id="${field.key}-help"]`)!;
+        expect(help.textContent).toContain(parts.map((p) => p.text).join(""));
+        expect([...help.querySelectorAll("code")].map((c) => c.textContent)).toEqual(
+          expect.arrayContaining(parts.filter((p) => p.code).map((p) => p.text))
         );
         expect(target.querySelector(`[id="${field.key}"]`)).not.toBeNull();
       }

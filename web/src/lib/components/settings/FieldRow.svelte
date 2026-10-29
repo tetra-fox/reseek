@@ -10,6 +10,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import type { Editability } from "#lib/config/editability.js";
   import type { Draft } from "#lib/config/fields.js";
+  import { helpParts } from "#lib/config/help.js";
   import type { Control, Field } from "#lib/config/sections.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
 
@@ -92,7 +93,9 @@
       {#if info.apply !== "live"}<Badge tone="warning">{info.apply}</Badge>{/if}
     </div>
     <p id={help} class="text-xs text-pretty wrap-anywhere text-fg-muted">
-      {info.doc}
+      {#each helpParts(info.doc) as part, i (i)}{#if part.code}<code class="font-mono wrap-anywhere"
+            >{part.text}</code
+          >{:else}{part.text}{/if}{/each}
       {#if info.default !== null && info.default !== undefined && !(Array.isArray(info.default) && !info.default.length)}
         <span class="text-fg-subtle"
           >Default <code class="font-mono wrap-anywhere">{shown(info.default)}</code>.</span>
