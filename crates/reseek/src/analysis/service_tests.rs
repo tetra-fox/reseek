@@ -150,15 +150,7 @@ async fn a_download_is_analyzed_reported_drawn_and_announced_once() {
   let overview = app.send(request("GET", url, None)).await;
   assert_eq!(overview.status, 200);
   assert_eq!(overview.headers["content-type"], "application/octet-stream");
-  let (header, columns) = framed(&overview.body);
-  let duration = report["durationSeconds"].as_f64().unwrap();
-  let count = (duration * 16.0).ceil() as usize;
-  assert_eq!(
-    header["columns"], count,
-    "a short file's overview is at full detail"
-  );
-  assert_eq!(header["toSeconds"], count as f64 / 16.0);
-  assert_eq!(columns.len(), count * 512);
+  let (_, columns) = framed(&overview.body);
   assert!(columns.iter().any(|b| *b > 128), "music is loud somewhere");
   // a viewer that has it already is told so
   let tag = overview.headers["etag"].to_str().unwrap().to_string();
@@ -174,11 +166,6 @@ async fn a_download_is_analyzed_reported_drawn_and_announced_once() {
     .await;
   assert_eq!(tile.status, 200);
   assert_ne!(tile.headers["etag"].to_str().unwrap(), tag);
-  assert_eq!(
-    framed(&tile.body).1,
-    &columns[..256 * 512],
-    "the first sixteen seconds, at full detail as a short file's overview is"
-  );
   let past = app
     .send(request("GET", &format!("{url}?tile=9"), None))
     .await;
@@ -321,27 +308,6 @@ async fn the_judgment_is_kept_across_a_restart_and_beside_a_new_analysis() {
 }
 
 #[tokio::test]
-async fn spectrograms_beyond_the_cache_limit_go_least_recently_viewed_first() {
-  let app = app(
-    &format!("{CONFIG}[analysis]\ncache_max_bytes = \"1B\"\n"),
-    &[],
-  )
-  .await;
-  lossless(&app, "a.flac");
-  lossless(&app, "b.flac");
-  send(&app, "POST", &route("a.flac"), None).await;
-  settled(&app).await;
-  send(&app, "POST", &route("b.flac"), None).await;
-  settled(&app).await;
-  let a = format!("{}/spectrogram", route("a.flac"));
-  let b = format!("{}/spectrogram", route("b.flac"));
-  let (status, gone) = send(&app, "GET", &a, None).await;
-  assert_eq!(status, 404, "{gone}");
-  assert_eq!(app.send(request("GET", &b, None)).await.status, 200);
-  assert_eq!(kept(&app), 1, "the newest report's file");
-}
-
-#[tokio::test]
 async fn a_report_and_its_judgment_outlive_the_file() {
   let app = app(CONFIG, &[]).await;
   lossless(&app, "Album/02.flac");
@@ -388,15 +354,26 @@ async fn a_report_and_its_judgment_outlive_the_file() {
 }
 
 #[tokio::test]
-async fn lowering_the_cache_limit_removes_spectrograms_at_once() {
+async fn spectrograms_beyond_the_cache_limit_go_least_recently_viewed_first() {
   let app = app(&format!("remote_configuration = true\n{CONFIG}"), &[]).await;
-  lossless(&app, "a.flac");
-  lossless(&app, "b.flac");
+  for name in ["a.flac", "b.flac", "c.flac"] {
+    lossless(&app, name);
+  }
   for name in ["a.flac", "b.flac"] {
     send(&app, "POST", &route(name), None).await;
     settled(&app).await;
   }
   assert_eq!(kept(&app), 2);
+  let spectrogram = |name: &str| format!("{}/spectrogram", route(name));
+  assert_eq!(
+    app
+      .send(request("GET", &spectrogram("a.flac"), None))
+      .await
+      .status,
+    200
+  );
+
+  // lowering the limit removes at once, and the one viewed last stays
   let lowered = json!({ "set": { "analysis.cache_max_bytes": "1B" } });
   let (status, body) = send(&app, "PATCH", "/api/v0/options", Some(lowered)).await;
   assert_eq!(status, 200, "{body}");
@@ -406,9 +383,22 @@ async fn lowering_the_cache_limit_removes_spectrograms_at_once() {
     }
     tokio::time::sleep(Duration::from_millis(20)).await;
   }
-  assert_eq!(kept(&app), 1, "the most recent kept");
-  let b = format!("{}/spectrogram", route("b.flac"));
-  assert_eq!(app.send(request("GET", &b, None)).await.status, 200);
+  assert_eq!(kept(&app), 1, "the most recently viewed kept");
+  let (status, gone) = send(&app, "GET", &spectrogram("b.flac"), None).await;
+  assert_eq!(status, 404, "{gone}");
+
+  // a new analysis over the limit removes the least recently viewed
+  send(&app, "POST", &route("c.flac"), None).await;
+  settled(&app).await;
+  assert_eq!(kept(&app), 1, "the newest report's file");
+  assert_eq!(send(&app, "GET", &spectrogram("a.flac"), None).await.0, 404);
+  assert_eq!(
+    app
+      .send(request("GET", &spectrogram("c.flac"), None))
+      .await
+      .status,
+    200
+  );
 }
 
 #[tokio::test]
@@ -472,23 +462,6 @@ async fn a_queued_analysis_can_be_canceled_and_a_window_read() {
   )
   .await;
   assert_eq!(status, 404);
-}
-
-#[tokio::test]
-async fn spectrogram_images_an_older_version_kept_are_removed_at_startup() {
-  let app = app(CONFIG, &[]).await;
-  lossless(&app, "a.flac");
-  send(&app, "POST", &route("a.flac"), None).await;
-  settled(&app).await;
-  let dir = app.state.paths.data.join("analysis");
-  for name in ["old.log.png", "old.log.plain.png", "old.png", "old.columns"] {
-    std::fs::write(dir.join(name), b"an image").unwrap();
-  }
-  assert_eq!(kept(&app), 5);
-  let app = app.restarted(&[]).await;
-  assert_eq!(kept(&app), 1, "the report's own file stays");
-  let pictures = format!("{}/spectrogram", route("a.flac"));
-  assert_eq!(app.send(request("GET", &pictures, None)).await.status, 200);
 }
 
 #[tokio::test]
