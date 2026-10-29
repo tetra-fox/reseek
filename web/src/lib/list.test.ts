@@ -57,6 +57,22 @@ describe("a list's selection and focus", () => {
     expect(document.getElementById(grid().getAttribute("aria-activedescendant")!)).toBe(line("a2"));
   });
 
+  it("shows the focused line's ring after a key, not after a press, and not once focus leaves", () => {
+    start(grouped());
+    press(grid(), "ArrowDown");
+    expect(focused()).toBe("a1");
+    line("a2").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    flushSync();
+    expect(focused()).toBe(null);
+    press(grid(), "ArrowDown");
+    expect(focused()).toBe("b1");
+    grid().dispatchEvent(
+      new FocusEvent("focusout", { bubbles: true, relatedTarget: document.body })
+    );
+    flushSync();
+    expect(focused()).toBe(null);
+  });
+
   it("toggles with Space, opens with Enter and selects the group with Ctrl or Cmd+A", () => {
     const onopen = vi.fn();
     start(grouped(), { onopen });

@@ -78,8 +78,7 @@
         {...list.line(line, i)}
         class={[
           "border-b px-1 py-1.5 text-sm last:border-b-0",
-          list.selected.has(line.username) && "bg-accent-soft/60",
-          list.isFocused(line) && "ring-1 ring-accent ring-inset"
+          list.selected.has(line.username) && "bg-accent-soft/60"
         ]}>
         <div role="gridcell">
           <div class="flex items-baseline gap-2">

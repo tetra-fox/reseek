@@ -227,15 +227,13 @@
       {#if pin.item.type === "group"}
         {@const group = pin.item.group}
         <div
-          class={[
-            "absolute inset-x-0 bg-surface",
-            list.focusedKey === pin.item.key && "ring-1 ring-accent ring-inset"
-          ]}
+          class="absolute inset-x-0 bg-surface"
           id={pinnedId(pin.index)}
           style:top={`calc(100% + ${pin.top}px)`}
           style:height={`${row}px`}
           style:z-index={n - pinned.length}
           data-line={pin.item.key}
+          data-focused={list.isFocused(pin.item) || undefined}
           data-pinned="true">
           <GroupHeader
             {group}
@@ -261,7 +259,6 @@
       <div
         class={[
           "absolute inset-x-0 top-0",
-          list.isFocused(item) && "ring-1 ring-accent ring-inset",
           item.type === "row" && [
             "group grid items-center border-b hover:bg-hover",
             item.transfer.state.startsWith("Completed, ") &&

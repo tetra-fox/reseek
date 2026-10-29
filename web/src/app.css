@@ -460,6 +460,14 @@
   }
 }
 
+/* the line of a list that the keys moved to: a ring inside its box, clear of the dividers. The
+   list controller marks it only while focus came from the keys, as :focus-visible would */
+@layer components {
+  [data-line][data-focused] {
+    @apply ring-1 ring-accent ring-inset;
+  }
+}
+
 /* Table.svelte's cells. in the components layer so a class on a cell, like text-right or py-6, still
    wins */
 @layer components {

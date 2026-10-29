@@ -155,8 +155,7 @@
           {...list.line(b, i)}
           class={[
             "grid min-w-max items-center gap-2 border-b px-2 py-1.5 last:border-b-0 hover:bg-hover",
-            list.selected.has(b.username) && "bg-accent-soft/60",
-            list.isFocused(b) && "ring-1 ring-accent ring-inset"
+            list.selected.has(b.username) && "bg-accent-soft/60"
           ]}
           style:grid-template-columns={COLUMNS}>
           <span role="gridcell">

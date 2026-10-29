@@ -58,6 +58,9 @@ let lists = 0;
  * the row, and with Shift it selects the rows from the anchor to it (adding them with Ctrl or
  * Cmd as well). A click that ends a text selection selects nothing.
  *
+ * The focused line shows its ring while focus is in the list and got there by the keys, as
+ * `:focus-visible` would: a press anywhere in the list hides it until the next key.
+ *
  * Keys: a focused control keeps the keys it handles (`keepsKey`); the rest act on the line the
  * control is in. Ctrl/Cmd+A selects the focused line's group, or every row; any other key with
  * Ctrl, Cmd or Alt is the browser's. On a row Space toggles it, Enter opens it and the list's
@@ -73,6 +76,8 @@ export class ListControl<L> {
   readonly uid = `list-${++lists}`;
   /** the focused line's key */
   focusedKey = $state<string | null>(null);
+  /** whether the focused line shows its ring: focus is in the list and came from the keys */
+  #ringed = $state(false);
 
   #spec: ListSpec<L>;
   #element = $state<HTMLElement | null>(null);
@@ -133,19 +138,20 @@ export class ListControl<L> {
     return `${this.uid}-${index}`;
   }
 
-  /** The attributes a line's element carries */
+  /** The attributes a line's element carries; `data-focused` draws the focus ring */
   line(line: L, index: number) {
     const id = this.#spec.id(line);
     return {
       "id": this.lineId(index),
       "data-line": this.#spec.key(line),
+      "data-focused": this.isFocused(line) || undefined,
       "aria-selected": id === null ? undefined : this.selected.has(id)
     };
   }
 
-  /** Whether the line is the focused one, for its focus ring */
+  /** Whether the line shows the focus ring: it is the focused one and focus came from the keys */
   isFocused(line: L) {
-    return this.#spec.key(line) === this.focusedKey;
+    return this.#ringed && this.#spec.key(line) === this.focusedKey;
   }
 
   /** Gives the container DOM focus, without scrolling */
@@ -208,18 +214,27 @@ export class ListControl<L> {
   attach = (node: HTMLElement) => {
     this.#element = node;
     const stops = [
-      on(node, "pointerdown", (e) => this.#take(e.target)),
+      on(node, "pointerdown", (e) => {
+        this.#ringed = false;
+        this.#take(e.target);
+      }),
       on(node, "mousedown", this.#mousedown),
       on(node, "focusin", (e) => {
-        this.#held = e.target === node ? null : (e.target as Element);
-        this.#take(e.target);
+        const target = e.target as Element;
+        this.#held = target === node ? null : target;
+        // Tab into the list shows the ring; a press already hid it, and a key already showed it
+        if (target.matches(":focus-visible")) this.#ringed = true;
+        this.#take(target);
       }),
       // focus the user put elsewhere stays there when a row leaves later. A control taken out of
       // the page loses focus too, and that one the list still takes back
       on(node, "focusout", (e) => {
         const to = e.relatedTarget;
         if (!(e.target as Element).isConnected) return;
-        if (!(to instanceof Node && node.contains(to))) this.#held = null;
+        if (!(to instanceof Node && node.contains(to))) {
+          this.#held = null;
+          this.#ringed = false;
+        }
       }),
       on(node, "keydown", this.#keydown),
       on(node, "click", this.#click)
@@ -301,6 +316,8 @@ export class ListControl<L> {
   };
 
   #keydown = (e: KeyboardEvent) => {
+    // Shift alone is the start of a Shift-click as often as of a key
+    if (!withModifier(e) && e.key !== "Shift") this.#ringed = true;
     if (keepsKey(e)) return;
     this.#take(e.target);
     const line = this.focused;

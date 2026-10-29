@@ -182,8 +182,7 @@
             class={[
               "grid min-w-max items-center gap-2 border-b px-4 py-1.5 last:border-b-0 hover:bg-hover",
               r.derivedFrom && "text-fg-muted",
-              sharedList.selected.has(key(r)) && "bg-accent-soft/60",
-              sharedList.isFocused(r) && "ring-1 ring-accent ring-inset"
+              sharedList.selected.has(key(r)) && "bg-accent-soft/60"
             ]}
             style:grid-template-columns={COLUMNS}>
             <span role="gridcell">{r.host}</span>
@@ -233,8 +232,7 @@
             {...excludedList.line(r, i)}
             class={[
               "flex items-center gap-2 border-b px-4 py-1.5 last:border-b-0 hover:bg-hover",
-              excludedList.selected.has(key(r)) && "bg-accent-soft/60",
-              excludedList.isFocused(r) && "ring-1 ring-accent ring-inset"
+              excludedList.selected.has(key(r)) && "bg-accent-soft/60"
             ]}>
             <XIcon class="size-4 text-danger" />
             <span role="gridcell" class="font-mono text-xs">{r.localPath}</span>

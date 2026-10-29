@@ -214,10 +214,7 @@
         <div
           role="row"
           {...list.line(line, i)}
-          class={[
-            "px-1 pt-2 pb-0.5 text-xs font-medium text-fg-muted",
-            list.isFocused(line) && "ring-1 ring-accent ring-inset"
-          ]}>
+          class="px-1 pt-2 pb-0.5 text-xs font-medium text-fg-muted">
           <span role="columnheader">{line.title}</span>
         </div>
       {:else}
@@ -230,7 +227,6 @@
           class={[
             "group flex items-center gap-1.5 rounded-badge px-1 py-0.5 text-sm hover:bg-hover",
             list.selected.has(u.username) && "bg-accent-soft/60",
-            list.isFocused(line) && "ring-1 ring-accent ring-inset",
             members.users.removed.has(u.username) && "opacity-40"
           ]}>
           <span role="gridcell" class="flex min-w-0 flex-1 items-center gap-1.5">

@@ -174,8 +174,7 @@
         {...list.line(e, i)}
         class={[
           "grid min-w-max grid-cols-[2rem_9rem_13rem_minmax(16rem,1fr)] items-center gap-2 border-b px-2 py-1 font-mono text-xs last:border-b-0 hover:bg-hover",
-          list.selected.has(e.id) && "bg-accent-soft/60",
-          list.isFocused(e) && "ring-1 ring-accent ring-inset"
+          list.selected.has(e.id) && "bg-accent-soft/60"
         ]}>
         <span role="gridcell">
           <Tooltip text={e.id}>

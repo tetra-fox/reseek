@@ -316,7 +316,6 @@
             COLUMNS,
             u.block && "bg-danger-soft/40",
             list.selected.has(u.username) && "bg-accent-soft/60",
-            list.isFocused(u) && "ring-1 ring-accent ring-inset",
             rows.removed.has(u.username) && "opacity-40"
           ]}>
           <span role="gridcell">

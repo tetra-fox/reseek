@@ -207,8 +207,7 @@
       class={[
         "grid grid-cols-[4.5rem_2.5rem_1fr] gap-2 border-b px-2 py-0.5 last:border-b-0",
         level?.row,
-        list.selected.has(String(l.seq)) && "bg-accent-soft/60",
-        list.isFocused(l) && "ring-1 ring-accent ring-inset"
+        list.selected.has(String(l.seq)) && "bg-accent-soft/60"
       ]}>
       <span role="gridcell" class="text-fg-muted">{logTime(l.record.timestamp)}</span>
       <span role="gridcell">{level?.short ?? l.record.level}</span>

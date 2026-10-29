@@ -170,7 +170,6 @@
           class={[
             "group absolute inset-x-0 top-0 grid items-center border-b hover:bg-hover",
             selected.has(row.key) && "bg-accent-soft/60",
-            list.isFocused(row) && "ring-1 ring-accent ring-inset",
             arrivals.isFresh(row.key) && "animate-row-in"
           ]}
           style:transform={`translateY(${start - headerHeight}px)`}

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { fakeBrowse, fakeDownloads, fakeSearch, SEARCH_ID } from "./fakes";
+import { fakeBrowse, fakeChat, fakeDownloads, fakeSearch, SEARCH_ID } from "./fakes";
 import { login } from "./login";
 
 test("shows search results as cards and as dense rows walked by key", async ({ page }) => {
@@ -131,4 +131,21 @@ test("goes to a screen from the command palette", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/#\/downloads$/);
   await expect(box).toBeHidden();
+});
+
+test("shows a list's focus ring for the keys, not after a click", async ({ page }) => {
+  await fakeChat(page);
+  await login(page, "/chat");
+  const list = page.getByRole("grid", { name: "Rooms and conversations" });
+  const rooms = list.locator('[data-line="h:rooms"]');
+  await rooms.getByRole("button").click();
+  await page.mouse.move(0, 0);
+  await expect(list.locator("[data-line]").first()).toBeVisible();
+  await expect(rooms).toHaveCSS("box-shadow", "none");
+  await expect(list.locator("[data-focused]")).toHaveCount(0);
+  // the keys bring it back, on the row they move to
+  await rooms.getByRole("button").click();
+  await page.keyboard.press("ArrowDown");
+  await expect(list.locator("[data-focused]")).toHaveCount(1);
+  await expect(list.locator("[data-focused]")).not.toHaveCSS("box-shadow", "none");
 });

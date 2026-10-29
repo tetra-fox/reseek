@@ -185,8 +185,7 @@
             folderId && selected.has(folderId(line.node))
               ? "bg-[color-mix(in_srgb,var(--color-accent-soft)_60%,var(--color-surface))]"
               : "bg-[color-mix(in_srgb,var(--color-surface-muted)_50%,var(--color-surface))]",
-            pin && "sticky",
-            list.isFocused(line) && "ring-1 ring-accent ring-inset"
+            pin && "sticky"
           ]}
           aria-level={line.depth + 1}
           aria-expanded={expansion.isOpen(line.node.path)}
@@ -216,8 +215,7 @@
         {...list.line(line, index)}
         class={[
           "group grid min-h-9 items-center border-b hover:bg-hover",
-          selected.has(idOf(line.item)) && "bg-accent-soft/60",
-          list.isFocused(line) && "ring-1 ring-accent ring-inset"
+          selected.has(idOf(line.item)) && "bg-accent-soft/60"
         ]}
         aria-level={line.depth + 1}
         style:grid-template-columns={columns}

@@ -88,8 +88,7 @@
         {...list.line(f, i)}
         class={[
           "grid items-center border-b py-1 last:border-b-0 hover:bg-hover",
-          list.selected.has(f.name) && "bg-accent-soft/60",
-          list.isFocused(f) && "ring-1 ring-accent ring-inset"
+          list.selected.has(f.name) && "bg-accent-soft/60"
         ]}
         style:grid-template-columns={grid.template}
         style:min-width={grid.width}>
