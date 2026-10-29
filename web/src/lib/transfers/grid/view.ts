@@ -1,5 +1,6 @@
 import { type Mark, markToken, passes } from "#lib/analysis/marks.js";
-import { getDirectoryName, getFileName } from "#lib/format.js";
+import { fileMatches, filterPlaceholder, parseFilters } from "#lib/files/filters.js";
+import { getDirectoryName } from "#lib/format.js";
 import { type ChipId, STATE_CHIPS, type Transfer } from "#lib/transfers/states.js";
 import {
   type FolderNode,
@@ -14,33 +15,43 @@ export type GroupBy = "user" | "folder" | "batch" | "flat";
 /** A transfer's analysis as filters read it: its mark, and whether it could be analyzed */
 export type MarkLookup = (t: Transfer) => { mark: Mark | undefined; analyzable: boolean };
 
+/** The filter tokens of the transfers screen's own, beside those every file filter takes */
+export const TRANSFER_KEYS = ["user", "folder", "marked", "analyzed"] as const;
+
+/** The transfers filter box's placeholder */
+export const TRANSFER_PLACEHOLDER = filterPlaceholder([
+  "user",
+  "folder",
+  "word",
+  "not",
+  "type",
+  "size"
+]);
+
 /**
- * The text filter over transfers: `user:`, `folder:` and `ext:` match those parts, `marked:fake`,
- * `marked:genuine`, `analyzed:yes` and `analyzed:no` the file's analysis read through `marks`
- * (nothing without it), any other word the username, file name or folder; every token must
- * match. Null for an empty filter
+ * The text filter over transfers: the file filter's language over the user and the path, plus
+ * `user:` and `folder:`, which match those parts, and `marked:fake`, `marked:genuine`,
+ * `analyzed:yes` and `analyzed:no`, which read the file's analysis through `marks` (nothing
+ * without it); every token must hold. Null for an empty filter
  */
 export const textFilter = (text: string, marks?: MarkLookup): ((t: Transfer) => boolean) | null => {
-  const tokens = text.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!tokens.length) return null;
+  if (!text.trim()) return null;
+  const filters = parseFilters(text, TRANSFER_KEYS);
   return (t) => {
     const user = t.username.toLowerCase();
-    const name = getFileName(t.filename).toLowerCase();
     const folder = getDirectoryName(t.filename).toLowerCase();
-    return tokens.every((token) => {
-      const byMark = markToken(token);
-      if (byMark) {
-        if (!marks) return false;
-        const { mark, analyzable } = marks(t);
-        return passes(byMark, mark, analyzable);
+    for (const token of filters.screen) {
+      let holds: boolean;
+      if (token.name === "user") holds = user.includes(token.value);
+      else if (token.name === "folder") holds = folder.includes(token.value);
+      else {
+        const byMark = markToken(`${token.name}:${token.value}`);
+        const read = marks?.(t);
+        holds = !!byMark && !!read && passes(byMark, read.mark, read.analyzable);
       }
-      if (token.startsWith("user:")) return user.includes(token.slice(5));
-      if (token.startsWith("folder:")) return folder.includes(token.slice(7));
-      if (token.startsWith("ext:")) {
-        return name.split(".").pop() === token.slice(4).replace(/^\./, "");
-      }
-      return user.includes(token) || name.includes(token) || folder.includes(token);
-    });
+      if (holds === token.negated) return false;
+    }
+    return fileMatches(filters, t, `${t.username}\n${t.filename}`);
   };
 };
 

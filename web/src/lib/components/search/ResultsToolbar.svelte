@@ -8,8 +8,8 @@
   import Select from "#lib/components/ui/Select.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
+  import { FILTER_PLACEHOLDER } from "#lib/files/filters.js";
   import { plural } from "#lib/format.js";
-  import { FILTER_PLACEHOLDER } from "#lib/search/filters.js";
   import { LONG_QUEUE, type ResultSort, searchOptions } from "#lib/settings.svelte.js";
 
   import FilterHelp from "./FilterHelp.svelte";

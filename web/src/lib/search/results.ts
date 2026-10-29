@@ -1,7 +1,6 @@
 import type { Schemas } from "#lib/api/client.js";
+import { filterResponse, type Filters } from "#lib/files/filters.js";
 import type { ResultSort } from "#lib/settings.svelte.js";
-
-import { filterResponse, type Filters } from "./filters";
 
 export type SearchResponse = Schemas["SearchResponse"];
 export type SearchFile = Schemas["File"];

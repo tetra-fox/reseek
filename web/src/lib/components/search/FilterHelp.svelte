@@ -3,7 +3,7 @@
   import { Popover } from "bits-ui";
 
   import Button from "#lib/components/ui/Button.svelte";
-  import { FILTER_TOKENS } from "#lib/search/filters.js";
+  import { FILTER_TOKENS } from "#lib/files/filters.js";
 </script>
 
 <!-- every token the filter box takes, one click away from it -->

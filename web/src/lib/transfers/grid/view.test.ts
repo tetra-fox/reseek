@@ -13,6 +13,17 @@ describe("the transfers view", () => {
     expect(textFilter("  ")).toBeNull();
   });
 
+  it("takes the file filter's sizes, types and excluded words, and negated tokens", () => {
+    const big = transfer({ size: 50 * 1024 ** 2 });
+    const small = transfer({ size: 1024 });
+    expect([big, small].map(textFilter("size:>10m")!)).toEqual([true, false]);
+    expect(textFilter("-one")!(transfer())).toBe(false);
+    expect(textFilter("type:mp3|flac")!(transfer())).toBe(true);
+    expect(textFilter("-user:ali")!(transfer())).toBe(false);
+    // a transfer says nothing of its bit rate, which never fails a bit rate token
+    expect(textFilter("bitrate:320")!(transfer())).toBe(true);
+  });
+
   it("filters by analysis through the marks it is given", () => {
     const mark = {
       verdict: "consistent",

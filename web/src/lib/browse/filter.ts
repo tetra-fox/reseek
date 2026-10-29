@@ -1,5 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
-import { fileMatches, parseFilters } from "#lib/search/filters.js";
+import { fileMatches, parseFilters } from "#lib/files/filters.js";
 import type { TreeFilter } from "#lib/tree/folders.js";
 
 /**

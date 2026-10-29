@@ -1,7 +1,7 @@
 /**
- * The result filter typed above a search's results: words a file name must or must not
- * contain, and tokens that keep only files of a kind, a type, a country, or with a size, bit
- * rate, bit depth or length in some range
+ * The filter typed above a list of files: words a file's path must or must not contain, tokens
+ * that keep only files of a kind, a type, a country, or with a size, bit rate, bit depth or length
+ * in some range, and the tokens of a screen's own, which the screen tests
  */
 export type Filters = {
   include: string[];
@@ -21,7 +21,12 @@ export type Filters = {
   types: Choice[];
   /** `country:` tokens, each a set of country codes */
   countries: Choice[];
+  /** tokens of the screen's own, by the names it gave */
+  screen: ScreenToken[];
 };
+
+/** A `name:value` token of a screen's own, with `!` or `-` before it for "not" */
+export type ScreenToken = { name: string; value: string; negated: boolean };
 
 /** The attributes a field token compares */
 export type Field = "size" | "bitrate" | "bitdepth" | "length";
@@ -128,13 +133,18 @@ const readComparison = (field: Field, text: string): Comparison | null => {
  * Adds a token `name:value`, with `!` or `-` before it for "not", as a field or a choice. False
  * for a name it doesn't know or a value it can't read, which leaves the token out
  */
-const readToken = (token: string, filters: Filters): boolean => {
+const readToken = (token: string, filters: Filters, keys: readonly string[]): boolean => {
   const negated = token.startsWith("!") || token.startsWith("-");
   const body = negated ? token.slice(1) : token;
   const cut = body.indexOf(":");
   if (cut <= 0) return false;
   const name = body.slice(0, cut);
   const value = body.slice(cut + 1);
+  if (keys.includes(name)) {
+    if (!value) return false;
+    filters.screen.push({ name, value, negated });
+    return true;
+  }
   const alternatives = value.split("|").filter(Boolean);
   if (!alternatives.length) return false;
   const field = FIELDS.get(name);
@@ -176,17 +186,40 @@ export const FILTER_TOKENS: { token: string; meaning: string }[] = [
   { token: "minfif:8", meaning: "Users with at least 8 matching files." }
 ];
 
-/** The filter box's placeholder: a few tokens to show what it takes */
-export const FILTER_PLACEHOLDER =
-  "album -live type:flac|mp3 bitrate:320 size:<1g length:3:00..8:00";
+/** An example of each token a filter box can take, by its name */
+const EXAMPLES: Record<string, string> = {
+  word: "album",
+  not: "-live",
+  type: "type:flac|mp3",
+  bitrate: "bitrate:320",
+  size: "size:<1g",
+  length: "length:3:00..8:00",
+  user: "user:alice",
+  folder: "folder:album",
+  marked: "marked:fake"
+};
+
+/** A filter box's placeholder: an example of each token named, in that order */
+export const filterPlaceholder = (keys: string[]) => keys.map((key) => EXAMPLES[key]).join(" ");
+
+/** The placeholder of a filter over files from the network, which have their own attributes */
+export const FILTER_PLACEHOLDER = filterPlaceholder([
+  "word",
+  "not",
+  "type",
+  "bitrate",
+  "size",
+  "length"
+]);
 
 /**
  * Reads a filter. Tokens are split on whitespace and compared in lower case. A `min…:N` token
  * sets that minimum (the first of a kind wins, 0 leaves it off), the four flags set their kind,
- * `field:value`, `type:` and `country:` tokens add a condition, any other token with a colon is
- * ignored, `-word` excludes and every other word includes
+ * `field:value`, `type:` and `country:` tokens add a condition, a token named in `keys` is kept for
+ * the screen, any other token with a colon is ignored, `-word` excludes and every other word
+ * includes
  */
-export const parseFilters = (text: string): Filters => {
+export const parseFilters = (text: string, keys: readonly string[] = []): Filters => {
   const filters: Filters = {
     include: [],
     exclude: [],
@@ -201,7 +234,8 @@ export const parseFilters = (text: string): Filters => {
     minFilesInFolder: 0,
     conditions: [],
     types: [],
-    countries: []
+    countries: [],
+    screen: []
   };
   const seen = new Set<Minimum>();
   for (const token of text.toLowerCase().split(/\s+/)) {
@@ -219,7 +253,7 @@ export const parseFilters = (text: string): Filters => {
       continue;
     }
     if (token.includes(":")) {
-      readToken(token, filters);
+      readToken(token, filters, keys);
       continue;
     }
     if (token.startsWith("-")) {
@@ -284,8 +318,11 @@ export const typeOf = (file: { filename: string; extension?: string | null }) =>
 const chosen = (choice: Choice, value: string | null) =>
   (value !== null && choice.values.includes(value)) !== choice.negated;
 
-/** Whether one file passes the filter's kinds, types, numbers and words */
-export const fileMatches = (filters: Filters, file: FilterFile): boolean => {
+/**
+ * Whether one file passes the filter's kinds, types, numbers and words; the words are looked for
+ * in its path, or in `text` where the screen gives more to look in
+ */
+export const fileMatches = (filters: Filters, file: FilterFile, text = file.filename): boolean => {
   const vbr = file.isVariableBitRate;
   if (filters.isCBR && (vbr === null || vbr === undefined || vbr)) return false;
   if (filters.isVBR && (vbr === null || vbr === undefined || !vbr)) return false;
@@ -305,7 +342,7 @@ export const fileMatches = (filters: Filters, file: FilterFile): boolean => {
     const type = typeOf(file);
     if (!filters.types.every((choice) => chosen(choice, type))) return false;
   }
-  const name = file.filename.toLowerCase();
+  const name = text.toLowerCase();
   return (
     filters.include.every((term) => name.includes(term)) &&
     !filters.exclude.some((term) => name.includes(term))

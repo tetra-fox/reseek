@@ -37,11 +37,11 @@
     enqueue,
     followDownloads
   } from "#lib/files/downloads.js";
+  import { FILTER_PLACEHOLDER } from "#lib/files/filters.js";
   import { slskLink } from "#lib/files/slsk.js";
   import { formatBytes, getFileName, plural } from "#lib/format.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
-  import { FILTER_PLACEHOLDER } from "#lib/search/filters.js";
   import { session } from "#lib/session.svelte.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import {

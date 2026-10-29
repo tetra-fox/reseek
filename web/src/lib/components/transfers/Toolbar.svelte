@@ -21,7 +21,7 @@
   import { type BulkAction, SCOPES } from "#lib/transfers/bulk.js";
   import { COLUMNS, columnsFor } from "#lib/transfers/grid/columns.js";
   import { defaults, type ViewSettings } from "#lib/transfers/grid/settings.svelte.js";
-  import type { GroupBy, SortKey } from "#lib/transfers/grid/view.js";
+  import { type GroupBy, type SortKey, TRANSFER_PLACEHOLDER } from "#lib/transfers/grid/view.js";
   import { type ChipId, type Direction, isSucceeded, STATE_CHIPS } from "#lib/transfers/states.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
@@ -130,7 +130,7 @@
         bind:value={text}
         type="search"
         aria-label="Filter"
-        placeholder="Filter: name, user:alice folder:album ext:flac"
+        placeholder={TRANSFER_PLACEHOLDER}
         class="h-control-sm" />
     </div>
   </div>

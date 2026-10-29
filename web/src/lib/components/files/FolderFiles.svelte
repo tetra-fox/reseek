@@ -9,7 +9,7 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
   import { asItem, type Enqueued, enqueue } from "#lib/files/downloads.js";
-  import { fileMatches, parseFilters } from "#lib/search/filters.js";
+  import { fileMatches, parseFilters } from "#lib/files/filters.js";
   import { session } from "#lib/session.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import {

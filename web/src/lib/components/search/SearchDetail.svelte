@@ -18,12 +18,12 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { undoable } from "#lib/feedback/undo.js";
+  import { parseFilters } from "#lib/files/filters.js";
   import { plural } from "#lib/format.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
   import { denseRows } from "#lib/search/dense.js";
-  import { parseFilters } from "#lib/search/filters.js";
   import { recent, remember, togglePin } from "#lib/search/recent.svelte.js";
   import { pipeline } from "#lib/search/results.js";
   import { Results } from "#lib/search/results.svelte.js";
