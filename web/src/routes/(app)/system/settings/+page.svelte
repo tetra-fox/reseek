@@ -185,7 +185,7 @@
           <EmptyState
             icon={SearchIcon}
             title="No settings match"
-            description="The search looks in names, descriptions, environment variables and flags." />
+            description="The search covers names, descriptions, environment variables and flags." />
         {/if}
         {#each all as section (section.id)}
           <Section

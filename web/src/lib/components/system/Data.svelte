@@ -56,8 +56,8 @@
   const clearCompleted = (direction: "uploads" | "downloads") =>
     confirmation.ask({
       title: `Clear finished ${direction}?`,
-      body: `All finished ${direction} leave the list. They still count in the statistics.`,
-      confirm: "Remove",
+      body: `All finished ${direction} are removed from the list. They remain in the statistics.`,
+      confirm: "Clear",
       run: () =>
         void busy.run(
           () =>
@@ -152,13 +152,13 @@
     {/each}
   </dl>
   <a href={href("/system/settings")} class="text-sm text-accent hover:underline"
-    >Change them in Settings</a>
+    >Edit in Settings</a>
 </Card>
 
 <Card title="Finished transfers">
   <p class="text-sm text-fg-muted">
-    Very long lists can slow down the Downloads and Uploads pages. Clearing finished transfers keeps
-    them in the statistics.
+    Long lists slow down the Downloads and Uploads screens. Cleared transfers remain in the
+    statistics.
   </p>
   {#if write}
     <div class="flex flex-wrap gap-inline">

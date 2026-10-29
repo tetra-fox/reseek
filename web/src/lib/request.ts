@@ -11,17 +11,17 @@ type ErrorBody = { error?: string | null; detail?: string | null };
 type Reply<T> = { data?: T; error?: unknown; response: Response };
 
 /** The message for a failed request that never got an answer */
-export const UNREACHABLE = "Can't reach reseek. Check that it's running.";
+export const UNREACHABLE = "Cannot reach reseek. Check that it is running.";
 
 /** Why a request failed: the daemon's own message with its detail when it sent one */
 export const reason = (status: number, body?: unknown): string => {
   const { error, detail } = (body && typeof body === "object" ? body : {}) as ErrorBody;
   if (error) return detail ? `${error}: ${detail}` : error;
   if (typeof body === "string" && body) return body;
-  if (status === 403) return "You don't have permission to do that";
+  if (status === 403) return "Permission denied";
   if (status === 404) return "Not found";
-  if (status === 429) return "Too many attempts. Wait a moment and try again";
-  if (status >= 500) return `reseek ran into an error (HTTP ${status})`;
+  if (status === 429) return "Too many attempts. Try again shortly";
+  if (status >= 500) return `Server error (HTTP ${status})`;
   return `HTTP ${status}`;
 };
 

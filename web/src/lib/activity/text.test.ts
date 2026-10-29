@@ -17,9 +17,9 @@ describe("an activity line", () => {
     expect(activityText(entry({ type: "browse" }), size)).toBe("alice is browsing your shares");
     expect(
       activityText(entry({ type: "search", query: "boards of canada", results: 12 }), size)
-    ).toBe('alice searched for "boards of canada" and got 12 results');
+    ).toBe('alice searched for "boards of canada" (12 results)');
     expect(activityText(entry({ type: "search", query: "x", results: 1 }), size)).toBe(
-      'alice searched for "x" and got 1 result'
+      'alice searched for "x" (1 result)'
     );
     expect(
       activityText(

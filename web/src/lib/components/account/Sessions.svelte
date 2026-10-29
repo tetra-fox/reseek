@@ -41,7 +41,7 @@
       const outcome = await call(() => api.DELETE("/api/v0/sessions"));
       if (outcome.ok) await loader.load();
       return outcome;
-    }, "Logged out every other session");
+    }, "Other sessions logged out");
 </script>
 
 <Card title="Sessions">
@@ -99,7 +99,7 @@
 <ConfirmDialog
   bind:open={everywhere}
   title="Log out other sessions?"
-  body="Every other browser will have to log in again."
+  body="Every other browser must log in again."
   confirm="Log out other sessions"
   danger
   onconfirm={revokeOthers} />

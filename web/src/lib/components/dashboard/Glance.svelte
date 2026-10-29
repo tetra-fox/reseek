@@ -102,7 +102,7 @@
     "Incoming connections",
     [
       {
-        text: reach === "yes" ? "Working" : reach === "no" ? "Blocked" : "Unknown",
+        text: reach === "yes" ? "Reachable" : reach === "no" ? "Unreachable" : "Unknown",
         to: SOULSEEK_SETTINGS,
         strong: true
       }

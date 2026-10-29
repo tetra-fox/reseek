@@ -63,7 +63,7 @@
               class={sidebar.collapsed
                 ? "absolute top-0.5 right-0.5 px-1 py-0 text-[0.625rem]"
                 : "ml-auto"}
-              title={`${fresh.succeeded} finished, ${fresh.failed} failed since you last looked`}
+              title={`${fresh.succeeded} finished, ${fresh.failed} failed since last viewed`}
               aria-label={`${fresh.succeeded} finished, ${fresh.failed} failed`}
               >{fresh.failed || fresh.succeeded}</Badge>
           {/if}

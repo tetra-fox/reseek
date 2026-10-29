@@ -114,7 +114,7 @@
   {/each}
 </div>
 
-{#if summaryError}<p class="text-sm text-danger">Couldn't load the totals: {summaryError}</p>{/if}
+{#if summaryError}<p class="text-sm text-danger">Could not load totals: {summaryError}</p>{/if}
 {#if summary}
   <StatTiles {summary} />
 {:else if !summaryError}
@@ -124,7 +124,7 @@
 <div class="grid grid-cols-[minmax(0,1fr)] gap-section lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
   <Card title="Transfers over time">
     {#if histogramError}<p class="text-sm text-danger">
-        Couldn't load the history: {histogramError}
+        Could not load history: {histogramError}
       </p>{/if}
     {#if histogram}
       <AreaChart {data} series={SERIES} {visible} label="Transfers over time" />
@@ -156,7 +156,7 @@
     <Leaderboard {span} range={dashboardPrefs.range} />
   {:else if tab === "content"}
     {#if directoriesError}<p class="text-sm text-danger">
-        Couldn't load the top folders: {directoriesError}
+        Could not load top folders: {directoriesError}
       </p>{/if}
     <TopDirectories rows={directories} />
   {:else}

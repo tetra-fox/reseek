@@ -42,7 +42,7 @@
 
 <Card
   title="API tokens"
-  description="For scripts and tools. A token can't do more than the account that created it.">
+  description="For scripts and tools. A token cannot exceed the permissions of the account that created it.">
   {#snippet action()}
     <Button variant="outline" size="sm" onclick={() => (creating = true)}>
       <PlusIcon />New token

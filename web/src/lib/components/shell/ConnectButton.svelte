@@ -10,7 +10,7 @@
   import { app } from "#lib/app.svelte.js";
   import { Busy } from "#lib/busy.svelte.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { unreachable } from "#lib/reachability.js";
+  import { UNREACHABLE_HINT } from "#lib/reachability.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
 
@@ -38,7 +38,7 @@
     if (server?.isConnected) {
       const cut = server.listen.reachable === "no";
       return {
-        label: cut ? "Connected, port blocked" : "Connected",
+        label: cut ? "Connected, unreachable" : "Connected",
         plug: state?.pendingReconnect || cut ? "text-warning" : "text-success",
         badge: cut
           ? ("unreachable" as const)
@@ -75,10 +75,9 @@
 
   // connecting and disconnecting need ReadWrite; a ReadOnly user sees the state only
   const allowed = $derived(session.can("ReadWrite"));
-  const listen = $derived(app.state?.server.listen);
   const hint = $derived(
     [
-      view.badge === "unreachable" && listen ? unreachable(listen.port) : null,
+      view.badge === "unreachable" ? UNREACHABLE_HINT : null,
       allowed
         ? `${view.connected ? "Disconnect from" : "Connect to"} ${app.mode === "agent" ? "the controller" : "the Soulseek server"}`
         : null

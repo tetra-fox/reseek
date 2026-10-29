@@ -225,7 +225,7 @@ export class Live {
     this.status = "polling";
     if (!this.#warned) {
       this.#deps.notice(
-        "Lost the live connection to reseek. The page refreshes periodically until it's back.",
+        "Live connection to reseek lost. The page refreshes periodically until it is restored.",
         "error"
       );
     }
