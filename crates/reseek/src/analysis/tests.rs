@@ -203,7 +203,7 @@ fn a_lossy_layer_or_a_lossy_part_reads_as_mixed_sources() {
       ("mp3 ~320 kbps or aac", 0.4)
     );
     assert!(
-      !reading.summary.contains("no encoder's shelf"),
+      !reading.summary.contains("no encoder shelf"),
       "{}",
       reading.summary
     );

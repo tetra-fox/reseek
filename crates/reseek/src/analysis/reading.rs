@@ -140,8 +140,8 @@ impl Heard {
 
 /// The limitation of a cut where the highest bitrates cut.
 fn filtered_at_20_khz() -> String {
-  "Some recordings are filtered at 20 kHz when they are made or mastered, which looks the \
-   same as a high-bitrate encoder's cutoff."
+  "Some recordings are filtered at 20 kHz during recording or mastering. This looks the same \
+   as the cutoff of a high-bitrate encoder."
     .to_string()
 }
 
@@ -198,13 +198,11 @@ pub(super) fn read(measured: &Measured) -> Reading {
   let heard_seconds = heard.seconds();
   if heard_seconds < FEW_SECONDS {
     limitations.push(format!(
-      "Only {heard_seconds:.1} s of the audio is above silence, which leaves little to judge \
-       from."
+      "Only {heard_seconds:.1} s of the audio is above silence, too little for a reliable reading."
     ));
   }
   if quiet(&heard) {
-    limitations
-      .push("The audio is quiet, which makes the upper band harder to measure.".to_string());
+    limitations.push("The audio is quiet. The upper band is harder to measure.".to_string());
   }
   // a lossy file read as consistent with its own bitrate stops where its own encoder cuts,
   // which needs no other explanation
@@ -223,9 +221,9 @@ pub(super) fn read(measured: &Measured) -> Reading {
         confidence: 0.4,
       }),
       summary: format!(
-        "The content stops sharply at {}: the top of what a {} kHz recording holds, and also \
-         where an encoder at {} cuts off. Either it was made at that rate and converted up, \
-         or it is a transcode from that encoder; the analyzer can not tell which.",
+        "The content stops sharply at {}. This is the upper limit of a {} kHz recording, and \
+         also the cutoff of an encoder at {}. The file was either recorded at that rate and \
+         upsampled, or transcoded from that encoder. The analyzer cannot tell which.",
         khz(edge),
         format!("{:.2}", edge * 2.0 / 1000.0)
           .trim_end_matches('0')
@@ -243,8 +241,7 @@ pub(super) fn read(measured: &Measured) -> Reading {
       .find(|(edge, _)| (cut - edge).abs() <= CLUSTER_HZ)
   {
     limitations.push(format!(
-      "Audio recorded at {rate} and converted to this rate stops with the same sharp cliff, \
-       at {}.",
+      "Audio recorded at {rate} and converted to this rate shows the same sharp cutoff, at {}.",
       khz(*edge)
     ));
   }
@@ -402,7 +399,7 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     reading.cutoff_hz = Some(at);
     reading.summary = format!(
       "The content reaches the top of the band, but {} of the time shows a sharp step at {} \
-       under it, as when a band-limited layer is mixed with full-band material.",
+       below it. This is typical of a band-limited layer mixed with full-band material.",
       percent(layered_share),
       khz(at)
     );
@@ -428,8 +425,8 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     reading.limitations.push(filtered_at_20_khz());
     reading.summary = format!(
       "The content reaches the top of the band, but {} of the time shows a sharp step at {} \
-       under it, where an encoder at {profile} cuts off; a layer at that bitrate and a \
-       recording filtered there with something above it look the same.",
+       below it, at the cutoff of an encoder at {profile}. A layer at that bitrate and a \
+       recording filtered there with other material above it look the same.",
       percent(high_steps.len() as f64 / count as f64),
       khz(at)
     );
@@ -459,21 +456,21 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
         if stepped {
           ""
         } else {
-          ", with no encoder's shelf"
+          ", with no encoder shelf"
         }
       );
       return reading;
     }
     reading.limitations.push(
-      "Lossless recordings of old masters, speech, lo-fi material or vinyl and cassette \
-       transfers roll off early, and heavy equalization can look like a shelf."
+      "Lossless recordings of old masters, speech, lo-fi material and vinyl or cassette \
+       transfers roll off early. Heavy equalization can resemble a shelf."
         .to_string(),
     );
     if median >= NATURAL_LIMIT * heard.top {
       reading.verdict = AnalysisVerdict::Consistent;
       reading.confidence = 0.7;
       reading.summary = format!(
-        "The content rolls off gently from about {}, not at an encoder's sharp cutoff.",
+        "The content rolls off gently from about {}, not at the sharp cutoff of an encoder.",
         khz(median)
       );
       return reading;
@@ -481,20 +478,21 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     reading.confidence = 0.4;
     // a band above what a 48 kHz recording holds is mostly empty in honest hi-res audio too
     let like = if heard.top > HI_RES_TOP_HZ {
-      "as many hi-res recordings do, whose microphones and instruments give little above 20 kHz"
+      "as in many hi-res recordings, where microphones and instruments produce little above \
+       20 kHz"
     } else {
-      "as test tones, speech, old masters and lo-fi recordings do"
+      "as in test tones, speech, old masters and lo-fi recordings"
     };
     reading.summary = format!(
-      "The content stops at about {}, well below the top of the band, without an encoder's \
-       sharp shelf, {like}.",
+      "The content stops at about {}, well below the top of the band, without the sharp shelf \
+       of an encoder, {like}.",
       khz(median)
     );
     return reading;
   }
   reading.summary = if sharp_share >= 0.5 && clustered >= TRANSCODE_SHARE {
     format!(
-      "The content stops at {} with a sharp shelf, which is not where common encoders cut off.",
+      "The content stops at {} with a sharp shelf, which is not the cutoff of a common encoder.",
       khz(median)
     )
   } else {
