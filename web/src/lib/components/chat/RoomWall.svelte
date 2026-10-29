@@ -77,7 +77,7 @@
         role="row"
         {...list.line(line, i)}
         class={[
-          "border-b px-1 py-1.5 text-sm last:border-b-0",
+          "list-row px-1 py-1.5 text-sm",
           list.selected.has(line.username) && "bg-accent-soft/60"
         ]}>
         <div role="gridcell">

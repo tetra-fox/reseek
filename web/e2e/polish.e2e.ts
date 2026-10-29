@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { fakeBrowse, fakeChat, fakeDownloads, fakeSearch, SEARCH_ID } from "./fakes";
+import { fakeBrowse, fakeChat, fakeDownloads, fakeSearch, manyDownloads, SEARCH_ID } from "./fakes";
 import { login } from "./login";
 
 test("shows search results as cards and as dense rows walked by key", async ({ page }) => {
@@ -131,6 +131,28 @@ test("goes to a screen from the command palette", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/#\/downloads$/);
   await expect(box).toBeHidden();
+});
+
+test("keeps a compact row's controls between its dividers", async ({ page }) => {
+  await manyDownloads(page, 30);
+  await login(page, "/downloads");
+  await page.getByRole("radio", { name: "Compact" }).click();
+  const grid = page.getByRole("grid", { name: "Downloads" });
+  const row = grid.locator("[role=row]").filter({ hasText: "00002 Track.flac" });
+  const header = grid.locator("[role=row]").filter({ hasText: "Album 0" }).first();
+  for (const line of [row, header]) {
+    await line.getByRole("button").last().hover();
+    // every control, and so its hover tint, ends above the line's divider
+    const crossing = await line.evaluate((e) => {
+      const box = e.getBoundingClientRect();
+      const divider = parseFloat(getComputedStyle(e).borderBottomWidth);
+      return [...e.querySelectorAll("button")]
+        .map((b) => b.getBoundingClientRect())
+        .filter((b) => b.height && (b.top < box.top || b.bottom > box.bottom - divider)).length;
+    });
+    expect(crossing).toBe(0);
+    await expect(line).toHaveCSS("border-bottom-width", "1px");
+  }
 });
 
 test("shows a list's focus ring for the keys, not after a click", async ({ page }) => {

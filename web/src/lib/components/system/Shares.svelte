@@ -180,7 +180,7 @@
             role="row"
             {...sharedList.line(r, i)}
             class={[
-              "grid min-w-max items-center gap-2 border-b px-4 py-1.5 last:border-b-0 hover:bg-hover",
+              "grid min-w-max items-center gap-2 list-row px-4 py-1.5 hover:bg-hover",
               r.derivedFrom && "text-fg-muted",
               sharedList.selected.has(key(r)) && "bg-accent-soft/60"
             ]}
@@ -231,7 +231,7 @@
             role="row"
             {...excludedList.line(r, i)}
             class={[
-              "flex items-center gap-2 border-b px-4 py-1.5 last:border-b-0 hover:bg-hover",
+              "flex items-center gap-2 list-row px-4 py-1.5 hover:bg-hover",
               excludedList.selected.has(key(r)) && "bg-accent-soft/60"
             ]}>
             <XIcon class="size-4 text-danger" />

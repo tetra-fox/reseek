@@ -205,7 +205,7 @@
       role="row"
       {...list.line(l, i)}
       class={[
-        "grid grid-cols-[4.5rem_2.5rem_1fr] gap-2 border-b px-2 py-0.5 last:border-b-0",
+        "grid grid-cols-[4.5rem_2.5rem_1fr] gap-2 list-row px-2 py-0.5",
         level?.row,
         list.selected.has(String(l.seq)) && "bg-accent-soft/60"
       ]}>

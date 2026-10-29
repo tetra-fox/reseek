@@ -87,7 +87,7 @@
         role="row"
         {...list.line(f, i)}
         class={[
-          "grid items-center border-b py-1 last:border-b-0 hover:bg-hover",
+          "grid items-center list-row py-1 hover:bg-hover",
           list.selected.has(f.name) && "bg-accent-soft/60"
         ]}
         style:grid-template-columns={grid.template}

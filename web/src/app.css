@@ -446,6 +446,21 @@
   }
 }
 
+/* a line of a list with a divider under it, but for the last line, which the list controller
+   marks and whose divider would double the frame below it. A list that sets its lines' height in
+   --line-h keeps their small controls a little shorter than a line less its divider, so on a short
+   line a control's tint stays between the dividers as on a tall one */
+@utility list-row {
+  border-bottom-width: 1px;
+  &[data-last] {
+    border-bottom-width: 0;
+  }
+  --spacing-control-sm: min(
+    --theme(--spacing-control-sm inline),
+    calc(var(--line-h, 100vh) - 0.25rem)
+  );
+}
+
 /* a row's buttons, put on an element inside a `group` row. Half shown until the row is hovered or
    focused where the pointer can hover, always shown on touch screens */
 @utility row-action {

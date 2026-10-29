@@ -138,13 +138,17 @@ export class ListControl<L> {
     return `${this.uid}-${index}`;
   }
 
-  /** The attributes a line's element carries; `data-focused` draws the focus ring */
+  /**
+   * The attributes a line's element carries: `data-focused` draws the focus ring, and `data-last`
+   * leaves the last line's divider off
+   */
   line(line: L, index: number) {
     const id = this.#spec.id(line);
     return {
       "id": this.lineId(index),
       "data-line": this.#spec.key(line),
       "data-focused": this.isFocused(line) || undefined,
+      "data-last": index === this.lines.length - 1 || undefined,
       "aria-selected": id === null ? undefined : this.selected.has(id)
     };
   }

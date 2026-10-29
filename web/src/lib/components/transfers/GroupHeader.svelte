@@ -164,7 +164,7 @@
 </script>
 
 <div
-  class="flex h-full items-center border-b bg-surface-muted/80 px-2 text-sm"
+  class="flex h-full items-center bg-surface-muted/80 px-2 text-sm"
   style:padding-left={`${lineStart(group.depth)}rem`}
   style:column-gap={`${GAP_REM}rem`}
   role="rowheader">
