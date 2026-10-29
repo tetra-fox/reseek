@@ -18,7 +18,7 @@
   {#each toasts as t (t.id)}
     <div
       class={[
-        "pointer-events-auto flex w-full items-center gap-2 rounded-card border bg-overlay py-2 pr-2 pl-4 text-sm shadow-raised",
+        "pointer-events-auto relative flex w-full items-center gap-2 overflow-hidden rounded-card border bg-overlay py-2 pr-2 pl-4 text-sm shadow-raised",
         t.kind === "error" && "border-danger/50 bg-danger-soft text-danger-soft-fg"
       ]}
       role={t.kind === "error" ? "alert" : "status"}
@@ -45,6 +45,33 @@
       <Button variant="ghost" size="icon-sm" onclick={() => dismiss(t.id)} aria-label="Dismiss">
         <XIcon />
       </Button>
+      {#if Number.isFinite(t.ms)}
+        <!-- the time left, run from the toast's own duration and held with it; none under
+        reduced motion, where a bar that does not move says nothing -->
+        <div
+          class={[
+            "countdown absolute inset-x-0 bottom-0 h-0.5 origin-left motion-reduce:hidden",
+            t.kind === "error" ? "bg-danger" : "bg-accent"
+          ]}
+          style:animation-duration="{t.ms}ms"
+          style:animation-play-state={t.held ? "paused" : "running"}
+          aria-hidden="true">
+        </div>
+      {/if}
     </div>
   {/each}
 </div>
+
+<style>
+  .countdown {
+    animation-name: countdown;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+
+  @keyframes countdown {
+    to {
+      transform: scaleX(0);
+    }
+  }
+</style>

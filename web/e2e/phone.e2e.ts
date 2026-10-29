@@ -316,3 +316,40 @@ test.describe("at a large text size", () => {
     });
   }
 });
+
+test("a toast's countdown runs along its foot and holds under the pointer", async ({ page }) => {
+  // a copy the browser refuses both ways is a toast that needs nothing from the daemon
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: () => Promise.reject(new Error("refused")) }
+    });
+    document.execCommand = () => false;
+  });
+  await fakeChat(page);
+  await login(page, "/chat");
+  await page.goto("./#/chat/rooms/indie");
+  const log = page.getByRole("log");
+  await log.getByText("thanks bob, grabbing it now").hover();
+  await page.getByRole("button", { name: "Copy the text" }).last().click();
+  const toast = page.getByRole("alert").filter({ hasText: "Couldn't copy" });
+  await expect(toast).toBeVisible();
+  const bar = toast.locator(".countdown");
+  const [box, line] = [(await toast.boundingBox())!, (await bar.boundingBox())!];
+  expect(box.x + box.width, "the toast fits the phone").toBeLessThanOrEqual(390);
+  expect(line.height).toBeLessThanOrEqual(3);
+  expect(line.x).toBeGreaterThanOrEqual(box.x);
+  expect(line.x + line.width).toBeLessThanOrEqual(box.x + box.width);
+  expect(Math.abs(line.y + line.height - (box.y + box.height))).toBeLessThanOrEqual(1);
+  const countdown = () =>
+    bar.evaluate((e) => {
+      const [animation] = e.getAnimations();
+      return { state: animation.playState, at: Number(animation.currentTime) };
+    });
+  await toast.hover();
+  await expect.poll(async () => (await countdown()).state).toBe("paused");
+  const held = await countdown();
+  await page.waitForTimeout(300);
+  expect((await countdown()).at, "the bar holds while the pointer is on the toast").toBe(held.at);
+  await page.mouse.move(0, 0);
+  await expect.poll(async () => (await countdown()).state).toBe("running");
+});
