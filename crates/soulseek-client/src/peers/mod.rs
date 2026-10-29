@@ -14,7 +14,7 @@ pub use dispatch::IncomingBrowse;
 pub(crate) use message::request_endpoint;
 pub(crate) use solicit::{Answer, Solicitation, Solicitations, Via, both_failed, race};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use soulseek_proto::{PeerMessage, RemoteFilename};
 use tokio::sync::{Semaphore, watch};
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 use crate::conn::MessageConn;
 use crate::error::{ClientError, ConnectionErrorKind};
@@ -32,6 +33,10 @@ use crate::waiter::{Scope, Waiter};
 /// peer messages handled at once across every connection; at the bound a connection's reader
 /// waits for one of them to finish before reading its next frame
 const PEER_HANDLERS: usize = 256;
+
+/// replaced message connections kept open per user beside the current one; a peer reconnecting
+/// over and over cannot hold more than this
+const KEPT_REPLACED: usize = 2;
 
 type Outcome = Option<Result<MessageConn, ClientError>>;
 
@@ -69,6 +74,8 @@ impl Entry {
 pub(crate) struct PeerConnections {
   /// one entry per user
   cache: Mutex<HashMap<String, Entry>>,
+  /// connections that were replaced but stay open until they go idle, oldest first, by user
+  replaced: Mutex<HashMap<String, VecDeque<MessageConn>>>,
   next_entry: AtomicU64,
   /// cancels an inbound indirect attempt still connecting, so a direct connection from the same
   /// user can replace it; keyed by user, with the id of the entry the attempt belongs to
@@ -90,6 +97,7 @@ impl PeerConnections {
   pub(crate) fn new(max_concurrent_connects: u32, waiter: Waiter) -> Self {
     Self {
       cache: Mutex::new(HashMap::new()),
+      replaced: Mutex::new(HashMap::new()),
       next_entry: AtomicU64::new(0),
       pending_inbound_indirect: Mutex::new(HashMap::new()),
       solicitations: Solicitations::default(),
@@ -206,6 +214,39 @@ impl PeerConnections {
     }
   }
 
+  /// Keeps `conn`, just replaced as `username`'s message connection, open beside its
+  /// replacement. Past the last few kept, the oldest is closed once its queued writes are out.
+  fn keep_replaced(&self, username: &str, conn: MessageConn) {
+    let mut replaced = lock(&self.replaced);
+    // checked under the lock its watcher takes to forget it, so a closed one is never kept
+    if !conn.handle().is_open() {
+      return;
+    }
+    let kept = replaced.entry(username.to_owned()).or_default();
+    kept.push_back(conn);
+    if kept.len() > KEPT_REPLACED
+      && let Some(oldest) = kept.pop_front()
+    {
+      tracing::debug!(
+        username,
+        remote = %oldest.handle().remote(),
+        "oldest replaced message connection closed"
+      );
+      oldest.close_when_flushed("Superseded");
+    }
+  }
+
+  /// forgets the replaced connection `id` to `username` once it closed
+  fn forget_replaced(&self, username: &str, id: Uuid) {
+    let mut replaced = lock(&self.replaced);
+    if let Some(kept) = replaced.get_mut(username) {
+      kept.retain(|conn| conn.handle().id() != id);
+      if kept.is_empty() {
+        replaced.remove(username);
+      }
+    }
+  }
+
   /// cancels the inbound indirect attempt still connecting to `username`, if there is one
   fn cancel_inbound_indirect(&self, username: &str) {
     if let Some((_, cancel)) = lock(&self.pending_inbound_indirect).remove(username) {
@@ -220,12 +261,16 @@ impl PeerConnections {
     for (_, (_, cancel)) in lock(&self.pending_inbound_indirect).drain() {
       cancel.cancel();
     }
-    for (_, entry) in self.cache().drain() {
-      if let Some(conn) = entry.connection() {
-        conn
-          .handle()
-          .disconnect("Client is being disposed", Some(ClientError::Disposed));
-      }
+    let replaced = std::mem::take(&mut *lock(&self.replaced));
+    let current = self
+      .cache()
+      .drain()
+      .filter_map(|(_, entry)| entry.connection())
+      .collect::<Vec<_>>();
+    for conn in current.iter().chain(replaced.values().flatten()) {
+      conn
+        .handle()
+        .disconnect("Client is being disposed", Some(ClientError::Disposed));
     }
   }
 }

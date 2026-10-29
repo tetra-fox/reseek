@@ -530,6 +530,30 @@ async fn a_replaced_connection_closing_never_takes_its_replacement_with_it() {
 }
 
 #[tokio::test]
+async fn a_peer_reconnecting_over_and_over_keeps_two_replaced_connections() {
+  let session = session().await;
+  let mut sides = Vec::new();
+  for _ in 0..5 {
+    sides.push(bob(&session).await);
+  }
+  // the oldest ones are closed as newer ones replace them
+  for oldest in &mut sides[..2] {
+    oldest.closed().await;
+  }
+  // the two replaced last are still answered on, and the newest is the current one
+  for kept in &mut sides[2..] {
+    kept.send(&PeerMessage::InfoRequest.encode()).await;
+    assert!(matches!(
+      kept.read_peer().await,
+      PeerMessage::InfoResponse(_)
+    ));
+  }
+  let connections = session.client.message_connections();
+  assert_eq!(connections.len(), 1, "{connections:?}");
+  assert_eq!(connections[0].1, sides[4].stream.local_addr().unwrap());
+}
+
+#[tokio::test]
 async fn messages_past_the_handler_bound_wait_instead_of_being_dropped() {
   // user info answered only once the test lets it, so every handler stays busy
   let release = Arc::new(tokio::sync::Semaphore::new(0));

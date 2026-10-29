@@ -3,7 +3,8 @@
 //! answering our request late, which replaces whatever we had; and one we open because a user
 //! asked the server to have us connect. A replaced connection is not closed: what is queued on it
 //! is still written and what the user sends on it is still read and answered, until it goes idle
-//! or the user closes it.
+//! or the user closes it. Only the last two replaced per user are kept; an older one closes once
+//! its queued writes are out.
 
 use std::net::SocketAddr;
 
@@ -230,13 +231,16 @@ impl Client {
     self.start_peer_reading(&conn);
     // an attempt still connecting finds it was replaced when it settles
     match replaced.as_ref().and_then(Entry::connection) {
-      Some(old) => tracing::debug!(
-        username,
-        %remote,
-        ?kind,
-        replaced = %old.handle().remote(),
-        "message connection replaced"
-      ),
+      Some(old) => {
+        tracing::debug!(
+          username,
+          %remote,
+          ?kind,
+          replaced = %old.handle().remote(),
+          "message connection replaced"
+        );
+        peers.keep_replaced(username, old);
+      }
       None => tracing::debug!(username, %remote, ?kind, "inbound message connection"),
     }
     Ok(())
@@ -322,7 +326,14 @@ impl Client {
     let current = PeerConnections::is_current(&cache, username, id);
     match &result {
       Ok(conn) if current => self.watch_message_connection(username, id, conn),
-      Ok(_) => tracing::debug!("message connection made after another replaced it"),
+      Ok(conn) => {
+        tracing::debug!(
+          username,
+          "message connection made after another replaced it"
+        );
+        self.watch_message_connection(username, id, conn);
+        peers.keep_replaced(username, conn.clone());
+      }
       Err(_) if current => {
         cache.remove(username);
       }
@@ -332,7 +343,7 @@ impl Client {
   }
 
   /// When the connection behind entry `id` closes, the entry leaves the cache if it is still
-  /// current, and the waits for that user's replies fail
+  /// current and the waits for that user's replies fail; a replaced one is forgotten
   fn watch_message_connection(&self, username: &str, id: u64, conn: &MessageConn) {
     let client = self.downgrade();
     let handle = conn.handle().clone();
@@ -345,6 +356,7 @@ impl Client {
         };
         // an entry that is gone was replaced, or closed with its waits failed already
         if !client.peers().remove_if_current(&username, id) {
+          client.peers().forget_replaced(&username, handle.id());
           return;
         }
         tracing::debug!(

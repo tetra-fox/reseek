@@ -5,6 +5,7 @@
 
 use std::fmt;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use soulseek_proto::Limits;
@@ -52,6 +53,8 @@ impl fmt::Debug for EncodedFrame {
 enum Payload {
   Bytes(Vec<u8>),
   Encoded(EncodedFrame),
+  /// closes the connection with this reason once everything queued before it is written
+  Close(String),
 }
 
 /// resolves once the write it belongs to is on the socket, or with why it never got there
@@ -74,6 +77,8 @@ pub struct MessageConn {
   handle: ConnHandle,
   frame_kind: FrameKind,
   queue: mpsc::Sender<Outgoing>,
+  /// set once the connection is to close after its queued writes; later writes are refused
+  closing: Arc<AtomicBool>,
   /// the read half until the read loop takes it
   reading: Arc<Mutex<Option<Reading>>>,
 }
@@ -102,6 +107,7 @@ impl Conn {
       handle,
       frame_kind,
       queue,
+      closing: Arc::new(AtomicBool::new(false)),
       reading: Arc::new(Mutex::new(Some(Reading {
         half: read,
         frame_kind,
@@ -187,6 +193,25 @@ impl MessageConn {
     Ok(done)
   }
 
+  /// Closes the connection with `reason` once the writes already queued are on the socket, and
+  /// refuses writes from now on; reading goes on until the close. A full queue means the remote
+  /// has stopped reading, so the connection is closed at once instead.
+  pub(crate) fn close_when_flushed(&self, reason: &str) {
+    self.closing.store(true, Ordering::Release);
+    let close = Outgoing {
+      payload: Payload::Close(reason.to_owned()),
+      written: None,
+    };
+    match self.queue.try_send(close) {
+      Ok(()) => {}
+      Err(mpsc::error::TrySendError::Full(_)) => {
+        self.handle.disconnect(reason, None);
+      }
+      // the write loop has ended, which closed the connection
+      Err(mpsc::error::TrySendError::Closed(_)) => {}
+    }
+  }
+
   /// writes waiting in the queue
   pub fn write_queue_depth(&self) -> usize {
     self.queue.max_capacity() - self.queue.capacity()
@@ -200,6 +225,7 @@ impl MessageConn {
     let empty = match &payload {
       Payload::Bytes(bytes) => bytes.is_empty(),
       Payload::Encoded(frame) => frame.len == 0,
+      Payload::Close(_) => false,
     };
     if empty {
       return Err(ClientError::InvalidArgument(
@@ -208,6 +234,11 @@ impl MessageConn {
     }
     if !self.handle.is_connected() {
       return Err(self.handle.not_connected());
+    }
+    if self.closing.load(Ordering::Acquire) {
+      return Err(ClientError::InvalidOperation(
+        "Invalid attempt to send to a connection that closes once its queued writes are out".into(),
+      ));
     }
     match self.queue.try_send(Outgoing { payload, written }) {
       Ok(()) => Ok(()),
@@ -240,6 +271,10 @@ async fn write_loop(mut half: ConnWriteHalf, mut queue: mpsc::Receiver<Outgoing>
     let result = match payload {
       Payload::Bytes(bytes) => half.write_all(&bytes).await,
       Payload::Encoded(frame) => write_encoded(&mut half, frame).await,
+      Payload::Close(reason) => {
+        half.handle().disconnect(reason, None);
+        return;
+      }
     };
     if let Some(written) = written {
       // the writer may have stopped waiting; the connection has logged the failure either way
@@ -411,6 +446,25 @@ mod tests {
       let _ = events.send(event);
     }));
     received
+  }
+
+  #[tokio::test]
+  async fn a_close_after_queued_writes_sends_them_first_and_refuses_more() {
+    let (conn, mut remote) = pair(ConnectionOptions::default(), FrameKind::Peer).await;
+    let first = conn.send_with_receipt(vec![1; 100_000]).unwrap();
+    let second = conn.send_with_receipt(vec![2; 10]).unwrap();
+    conn.close_when_flushed("Superseded");
+    assert!(
+      conn.send(vec![3]).is_err(),
+      "a write after the close is refused"
+    );
+    let mut received = Vec::new();
+    remote.read_to_end(&mut received).await.unwrap();
+    assert_eq!(received.len(), 100_010);
+    assert!(received[100_000..].iter().all(|byte| *byte == 2));
+    assert!(first.await.unwrap().is_ok());
+    assert!(second.await.unwrap().is_ok());
+    assert_eq!(conn.handle().disconnected().await.message, "Superseded");
   }
 
   #[tokio::test]
