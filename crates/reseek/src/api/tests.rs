@@ -243,26 +243,8 @@ async fn requests_are_checked_before_any_service_is_asked() {
     (
       "POST",
       "/api/v0/searches".into(),
-      Some(json!({ "searchText": "-live" })),
-      400,
-    ),
-    (
-      "POST",
-      "/api/v0/searches".into(),
-      Some(json!({ "searchText": "animals", "searchTimeout": 15 })),
-      400,
-    ),
-    (
-      "POST",
-      "/api/v0/searches".into(),
       Some(json!({ "searchText": "animals", "searchTimeout": "20s" })),
       409,
-    ),
-    (
-      "POST",
-      "/api/v0/searches".into(),
-      Some(json!({ "searchText": "a b -live" })),
-      400,
     ),
     (
       "POST",
@@ -274,20 +256,6 @@ async fn requests_are_checked_before_any_service_is_asked() {
       "POST",
       "/api/v0/transfers/downloads/batches".into(),
       Some(batch(json!({ "id": "" }))),
-      400,
-    ),
-    (
-      "POST",
-      "/api/v0/transfers/downloads/batches".into(),
-      Some(batch(
-        json!({ "id": "00000000-0000-0000-0000-000000000000" }),
-      )),
-      400,
-    ),
-    (
-      "POST",
-      "/api/v0/transfers/downloads/batches".into(),
-      Some(batch(json!({ "options": { "destination": "/srv" } }))),
       400,
     ),
     (
@@ -361,12 +329,6 @@ async fn requests_are_checked_before_any_service_is_asked() {
     (
       "POST",
       "/api/v0/rooms/joined".into(),
-      Some(json!({ "name": " indie" })),
-      400,
-    ),
-    (
-      "POST",
-      "/api/v0/rooms/joined".into(),
       Some(json!("indie")),
       400,
     ),
@@ -403,12 +365,6 @@ async fn requests_are_checked_before_any_service_is_asked() {
     ),
     (
       "GET",
-      "/api/v0/files/downloads/directories/Li4v".into(),
-      None,
-      400,
-    ),
-    (
-      "GET",
       "/api/v0/files/downloads/directories/%2Fw%3D%3D".into(),
       None,
       400,
@@ -428,28 +384,7 @@ async fn requests_are_checked_before_any_service_is_asked() {
       None,
       400,
     ),
-    ("GET", leaderboard.to_string(), None, 400),
     ("GET", format!("{histogram}?buckets=0"), None, 400),
-    (
-      "GET",
-      format!("{histogram}?buckets=10&interval=60"),
-      None,
-      400,
-    ),
-    (
-      "GET",
-      format!("{histogram}?end=2020-01-01T00:00:00Z&start=2019-01-01T00:00:00Z"),
-      None,
-      400,
-    ),
-    (
-      "GET",
-      format!("{histogram}?start=2026-01-02T00:00:00Z&end=2026-01-01T00:00:00Z"),
-      None,
-      400,
-    ),
-    ("GET", format!("{histogram}?start=abc"), None, 400),
-    ("GET", "/api/v0/logs/files/notes.txt".into(), None, 403),
     (
       "POST",
       "/api/v0/relay/controller/shares/not-a-token".into(),

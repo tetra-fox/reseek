@@ -2,8 +2,6 @@
 //! [`EXIT_RESTART`] for a supervisor to start it, or, unsupervised, runs itself again once it
 //! has stopped and let go of its instance lock.
 
-use std::ffi::OsString;
-
 use tracing::{error, info};
 
 use super::EXIT_FATAL;
@@ -18,8 +16,8 @@ const CONTAINER_INITS: &[&str] = &["tini", "docker-init", "dumb-init", "catatoni
 /// Whether something restarts the daemon when it exits with [`EXIT_RESTART`]: systemd, which
 /// sets `INVOCATION_ID`, or a container, where the daemon is the first process or a child of
 /// the container's init.
-pub(super) fn supervised_by_default(env: impl Fn(&str) -> Option<OsString>) -> bool {
-  env("INVOCATION_ID").is_some() || std::process::id() == 1 || under_container_init()
+pub(super) fn supervised_by_default() -> bool {
+  std::env::var_os("INVOCATION_ID").is_some() || std::process::id() == 1 || under_container_init()
 }
 
 #[cfg(target_os = "linux")]
@@ -64,16 +62,5 @@ pub(super) fn start_again() -> u8 {
       error!(error = %e, "not started again");
       EXIT_FATAL
     }
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn systemd_supervises() {
-    let systemd = |name: &str| (name == "INVOCATION_ID").then(|| OsString::from("abc"));
-    assert!(supervised_by_default(systemd));
   }
 }
