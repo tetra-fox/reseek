@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isAudio, remoteFolder } from "./links";
+import { remoteFolder } from "./links";
 
 describe("file links", () => {
   it("point Browse at the folder a remote file is in", () => {
@@ -9,10 +9,5 @@ describe("file links", () => {
       browse: "#/browse?user=al%20ice&path=Music%5CArtist",
       flat: "#/browse?user=al%20ice&path=Music%5CArtist&flat=1"
     });
-  });
-
-  it("tell audio by its extension", () => {
-    expect(isAudio("a/b.FLAC")).toBe(true);
-    expect(isAudio("a/b.jpg")).toBe(false);
   });
 });

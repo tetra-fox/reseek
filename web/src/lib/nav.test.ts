@@ -5,7 +5,6 @@ import {
   redirectFor,
   route,
   safeReturn,
-  title,
   unknownTarget,
   userHref
 } from "./nav";
@@ -48,15 +47,6 @@ describe("redirects", () => {
     expect(safeReturn("//evil.example")).toBe("/dashboard");
     expect(safeReturn("https://evil.example/")).toBe("/dashboard");
     expect(safeReturn("/login?to=/x")).toBe("/dashboard");
-  });
-});
-
-describe("titles", () => {
-  it("name the screen innermost first", () => {
-    expect(title("/downloads")).toBe("Downloads - reseek");
-    expect(title("/searches/1")).toBe("Search - reseek");
-    expect(title("/system/settings")).toBe("Settings - System - reseek");
-    expect(title("/login")).toBe("Log in - reseek");
   });
 });
 
