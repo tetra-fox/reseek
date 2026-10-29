@@ -15,7 +15,7 @@ use soulseek_client::{
 };
 use soulseek_proto::peer::{File, SearchResponse};
 use soulseek_proto::server::{GetStatusRequest, UserStatus};
-use soulseek_proto::{ServerCode, ServerRequest, UserPresence};
+use soulseek_proto::{RemoteFilename, ServerCode, ServerRequest, UserPresence};
 use support::soulfind::{self, Soulfind, User};
 use support::soulseek_rs::Peer;
 use support::transfers::{self, content, scratch};
@@ -129,12 +129,10 @@ fn write(path: &Path, len: usize) {
   std::fs::write(path, content(len)).unwrap();
 }
 
-#[tokio::test]
-#[ignore = "drives the soulseek-rs CLI; run by just e2e"]
-async fn search_browse_and_transfers_both_ways_with_soulseek_rs() {
+/// the soulseek-rs user on `server`, sharing one file of `THEIR_SIZE` bytes
+fn theirs(server: &Soulfind) -> Peer {
   let binary = std::env::var_os("SOULSEEK_RS_BIN")
     .expect("SOULSEEK_RS_BIN names the soulseek-rs CLI; run this through just e2e");
-  let server = soulfind::server().expect("just e2e checks soulfind is there");
   let peer = Peer {
     binary: binary.into(),
     server: server.address(),
@@ -148,6 +146,36 @@ async fn search_browse_and_transfers_both_ways_with_soulseek_rs() {
     THEIR_SIZE,
   );
   std::fs::create_dir_all(peer.downloads()).unwrap();
+  peer
+}
+
+/// downloads `filename` from `peer` and checks every byte arrived
+async fn download_theirs(ours: &User, peer: &Peer, filename: RemoteFilename) {
+  let destination = scratch().join("theirs.flac");
+  let downloaded = tokio::time::timeout(
+    PATIENCE * 6,
+    ours.client.download(
+      DownloadRequest::new(
+        &peer.username,
+        filename,
+        THEIR_SIZE as u64,
+        DownloadOutput::File(destination.clone()),
+      ),
+      &CancellationToken::new(),
+    ),
+  )
+  .await
+  .expect("the download ends")
+  .unwrap();
+  assert_eq!(downloaded.bytes_transferred, THEIR_SIZE as u64);
+  assert_eq!(std::fs::read(&destination).unwrap(), content(THEIR_SIZE));
+}
+
+#[tokio::test]
+#[ignore = "drives the soulseek-rs CLI; run by just e2e"]
+async fn search_browse_and_transfers_both_ways_with_soulseek_rs() {
+  let server = soulfind::server().expect("just e2e checks soulfind is there");
+  let peer = theirs(&server);
   let (ours, mut asked) = ours(&server).await;
 
   // the other user serves its share: we search it, browse it and download from it
@@ -182,24 +210,7 @@ async fn search_browse_and_transfers_both_ways_with_soulseek_rs() {
       .any(|name| name.ends_with("reseekprobe theirs.flac")),
     "{browsed:?}"
   );
-  let destination = scratch().join("theirs.flac");
-  let downloaded = tokio::time::timeout(
-    PATIENCE * 6,
-    ours.client.download(
-      DownloadRequest::new(
-        &peer.username,
-        theirs.filename.clone(),
-        theirs.size,
-        DownloadOutput::File(destination.clone()),
-      ),
-      &CancellationToken::new(),
-    ),
-  )
-  .await
-  .expect("the download ends")
-  .unwrap();
-  assert_eq!(downloaded.bytes_transferred, THEIR_SIZE as u64);
-  assert_eq!(std::fs::read(&destination).unwrap(), content(THEIR_SIZE));
+  download_theirs(&ours, &peer, theirs.filename).await;
   drop(serving);
 
   // the other user searches us
@@ -259,4 +270,46 @@ async fn search_browse_and_transfers_both_ways_with_soulseek_rs() {
   );
   let local = String::from_utf8_lossy(&fetched.stdout).trim().to_owned();
   assert_eq!(std::fs::read(&local).unwrap(), content(OUR_SIZE));
+}
+
+/// We find the other user's file without searching, by browsing it, so nothing connected it to
+/// us before: our first connection to it is the browse's own, made both ways at once. The direct
+/// one wins and carries the browse; the user then answers the request the server relayed by
+/// connecting to us, and from then on counts that connection as its connection to us. The
+/// download that follows must still be offered and arrive.
+#[tokio::test]
+#[ignore = "drives the soulseek-rs CLI; run by just e2e"]
+async fn a_download_after_a_browse_with_no_search_completes() {
+  let server = soulfind::server().expect("just e2e checks soulfind is there");
+  let peer = theirs(&server);
+  let (ours, _asked) = ours(&server).await;
+  let _serving = peer.serve();
+  online(&ours, &peer.username).await;
+  let mut answered = ours.client.inbound_connections();
+  let listing = ours
+    .client
+    .browse(
+      &peer.username,
+      Default::default(),
+      &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+  let filename = listing
+    .directories
+    .iter()
+    .flat_map(|directory| {
+      directory
+        .files
+        .iter()
+        .map(|file| format!("{}\\{}", directory.name, file.filename))
+    })
+    .find(|name| name.ends_with("reseekprobe theirs.flac"))
+    .expect("the browse lists the file");
+  // the user's answer to the relayed request reaches us before the download asks for anything
+  tokio::time::timeout(PATIENCE, answered.wait_for(|count| *count >= 1))
+    .await
+    .expect("the user answers the relayed request")
+    .unwrap();
+  download_theirs(&ours, &peer, filename.into()).await;
 }
