@@ -53,7 +53,7 @@
       type="button"
       aria-pressed={activityPrefs.open}
       class="flex shrink-0 items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg max-md:ml-auto"
-      title={`Who is browsing, searching and downloading from you (${shortcutText("J")})`}
+      title={`Activity log: browses, searches and downloads by other users (${shortcutText("J")})`}
       aria-keyshortcuts={shortcutAria("J")}
       onclick={() => (activityPrefs.open = !activityPrefs.open)}>
       <ActivityIcon class="size-3.5" /><span class="max-md:sr-only">Activity</span>

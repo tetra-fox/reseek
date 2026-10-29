@@ -96,7 +96,7 @@
   {/if}
   {#if scoped}
     <div class="flex items-center gap-2 text-xs text-fg-muted">
-      Only searching
+      Search limited to
       <Badge tone="accent">
         {scoped}
         {#if onclearscope}

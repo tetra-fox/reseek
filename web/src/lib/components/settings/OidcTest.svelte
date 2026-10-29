@@ -29,11 +29,11 @@
       </Button>
       {#if result}
         <span class={result.ok ? "text-success-soft-fg" : "text-danger"} role="status">
-          {result.ok ? "passed" : `failed: ${result.error ?? "unknown"}`}
+          {result.ok ? "Passed" : `Failed: ${result.error ?? "unknown error"}`}
         </span>
       {/if}
     </div>
-    {#if result?.issuer}<p class="text-fg-muted">issuer <code>{result.issuer}</code></p>{/if}
+    {#if result?.issuer}<p class="text-fg-muted">Issuer <code>{result.issuer}</code></p>{/if}
     {#if result?.endpoints}
       {@const e = result.endpoints}
       <ul class="font-mono text-fg-subtle">

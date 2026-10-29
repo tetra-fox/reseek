@@ -152,7 +152,7 @@ class Browse {
     if (on) {
       const added = filenames.filter((f) => !this.selected.has(f)).length;
       if (this.selected.size + added > MAX_SELECTED_FILES) {
-        toast("You can select at most 5,000 files.", "error");
+        toast("At most 5,000 files can be selected.", "error");
         return false;
       }
     }

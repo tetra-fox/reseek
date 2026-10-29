@@ -28,6 +28,8 @@
     showBlocked: boolean;
     /** the Fold toggle changed: every card folds or unfolds */
     onfold: (fold: boolean) => void;
+    /** the toolbar's height, which what stays in view under it starts below */
+    height?: number;
   };
 
   let {
@@ -37,7 +39,8 @@
     sortable,
     blockedCount,
     showBlocked = $bindable(),
-    onfold
+    onfold,
+    height = $bindable(0)
   }: Props = $props();
 
   const SORTS: { value: ResultSort; label: string }[] = [
@@ -54,7 +57,8 @@
 <!-- on a wide screen it stays in view over the results, above the dense view's own header, so
      the filter is always at hand; a phone can't spare the height, so there it scrolls away -->
 <div
-  class="flex flex-col gap-2.5 rounded-card border bg-surface/95 p-3 shadow-card backdrop-blur-md md:sticky md:top-0 md:z-20">
+  class="flex flex-col gap-2.5 rounded-card border bg-surface/95 p-3 shadow-card backdrop-blur-md md:sticky md:top-0 md:z-20"
+  bind:offsetHeight={height}>
   <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
     <div class="inline-flex rounded-control border p-0.5" role="radiogroup" aria-label="View">
       {#each VIEWS as v (v.id)}
@@ -99,7 +103,7 @@
     <label class="flex items-center gap-2">
       <Switch bind:checked={searchOptions.hideNoFreeSlots} />Hide users with no free slot
     </label>
-    <label class="flex items-center gap-2" title="Hides users who were offline when last seen">
+    <label class="flex items-center gap-2" title="Users who were offline when last seen">
       <Switch bind:checked={searchOptions.hideOffline} />Hide offline users
     </label>
     <label class="flex items-center gap-2">

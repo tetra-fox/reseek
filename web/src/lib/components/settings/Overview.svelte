@@ -42,18 +42,18 @@
       );
       if (outcome.ok) await onchanged();
       return outcome;
-    }, `${key} is back to its configured value`);
+    }, `${key} restored to its configured value`);
 </script>
 
 {#if !remote}
   <Notice kind="warning">
-    Remote configuration is off, so settings can only be viewed here. Set
+    Remote configuration is off. Settings are read-only here. Set
     <code>remote_configuration</code> to change them.
   </Notice>
 {/if}
 {#if view.loadError}
   <Notice kind="error"
-    >Couldn't reload the configuration, so the previous values are still in effect: {view.loadError}</Notice>
+    >Could not reload the configuration. The previous values remain in effect: {view.loadError}</Notice>
 {/if}
 {#each view.warnings as warning (warning)}
   <Notice kind="warning">{warning}</Notice>
@@ -108,7 +108,7 @@
 {#if overrides.length}
   <Card
     title="Runtime overrides"
-    description="Applied from this page or the API, on top of the configuration files">
+    description="Values applied from this page or the API, on top of the configuration files">
     <ul class="-mx-5 divide-y border-y">
       {#each overrides as [key, override] (key)}
         <li class="flex flex-wrap items-center gap-inline px-5 py-2 text-sm">

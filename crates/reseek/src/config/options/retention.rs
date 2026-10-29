@@ -9,33 +9,34 @@ use serde::{Deserialize, Serialize};
 /// How often the retention job deletes what is past the retention options.
 pub const RETENTION_SWEEP: Duration = Duration::from_secs(300);
 
-/// How long finished things are kept.
+/// Retention of finished items.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Retention {
-  /// Finished searches older than this are deleted, at least five minutes.
+  /// Age after which finished searches are deleted. Minimum: 5 minutes.
   #[serde(with = "humantime_serde")]
   pub search: Option<Duration>,
   /// Finished transfers.
   pub transfers: TransfersRetention,
   /// Files in the download directories.
   pub files: FileRetention,
-  /// Daily log files older than this are deleted, at least two days.
+  /// Age after which daily log files are deleted. Minimum: 2 days.
   #[cascade(apply = "restart")]
   #[serde(with = "humantime_serde")]
   pub logs: Duration,
   /// Chat history.
   pub messages: MessageRetention,
-  /// Users not seen for this long leave the users directory, unless pinned, noted, tagged,
-  /// blocked or in a group.
+  /// Time without being seen after which a user is removed from the users directory. Pinned,
+  /// noted, tagged, blocked and grouped users are kept.
   #[cascade(env = "RESEEK_RETENTION_USERS")]
   #[serde(with = "humantime_serde")]
   pub users: Option<Duration>,
-  /// Logged events older than this are deleted; `0` keeps them.
+  /// Age after which logged events are deleted. `0` keeps them.
   #[cascade(env = "RESEEK_RETENTION_EVENTS")]
   #[serde(with = "humantime_serde")]
   pub events: Duration,
-  /// The most logged events kept; the oldest beyond it are deleted, `0` keeps them all.
+  /// Maximum number of logged events kept. The oldest beyond it are deleted. `0` keeps all of
+  /// them.
   #[cascade(env = "RESEEK_RETENTION_EVENTS_MAX_ROWS")]
   pub events_max_rows: u32,
 }
@@ -55,7 +56,7 @@ impl Default for Retention {
   }
 }
 
-/// Finished transfers, by direction, and how long removed ones are kept.
+/// Retention of finished transfers by direction, and of removed transfers.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct TransfersRetention {
@@ -63,65 +64,69 @@ pub struct TransfersRetention {
   pub upload: TransferRetention,
   /// Finished downloads.
   pub download: TransferRetention,
-  /// Transfers removed from the listings longer ago than this are deleted for good, at least
-  /// five minutes; removed transfers are kept for the history when not set.
+  /// Time after removal from the transfer lists at which a transfer is deleted permanently.
+  /// Minimum: 5 minutes. Removed transfers are kept for the history when not set.
   #[serde(with = "humantime_serde")]
   pub purge_removed_after: Option<Duration>,
 }
 
-/// Finished transfers older than these are removed, each at least five minutes.
+/// Ages after which finished transfers are removed, each at least five minutes.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct TransferRetention {
-  /// Transfers that succeeded.
+  /// Age after which succeeded transfers are removed. Minimum: 5 minutes.
   #[serde(with = "humantime_serde")]
   pub succeeded: Option<Duration>,
-  /// Transfers that failed with an error, a timeout, a refusal or a size mismatch.
+  /// Age after which transfers that ended in an error, a timeout, a rejection or a size
+  /// mismatch are removed. Minimum: 5 minutes.
   #[serde(with = "humantime_serde")]
   pub errored: Option<Duration>,
-  /// Transfers that were canceled.
+  /// Age after which canceled transfers are removed. Minimum: 5 minutes.
   #[serde(with = "humantime_serde")]
   pub canceled: Option<Duration>,
-  /// Transfers that errored or were canceled.
+  /// Age after which errored or canceled transfers are removed. Minimum: 5 minutes.
   #[serde(with = "humantime_serde")]
   pub failed: Option<Duration>,
 }
 
-/// Files in the download directories last written this long ago are deleted, each at least 30
-/// minutes.
+/// Ages after which files in the download directories are deleted, by last write time, each at
+/// least 30 minutes.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct FileRetention {
-  /// Files in the downloads directory.
+  /// Age after which files in the downloads directory are deleted, by last write time.
+  /// Minimum: 30 minutes.
   #[serde(with = "humantime_serde")]
   pub complete: Option<Duration>,
-  /// Files in the incomplete directory.
+  /// Age after which files in the incomplete directory are deleted, by last write time.
+  /// Minimum: 30 minutes.
   #[serde(with = "humantime_serde")]
   pub incomplete: Option<Duration>,
 }
 
-/// Chat history. A message is deleted when it is past its age or its count limit, whichever
-/// comes first; `0` turns a limit off.
+/// Chat history. A message is deleted when it passes its age or count limit, whichever comes
+/// first. `0` disables a limit.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct MessageRetention {
-  /// Read private messages older than this are deleted.
+  /// Age after which read private messages are deleted. `0` for no limit.
   #[cascade(env = "RESEEK_RETENTION_MESSAGES_PRIVATE")]
   #[serde(with = "humantime_serde")]
   pub private: Duration,
-  /// The most read private messages kept per conversation, at least 250.
+  /// Maximum number of read private messages kept per conversation. Minimum: 250, or `0` for
+  /// no limit.
   #[cascade(env = "RESEEK_RETENTION_MESSAGES_MAX_PER_CONVERSATION")]
   pub max_per_conversation: u32,
-  /// Room messages older than this are deleted, except those that mention us; at least an
-  /// hour.
+  /// Age after which room messages are deleted, except those that mention this account.
+  /// Minimum: 1 hour, or `0` for no limit.
   #[cascade(env = "RESEEK_RETENTION_MESSAGES_ROOMS")]
   #[serde(with = "humantime_serde")]
   pub rooms: Duration,
-  /// Room messages that mention us older than this are deleted.
+  /// Age after which room messages that mention this account are deleted. `0` for no limit.
   #[cascade(env = "RESEEK_RETENTION_MESSAGES_MENTIONS")]
   #[serde(with = "humantime_serde")]
   pub mentions: Duration,
-  /// The most messages kept per room, at least 250.
+  /// Maximum number of messages kept per room. Minimum: 250, or `0` for no limit.
   #[cascade(env = "RESEEK_RETENTION_MESSAGES_MAX_PER_ROOM")]
   pub max_per_room: u32,
 }

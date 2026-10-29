@@ -180,7 +180,7 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
         }
         Err(e) => {
           warn!(error = e, "spectrogram not kept");
-          problem = Some(format!("The spectrogram could not be kept: {e}"));
+          problem = Some(format!("The spectrogram could not be stored: {e}"));
           None
         }
       }

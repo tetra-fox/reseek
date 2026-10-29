@@ -17,9 +17,12 @@ export const serverStateText = (s: Schemas["ServerState"]): string =>
 /** Where the port and its mapping are set */
 export const SOULSEEK_SETTINGS = "/system/settings?section=soulseek";
 
-/** What the search screen and the connection button say when other users can't reach us */
+/** What the search screen says when other users can't reach us */
 export const unreachable = (port: number) =>
-  `Other users can't connect to you, so you'll see fewer search results and some downloads won't start. Forward TCP port ${port} to this computer, or turn on port mapping.`;
+  `Other users cannot connect to you. Searches return fewer results, and some downloads cannot start. Forward TCP port ${port} to this computer or enable port mapping.`;
+
+/** What the connection button's tooltip says when other users can't reach us */
+export const UNREACHABLE_HINT = "Other users cannot connect to you. Check port forwarding.";
 
 const METHODS: Record<Schemas["PortMappingMethod"], string> = {
   upnp: "UPnP",
@@ -32,18 +35,18 @@ export const mappingText = (listen: Listen): string => {
   const m = listen.portMapping;
   switch (m.state) {
     case "off":
-      return "Port mapping is off, so reseek doesn't ask the router to forward the port.";
+      return "Port mapping is disabled.";
     case "mapping":
-      return `Asking the router to forward port ${listen.port}...`;
+      return `Mapping port ${listen.port} on the router...`;
     case "mapped": {
       const how = m.method ? ` with ${METHODS[m.method]}` : "";
       const where = m.externalAddress
         ? ` as ${m.externalAddress}:${m.externalPort ?? listen.port}`
         : "";
-      return `The router forwards port ${listen.port} to reseek${how}${where}.`;
+      return `Port ${listen.port} is forwarded to reseek${how}${where}.`;
     }
     case "failed":
-      return `The router didn't forward port ${listen.port}: ${m.error ?? "no reason given"}`;
+      return `The router did not forward port ${listen.port}: ${m.error ?? "no reason given"}`;
   }
 };
 
@@ -52,5 +55,5 @@ export const reachableText = (listen: Listen): string =>
   listen.reachable === "yes"
     ? "Other users can connect to you."
     : listen.reachable === "no"
-      ? "Other users haven't been able to connect to you."
-      : "It isn't known yet whether other users can connect to you.";
+      ? "Other users have not been able to connect to you."
+      : "Whether other users can connect to you is not yet known.";

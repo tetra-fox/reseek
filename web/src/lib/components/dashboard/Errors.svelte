@@ -114,7 +114,7 @@
     {@render which(paretoWhich, (w) => (paretoWhich = w), "Direction of the error counts")}
   </div>
   {#if paretoError}<p class="text-sm text-danger">
-      Couldn't load errors by type: {paretoError}
+      Could not load errors by type: {paretoError}
     </p>{/if}
   <!-- a phone scrolls the table sideways rather than squeeze the messages into slivers -->
   <div class="overflow-x-auto">
@@ -176,7 +176,7 @@
     {/if}
   </div>
   {#if recentError}<p class="text-sm text-danger">
-      Couldn't load recent errors: {recentError}
+      Could not load recent errors: {recentError}
     </p>{/if}
   <!-- a phone scrolls the table sideways rather than squeeze the messages into slivers -->
   <div class="overflow-x-auto">

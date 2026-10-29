@@ -69,7 +69,7 @@
   /** Runs a write and reads the profile again after it, or says why it failed */
   const run = async (write: () => Promise<{ ok: boolean; error?: string }>) => {
     const outcome = await write();
-    if (!outcome.ok) toast(outcome.error ?? "Something went wrong", "error");
+    if (!outcome.ok) toast(outcome.error ?? "The request failed", "error");
     onchanged();
   };
   const mute = (on: boolean) =>
@@ -86,7 +86,7 @@
     );
     if (!outcome.ok) return void toast(outcome.error, "error");
     deleting = false;
-    toast(`Removed ${name} from your user list`);
+    toast(`Removed ${name} from the user list`);
     void goto(href("/users"));
   };
 </script>
@@ -240,10 +240,10 @@
 <Dialog
   bind:open={deleting}
   title={`Forget ${name}?`}
-  description="This removes them from your user list, with your notes, tags and block. They come back if you interact with them again.">
+  description="Removes the user from the user list, with their notes, tags and block. The user is listed again after any new interaction.">
   <label class="flex items-center gap-2 text-sm">
     <Checkbox checked={purge} onCheckedChange={(on) => (purge = on)} />
-    Also remove their transfers and delete your messages with them
+    Also remove the transfers and messages with this user
   </label>
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (deleting = false)}>Cancel</Button>

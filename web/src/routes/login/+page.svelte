@@ -81,7 +81,7 @@
       </div>
     </div>
     {#if refused}
-      <Notice kind="error">Couldn't log in: {refused}</Notice>
+      <Notice kind="error">Could not log in: {refused}</Notice>
     {/if}
     {#if loadError}
       <Notice kind="error">{loadError}</Notice>
@@ -130,7 +130,7 @@
         </Form>
       {:else if !providers.oidc.length}
         <Notice kind="warning">
-          No login method is enabled on this server. Ask its administrator.
+          No login method is enabled on this server. Contact its administrator.
         </Notice>
       {/if}
     {/if}

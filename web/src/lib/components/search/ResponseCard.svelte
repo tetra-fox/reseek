@@ -69,6 +69,10 @@
   let status = $state<Enqueued | null>(null);
   let flat = $state<{ folder: string; files: Schemas["File"][] } | null>(null);
   let flatOpen = $state(false);
+  /** the height of the card's header, which stays in view on a wider screen */
+  let headerHeight = $state(0);
+  /** the height of the user's line, the part of the header that stays in view on a phone */
+  let userHeight = $state(0);
 
   $effect(() => void users.load(name));
 
@@ -117,7 +121,7 @@
     const outcome = await fetchFolder(name, folder);
     asking = null;
     if (!outcome.ok) {
-      toast(`Couldn't load the folder: ${outcome.error}`, "error");
+      toast(`Could not load the folder: ${outcome.error}`, "error");
       return;
     }
     flat = { folder, files: outcome.data.flatMap((d) => d.files) };
@@ -133,67 +137,96 @@
   const write = $derived(canWrite && connected);
 </script>
 
+<!-- the header stays in view under the results toolbar while the card's files scroll, and the
+     folders' lines stack under it; a phone keeps only the user's line of it, the figures and
+     actions scrolling away. The card clips rather than hides its overflow, since a box that hides
+     it is one its pinned lines would stay within -->
 <section
-  class="flex flex-col overflow-hidden rounded-card border bg-surface shadow-card [contain-intrinsic-size:auto_12rem] [content-visibility:auto]"
+  class="flex flex-col overflow-clip rounded-card border bg-surface shadow-card [contain-intrinsic-size:auto_12rem] [content-visibility:auto]"
   data-key={result.key}>
-  <header class="flex flex-wrap items-center gap-2 px-3 py-2.5">
-    <TreeToggle expansion={cards} key={result.key} {siblings} name={`${name}'s results`} />
-    <span
-      class={["size-2.5 rounded-full", response.hasFreeUploadSlot ? "bg-success" : "bg-warning"]}
-      title={response.hasFreeUploadSlot ? "Has a free upload slot" : "No free upload slot"}></span>
-    <Username {name} />
-    {#if user}
+  <header
+    class={[
+      "max-md:contents md:sticky md:z-[1] md:flex md:flex-wrap md:items-center md:gap-2 md:bg-surface md:px-3 md:py-2.5",
+      open && "md:border-b"
+    ]}
+    style:top="var(--results-top, 0px)"
+    bind:offsetHeight={headerHeight}>
+    <div
+      class="flex min-w-0 flex-wrap items-center gap-2 max-md:sticky max-md:z-[1] max-md:bg-surface max-md:px-3 max-md:py-2.5"
+      style:top="var(--results-top, 0px)"
+      bind:offsetHeight={userHeight}>
+      <TreeToggle expansion={cards} key={result.key} {siblings} name={`${name}'s results`} />
       <span
-        class={[
-          "size-2 rounded-full",
-          user.presence === "Online"
-            ? "bg-success"
-            : user.presence === "Away"
-              ? "bg-warning"
-              : "bg-fg-subtle/50"
-        ]}
-        title={user.presence ?? "Unknown"}></span>
-    {/if}
-    {#if user?.group.color}
-      <span
-        class="size-2 rounded-full"
-        style:background-color={user.group.color}
-        title={`Group ${user.group.name}`}></span>
-    {/if}
-    {#if response.country}<Country code={response.country} />{/if}
-    {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
-    <span class="text-xs text-fg-muted tabular-nums">
-      {formatBytes(response.uploadSpeed)}/s · {response.hasFreeUploadSlot
-        ? "free slot"
-        : "no free slot"} · {response.queueLength} queued · {plural(files.length, "file", "files")}
-    </span>
-    <div class="ml-auto flex flex-wrap items-center justify-end gap-1">
-      <Button variant="ghost" size="sm" href={href(`/browse?user=${encodeURIComponent(name)}`)}>
-        <FolderOpenIcon />Browse
-      </Button>
-      {#if canWrite}
-        <Button variant="ghost" size="sm" href={href(`/searches?user=${encodeURIComponent(name)}`)}>
-          <SearchIcon />More from this user
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!connected || downloading}
-          title={`${plural(files.length, "file", "files")}, ${formatBytes(allBytes)}`}
-          onclick={() => void download(files)}>
-          <DownloadIcon />Download all
-        </Button>
+        class={["size-2.5 rounded-full", response.hasFreeUploadSlot ? "bg-success" : "bg-warning"]}
+        title={response.hasFreeUploadSlot ? "Has a free upload slot" : "No free upload slot"}
+      ></span>
+      <Username {name} />
+      {#if user}
+        <span
+          class={[
+            "size-2 rounded-full",
+            user.presence === "Online"
+              ? "bg-success"
+              : user.presence === "Away"
+                ? "bg-warning"
+                : "bg-fg-subtle/50"
+          ]}
+          title={user.presence ?? "Unknown"}></span>
       {/if}
-      <Button variant="ghost" size="icon-sm" aria-label="Hide this result" onclick={ondismiss}>
-        <XIcon class="text-danger" />
-      </Button>
+      {#if user?.group.color}
+        <span
+          class="size-2 rounded-full"
+          style:background-color={user.group.color}
+          title={`Group ${user.group.name}`}></span>
+      {/if}
+      {#if response.country}<Country code={response.country} />{/if}
+      {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
+    </div>
+    <div
+      class={[
+        "flex flex-wrap items-center gap-2 max-md:px-3 max-md:pb-2.5 md:contents",
+        open && "max-md:border-b"
+      ]}>
+      <span class="text-xs text-fg-muted tabular-nums">
+        {formatBytes(response.uploadSpeed)}/s · {response.hasFreeUploadSlot
+          ? "free slot"
+          : "no free slot"} · {response.queueLength} queued · {plural(
+          files.length,
+          "file",
+          "files"
+        )}
+      </span>
+      <div class="ml-auto flex flex-wrap items-center justify-end gap-1">
+        <Button variant="ghost" size="sm" href={href(`/browse?user=${encodeURIComponent(name)}`)}>
+          <FolderOpenIcon />Browse
+        </Button>
+        {#if canWrite}
+          <Button
+            variant="ghost"
+            size="sm"
+            href={href(`/searches?user=${encodeURIComponent(name)}`)}>
+            <SearchIcon />More from this user
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!connected || downloading}
+            title={`${plural(files.length, "file", "files")}, ${formatBytes(allBytes)}`}
+            onclick={() => void download(files)}>
+            <DownloadIcon />Download all
+          </Button>
+        {/if}
+        <Button variant="ghost" size="icon-sm" aria-label="Hide this result" onclick={ondismiss}>
+          <XIcon class="text-danger" />
+        </Button>
+      </div>
     </div>
   </header>
 
   {#if open}
     <FolderTree
-      class="border-t"
       {lines}
+      pin={`calc(var(--results-top, 0px) + ${viewport.phone ? userHeight : headerHeight}px)`}
       expansion={folders}
       label={`Files from ${name}`}
       columns={viewport.phone ? PHONE_COLUMNS : columns}

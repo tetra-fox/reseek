@@ -29,7 +29,7 @@
     {
       label: "Messages",
       value: f.messages.in + f.messages.out,
-      sub: f.messages.unread ? `${f.messages.unread} unread` : `${f.messages.in} from them`
+      sub: f.messages.unread ? `${f.messages.unread} unread` : `${f.messages.in} received`
     }
   ]);
 </script>
@@ -44,9 +44,7 @@
       freeUploadSlot={p.info.hasFreeUploadSlot}
       queueLength={p.info.queueLength} />
   {:else}
-    <p class="text-sm text-fg-muted">
-      Their profile hasn't been loaded yet. Use Refresh to request it.
-    </p>
+    <p class="text-sm text-fg-muted">The profile has not been loaded. Use Refresh to request it.</p>
   {/if}
 </Card>
 

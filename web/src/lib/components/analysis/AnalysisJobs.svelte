@@ -13,7 +13,7 @@
   const name = (path: string) => path.split(/[/\\]/).pop() ?? path;
   const cancel = async (id: string) => {
     const outcome = await jobs.cancel(id);
-    if (!outcome.ok) toast(`Couldn't cancel the analysis: ${outcome.error}`, "error");
+    if (!outcome.ok) toast(`Could not cancel the analysis: ${outcome.error}`, "error");
   };
 </script>
 

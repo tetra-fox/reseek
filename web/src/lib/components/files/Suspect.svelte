@@ -10,11 +10,11 @@
 
   const first = $derived(
     suspect.reason === "belowDeclaredBitrate"
-      ? `Size works out to ${suspect.impliedKbps} kbps, well below the ${suspect.expectedKbps} kbps it claims`
-      : `Size works out to ${suspect.impliedKbps} kbps, small for a lossless file`
+      ? `Size implies ${suspect.impliedKbps} kbps, well below the stated ${suspect.expectedKbps} kbps`
+      : `Size implies ${suspect.impliedKbps} kbps, low for a lossless file`
   );
   const text = $derived(
-    `${first}. A hint, not a verdict: tags, cover art, silence or an unusual encoder can cause this, and a fake file can pass. Check the spectrum after downloading.`
+    `${first}. This is an indication, not a verdict. Tags, cover art, silence or an unusual encoder can cause it, and a fake file can pass. Check the spectrum after downloading.`
   );
 </script>
 

@@ -115,7 +115,7 @@
   const remove = (name: string) =>
     confirmation.ask({
       title: "Remove from the room",
-      body: `Remove ${name} from ${members.name}? They can't rejoin until someone adds them again.`,
+      body: `Remove ${name} from ${members.name}? The user cannot rejoin until added again.`,
       confirm: "Remove",
       run: () => void members.removeMember(name).then(report(`${name} was removed`))
     });
@@ -124,14 +124,14 @@
       title: "Give up ownership",
       body: `Give up ownership of ${members.name}? The server dissolves a private room without an owner.`,
       confirm: "Give up",
-      run: () => void members.dropOwnership().then(report(`You gave up ${members.name}`))
+      run: () => void members.dropOwnership().then(report(`Gave up ownership of ${members.name}`))
     });
   const quit = () =>
     confirmation.ask({
       title: "Leave the private room",
-      body: `Leave ${members.name}? You can only come back if someone adds you again.`,
+      body: `Leave ${members.name}? Rejoining requires being added again.`,
       confirm: "Leave",
-      run: () => void members.dropMembership().then(report(`You left ${members.name}`))
+      run: () => void members.dropMembership().then(report(`Left ${members.name}`))
     });
 </script>
 
@@ -154,8 +154,8 @@
         </Menu.Trigger>
         <Menu.Content align="end" class="min-w-52">
           <Menu.Label>
-            {#if role === "owner"}You own this room{:else if role === "operator"}You're an operator
-              of this room{:else}You're a member{/if}
+            {#if role === "owner"}Owner of this room{:else if role === "operator"}Operator of this
+              room{:else}Member of this room{/if}
           </Menu.Label>
           {#if role === "owner"}
             <Menu.Item onSelect={giveUp}><CrownIcon />Give up ownership</Menu.Item>
@@ -271,7 +271,7 @@
                     onSelect={() =>
                       void members
                         .addOperator(u.username)
-                        .then(report(`${u.username} is an operator now`))}
+                        .then(report(`${u.username} is now an operator`))}
                     ><ShieldIcon />Make operator</Menu.Item>
                 {/if}
                 {#if can.demote}

@@ -74,7 +74,8 @@
   /** Saves the group's local folder as a zip; only finished files are in it */
   const zip = () => {
     if (!local) return;
-    if (list.some((t) => !isSucceeded(t.state))) toast("The zip includes only the finished files");
+    if (list.some((t) => !isSucceeded(t.state)))
+      toast("Only finished files are included in the zip");
     const name = local.split("/").pop() || "downloads";
     window.location.assign(
       `${root()}/api/v0/files/downloads/directories/${encodePath(local)}/archive?name=${encodeURIComponent(name)}`

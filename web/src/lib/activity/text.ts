@@ -51,7 +51,7 @@ export const activityParts = (e: ActivityEntry, size: (bytes: number) => string)
         ...who,
         t(" searched for "),
         { kind: "strong", text: `"${k.query}"` },
-        t(` and got ${plural(k.results, "result", "results")}`)
+        { kind: "muted", text: ` (${plural(k.results, "result", "results")})` }
       ];
     case "queued":
       return [
@@ -86,8 +86,8 @@ export const activityParts = (e: ActivityEntry, size: (bytes: number) => string)
       return {
         added: [t("You were added to the private room "), room],
         removed: [t("You were removed from the private room "), room],
-        operator: [t("You're now an operator of "), room],
-        noLongerOperator: [t("You're no longer an operator of "), room]
+        operator: [t("You are now an operator of "), room],
+        noLongerOperator: [t("You are no longer an operator of "), room]
       }[k.change];
     }
   }

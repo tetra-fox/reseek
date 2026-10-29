@@ -114,7 +114,7 @@
   const discard = () =>
     confirmation.ask({
       title: "Discard changes?",
-      body: "Your edits are discarded and the file is left unchanged.",
+      body: "The edits are discarded and the file is left unchanged.",
       confirm: "Discard",
       run: () => void load()
     });
@@ -164,7 +164,7 @@
   </Notice>
 {:else if !writable}
   <Notice kind="warning"
-    >{info?.name} isn't writable{info?.readOnlyReason ? ` (${info.readOnlyReason})` : ""}.</Notice>
+    >{info?.name} is not writable{info?.readOnlyReason ? ` (${info.readOnlyReason})` : ""}.</Notice>
 {:else if file}
   <Notice kind="warning">Editing {file.path}</Notice>
 {/if}
@@ -217,7 +217,7 @@
   {/if}
   {#if saveError}
     <Notice kind="error">
-      {stale ? `${name} changed on disk. Reload it, then make your changes again.` : saveError}
+      {stale ? `${name} changed on disk. Reload it, then make the changes again.` : saveError}
       {#snippet action()}
         {#if stale}<Button variant="outline" size="sm" onclick={() => void load()}>Reload</Button
           >{/if}

@@ -51,10 +51,10 @@ export const enqueue = async ({
     };
   }
   if (failures.length >= files.length)
-    return { kind: "none", text: `Couldn't queue anything: ${why}` };
+    return { kind: "none", text: `Could not queue any files: ${why}` };
   return {
     kind: "partial",
-    text: `Queued ${files.length - failures.length} of ${plural(files.length, "file", "files")}. Couldn't queue ${why}`
+    text: `Queued ${files.length - failures.length} of ${plural(files.length, "file", "files")}. Could not queue ${why}`
   };
 };
 

@@ -51,7 +51,7 @@ pub(super) fn flags(schema: &Schema) -> Vec<FlagDoc> {
     short: None,
     long: CONFIG_FILE.to_string(),
     value: Some("path".to_string()),
-    doc: "The same as --config.".to_string(),
+    doc: "Same as --config.".to_string(),
   });
   for field in schema.fields() {
     let Some(long) = &field.cli else {
@@ -125,7 +125,7 @@ fn flag_item(short: Option<char>, long: &str) -> String {
 fn described(field: &Field) -> String {
   let doc = field.doc.split_whitespace().collect::<Vec<_>>().join(" ");
   if field.negated {
-    return format!("{doc} (the flag turns it off)");
+    return format!("{doc} This flag disables it.");
   }
   if field.kind == Kind::Bool {
     return doc;

@@ -17,7 +17,7 @@
   </Button>
   <Dialog bind:open title="Update available">
     <p class="text-sm">
-      reseek <strong>{version.latest}</strong> is available. You're running
+      reseek <strong>{version.latest}</strong> is available. The current version is
       <strong>{version.current}</strong>.
     </p>
     <a

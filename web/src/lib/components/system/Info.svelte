@@ -50,7 +50,7 @@
         toast(
           v.isUpdateAvailable && v.latest
             ? `Version ${v.latest} is available`
-            : `You're running the latest version (${v.current})`
+            : `Version ${v.current} is the latest`
         );
       }
       return outcome;
@@ -77,7 +77,7 @@
   const shutDown = () =>
     confirmation.ask({
       title: "Shut down reseek?",
-      body: "You'll need to start it again yourself.",
+      body: "reseek must then be started again manually.",
       confirm: "Shut down",
       run: () => void busy.run(() => call(() => api.DELETE("/api/v0/application")))
     });
@@ -171,7 +171,7 @@
         <dt>Platform</dt>
         <dd>{s.process.os} ({s.process.arch})</dd>
         <dt>Memory</dt>
-        <dd>{s.process.memoryBytes ? formatBytes(s.process.memoryBytes) : "Not known yet"}</dd>
+        <dd>{s.process.memoryBytes ? formatBytes(s.process.memoryBytes) : "Unknown"}</dd>
         <dt>Web addresses</dt>
         <dd class="font-mono">
           {#each s.listeners as url (url)}<span class="block">{url}</span>{:else}None{/each}
@@ -205,7 +205,7 @@
         </dd>
       </dl>
     </Card>
-    <Card title="Shared with others">
+    <Card title="Sharing">
       <dl class="info">
         <dt>Shares</dt>
         <dd>
@@ -215,7 +215,7 @@
             "folders"
           )}
         </dd>
-        <dt>As others see you</dt>
+        <dt>Seen by others</dt>
         <dd>
           {plural(s.user.statistics.fileCount, "file", "files")}, {formatSpeed(
             s.user.statistics.averageSpeed
@@ -224,9 +224,9 @@
         </dd>
         <dt>Incoming searches</dt>
         <dd>
-          {s.health.search.incoming.queueDepth} waiting, {Math.round(
+          {s.health.search.incoming.queueDepth} queued, {Math.round(
             s.health.search.incoming.latency
-          )} ms to answer,
+          )} ms response time,
           {s.health.search.incoming.dropRate} dropped this minute
         </dd>
       </dl>
@@ -236,7 +236,7 @@
         <dt>Parent</dt>
         <dd>
           {s.distributedNetwork.parent ??
-            (s.distributedNetwork.isBranchRoot ? "none, this is a branch root" : "none")}
+            (s.distributedNetwork.isBranchRoot ? "none (branch root)" : "none")}
         </dd>
         <dt>Branch</dt>
         <dd>
@@ -272,7 +272,7 @@
                   {agent.ipAddress}, since {ago(agent.connectedAt, clock.now)},
                   {agent.ready
                     ? `shares from ${agent.sharesUpdatedAt ? ago(agent.sharesUpdatedAt, clock.now) : "?"}`
-                    : "sending its shares"}
+                    : "sending shares"}
                 </span>
                 {#if admin}
                   <Button

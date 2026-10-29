@@ -211,10 +211,10 @@
               {#if room.isPrivate}<LockIcon
                   class="size-3.5 text-fg-muted"
                   aria-label="private" />{/if}
-              {#if room.isOwned}<CrownIcon class="size-3.5 text-warning" aria-label="yours" />{/if}
+              {#if room.isOwned}<CrownIcon class="size-3.5 text-warning" aria-label="owned" />{/if}
               {#if room.isModerated}<GavelIcon
                   class="size-3.5 text-fg-muted"
-                  aria-label="you're an operator" />{/if}
+                  aria-label="operator" />{/if}
               <span class="truncate">{room.name}</span>
             </span>
             <span role="gridcell" class="truncate px-2 text-right tabular-nums"
@@ -284,7 +284,8 @@
         >Create</Button>
     </div>
     <p class="text-xs text-fg-muted">
-      A private room lets in only the members you add. Invitations to private rooms are
+      Only added members can join a private room. Invitations to private rooms are
+
       {invitations ? "accepted" : "refused"}.
       <a
         class="text-accent hover:underline"

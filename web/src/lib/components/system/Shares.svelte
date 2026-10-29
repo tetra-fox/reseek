@@ -119,7 +119,7 @@
 {#if scan?.faulted}
   <Notice kind="warning">The last scan failed. See Logs for details.</Notice>
 {:else if scan?.cancelled}
-  <Notice kind="warning">The last scan was canceled, so shares may be incomplete.</Notice>
+  <Notice kind="warning">The last scan was canceled. Shares may be incomplete.</Notice>
 {/if}
 <LoadError loader={shares} />
 
@@ -200,7 +200,7 @@
                   Shared because
                   <a href={href("/system/settings")} class="underline"
                     >Share the downloads folder</a>
-                  is on (<code>{r.derivedFrom}</code>)
+                  is enabled (<code>{r.derivedFrom}</code>)
                 </span>
               {/if}
             </span>

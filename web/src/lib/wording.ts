@@ -29,4 +29,4 @@ export const RESTART = {
 } as const;
 
 /** What a screen that failed to render says first; the error's own message follows it */
-export const SCREEN_FAILED = "This screen couldn't be shown";
+export const SCREEN_FAILED = "This screen could not be displayed";

@@ -76,7 +76,7 @@ test("the activity log opens from the footer and lists what others did", async (
   const log = page.getByRole("grid", { name: "Activity" });
   await expect(log.getByRole("row")).toHaveCount(3);
   await expect(log.getByRole("row").first()).toContainText("carol queued 3 files");
-  await expect(log).toContainText('bob searched for "boards of canada" and got 12 results');
+  await expect(log).toContainText('bob searched for "boards of canada" (12 results)');
   await expect(log).toContainText("alice is browsing your shares");
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/activity.png` });
   await page.getByRole("button", { name: "Close the activity log" }).click();

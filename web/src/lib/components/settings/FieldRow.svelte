@@ -117,9 +117,7 @@
             align="start"
             sideOffset={4}
             class="z-50 flex w-max max-w-[calc(100vw-1rem)] flex-col gap-1.5 rounded-card border bg-overlay p-3 text-xs shadow-raised motion-safe:animate-popover-in">
-            <p class="text-fg-muted">
-              Set it with an environment variable or a command-line flag instead:
-            </p>
+            <p class="text-fg-muted">Environment variable and command-line flag:</p>
             {#each [info.envVar && `${info.envVar}=…`, info.cliFlag && `${info.cliFlag} …`].filter((t): t is string => !!t) as text (text)}
               <span class="flex items-center gap-2">
                 <code
@@ -157,10 +155,10 @@
     {#if notApplied}
       <p class="text-xs text-danger">
         The value <code class="wrap-anywhere">{JSON.stringify(notApplied.value)}</code> in the file
-        isn't in effect: {notApplied.reason}
+        is not in effect: {notApplied.reason}
       </p>
     {/if}
     {@render extra?.()}
-    {#if moved}<p class="text-xs text-warning-soft-fg">The running value changed</p>{/if}
+    {#if moved}<p class="text-xs text-warning-soft-fg">The running value has changed</p>{/if}
   </div>
 </div>

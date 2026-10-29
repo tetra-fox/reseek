@@ -37,6 +37,7 @@
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { undoable } from "#lib/undo.js";
   import { users } from "#lib/users.svelte.js";
+  import { viewport } from "#lib/viewport.svelte.js";
 
   import DenseResults from "./DenseResults.svelte";
   import ResponseCard from "./ResponseCard.svelte";
@@ -71,6 +72,7 @@
   let filterText = $state("");
   let typed = $state("");
   let showBlocked = $state(false);
+  let toolbarHeight = $state(0);
   let blocked = $state.raw<Set<string>>(new Set());
   const dismissed = new SvelteSet<string>();
   const cards = new Expansion(!searchOptions.fold);
@@ -188,7 +190,7 @@
   const dismiss = (username: string) => {
     dismissed.add(username);
     undoable(
-      `Hid ${username}'s results`,
+      `Results from ${username} hidden`,
       () => {},
       () => dismissed.delete(username)
     );
@@ -220,13 +222,13 @@
 
 {#if refused}
   <ErrorSegment
-    caption={`The search couldn't start: ${refused}`}
+    caption={`Could not start the search: ${refused}`}
     retry={again}
     retryLabel="Try again" />
 {:else if !search}
   {#if missing}
     <ErrorSegment
-      caption="This search couldn't be loaded"
+      caption="Could not load this search"
       retry={() => (missing = false)}
       retryLabel="Retry" />
   {:else}
@@ -287,6 +289,7 @@
       sortable={results.stored}
       blockedCount={blocked.size}
       bind:showBlocked
+      bind:height={toolbarHeight}
       onfold={(fold) => cards.reset(!fold)} />
 
     {#if searchOptions.view === "dense"}
@@ -294,7 +297,12 @@
         <DenseResults {rows} searchId={id} canDownload={canWrite && connected} />
       {/if}
     {:else}
-      <div class="flex flex-col gap-3" {@attach freezesWhileUsed}>
+      <!-- a card's pinned lines start under the toolbar where it stays in view, at the top on a
+           phone, where it scrolls away -->
+      <div
+        class="flex flex-col gap-3"
+        style:--results-top={viewport.phone ? "0px" : `${toolbarHeight}px`}
+        {@attach freezesWhileUsed}>
         {#each view.slice(0, shown) as result (result.key)}
           <div in:fly={motion()} out:fly={motion()}>
             <ResponseCard
@@ -347,6 +355,6 @@
     <EmptyState
       icon={SearchXIcon}
       title="No results"
-      description="Try fewer or different words, or search again later." />
+      description="Use fewer or different words, or search again later." />
   {/if}
 {/if}

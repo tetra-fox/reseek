@@ -119,7 +119,7 @@
         rules.blocklistFile &&
           `${plural(rules.blocklistFile.entries, "entry", "entries")} from ${rules.blocklistFile.path}`
       ].filter((p): p is string => !!p)
-    )}. You can change these in Settings, under Groups.
+    )}. These rules are set in Settings, under Groups.
   </Notice>
 {/if}
 
@@ -218,7 +218,7 @@
 <Dialog
   bind:open={importing}
   title="Import blocks"
-  description="One username per line. Lines starting with # are ignored. You can also paste a JSON export.">
+  description="One username per line. Lines starting with # are ignored. A JSON export is also accepted.">
   <Textarea
     class="min-h-40 font-mono text-xs"
     aria-label="Blocks to import"

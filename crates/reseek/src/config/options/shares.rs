@@ -7,47 +7,48 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::enums::StorageMode;
 
-/// What we share.
+/// Shared directories.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct Shares {
-  /// Shared directories, each an absolute path, optionally with `[alias]` before it and `!`
-  /// in front to exclude it instead.
+  /// Shared directories, each an absolute path. A leading `[alias]` sets an alias, and a
+  /// leading `!` excludes the directory instead.
   #[cascade(env = "RESEEK_SHARED_DIR", cli = "-s|--shared")]
   pub directories: Vec<String>,
   /// Also shares the downloads directory.
   #[cascade(env = "RESEEK_SHARE_DOWNLOADS", cli = "--share-downloads")]
   pub share_downloads: bool,
-  /// Regular expressions; a file whose full path matches one is not shared.
+  /// Regular expressions. Files whose full path matches any of them are not shared.
   #[cascade(env = "RESEEK_SHARE_FILTER", cli = "--share-filter")]
   pub filters: Vec<String>,
-  /// Follows links to directories and files inside the shares; share roots are always
-  /// opened through a link.
+  /// Follows symbolic links to directories and files within the shares. Share roots are
+  /// always opened through a link.
   pub follow_symlinks: bool,
-  /// The index of shared files.
+  /// Index of shared files.
   pub cache: ShareCache,
 }
 
-/// The index of shared files.
+/// Index of shared files.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct ShareCache {
-  /// `memory`, rebuilt at every start, or `disk`, kept in the cache directory.
+  /// Storage of the share index: `memory`, rebuilt at every start, or `disk`, kept in the
+  /// cache directory.
   #[cascade(
     env = "RESEEK_SHARE_CACHE_STORAGE_MODE",
     cli = "--share-cache-storage-mode",
     apply = "restart"
   )]
   pub storage_mode: StorageMode,
-  /// How many files are read at the same time during a scan.
+  /// Number of files read at once during a scan.
   #[cascade(
     env = "RESEEK_SHARE_CACHE_WORKERS",
     cli = "--share-cache-workers",
     apply = "restart"
   )]
   pub workers: u32,
-  /// How often the shares are scanned again on their own, at least an hour; never when not
-  /// set.
+  /// Interval between automatic rescans of the shares. Minimum: 1 hour. No automatic rescans
+  /// when not set.
   #[cascade(env = "RESEEK_SHARE_CACHE_RETENTION", cli = "--share-cache-retention")]
   #[serde(with = "humantime_serde")]
   pub retention: Option<Duration>,

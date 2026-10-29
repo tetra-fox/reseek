@@ -25,7 +25,7 @@
   const logout = async () => {
     const outcome = await session.logout();
     if (!outcome.ok) {
-      toast(`Couldn't log out: ${outcome.error}`, "error");
+      toast(`Could not log out: ${outcome.error}`, "error");
       return;
     }
     // an identity provider's own logout page ends its session too
@@ -98,7 +98,7 @@
 <ConfirmDialog
   bind:open={confirming}
   title="Log out?"
-  body="You'll need to log in again to use reseek in this browser."
+  body="This browser must log in again to use reseek."
   confirm="Log out"
   danger
   onconfirm={logout} />

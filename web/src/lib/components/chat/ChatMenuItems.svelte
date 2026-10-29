@@ -39,7 +39,7 @@
       : `${root()}/api/v0/rooms/history/${segment(target.name)}/export?format=${format}`;
 
   const report = (outcome: { ok: boolean; error?: string }) => {
-    if (!outcome.ok) toast(outcome.error ?? "Something went wrong", "error");
+    if (!outcome.ok) toast(outcome.error ?? "The request failed", "error");
   };
   const markRead = async () =>
     report(user ? await chat.acknowledge(target.name) : await chat.markRoomReadNewest(target.name));
@@ -51,13 +51,13 @@
       user
         ? {
             title: "Close conversation",
-            body: `Close the conversation with ${target.name}? The history is kept and comes back if they message you again.`,
+            body: `Close the conversation with ${target.name}? The history is kept, and the conversation reopens when a new message arrives.`,
             confirm: "Close",
             run: () => void chat.close(target.name).then(report)
           }
         : {
             title: "Leave room",
-            body: `Leave ${target.name}? You will stop receiving its messages until you join again.`,
+            body: `Leave ${target.name}? Its messages stop arriving until the room is joined again.`,
             confirm: "Leave",
             run: () => void chat.leave(target.name).then(report)
           }
@@ -66,7 +66,7 @@
     confirmation.ask({
       title: "Clear history",
       body: user
-        ? `Delete every stored message with ${target.name}? The conversation closes too.`
+        ? `Delete every stored message with ${target.name}? The conversation is also closed.`
         : `Delete every stored message in ${target.name}?`,
       confirm: "Delete",
       run: async () =>

@@ -80,7 +80,7 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   await expect(drawer.getByRole("heading", { name: "Analysis" })).toBeInViewport();
   const plot = drawer.getByRole("slider", { name: "Cursor" });
   await expect(plot).toBeVisible();
-  await expect(drawer.getByText(/This is a tool to help you judge, not proof/)).toBeVisible();
+  await expect(drawer.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
   // each guide line shows and hides from its legend, drawn on the plot at its frequency
   const legend = drawer.getByRole("button", { name: "MP3 128k" });
   const guide = await guideRow(plot, 16_000);
@@ -101,7 +101,7 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   await expect(table.getByText("Fake", { exact: true })).toBeVisible();
 
   // the analyzer's reading, folded away and labeled as its own
-  await drawer.getByText("The analyzer's reading").click();
+  await drawer.getByText("Analyzer reading").click();
   await expect(drawer.getByText("Likely a transcode")).toBeVisible();
 
   // the cursor steps a window at a time from the keyboard, ten with Shift
@@ -122,7 +122,7 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   await expect(plot).toHaveAttribute("aria-valuenow", "0");
   await expect(plot).toHaveAttribute(
     "aria-valuetext",
-    /^0:00\.0, in the window at 0:00: -20\.0 dBFS, content stops at 16\.8 kHz$/
+    /^0:00\.0, in the window at 0:00: -20\.0 dBFS, cutoff at 16\.8 kHz$/
   );
 
   // a click on the plot puts the cursor at that moment
@@ -452,7 +452,7 @@ test("the cursor follows playback and a click seeks it", async ({ page }) => {
   const plot = drawer.getByRole("slider", { name: "Cursor" });
   await plot.focus();
   await page.keyboard.press("ArrowRight");
-  await drawer.getByRole("button", { name: "Play" }).click();
+  await drawer.getByRole("button", { name: "Play", exact: true }).click();
   // playback starts at the cursor and the cursor moves with it
   const now = async () => Number(await plot.getAttribute("aria-valuenow"));
   await expect.poll(now).toBeGreaterThan(1.5);
@@ -462,7 +462,7 @@ test("the cursor follows playback and a click seeks it", async ({ page }) => {
   await clickAt(plot, 4 / 30.5);
   await expect.poll(position).toBeGreaterThanOrEqual(4);
   expect(await position()).toBeLessThan(5);
-  await drawer.getByRole("button", { name: "Pause" }).click();
+  await drawer.getByRole("button", { name: "Pause", exact: true }).click();
   const paused = await now();
   await page.waitForTimeout(300);
   expect(await now()).toBe(paused);
@@ -480,7 +480,9 @@ test("a report an older version made asks to be analyzed again", async ({ page }
   await page.getByRole("menuitem", { name: "Analyze" }).click();
   const drawer = page.getByRole("complementary", { name: "Transfer details" });
   await expect(
-    drawer.getByText("This was analyzed by an older version of reseek. Analyze again to see it.")
+    drawer.getByText(
+      "This file was analyzed by an older version of reseek. Analyze it again to view the results."
+    )
   ).toBeVisible();
   await expect(drawer.getByRole("slider", { name: "Cursor" })).toHaveCount(0);
   // the judgment is the user's and outlives the report
@@ -623,9 +625,9 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   await page.getByRole("menuitem", { name: "Analyze" }).click();
   const drawer = page.getByRole("complementary", { name: "Analysis" });
   // queued by another browser, it shows its place in the queue
-  await expect(drawer.getByText("Waiting for the analyzer")).toBeVisible();
+  await expect(drawer.getByText("Waiting in the analysis queue")).toBeVisible();
   await expect(drawer.getByRole("slider", { name: "Cursor" })).toBeVisible();
-  await expect(drawer.getByText(/This is a tool to help you judge, not proof/)).toBeVisible();
+  await expect(drawer.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
   // the file's own actions sit beside its name
   await expect(drawer.getByRole("button", { name: "Preview" })).toBeVisible();
   await expect(drawer.getByRole("button", { name: "Download to device" })).toBeVisible();
@@ -641,7 +643,7 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   await page.getByRole("menuitem", { name: "Open" }).click();
   await page.getByRole("button", { name: "More for 01.flac" }).click();
   await page.getByRole("menuitem", { name: "Analyze" }).click();
-  await expect(drawer.getByText("Waiting for the analyzer")).toBeVisible();
+  await expect(drawer.getByText("Waiting in the analysis queue")).toBeVisible();
   await expect(drawer.getByRole("button", { name: "Analyze", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Analysis queue" })).toBeVisible();
 });

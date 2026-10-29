@@ -82,7 +82,7 @@
       listings.set(at, outcome.data);
       if (at === path) error = "";
     } else if (at === path) {
-      error = outcome.status === 404 ? `/${root}/${path} doesn't exist` : outcome.error;
+      error = outcome.status === 404 ? `/${root}/${path} does not exist` : outcome.error;
       listings.delete(at);
     } else {
       toast(outcome.error, "error");
@@ -174,7 +174,7 @@
         params: { path: { root, path: encodePath(e.path) }, query: { recursive: true } }
       })
     );
-    if (!listing.ok) return void toast(`Couldn't read ${e.name}: ${listing.error}`, "error");
+    if (!listing.ok) return void toast(`Could not read ${e.name}: ${listing.error}`, "error");
     const files = (listing.data.files ?? [])
       .map((f) => f.fullName.replaceAll("\\", "/"))
       .filter(analyzable);
@@ -188,9 +188,9 @@
       else if (outcome.status !== 409) failed.push(`${file}: ${outcome.error}`);
     }
     void jobs.refresh();
-    if (failed.length) toast(`Couldn't queue ${failed.join("; ")}`, "error");
+    if (failed.length) toast(`Could not queue ${failed.join("; ")}`, "error");
     else if (queued) toast(`${plural(queued, "file", "files")} queued for analysis`);
-    else toast(`Every file in ${e.name} has been analyzed already`);
+    else toast(`All files in ${e.name} are already analyzed`);
   };
   const write = $derived(session.can("ReadWrite"));
   const canDelete = $derived(managed && write);
@@ -247,7 +247,7 @@
     const shown = analyzing?.entry.path;
     if (targets.some((e) => e.path === shown)) analyzing = null;
     load();
-    if (failed.length) toast(`Couldn't delete ${failed.join("; ")}`, "error");
+    if (failed.length) toast(`Could not delete ${failed.join("; ")}`, "error");
     else
       toast(
         targets.length === 1
@@ -262,13 +262,13 @@
       targets.length === 1
         ? {
             title: one.kind === "directory" ? "Delete folder?" : "Delete file?",
-            body: `${one.path} will be deleted. This can't be undone.`,
+            body: `${one.path} will be deleted. This cannot be undone.`,
             confirm: "Delete",
             run: () => void remove(targets)
           }
         : {
             title: `Delete ${targets.length} items?`,
-            body: "This can't be undone.",
+            body: "This cannot be undone.",
             confirm: "Delete",
             run: () => void remove(targets)
           }
@@ -327,8 +327,7 @@
 
 {#if !managed}
   <Notice kind="info">
-    Remote file management is disabled; enable <code>remote_file_management</code> to delete files from
-    here.
+    Remote file management is disabled. Enable <code>remote_file_management</code> to delete files here.
   </Notice>
 {/if}
 

@@ -216,6 +216,11 @@ export class ListWindow<L> {
     this.#virtualizer.scrollToIndex(index, { align });
   }
 
+  /** Scrolls the box to `offset`, in pixels from its top */
+  scrollToOffset(offset: number) {
+    this.#virtualizer.scrollToOffset(offset);
+  }
+
   /** Scrolls to the end of the list */
   scrollToEnd() {
     this.#virtualizer.scrollToEnd();

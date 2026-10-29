@@ -311,7 +311,7 @@
     <div class="flex flex-col gap-1">
       <p class="text-xs text-fg-muted">
         The browser blocked copying. Copy the text from this box.
-        <Button variant="link" class="ml-1" onclick={() => (nix = null)}>close</Button>
+        <Button variant="link" class="ml-1" onclick={() => (nix = null)}>Close</Button>
       </p>
       <Textarea class="field-sizing-content max-h-64 font-mono text-xs" readonly value={nix} />
     </div>
@@ -339,10 +339,10 @@
               <OidcTest names={Object.keys(valueAt(view.values, field.key) ?? {})} />
             {:else if field.key === "soulseek.description" || field.key === "soulseek.picture"}
               <a href={href("/profile")} class="text-xs text-accent hover:underline"
-                >Edit on your profile page</a>
+                >Edit on the profile page</a>
             {:else if field.key === "search.filter_presets"}
               <span class="text-xs text-fg-muted"
-                >A search's results can save and remove presets too.</span>
+                >Presets can also be saved and removed from search results.</span>
             {/if}
           {/snippet}
         </FieldRow>

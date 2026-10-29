@@ -18,47 +18,47 @@
   const rows = $derived(
     (
       [
-        ["Median cutoff", kHz(m.cutoffMedianHz), "Where the content usually stops."],
+        ["Median cutoff", kHz(m.cutoffMedianHz), "Frequency at which the content usually ends."],
         [
           "Shelf sharpness",
           db(m.shelfSharpnessDbP95),
-          "How steeply it stops: more than 30 dB is an encoder's low-pass, a few dB a natural roll-off."
+          "Steepness of the cutoff. Above 30 dB indicates an encoder low-pass. A few dB indicates a natural roll-off."
         ],
         [
           "Gaps in the top band",
           share(m.sfb21Holes),
-          "Empty bins between 16 and 20 kHz for each filled one. Reported only: it rises on tones too."
+          "Empty bins between 16 and 20 kHz per filled bin. Informational only, since tonal content also raises it."
         ],
         [
           "Frame rhythm",
           share(m.frameArtifactScore),
-          "How strongly the noise repeats at a lossy codec's frame length. Reported only."
+          "Strength of noise repetition at the frame length of a lossy codec. Informational only."
         ],
         [
           "Energy above half the band",
           m.upsampleRatio === null || m.upsampleRatio === undefined
             ? null
             : m.upsampleRatio.toExponential(1),
-          "For files above 48 kHz. Low for an upsample, and for much honest hi-res audio too."
+          "Measured for files above 48 kHz. Low for upsampled audio, and also for much genuine high-resolution audio."
         ],
-        ["Bits in use", m.bitDepthEffective?.toString() ?? null, "How many bits the samples use."],
-        ["Quietest level", db(m.noiseFloorDbfs), "The level of the quietest passages, in dBFS."],
+        ["Bits in use", m.bitDepthEffective?.toString() ?? null, "Number of bits the samples use."],
+        ["Quietest level", db(m.noiseFloorDbfs), "Level of the quietest passages, in dBFS."],
         [
           "Channel correlation",
           share(m.stereoCorrelation),
-          "1 means both channels are the same: a mono source."
+          "A value of 1 means identical channels, which indicates a mono source."
         ],
         [
           "Side energy",
           db(m.sideEnergyDb),
-          "The difference between the channels against their sum."
+          "Difference between the channels relative to their sum."
         ],
         [
           "Clipped samples",
           m.clippedSamplesPct === null || m.clippedSamplesPct === undefined
             ? null
             : `${m.clippedSamplesPct.toFixed(3)}%`,
-          "Samples at full scale."
+          "Share of samples at full scale."
         ]
       ] as [string, string | null, string][]
     ).filter(([, value]) => value !== null)
@@ -68,12 +68,12 @@
 </script>
 
 <details class="group rounded-control border" bind:open>
-  <summary class="cursor-pointer px-3 py-2 text-sm font-medium">The analyzer's reading</summary>
+  <summary class="cursor-pointer px-3 py-2 text-sm font-medium">Analyzer reading</summary>
   <div class="flex flex-col gap-3 border-t px-3 py-3 text-sm">
     <p>
       <span class="font-medium">{VERDICTS[report.verdict]}</span>
       <span class="text-fg-muted">
-        · {Math.round(report.confidence * 100)}% sure{report.encoderGuess
+        · {Math.round(report.confidence * 100)}% confidence{report.encoderGuess
           ? ` · ${report.encoderGuess.profile}`
           : ""}</span>
     </p>
@@ -85,8 +85,8 @@
     {/if}
     {#if m.cutoffHzHistogram.length}
       <div class="flex flex-col gap-1">
-        <h4 class="text-xs font-medium text-fg-muted uppercase">Where the content stops</h4>
-        <ul class="flex flex-col gap-0.5" aria-label="Cutoffs by how many windows have them">
+        <h4 class="text-xs font-medium text-fg-muted uppercase">Cutoff distribution</h4>
+        <ul class="flex flex-col gap-0.5" aria-label="Cutoffs by share of windows">
           {#each m.cutoffHzHistogram as [hz, count] (hz)}
             <li class="grid grid-cols-[5rem_1fr_3rem] items-center gap-2 text-xs">
               <span class="tabular-nums">{kHz(hz)}</span>
@@ -122,7 +122,8 @@
     </p>
     {#if report.limitations.length}
       <div class="flex flex-col gap-1">
-        <h4 class="text-xs font-medium text-fg-muted uppercase">What makes this less sure</h4>
+        <h4 class="text-xs font-medium text-fg-muted uppercase">Limitations</h4>
+
         <ul class="list-disc pl-5 text-fg-muted">
           {#each report.limitations as limit (limit)}<li>{limit}</li>{/each}
         </ul>

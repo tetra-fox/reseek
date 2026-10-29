@@ -29,7 +29,7 @@
     if (failed.length) error = failed.join("; ");
     else {
       open = false;
-      toast(group ? `Moved to group ${group}` : "Removed from their group");
+      toast(group ? `Moved to group ${group}` : "Removed from the upload group");
     }
   };
 </script>

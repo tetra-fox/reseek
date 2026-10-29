@@ -240,7 +240,7 @@ fn a_320_kbps_stem_under_a_bed_reads_as_that_cut(gain: f32) {
     ("mp3 ~320 kbps or aac", 0.4)
   );
   assert!(
-    !reading.summary.contains("no encoder's shelf"),
+    !reading.summary.contains("no encoder shelf"),
     "{}",
     reading.summary
   );

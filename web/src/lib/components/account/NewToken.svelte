@@ -65,7 +65,7 @@
 
 <Dialog bind:open={() => open, close} title="New API token">
   {#if created}
-    <p class="text-sm">Copy the secret now; it is not shown again.</p>
+    <p class="text-sm">Copy the secret now. It is not shown again.</p>
     <div class="flex items-center gap-inline">
       <code
         class="min-w-0 flex-1 rounded-control bg-surface-muted px-2 py-1.5 text-xs wrap-anywhere">

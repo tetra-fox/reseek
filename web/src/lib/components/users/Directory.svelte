@@ -267,7 +267,7 @@
     title={filtered ? "No users match" : "No users yet"}
     description={filtered
       ? undefined
-      : "Users you download from, upload to, message or browse appear here."} />
+      : "Users from transfers, private messages and browsing are listed here."} />
 {:else}
   <div
     class="overflow-x-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"

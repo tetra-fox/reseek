@@ -41,6 +41,7 @@ test("opens the dashboard, chat, rooms, a profile and your profile", async ({ pa
 
   await page.getByRole("link", { name: "Your profile" }).click();
   await expect(page).toHaveURL(/#\/profile$/);
+  await expect(page.getByText("Public view")).toBeVisible();
   await expect(page.getByLabel("Profile text")).toBeEditable();
 });
 

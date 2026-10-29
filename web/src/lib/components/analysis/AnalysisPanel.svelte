@@ -92,7 +92,7 @@
     const outcome = await queue(target, force);
     // a file queued already shows its job once the queue is read
     if (outcome.ok || outcome.status === 409) void jobs.refresh();
-    else toast(`Couldn't analyze the file: ${outcome.error}`, "error");
+    else toast(`Could not analyze the file: ${outcome.error}`, "error");
   };
 
   $effect(() => jobs.retain());
@@ -139,7 +139,7 @@
         <span>
           {job.state === "running"
             ? `Analyzing: ${Math.round((job.progress ?? 0) * 100)}%`
-            : "Waiting for the analyzer"}
+            : "Waiting in the analysis queue"}
         </span>
         <div class="h-1.5 overflow-hidden rounded-full bg-surface-muted">
           <div
@@ -155,11 +155,11 @@
     </div>
   {:else if report === null && write}
     <div class="flex flex-col items-start gap-2 text-sm">
-      <p class="text-fg-muted">This file hasn't been analyzed yet.</p>
+      <p class="text-fg-muted">This file has not been analyzed.</p>
       <Button size="sm" onclick={() => void analyze(false)}>Analyze</Button>
     </div>
   {:else if report === null}
-    <p class="text-sm text-fg-muted">This file hasn't been analyzed yet.</p>
+    <p class="text-sm text-fg-muted">This file has not been analyzed.</p>
   {/if}
 
   {#if error}
@@ -170,7 +170,8 @@
     {#if !job}
       <div class="flex flex-col items-start gap-2 text-sm">
         <p class="text-fg-muted">
-          This was analyzed by an older version of reseek. Analyze again to see it.
+          This file was analyzed by an older version of reseek. Analyze it again to view the
+          results.
         </p>
         {#if write}
           <Button size="sm" onclick={() => void analyze(false)}>Analyze</Button>

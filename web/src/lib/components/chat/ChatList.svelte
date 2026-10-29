@@ -143,7 +143,7 @@
         t.kind === "user" ? await chat.acknowledge(t.name) : await chat.markRoomReadNewest(t.name);
       if (!outcome.ok) failed += 1;
     }
-    if (failed) toast(`${plural(failed, "chat", "chats")} couldn't be marked read`, "error");
+    if (failed) toast(`Could not mark ${plural(failed, "chat", "chats")} as read`, "error");
   };
 
   const offer = (e: KeyboardEvent) => {

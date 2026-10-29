@@ -50,7 +50,7 @@
     <button
       type="button"
       class="ml-1 text-xs text-accent hover:underline"
-      onclick={() => (unfolded = true)}>show more</button>
+      onclick={() => (unfolded = true)}>Show more</button>
   {/if}
 {/snippet}
 
@@ -116,11 +116,11 @@
     {/if}
     {#if m.sending === "sending"}
       <span class="flex items-center gap-1 text-xs text-fg-subtle"
-        ><ClockIcon class="size-3" />sending</span>
+        ><ClockIcon class="size-3" />Sending</span>
     {:else if m.sending === "failed"}
       <span class="flex items-center gap-1 text-xs text-danger">
         Not sent
-        <Button variant="link" class="text-xs" onclick={onretry}>retry</Button>
+        <Button variant="link" class="text-xs" onclick={onretry}>Retry</Button>
       </span>
     {/if}
   </div>

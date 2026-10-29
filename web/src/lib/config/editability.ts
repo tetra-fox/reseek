@@ -12,7 +12,8 @@ export const fileOf = (view: ConfigView, key: string): string =>
 
 export const editability = (view: ConfigView, key: string): Editability => {
   const field = view.fields[key];
-  if (!field) return { mode: "locked", notice: "This version of reseek doesn't know this option" };
+  if (!field)
+    return { mode: "locked", notice: "This option is not recognized by this version of reseek" };
   const { source, apply } = field;
   if (source.layer === "env") {
     return { mode: "locked", notice: `Set by ${source.var}. Change it there.` };
@@ -29,7 +30,7 @@ export const editability = (view: ConfigView, key: string): Editability => {
   if (writable) {
     return {
       mode: "save",
-      notice: apply === "restart" ? "Needs a restart to take effect" : null
+      notice: apply === "restart" ? "Requires a restart to take effect" : null
     };
   }
   const runtime = apply === "live" || apply === "reconnect";
@@ -38,18 +39,21 @@ export const editability = (view: ConfigView, key: string): Editability => {
     return runtime
       ? {
           mode: "runtime",
-          notice: `Set by ${manager}. Changes here apply now but won't persist: click Copy as Nix and add it to your configuration.`
+          notice: `Set by ${manager}. Changes made here apply immediately but do not persist. Use Copy as Nix and add the result to the configuration.`
         }
       : {
           mode: "locked",
-          notice: `Set by ${manager} and needs a restart: add it to your configuration (Copy as Nix)`
+          notice: `Set by ${manager}. Requires a restart. Use Copy as Nix and add the result to the configuration.`
         };
   }
   const why = file?.readOnlyReason ?? "read-only";
   return runtime
     ? {
         mode: "runtime",
-        notice: `${name} isn't writable (${why}). Changes apply now but won't persist.`
+        notice: `${name} is not writable (${why}). Changes apply immediately but do not persist.`
       }
-    : { mode: "locked", notice: `${name} isn't writable (${why}) and this needs a restart` };
+    : {
+        mode: "locked",
+        notice: `${name} is not writable (${why}). This option requires a restart.`
+      };
 };

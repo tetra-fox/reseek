@@ -12,7 +12,7 @@ export type Scale = Layout["scale"];
 
 /** The text shown with every spectrogram and every reading */
 export const DISCLAIMER =
-  "This is a tool to help you judge, not proof. Content can stop short of the top of the graph for honest reasons: a test tone, speech, an old master or a vinyl rip all do. And a careful transcode can reach the top. Listen, compare, and decide for yourself.";
+  "This analysis is an aid to judgment, not proof. Content can end below the top of the graph for legitimate reasons, such as a test tone, speech, an old master or a vinyl rip. A careful transcode can also reach the top. Listen and compare before deciding.";
 
 /** The file an analysis is about: one under a root, or a finished download's */
 export type Target =
