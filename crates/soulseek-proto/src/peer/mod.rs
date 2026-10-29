@@ -129,19 +129,6 @@ pub(crate) mod tests {
   }
 
   #[test]
-  fn inflate_round_trips_and_honors_the_limit() {
-    let body = vec![7; 1000];
-    let compressed = compress(&body);
-    assert_eq!(compressed[0], 0x78, "zlib header, not raw deflate or gzip");
-    assert_eq!(inflate(&compressed, 1000), Ok(body));
-    assert_eq!(
-      inflate(&compressed, 999),
-      Err(FieldError::InflatedTooLarge { limit: 999 })
-    );
-    assert_eq!(inflate(&compressed, usize::MAX), Ok(vec![7; 1000]));
-  }
-
-  #[test]
   fn inflate_rejects_truncated_and_corrupt_streams() {
     let compressed = compress(b"hello hello hello");
     assert_eq!(

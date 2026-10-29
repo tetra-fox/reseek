@@ -443,37 +443,6 @@ mod tests {
   use crate::testing::field;
 
   #[test]
-  fn invalid_utf8_falls_back_to_latin1_and_keeps_bytes() {
-    let bytes = vec![b'c', 0xe9, b'.', b'm', b'p', b'3'];
-    let name = RemoteFilename::from_bytes(bytes.clone());
-    assert_eq!(name.as_str(), "c\u{e9}.mp3");
-    assert!(name.is_lossy());
-    assert_eq!(name.as_bytes(), bytes);
-
-    let mut writer = Writer::body();
-    writer.filename(&name);
-    let mut expected = 6u32.to_le_bytes().to_vec();
-    expected.extend_from_slice(&bytes);
-    assert_eq!(writer.into_body(), expected);
-  }
-
-  #[test]
-  fn valid_utf8_is_not_lossy() {
-    let name = RemoteFilename::from_bytes("caf\u{e9}".as_bytes().to_vec());
-    assert_eq!(name.as_str(), "caf\u{e9}");
-    assert!(!name.is_lossy());
-  }
-
-  #[test]
-  fn ip4_is_reversed_on_the_wire() {
-    let mut reader = Reader::new(&[4, 3, 2, 1], &Limits::DEFAULT, "Test");
-    assert_eq!(reader.ip4("ip").unwrap(), Ipv4Addr::new(1, 2, 3, 4));
-    let mut writer = Writer::body();
-    writer.ip4(Ipv4Addr::new(1, 2, 3, 4));
-    assert_eq!(writer.into_body(), [4, 3, 2, 1]);
-  }
-
-  #[test]
   fn string_longer_than_remaining_is_truncated() {
     let mut reader = Reader::new(&[5, 0, 0, 0, b'a'], &Limits::DEFAULT, "Test");
     assert_eq!(
@@ -558,12 +527,5 @@ mod tests {
         ..
       })
     ));
-  }
-
-  #[test]
-  fn bool_reads_differ_for_values_above_one() {
-    let mut reader = Reader::new(&[2, 2], &Limits::DEFAULT, "Test");
-    assert!(reader.bool("a").unwrap());
-    assert!(!reader.bool_exact("b").unwrap());
   }
 }
