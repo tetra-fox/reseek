@@ -12,12 +12,12 @@
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
   import type { ColumnId } from "#lib/transfers/grid/columns.js";
-  import { depthOf, nesting, pins } from "#lib/transfers/grid/pinned.js";
   import type { ViewSettings } from "#lib/transfers/grid/settings.svelte.js";
-  import type { Group, Item } from "#lib/transfers/grid/view.js";
+  import { depthOf, type Group, type Item } from "#lib/transfers/grid/view.js";
   import type { Direction, Transfer } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
+  import { nesting, pins } from "#lib/tree/pins.js";
   import { rem, viewport } from "#lib/ui/viewport.svelte.js";
 
   import GroupHeader from "./GroupHeader.svelte";
@@ -87,11 +87,11 @@
    * its subfolder stack in order. A phone keeps two, the top group and the innermost folder
    */
   const slot = (depth: number) => (viewport.phone ? Math.min(depth, 1) : depth);
-  const nest = $derived(nesting(items));
+  const nest = $derived(nesting(items, depthOf, (item) => item.type === "group"));
   // the headers of the groups the top lines are in stay at the top while their rows scroll
   const pinned = $derived(
     pinnable
-      ? pins(items, nest, scrollTop, row, slot).map((pin) => ({ ...pin, item: items[pin.index] }))
+      ? pins(nest, scrollTop, row, slot).map((pin) => ({ ...pin, item: items[pin.index] }))
       : []
   );
   const pinnedId = (index: number) => `${list.uid}-pinned-${index}`;

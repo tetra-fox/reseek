@@ -12,7 +12,8 @@
 
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
-  import { isAudio, remoteFolder } from "#lib/files/links.js";
+  import { isAudio } from "#lib/files/kinds.js";
+  import { remoteFolder } from "#lib/files/links.js";
   import { slskLink } from "#lib/files/slsk.js";
 
   type Props = {

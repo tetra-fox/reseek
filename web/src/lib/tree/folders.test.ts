@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import type { Schemas } from "#lib/api/client.js";
+
 import { Expansion } from "./expansion.svelte";
-import { folderTree, treeLines } from "./folders";
+import {
+  ancestors,
+  detectSeparator,
+  folderTree,
+  itemsUnder,
+  listingTree,
+  type RemoteDirectory,
+  treeLines
+} from "./folders";
 
 type File = { filename: string; size: number };
 const file = (filename: string, size = 10): File => ({ filename, size });
@@ -54,6 +64,78 @@ describe("folder trees", () => {
     expect(keys()).toEqual(["0:folder:x", "1:folder:x\\a", "1:folder:x\\b", "2:x\\b\\3"]);
     open.toggle("x");
     expect(keys()).toEqual(["0:folder:x"]);
+  });
+});
+
+const remote = (filename: string, size = 10): Schemas["File"] => ({
+  filename,
+  size,
+  code: 1,
+  extension: "",
+  isLocked: false,
+  attributeCount: 0,
+  attributes: []
+});
+
+const dir = (name: string, files: string[] = [], locked = false): RemoteDirectory => ({
+  name,
+  fileCount: files.length,
+  files: files.map((f) => remote(f)),
+  locked
+});
+
+describe("browse listings", () => {
+  it("find the separator from the first folder name with one", () => {
+    expect(detectSeparator([{ name: "top" }, { name: "a/b" }, { name: "c\\d" }])).toBe("/");
+    expect(detectSeparator([{ name: "top" }])).toBe("\\");
+  });
+
+  it("root a folder whose parent isn't listed and count what is under each", () => {
+    const listing = listingTree(
+      [
+        dir("C:\\Music\\A", ["1.mp3"]),
+        dir("C:\\Music\\A\\Disc 1", ["2.flac", "1.flac"]),
+        dir("C:\\Music\\A\\Disc 1\\Scans", ["cover.jpg"], true),
+        dir("C:\\Other", [])
+      ],
+      "\\"
+    );
+    expect(listing.roots.map((r) => [r.path, r.label])).toEqual([
+      ["C:\\Music\\A", "A"],
+      ["C:\\Other", "Other"]
+    ]);
+    const [a] = listing.roots;
+    expect([a.count, a.folders, a.bytes]).toEqual([4, 2, 40]);
+    expect(a.children[0].children[0].locked).toBe(true);
+    // a folder's files carry their full paths, sorted by name
+    expect(a.children[0].items.map((f) => f.filename)).toEqual([
+      "C:\\Music\\A\\Disc 1\\1.flac",
+      "C:\\Music\\A\\Disc 1\\2.flac"
+    ]);
+    expect(itemsUnder(a)).toHaveLength(4);
+    expect(ancestors("C:\\Music\\A\\Disc 1\\Scans", listing, "\\")).toEqual([
+      "C:\\Music\\A",
+      "C:\\Music\\A\\Disc 1"
+    ]);
+  });
+
+  it("show every way to a match when filtering, open, with the items kept", () => {
+    const { roots } = listingTree(
+      [dir("a"), dir("a\\b"), dir("a\\b\\target", ["x.flac", "y.mp3"]), dir("a\\c"), dir("d")],
+      "\\"
+    );
+    const lines = treeLines(
+      roots,
+      () => false,
+      (f) => f.filename,
+      { folder: (n) => n.label === "target", item: (f) => f.filename.endsWith(".flac") }
+    );
+    expect(lines.map((l) => `${l.depth}:${l.key}`)).toEqual([
+      "0:folder:a",
+      "1:folder:a\\b",
+      "2:folder:a\\b\\target",
+      "3:a\\b\\target\\x.flac"
+    ]);
   });
 });
 

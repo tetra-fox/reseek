@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { transfer } from "#lib/testing/fixtures.js";
+import { depthOf, layout } from "#lib/transfers/grid/view.js";
 
-import { nesting, pins } from "./pinned";
-import { layout } from "./view";
+import { nesting, pins } from "./pins";
 
 // alice > M > A, six files and the subfolder S of six more, then M > B of six: A's header is
 // line 2, S's line 9, B's line 16, and the list is 23 lines
@@ -11,18 +11,18 @@ const files = ["A", "A\\S", "B"].flatMap((folder) =>
   Array.from({ length: 6 }, (_, n) => transfer({ filename: `M\\${folder}\\${n}.flac` }))
 );
 const items = layout(files, "user", () => true);
-const nest = nesting(items);
+const nest = nesting(items, depthOf, (item) => item.type === "group");
 const ROW = 10;
 const wide = (depth: number) => depth;
 const phone = (depth: number) => Math.min(depth, 1);
 /** the pins as `label@top`, in painting order */
 const at = (scrollTop: number, slot = wide) =>
-  pins(items, nest, scrollTop, ROW, slot).map(({ index, top }) => {
+  pins(nest, scrollTop, ROW, slot).map(({ index, top }) => {
     const item = items[index];
     return `${item.type === "group" ? item.group.label : item.key}@${top}`;
   });
 
-describe("the pinned group headers", () => {
+describe("the pinned headers", () => {
   it("knows where each group ends and what each line is in", () => {
     expect(items).toHaveLength(23);
     expect([nest.end[0], nest.end[1], nest.end[2], nest.end[9], nest.end[16]]).toEqual([

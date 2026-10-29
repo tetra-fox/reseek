@@ -1,7 +1,7 @@
 import { type Mark, markToken, passes } from "#lib/analysis/marks.js";
 import { getDirectoryName, getFileName } from "#lib/format.js";
 import { type ChipId, STATE_CHIPS, type Transfer } from "#lib/transfers/states.js";
-import { type FolderNode, folderTree } from "#lib/tree/folders.js";
+import { type FolderNode, folderTree, itemsUnder } from "#lib/tree/folders.js";
 
 export type GroupBy = "user" | "folder" | "batch" | "flat";
 
@@ -64,6 +64,10 @@ export type Item =
   | { type: "group"; key: string; group: Group }
   | { type: "row"; key: string; transfer: Transfer; group: Group | null };
 
+/** How far a line is nested: a group header at its group's depth, a row one past its group's */
+export const depthOf = (item: Item) =>
+  item.type === "group" ? item.group.depth : item.group ? item.group.depth + 1 : 0;
+
 export type SortKey =
   | "file"
   | "user"
@@ -115,10 +119,6 @@ export const layout = (
   /** a user's folders as nested groups, from `depth` down */
   const folders = (username: string, list: Transfer[], depth: number) => {
     const key = (node: FolderNode<Transfer>) => `folder:${username}\u0000${node.path}`;
-    const under = (node: FolderNode<Transfer>): Transfer[] => [
-      ...node.items,
-      ...node.children.flatMap(under)
-    ];
     const walk = (nodes: FolderNode<Transfer>[], at: number) => {
       const siblings = nodes.map(key);
       for (const node of nodes) {
@@ -128,7 +128,7 @@ export const layout = (
           label: node.label,
           username,
           depth: at,
-          transfers: under(node),
+          transfers: itemsUnder(node),
           folder: node.path,
           siblings
         };

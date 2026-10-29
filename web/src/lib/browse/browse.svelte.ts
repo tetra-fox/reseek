@@ -5,16 +5,16 @@ import { toast } from "#lib/feedback/toast.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
+import {
+  detectSeparator,
+  type Listing,
+  listingTree,
+  type RemoteDirectory,
+  type Separator
+} from "#lib/tree/folders.js";
 
 import { type BrowseInfo, readListing, writeListing } from "./cache";
 import { rememberBrowsed } from "./recent.svelte";
-import {
-  buildTree,
-  detectSeparator,
-  type RemoteDirectory,
-  type Separator,
-  type Tree
-} from "./tree";
 
 export type BrowsePhase = "idle" | "pending" | "complete" | "error";
 
@@ -33,7 +33,7 @@ type Meta = {
   selected: { directoryName: string; files: string[]; subdirectory: string | null } | null;
 };
 
-const EMPTY_TREE: Tree = { roots: [], byName: new Map() };
+const EMPTY_TREE: Listing = { roots: [], byPath: new Map() };
 
 /**
  * The Browse screen's state: one user's shares at a time, fetched whole, kept as a tree, and
@@ -45,7 +45,7 @@ class Browse {
   phase = $state<BrowsePhase>("idle");
   errorMessage = $state("");
   progress = $state.raw<Schemas["BrowseProgress"] | null>(null);
-  tree = $state.raw<Tree>(EMPTY_TREE);
+  tree = $state.raw<Listing>(EMPTY_TREE);
   separator = $state<Separator>("\\");
   info = $state.raw<BrowseInfo | null>(null);
   /** the folder shown in the selection card */
@@ -193,7 +193,7 @@ class Browse {
       if (meta.phase === "complete") this.phase = "idle";
     }
     const chosen = meta.selected;
-    if (chosen && this.tree.byName.has(chosen.directoryName)) {
+    if (chosen && this.tree.byPath.has(chosen.directoryName)) {
       this.directory = chosen.directoryName;
       this.subdirectory = chosen.subdirectory;
       for (const f of chosen.files) this.selected.add(f);
@@ -205,13 +205,13 @@ class Browse {
     this.username = username;
     this.separator = separator;
     this.info = info;
-    this.tree = buildTree(directories, separator);
+    this.tree = listingTree(directories, separator);
   }
 
   #select(name: string | null) {
     this.directory = name;
     this.selected.clear();
-    this.subdirectory = name ? (this.tree.byName.get(name)?.children[0]?.name ?? null) : null;
+    this.subdirectory = name ? (this.tree.byPath.get(name)?.children[0]?.path ?? null) : null;
   }
 
   #saveMeta() {

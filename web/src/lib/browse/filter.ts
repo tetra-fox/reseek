@@ -1,30 +1,23 @@
 import type { Schemas } from "#lib/api/client.js";
 import { fileMatches, parseFilters } from "#lib/search/filters.js";
-
-import { leaf, type Separator, type TreeNode } from "./tree";
-
-/** What a browse filter keeps: files by path, kind and size, and the folders that hold them */
-export type BrowseFilter = {
-  file: (file: Schemas["File"], path: string) => boolean;
-  folder: (node: TreeNode) => boolean;
-};
+import type { TreeFilter } from "#lib/tree/folders.js";
 
 /**
  * Reads the browse filter: the search results' filter language over full paths, `ext:flac`
  * being its `type:`. A folder is kept when its name has every word, or when a file directly in
  * it is kept. Null for an empty filter
  */
-export const browseFilter = (text: string, separator: Separator): BrowseFilter | null => {
+export const browseFilter = (text: string): TreeFilter<Schemas["File"]> | null => {
   if (!text.trim()) return null;
   const filters = parseFilters(text);
-  const file = (f: Schemas["File"], path: string) => fileMatches(filters, { ...f, filename: path });
+  const item = (f: Schemas["File"]) => fileMatches(filters, f);
   const words = filters.include;
   return {
-    file,
+    item,
     folder: (node) => {
-      const name = leaf(node.name).toLowerCase();
+      const name = node.label.toLowerCase();
       if (words.length && words.every((w) => name.includes(w))) return true;
-      return node.files.some((f) => file(f, node.name + separator + f.filename));
+      return node.items.some(item);
     }
   };
 };

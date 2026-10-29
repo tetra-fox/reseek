@@ -11,8 +11,6 @@
   import XIcon from "@lucide/svelte/icons/x";
 
   import { marks } from "#lib/analysis/marks.svelte.js";
-  import { kindOf } from "#lib/browse/summary.js";
-  import { leaf } from "#lib/browse/tree.js";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -20,6 +18,7 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Username from "#lib/components/users/Username.svelte";
+  import { kindOf } from "#lib/files/kinds.js";
   import {
     ago,
     dateTime,
@@ -183,7 +182,7 @@
           style:background-color={user.group.color}
           title={`Group ${user.group.name}`}></span>
       {/if}
-      <Username name={t.username} folder={leaf(getDirectoryName(t.filename))} />
+      <Username name={t.username} folder={getFileName(getDirectoryName(t.filename))} />
       {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
     {:else if column === "size"}
       <span title={plural(t.size, "byte", "bytes")}>{formatBytes(t.size)}</span>

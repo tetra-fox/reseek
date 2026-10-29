@@ -6,7 +6,7 @@
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
-  import type { FolderNode, TreeLine } from "#lib/tree/folders.js";
+  import { type FolderNode, itemsUnder, type TreeLine } from "#lib/tree/folders.js";
   import { FOLDER_LINE_REM, GAP_REM, lineStart, TOGGLE_REM } from "#lib/tree/indent.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
@@ -132,12 +132,6 @@
   const inset = (depth: number, kind: "folder" | "item") =>
     `${lineStart(depth) + (kind === "item" ? TOGGLE_REM + GAP_REM : 0)}rem`;
 
-  /** the ids of every item in a folder and the folders below it */
-  const under = (node: FolderNode<T>): string[] => [
-    ...node.items.map(idOf),
-    ...node.children.flatMap(under)
-  ];
-
   /** Opens or closes a folder from the keys, as its toggle would */
   const show = (node: FolderNode<T>, open: boolean) => {
     if (expansion.isOpen(node.path) === open) return;
@@ -149,7 +143,7 @@
     lines: () => shown,
     key: (line) => line.key,
     id: (line) => (line.kind === "item" ? idOf(line.item) : (folderId?.(line.node) ?? null)),
-    group: (line) => under(line.kind === "folder" ? line.node : line.folder),
+    group: (line) => itemsUnder(line.kind === "folder" ? line.node : line.folder).map(idOf),
     onopen: (line) => {
       if (line.kind === "item") onopen?.(line.item);
       else onopenfolder?.(line.node);

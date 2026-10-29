@@ -13,7 +13,6 @@
   import { browser } from "#lib/browse/browse.svelte.js";
   import { browseFilter } from "#lib/browse/filter.js";
   import { browsed, forgetBrowsed, restoreBrowsed } from "#lib/browse/recent.svelte.js";
-  import { filesUnder } from "#lib/browse/tree.js";
   import FolderFiles from "#lib/components/files/FolderFiles.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
@@ -28,6 +27,7 @@
   import { FILTER_PLACEHOLDER } from "#lib/search/filters.js";
   import { session } from "#lib/session.svelte.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
+  import { itemsUnder } from "#lib/tree/folders.js";
   import { keepsKey, layerOpen, withModifier } from "#lib/ui/keys.js";
 
   import DirectoryTree from "./DirectoryTree.svelte";
@@ -56,9 +56,9 @@
 
   const canWrite = $derived(session.can("ReadWrite"));
   const connected = $derived(app.isServerConnected);
-  const filter = $derived(browseFilter(query, browser.separator));
-  const node = $derived(browser.directory ? browser.tree.byName.get(browser.directory) : undefined);
-  const flatNode = $derived(path ? browser.tree.byName.get(path) : undefined);
+  const filter = $derived(browseFilter(query));
+  const node = $derived(browser.directory ? browser.tree.byPath.get(browser.directory) : undefined);
+  const flatNode = $derived(path ? browser.tree.byPath.get(path) : undefined);
 
   // a link names a user: browse them unless their browse is what's shown, then open the folder
   $effect(() => {
@@ -73,7 +73,7 @@
       if (browser.username !== wanted || browser.phase !== "complete") {
         await browser.browse(wanted);
       }
-      if (path && browser.tree.byName.has(path)) {
+      if (path && browser.tree.byPath.has(path)) {
         await tick();
         await tree?.navigate(path);
         flatOpen = flat;
@@ -130,7 +130,7 @@
         const last = i === parts.length - 1;
         return {
           label: part,
-          onclick: !last && browser.tree.byName.has(path) ? () => show(path) : undefined,
+          onclick: !last && browser.tree.byPath.has(path) ? () => show(path) : undefined,
           copy: last ? directory : undefined
         };
       })
@@ -349,7 +349,7 @@
   <FolderFiles
     bind:open={flatOpen}
     username={browser.username}
-    folder={flatNode.name}
-    files={filesUnder(flatNode, browser.separator)}
+    folder={flatNode.path}
+    files={itemsUnder(flatNode)}
     {connected} />
 {/if}

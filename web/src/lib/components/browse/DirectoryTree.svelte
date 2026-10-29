@@ -27,34 +27,34 @@
   import LockIcon from "@lucide/svelte/icons/lock";
   import { tick, untrack } from "svelte";
 
-  import type { BrowseFilter } from "#lib/browse/filter.js";
-  import {
-    ancestors,
-    flatten,
-    leaf,
-    parentOf,
-    type Separator,
-    type Tree,
-    type TreeNode
-  } from "#lib/browse/tree.js";
+  import type { Schemas } from "#lib/api/client.js";
   import { TYPE_AHEAD_MS, typeAhead } from "#lib/browse/typeahead.js";
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
   import { formatBytes, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
+  import {
+    ancestors,
+    type FolderNode,
+    type Listing,
+    parentOf,
+    type Separator,
+    type TreeFilter,
+    treeLines
+  } from "#lib/tree/folders.js";
   import { keepsKey, withModifier } from "#lib/ui/keys.js";
   import { rem } from "#lib/ui/viewport.svelte.js";
 
   import { LOCKED_HINT } from "./locked";
 
   type Props = {
-    tree: Tree;
+    tree: Listing;
     separator: Separator;
     /** the folder shown in the selection card */
     selected: string | null;
     onselect: (name: string) => void;
-    filter: BrowseFilter | null;
+    filter: TreeFilter<Schemas["File"]> | null;
   };
 
   let { tree, separator, selected, onselect, filter }: Props = $props();
@@ -71,15 +71,20 @@
     const first = tree.roots[0];
     untrack(() => {
       expansion.reset(false);
-      if (first?.children.length) expansion.set(first.name, true);
+      if (first?.children.length) expansion.set(first.path, true);
       if (scroller) scroller.scrollTop = 0;
     });
   });
 
-  const rows = $derived(flatten(tree.roots, expansion.isOpen, filter?.folder));
+  type Row = { node: FolderNode<Schemas["File"]>; depth: number };
+  const rows = $derived(
+    treeLines(tree.roots, expansion.isOpen, (f) => f.filename, filter).flatMap((l): Row[] =>
+      l.kind === "folder" ? [{ node: l.node, depth: l.depth }] : []
+    )
+  );
   const lines = new ListWindow(
     () => rows,
-    (r) => r.node.name,
+    (r) => r.node.path,
     () => ({ estimateSize: () => row, overscan: 15, sizes: row })
   );
 
@@ -92,8 +97,8 @@
       .join(", ");
 
   /** The folders beside a folder, itself among them, which Alt-click opens or closes with it */
-  const siblings = (node: TreeNode) =>
-    (tree.byName.get(parentOf(node.name, separator))?.children ?? tree.roots).map((n) => n.name);
+  const siblings = (node: FolderNode<Schemas["File"]>) =>
+    (tree.byPath.get(parentOf(node.path, separator))?.children ?? tree.roots).map((n) => n.path);
 
   export const expandAll = () => expansion.reset(true);
   export const collapseAll = () => expansion.reset(false);
@@ -111,15 +116,15 @@
     const now = Date.now();
     typed = now - typedAt > TYPE_AHEAD_MS ? e.key : typed + e.key;
     typedAt = now;
-    const from = rows.findIndex((r) => r.node.name === selected);
+    const from = rows.findIndex((r) => r.node.path === selected);
     const at = typeAhead(
-      rows.map((r) => leaf(r.node.name)),
+      rows.map((r) => r.node.label),
       from,
       typed
     );
     if (at === -1) return;
     e.preventDefault();
-    onselect(rows[at].node.name);
+    onselect(rows[at].node.path);
     center(at);
   };
 
@@ -128,7 +133,7 @@
     for (const above of ancestors(name, tree, separator)) expansion.set(above, true);
     onselect(name);
     await tick();
-    center(rows.findIndex((r) => r.node.name === name));
+    center(rows.findIndex((r) => r.node.path === name));
   };
 </script>
 
@@ -144,36 +149,36 @@
   {@attach lines.attach}
   {@attach freezesWhileUsed}>
   <div style:height={`${lines.total}px`} class="relative">
-    {#each lines.drawn as { line: { node, depth }, start, size } (node.name)}
-      {@const open = !!filter || expansion.isOpen(node.name)}
+    {#each lines.drawn as { line: { node, depth }, start, size } (node.path)}
+      {@const open = !!filter || expansion.isOpen(node.path)}
       <div
         role="treeitem"
-        aria-selected={node.name === selected}
+        aria-selected={node.path === selected}
         aria-expanded={node.children.length ? open : undefined}
         tabindex="-1"
         class={[
           "absolute inset-x-0 top-0 flex items-center gap-1.5 pr-3 text-sm hover:bg-hover",
           node.locked && "opacity-50",
-          node.name === selected && "font-semibold text-accent"
+          node.path === selected && "font-semibold text-accent"
         ]}
         style:transform={`translateY(${start}px)`}
         style:height={`${size}px`}
         style:padding-left={`calc(${depth * 2}em + 0.75rem)`}
-        onclick={() => onselect(node.name)}
+        onclick={() => onselect(node.path)}
         onkeydown={(e) => {
           // Enter on the folder's toggle is the toggle's
-          if (e.key === "Enter" && !withModifier(e) && !keepsKey(e)) onselect(node.name);
+          if (e.key === "Enter" && !withModifier(e) && !keepsKey(e)) onselect(node.path);
         }}>
         <button
           type="button"
           class="shrink-0"
-          aria-label={`${open ? "Collapse" : "Expand"} ${leaf(node.name)}`}
+          aria-label={`${open ? "Collapse" : "Expand"} ${node.label}`}
           title={node.locked
             ? LOCKED_HINT
             : "Alt-click to open or close the sibling folders as well"}
           onclick={(e) => {
             e.stopPropagation();
-            expansion.toggle(node.name, siblings(node), withSiblings(e));
+            expansion.toggle(node.path, siblings(node), withSiblings(e));
           }}>
           {#if node.locked}
             <LockIcon class="size-4 text-fg-muted" />
@@ -186,11 +191,11 @@
           {/if}
         </button>
         <span class="name-count flex-1 gap-1.5">
-          <span class="truncate">{leaf(node.name)}</span>
+          <span class="truncate">{node.label}</span>
           <span class="text-right text-xs font-normal text-fg-muted"
             ><span
-              >{caption(node.totalFileCount, node.totalDirectoryCount)}
-              {#if node.totalBytes}· {formatBytes(node.totalBytes)}{/if}</span
+              >{caption(node.count, node.folders)}
+              {#if node.bytes}· {formatBytes(node.bytes)}{/if}</span
             ></span>
         </span>
       </div>

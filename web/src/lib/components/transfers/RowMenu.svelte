@@ -19,9 +19,10 @@
   import UserIcon from "@lucide/svelte/icons/user";
   import XIcon from "@lucide/svelte/icons/x";
 
-  import { leaf } from "#lib/browse/tree.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
-  import { isAudio, remoteFolder } from "#lib/files/links.js";
+  import { isAudio } from "#lib/files/kinds.js";
+  import { remoteFolder } from "#lib/files/links.js";
+  import { getFileName } from "#lib/format.js";
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import {
@@ -61,7 +62,7 @@
   const write = $derived(session.can("ReadWrite"));
   const admin = $derived(session.can("Administrator"));
   const folder = $derived(remoteFolder(t.username, t.filename));
-  const to = $derived(links(t.username, leaf(folder.folder)));
+  const to = $derived(links(t.username, getFileName(folder.folder)));
 </script>
 
 <!-- the whole row's actions; placed in a Menu.Root by the caller -->

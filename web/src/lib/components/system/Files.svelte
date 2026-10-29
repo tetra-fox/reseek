@@ -37,7 +37,7 @@
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { isAudio } from "#lib/files/links.js";
+  import { isAudio } from "#lib/files/kinds.js";
   import { player } from "#lib/files/player.svelte.js";
   import { dateTime, formatBytes, plural } from "#lib/format.js";
   import { href } from "#lib/nav.js";
@@ -120,7 +120,9 @@
       children,
       count: items.length + children.reduce((n, c) => n + c.count, 0),
       bytes:
-        items.reduce((n, e) => n + (e.size ?? 0), 0) + children.reduce((n, c) => n + c.bytes, 0)
+        items.reduce((n, e) => n + (e.size ?? 0), 0) + children.reduce((n, c) => n + c.bytes, 0),
+      folders: children.reduce((n, c) => n + 1 + c.folders, 0),
+      locked: false
     };
   };
   const top = $derived(listing ? entries(listing, parts, sort.by, sort.dir) : []);
@@ -132,7 +134,9 @@
     items: top.filter((e) => e.kind !== "directory" && shows(e)),
     children: roots,
     count: 0,
-    bytes: 0
+    bytes: 0,
+    folders: 0,
+    locked: false
   });
   const lines = $derived<TreeLine<Entry>[]>([
     ...top

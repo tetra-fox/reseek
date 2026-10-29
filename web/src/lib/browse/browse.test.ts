@@ -34,7 +34,7 @@ describe("the browse screen's state", () => {
     });
     await browsing;
     expect(browser.phase).toBe("complete");
-    expect(browser.tree.roots.map((r) => r.name)).toEqual(["Music"]);
+    expect(browser.tree.roots.map((r) => r.path)).toEqual(["Music"]);
   });
 
   it("starts a browse of another user while one is pending, and drops the first answer", async () => {
@@ -66,6 +66,6 @@ describe("the browse screen's state", () => {
     answers.get("alice")!(listing("Alice's music"));
     await alice;
     expect(browser.phase).toBe("complete");
-    expect(browser.tree.roots.map((r) => r.name)).toEqual(["Alice's music"]);
+    expect(browser.tree.roots.map((r) => r.path)).toEqual(["Alice's music"]);
   });
 });

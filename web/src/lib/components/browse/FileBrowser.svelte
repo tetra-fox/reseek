@@ -17,9 +17,8 @@
 
   import type { Schemas } from "#lib/api/client.js";
   import { browser } from "#lib/browse/browse.svelte.js";
-  import type { BrowseFilter } from "#lib/browse/filter.js";
-  import { attributesOf, kindOf, lengthOf, sizeOf } from "#lib/browse/summary.js";
-  import { downloadGroups, filesUnder, leaf, type TreeNode } from "#lib/browse/tree.js";
+  import { attributesOf, lengthOf, sizeOf } from "#lib/browse/summary.js";
+  import { downloadGroups } from "#lib/browse/tree.js";
   import FileMenu from "#lib/components/files/FileMenu.svelte";
   import FolderFiles from "#lib/components/files/FolderFiles.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -27,6 +26,7 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { asItem, type Enqueued, enqueue } from "#lib/files/downloads.js";
+  import { kindOf } from "#lib/files/kinds.js";
   import { slskLink } from "#lib/files/slsk.js";
   import {
     formatAttributes,
@@ -35,13 +35,14 @@
     getFileName,
     plural
   } from "#lib/format.js";
+  import { type FolderNode, itemsUnder, type TreeFilter } from "#lib/tree/folders.js";
 
   import { LOCKED_HINT } from "./locked";
 
   type Props = {
-    node: TreeNode;
+    node: FolderNode<Schemas["File"]>;
     username: string;
-    filter: BrowseFilter | null;
+    filter: TreeFilter<Schemas["File"]> | null;
     canWrite: boolean;
     /** downloads need the Soulseek server */
     connected: boolean;
@@ -57,18 +58,13 @@
   let status = $state<Enqueued | null>(null);
   let flatOpen = $state(false);
 
-  const kept = (files: Schemas["File"][]) =>
-    filter ? files.filter((f) => filter.file(f, f.filename)) : files;
-  const byName = (a: Schemas["File"], b: Schemas["File"]) =>
-    getFileName(a.filename).localeCompare(getFileName(b.filename));
+  const kept = (files: Schemas["File"][]) => (filter ? files.filter(filter.item) : files);
 
   /** every file in the folder and under it, with full paths: what the header box ticks */
-  const candidates = $derived(kept(filesUnder(node, sep)));
-  const own = $derived(
-    kept(node.files.map((f) => ({ ...f, filename: node.name + sep + f.filename }))).toSorted(byName)
-  );
+  const candidates = $derived(kept(itemsUnder(node)));
+  const own = $derived(kept(node.items));
   const children = $derived(
-    node.children.map((child) => ({ child, files: kept(filesUnder(child, sep)) }))
+    node.children.map((child) => ({ child, files: kept(itemsUnder(child)) }))
   );
   const ticked = $derived(candidates.filter((f) => browser.selected.has(f.filename)));
   const tickedBytes = $derived(sizeOf(ticked));
@@ -94,7 +90,7 @@
     downloading = true;
     status = null;
     let last: Enqueued | null = null;
-    for (const group of downloadGroups(node.name, files, sep)) {
+    for (const group of downloadGroups(node.path, files, sep)) {
       last = await enqueue({
         username,
         files: group.files.map((f) => asItem(f)),
@@ -111,8 +107,8 @@
     downloading = true;
     status = await enqueue({
       username,
-      files: filesUnder(node, sep).map((f) => asItem(f)),
-      destination: leaf(node.name)
+      files: itemsUnder(node).map((f) => asItem(f)),
+      destination: node.label
     });
     downloading = false;
   };
@@ -139,25 +135,25 @@
         {#if folded}<FolderIcon class="size-5" />{:else}<FolderOpenIcon class="size-5" />{/if}
       </button>
     {/if}
-    <h3 class="min-w-0 flex-1 font-mono text-sm wrap-anywhere">{node.name}</h3>
+    <h3 class="min-w-0 flex-1 font-mono text-sm wrap-anywhere">{node.path}</h3>
     <div class="flex flex-wrap items-center gap-1">
       {#if canWrite}
         <Button
           variant="ghost"
           size="sm"
-          disabled={!connected || downloading || !node.totalFileCount}
+          disabled={!connected || downloading || !node.count}
           onclick={() => void downloadFolder()}>
           <DownloadIcon />Download this folder
           <!-- a phone leaves the count to the folder's line in the tree above -->
           <span class="font-normal text-fg-muted max-md:hidden">
-            {plural(node.totalFileCount, "file", "files")}, {formatBytes(node.totalBytes)}
+            {plural(node.count, "file", "files")}, {formatBytes(node.bytes)}
           </span>
         </Button>
       {/if}
       <Button variant="ghost" size="sm" onclick={() => (flatOpen = true)}>
         <ListIcon />View all files
       </Button>
-      <Button variant="ghost" size="sm" onclick={() => void copyText(node.name)}>
+      <Button variant="ghost" size="sm" onclick={() => void copyText(node.path)}>
         <CopyIcon />Copy path
       </Button>
       <Button
@@ -165,7 +161,7 @@
         size="icon-sm"
         aria-label="Copy the slsk:// link"
         title="Copy the slsk:// link"
-        onclick={() => void copyText(slskLink(username, node.name, true))}>
+        onclick={() => void copyText(slskLink(username, node.path, true))}>
         <LinkIcon />
       </Button>
       <Button
@@ -197,14 +193,14 @@
           </tr>
         </thead>
         <tbody>
-          {#each children as { child, files } (child.name)}
-            {@const open = browser.subdirectory === child.name}
+          {#each children as { child, files } (child.path)}
+            {@const open = browser.subdirectory === child.path}
             <tr
               class="group cursor-pointer"
-              onclick={() => browser.expand(open ? null : child.name)}>
+              onclick={() => browser.expand(open ? null : child.path)}>
               <td>
                 <Checkbox
-                  aria-label={`Select every file in ${leaf(child.name)}`}
+                  aria-label={`Select every file in ${child.label}`}
                   checked={allTicked(files)}
                   indeterminate={someTicked(files)}
                   onclick={(e) => e.stopPropagation()}
@@ -214,12 +210,10 @@
                 <span class="flex items-center gap-1.5">
                   {#if open}<FolderOpenIcon class="size-4 shrink-0" />{:else}<FolderIcon
                       class="size-4 shrink-0" />{/if}
-                  <span class="truncate">{leaf(child.name)}</span>
+                  <span class="truncate">{child.label}</span>
                   <span class="shrink-0 text-xs text-fg-muted">
-                    {child.totalFileCount
-                      ? plural(child.totalFileCount, "file", "files")
-                      : "0 files"}{child.totalDirectoryCount
-                      ? `, ${plural(child.totalDirectoryCount, "folder", "folders")}`
+                    {child.count ? plural(child.count, "file", "files") : "0 files"}{child.folders
+                      ? `, ${plural(child.folders, "folder", "folders")}`
                       : ""}
                   </span>
                   <Button
@@ -229,7 +223,7 @@
                     aria-label="Open this folder"
                     onclick={(e) => {
                       e.stopPropagation();
-                      onnavigate(child.name);
+                      onnavigate(child.path);
                     }}>
                     <CornerDownRightIcon />
                   </Button>
@@ -243,16 +237,15 @@
               <td></td>
             </tr>
             {#if open}
-              {#each child.children as grandchild (grandchild.name)}
-                {@const under = kept(filesUnder(grandchild, sep))}
+              {#each child.children as grandchild (grandchild.path)}
+                {@const under = kept(itemsUnder(grandchild))}
                 <tr class="text-fg-muted">
                   <td></td>
                   <td class="pl-10">
                     <span class="flex items-center gap-1.5">
                       <FolderClosedIcon class="size-4 shrink-0" />
-                      <span class="truncate">{leaf(grandchild.name)}</span>
-                      <span class="text-xs"
-                        >{plural(grandchild.totalFileCount, "file", "files")}</span>
+                      <span class="truncate">{grandchild.label}</span>
+                      <span class="text-xs">{plural(grandchild.count, "file", "files")}</span>
                     </span>
                   </td>
                   <td class="text-right tabular-nums">{formatBytes(sizeOf(under))}</td>
@@ -263,7 +256,7 @@
                   <td></td>
                 </tr>
               {/each}
-              {#each kept(child.files.map( (f) => ({ ...f, filename: child.name + sep + f.filename }) )).toSorted(byName) as file (file.filename)}
+              {#each kept(child.items) as file (file.filename)}
                 {@const Icon = icons[kindOf(file.filename)]}
                 <tr class="text-fg-muted">
                   <td></td>
@@ -343,4 +336,4 @@
   {/if}
 </section>
 
-<FolderFiles bind:open={flatOpen} {username} folder={node.name} files={candidates} {connected} />
+<FolderFiles bind:open={flatOpen} {username} folder={node.path} files={candidates} {connected} />

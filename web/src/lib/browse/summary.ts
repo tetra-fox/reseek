@@ -18,12 +18,3 @@ export const lengthOf = (files: File[]) => files.reduce((sum, f) => sum + (f.len
 
 /** The sizes of several files added up, in bytes */
 export const sizeOf = (files: File[]) => files.reduce((sum, f) => sum + f.size, 0);
-
-const AUDIO = new Set("aac aif aiff alac ape flac m4a mp3 ogg opus wav wma".split(" "));
-const VIDEO = new Set("avi flv m4v mkv mov mp4 webm wmv".split(" "));
-
-/** What a file is by its extension, for its icon */
-export const kindOf = (filename: string): "audio" | "video" | "other" => {
-  const extension = filename.split(".").pop()?.toLowerCase() ?? "";
-  return AUDIO.has(extension) ? "audio" : VIDEO.has(extension) ? "video" : "other";
-};

@@ -1,4 +1,4 @@
-import type { RemoteDirectory, Separator } from "./tree";
+import type { RemoteDirectory, Separator } from "#lib/tree/folders.js";
 
 /** The last browse's listing, which can be tens of megabytes, so it is kept in IndexedDB */
 export type Listing = {

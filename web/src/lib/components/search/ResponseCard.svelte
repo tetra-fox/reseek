@@ -33,9 +33,9 @@
     WIDEST
   } from "#lib/format.js";
   import { href } from "#lib/nav.js";
-  import { type Result, type ResultFile, resultFiles } from "#lib/search/results.js";
+  import { type Result, resultFiles } from "#lib/search/results.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
-  import { type FolderNode, folderTree, treeLines } from "#lib/tree/folders.js";
+  import { folderTree, itemsUnder, treeLines } from "#lib/tree/folders.js";
   import { TICK_REM } from "#lib/tree/indent.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
@@ -100,12 +100,6 @@
   const chosen = $derived([...selected].flatMap((n) => byName.get(n) ?? []));
   const allBytes = $derived(files.reduce((sum, f) => sum + f.size, 0));
   const chosenBytes = $derived(chosen.reduce((sum, f) => sum + f.size, 0));
-
-  /** every file in a folder and below it */
-  const under = (node: FolderNode<ResultFile>): ResultFile[] => [
-    ...node.items,
-    ...node.children.flatMap(under)
-  ];
 
   const download = async (list: Schemas["File"][]) => {
     downloading = true;
@@ -235,7 +229,7 @@
       onopen={write ? (f) => void download([f]) : undefined}
       onmiddleclick={write ? (f) => void download([f]) : undefined}>
       {#snippet folder(node, depth)}
-        {@const inside = under(node)}
+        {@const inside = itemsUnder(node)}
         {@const locked = inside.every((f) => f.locked)}
         <Checkbox
           aria-label={`Select every file in ${node.label}`}
