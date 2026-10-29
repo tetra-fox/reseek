@@ -202,6 +202,7 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
                 (images::columns_path(&dir, &image), &columns),
               ],
             )?;
+            images::remove_older(&dir, &image);
             Ok((rendered, columns.len()))
           });
         match kept {

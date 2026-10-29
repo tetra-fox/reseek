@@ -30,12 +30,22 @@ pub(super) fn columns_path(dir: &Path, name: &str) -> PathBuf {
   dir.join(format!("{name}.columns"))
 }
 
+/// The images an older version kept a report under, one scale only: no longer served, but
+/// counted with the report's files and removed with them.
+pub(super) fn older_paths(dir: &Path, name: &str) -> [PathBuf; 2] {
+  [
+    dir.join(format!("{name}.png")),
+    dir.join(format!("{name}.plain.png")),
+  ]
+}
+
 /// Every file a report may have on disk.
 pub(super) fn all_paths(dir: &Path, name: &str) -> Vec<PathBuf> {
   Scale::ALL
     .into_iter()
     .flat_map(|scale| [true, false].map(|guides| image_path(dir, name, scale, guides)))
     .chain([columns_path(dir, name)])
+    .chain(older_paths(dir, name))
     .collect()
 }
 
@@ -78,6 +88,17 @@ pub(super) fn write(dir: &Path, files: &[(PathBuf, &[u8])]) -> Result<(), String
     std::fs::write(path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
   }
   Ok(())
+}
+
+/// Removes the images an older version kept a report under, once the report has its own.
+pub(super) fn remove_older(dir: &Path, name: &str) {
+  for path in older_paths(dir, name) {
+    if let Err(e) = std::fs::remove_file(&path)
+      && e.kind() != std::io::ErrorKind::NotFound
+    {
+      warn!(path = %path.display(), error = %e, "an older spectrogram not removed");
+    }
+  }
 }
 
 /// How many bytes a report's files take on disk.
@@ -203,5 +224,27 @@ impl Analysis {
     } else {
       rendered.plain
     })
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn the_images_an_older_version_kept_are_counted_and_removed_with_a_new_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    let [guided, plain] = older_paths(dir.path(), "report");
+    std::fs::write(&guided, [0; 10]).unwrap();
+    std::fs::write(&plain, [0; 5]).unwrap();
+    std::fs::write(columns_path(dir.path(), "report"), [0; 3]).unwrap();
+    assert_eq!(
+      kept_bytes(dir.path(), "report"),
+      18,
+      "counted, so the cache evicts them"
+    );
+    remove_older(dir.path(), "report");
+    assert!(!guided.exists() && !plain.exists());
+    assert_eq!(kept_bytes(dir.path(), "report"), 3);
   }
 }
