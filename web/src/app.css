@@ -529,8 +529,12 @@
     tbody tr {
       transition: background-color var(--motion-fast) var(--ease-out-soft);
     }
-    tbody tr:hover {
-      background: var(--color-hover);
+    /* where the pointer can hover, as tailwind's hover variant does: a touch screen would keep
+       the tint on the row last tapped */
+    @media (hover: hover) {
+      tbody tr:hover {
+        background: var(--color-hover);
+      }
     }
   }
 }
