@@ -452,7 +452,7 @@ test("the cursor follows playback and a click seeks it", async ({ page }) => {
   const plot = drawer.getByRole("slider", { name: "Cursor" });
   await plot.focus();
   await page.keyboard.press("ArrowRight");
-  await drawer.getByRole("button", { name: "Play" }).click();
+  await drawer.getByRole("button", { name: "Play", exact: true }).click();
   // playback starts at the cursor and the cursor moves with it
   const now = async () => Number(await plot.getAttribute("aria-valuenow"));
   await expect.poll(now).toBeGreaterThan(1.5);
@@ -462,7 +462,7 @@ test("the cursor follows playback and a click seeks it", async ({ page }) => {
   await clickAt(plot, 4 / 30.5);
   await expect.poll(position).toBeGreaterThanOrEqual(4);
   expect(await position()).toBeLessThan(5);
-  await drawer.getByRole("button", { name: "Pause" }).click();
+  await drawer.getByRole("button", { name: "Pause", exact: true }).click();
   const paused = await now();
   await page.waitForTimeout(300);
   expect(await now()).toBe(paused);
