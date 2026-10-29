@@ -1,6 +1,6 @@
 import { expect, type Locator, test } from "@playwright/test";
 
-import { fakeFiles, fakeSearch, file, SEARCH_ID } from "./fakes";
+import { fakeFiles, fakeSearch, file, SEARCH_ID, transfer } from "./fakes";
 import { login, textSize } from "./login";
 
 /** How far apart two names start across the page, in pixels */
@@ -21,7 +21,29 @@ for (const [width, height] of [
         await textSize(page, root);
         await fakeSearch(page);
         await fakeFiles(page);
-        // a file beside a folder: Album holds a track and the Bonus folder
+        // a file beside a folder, in search results and in the downloads: Album holds a track and
+        // the Bonus folder
+        await page.route(
+          (url) => url.pathname.endsWith("/api/v0/transfers/downloads"),
+          (route) =>
+            route.fulfill({
+              json: [
+                {
+                  username: "alice",
+                  directories: [
+                    {
+                      directory: "d",
+                      fileCount: 2,
+                      files: [
+                        transfer("@@a\\Music\\Album\\01 One.flac"),
+                        transfer("@@a\\Music\\Album\\Bonus\\05 Demo.flac")
+                      ]
+                    }
+                  ]
+                }
+              ]
+            })
+        );
         await page.route(`**/api/v0/searches/${SEARCH_ID}/responses**`, (route) =>
           route.fulfill({
             json: [
@@ -57,6 +79,21 @@ for (const [width, height] of [
         const track = card.getByText("01 One.flac", { exact: true });
         await expect(track).toBeVisible();
         expect(await apart(bonus, track), "search results").toBeLessThan(0.5);
+
+        // the downloads, each user a group and their folders under it. A phone's row has no tick of
+        // its own, so its icon starts under the tick of a header at its depth
+        await page.goto("./#/downloads");
+        const grid = page.getByRole("grid", { name: "Downloads" });
+        const download = grid.getByTitle("@@a\\Music\\Album\\01 One.flac", { exact: true });
+        await expect(download).toBeVisible();
+        if (width < 768) {
+          const tick = grid.getByRole("checkbox", { name: "Select every transfer in Bonus" });
+          const icon = download.locator("xpath=preceding-sibling::*[1]");
+          expect(await apart(tick, icon), "downloads").toBeLessThan(0.5);
+        } else {
+          const subfolder = grid.getByTitle("Bonus", { exact: true });
+          expect(await apart(subfolder, download), "downloads").toBeLessThan(0.5);
+        }
       });
     });
   }

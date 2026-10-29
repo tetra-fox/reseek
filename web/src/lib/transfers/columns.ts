@@ -35,6 +35,9 @@ export type Column = GridColumn<Transfer> & {
   always?: boolean;
 };
 
+/** How wide the select column is, in rem; a phone leaves it out */
+export const SELECT_REM = 2.5;
+
 /** How wide a transfer's speed sparkline is drawn, in pixels, which its column makes room for */
 export const SPARKLINE_WIDTH = 48;
 
@@ -61,7 +64,7 @@ export const COLUMNS: Column[] = (
       id: "select",
       label: "Select",
       visible: true,
-      width: "2.5rem",
+      width: `${SELECT_REM}rem`,
       always: true,
       quiet: true,
       fixed: true

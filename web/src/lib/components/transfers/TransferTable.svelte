@@ -268,6 +268,7 @@
             transfer={item.transfer}
             {direction}
             {columns}
+            depth={item.group ? item.group.depth + 1 : 0}
             showFolder={flat}
             selected={selected.has(item.transfer.id)}
             speeds={store.speeds.get(item.transfer.id) ?? []}
