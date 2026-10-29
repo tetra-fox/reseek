@@ -16,26 +16,10 @@ const enqueue = async (page: Page, files: { filename: string; size: number }[]) 
   expect(answer.status(), await answer.text()).toBe(201);
 };
 
-/**
- * Searches for the peer's files the way a user finds them before downloading; the peer answers
- * by connecting to the daemon
- */
-const search = async (page: Page) => {
-  const origin = new URL(page.url()).origin;
-  const answer = await page.request.post("api/v0/searches", {
-    data: { searchText: "album flac", searchTimeout: 3000 },
-    headers: { Origin: origin }
-  });
-  expect(answer.ok(), await answer.text()).toBe(true);
-  const id = (await answer.json()).id;
-  await expect
-    .poll(
-      async () => (await (await page.request.get(`api/v0/searches/${id}`)).json()).responseCount,
-      {
-        timeout: 30_000
-      }
-    )
-    .toBeGreaterThan(0);
+/** Whether the server reports the peer online */
+const peerOnline = async (page: Page) => {
+  const answer = await page.request.get(`api/v0/users/${PEER}/status`);
+  return answer.ok() && (await answer.json()).presence === "Online";
 };
 
 /** Whether the daemon is logged in to the soulfind serve.sh started, which it is not without one */
@@ -56,7 +40,7 @@ test("keeps a selection across two transfers while real ones are added and finis
   const rows = table.locator(ROW);
   const succeeded = rows.filter({ hasText: "Succeeded" });
   // the peer can take a moment to come online after the daemon
-  await expect(async () => search(page)).toPass({ timeout: 30_000 });
+  await expect.poll(() => peerOnline(page), { timeout: 30_000 }).toBe(true);
   await enqueue(page, [file(1), file(2)]);
   await expect(rows).toHaveCount(2);
   await expect(succeeded).toHaveCount(2, { timeout: 30_000 });
