@@ -3,16 +3,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "#lib/app.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
+import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import Dashboard from "./Dashboard.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
 
-const flush = async () => {
-  for (let i = 0; i < 4; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
 const summary = (count: number, totalBytes: number) => ({
   count,
   totalBytes,

@@ -3,21 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
-import { chat } from "#lib/chat/chat.svelte.js";
+import { chat, type JoinedRoom } from "#lib/chat/chat.svelte.js";
 import { ECHO_WAIT } from "#lib/chat/pane.svelte.js";
 import { chatLayout } from "#lib/chat/prefs.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
+import { joinedRoom } from "#lib/testing/fixtures.js";
+import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import Pane from "./Pane.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn(), beforeNavigate: () => {} }));
-
-const flush = async () => {
-  for (let i = 0; i < 4; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
 
 /** A minute past ten on the test day for each id, so ids past 59 are times too */
 const minute = (localId: number) => new Date(Date.UTC(2026, 9, 26, 10, localId)).toISOString();
@@ -47,6 +44,21 @@ const roomMessage = (localId: number, fields: Partial<Schemas["RoomMessage"]> = 
     hidden: false,
     ...fields
   }) as Schemas["RoomMessage"];
+
+/** The joined room indie, `fields` over it, whose stored messages `messages` answers */
+const indie = (messages: (url: URL) => unknown, fields: Partial<JoinedRoom> = {}) => {
+  chat.rooms.upsert(joinedRoom("indie", { userCount: 2, ...fields }));
+  return fakeNetwork((url, method) => {
+    if (url.pathname.endsWith("/rooms/joined/indie/messages") && method === "GET") {
+      return messages(url);
+    }
+    if (url.pathname.endsWith("/rooms/joined/indie")) {
+      return { name: "indie", isPrivate: false, users: [], tickers: [], messages: null };
+    }
+    if (method === "POST") return { status: 201 };
+    return undefined;
+  });
+};
 
 describe("a chat pane", () => {
   let component: ReturnType<typeof mount> | null = null;
@@ -145,23 +157,7 @@ describe("a chat pane", () => {
       hasMore: true,
       gaps: [{ from: "2026-10-26T10:10:30Z", to: "2026-10-26T10:10:50Z", reason: "daemonDown" }]
     };
-    const net = fakeNetwork((url) => {
-      if (url.pathname.endsWith("/rooms/joined/indie/messages")) {
-        return url.searchParams.get("before") ? older : newest;
-      }
-      if (url.pathname.endsWith("/rooms/joined/indie")) {
-        return { name: "indie", isPrivate: false, users: [], tickers: [], messages: null };
-      }
-      return undefined;
-    });
-    chat.rooms.upsert({
-      name: "indie",
-      unread: 0,
-      mentions: 0,
-      notify: "mentions",
-      userCount: 2,
-      lastReadId: 0
-    });
+    const net = indie((url) => (url.searchParams.get("before") ? older : newest));
     live.start();
     component = mount(Pane, {
       target: document.body,
@@ -191,21 +187,7 @@ describe("a chat pane", () => {
   });
 
   it("keeps joins and leaves out of the messages and folds them in the room's activity", async () => {
-    const net = fakeNetwork((url) => {
-      if (url.pathname.endsWith("/rooms/joined/indie/messages")) {
-        return { messages: [roomMessage(1)], hasMore: false, gaps: [] };
-      }
-      if (url.pathname.endsWith("/rooms/joined/indie")) {
-        return { name: "indie", isPrivate: false, users: [], tickers: [], messages: null };
-      }
-      return undefined;
-    });
-    chat.rooms.upsert({
-      name: "indie",
-      unread: 0,
-      mentions: 0,
-      notify: "mentions",
-      userCount: 2,
+    const net = indie(() => ({ messages: [roomMessage(1)], hasMore: false, gaps: [] }), {
       lastReadId: 1
     });
     chatLayout.users = true;
@@ -239,24 +221,7 @@ describe("a chat pane", () => {
   });
 
   it("keeps a room message we sent until the server's echo replaces it", async () => {
-    const net = fakeNetwork((url, method) => {
-      if (url.pathname.endsWith("/rooms/joined/indie/messages") && method === "GET") {
-        return { messages: [roomMessage(1)], hasMore: false, gaps: [] };
-      }
-      if (url.pathname.endsWith("/rooms/joined/indie")) {
-        return { name: "indie", isPrivate: false, users: [], tickers: [], messages: null };
-      }
-      if (method === "POST") return { status: 201 };
-      return undefined;
-    });
-    chat.rooms.upsert({
-      name: "indie",
-      unread: 0,
-      mentions: 0,
-      notify: "mentions",
-      userCount: 2,
-      lastReadId: 0
-    });
+    const net = indie(() => ({ messages: [roomMessage(1)], hasMore: false, gaps: [] }));
     live.start();
     component = mount(Pane, {
       target: document.body,
@@ -290,24 +255,7 @@ describe("a chat pane", () => {
       flushSync();
     };
     try {
-      const net = fakeNetwork((url, method) => {
-        if (url.pathname.endsWith("/rooms/joined/indie/messages") && method === "GET") {
-          return { messages: [roomMessage(1)], hasMore: false, gaps: [] };
-        }
-        if (url.pathname.endsWith("/rooms/joined/indie")) {
-          return { name: "indie", isPrivate: false, users: [], tickers: [], messages: null };
-        }
-        if (method === "POST") return { status: 201 };
-        return undefined;
-      });
-      chat.rooms.upsert({
-        name: "indie",
-        unread: 0,
-        mentions: 0,
-        notify: "mentions",
-        userCount: 2,
-        lastReadId: 0
-      });
+      const net = indie(() => ({ messages: [roomMessage(1)], hasMore: false, gaps: [] }));
       live.start();
       component = mount(Pane, {
         target: document.body,
@@ -340,32 +288,14 @@ describe("a chat pane", () => {
   });
 
   it("puts the unread line after the room's read marker", async () => {
-    fakeNetwork((url) => {
-      if (url.pathname.endsWith("/rooms/joined/indie/messages")) {
-        return {
-          messages: [
-            roomMessage(1),
-            roomMessage(2),
-            roomMessage(3, { self: true }),
-            roomMessage(4)
-          ],
-          hasMore: false,
-          gaps: []
-        };
-      }
-      if (url.pathname.endsWith("/rooms/joined/indie")) {
-        return { name: "indie", isPrivate: false, users: [], tickers: [], messages: null };
-      }
-      return undefined;
-    });
-    chat.rooms.upsert({
-      name: "indie",
-      unread: 1,
-      mentions: 0,
-      notify: "mentions",
-      userCount: 2,
-      lastReadId: 2
-    });
+    indie(
+      () => ({
+        messages: [roomMessage(1), roomMessage(2), roomMessage(3, { self: true }), roomMessage(4)],
+        hasMore: false,
+        gaps: []
+      }),
+      { unread: 1, lastReadId: 2 }
+    );
     live.start();
     component = mount(Pane, {
       target: document.body,

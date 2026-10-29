@@ -4,16 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "#lib/app.svelte.js";
 import fixture from "#lib/config/fixtures/view.json";
 import { session } from "#lib/session.svelte.js";
+import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import MyProfile from "./MyProfile.svelte";
 
 vi.mock("$app/navigation", () => ({ beforeNavigate: () => {}, goto: vi.fn() }));
-
-const flush = async () => {
-  for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
 
 const own = {
   description: "hello",

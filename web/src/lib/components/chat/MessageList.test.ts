@@ -1,15 +1,11 @@
-import { flushSync, mount, unmount } from "svelte";
+import { mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MessagePane, PAGE } from "#lib/chat/pane.svelte.js";
+import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import MessageList from "./MessageList.svelte";
-
-const flush = async () => {
-  for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
 
 /** a conversation with alice of `total` messages, read a page at a time from the newest */
 const history = (total: number) => {

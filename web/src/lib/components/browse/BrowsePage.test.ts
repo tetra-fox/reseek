@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Schemas } from "#lib/api/client.js";
 import { browser } from "#lib/browse/browse.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
+import { flushFaked } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import BrowsePage from "./BrowsePage.svelte";
@@ -11,11 +12,6 @@ import BrowsePage from "./BrowsePage.svelte";
 // clearing a browse opened from a link takes the user parameter out of the URL; there is no
 // router in these tests
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
-
-const flush = async () => {
-  await vi.advanceTimersByTimeAsync(0);
-  flushSync();
-};
 
 const progress = (percentComplete: number): Schemas["BrowseProgress"] => ({
   username: "alice",
@@ -51,18 +47,18 @@ describe("browse progress", () => {
       target: document.body,
       props: { user: "alice", path: null, flat: false }
     });
-    await flush();
+    await flushFaked();
     const line = () => document.querySelector("[role=status] p")!;
     expect(line().textContent).toContain("Loading shares... 0%");
     const before = line();
 
     net.frame("users.browse_progress", progress(40));
-    await flush();
+    await flushFaked();
     expect(line()).toBe(before);
     expect(line().textContent).toContain("Loading shares... 40%");
     // another user's browse doesn't move this one
     net.frame("users.browse_progress", { ...progress(90), username: "bob" });
-    await flush();
+    await flushFaked();
     expect(line().textContent).toContain("Loading shares... 40%");
 
     answer({
@@ -74,7 +70,7 @@ describe("browse progress", () => {
       lockedDirectories: [],
       lockedDirectoryCount: 0
     });
-    await flush();
+    await flushFaked();
     expect(document.querySelectorAll("[role=treeitem]")).toHaveLength(2);
   });
 
@@ -96,8 +92,8 @@ describe("browse progress", () => {
       target: document.body,
       props: { user: "alice", path: null, flat: false }
     });
-    await flush();
-    await flush();
+    await flushFaked();
+    await flushFaked();
     const toggle = document.querySelector("[role=treeitem] button")!;
     toggle.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     flushSync();

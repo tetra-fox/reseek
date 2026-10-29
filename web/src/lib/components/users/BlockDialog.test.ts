@@ -3,15 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
+import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import { blocking } from "./block.svelte";
 import BlockDialog from "./BlockDialog.svelte";
-
-const flush = async () => {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
 
 describe("the block dialog", () => {
   let component: ReturnType<typeof mount> | null = null;

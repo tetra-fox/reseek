@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { press, ticked } from "#lib/testing/keys.js";
 import List from "#lib/testing/List.svelte";
 import { box } from "#lib/testing/state.svelte.js";
 
@@ -30,16 +31,6 @@ describe("a list's selection and focus", () => {
   };
   const grid = () => document.querySelector<HTMLElement>("[role=grid]")!;
   const line = (key: string) => document.querySelector<HTMLElement>(`[data-line="${key}"]`)!;
-  const press = (target: Element, key: string, mods: KeyboardEventInit = {}) => {
-    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...mods });
-    target.dispatchEvent(event);
-    flushSync();
-    return event;
-  };
-  const ticked = () =>
-    [...document.querySelectorAll('[aria-selected="true"]')].map((r) =>
-      r.getAttribute("data-line")
-    );
   const focused = () => document.querySelector(".focused")?.getAttribute("data-line") ?? null;
 
   it("moves by position over the rows, past the group headers", () => {

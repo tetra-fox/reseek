@@ -1,10 +1,11 @@
-import { flushSync, mount, unmount } from "svelte";
+import { mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { live } from "#lib/live/live.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
+import { flushFaked } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import SearchList from "./SearchList.svelte";
@@ -26,11 +27,6 @@ const search = (id: string, minute: number, fields: Partial<Schemas["Search"]> =
     scope: { type: "network", subjects: [] },
     ...fields
   }) as Schemas["Search"];
-
-const flush = async () => {
-  await vi.advanceTimersByTimeAsync(0);
-  flushSync();
-};
 
 describe("the searches list", () => {
   let component: ReturnType<typeof mount> | null = null;
@@ -57,7 +53,7 @@ describe("the searches list", () => {
     );
     live.start();
     component = mount(SearchList, { target: document.body });
-    await flush();
+    await flushFaked();
     const row = (id: string) => document.querySelector<HTMLTableRowElement>(`tr[data-id="${id}"]`);
     const [a, b] = [row("a")!, row("b")!];
     const link = a.querySelector("a")!;
@@ -65,10 +61,10 @@ describe("the searches list", () => {
 
     net.frame("search.update", search("a", 1, { fileCount: 5, responseCount: 1 }));
     net.frame("search.update", search("a", 1, { fileCount: 9, responseCount: 2 }));
-    await flush();
+    await flushFaked();
     stored = [search("a", 1, { fileCount: 9 }), search("b", 2), search("c", 3)];
     await searches.load();
-    await flush();
+    await flushFaked();
 
     expect(row("a")).toBe(a);
     expect(row("b")).toBe(b);

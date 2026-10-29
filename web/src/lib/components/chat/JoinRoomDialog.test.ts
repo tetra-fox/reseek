@@ -2,16 +2,13 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { chat } from "#lib/chat/chat.svelte.js";
+import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import JoinRoomDialog from "./JoinRoomDialog.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
 
-const flush = async () => {
-  for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
 const room = (name: string, userCount: number) => ({
   name,
   userCount,

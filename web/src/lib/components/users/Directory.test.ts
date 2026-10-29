@@ -1,20 +1,16 @@
 import { goto } from "$app/navigation";
-import { flushSync, mount, unmount } from "svelte";
+import { mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { live } from "#lib/live/live.svelte.js";
+import { flushFaked } from "#lib/testing/flush.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import Directory from "./Directory.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
-
-const flush = async () => {
-  await vi.advanceTimersByTimeAsync(0);
-  flushSync();
-};
 
 const summary = (username: string, fields: Partial<Schemas["UserSummary"]> = {}) =>
   ({
@@ -54,8 +50,8 @@ describe("the users directory", () => {
     );
     live.start();
     component = mount(Directory, { target: document.body, props: {} });
-    await flush();
-    await flush();
+    await flushFaked();
+    await flushFaked();
     return net;
   };
   const grid = () => document.querySelector("[role=grid]")!;
@@ -68,7 +64,7 @@ describe("the users directory", () => {
     ).toEqual(["carol", "bob"]);
     const bob = line("bob");
     net.frame("users.updated", summary("bob", { unreadMessages: 3 }));
-    await flush();
+    await flushFaked();
     expect(line("bob")).toBe(bob);
     expect(bob.textContent).toContain("3");
   });

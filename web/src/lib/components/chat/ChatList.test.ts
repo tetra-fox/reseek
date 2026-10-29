@@ -5,33 +5,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { chat } from "#lib/chat/chat.svelte.js";
 import { interaction } from "#lib/interaction.svelte.js";
 import { session } from "#lib/session.svelte.js";
+import { conversation, joinedRoom } from "#lib/testing/fixtures.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import ChatList from "./ChatList.svelte";
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
-
-const conversation = (username: string) => ({
-  username,
-  isActive: true,
-  isServerNotice: false,
-  unAcknowledgedMessageCount: 0,
-  hasUnAcknowledgedMessages: false,
-  notify: "all" as const,
-  draft: "",
-  lastMessage: null,
-  messages: null
-});
-const room = (name: string, lastMessageAt: string) => ({
-  name,
-  unread: 0,
-  mentions: 0,
-  notify: "mentions" as const,
-  userCount: 3,
-  lastMessageAt,
-  lastReadId: 0
-});
 
 describe("the chat list", () => {
   let component: ReturnType<typeof mount> | null = null;
@@ -49,8 +29,8 @@ describe("the chat list", () => {
     session.principal = { name: "me", role: "ReadWrite" } as never;
     fakeNetwork(() => undefined);
     chat.rooms.reconcile([
-      room("indie", "2026-10-26T10:00:00Z"),
-      room("jazz", "2026-10-26T11:00:00Z")
+      joinedRoom("indie", { lastMessageAt: "2026-10-26T10:00:00Z" }),
+      joinedRoom("jazz", { lastMessageAt: "2026-10-26T11:00:00Z" })
     ]);
     chat.conversations.reconcile([conversation("alice"), conversation("bob")]);
     component = mount(ChatList, {
