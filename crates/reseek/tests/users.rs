@@ -123,7 +123,7 @@ async fn a_user_is_browsed_with_progress_asked_about_and_watched() {
   api.unwatch(&peer.username).await.unwrap();
   assert!(api.watched().await.unwrap().is_empty());
 
-  // the profile says what was learnt along the way, once the touches are written
+  // the profile says what was learned along the way, once the touches are written
   let started = Instant::now();
   loop {
     let profile = api.user_profile(&peer.username, false).await.unwrap();

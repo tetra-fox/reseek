@@ -238,18 +238,18 @@ async fn a_cancel_removes_once_ended_and_a_block_cancels_with_its_reason() {
   let peer = uploader.username.clone();
   let queued = |t: &Transfer| t.state == TransferStates::Queued | TransferStates::Remotely;
 
-  let cancelled = enqueue(&api, &peer, "@@share\\a\\1.flac", 10).await;
+  let canceled = enqueue(&api, &peer, "@@share\\a\\1.flac", 10).await;
   let blocked = enqueue(&api, &peer, "@@share\\a\\2.flac", 10).await;
   for _ in 0..2 {
     asked(&mut requests).await;
   }
-  download_when(&api, &peer, cancelled, "queued", queued).await;
+  download_when(&api, &peer, canceled, "queued", queued).await;
   download_when(&api, &peer, blocked, "queued", queued).await;
   api
-    .cancel_transfer(TransferDirection::Download, &peer, cancelled, true)
+    .cancel_transfer(TransferDirection::Download, &peer, canceled, true)
     .await
     .unwrap();
-  let ended = download_when(&api, &peer, cancelled, "removed", |t| t.removed).await;
+  let ended = download_when(&api, &peer, canceled, "removed", |t| t.removed).await;
   assert_eq!(ended.state, completed(TransferStates::Cancelled));
   assert_eq!(ended.exception.as_deref(), Some("Operation cancelled"));
   let missing = api
@@ -260,7 +260,7 @@ async fn a_cancel_removes_once_ended_and_a_block_cancels_with_its_reason() {
 
   let block = serde_json::from_value(json!({ "scopes": ["downloads"] })).unwrap();
   api.block(&peer, &block).await.unwrap();
-  let ended = download_when(&api, &peer, blocked, "cancelled", |t| t.ended_at.is_some()).await;
+  let ended = download_when(&api, &peer, blocked, "canceled", |t| t.ended_at.is_some()).await;
   assert_eq!(ended.state, completed(TransferStates::Cancelled));
   assert_eq!(ended.exception.as_deref(), Some("Blocked"));
   let refused = api

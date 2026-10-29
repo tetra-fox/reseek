@@ -99,7 +99,7 @@ pub struct Daemon {
 #[derive(Default)]
 struct Printed {
   text: Mutex<String>,
-  /// signalled at every line and when the output ends
+  /// signaled at every line and when the output ends
   more: Condvar,
 }
 

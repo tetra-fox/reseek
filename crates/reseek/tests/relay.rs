@@ -73,7 +73,7 @@ async fn exactly(api: &Client, kind: &str, count: usize) {
   assert_eq!(all.len(), count, "{kind}: {all:?}");
 }
 
-/// The value of the unlabelled metric `name`.
+/// The value of the unlabeled metric `name`.
 async fn value_of(api: &Client, name: &str) -> f64 {
   api.metrics().await.unwrap()[name].samples.as_ref().unwrap()[0].value
 }
@@ -226,11 +226,11 @@ async fn a_stopping_controller_closes_its_agents_as_shutting_down() {
   let agent = agent(agent_dir.path(), port, "");
   until(&api, "serving the agent", |s| serving(s, 0)).await;
   let pid = stopping.child.id().to_string();
-  let signalled = std::process::Command::new("kill")
+  let signaled = std::process::Command::new("kill")
     .args(["-TERM", &pid])
     .status()
     .unwrap();
-  assert!(signalled.success());
+  assert!(signaled.success());
   agent
     .printed_line(&["relay controller connection lost", "code=4010"])
     .await;

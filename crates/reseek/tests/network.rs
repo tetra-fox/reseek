@@ -40,7 +40,7 @@ async fn the_daemon_logs_in_with_its_shares_counted_and_connects_when_asked() {
   );
   assert_eq!(state.shares.files, 2);
 
-  // the server learnt what we share, which another user reads from it
+  // the server learned what we share, which another user reads from it
   let watcher = server.login("watcher", quiet()).await;
   let started = Instant::now();
   loop {

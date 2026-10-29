@@ -420,7 +420,7 @@ pub async fn live(api: &Client, query: &str, max_size: u64) {
           .cancel_transfer(TransferDirection::Download, &candidate.username, id, true)
           .await
         {
-          info!(error = %e, "the download was not cancelled");
+          info!(error = %e, "the download was not canceled");
         }
       }
     }

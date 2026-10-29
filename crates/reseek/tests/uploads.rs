@@ -1,6 +1,6 @@
 //! Uploads by the daemon over soulfind to other users' clients: a file is queued and sent; and
 //! with one slot, a second request waits its place, the forecast says so in search responses
-//! and the user info, why it waits is told, a cancelled upload leaves the listings once it
+//! and the user info, why it waits is told, a canceled upload leaves the listings once it
 //! ended, and a live change of the group's speed lets the running upload finish and the queued
 //! one start; an upload that fails once started is queued anew when its peer, told of the
 //! failure, asks again at once.
@@ -209,7 +209,7 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
     t.state == TransferStates::InProgress
   })
   .await;
-  let (cancelled, _) = download(&second, &name, small_name, small);
+  let (canceled, _) = download(&second, &name, small_name, small);
   let waiting = upload_when(&api, &second.username, small_name, "queued", |t| {
     t.state == TransferStates::Queued | TransferStates::Locally
   })
@@ -272,7 +272,7 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
   assert!(!responses[0].has_free_upload_slot);
   assert_eq!(responses[0].queue_length, 2);
 
-  // a cancelled upload tells its peer and leaves the listings once it ended
+  // a canceled upload tells its peer and leaves the listings once it ended
   api
     .cancel_transfer(
       api_types::transfers::TransferDirection::Upload,
@@ -282,7 +282,7 @@ async fn a_second_request_waits_its_place_and_starts_once_the_first_ends() {
     )
     .await
     .unwrap();
-  let refused = tokio::time::timeout(PATIENCE, cancelled)
+  let refused = tokio::time::timeout(PATIENCE, canceled)
     .await
     .expect("the download ends")
     .unwrap();
