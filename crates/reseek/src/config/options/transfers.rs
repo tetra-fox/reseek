@@ -100,10 +100,8 @@ pub struct Download {
 pub struct Retry {
   /// Number of attempts per download, including the first. `1` disables retries.
   pub attempts: u32,
-  /// Wait before the first retry. Each later wait doubles. Minimum: 1 second.
-  #[serde(with = "humantime_serde")]
-  pub delay: Duration,
-  /// Longest wait between retries. Minimum: 30 seconds.
+  /// Longest wait between retries. The first retry follows at once, then after about 1, 3, 7
+  /// and 15 seconds, doubling up to this. Minimum: 30 seconds.
   #[serde(with = "humantime_serde")]
   pub max_delay: Duration,
   /// Handling of the partially downloaded data on a retry: `resume` or `overwrite`.
@@ -114,7 +112,6 @@ impl Default for Retry {
   fn default() -> Self {
     Self {
       attempts: 3,
-      delay: Duration::from_secs(5),
       max_delay: Duration::from_secs(60),
       partial: RetryPartial::default(),
     }

@@ -19,6 +19,7 @@ use uuid::Uuid;
 use super::Downloads;
 use super::attempt::{Attempted, Failure};
 use super::destination::incomplete_path;
+use crate::backoff;
 use crate::safety::Os;
 use crate::sync::lock;
 use crate::transfers::{Record, removal, store};
@@ -62,21 +63,10 @@ impl Ended {
   }
 }
 
-/// The wait before try `attempt`, the second or a later one: `delay` doubled for every try
-/// between the first and this one, with `jitter` added, at most `max`.
-pub(super) fn backoff(attempt: u32, delay: Duration, max: Duration, jitter: Duration) -> Duration {
-  let doublings = attempt.saturating_sub(2).min(100);
-  let computed = 2u32
-    .checked_pow(doublings)
-    .and_then(|factor| delay.checked_mul(factor))
-    .unwrap_or(max);
-  computed.saturating_add(jitter).min(max)
-}
-
-/// A random part of `delay`, so retries of many downloads do not all start at once.
-fn jitter(delay: Duration) -> Duration {
-  let millis = u64::try_from(delay.as_millis()).unwrap_or(u64::MAX).max(1);
-  Duration::from_millis(rand::random_range(0..millis))
+/// The wait before try `attempt`, the second or a later one: the shared retry back-off, at most
+/// `max` plus its jitter.
+fn retry_wait(attempt: u32, max: Duration) -> Duration {
+  backoff::wait(attempt - 1, max)
 }
 
 impl Downloads {
@@ -210,7 +200,7 @@ impl Downloads {
           record.ended_at = None;
           record.place_in_queue = None;
           record.exception = Some(failure.message);
-          let wait = backoff(attempt, retry.delay, retry.max_delay, jitter(retry.delay));
+          let wait = retry_wait(attempt, retry.max_delay);
           record.next_attempt_at =
             Some(Utc::now() + chrono::Duration::from_std(wait).unwrap_or(chrono::Duration::MAX));
           delay = Some(wait);
@@ -317,28 +307,13 @@ mod tests {
   const SECOND: Duration = Duration::from_secs(1);
 
   #[test]
-  fn each_retry_waits_twice_as_long_up_to_the_most() {
-    let wait = |attempt| backoff(attempt, 5 * SECOND, 60 * SECOND, Duration::ZERO);
+  fn retries_wait_from_nothing_doubling_up_to_the_most() {
+    let whole = |attempt| retry_wait(attempt, 60 * SECOND).as_secs();
+    let waits: Vec<u64> = (2..=9).map(whole).collect();
     assert_eq!(
-      [wait(2), wait(3), wait(4), wait(5), wait(6), wait(7)],
-      [
-        5 * SECOND,
-        10 * SECOND,
-        20 * SECOND,
-        40 * SECOND,
-        60 * SECOND,
-        60 * SECOND
-      ]
+      waits,
+      [0, 1, 3, 7, 15, 31, 60, 60],
+      "under a second of jitter"
     );
-    assert_eq!(wait(1000), 60 * SECOND, "never overflows");
-  }
-
-  #[test]
-  fn the_jitter_never_takes_a_wait_past_the_most() {
-    assert_eq!(backoff(2, 5 * SECOND, 60 * SECOND, 4 * SECOND), 9 * SECOND);
-    assert_eq!(backoff(6, 5 * SECOND, 60 * SECOND, 4 * SECOND), 60 * SECOND);
-    for _ in 0..100 {
-      assert!(jitter(5 * SECOND) < 5 * SECOND);
-    }
   }
 }

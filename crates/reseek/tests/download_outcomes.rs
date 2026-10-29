@@ -145,7 +145,7 @@ async fn refusals_failures_and_sizes_end_each_in_their_outcome() {
     return;
   };
   let dir = tempfile::tempdir().unwrap();
-  let config = "[transfers.download.retry]\nattempts = 2\ndelay = \"1s\"\n";
+  let config = "[transfers.download.retry]\nattempts = 2\n";
   let (_daemon, api, listen) = started(dir.path(), &server, config).await;
 
   let refusing = Scripted::start(&server).await;

@@ -297,7 +297,6 @@
         "request_style": "queue",
         "retry": {
           "attempts": 3,
-          "delay": "5s",
           "max_delay": "1m",
           "partial": "resume"
         },
@@ -2909,21 +2908,6 @@
       "secret": false,
       "notApplied": null
     },
-    "transfers.download.retry.delay": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": null,
-      "cliFlag": null,
-      "kind": "duration",
-      "doc": "Wait before the first retry. Each later wait doubles. Minimum: 1 second.",
-      "choices": null,
-      "default": "5s",
-      "apply": "live",
-      "secret": false,
-      "notApplied": null
-    },
     "transfers.download.retry.max_delay": {
       "source": {
         "layer": "default"
@@ -2932,7 +2916,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "duration",
-      "doc": "Longest wait between retries. Minimum: 30 seconds.",
+      "doc": "Longest wait between retries. The first retry follows at once, then after about 1, 3, 7 and 15 seconds, doubling up to this. Minimum: 30 seconds.",
       "choices": null,
       "default": "1m",
       "apply": "live",
