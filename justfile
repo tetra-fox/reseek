@@ -1,4 +1,4 @@
-# reseek task runner. `just ci` is the gate for every push.
+# reseek task runner
 
 default:
     @just --list
@@ -141,7 +141,7 @@ e2e:
     cargo nextest run --workspace --all-features --run-ignored only -E "binary_id(soulseek-client::interop)"
     cargo nextest run --workspace --all-features --run-ignored only -E "binary_id(reseek::smoke) & test(soulseek_rs)"
 
-# Run by hand only, never from ci or by an agent: the daemon logs in to the real Soulseek server
+# run by hand only, never from ci or by an agent: the daemon logs in to the real Soulseek server
 # with the throwaway account in RESEEK_TEST_USERNAME and RESEEK_TEST_PASSWORD, searches, browses
 # and downloads one small file. RESEEK_TEST_QUERY, _MAX_SIZE, _LISTEN_PORT and _SERVER change
 # what it looks for and where
@@ -149,8 +149,8 @@ e2e:
 live-smoke:
     cargo nextest run --workspace --all-features --run-ignored only --no-capture -E "binary_id(reseek::smoke) & test(real_network)"
 
-# Prints the soulfind to test against: SOULFIND_BIN, else soulfind on PATH, else nothing, which
-# the callers take as a skip. With SOULFIND_REQUIRED=1 a missing soulfind fails instead
+# prints the soulfind to test against: SOULFIND_BIN, else soulfind on PATH, else nothing, which
+# the callers take as a skip; with SOULFIND_REQUIRED=1 a missing soulfind fails instead
 [private]
 soulfind-bin:
     #!/usr/bin/env bash

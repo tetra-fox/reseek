@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts reseek in the container with the application directory ready: as the user the container
-# was started as, as root, or, with PUID and PGID, as the reseek user moved to those ids.
+# was started as, as root, or, with PUID or PGID, as the reseek user moved to those ids.
 set -euo pipefail
 
 app="${RESEEK_APP_DIR:-/app}"
