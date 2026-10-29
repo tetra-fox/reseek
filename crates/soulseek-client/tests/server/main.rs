@@ -1,4 +1,5 @@
-//! The server connection: session, rooms, users, messaging, privileges and reconfiguring a running client.
+//! The server connection: session, rooms, users, messaging, privileges and reconfiguring a
+//! running client.
 
 #[path = "../support/mod.rs"]
 mod support;
