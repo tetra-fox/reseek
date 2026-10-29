@@ -5,7 +5,6 @@
   import { untrack } from "svelte";
 
   import { api, type Schemas } from "#lib/api/client.js";
-  import CodeEditor from "#lib/components/CodeEditor.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
@@ -17,6 +16,8 @@
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { plural } from "#lib/format.js";
   import { call } from "#lib/request.js";
+
+  import CodeEditor from "./CodeEditor.svelte";
 
   // a configuration file edited as text: checked as it is typed, saved against the revision read
   let { view }: { view: Schemas["ConfigView"] } = $props();
