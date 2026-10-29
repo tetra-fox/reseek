@@ -293,20 +293,19 @@ pub async fn local(api: &Client, ours: &str, share: &Path, peer: &Peer) {
 }
 
 /// A file a search response offered, in the order the live run tries them.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Candidate {
+struct Candidate {
   /// the user who offered it
-  pub username: String,
+  username: String,
   /// its remote path
-  pub filename: String,
+  filename: String,
   /// its size in bytes
-  pub size: u64,
+  size: u64,
 }
 
 /// The non-empty files of at most `max_size` bytes from users with a free upload slot,
 /// smallest first, the file name and then the username breaking ties. An empty file would show
 /// nothing about bytes landing.
-pub fn pick_order(responses: &[SearchResponse], max_size: u64) -> Vec<Candidate> {
+fn pick_order(responses: &[SearchResponse], max_size: u64) -> Vec<Candidate> {
   let mut candidates: Vec<Candidate> = responses
     .iter()
     .filter(|response| response.has_free_upload_slot)
