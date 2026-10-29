@@ -7,25 +7,9 @@ mod support;
 use soulseek_client::{Client, ClientError, ClientOptions, ConnKind, MessageConn, WaitKey};
 use soulseek_proto::peer::UserInfo;
 use soulseek_proto::{PeerCode, PeerMessage};
+use support::PATIENCE;
 use support::soulfind::{self, Soulfind, User};
-use support::{PATIENCE, free_port, options};
 use tokio_util::sync::CancellationToken;
-
-/// a client that listens on every address, as soulfind hands out the host's address
-pub fn listening() -> ClientOptions {
-  ClientOptions {
-    listen_port: free_port(),
-    ..ClientOptions::default()
-  }
-}
-
-/// a client that advertises a port nothing listens on, so dialing it fails at once
-pub fn unreachable() -> ClientOptions {
-  ClientOptions {
-    listen_port: free_port(),
-    ..options()
-  }
-}
 
 async fn connect(from: &Client, to: &User) -> MessageConn {
   tokio::time::timeout(
@@ -101,7 +85,7 @@ async fn a_direct_connection_carries_messages_both_ways() {
   let Some(server) = soulfind::server() else {
     return;
   };
-  let (alice, bob) = two(&server, listening(), listening()).await;
+  let (alice, bob) = two(&server, soulfind::listening(), soulfind::listening()).await;
   let conn = connect(&bob.client, &alice).await;
   assert_eq!(conn.handle().kind(), ConnKind::OUTBOUND | ConnKind::DIRECT);
   assert_eq!(conn.handle().username(), Some(alice.username.as_str()));
@@ -121,7 +105,7 @@ async fn a_user_that_cannot_be_dialed_is_reached_through_the_server() {
   let Some(server) = soulfind::server() else {
     return;
   };
-  let (alice, bob) = two(&server, unreachable(), listening()).await;
+  let (alice, bob) = two(&server, soulfind::unreachable(), soulfind::listening()).await;
   let conn = connect(&bob.client, &alice).await;
   assert_eq!(
     conn.handle().kind(),
@@ -138,7 +122,7 @@ async fn concurrent_callers_share_one_attempt_and_later_ones_the_cache() {
   let Some(server) = soulfind::server() else {
     return;
   };
-  let (alice, bob) = two(&server, listening(), listening()).await;
+  let (alice, bob) = two(&server, soulfind::listening(), soulfind::listening()).await;
   let (first, second) = tokio::join!(connect(&bob.client, &alice), connect(&bob.client, &alice));
   assert_eq!(first.handle().id(), second.handle().id());
   let third = connect(&bob.client, &alice).await;
@@ -152,7 +136,7 @@ async fn invalidating_replaces_the_cached_connection() {
   let Some(server) = soulfind::server() else {
     return;
   };
-  let (alice, bob) = two(&server, listening(), listening()).await;
+  let (alice, bob) = two(&server, soulfind::listening(), soulfind::listening()).await;
   let old = connect(&bob.client, &alice).await;
   let pending = unanswered_info(&bob.client, &alice.username);
   bob
@@ -175,10 +159,10 @@ async fn a_full_cache_evicts_the_idlest_connection() {
   let Some(server) = soulfind::server() else {
     return;
   };
-  let mut options = listening();
+  let mut options = soulfind::listening();
   options.limits.max_cached_peer_connections = 1;
-  let (alice, bob) = two(&server, listening(), options).await;
-  let carol = server.login("carol", listening()).await;
+  let (alice, bob) = two(&server, soulfind::listening(), options).await;
+  let carol = server.login("carol", soulfind::listening()).await;
   let evicted = connect(&bob.client, &alice).await;
   let pending = unanswered_info(&bob.client, &alice.username);
   let kept = connect(&bob.client, &carol).await;
@@ -195,7 +179,7 @@ async fn an_offline_user_cannot_be_connected_to() {
   let Some(server) = soulfind::server() else {
     return;
   };
-  let bob = server.login("bob", listening()).await;
+  let bob = server.login("bob", soulfind::listening()).await;
   let error = bob
     .client
     .get_or_add_message_connection(&soulfind::username("gone"), None, &CancellationToken::new())

@@ -34,6 +34,22 @@ pub struct Soulfind {
   binary: PathBuf,
 }
 
+/// options for a client that listens on a free port, so peers can dial it
+pub fn listening() -> ClientOptions {
+  ClientOptions {
+    listen_port: super::free_port(),
+    ..ClientOptions::default()
+  }
+}
+
+/// options for a client that advertises a port nothing listens on, so dialing it fails at once
+pub fn unreachable() -> ClientOptions {
+  ClientOptions {
+    listen_port: super::free_port(),
+    ..super::options()
+  }
+}
+
 /// The server the tests running now share, or `None` when there is no soulfind to run
 pub fn server() -> Option<Arc<Soulfind>> {
   let mut shared = SHARED.lock().unwrap_or_else(PoisonError::into_inner);
