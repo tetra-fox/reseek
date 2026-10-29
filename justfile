@@ -137,8 +137,9 @@ e2e:
       exit 0
     fi
     export SOULFIND_BIN="$soulfind" SOULSEEK_RS_BIN="$soulseek_rs"
-    cargo nextest run -p soulseek-client --test interop --run-ignored only
-    cargo nextest run -p reseek --test smoke --run-ignored only -E "test(soulseek_rs)"
+    # the same packages and features as `just test`, so nothing is built again after it
+    cargo nextest run --workspace --all-features --run-ignored only -E "binary_id(soulseek-client::interop)"
+    cargo nextest run --workspace --all-features --run-ignored only -E "binary_id(reseek::smoke) & test(soulseek_rs)"
 
 # Run by hand only, never from ci or by an agent: the daemon logs in to the real Soulseek server
 # with the throwaway account in RESEEK_TEST_USERNAME and RESEEK_TEST_PASSWORD, searches, browses
