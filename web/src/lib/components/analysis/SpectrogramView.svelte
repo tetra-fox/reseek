@@ -1,4 +1,6 @@
 <script lang="ts">
+  import LocateFixedIcon from "@lucide/svelte/icons/locate-fixed";
+  import LocateOffIcon from "@lucide/svelte/icons/locate-off";
   import Maximize2Icon from "@lucide/svelte/icons/maximize-2";
   import PauseIcon from "@lucide/svelte/icons/pause";
   import PlayIcon from "@lucide/svelte/icons/play";
@@ -104,6 +106,19 @@
         <Button variant="outline" size="sm" aria-pressed={playing} onclick={toggle}>
           {#if playing}<PauseIcon />Pause{:else}<PlayIcon />Play{/if}
         </Button>
+        <Tooltip text={scope.following ? "Following the playhead" : "Not following the playhead"}>
+          {#snippet child({ props })}
+            <Button
+              {...props}
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Follow the playhead"
+              aria-pressed={scope.following}
+              onclick={() => scope.setFollowing(!scope.following)}>
+              {#if scope.following}<LocateFixedIcon />{:else}<LocateOffIcon />{/if}
+            </Button>
+          {/snippet}
+        </Tooltip>
       {/if}
       <div
         class="inline-flex rounded-control border p-0.5"

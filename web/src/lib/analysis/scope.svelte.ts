@@ -76,13 +76,32 @@ export class Scope {
    * add up from where the last one is headed
    */
   zoom(factor: number, across: number, eased = true) {
+    const base = eased ? (this.#zooming?.to ?? this.view) : this.view;
+    const to = zoomAround(base, factor, across, this.duration);
+    // zooming onto a stretch the playhead isn't in is the user looking elsewhere, so stop
+    // following rather than page the view away from what they zoomed to
+    if (this.following && (this.cursor < to.start || this.cursor > to.start + to.span)) {
+      this.following = false;
+    }
     if (!eased) {
       this.#stop();
-      this.view = zoomAround(this.view, factor, across, this.duration);
+      this.view = to;
       return;
     }
-    const base = this.#zooming?.to ?? this.view;
-    this.#ease(zoomAround(base, factor, across, this.duration), across);
+    this.#ease(to, across);
+  }
+
+  /**
+   * Turns following the playhead on or off; turned on with the playhead out of sight, the view
+   * moves to it
+   */
+  setFollowing(on: boolean) {
+    this.following = on;
+    if (!on) return;
+    const v = this.#zooming?.to ?? this.view;
+    if (this.cursor < v.start || this.cursor > v.start + v.span) {
+      this.#ease(centerOn(v, this.cursor, this.duration), 0.5);
+    }
   }
 
   /** Zooms by `factor` around the cursor, or the middle when the cursor is out of sight */
@@ -176,6 +195,7 @@ export class Scope {
   played(t: number) {
     if (this.dragging) return;
     this.cursor = Math.min(this.duration, Math.max(0, t));
-    if (this.following) this.view = follow(this.view, this.cursor, this.duration);
+    // an eased zoom in flight owns the view until it lands
+    if (this.following && !this.#zooming) this.view = follow(this.view, this.cursor, this.duration);
   }
 }
