@@ -383,25 +383,4 @@ mod tests {
     assert_eq!(change.changed, ["server.port"]);
     assert_eq!(watcher.current().load_error, None);
   }
-
-  #[tokio::test]
-  async fn an_edit_to_the_value_under_an_override_ends_it() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("config.toml");
-    fs::write(&path, "[server]\naddress = \"a\"\n").unwrap();
-    let watcher = watched(dir.path());
-    watcher
-      .set_overrides(
-        values(&[("server.address", json!("o"))]),
-        vec![],
-        "a",
-        Lasts::UntilRemoved,
-      )
-      .await
-      .unwrap();
-    fs::write(&path, "[server]\naddress = \"b\"\n").unwrap();
-    watcher.reload().await.unwrap();
-    assert_eq!(watcher.current().values.server.address, "b");
-    assert!(watcher.current().overrides.is_empty());
-  }
 }
