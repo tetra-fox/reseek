@@ -5,7 +5,7 @@
 
   import Button from "#lib/components/ui/Button.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   type Props = {
     open: boolean;

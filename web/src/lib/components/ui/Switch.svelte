@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Switch } from "bits-ui";
 
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   type Props = {
     "checked"?: boolean;

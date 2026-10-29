@@ -18,7 +18,6 @@
   import { api, byUser, type Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import { copyText } from "#lib/clipboard.svelte.js";
-  import { clock } from "#lib/clock.svelte.js";
   import { nameColor } from "#lib/colors.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -32,6 +31,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
+  import { clock } from "#lib/ui/clock.svelte.js";
   import { BUDDY } from "#lib/wording.js";
 
   import { assignGroup, links, pin, userGroups } from "./actions";

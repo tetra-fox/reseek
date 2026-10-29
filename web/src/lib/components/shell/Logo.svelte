@@ -1,7 +1,7 @@
 <script lang="ts">
   import AudioWaveformIcon from "@lucide/svelte/icons/audio-waveform";
 
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   let { class: className }: { class?: string } = $props();
 </script>

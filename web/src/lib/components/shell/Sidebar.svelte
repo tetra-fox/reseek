@@ -13,9 +13,9 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { crossFade } from "#lib/motion.js";
   import { href, navCurrent, navItems, type NavItem, route, systemItem } from "#lib/nav.js";
   import { unseen } from "#lib/transfers/unseen.svelte.js";
+  import { crossFade } from "#lib/ui/motion.js";
 
   import AccountMenu from "./AccountMenu.svelte";
   import ConnectButton from "./ConnectButton.svelte";

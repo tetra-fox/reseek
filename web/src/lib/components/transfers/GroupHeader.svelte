@@ -34,7 +34,7 @@
   import { quota, waits } from "#lib/transfers/why.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import { GAP_REM, lineStart } from "#lib/tree/indent.js";
-  import { viewport } from "#lib/viewport.svelte.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
 
   type Props = {
     group: Group;

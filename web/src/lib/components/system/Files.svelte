@@ -38,7 +38,6 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { confirmation } from "#lib/confirm.svelte.js";
   import { dateTime, formatBytes, plural } from "#lib/format.js";
-  import { shiftHeld } from "#lib/keys.js";
   import { archiveUrl, fileTrack, fileUrl, joinPath, type Root } from "#lib/localfiles.js";
   import { href } from "#lib/nav.js";
   import { player } from "#lib/player.svelte.js";
@@ -50,7 +49,8 @@
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
   import { TICK_REM } from "#lib/tree/indent.js";
-  import { viewport } from "#lib/viewport.svelte.js";
+  import { shiftHeld } from "#lib/ui/keys.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
 
   import { type Entry, entries, type SortBy } from "./explorer";
 

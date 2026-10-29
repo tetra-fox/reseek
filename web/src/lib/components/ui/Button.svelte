@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { HTMLButtonAttributes } from "svelte/elements";
 
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   type Props = HTMLButtonAttributes & {
     variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "link";

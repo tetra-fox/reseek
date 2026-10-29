@@ -26,8 +26,8 @@
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { DENSE_COLUMNS, type DenseColumn, type DenseRow, denseView } from "#lib/search/dense.js";
   import { toast } from "#lib/toast.svelte.js";
+  import { rem } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users.svelte.js";
-  import { rem } from "#lib/viewport.svelte.js";
 
   import Country from "./Country.svelte";
 

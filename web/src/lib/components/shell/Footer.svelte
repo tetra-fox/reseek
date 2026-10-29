@@ -6,8 +6,8 @@
   import { activityPrefs } from "#lib/activity/activity.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import { formatSpeedPadded } from "#lib/format.js";
-  import { shortcutAria, shortcutText } from "#lib/keys.js";
   import { REPOSITORY } from "#lib/project.js";
+  import { shortcutAria, shortcutText } from "#lib/ui/keys.js";
 
   const connected = $derived(app.isServerConnected);
   const username = $derived(app.state?.user.username);

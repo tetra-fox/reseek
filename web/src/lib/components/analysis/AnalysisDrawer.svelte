@@ -6,9 +6,9 @@
 
   import type { Target } from "#lib/analysis/analysis.js";
   import Button from "#lib/components/ui/Button.svelte";
-  import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
-  import { motionFast } from "#lib/motion.js";
   import type { Track } from "#lib/player.svelte.js";
+  import { keepsKey, layerOpen, withModifier } from "#lib/ui/keys.js";
+  import { motionFast } from "#lib/ui/motion.js";
 
   import AnalysisPanel from "./AnalysisPanel.svelte";
 

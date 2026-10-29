@@ -23,7 +23,6 @@
   import { isAudio, remoteFolder } from "#lib/components/files/links.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { links } from "#lib/components/users/actions.js";
-  import { shiftHeld } from "#lib/keys.js";
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import {
@@ -39,6 +38,7 @@
     storeOf
   } from "#lib/transfers/actions.js";
   import { type Direction, rowActions, type Transfer } from "#lib/transfers/states.js";
+  import { shiftHeld } from "#lib/ui/keys.js";
 
   type Props = {
     transfer: Transfer;

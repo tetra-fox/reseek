@@ -24,8 +24,8 @@
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users.svelte.js";
-  import { viewport } from "#lib/viewport.svelte.js";
 
   import ChatMenuItems from "./ChatMenuItems.svelte";
   import Composer from "./Composer.svelte";

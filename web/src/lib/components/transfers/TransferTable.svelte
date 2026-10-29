@@ -18,7 +18,7 @@
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
   import type { Group, Item } from "#lib/transfers/view.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
-  import { rem, viewport } from "#lib/viewport.svelte.js";
+  import { rem, viewport } from "#lib/ui/viewport.svelte.js";
 
   import GroupHeader from "./GroupHeader.svelte";
   import TransferRow from "./TransferRow.svelte";

@@ -6,7 +6,7 @@
   import { EditorView, keymap, lineNumbers } from "@codemirror/view";
   import { untrack } from "svelte";
 
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   type Props = {
     "value": string;

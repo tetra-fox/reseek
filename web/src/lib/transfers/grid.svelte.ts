@@ -1,5 +1,5 @@
 import { Grid } from "#lib/lists/table.svelte.js";
-import { viewport } from "#lib/viewport.svelte.js";
+import { viewport } from "#lib/ui/viewport.svelte.js";
 
 import { type ColumnId, columnsFor, PHONE_COLUMNS } from "./columns";
 import type { ViewSettings } from "./settings.svelte";

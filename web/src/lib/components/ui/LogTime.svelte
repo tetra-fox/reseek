@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { clock } from "#lib/clock.svelte.js";
   import { ago, formatDate, shortTime } from "#lib/format.js";
+  import { clock } from "#lib/ui/clock.svelte.js";
 
   // the time cell of an activity log's line, with the full date and how long ago as its tooltip
   let { at }: { at: string } = $props();

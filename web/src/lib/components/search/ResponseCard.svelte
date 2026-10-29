@@ -37,8 +37,8 @@
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, folderTree, treeLines } from "#lib/tree/folders.js";
   import { TICK_REM } from "#lib/tree/indent.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users.svelte.js";
-  import { viewport } from "#lib/viewport.svelte.js";
 
   import Country from "./Country.svelte";
 

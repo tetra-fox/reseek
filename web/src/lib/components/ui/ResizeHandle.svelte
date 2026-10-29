@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
 
-  import { withModifier } from "#lib/keys.js";
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
+  import { withModifier } from "#lib/ui/keys.js";
 
   type Props = {
     /** the height it sets, in pixels */

@@ -18,8 +18,8 @@
   import { interaction } from "#lib/lists/interaction.svelte.js";
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
+  import { cn } from "#lib/ui/cn.js";
   import { users } from "#lib/users.svelte.js";
-  import { cn } from "#lib/utils.js";
   import { BUDDY } from "#lib/wording.js";
 
   import { links, pin } from "./actions";

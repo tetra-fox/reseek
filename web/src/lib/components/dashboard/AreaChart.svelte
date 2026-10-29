@@ -11,8 +11,8 @@
   } from "#lib/dashboard/chart.js";
   import type { Point } from "#lib/dashboard/reports.js";
   import type { Series } from "#lib/dashboard/series.js";
-  import { chartMotion } from "#lib/motion.js";
-  import { rem } from "#lib/viewport.svelte.js";
+  import { chartMotion } from "#lib/ui/motion.js";
+  import { rem } from "#lib/ui/viewport.svelte.js";
 
   // transfer history as areas over time on LayerChart, each a smooth line over a fill that fades
   // toward the floor, with the axes and the tooltip of the bucket under the pointer; the buttons

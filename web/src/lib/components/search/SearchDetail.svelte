@@ -23,7 +23,6 @@
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
-  import { motionFast } from "#lib/motion.js";
   import { href } from "#lib/nav.js";
   import { denseRows } from "#lib/search/dense.js";
   import { parseFilters } from "#lib/search/filters.js";
@@ -35,9 +34,10 @@
   import { LONG_QUEUE, searchOptions } from "#lib/settings.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
+  import { motionFast } from "#lib/ui/motion.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
   import { undoable } from "#lib/undo.js";
   import { users } from "#lib/users.svelte.js";
-  import { viewport } from "#lib/viewport.svelte.js";
 
   import DenseResults from "./DenseResults.svelte";
   import ResponseCard from "./ResponseCard.svelte";

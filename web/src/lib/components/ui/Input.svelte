@@ -3,7 +3,7 @@
   import type { Component } from "svelte";
   import type { HTMLInputAttributes } from "svelte/elements";
 
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   type Props = HTMLInputAttributes & {
     /** the element, for callers that focus it */

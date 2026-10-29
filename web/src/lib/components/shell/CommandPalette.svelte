@@ -8,7 +8,6 @@
   import { chat } from "#lib/chat/chat.svelte.js";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import { sections } from "#lib/config/sections.js";
-  import { opensPalette, shortcutText } from "#lib/keys.js";
   import {
     chatHref,
     href,
@@ -24,6 +23,7 @@
   import { recent, remember } from "#lib/search/recent.svelte.js";
   import { searches } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
+  import { opensPalette, shortcutText } from "#lib/ui/keys.js";
 
   import { palette } from "./palette.svelte";
 

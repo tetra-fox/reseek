@@ -1,4 +1,4 @@
-import { viewport } from "#lib/viewport.svelte.js";
+import { viewport } from "#lib/ui/viewport.svelte.js";
 
 /** The width of a tree line's open-and-close toggle, in rem */
 export const TOGGLE_REM = 1.25;

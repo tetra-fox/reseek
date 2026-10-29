@@ -20,7 +20,6 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import BlockDialog from "#lib/components/users/BlockDialog.svelte";
   import { trail } from "#lib/crumbs.svelte.js";
-  import { togglesActivity } from "#lib/keys.js";
   import { live } from "#lib/live/live.svelte.js";
   import {
     baseCrumbs,
@@ -32,6 +31,7 @@
     titleOf
   } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
+  import { togglesActivity } from "#lib/ui/keys.js";
   // listens for transfer frames from the start, so its notifications follow every screen
   import "#lib/transfers/notices.svelte.js";
   import { SCREEN_FAILED } from "#lib/wording.js";

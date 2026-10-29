@@ -23,7 +23,7 @@
   import { defaults, type ViewSettings } from "#lib/transfers/settings.svelte.js";
   import { type ChipId, type Direction, isSucceeded, STATE_CHIPS } from "#lib/transfers/states.js";
   import type { GroupBy, SortKey } from "#lib/transfers/view.js";
-  import { viewport } from "#lib/viewport.svelte.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
 
   type Props = {
     direction: Direction;

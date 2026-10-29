@@ -8,7 +8,7 @@
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import type { FolderNode, TreeLine } from "#lib/tree/folders.js";
   import { FOLDER_LINE_REM, GAP_REM, lineStart, TOGGLE_REM } from "#lib/tree/indent.js";
-  import { viewport } from "#lib/viewport.svelte.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
 
   import TreeToggle from "./TreeToggle.svelte";
 

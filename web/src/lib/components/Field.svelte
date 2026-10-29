@@ -2,7 +2,7 @@
   import type { Snippet } from "svelte";
 
   import FieldError from "#lib/components/FieldError.svelte";
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   type Props = {
     label: string;

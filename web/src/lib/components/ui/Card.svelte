@@ -2,7 +2,7 @@
   import type { Snippet } from "svelte";
   import type { HTMLAttributes } from "svelte/elements";
 
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   type Props = Omit<HTMLAttributes<HTMLDivElement>, "title"> & {
     title?: string;

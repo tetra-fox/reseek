@@ -1,7 +1,7 @@
 <script lang="ts">
   import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
 
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   // a turning circle for something under way, with the words a screen reader hears
   let { label = "Loading", class: className }: { label?: string; class?: string } = $props();

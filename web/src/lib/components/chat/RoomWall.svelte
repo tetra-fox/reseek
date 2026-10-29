@@ -4,7 +4,6 @@
 
   import { app } from "#lib/app.svelte.js";
   import type { RoomMembers, WallLine } from "#lib/chat/room.svelte.js";
-  import { clock } from "#lib/clock.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Input from "#lib/components/ui/Input.svelte";
@@ -15,6 +14,7 @@
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
+  import { clock } from "#lib/ui/clock.svelte.js";
 
   // the room's wall: each member's ticker, the latest change first, and a field to set our own
   let { members }: { members: RoomMembers } = $props();

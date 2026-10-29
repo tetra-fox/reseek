@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { clock } from "#lib/clock.svelte.js";
   import { ago, dateTime } from "#lib/format.js";
+  import { clock } from "#lib/ui/clock.svelte.js";
 
   // a moment as "3 minutes ago", kept current, the exact time on hover
   let { at, class: className }: { at: string; class?: string } = $props();

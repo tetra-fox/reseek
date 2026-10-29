@@ -12,7 +12,6 @@
   import { app } from "#lib/app.svelte.js";
   import { Busy } from "#lib/busy.svelte.js";
   import { CopyButton, copyText } from "#lib/clipboard.svelte.js";
-  import { clock } from "#lib/clock.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
@@ -22,6 +21,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
+  import { clock } from "#lib/ui/clock.svelte.js";
   import { RESTART } from "#lib/wording.js";
 
   import { diagnostics, latestProblems } from "./diagnostics";

@@ -5,9 +5,9 @@
   import type { Schemas } from "#lib/api/client.js";
   import { axisPadding, tickLabel } from "#lib/dashboard/chart.js";
   import { outcomes } from "#lib/dashboard/reports.js";
-  import { chartMotion } from "#lib/motion.js";
   import { href } from "#lib/nav.js";
-  import { rem } from "#lib/viewport.svelte.js";
+  import { chartMotion } from "#lib/ui/motion.js";
+  import { rem } from "#lib/ui/viewport.svelte.js";
 
   // how the range's transfers ended, each direction one stacked bar on LayerChart; a part opens
   // the list of those transfers, and a hover fades the other direction

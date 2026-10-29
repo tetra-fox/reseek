@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { clock } from "#lib/clock.svelte.js";
   import { formatDate, formatDuration } from "#lib/format.js";
+  import { clock } from "#lib/ui/clock.svelte.js";
 
   // how long the daemon has run, counting each second while the page shows it: hours, minutes
   // and seconds under a day, days, hours and minutes past one

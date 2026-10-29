@@ -45,8 +45,8 @@
   import { type Direction, rowActions, stateChip, type Transfer } from "#lib/transfers/states.js";
   import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
   import { GAP_REM, lineStart, TICK_REM, TOGGLE_REM } from "#lib/tree/indent.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users.svelte.js";
-  import { viewport } from "#lib/viewport.svelte.js";
 
   import RowMenu from "./RowMenu.svelte";
   import Sparkline from "./Sparkline.svelte";

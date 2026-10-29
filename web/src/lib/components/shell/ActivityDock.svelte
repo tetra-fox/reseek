@@ -31,9 +31,9 @@
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
-  import { motionFast } from "#lib/motion.js";
   import { roomHref, userHref } from "#lib/nav.js";
-  import { viewport } from "#lib/viewport.svelte.js";
+  import { motionFast } from "#lib/ui/motion.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
 
   // what other users do with us on the network: a panel at the bottom of every screen, opened
   // from the footer or with Ctrl+J, so it stays in view whatever screen is open

@@ -10,7 +10,6 @@
 
   import { app } from "#lib/app.svelte.js";
   import { Busy } from "#lib/busy.svelte.js";
-  import { clock } from "#lib/clock.svelte.js";
   import { nameColor } from "#lib/colors.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
@@ -21,6 +20,7 @@
   import { firstLines, ownProfile } from "#lib/profile.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
+  import { clock } from "#lib/ui/clock.svelte.js";
   import { type UserSummary, users } from "#lib/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";
 

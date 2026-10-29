@@ -3,7 +3,7 @@
   import MinusIcon from "@lucide/svelte/icons/minus";
   import { Checkbox } from "bits-ui";
 
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   type Props = {
     "checked": boolean;

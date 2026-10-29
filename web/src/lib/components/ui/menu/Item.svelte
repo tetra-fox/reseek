@@ -7,7 +7,7 @@
 <script lang="ts">
   import { DropdownMenu } from "bits-ui";
 
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   let { class: className, ...rest }: DropdownMenu.ItemProps = $props();
 </script>

@@ -1,5 +1,5 @@
 import { settings } from "#lib/settings.svelte.js";
-import { viewport } from "#lib/viewport.svelte.js";
+import { viewport } from "#lib/ui/viewport.svelte.js";
 
 /** The navigation: a column on wide screens, expanded or icons only, and a sheet on phones */
 class Sidebar {

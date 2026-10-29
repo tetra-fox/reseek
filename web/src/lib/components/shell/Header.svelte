@@ -13,8 +13,8 @@
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { trail } from "#lib/crumbs.svelte.js";
   import { listText } from "#lib/format.js";
-  import { shortcutAria, shortcutText } from "#lib/keys.js";
   import { baseCrumbs, href, route } from "#lib/nav.js";
+  import { shortcutAria, shortcutText } from "#lib/ui/keys.js";
 
   import NewVersion from "./NewVersion.svelte";
   import { palette } from "./palette.svelte";

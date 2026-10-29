@@ -1,7 +1,7 @@
 <script lang="ts">
   import { root } from "#lib/api/client.js";
   import { nameHue } from "#lib/colors.js";
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   type Props = {
     name: string;

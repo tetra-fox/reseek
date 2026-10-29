@@ -33,7 +33,7 @@
   import { href, roomHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { fields } from "#lib/stored.svelte.js";
-  import { rem } from "#lib/viewport.svelte.js";
+  import { rem } from "#lib/ui/viewport.svelte.js";
 
   // two parts: the server's public rooms, each joined from its row, and a room created by name
   let { open = $bindable(), name: start = "" }: { open: boolean; name?: string } = $props();

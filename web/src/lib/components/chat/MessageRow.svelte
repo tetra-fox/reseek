@@ -7,7 +7,6 @@
   import { LONG, type Message } from "#lib/chat/messages.js";
   import { actionOf } from "#lib/chat/rich.js";
   import { copyText } from "#lib/clipboard.svelte.js";
-  import { clock } from "#lib/clock.svelte.js";
   import { nameColor } from "#lib/colors.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
@@ -15,6 +14,7 @@
   import Username from "#lib/components/users/Username.svelte";
   import { chatTime, formatDate, shortTime } from "#lib/format.js";
   import { chatHref } from "#lib/nav.js";
+  import { clock } from "#lib/ui/clock.svelte.js";
   import { users } from "#lib/users.svelte.js";
 
   import ChatText from "./ChatText.svelte";

@@ -14,7 +14,7 @@
   import { formatDay, plural } from "#lib/format.js";
   import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
-  import { motionFast } from "#lib/motion.js";
+  import { motionFast } from "#lib/ui/motion.js";
 
   import GapRow from "./GapRow.svelte";
   import MessageRow from "./MessageRow.svelte";

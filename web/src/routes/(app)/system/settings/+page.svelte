@@ -23,10 +23,10 @@
   import { plural } from "#lib/format.js";
   import { live } from "#lib/live/live.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
-  import { motionFast } from "#lib/motion.js";
   import { href, route } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
+  import { motionFast } from "#lib/ui/motion.js";
 
   const view = new Loader(() => call(() => api.GET("/api/v0/options/view")));
   const admin = $derived(session.can("Administrator"));

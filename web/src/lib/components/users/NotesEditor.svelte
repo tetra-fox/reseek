@@ -6,8 +6,8 @@
   import { api, byUser } from "#lib/api/client.js";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
-  import { motionFast } from "#lib/motion.js";
   import { call } from "#lib/request.js";
+  import { motionFast } from "#lib/ui/motion.js";
 
   // our private notes about a user, saved as typing pauses, with a tick once saved
   type Props = { username: string; notes: string; disabled: boolean };

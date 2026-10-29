@@ -3,7 +3,7 @@
 
   import { type Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
   import { TOGGLE_REM } from "#lib/tree/indent.js";
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   type Props = {
     expansion: Expansion;

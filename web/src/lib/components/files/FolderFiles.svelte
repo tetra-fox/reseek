@@ -26,7 +26,7 @@
   import { separatorOf } from "#lib/search/results.js";
   import { session } from "#lib/session.svelte.js";
   import { toast } from "#lib/toast.svelte.js";
-  import { rem, viewport } from "#lib/viewport.svelte.js";
+  import { rem, viewport } from "#lib/ui/viewport.svelte.js";
 
   import Suspect from "./Suspect.svelte";
 

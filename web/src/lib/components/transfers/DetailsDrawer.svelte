@@ -23,11 +23,11 @@
     NONE,
     plural
   } from "#lib/format.js";
-  import { keepsKey, layerOpen, withModifier } from "#lib/keys.js";
-  import { motionFast } from "#lib/motion.js";
   import { downloadTrack } from "#lib/transfers/actions.js";
   import { rowActions, stateChip, type Direction, type Transfer } from "#lib/transfers/states.js";
   import { endpoint, type Transfers } from "#lib/transfers/transfers.svelte.js";
+  import { keepsKey, layerOpen, withModifier } from "#lib/ui/keys.js";
+  import { motionFast } from "#lib/ui/motion.js";
   import { users } from "#lib/users.svelte.js";
 
   import RowMenu from "./RowMenu.svelte";

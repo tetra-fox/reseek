@@ -1,6 +1,6 @@
 import { cubicOut } from "svelte/easing";
 
-import { motionSlow } from "#lib/motion.js";
+import { motionSlow } from "#lib/ui/motion.js";
 
 import type { Scale } from "./analysis";
 import { type Curve, mix, pure } from "./frequency";

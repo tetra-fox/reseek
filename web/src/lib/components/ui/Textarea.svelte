@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { HTMLTextareaAttributes } from "svelte/elements";
 
-  import { cn } from "#lib/utils.js";
+  import { cn } from "#lib/ui/cn.js";
 
   type Props = HTMLTextareaAttributes & {
     /** the element, for callers that move its caret */

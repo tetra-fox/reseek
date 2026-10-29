@@ -1,6 +1,6 @@
 import { SvelteSet } from "svelte/reactivity";
 
-import { motionSlow } from "#lib/motion.js";
+import { motionSlow } from "#lib/ui/motion.js";
 
 import type { Layout, Report, Target } from "./analysis";
 import { Pictures } from "./pictures.svelte";
