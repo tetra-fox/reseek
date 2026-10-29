@@ -184,9 +184,7 @@ mod tests {
   use api_types::users::UserRemoved;
   use serde_json::json;
 
-  use crate::testing::{TestApp, app, request, with};
-
-  const TRUSTED: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
+  use crate::testing::{OUTSIDE, TRUSTED, TestApp, app, request, with};
 
   fn removed(app: &TestApp, username: &str) {
     app.state.live.publish(LiveFrame::UsersRemoved(UserRemoved {
@@ -345,7 +343,7 @@ mod tests {
       .to_string();
     let logs = app
       .stream_from(
-        "192.0.2.1:1",
+        OUTSIDE,
         request(
           "GET",
           &format!("/api/v0/live?topics=logs&access_token={viewer}"),
@@ -373,7 +371,7 @@ mod tests {
       "a closed stream frees its place"
     );
     let anonymous = app
-      .stream_from("192.0.2.1:1", request("GET", "/api/v0/live", None))
+      .stream_from(OUTSIDE, request("GET", "/api/v0/live", None))
       .await;
     assert_eq!(anonymous.status, 401);
   }
@@ -394,7 +392,7 @@ mod tests {
     }
     let failed = app
       .send_from(
-        "192.0.2.1:1",
+        OUTSIDE,
         request(
           "POST",
           "/api/v0/session",
@@ -425,7 +423,7 @@ mod tests {
     let secret = created["secret"].as_str().unwrap();
     let current = app.state.config.current();
     let peer = crate::http::Peer {
-      remote: Some("192.0.2.1:1".parse().unwrap()),
+      remote: Some(OUTSIDE.parse().unwrap()),
       transport: crate::http::Transport::Plain,
     };
     let uri: axum::http::Uri = format!("/api/v0/live?access_token={secret}")
