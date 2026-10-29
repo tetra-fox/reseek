@@ -13,7 +13,7 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import type { FileColumn } from "#lib/files/columns.js";
   import { asItem, type Enqueued, enqueue, followDownloads } from "#lib/files/downloads.js";
-  import { formatBytes, getFileName, plural } from "#lib/format.js";
+  import { formatBytes, formatSpeed, getFileName, plural } from "#lib/format.js";
   import { Arrivals } from "#lib/lists/arrivals.svelte.js";
   import { freezesWhileUsed, heldOrder } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -201,7 +201,7 @@
             {#if row.country}<Country code={row.country} />{/if}
           </span>
           <span role="gridcell" class="truncate px-2 text-right tabular-nums"
-            >{formatBytes(row.speed, 1)}/s</span>
+            >{formatSpeed(row.speed)}</span>
           <span role="gridcell" class="truncate px-2 text-right tabular-nums">{row.queue}</span>
           <span role="gridcell" class={["px-2", row.free ? "text-success" : "text-fg-muted"]}>
             {row.free ? "Yes" : "No"}
