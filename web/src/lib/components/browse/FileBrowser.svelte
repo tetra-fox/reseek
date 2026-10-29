@@ -121,8 +121,13 @@
 <section
   class={["flex flex-col rounded-card border bg-surface shadow-card", node.locked && "opacity-50"]}>
   <!-- the folder's name and its download stay in view while its files scroll -->
+  <!-- a folded folder's header is all of the card: no line under it to double the frame, and
+       its fill rounded at the bottom too -->
   <header
-    class="sticky top-0 z-[4] flex flex-wrap items-center gap-2 rounded-t-card border-b bg-surface/95 px-4 py-3 backdrop-blur-md">
+    class={[
+      "sticky top-0 z-[4] flex flex-wrap items-center gap-2 bg-surface/95 px-4 py-3 backdrop-blur-md",
+      folded ? "rounded-card" : "rounded-t-card border-b"
+    ]}>
     {#if node.locked}
       <span title={LOCKED_HINT}><LockIcon class="size-5 text-fg-muted" /></span>
     {:else}
@@ -173,7 +178,7 @@
     </div>
   </header>
   {#if !folded}
-    <div class="overflow-x-auto border-t">
+    <div class="overflow-x-auto">
       <table class="data-table w-full text-sm">
         <thead>
           <tr>

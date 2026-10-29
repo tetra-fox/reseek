@@ -490,7 +490,9 @@
     tr {
       border-bottom: 1px solid var(--color-border);
     }
-    tbody tr:last-child {
+    /* the table's last row draws no divider, which would double the frame under it */
+    tbody tr:last-child,
+    &:not(:has(tbody tr)) thead tr {
       border-bottom: 0;
     }
     thead tr {
