@@ -1,3 +1,4 @@
+import { FILE_COLUMNS } from "#lib/files/columns.js";
 import { columnWidth, getDirectoryName, getFileName, WIDEST } from "#lib/format.js";
 import type { GridColumn } from "#lib/lists/table.svelte.js";
 import { fields, stored } from "#lib/stored.svelte.js";
@@ -81,7 +82,12 @@ export const DENSE_COLUMNS: (GridColumn<DenseRow> & { id: DenseColumn | "select"
       end: true,
       value: (r) => r.file.size
     },
-    { id: "bitrate", label: "Bitrate", width: "7rem", value: (r) => r.file.bitRate ?? -1 },
+    {
+      id: "bitrate",
+      label: FILE_COLUMNS.quality.label,
+      width: "7rem",
+      value: (r) => r.file.bitRate ?? -1
+    },
     {
       id: "length",
       label: "Length",

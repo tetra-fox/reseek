@@ -64,8 +64,11 @@
     around: Transfer[];
     /** ticks the row; `range` when shift was held */
     onselect: (range: boolean) => void;
-    /** opens the details drawer, at the file's analysis with `analyze`, in the large view with `large` */
-    ondetails: (analyze?: boolean, large?: boolean) => void;
+    /**
+     * Opens the details drawer, at the file's analysis with `analyze`, in the large view with
+     * `large`; a screen without the drawer leaves it out
+     */
+    ondetails?: (analyze?: boolean, large?: boolean) => void;
     onremove: () => void;
     onblock: (deny: boolean) => void;
   };
@@ -103,18 +106,26 @@
   );
 </script>
 
+{#snippet label()}
+  {getFileName(t.filename)}
+  {#if showFolder}
+    <span class="text-fg-muted"> {getDirectoryName(t.filename)}</span>
+  {/if}
+{/snippet}
+
 {#snippet name()}
   <Icon class="size-4 shrink-0 text-fg-muted" />
-  <button
-    type="button"
-    class="min-w-0 truncate text-left hover:underline"
-    title={t.filename}
-    onclick={() => ondetails()}>
-    {getFileName(t.filename)}
-    {#if showFolder}
-      <span class="text-fg-muted"> {getDirectoryName(t.filename)}</span>
-    {/if}
-  </button>
+  {#if ondetails}
+    <button
+      type="button"
+      class="min-w-0 truncate text-left hover:underline"
+      title={t.filename}
+      onclick={() => ondetails()}>
+      {@render label()}
+    </button>
+  {:else}
+    <span class="min-w-0 truncate" title={t.filename}>{@render label()}</span>
+  {/if}
   {#if direction === "download"}<AnalysisMark mark={marks.download(t.id)} />{/if}
 {/snippet}
 
@@ -303,8 +314,8 @@
             {around}
             {onremove}
             {onblock}
-            ondetails={() => ondetails()}
-            onanalyze={(large) => ondetails(true, large)} />
+            ondetails={ondetails ? () => ondetails() : undefined}
+            onanalyze={ondetails ? (large) => ondetails(true, large) : undefined} />
         </Menu.LazyRoot>
       </div>
     {/if}

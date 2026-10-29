@@ -159,3 +159,12 @@ export const PHONE_COLUMNS: Partial<Record<ColumnId, string>> = {
   file: "0rem",
   actions: "2.5rem"
 };
+
+/** A grid template of the columns `ids`, each at its default width, the file taking the rest */
+export const templateOf = (ids: ColumnId[]) =>
+  ids
+    .map((id) => {
+      const width = COLUMNS.find((c) => c.id === id)!.width;
+      return id === "file" ? `minmax(${width}, 1fr)` : width;
+    })
+    .join(" ");

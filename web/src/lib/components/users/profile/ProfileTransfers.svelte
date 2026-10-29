@@ -1,20 +1,17 @@
 <script lang="ts">
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
-  import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import RepeatIcon from "@lucide/svelte/icons/repeat";
   import { untrack } from "svelte";
 
   import { api, byUser } from "#lib/api/client.js";
   import LoadError from "#lib/components/LoadError.svelte";
-  import RowMenu from "#lib/components/transfers/RowMenu.svelte";
-  import Badge from "#lib/components/ui/Badge.svelte";
+  import TransferRow from "#lib/components/transfers/TransferRow.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
-  import * as Menu from "#lib/components/ui/menu/menu.js";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
-  import { dateTime, formatBytes, getDirectoryName, getFileName, plural } from "#lib/format.js";
+  import { getDirectoryName, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -22,8 +19,10 @@
   import { live } from "#lib/live/live.svelte.js";
   import { call } from "#lib/request.js";
   import { act, storeOf } from "#lib/transfers/actions.js";
-  import { isActive, isCancelable, stateChip, type Transfer } from "#lib/transfers/states.js";
+  import { type ColumnId, templateOf } from "#lib/transfers/grid/columns.js";
+  import { isActive, isCancelable, type Transfer } from "#lib/transfers/states.js";
   import { uploads } from "#lib/transfers/transfers.svelte.js";
+  import { viewport } from "#lib/ui/viewport.svelte.js";
   import { blocking } from "#lib/users/block.svelte.js";
 
   // the transfers with one user, both directions or one, newest first, live
@@ -107,7 +106,11 @@
     blocking.ask(username, ["uploads"]);
   };
 
-  const COLUMNS = "1.5rem minmax(12rem,1fr) 6rem 10rem 8rem 2.5rem";
+  /** the transfers screen's cells for the file, its size, its state and when it was asked for */
+  const columns: ColumnId[] = $derived(
+    viewport.phone ? ["file", "actions"] : ["file", "size", "progress", "requested", "actions"]
+  );
+  const template = $derived(`1.5rem ${templateOf(columns)}`);
 </script>
 
 <div class="flex flex-wrap items-center gap-inline">
@@ -143,53 +146,33 @@
     {@attach list.attach}>
     <div role="rowgroup" {@attach freezesWhileUsed}>
       {#each shown as t, i (t.id)}
-        {@const chip = stateChip(t)}
         <div
           role="row"
           {...list.line(t, i)}
           class={[
-            "grid min-w-max items-center gap-2 list-row px-2 py-1.5 hover:bg-hover",
+            "group relative isolate grid min-w-max items-center list-row py-1 pl-2 hover:bg-hover",
             list.selected.has(t.id) && "bg-accent-soft/60",
             rows.removed.has(t.id) && "opacity-40"
           ]}
-          style:grid-template-columns={COLUMNS}>
+          style:grid-template-columns={template}>
           <span role="gridcell" title={t.direction}>
             {#if t.direction === "Upload"}<ArrowUpIcon class="size-4 text-success" />{:else}
               <ArrowDownIcon class="size-4 text-info" />{/if}
           </span>
-          <span role="gridcell" class="min-w-0 truncate" title={t.filename}>
-            {getFileName(t.filename)}
-            <span class="text-fg-muted"> {getDirectoryName(t.filename)}</span>
-          </span>
-          <span role="gridcell" class="text-right tabular-nums">{formatBytes(t.size)}</span>
-          <span role="gridcell" class="min-w-0">
-            <Badge tone={chip.tone} class="max-w-full truncate" title={chip.title ?? undefined}
-              >{chip.text}</Badge>
-          </span>
-          <span role="gridcell" class="text-xs text-fg-muted">{dateTime(t.requestedAt)}</span>
-          <span role="gridcell">
-            <Menu.Root>
-              <Menu.Trigger>
-                {#snippet child({ props })}
-                  <Button
-                    {...props}
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`More for ${getFileName(t.filename)}`}>
-                    <EllipsisIcon />
-                  </Button>
-                {/snippet}
-              </Menu.Trigger>
-              <RowMenu
-                transfer={t}
-                direction={direction(t)}
-                around={shown.filter(
-                  (o) => getDirectoryName(o.filename) === getDirectoryName(t.filename)
-                )}
-                onremove={() => remove(t)}
-                onblock={(deny) => (deny ? void denyAndBlock() : blocking.ask(username))} />
-            </Menu.Root>
-          </span>
+          <TransferRow
+            transfer={t}
+            direction={direction(t)}
+            {columns}
+            depth={0}
+            showFolder
+            selected={list.selected.has(t.id)}
+            speeds={[]}
+            around={shown.filter(
+              (o) => getDirectoryName(o.filename) === getDirectoryName(t.filename)
+            )}
+            onselect={(range) => list.tick(t.id, range)}
+            onremove={() => remove(t)}
+            onblock={(deny) => (deny ? void denyAndBlock() : blocking.ask(username))} />
         </div>
       {/each}
     </div>

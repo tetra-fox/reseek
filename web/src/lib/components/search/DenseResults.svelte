@@ -2,24 +2,18 @@
   import DownloadIcon from "@lucide/svelte/icons/download";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import FolderDownIcon from "@lucide/svelte/icons/folder-down";
-  import LockIcon from "@lucide/svelte/icons/lock";
   import { SvelteSet } from "svelte/reactivity";
 
+  import FileCells from "#lib/components/files/FileCells.svelte";
   import FileMenu from "#lib/components/files/FileMenu.svelte";
-  import Suspect from "#lib/components/files/Suspect.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { asItem, enqueue } from "#lib/files/downloads.js";
-  import {
-    formatAttributes,
-    formatBytes,
-    formatSeconds,
-    getFileName,
-    plural
-  } from "#lib/format.js";
+  import type { FileColumn } from "#lib/files/columns.js";
+  import { asItem, enqueue, followDownloads } from "#lib/files/downloads.js";
+  import { formatBytes, getFileName, plural } from "#lib/format.js";
   import { Arrivals } from "#lib/lists/arrivals.svelte.js";
   import { freezesWhileUsed, heldOrder } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -41,7 +35,11 @@
 
   let { rows, searchId, canDownload }: Props = $props();
 
+  /** the file's own cells, drawn as every list of remote files draws them */
+  const FILE_CELLS: FileColumn[] = ["name", "size", "quality", "length"];
+
   let headerHeight = $state(0);
+  followDownloads();
   const selected = new SvelteSet<string>();
   const arrivals = new Arrivals();
 
@@ -203,22 +201,12 @@
           <span role="gridcell" class={["px-2", row.free ? "text-success" : "text-fg-muted"]}>
             {row.free ? "Yes" : "No"}
           </span>
-          <span
-            role="gridcell"
-            class="flex min-w-0 items-center gap-1 px-2"
-            title={row.file.filename}>
-            {#if row.file.locked}<LockIcon class="size-3.5 shrink-0 text-fg-muted" />{/if}
-            <span class="truncate">{name}</span>
-          </span>
-          <span role="gridcell" class="truncate px-2 text-right tabular-nums"
-            >{formatBytes(row.file.size)}</span>
-          <span role="gridcell" class="flex min-w-0 items-center gap-1 truncate px-2 text-fg-muted">
-            {#if row.file.suspect}<Suspect suspect={row.file.suspect} />{/if}
-            {formatAttributes(row.file)}
-          </span>
-          <span role="gridcell" class="truncate px-2 text-right text-fg-muted tabular-nums">
-            {formatSeconds(row.file.length)}
-          </span>
+          <FileCells
+            file={row.file}
+            username={row.username}
+            columns={FILE_CELLS}
+            selected={selected.has(row.key)}
+            ontick={(range) => list.tick(row.key, range)} />
           <span
             role="gridcell"
             class="truncate px-2 font-mono text-xs text-fg-muted"
