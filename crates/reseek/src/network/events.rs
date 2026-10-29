@@ -7,9 +7,9 @@
 //! engine takes them.
 
 use api_types::activity::{ActivityKind, PrivateRoomChange};
-use api_types::chat::ServerMessage;
 use api_types::events::{Event as BusEvent, EventError, NoFields, SoulseekClientDisconnected};
 use api_types::live::LiveFrame;
+use api_types::messaging::ServerMessage;
 use api_types::state::{DistributedNetworkState, ServerConnectionState};
 use api_types::transfers::TransferStates;
 use api_types::users::{UserPresence, UserStatus, UserStatusChanged};
@@ -479,7 +479,7 @@ async fn private_message(app: &AppState, message: PrivateMessage) {
   if app.users.is_blocked(
     &message.username,
     None,
-    api_types::blocking::BlockScope::Messages,
+    api_types::users::blocking::BlockScope::Messages,
   ) {
     debug!(
       username = message.username,

@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
-use api_types::blocking::BlockScope;
+use api_types::users::blocking::BlockScope;
 use regex::Regex;
 use soulseek_client::{ClientError, LogLimiter, SearchReply};
 use soulseek_proto::SearchQuery;

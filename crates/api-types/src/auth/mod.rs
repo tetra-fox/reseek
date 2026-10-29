@@ -1,4 +1,8 @@
-//! Who a request is: roles and principals as the API shows them.
+//! Who a request is and how it signs in. This module holds roles and principals as the API shows
+//! them; signing in and API tokens have their own modules.
+
+pub mod session;
+pub mod tokens;
 
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

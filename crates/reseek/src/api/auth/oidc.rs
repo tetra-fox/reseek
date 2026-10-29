@@ -1,10 +1,10 @@
 //! The OpenID Connect routes: leaving for a provider's login, coming back from it, the
 //! provider's back-channel logout, and testing a provider's discovery.
 
-use api_types::events::{Event, LoginFailed, SessionRevokeReason};
-use api_types::session::{
+use api_types::auth::session::{
   BackchannelLogout, OidcCallbackQuery, OidcEndpoints, OidcLoginQuery, OidcTestResult,
 };
+use api_types::events::{Event, LoginFailed, SessionRevokeReason};
 use axum::body::Bytes;
 use axum::extract::{Path, Query, State};
 use axum::http::{StatusCode, header};

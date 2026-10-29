@@ -23,7 +23,7 @@ mod tests {
   use super::super::store::{Change, change, ensure};
   use super::super::testing::users_db;
   use super::*;
-  use api_types::blocking::{Block, BlockScope, BlockSource};
+  use api_types::users::blocking::{Block, BlockScope, BlockSource};
 
   #[tokio::test]
   async fn only_users_with_nothing_of_ours_are_forgotten() {

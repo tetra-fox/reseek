@@ -4,7 +4,7 @@
 //! stop or a crash. Gaps under a second are not reported.
 
 use api_types::live::LiveFrame;
-use api_types::rooms::{GapReason, HistoryGap};
+use api_types::messaging::rooms::{GapReason, HistoryGap};
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, Row, params};
 use tracing::{debug, warn};

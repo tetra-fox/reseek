@@ -1,11 +1,11 @@
 //! The session calls: signing in and out, who the caller is, browser sessions, API tokens and
 //! the OpenID Connect routes.
 
-use api_types::session::{
+use api_types::auth::session::{
   BackchannelLogout, CurrentPrincipal, LoginRequest, LogoutResponse, OidcCallbackQuery,
   OidcLoginQuery, OidcTestResult, Providers, Session,
 };
-use api_types::tokens::{CreateToken, CreatedToken, ListedToken, Token, UpdateToken};
+use api_types::auth::tokens::{CreateToken, CreatedToken, ListedToken, Token, UpdateToken};
 use reqwest::header::LOCATION;
 use uuid::Uuid;
 

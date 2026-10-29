@@ -451,7 +451,7 @@ pub struct Blocking {
 impl Default for Blocking {
   fn default() -> Self {
     Self {
-      default_scopes: api_types::blocking::BlockScope::DEFAULT
+      default_scopes: api_types::users::blocking::BlockScope::DEFAULT
         .iter()
         .map(ToString::to_string)
         .collect(),

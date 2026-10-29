@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use api_types::rooms::{Room, RoomTicker, RoomUser};
+use api_types::messaging::rooms::{Room, RoomTicker, RoomUser};
 use api_types::state::UserStatistics;
 use api_types::users::UserPresence;
 use soulseek_proto::server::{RoomData, UserData};

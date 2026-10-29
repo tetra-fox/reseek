@@ -4,8 +4,8 @@
 
 use std::net::IpAddr;
 
+use api_types::auth::tokens::Token;
 use api_types::auth::{Principal, Role, Via};
-use api_types::tokens::Token;
 use chrono::{DateTime, Duration, Utc};
 use rand::Rng;
 use rand::distr::Alphanumeric;

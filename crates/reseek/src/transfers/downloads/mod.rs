@@ -259,8 +259,8 @@ impl Downloads {
 
   /// Cancels every unfinished download from `username`, who was just blocked, when `scopes`
   /// include downloads.
-  pub async fn blocked(&self, username: &str, scopes: &[api_types::blocking::BlockScope]) {
-    if !scopes.contains(&api_types::blocking::BlockScope::Downloads) {
+  pub async fn blocked(&self, username: &str, scopes: &[api_types::users::blocking::BlockScope]) {
+    if !scopes.contains(&api_types::users::blocking::BlockScope::Downloads) {
       return;
     }
     let name = username.to_string();

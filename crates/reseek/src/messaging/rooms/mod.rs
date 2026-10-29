@@ -14,9 +14,9 @@ pub use events::room_of;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use api_types::chat::NotifyLevel;
 use api_types::live::LiveFrame;
-use api_types::rooms::{
+use api_types::messaging::NotifyLevel;
+use api_types::messaging::rooms::{
   JoinRoom, JoinedRoom, Room, RoomInfo, RoomMessagesQuery, RoomTicker, RoomUser,
 };
 use chrono::Utc;

@@ -1,18 +1,18 @@
 #![no_main]
 
 use api_types::analysis::SetAnalysisOverride;
-use api_types::blocking::{Block, BlockRequest};
-use api_types::chat::{MessageText, NotifySetting};
+use api_types::auth::session::LoginRequest;
+use api_types::auth::tokens::{CreateToken, UpdateToken};
 use api_types::files::FileTokenRequest;
 use api_types::live::LiveFrame;
+use api_types::messaging::rooms::JoinRoom;
+use api_types::messaging::{MessageText, NotifySetting};
 use api_types::options::{FilePatch, FileReplace, FileValidate, OptionsPatch};
-use api_types::rooms::JoinRoom;
 use api_types::search::SearchRequest;
-use api_types::session::LoginRequest;
-use api_types::tokens::{CreateToken, UpdateToken};
 use api_types::transfers::{
   BulkRequest, EnqueueDownloadBatchRequest, QueueDownloadRequest, TransferStates,
 };
+use api_types::users::blocking::{Block, BlockRequest};
 use api_types::users::{GroupAssignment, UserTags};
 use libfuzzer_sys::fuzz_target;
 use serde::Serialize;

@@ -2,11 +2,11 @@
 //! tickers, private room membership, read markers and notifications, and the server's room
 //! list.
 
-use api_types::chat::{MessageText, NotifySetting};
-use api_types::rooms::{
+use api_types::messaging::rooms::{
   JoinRoom, JoinedRoom, ReadMarker, Room, RoomHistory, RoomInfo, RoomMemberName, RoomMessagesQuery,
   RoomNameQuery, RoomTicker, RoomUser, TickerText,
 };
+use api_types::messaging::{MessageText, NotifySetting};
 use api_types::users::UsernameQuery;
 use axum::extract::State;
 use axum::http::StatusCode;

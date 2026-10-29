@@ -2,7 +2,7 @@
 //! both, newest first, each hit with the matching part of its text marked. Room messages of
 //! blocked users are left out, as the rooms show them collapsed.
 
-use api_types::chat::{
+use api_types::messaging::{
   MessageHit, MessageHitKind, MessageSearchKind, MessageSearchQuery, MessageSearchResults,
 };
 use std::sync::{Arc, Mutex};

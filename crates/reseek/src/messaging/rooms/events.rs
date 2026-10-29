@@ -5,11 +5,13 @@
 
 use std::collections::BTreeMap;
 
-use api_types::blocking::BlockScope;
 use api_types::events::{Event as BusEvent, RoomMessageReceivedEvent};
 use api_types::live::LiveFrame;
-use api_types::rooms::{RoomMessageReceived, RoomUserJoined, RoomUserLeft, RoomUserStatus};
+use api_types::messaging::rooms::{
+  RoomMessageReceived, RoomUserJoined, RoomUserLeft, RoomUserStatus,
+};
 use api_types::users::UserPresence;
+use api_types::users::blocking::BlockScope;
 use chrono::Utc;
 use soulseek_client::{Event, RoomMembers};
 use soulseek_proto::server::UserData;

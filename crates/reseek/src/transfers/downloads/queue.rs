@@ -4,8 +4,8 @@
 
 use std::time::Duration;
 
-use api_types::blocking::BlockScope;
 use api_types::transfers::TransferStates;
+use api_types::users::blocking::BlockScope;
 use soulseek_client::ClientError;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;

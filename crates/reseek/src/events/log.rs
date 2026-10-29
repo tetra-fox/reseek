@@ -308,8 +308,8 @@ async fn sweep(log: Arc<EventLog>, config: Watcher<Options>, shutdown: Cancellat
 #[cfg(test)]
 mod tests {
   use super::*;
-  use api_types::blocking::BlockScope;
   use api_types::events::{NoFields, UserBlocked};
+  use api_types::users::blocking::BlockScope;
 
   async fn log() -> (Arc<EventLog>, EventBus) {
     let bus = EventBus::new();

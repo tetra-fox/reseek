@@ -12,7 +12,7 @@ mod support;
 use std::time::{Duration, Instant};
 
 use api_client::Client;
-use api_types::rooms::{GapReason, RoomHistory, RoomMessagesQuery};
+use api_types::messaging::rooms::{GapReason, RoomHistory, RoomMessagesQuery};
 use soulseek_proto::RoomType;
 use support::soulfind::{self, User};
 use support::{PATIENCE, daemon, events, logged_in, quiet, signed_in, until};

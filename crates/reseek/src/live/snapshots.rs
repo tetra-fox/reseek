@@ -1,8 +1,8 @@
 //! What a stream is sent for each topic when it opens without resuming: the one place each
 //! topic's snapshot is made.
 
-use api_types::conversations::ConversationListQuery;
 use api_types::live::LiveFrame;
+use api_types::messaging::conversations::ConversationListQuery;
 use api_types::options::OptionsDocument;
 use tracing::warn;
 

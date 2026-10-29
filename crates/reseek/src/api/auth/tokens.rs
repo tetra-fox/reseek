@@ -4,8 +4,10 @@
 
 use crate::api::extract::Json;
 use api_types::auth::Role;
+use api_types::auth::tokens::{
+  ConfigApiKey, CreateToken, CreatedToken, ListedToken, Token, UpdateToken,
+};
 use api_types::events::{Event, TokenChanged};
-use api_types::tokens::{ConfigApiKey, CreateToken, CreatedToken, ListedToken, Token, UpdateToken};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};

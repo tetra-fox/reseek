@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use super::{UserEndpoint, UserPresence};
-use crate::blocking::Block;
-use crate::conversations::ConversationSummary;
+use crate::messaging::conversations::ConversationSummary;
 use crate::state::UserStatistics;
 use crate::transfers::{SortOrder, Transfer, TransferDirection, TransferStateCategory};
+use crate::users::blocking::Block;
 
 /// Where the effective group of a user comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]

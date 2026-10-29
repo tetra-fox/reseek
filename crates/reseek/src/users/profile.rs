@@ -1,7 +1,7 @@
 //! A user as the API shows them: what the directory holds, their group and block, with the
 //! figures from the transfer history, as a summary or a whole profile.
 
-use api_types::blocking::Block;
+use api_types::users::blocking::Block;
 use api_types::users::{
   KnownUser, StoredInfo, StoredInfoSummary, StoredStatistics, SummaryFigures, UserFigures,
   UserProfile, UserSummary,

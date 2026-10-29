@@ -8,7 +8,9 @@ mod support;
 use std::time::{Duration, Instant};
 
 use api_client::Client;
-use api_types::conversations::{ConversationListQuery, MessageDirection, PrivateMessage};
+use api_types::messaging::conversations::{
+  ConversationListQuery, MessageDirection, PrivateMessage,
+};
 use support::soulfind::{self, User};
 use support::{PATIENCE, daemon, events, logged_in, quiet, signed_in, until};
 

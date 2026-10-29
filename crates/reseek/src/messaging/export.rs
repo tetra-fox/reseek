@@ -1,9 +1,9 @@
 //! A conversation or a room's history as a file to save: a JSON array of its messages, or text
 //! with one message per line, a message's own line breaks indented under it.
 
-use api_types::chat::ExportFormat;
-use api_types::conversations::{MessageDirection, PrivateMessage};
-use api_types::rooms::RoomMessage;
+use api_types::messaging::ExportFormat;
+use api_types::messaging::conversations::{MessageDirection, PrivateMessage};
+use api_types::messaging::rooms::RoomMessage;
 use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use chrono::{DateTime, SecondsFormat, Utc};

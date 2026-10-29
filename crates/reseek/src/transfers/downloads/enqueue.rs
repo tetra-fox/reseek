@@ -6,9 +6,9 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use api_types::blocking::BlockScope;
 use api_types::live::LiveFrame;
 use api_types::transfers::{EnqueueDownloadBatchItem, EnqueueFailure, Transfer, TransferDirection};
+use api_types::users::blocking::BlockScope;
 use rusqlite::params;
 use soulseek_client::ClientError;
 use tokio::sync::Semaphore;

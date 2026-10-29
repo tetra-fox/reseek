@@ -1,7 +1,7 @@
 //! Blocked users.
 
 use api_types::auth::Principal;
-use api_types::blocking::{Block, BlockImportResult, BlockRequest, BlockedUsers};
+use api_types::users::blocking::{Block, BlockImportResult, BlockRequest, BlockedUsers};
 use async_trait::async_trait;
 
 use super::not_yet;

@@ -1,13 +1,13 @@
 //! Private conversations and rooms: what is said, joining and leaving, and the stored history.
 
-use api_types::chat::{ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel};
-use api_types::conversations::{
+use api_types::messaging::conversations::{
   Conversation, ConversationListQuery, ConversationMessagesQuery, PrivateMessage,
 };
-use api_types::rooms::{
+use api_types::messaging::rooms::{
   JoinRoom, JoinedRoom, Room, RoomHistory, RoomHistoryList, RoomInfo, RoomMessagesQuery,
   RoomTicker, RoomUser,
 };
+use api_types::messaging::{ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel};
 use async_trait::async_trait;
 use axum::response::Response;
 

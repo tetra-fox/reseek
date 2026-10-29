@@ -1,8 +1,8 @@
 //! The rooms in `messaging.db`: every message said in a room while we were in it, and what each
 //! room keeps besides: its read marker, what it notifies of, and when we joined and left it.
 
-use api_types::chat::{NotifyLevel, RoomUnread};
-use api_types::rooms::{RoomMessage, RoomMessagesQuery, StoredRoom};
+use api_types::messaging::rooms::{RoomMessage, RoomMessagesQuery, StoredRoom};
+use api_types::messaging::{NotifyLevel, RoomUnread};
 use chrono::{DateTime, Utc};
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};

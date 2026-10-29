@@ -1,11 +1,11 @@
 //! The conversations routes: listing conversations, reading one and its messages, sending,
 //! acknowledging, closing, exporting, and a conversation's notifications and draft.
 
-use api_types::chat::{ExportQuery, MessageText, NotifySetting};
-use api_types::conversations::{
+use api_types::messaging::conversations::{
   CloseConversationQuery, Conversation, ConversationDraft, ConversationListQuery,
   ConversationMessagesQuery, ConversationQuery, PrivateMessage,
 };
+use api_types::messaging::{ExportQuery, MessageText, NotifySetting};
 use api_types::users::UsernameQuery;
 use axum::extract::State;
 use axum::http::StatusCode;

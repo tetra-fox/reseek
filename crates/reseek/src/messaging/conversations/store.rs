@@ -3,8 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use api_types::chat::NotifyLevel;
-use api_types::conversations::{
+use api_types::messaging::NotifyLevel;
+use api_types::messaging::conversations::{
   Conversation, ConversationListQuery, ConversationSummary, MessageDirection, PrivateMessage,
 };
 use api_types::users::MessageCounts;

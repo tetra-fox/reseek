@@ -1,6 +1,7 @@
 //! Other users: their presence, statistics, info and address, browsing their shares, the
 //! known-users directory with its profiles, and the bodies and queries of the user calls.
 
+pub mod blocking;
 mod profiles;
 
 pub use profiles::*;

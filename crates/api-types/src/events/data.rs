@@ -8,10 +8,10 @@ use uuid::Uuid;
 use super::EventType;
 use crate::analysis::AudioAnalysis;
 use crate::auth::{Role, Via};
-use crate::blocking::BlockScope;
-use crate::conversations::PrivateMessage;
-use crate::rooms::RoomMessage;
+use crate::messaging::conversations::PrivateMessage;
+use crate::messaging::rooms::RoomMessage;
 use crate::transfers::Transfer;
+use crate::users::blocking::BlockScope;
 
 /// The data of an event that has no fields of its own.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

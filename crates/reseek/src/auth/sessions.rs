@@ -2,8 +2,8 @@
 //! session's id and an HMAC of it, so a forged id is refused before the database is read. A
 //! session ends when it expires, when it goes unused for too long, or when it is revoked.
 
+use api_types::auth::session::Session;
 use api_types::auth::{Principal, Role, Via};
-use api_types::session::Session;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{DateTime, Duration, Utc};

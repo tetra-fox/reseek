@@ -11,7 +11,6 @@ use api_types::analysis::{
   Judgment, SpectrogramLayout, SpectrogramScale,
 };
 use api_types::auth::{Role, Via};
-use api_types::conversations::{MessageDirection, PrivateMessage};
 use api_types::events::{
   DownloadDirectoryComplete, DownloadFailureStage, DownloadFileComplete, DownloadFileFailed, Event,
   EventType, FileAnalysisComplete, LoginFailed, NoFields, PrivateMessageReceived,
@@ -20,7 +19,8 @@ use api_types::events::{
   UnblockReason, UploadFileComplete, UserBlocked, UserUnblocked,
 };
 use api_types::files::FileRoot;
-use api_types::rooms::RoomMessage;
+use api_types::messaging::conversations::{MessageDirection, PrivateMessage};
+use api_types::messaging::rooms::RoomMessage;
 use api_types::transfers::{Transfer, TransferDirection, TransferStates};
 use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;

@@ -3,9 +3,11 @@
 
 use std::time::Duration;
 
-use api_types::blocking::{Block, BlockImportResult, BlockRequest, BlockedQuery, BlockedUsers};
-use api_types::chat::{ExportFormat, ExportQuery};
+use api_types::messaging::{ExportFormat, ExportQuery};
 use api_types::users::UsernameQuery;
+use api_types::users::blocking::{
+  Block, BlockImportResult, BlockRequest, BlockedQuery, BlockedUsers,
+};
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
@@ -80,7 +82,7 @@ async fn block(
   if cancel_transfers {
     if block
       .scopes
-      .contains(&api_types::blocking::BlockScope::Uploads)
+      .contains(&api_types::users::blocking::BlockScope::Uploads)
     {
       app.uploads.blocked(&username);
     }

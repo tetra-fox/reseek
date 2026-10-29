@@ -2,8 +2,8 @@
 //! room we are in or one we left, the rooms with stored messages, and deleting and exporting a
 //! room's history.
 
-use api_types::chat::ExportFormat;
-use api_types::rooms::{RoomHistory, RoomHistoryList, RoomMessagesQuery};
+use api_types::messaging::ExportFormat;
+use api_types::messaging::rooms::{RoomHistory, RoomHistoryList, RoomMessagesQuery};
 use axum::response::Response;
 use chrono::Utc;
 use tracing::debug;
@@ -138,7 +138,7 @@ impl Messaging {
 
 #[cfg(test)]
 mod tests {
-  use api_types::rooms::{RoomHistory, RoomMessagesQuery};
+  use api_types::messaging::rooms::{RoomHistory, RoomMessagesQuery};
   use rusqlite::params;
   use soulseek_proto::server::RoomData;
 

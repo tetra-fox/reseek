@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
-use api_types::blocking::{BlacklistRules, Block, BlockScope, BlockSource, BlocklistFile};
+use api_types::users::blocking::{BlacklistRules, Block, BlockScope, BlockSource, BlocklistFile};
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use rusqlite::{Connection, OptionalExtension, Row, params};

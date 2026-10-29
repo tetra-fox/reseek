@@ -1,5 +1,9 @@
-//! What private conversations and rooms share: message bodies, notification levels, unread
-//! counts, the message search, exports, and the server's own messages.
+//! Chat, in private conversations and in rooms. This module holds what the two share: message
+//! bodies, notification levels, unread counts, the message search, exports, and the server's
+//! own messages.
+
+pub mod conversations;
+pub mod rooms;
 
 use std::collections::BTreeMap;
 

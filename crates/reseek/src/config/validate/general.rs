@@ -100,7 +100,7 @@ pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
   }
   check_retention(&options.retention, report);
   for scope in &options.blocking.default_scopes {
-    if let Err(message) = scope.parse::<api_types::blocking::BlockScope>() {
+    if let Err(message) = scope.parse::<api_types::users::blocking::BlockScope>() {
       report.add("blocking.default_scopes", message);
     }
   }

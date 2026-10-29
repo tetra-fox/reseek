@@ -1,7 +1,9 @@
 //! The user calls: what the network says about a user, the users directory, and blocking.
 
-use api_types::blocking::{Block, BlockImportResult, BlockRequest, BlockedQuery, BlockedUsers};
-use api_types::chat::{ExportFormat, ExportQuery};
+use api_types::messaging::{ExportFormat, ExportQuery};
+use api_types::users::blocking::{
+  Block, BlockImportResult, BlockRequest, BlockedQuery, BlockedUsers,
+};
 use api_types::users::{
   BrowseProgress, BrowseResponse, CachedUser, DeleteUserQuery, Directory, DirectoryRequest,
   GroupAssignment, ProfileQuery, StatisticsSnapshot, UserEndpoint, UserInfo, UserList,

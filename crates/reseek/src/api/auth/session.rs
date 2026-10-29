@@ -1,11 +1,11 @@
 //! The session routes: signing in with a local account, who the caller is, the ways to sign
 //! in, signing out, and the list of browser sessions with revoking them.
 
-use api_types::events::{Event, LoginFailed, SessionRevokeReason, SessionRevoked};
-use api_types::session::{
+use api_types::auth::session::{
   CurrentPrincipal, CurrentSession, LocalProvider, LoginRequest, LogoutResponse, OidcProvider,
   Providers, ProxyProvider, Session,
 };
+use api_types::events::{Event, LoginFailed, SessionRevokeReason, SessionRevoked};
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Path, State};
 use axum::http::{StatusCode, header};

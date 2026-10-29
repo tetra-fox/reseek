@@ -1,8 +1,8 @@
 //! The room history routes: every room with stored messages, the rooms we left included,
 //! reading and exporting one room's history, and deleting it.
 
-use api_types::chat::ExportQuery;
-use api_types::rooms::{
+use api_types::messaging::ExportQuery;
+use api_types::messaging::rooms::{
   RoomHistory, RoomHistoryList, RoomHistoryListQuery, RoomMessage, RoomMessagesQuery, RoomNameQuery,
 };
 use axum::extract::State;

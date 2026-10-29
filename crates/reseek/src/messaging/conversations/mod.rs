@@ -5,14 +5,14 @@
 
 pub mod store;
 
-use api_types::blocking::BlockScope;
-use api_types::chat::{ExportFormat, NotifyLevel, ServerMessage};
-use api_types::conversations::{
+use api_types::events::{Event, PrivateMessageReceived};
+use api_types::live::LiveFrame;
+use api_types::messaging::conversations::{
   Conversation, ConversationListQuery, ConversationMessage, ConversationMessagesQuery,
   ConversationUpdate, PrivateMessage,
 };
-use api_types::events::{Event, PrivateMessageReceived};
-use api_types::live::LiveFrame;
+use api_types::messaging::{ExportFormat, NotifyLevel, ServerMessage};
+use api_types::users::blocking::BlockScope;
 use axum::response::Response;
 use chrono::{DateTime, Utc};
 use soulseek_client::ClientError;

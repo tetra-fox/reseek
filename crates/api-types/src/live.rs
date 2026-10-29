@@ -8,14 +8,14 @@ use utoipa::{IntoParams, ToSchema};
 use crate::activity::ActivityEntry;
 use crate::analysis::AnalysisCompleted;
 use crate::auth::PrincipalSummary;
-use crate::chat::{ChatUnread, ServerMessage};
-use crate::conversations::{Conversation, ConversationMessage, ConversationUpdate};
 use crate::events::EventRecord;
 use crate::logs::LogRecord;
-use crate::options::OptionsDocument;
-use crate::rooms::{
+use crate::messaging::conversations::{Conversation, ConversationMessage, ConversationUpdate};
+use crate::messaging::rooms::{
   HistoryGap, JoinedRoom, Room, RoomMessageReceived, RoomUserJoined, RoomUserLeft, RoomUserStatus,
 };
+use crate::messaging::{ChatUnread, ServerMessage};
+use crate::options::OptionsDocument;
 use crate::search::{Search, SearchResponseReceived};
 use crate::state::{State, VersionInfo};
 use crate::telemetry::TransferMetrics;

@@ -7,7 +7,7 @@ mod conversations;
 mod history;
 mod rooms;
 
-use api_types::chat::{MessageSearchQuery, MessageSearchResults};
+use api_types::messaging::{MessageSearchQuery, MessageSearchResults};
 use axum::extract::State;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;

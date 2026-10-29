@@ -12,7 +12,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock, Weak};
 
 use api_types::activity::ActivityKind;
-use api_types::blocking::BlockScope;
+use api_types::users::blocking::BlockScope;
 use cascade::Watcher;
 use soulseek_client::{ClientError, LogLimiter, Resolvers};
 use soulseek_proto::RemoteFilename;

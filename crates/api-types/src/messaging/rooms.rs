@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
-use crate::chat::NotifyLevel;
+use crate::messaging::NotifyLevel;
 use crate::state::UserStatistics;
 use crate::users::UserPresence;
 

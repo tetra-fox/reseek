@@ -34,9 +34,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use api_types::blocking::{Block, BlockScope};
 use api_types::events::{Event, UnblockReason, UserUnblocked};
 use api_types::live::LiveFrame;
+use api_types::users::blocking::{Block, BlockScope};
 use api_types::users::{KnownUser, UserEndpoint, UserRemoved, UserSummary};
 use cascade::Watcher;
 use chrono::Utc;

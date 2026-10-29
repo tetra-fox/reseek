@@ -22,7 +22,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
-use api_types::chat::NotifyLevel;
+use api_types::messaging::NotifyLevel;
 use cascade::Watcher;
 use soulseek_client::{Client, ClientState, Event};
 use tokio::sync::mpsc;

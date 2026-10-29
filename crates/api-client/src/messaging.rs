@@ -1,16 +1,16 @@
 //! The messaging calls: conversations, rooms, their history and the message search.
 
-use api_types::chat::{
-  ExportFormat, ExportQuery, MessageSearchQuery, MessageSearchResults, MessageText, NotifyLevel,
-  NotifySetting,
-};
-use api_types::conversations::{
+use api_types::messaging::conversations::{
   CloseConversationQuery, Conversation, ConversationDraft, ConversationListQuery,
   ConversationMessagesQuery, ConversationQuery, PrivateMessage,
 };
-use api_types::rooms::{
+use api_types::messaging::rooms::{
   JoinRoom, JoinedRoom, ReadMarker, Room, RoomHistory, RoomHistoryList, RoomHistoryListQuery,
   RoomInfo, RoomMemberName, RoomMessagesQuery, RoomTicker, RoomUser, TickerText,
+};
+use api_types::messaging::{
+  ExportFormat, ExportQuery, MessageSearchQuery, MessageSearchResults, MessageText, NotifyLevel,
+  NotifySetting,
 };
 use bytes::Bytes;
 use reqwest::StatusCode;

@@ -2,10 +2,10 @@
 //! from what it stores. The calls that ask the network about a user are the users service's.
 
 use api_types::auth::Principal;
-use api_types::blocking::{
+use api_types::events::{Event, UnblockReason, UserBlocked, UserUnblocked};
+use api_types::users::blocking::{
   Block, BlockImportResult, BlockRequest, BlockScope, BlockSource, BlockedUsers,
 };
-use api_types::events::{Event, UnblockReason, UserBlocked, UserUnblocked};
 use api_types::users::{UserProfile, UserSummary, UserTransfers, UserTransfersQuery};
 use async_trait::async_trait;
 use axum::http::{HeaderValue, header};

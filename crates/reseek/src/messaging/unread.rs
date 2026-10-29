@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use api_types::chat::{ChatUnread, RoomUnread};
 use api_types::live::LiveFrame;
+use api_types::messaging::{ChatUnread, RoomUnread};
 use tokio::sync::Notify;
 use tracing::warn;
 
