@@ -1,4 +1,4 @@
-import type { Crumb } from "./nav";
+import type { Crumb } from "#lib/nav.js";
 
 /** The steps the screen on show adds under its own in the header's breadcrumb */
 class Trail {

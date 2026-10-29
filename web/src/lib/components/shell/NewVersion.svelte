@@ -4,7 +4,7 @@
   import { app } from "#lib/app.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
-  import { RELEASES } from "#lib/project.js";
+  import { RELEASES } from "#lib/shell/project.js";
 
   const version = $derived(app.state?.version);
   let open = $state(false);

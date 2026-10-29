@@ -15,8 +15,8 @@
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
-  import { useCrumbs } from "#lib/crumbs.svelte.js";
   import { chatHref, href, roomHref } from "#lib/nav.js";
+  import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
 
   import ChatList from "./ChatList.svelte";
   import JoinRoomDialog from "./JoinRoomDialog.svelte";

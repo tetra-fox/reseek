@@ -10,7 +10,6 @@
   import Overview from "#lib/components/settings/Overview.svelte";
   import RawFile from "#lib/components/settings/RawFile.svelte";
   import Section from "#lib/components/settings/Section.svelte";
-  import { content } from "#lib/components/shell/content.svelte.js";
   import Crumbs from "#lib/components/shell/Crumbs.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
@@ -26,6 +25,7 @@
   import { href, route } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
+  import { content } from "#lib/shell/content.svelte.js";
   import { motionFast } from "#lib/ui/motion.js";
 
   const view = new Loader(() => call(() => api.GET("/api/v0/options/view")));

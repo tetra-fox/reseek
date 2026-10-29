@@ -7,19 +7,17 @@
   import { activityPrefs } from "#lib/activity/activity.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
-  import ConfirmHost from "#lib/components/ConfirmHost.svelte";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
-  import PlayerBar from "#lib/components/player/PlayerBar.svelte";
   import ActivityDock from "#lib/components/shell/ActivityDock.svelte";
   import CommandPalette from "#lib/components/shell/CommandPalette.svelte";
-  import { content } from "#lib/components/shell/content.svelte.js";
+  import ConfirmHost from "#lib/components/shell/ConfirmHost.svelte";
   import Footer from "#lib/components/shell/Footer.svelte";
   import Header from "#lib/components/shell/Header.svelte";
   import LostBanner from "#lib/components/shell/LostBanner.svelte";
+  import PlayerBar from "#lib/components/shell/PlayerBar.svelte";
   import Sidebar from "#lib/components/shell/Sidebar.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import BlockDialog from "#lib/components/users/BlockDialog.svelte";
-  import { trail } from "#lib/crumbs.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import {
     baseCrumbs,
@@ -31,6 +29,8 @@
     titleOf
   } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
+  import { content } from "#lib/shell/content.svelte.js";
+  import { trail } from "#lib/shell/crumbs.svelte.js";
   import { togglesActivity } from "#lib/ui/keys.js";
   // listens for transfer frames from the start, so its notifications follow every screen
   import "#lib/transfers/notices.svelte.js";

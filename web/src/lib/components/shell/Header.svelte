@@ -10,15 +10,15 @@
   import { app } from "#lib/app.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { trail } from "#lib/crumbs.svelte.js";
   import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
   import { listText } from "#lib/format.js";
   import { baseCrumbs, href, route } from "#lib/nav.js";
+  import { trail } from "#lib/shell/crumbs.svelte.js";
+  import { palette } from "#lib/shell/palette.svelte.js";
+  import { sidebar } from "#lib/shell/sidebar.svelte.js";
   import { shortcutAria, shortcutText } from "#lib/ui/keys.js";
 
   import NewVersion from "./NewVersion.svelte";
-  import { palette } from "./palette.svelte";
-  import { sidebar } from "./sidebar.svelte";
 
   const crumbs = $derived([...baseCrumbs(route(page.url).path), ...trail.page]);
   const copier = new CopyButton();

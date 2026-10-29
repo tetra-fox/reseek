@@ -18,14 +18,13 @@
     systemTabs,
     userHref
   } from "#lib/nav.js";
-  import { paletteScore, paletteValue } from "#lib/palette.js";
   import { call } from "#lib/request.js";
   import { recent, remember } from "#lib/search/recent.svelte.js";
   import { searches } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
+  import { paletteScore, paletteValue } from "#lib/shell/palette.js";
+  import { palette } from "#lib/shell/palette.svelte.js";
   import { opensPalette, shortcutText } from "#lib/ui/keys.js";
-
-  import { palette } from "./palette.svelte";
 
   /** One thing the palette can do: go to a screen, a user, a room, a setting, a search */
   type PaletteEntry = {

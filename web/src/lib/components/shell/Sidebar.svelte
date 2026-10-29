@@ -14,13 +14,13 @@
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { href, navCurrent, navItems, type NavItem, route, systemItem } from "#lib/nav.js";
+  import { sidebar } from "#lib/shell/sidebar.svelte.js";
   import { unseen } from "#lib/transfers/unseen.svelte.js";
   import { crossFade } from "#lib/ui/motion.js";
 
   import AccountMenu from "./AccountMenu.svelte";
   import ConnectButton from "./ConnectButton.svelte";
   import Logo from "./Logo.svelte";
-  import { sidebar } from "./sidebar.svelte";
 
   // a link in the phone sheet closes it
   afterNavigate(() => (sidebar.sheetOpen = false));

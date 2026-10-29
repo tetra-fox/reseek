@@ -21,13 +21,13 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Username from "#lib/components/users/Username.svelte";
-  import { useCrumbs } from "#lib/crumbs.svelte.js";
   import { undoable } from "#lib/feedback/undo.js";
   import { formatBytes, plural } from "#lib/format.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
   import { FILTER_PLACEHOLDER } from "#lib/search/filters.js";
   import { session } from "#lib/session.svelte.js";
+  import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import { keepsKey, layerOpen, withModifier } from "#lib/ui/keys.js";
 
   import DirectoryTree from "./DirectoryTree.svelte";

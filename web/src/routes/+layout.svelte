@@ -3,7 +3,7 @@
   import { ModeWatcher } from "mode-watcher";
 
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
-  import Toaster from "#lib/components/Toaster.svelte";
+  import Toaster from "#lib/components/shell/Toaster.svelte";
   import TooltipHost from "#lib/components/ui/TooltipHost.svelte";
   import { SCREEN_FAILED } from "#lib/wording.js";
 
