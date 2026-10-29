@@ -1,6 +1,8 @@
 //! Message connections to other users: the one we open, which dials the user and asks the server
 //! to have the user dial us at the same time; one a user opens to us directly, which replaces
-//! whatever we had; and one we open because a user asked the server to have us connect.
+//! whatever we had; and one we open because a user asked the server to have us connect. A
+//! replaced connection is not closed: what is queued on it is still written and what the user
+//! sends on it is still read and answered, until it goes idle or the user closes it.
 
 use std::net::SocketAddr;
 
@@ -71,11 +73,12 @@ impl Client {
         () = cancel.cancelled() => return Err(ClientError::Cancelled),
         settled = entry.settled() => settled?,
       };
-      if conn.handle().is_open() {
+      let current = PeerConnections::is_current(&self.peers().cache(), username, id);
+      if current && conn.handle().is_open() {
         return Ok(conn);
       }
-      // replaced, or closed before its own watcher removed the entry; the next look finds what
-      // is current
+      // replaced while we waited, or closed before its own watcher removed the entry; the next
+      // look finds what is current
       self.peers().remove_if_current(username, id);
     }
     Err(ClientError::connection(
@@ -178,7 +181,8 @@ impl Client {
   }
 
   /// A peer connected to us directly for messages. Its connection replaces whatever we had for
-  /// that user, since the peer considers this one current; the one it replaces is closed.
+  /// that user, since the peer considers this one current, and takes our writes from now on;
+  /// the one it replaces stays open until it goes idle.
   pub(crate) fn add_or_update_message_connection(
     &self,
     username: &str,
@@ -206,7 +210,7 @@ impl Client {
         )
       })?;
     let peers = self.peers();
-    {
+    let replaced = {
       let mut cache = peers.cache();
       if !cache.contains_key(username) {
         peers.make_room(
@@ -217,14 +221,20 @@ impl Client {
       let entry = peers.settled_entry(conn.clone());
       let replaced = cache.insert(username.to_owned(), entry.clone());
       self.watch_message_connection(username, entry.id, &conn);
-      // an attempt still connecting finds it was replaced when it settles, and closes its own
-      if let Some(old) = replaced.as_ref().and_then(Entry::connection) {
-        old.handle().disconnect("Superseded", None);
-      }
-    }
+      replaced
+    };
     peers.cancel_inbound_indirect(username);
     self.start_peer_reading(&conn);
-    tracing::debug!(username, %remote, "inbound message connection");
+    // an attempt still connecting finds it was replaced when it settles
+    match replaced.as_ref().and_then(Entry::connection) {
+      Some(old) => tracing::debug!(
+        username,
+        %remote,
+        replaced = %old.handle().remote(),
+        "message connection replaced"
+      ),
+      None => tracing::debug!(username, %remote, "inbound message connection"),
+    }
     Ok(())
   }
 
@@ -294,7 +304,8 @@ impl Client {
   }
 
   /// Settles the attempt behind entry `id` with `result`. A connection whose entry was replaced
-  /// meanwhile is closed; a failed attempt leaves the cache unless something replaced it.
+  /// meanwhile is left to go idle like any replaced one; a failed attempt leaves the cache unless
+  /// something replaced it.
   fn settle(
     &self,
     username: &str,
@@ -307,9 +318,7 @@ impl Client {
     let current = PeerConnections::is_current(&cache, username, id);
     match &result {
       Ok(conn) if current => self.watch_message_connection(username, id, conn),
-      Ok(conn) => {
-        conn.handle().disconnect("Superseded", None);
-      }
+      Ok(_) => tracing::debug!("message connection made after another replaced it"),
       Err(_) if current => {
         cache.remove(username);
       }

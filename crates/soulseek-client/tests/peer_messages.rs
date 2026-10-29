@@ -495,11 +495,20 @@ async fn a_frame_longer_than_the_limit_closes_the_connection() {
 
 #[tokio::test]
 async fn a_replaced_connection_closing_never_takes_its_replacement_with_it() {
+  let logs = Logs::capture();
   let session = session().await;
   let mut first = bob(&session).await;
   let mut second = bob(&session).await;
-  // the client closes the connection the second one replaced
-  first.closed().await;
+  // the replaced connection is still read and answered on until bob closes it
+  first.send(&PeerMessage::InfoRequest.encode()).await;
+  assert!(matches!(
+    first.read_peer().await,
+    PeerMessage::InfoResponse(_)
+  ));
+  drop(first);
+  logs
+    .wait_for(&["connection closed", "Remote connection closed"])
+    .await;
   // the replacement still answers, and it is the one the client hands out
   second.send(&PeerMessage::InfoRequest.encode()).await;
   assert!(matches!(
