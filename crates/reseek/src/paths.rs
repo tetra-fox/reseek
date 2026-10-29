@@ -3,23 +3,27 @@
 //!
 //! The defaults come from the platform's conventional places (the `directories` crate), or from
 //! one tree under the application directory when `--app-dir` is given. A `paths.*` or
-//! `directories.*` option overrides either.
+//! `directories.*` option overrides either. Downloads go under the data directory, except on
+//! Windows, where finished ones go to the user's Downloads folder.
 
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 
-use directories::ProjectDirs;
+use directories::{ProjectDirs, UserDirs};
 
 use crate::config::Options;
 use crate::db::Location;
+use crate::safety::Os;
 
-/// The four base directories before the options are read.
+/// The four base directories and the downloads folder before the options are read.
 #[derive(Clone, Debug)]
 pub struct Defaults {
   config: Option<PathBuf>,
   data: Option<PathBuf>,
   cache: Option<PathBuf>,
   logs: Option<PathBuf>,
+  /// where finished downloads go when not under the data directory
+  downloads: Option<PathBuf>,
 }
 
 /// Every place reseek reads or writes, resolved.
@@ -61,8 +65,12 @@ impl Defaults {
         data: Some(app.join("data")),
         cache: Some(app.join("cache")),
         logs: Some(app.join("logs")),
+        downloads: None,
       };
     }
+    let downloads = user_downloads(Os::CURRENT, || {
+      UserDirs::new().and_then(|dirs| dirs.download_dir().map(Path::to_path_buf))
+    });
     match ProjectDirs::from("", "", "reseek") {
       Some(dirs) => Self {
         config: Some(dirs.config_dir().to_path_buf()),
@@ -75,12 +83,14 @@ impl Defaults {
             .unwrap_or_else(|| dirs.data_local_dir())
             .join("logs"),
         ),
+        downloads,
       },
       None => Self {
         config: None,
         data: None,
         cache: None,
         logs: None,
+        downloads,
       },
     }
   }
@@ -88,6 +98,16 @@ impl Defaults {
   /// The default data directory, `None` when there is no home directory to put it in.
   pub fn data(&self) -> Option<&Path> {
     self.data.as_deref()
+  }
+
+  /// The default downloads and incomplete directories with the data directory `data`. Downloads
+  /// in progress always stay with the data.
+  pub fn downloads(&self, data: &Path) -> (PathBuf, PathBuf) {
+    let downloads = self
+      .downloads
+      .clone()
+      .unwrap_or_else(|| data.join("downloads"));
+    (downloads, data.join("incomplete"))
   }
 
   /// The configuration directory: `configured` (from `RESEEK_CONFIG_DIR` or `--config-dir`)
@@ -110,7 +130,7 @@ impl Defaults {
     let data = pick(&options.paths.data, &self.data, "paths.data")?;
     let cache = pick(&options.paths.cache, &self.cache, "paths.cache")?;
     let logs = pick(&options.paths.logs, &self.logs, "paths.logs")?;
-    let (downloads, incomplete) = default_downloads(&data);
+    let (downloads, incomplete) = self.downloads(&data);
     let dirs = &options.directories;
     Ok(Paths {
       scripts: config.join("scripts"),
@@ -127,9 +147,14 @@ impl Defaults {
   }
 }
 
-/// The default downloads and incomplete directories under the data directory `data`.
-pub fn default_downloads(data: &Path) -> (PathBuf, PathBuf) {
-  (data.join("downloads"), data.join("incomplete"))
+/// The user's Downloads folder on `os`, from `find`, when finished downloads go there: on
+/// Windows, where reseek runs as the user. Elsewhere it usually runs as a service, whose
+/// downloads stay with its data.
+fn user_downloads(os: Os, find: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
+  match os {
+    Os::Windows => find(),
+    Os::Unix => None,
+  }
 }
 
 fn no_home(key: &str) -> PathError {
@@ -273,6 +298,35 @@ mod tests {
     assert_eq!(paths.incomplete, Path::new("/scratch"));
     assert!(!paths.incomplete_is_default);
     assert_eq!(paths.lock(), Path::new("/var/lib/reseek/reseek.lock"));
+  }
+
+  #[test]
+  fn finished_downloads_go_to_the_downloads_folder_on_windows_only() {
+    let folder = PathBuf::from(r"C:\Users\alice\Downloads");
+    assert_eq!(
+      user_downloads(Os::Windows, || Some(folder.clone())),
+      Some(folder.clone())
+    );
+    assert_eq!(user_downloads(Os::Windows, || None), None);
+    assert_eq!(
+      user_downloads(Os::Unix, || panic!("not looked up off Windows")),
+      None
+    );
+
+    let defaults = Defaults {
+      downloads: Some(folder.clone()),
+      ..Defaults::new(Some(Path::new("/app")))
+    };
+    let mut options = Options::default();
+    let paths = defaults.resolve(&options).unwrap();
+    assert_eq!(paths.downloads, folder);
+    assert!(paths.downloads_is_default);
+    assert_eq!(paths.incomplete, Path::new("/app/data/incomplete"));
+    options.directories.downloads = Some("/music".into());
+    assert_eq!(
+      defaults.resolve(&options).unwrap().downloads,
+      Path::new("/music")
+    );
   }
 
   #[test]

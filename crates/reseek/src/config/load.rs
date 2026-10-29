@@ -9,7 +9,7 @@ use cascade::{Layers, Overrides, Schema};
 
 use super::Options;
 use super::validate::{Context, validate};
-use crate::paths::{Defaults, default_downloads};
+use crate::paths::Defaults;
 
 /// The variable that marks the configuration files as managed by a tool, such as `nixos`.
 pub const MANAGED_BY: &str = "RESEEK_CONFIG_MANAGED_BY";
@@ -129,7 +129,7 @@ pub fn layers(
         .clone()
         .or_else(|| defaults.data().map(Path::to_path_buf))
         .unwrap_or_default();
-      let (default_downloads, default_incomplete) = default_downloads(&data);
+      let (default_downloads, default_incomplete) = defaults.downloads(&data);
       let started_case_sensitive = *started.get_or_init(|| options.flags.case_sensitive_regex);
       validate(
         options,
