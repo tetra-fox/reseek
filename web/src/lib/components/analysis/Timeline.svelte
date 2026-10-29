@@ -123,6 +123,23 @@
     | { kind: "cursor" }
     | { kind: "pan"; x: number; start: typeof scope.view };
   let press: Press | null = null;
+  /**
+   * The mouse cursor over the canvas: arrows both ways on the cursor line, which drags; a hand
+   * over a zoomed plot, which pans; the arrow elsewhere
+   */
+  let pointerStyle = $state("default");
+  const nearCursor = (x: number) =>
+    Math.abs(
+      x - (stage.spectrogram.x + acrossOf(scope.view, scope.cursor) * stage.spectrogram.width)
+    ) <=
+    0.5 * stage.rem;
+  const styleAt = (p: { x: number; y: number }) => {
+    if (press?.kind === "cursor") return "ew-resize";
+    if (press?.kind === "pan") return "grabbing";
+    if (!plots(p.x, p.y)) return "default";
+    if (nearCursor(p.x)) return "ew-resize";
+    return showsAll(scope.view, scope.duration) ? "default" : "grab";
+  };
   /** the pointers down, for a pinch */
   const pointers = new Map<number, { x: number; y: number }>();
   let pinch: { distance: number; span: number } | null = null;
@@ -151,19 +168,18 @@
       return;
     }
     if (!plots(p.x, p.y)) return;
-    const cursorX =
-      stage.spectrogram.x + acrossOf(scope.view, scope.cursor) * stage.spectrogram.width;
     // the line is easy to grab: half a rem either side of it
-    press =
-      Math.abs(p.x - cursorX) <= 0.5 * stage.rem
-        ? { kind: "cursor" }
-        : { kind: "pending", x: p.x, y: p.y, start: scope.view };
+    press = nearCursor(p.x)
+      ? { kind: "cursor" }
+      : { kind: "pending", x: p.x, y: p.y, start: scope.view };
     scope.dragging = press.kind === "cursor";
+    pointerStyle = styleAt(p);
   };
 
   const move = (e: PointerEvent) => {
     const p = at(e);
     hover = plots(p.x, p.y) ? p : null;
+    pointerStyle = styleAt(p);
     if (!pointers.has(e.pointerId)) return;
     pointers.set(e.pointerId, p);
     if (pinch && pointers.size === 2) {
@@ -203,6 +219,7 @@
     }
     press = null;
     scope.dragging = false;
+    pointerStyle = styleAt(p);
   };
 
   const wheel = (e: WheelEvent) => {
@@ -257,6 +274,7 @@
     bind:this={canvas}
     class="block w-full touch-pan-y rounded-control bg-plot focus-visible:outline-2 focus-visible:outline-accent"
     style:height={`${stage.height / dpr}px`}
+    style:cursor={pointerStyle}
     width={stage.width}
     height={stage.height}
     tabindex="0"
