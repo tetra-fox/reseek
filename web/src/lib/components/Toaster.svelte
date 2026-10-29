@@ -6,7 +6,7 @@
 
   import Button from "#lib/components/ui/Button.svelte";
   import { motionFast } from "#lib/motion.js";
-  import { dismiss, toasts } from "#lib/toast.svelte.js";
+  import { dismiss, hold, toasts } from "#lib/toast.svelte.js";
 
   const motion = () => ({ duration: motionFast(), easing: cubicOut });
 </script>
@@ -22,6 +22,13 @@
         t.kind === "error" && "border-danger/50 bg-danger-soft text-danger-soft-fg"
       ]}
       role={t.kind === "error" ? "alert" : "status"}
+      onpointerenter={() => hold(t.id, "pointer", true)}
+      onpointerleave={() => hold(t.id, "pointer", false)}
+      onfocusin={() => hold(t.id, "focus", true)}
+      onfocusout={(e) => {
+        // focus moving between the toast's own buttons keeps it held
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hold(t.id, "focus", false);
+      }}
       animate:flip={motion()}
       transition:fly={{ ...motion(), y: 8 }}>
       <span class="flex-1 wrap-anywhere">{t.text}</span>
@@ -31,8 +38,8 @@
           size="sm"
           variant="outline"
           onclick={() => {
-            dismiss(t.id);
             action.run();
+            dismiss(t.id);
           }}>{action.label}</Button>
       {/if}
       <Button variant="ghost" size="icon-sm" onclick={() => dismiss(t.id)} aria-label="Dismiss">
