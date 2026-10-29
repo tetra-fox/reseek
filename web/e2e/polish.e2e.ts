@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-import { fakeBrowse, fakeChat, fakeSearch, manyDownloads, SEARCH_ID } from "./fakes";
-import { login } from "./login";
+import { fakeBrowse, fakeChat, fakeSearch, manyDownloads, SEARCH_ID } from "./support/fakes";
+import { login } from "./support/login";
 
 test("shows search results as cards and as dense rows walked by key", async ({ page }) => {
   await fakeSearch(page);

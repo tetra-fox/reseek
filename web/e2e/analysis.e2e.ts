@@ -1,9 +1,9 @@
 import { expect, type Locator, test } from "@playwright/test";
 
 import { newId } from "../src/lib/ids";
-import { ANALYZED_DOWNLOAD, fakeAnalysis, fakeDownloads } from "./fakes";
-import { login } from "./login";
-import { wav } from "./pictures";
+import { ANALYZED_DOWNLOAD, fakeAnalysis, fakeDownloads } from "./support/fakes";
+import { login } from "./support/login";
+import { wav } from "./support/pictures";
 
 /** A plot's place in the canvas, in CSS pixels, as the canvas writes it */
 const rect = async (plot: Locator, which = "data-plot") => {

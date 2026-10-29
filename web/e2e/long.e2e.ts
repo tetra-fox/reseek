@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
-import { longRoom, manyDownloads, manyResults, SEARCH_ID, wideBrowse } from "./fakes";
-import { login } from "./login";
+import { longRoom, manyDownloads, manyResults, SEARCH_ID, wideBrowse } from "./support/fakes";
+import { login } from "./support/login";
 
 /** Scrolls `box` to its end a step at a time, as a held key or a fling would */
 const toEnd = (box: Locator) =>

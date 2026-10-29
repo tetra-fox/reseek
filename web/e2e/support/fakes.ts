@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { newId } from "../src/lib/ids";
+import { newId } from "../../src/lib/ids";
 import { layout, spectra, spectrogram, waveform } from "./pictures";
 
 /** A time on the evening the fakes take place */

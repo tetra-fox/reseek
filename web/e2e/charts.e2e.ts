@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { fakeReports } from "./fakes";
-import { login } from "./login";
+import { fakeReports } from "./support/fakes";
+import { login } from "./support/login";
 
 /** The labels of a chart that spill out of its box, its axes' included, by text and how far */
 const spills = (page: Page, name: string) =>

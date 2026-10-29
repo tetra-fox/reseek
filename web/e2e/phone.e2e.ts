@@ -11,8 +11,8 @@ import {
   fakeReports,
   fakeSearch,
   SEARCH_ID
-} from "./fakes";
-import { login, refuseCopy, textSize } from "./login";
+} from "./support/fakes";
+import { login, refuseCopy, textSize } from "./support/login";
 
 // a phone's width: no screen may be wider than it, so nothing runs off its right edge
 test.use({ viewport: { width: 390, height: 844 } });

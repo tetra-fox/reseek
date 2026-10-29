@@ -49,4 +49,4 @@ no_version_check = true
 no_share_scan = $([ -n "$connect" ] && echo false || echo true)
 $connect
 TOML
-"$(dirname "$0")/../../target/debug/reseek" --app-dir "$dir" --no-logo
+"$(dirname "$0")/../../../target/debug/reseek" --app-dir "$dir" --no-logo

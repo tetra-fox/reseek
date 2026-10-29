@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { login } from "./login";
+import { login } from "./support/login";
 
 const counts = { succeeded: 2, failed: 0, active: 0, queued: 0, bytes: 0 };
 const alice = {

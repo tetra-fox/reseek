@@ -1,7 +1,7 @@
 import { expect, type Locator, test } from "@playwright/test";
 
-import { fakeSearch, file, SEARCH_ID, transfer } from "./fakes";
-import { login, textSize } from "./login";
+import { fakeSearch, file, SEARCH_ID, transfer } from "./support/fakes";
+import { login, textSize } from "./support/login";
 
 const ALBUM = "@@a\\Music\\Artist\\Album";
 /** forty tracks on each of an album's two discs, a top folder with two subfolders */

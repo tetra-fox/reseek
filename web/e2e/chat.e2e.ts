@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-import { fakeChat, frame, helloFrame } from "./fakes";
-import { login, refuseCopy } from "./login";
+import { fakeChat, frame, helloFrame } from "./support/fakes";
+import { login, refuseCopy } from "./support/login";
 
 test("a room reads like a chat: names, actions, links and the wall", async ({ page }) => {
   await fakeChat(page);

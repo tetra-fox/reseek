@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
-import { login } from "./login";
+import { login } from "./support/login";
 
 /**
  * Answers the chat calls with two conversations, `alpha` with `messages` unread ones, a page at

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { login } from "./login";
+import { login } from "./support/login";
 
 test("opens the dashboard, chat, rooms, a profile and your profile", async ({ page }) => {
   await login(page, "/dashboard");

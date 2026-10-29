@@ -54,13 +54,13 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "./e2e/serve.sh",
+      command: "./e2e/support/serve.sh",
       url: `http://127.0.0.1:${port}/reseek/`,
       reuseExistingServer: false,
       env: { SMOKE_PORT: String(port) }
     },
     {
-      command: "./e2e/serve.sh",
+      command: "./e2e/support/serve.sh",
       url: `http://127.0.0.1:${networkPort}/reseek/`,
       reuseExistingServer: false,
       env: { SMOKE_PORT: String(networkPort), SMOKE_NETWORK: "1" }

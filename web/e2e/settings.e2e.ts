@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { login } from "./login";
+import { login } from "./support/login";
 
 test("reads an option with its source and saves a change to the file", async ({ page }) => {
   await login(page, "/system/settings");

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { login } from "./login";
+import { login } from "./support/login";
 
 const summary = (count: number) => ({
   count,

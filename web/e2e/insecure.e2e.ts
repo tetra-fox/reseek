@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { fakeChat, frame, helloFrame } from "./fakes";
-import { login } from "./login";
+import { fakeChat, frame, helloFrame } from "./support/fakes";
+import { login } from "./support/login";
 
 // these run on a hostname over plain http that is not localhost, as a LAN address is, where the
 // page has no secure context and the browser leaves out crypto.randomUUID, navigator.clipboard

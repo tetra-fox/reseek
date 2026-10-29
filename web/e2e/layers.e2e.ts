@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { fakeChat, fakeDownloads } from "./fakes";
-import { login } from "./login";
+import { fakeChat, fakeDownloads } from "./support/fakes";
+import { login } from "./support/login";
 
 /** Whether the header leaves `box` whole: it ends above it, and the box is what shows at its top */
 const clearOfHeader = (page: Page, selector: string) =>

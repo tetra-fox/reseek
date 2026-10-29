@@ -1,7 +1,7 @@
 import { expect, type Locator, test } from "@playwright/test";
 
-import { fakeFiles, fakeSearch, file, SEARCH_ID, transfer } from "./fakes";
-import { login, textSize } from "./login";
+import { fakeFiles, fakeSearch, file, SEARCH_ID, transfer } from "./support/fakes";
+import { login, textSize } from "./support/login";
 
 /** How far apart two names start across the page, in pixels */
 const apart = async (a: Locator, b: Locator) => {

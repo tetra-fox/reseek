@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { login } from "./login";
+import { login } from "./support/login";
 
 /** The peer serve.sh starts beside the daemon, and the files it shares */
 const PEER = "smokepeer";
