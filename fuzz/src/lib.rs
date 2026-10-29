@@ -14,8 +14,8 @@ pub const LIMITS: Limits = Limits {
   ..Limits::DEFAULT
 };
 
-/// Builds a compressed peer frame from fuzz input: the first byte's low bit picks whether the
-/// rest is a body to compress (0) or a raw zlib stream (1)
+/// Builds a compressed peer frame from fuzz input: the low bit of `mode` picks whether `rest` is
+/// a body to compress (0) or a raw zlib stream (1)
 pub fn compressed_frame(code: u32, mode: u8, rest: &[u8]) -> Vec<u8> {
   let payload = if mode & 1 == 0 {
     let mut compressed = Vec::new();

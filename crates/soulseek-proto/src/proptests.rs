@@ -166,7 +166,7 @@ fn init_frames() -> impl Strategy<Value = Vec<u8>> {
   )
 }
 
-/// any value a decoder returns must survive another encode and decode unchanged
+/// any value a decoder returns must come back unchanged from another encode and decode
 macro_rules! assert_canonical {
   ($ty:ty, $bytes:expr) => {
     if let Ok(message) = <$ty>::decode($bytes) {

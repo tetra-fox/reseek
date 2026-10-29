@@ -9,7 +9,7 @@
 //! A [`Watcher`] reloads when the files change or when asked, keeps the last good values when
 //! a reload fails, and reports what changed grouped by when it takes effect ([`Apply`]). It
 //! also sets and removes runtime [`Overrides`], and writes the files with [`FileEditor`] so
-//! their comments survive. [`ConfigView`] is all of it in one serializable document.
+//! their comments are kept. [`ConfigView`] is all of it in one serializable document.
 //!
 //! ```
 //! use std::collections::BTreeMap;

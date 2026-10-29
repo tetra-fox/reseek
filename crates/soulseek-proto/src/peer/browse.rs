@@ -44,8 +44,7 @@ impl File {
   }
 
   /// The extension the filename gives: what follows the last `.` of the last path component,
-  /// lower-cased, or empty when there is none. `extension` is often blank or wrong, so this is
-  /// what filters go by.
+  /// lower-cased, or empty when there is none. `extension` is often blank or wrong.
   pub fn derived_extension(&self) -> String {
     let path = self.filename.as_str();
     let name = path.rsplit_once(['\\', '/']).map_or(path, |(_, name)| name);

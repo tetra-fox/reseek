@@ -219,8 +219,8 @@ impl<T: Root> Watcher<T> {
   ///
   /// Refused, in this order, when the file changed since `revision`, can not be written, would
   /// leave a configuration that does not load, or when a key's value comes from an env var or
-  /// flag, or from a later file, which this file would not beat. For a secret, `*****` keeps the value and an empty
-  /// string removes it.
+  /// flag, which nothing at run time changes, or from a later file, which this file would not
+  /// beat. For a secret, `*****` keeps the value and an empty string removes it.
   pub async fn patch_file(
     &self,
     name: &str,

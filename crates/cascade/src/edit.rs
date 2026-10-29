@@ -122,9 +122,8 @@ fn set_item(
       });
     }
     if node.is_table() && node.get(part).is_none_or(Item::is_none) {
-      // a real `[section]` after its parent's; implicit while it only holds sections, so it
-      // prints no empty header. Inside an inline table indexing adds an inline table, which is
-      // what belongs there
+      // a real `[section]` after its parent's, implicit while it only holds sections so it
+      // prints no empty header; inside an inline table, indexing adds an inline table instead
       let mut table = Table::new();
       table.set_implicit(depth + 1 < tables.len());
       node[part] = Item::Table(table);
