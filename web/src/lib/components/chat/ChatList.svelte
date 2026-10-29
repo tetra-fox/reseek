@@ -12,9 +12,9 @@
   import { SvelteSet } from "svelte/reactivity";
 
   import { chat, paneKey, paneOf } from "#lib/chat/chat.svelte.js";
-  import { sortedConversations, sortedRooms } from "#lib/chat/order.js";
+  import { actionOf } from "#lib/chat/messages/rich.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
-  import { actionOf } from "#lib/chat/rich.js";
+  import { sortedConversations, sortedRooms } from "#lib/chat/rooms/order.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";

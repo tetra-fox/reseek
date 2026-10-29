@@ -4,8 +4,8 @@
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import ReplyIcon from "@lucide/svelte/icons/reply";
 
-  import { LONG, type Message } from "#lib/chat/messages.js";
-  import { actionOf } from "#lib/chat/rich.js";
+  import { LONG, type Message } from "#lib/chat/messages/messages.js";
+  import { actionOf } from "#lib/chat/messages/rich.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";

@@ -1,7 +1,6 @@
+import { chat } from "#lib/chat/chat.svelte.js";
+import type { Target } from "#lib/chat/pane.svelte.js";
 import { users } from "#lib/users/users.svelte.js";
-
-import { chat } from "./chat.svelte";
-import type { Target } from "./pane.svelte";
 
 const time = (iso: string | null | undefined) => (iso ? Date.parse(iso) : 0);
 

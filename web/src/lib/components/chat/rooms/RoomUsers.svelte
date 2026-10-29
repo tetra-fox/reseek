@@ -7,7 +7,7 @@
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
 
   import { app } from "#lib/app.svelte.js";
-  import type { RoomMembers, RoomUser } from "#lib/chat/room.svelte.js";
+  import type { RoomMembers, RoomUser } from "#lib/chat/rooms/room.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";

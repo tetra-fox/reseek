@@ -10,8 +10,10 @@
 
   import { paneKey } from "#lib/chat/chat.svelte.js";
   import { notifier, notifyOptions } from "#lib/chat/notify.svelte.js";
-  import { chatOrder } from "#lib/chat/order.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
+  import { chatOrder } from "#lib/chat/rooms/order.js";
+  import MessageSearch from "#lib/components/chat/messages/MessageSearch.svelte";
+  import JoinRoomDialog from "#lib/components/chat/rooms/JoinRoomDialog.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
@@ -19,8 +21,6 @@
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
 
   import ChatList from "./ChatList.svelte";
-  import JoinRoomDialog from "./JoinRoomDialog.svelte";
-  import MessageSearch from "./MessageSearch.svelte";
   import NewMessageDialog from "./NewMessageDialog.svelte";
   import Pane from "./Pane.svelte";
 

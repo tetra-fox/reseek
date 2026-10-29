@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Gap } from "#lib/chat/messages.js";
+  import type { Gap } from "#lib/chat/messages/messages.js";
   import { dateTime, shortTime } from "#lib/format.js";
   import { GAP_NOTICE, GAP_REASONS } from "#lib/wording.js";
 

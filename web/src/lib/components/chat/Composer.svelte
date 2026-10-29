@@ -18,10 +18,10 @@
   import { chat, paneKey } from "#lib/chat/chat.svelte.js";
   import { COMMANDS, commandsFor, parseCommand } from "#lib/chat/commands.js";
   import { emojiFor } from "#lib/chat/emoji.js";
-  import type { Message } from "#lib/chat/messages.js";
+  import type { Message } from "#lib/chat/messages/messages.js";
+  import { actionOf } from "#lib/chat/messages/rich.js";
   import type { MessagePane } from "#lib/chat/pane.svelte.js";
   import { chatLayout, roomDrafts } from "#lib/chat/prefs.svelte.js";
-  import { actionOf } from "#lib/chat/rich.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";

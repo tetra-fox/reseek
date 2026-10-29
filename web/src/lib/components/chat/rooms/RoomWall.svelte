@@ -3,7 +3,7 @@
   import MessageSquareDashedIcon from "@lucide/svelte/icons/message-square-dashed";
 
   import { app } from "#lib/app.svelte.js";
-  import type { RoomMembers, WallLine } from "#lib/chat/room.svelte.js";
+  import type { RoomMembers, WallLine } from "#lib/chat/rooms/room.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Input from "#lib/components/ui/Input.svelte";

@@ -6,8 +6,8 @@
   import { tick, untrack } from "svelte";
   import { fly } from "svelte/transition";
 
-  import { type Line, layout, LONG, type Message } from "#lib/chat/messages.js";
-  import { pullOlder } from "#lib/chat/older.js";
+  import { type Line, layout, LONG, type Message } from "#lib/chat/messages/messages.js";
+  import { pullOlder } from "#lib/chat/messages/older.js";
   import type { MessagePane } from "#lib/chat/pane.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";

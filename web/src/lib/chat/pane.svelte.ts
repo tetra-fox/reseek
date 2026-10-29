@@ -1,10 +1,10 @@
 import { api, byRoom, byUser, type Schemas } from "#lib/api/client.js";
+import { fromPrivate, fromRoom, type Gap, type Message } from "#lib/chat/messages/messages.js";
 import { Keyed } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
 
 import { chat } from "./chat.svelte";
-import { fromPrivate, fromRoom, type Gap, type Message } from "./messages";
 
 /** What a pane shows: the conversation with a user, or a room */
 export type Target = { kind: "user"; name: string } | { kind: "room"; name: string };

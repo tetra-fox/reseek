@@ -2,7 +2,7 @@ import { goto } from "$app/navigation";
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { RoomMembers, type RoomUser } from "#lib/chat/room.svelte.js";
+import { RoomMembers, type RoomUser } from "#lib/chat/rooms/room.svelte.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 

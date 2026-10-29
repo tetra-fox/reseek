@@ -8,10 +8,14 @@
 
   import { app } from "#lib/app.svelte.js";
   import { chat, paneKey } from "#lib/chat/chat.svelte.js";
-  import type { Message } from "#lib/chat/messages.js";
+  import type { Message } from "#lib/chat/messages/messages.js";
   import { MessagePane, type Target } from "#lib/chat/pane.svelte.js";
   import { chatLayout as layout, SIDE_TABS } from "#lib/chat/prefs.svelte.js";
-  import { RoomMembers } from "#lib/chat/room.svelte.js";
+  import { RoomMembers } from "#lib/chat/rooms/room.svelte.js";
+  import MessageList from "#lib/components/chat/messages/MessageList.svelte";
+  import RoomActivity from "#lib/components/chat/rooms/RoomActivity.svelte";
+  import RoomUsers from "#lib/components/chat/rooms/RoomUsers.svelte";
+  import RoomWall from "#lib/components/chat/rooms/RoomWall.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
@@ -29,10 +33,6 @@
 
   import ChatMenuItems from "./ChatMenuItems.svelte";
   import Composer from "./Composer.svelte";
-  import MessageList from "./MessageList.svelte";
-  import RoomActivity from "./RoomActivity.svelte";
-  import RoomUsers from "./RoomUsers.svelte";
-  import RoomWall from "./RoomWall.svelte";
 
   type Props = {
     target: Target;

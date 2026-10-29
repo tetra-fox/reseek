@@ -5,7 +5,7 @@
   import ShieldIcon from "@lucide/svelte/icons/shield";
   import SunIcon from "@lucide/svelte/icons/sun";
 
-  import { type Burst, burstLine } from "#lib/chat/presence.js";
+  import { type Burst, burstLine } from "#lib/chat/rooms/presence.js";
   import LogTime from "#lib/components/ui/LogTime.svelte";
   import Username from "#lib/components/users/Username.svelte";
 

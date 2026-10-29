@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { Message } from "#lib/chat/messages.js";
+import type { Message } from "#lib/chat/messages/messages.js";
 
 import MessageRow from "./MessageRow.svelte";
 

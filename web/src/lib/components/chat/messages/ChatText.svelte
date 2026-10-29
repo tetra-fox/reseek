@@ -1,7 +1,7 @@
 <script lang="ts">
   import DownloadIcon from "@lucide/svelte/icons/download";
 
-  import { richText } from "#lib/chat/rich.js";
+  import { richText } from "#lib/chat/messages/rich.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { enqueue } from "#lib/files/downloads.js";
   import { slskBrowse, type SlskLink } from "#lib/files/slsk.js";
