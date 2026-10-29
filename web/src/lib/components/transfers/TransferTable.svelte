@@ -11,12 +11,12 @@
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
-  import type { ColumnId } from "#lib/transfers/columns.js";
-  import { depthOf, nesting, pins } from "#lib/transfers/pinned.js";
-  import type { ViewSettings } from "#lib/transfers/settings.svelte.js";
+  import type { ColumnId } from "#lib/transfers/grid/columns.js";
+  import { depthOf, nesting, pins } from "#lib/transfers/grid/pinned.js";
+  import type { ViewSettings } from "#lib/transfers/grid/settings.svelte.js";
+  import type { Group, Item } from "#lib/transfers/grid/view.js";
   import type { Direction, Transfer } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
-  import type { Group, Item } from "#lib/transfers/view.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import { rem, viewport } from "#lib/ui/viewport.svelte.js";
 

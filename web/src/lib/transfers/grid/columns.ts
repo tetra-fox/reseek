@@ -1,7 +1,7 @@
 import { columnWidth, getFileName, WIDEST } from "#lib/format.js";
 import type { GridColumn } from "#lib/lists/table.svelte.js";
+import type { Direction, Transfer } from "#lib/transfers/states.js";
 
-import type { Direction, Transfer } from "./states";
 import type { SortKey } from "./view";
 
 export type ColumnId =

@@ -2,7 +2,7 @@
   import { Area, Chart, Svg } from "layerchart";
 
   import { chartCurve } from "#lib/dashboard/chart.js";
-  import { SPARKLINE_WIDTH } from "#lib/transfers/columns.js";
+  import { SPARKLINE_WIDTH } from "#lib/transfers/grid/columns.js";
 
   // the last speeds a transfer reported, as a small area on LayerChart, still and without axes;
   // nothing until there are two

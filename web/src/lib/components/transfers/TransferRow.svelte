@@ -41,7 +41,7 @@
     queuePosition,
     storeOf
   } from "#lib/transfers/actions.js";
-  import { type ColumnId, SELECT_REM } from "#lib/transfers/columns.js";
+  import { type ColumnId, SELECT_REM } from "#lib/transfers/grid/columns.js";
   import { type Direction, rowActions, stateChip, type Transfer } from "#lib/transfers/states.js";
   import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
   import { GAP_REM, lineStart, TICK_REM, TOGGLE_REM } from "#lib/tree/indent.js";

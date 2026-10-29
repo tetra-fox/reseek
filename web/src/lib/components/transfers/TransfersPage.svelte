@@ -20,8 +20,15 @@
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import { act, denyAndBlock, exportJson, open, openFolder } from "#lib/transfers/actions.js";
   import { activeAmong, type BulkAction, bulkRequest } from "#lib/transfers/bulk.js";
-  import { transferGrid } from "#lib/transfers/grid.svelte.js";
-  import { views } from "#lib/transfers/settings.svelte.js";
+  import { transferGrid } from "#lib/transfers/grid/grid.svelte.js";
+  import { views } from "#lib/transfers/grid/settings.svelte.js";
+  import {
+    inStates,
+    type Item,
+    layout,
+    type MarkLookup,
+    textFilter
+  } from "#lib/transfers/grid/view.js";
   import {
     type ChipId,
     type Direction,
@@ -31,7 +38,6 @@
   } from "#lib/transfers/states.js";
   import { downloads, uploads } from "#lib/transfers/transfers.svelte.js";
   import { unseen } from "#lib/transfers/unseen.svelte.js";
-  import { inStates, type Item, layout, type MarkLookup, textFilter } from "#lib/transfers/view.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { blocking } from "#lib/users/block.svelte.js";
   import { users } from "#lib/users/users.svelte.js";

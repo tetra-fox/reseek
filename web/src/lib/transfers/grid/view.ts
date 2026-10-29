@@ -1,8 +1,7 @@
 import { type Mark, markToken, passes } from "#lib/analysis/marks.js";
 import { getDirectoryName, getFileName } from "#lib/format.js";
+import { type ChipId, STATE_CHIPS, type Transfer } from "#lib/transfers/states.js";
 import { type FolderNode, folderTree } from "#lib/tree/folders.js";
-
-import { type ChipId, STATE_CHIPS, type Transfer } from "./states";
 
 export type GroupBy = "user" | "folder" | "batch" | "flat";
 

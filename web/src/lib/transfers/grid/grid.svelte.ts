@@ -1,9 +1,9 @@
 import { Grid } from "#lib/lists/table.svelte.js";
+import type { Direction, Transfer } from "#lib/transfers/states.js";
 import { viewport } from "#lib/ui/viewport.svelte.js";
 
 import { type ColumnId, columnsFor, PHONE_COLUMNS } from "./columns";
 import type { ViewSettings } from "./settings.svelte";
-import type { Direction, Transfer } from "./states";
 import type { SortKey } from "./view";
 
 /**

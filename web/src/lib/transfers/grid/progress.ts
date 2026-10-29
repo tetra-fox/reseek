@@ -1,4 +1,4 @@
-import { isActive, isRetryable, isSucceeded, type Transfer } from "./states";
+import { isActive, isRetryable, isSucceeded, type Transfer } from "#lib/transfers/states.js";
 
 /** How far a group of transfers has come, counting those still wanted: not failed or canceled */
 export type Progress = {

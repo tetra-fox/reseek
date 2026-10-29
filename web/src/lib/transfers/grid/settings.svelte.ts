@@ -1,8 +1,8 @@
 import { MARK_FILTERS, type MarkFilter } from "#lib/analysis/marks.js";
 import { fields, stored } from "#lib/stored.svelte.js";
+import { type ChipId, type Direction, STATE_CHIPS } from "#lib/transfers/states.js";
 
 import { type ColumnId, columnsFor } from "./columns";
-import { type ChipId, type Direction, STATE_CHIPS } from "./states";
 import type { GroupBy, SortKey } from "./view";
 
 export type ViewSettings = {

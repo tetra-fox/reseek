@@ -27,10 +27,10 @@
   import { session } from "#lib/session.svelte.js";
   import { act, folderOf, openFolder } from "#lib/transfers/actions.js";
   import { encodePath } from "#lib/transfers/content.js";
-  import { groupProgress } from "#lib/transfers/progress.js";
+  import { groupProgress } from "#lib/transfers/grid/progress.js";
+  import type { Group } from "#lib/transfers/grid/view.js";
   import { isCancelable, isRetryable, isSucceeded, type Direction } from "#lib/transfers/states.js";
   import type { Transfers } from "#lib/transfers/transfers.svelte.js";
-  import type { Group } from "#lib/transfers/view.js";
   import { quota, waits } from "#lib/transfers/why.svelte.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import { GAP_REM, lineStart } from "#lib/tree/indent.js";

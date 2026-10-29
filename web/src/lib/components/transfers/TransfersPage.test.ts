@@ -11,7 +11,7 @@ import { transfer } from "#lib/testing/fixtures.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
-import { defaults, views } from "#lib/transfers/settings.svelte.js";
+import { defaults, views } from "#lib/transfers/grid/settings.svelte.js";
 import type { Transfer } from "#lib/transfers/states.js";
 import { downloads } from "#lib/transfers/transfers.svelte.js";
 
