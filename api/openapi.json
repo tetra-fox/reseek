@@ -20579,13 +20579,21 @@
           "pid",
           "os",
           "arch",
-          "memoryBytes"
+          "memoryBytes",
+          "autoAnalysisWorkers"
         ],
         "properties": {
           "arch": {
             "type": "string",
             "description": "the processor architecture",
             "example": "x86_64"
+          },
+          "autoAnalysisWorkers": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many files are analyzed at once when the analysis workers option is `auto`: half of\nthe processors, at least one",
+            "example": 4,
+            "minimum": 0
           },
           "memoryBytes": {
             "type": "integer",

@@ -80,6 +80,13 @@ describe("controls and drafts", () => {
     expect(fromDraft(port, "number", "x", view.fields["web.port"])).toEqual({
       error: "must be a number"
     });
+    const workers = field("analysis.workers");
+    expect(fromDraft(workers, "auto-count", " Auto ")).toEqual({ set: "auto" });
+    expect(fromDraft(workers, "auto-count", "3")).toEqual({ set: 3 });
+    expect(fromDraft(workers, "auto-count", "0")).toEqual({ error: "must be at least 1" });
+    expect(fromDraft(workers, "auto-count", "many")).toEqual({
+      error: "must be auto or a number"
+    });
     expect(fromDraft(field("rooms"), "list", " a \n\n b ")).toEqual({ set: ["a", "b"] });
     expect(fromDraft(field("shares.filters"), "regex-list", "(")).toMatchObject({
       error: expect.any(String)

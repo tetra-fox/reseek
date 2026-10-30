@@ -213,8 +213,8 @@ pub(super) async fn dispatch(analysis: Arc<Analysis>) {
 
 /// Starts as many waiting jobs as there are free workers.
 fn start_free(analysis: &Arc<Analysis>) {
-  // validation keeps the loaded value between 1 and MAX_ANALYSIS_WORKERS
-  let workers = analysis.config.current().values.analysis.workers as usize;
+  // validation keeps a set count between 1 and the number of processors
+  let workers = analysis.config.current().values.analysis.workers.count() as usize;
   loop {
     let job = {
       let mut queue = lock(&analysis.queue);

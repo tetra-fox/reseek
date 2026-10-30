@@ -17,6 +17,9 @@ use super::analyzer::fixtures::{music, pink, write_flac};
 use crate::testing::{TRUSTED, TestApp, app, request};
 use crate::transfers::{Record, store as transfers};
 
+/// One analysis at a time, so a test knows which files wait.
+const ONE_WORKER: &str = "[analysis]\nworkers = 1\n";
+
 /// The analysis route of the file `relative` under the downloads directory.
 fn route(relative: &str) -> String {
   format!(
@@ -399,7 +402,7 @@ async fn spectrograms_beyond_the_cache_limit_go_least_recently_viewed_first() {
 
 #[tokio::test]
 async fn a_queued_analysis_can_be_canceled_and_a_window_read() {
-  let app = app(TRUSTED, &[]).await;
+  let app = app(&format!("{TRUSTED}{ONE_WORKER}"), &[]).await;
   for name in ["a.flac", "b.flac", "c.flac"] {
     lossless(&app, name);
   }

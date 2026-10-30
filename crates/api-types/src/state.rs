@@ -63,6 +63,10 @@ pub struct ProcessState {
   pub arch: String,
   /// the memory the process holds in RAM, in bytes, sampled every 30 seconds
   pub memory_bytes: u64,
+  /// how many files are analyzed at once when the analysis workers option is `auto`: half of
+  /// the processors, at least one
+  #[schema(example = 4)]
+  pub auto_analysis_workers: u32,
 }
 
 /// The running version and whether a newer one exists.

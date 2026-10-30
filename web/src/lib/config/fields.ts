@@ -90,10 +90,12 @@ export const fromDraft = (
   }
   if (control === "secret") return { set: text };
   if (text.trim() === "") return { unset: true };
-  if (control === "number") {
+  if (control === "auto-count" && text.trim().toLowerCase() === "auto") return { set: "auto" };
+  if (control === "number" || control === "auto-count") {
     const n = Number(text);
-    if (!Number.isFinite(n)) return { error: "must be a number" };
-    if (view?.kind === "integer" && !Number.isInteger(n))
+    if (!Number.isFinite(n))
+      return { error: control === "auto-count" ? "must be auto or a number" : "must be a number" };
+    if ((view?.kind === "integer" || control === "auto-count") && !Number.isInteger(n))
       return { error: "must be a whole number" };
     if (field.min !== undefined && n < field.min) return { error: `must be at least ${field.min}` };
     if (field.max !== undefined && n > field.max) return { error: `must be at most ${field.max}` };

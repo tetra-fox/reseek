@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use super::Report;
 use super::fields::{at_least, duration_at_least, range};
-use crate::config::{Analysis, MAX_ANALYSIS_WORKERS};
+use crate::config::{Analysis, Workers, processors};
 
 /// The fewest windows a sampled file is analyzed at: fewer cannot give a reading.
 const MIN_SAMPLED_WINDOWS: u32 = 20;
@@ -14,15 +14,12 @@ const MIN_SAMPLED_WINDOWS: u32 = 20;
 const MAX_SAMPLED_WINDOWS: u32 = 2000;
 
 pub(super) fn check(analysis: &Analysis, report: &mut Report) {
-  report.check(
-    "analysis.workers",
-    range(
+  if let Workers::Count(count) = analysis.workers {
+    report.check(
       "analysis.workers",
-      analysis.workers,
-      1,
-      MAX_ANALYSIS_WORKERS,
-    ),
-  );
+      range("analysis.workers", count, 1, processors()),
+    );
+  }
   report.check(
     "analysis.timeout",
     duration_at_least("analysis.timeout", analysis.timeout, Duration::from_secs(1)),

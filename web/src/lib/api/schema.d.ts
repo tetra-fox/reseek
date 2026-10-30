@@ -5503,6 +5503,13 @@ export interface components {
              */
             arch: string;
             /**
+             * Format: int32
+             * @description how many files are analyzed at once when the analysis workers option is `auto`: half of
+             *     the processors, at least one
+             * @example 4
+             */
+            autoAnalysisWorkers: number;
+            /**
              * Format: int64
              * @description the memory the process holds in RAM, in bytes, sampled every 30 seconds
              */

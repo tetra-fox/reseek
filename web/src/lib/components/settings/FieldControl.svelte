@@ -6,6 +6,7 @@
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { type Draft, REDACTED } from "#lib/config/fields.js";
   import type { Control, Field } from "#lib/config/sections.js";
+  import { plural } from "#lib/format.js";
 
   type Props = {
     field: Field;
@@ -33,6 +34,10 @@
   let changing = $state(false);
   let kept = $state<Draft>(REDACTED);
   const cleared = $derived(kept === REDACTED && draft === "");
+  /** what `auto` stands for, shown while the input holds it */
+  const autoCount = $derived(
+    String(draft).trim().toLowerCase() === "auto" ? field.auto?.() : undefined
+  );
 </script>
 
 {#if control === "bool"}
@@ -94,6 +99,21 @@
     aria-invalid={invalid || undefined}
     bind:value={draft as string}
     {disabled} />
+{:else if control === "auto-count"}
+  <div class="flex items-center gap-inline">
+    <Input
+      id={field.key}
+      class="tabular-nums"
+      placeholder="auto or a number"
+      aria-describedby={described}
+      aria-invalid={invalid || undefined}
+      bind:value={draft}
+      {disabled} />
+    {#if autoCount !== undefined}
+      <span class="shrink-0 text-sm text-fg-muted tabular-nums"
+        >{plural(autoCount, "file", "files")} at once</span>
+    {/if}
+  </div>
 {:else}
   <Input
     id={field.key}

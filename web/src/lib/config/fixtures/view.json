@@ -18,7 +18,7 @@
         "scale": "log"
       },
       "timeout": "2m",
-      "workers": 1
+      "workers": "auto"
     },
     "blacklist": {
       "enabled": false,
@@ -586,10 +586,10 @@
       "file": "config.toml",
       "envVar": null,
       "cliFlag": null,
-      "kind": "integer",
-      "doc": "Number of files analyzed at once. Maximum: 4.",
+      "kind": "string",
+      "doc": "Number of files analyzed at once: `auto`, half of the processors and at least one, or a number from 1 to the number of processors.",
       "choices": null,
-      "default": 1,
+      "default": "auto",
       "apply": "live",
       "secret": false,
       "notApplied": null

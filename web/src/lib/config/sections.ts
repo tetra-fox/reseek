@@ -1,5 +1,6 @@
 import type { Component } from "svelte";
 
+import { app } from "#lib/app.svelte.js";
 import PortMapping from "#lib/components/settings/PortMapping.svelte";
 
 /**
@@ -16,6 +17,7 @@ export type Control =
   | "list"
   | "duration"
   | "size"
+  | "auto-count"
   | "secret"
   | "regex-list"
   | "cidr-list"
@@ -37,6 +39,8 @@ export type Field = {
   placeholder?: string;
   /** editable only while `key` holds one of `values` */
   enabledWhen?: { key: string; values: unknown[] };
+  /** for an `auto-count` control, the count `auto` stands for on the daemon's machine */
+  auto?: () => number | undefined;
   /** a list entry that follows from another option: shown dimmed under the list, never saved */
   derived?: { from: string; entry: (values: unknown) => string | null; note: string };
 };
@@ -308,7 +312,13 @@ export const sections: Section[] = [
     fields: [
       { key: "analysis.on_download", label: "Analyze finished downloads" },
       { key: "analysis.extensions", label: "Extensions" },
-      { key: "analysis.workers", label: "Concurrent analyses", min: 1, max: 4 },
+      {
+        key: "analysis.workers",
+        label: "Concurrent analyses",
+        control: "auto-count",
+        min: 1,
+        auto: () => app.state?.process.autoAnalysisWorkers
+      },
       { key: "analysis.timeout", label: "Time limit per file" },
       {
         key: "analysis.max_full_minutes",

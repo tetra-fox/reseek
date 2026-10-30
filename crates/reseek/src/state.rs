@@ -191,6 +191,7 @@ fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
       os: std::env::consts::OS.to_string(),
       arch: std::env::consts::ARCH.to_string(),
       memory_bytes: 0,
+      auto_analysis_workers: crate::config::Workers::auto(),
     },
     listeners: Vec::new(),
   }

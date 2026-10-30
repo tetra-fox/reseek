@@ -22,7 +22,7 @@ use std::time::Duration;
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
 
-pub use analysis::{Analysis, MAX_ANALYSIS_WORKERS, Spectrogram};
+pub use analysis::{Analysis, Spectrogram, Workers, processors};
 pub use authentication::{
   ApiKey, Authentication, Local, LocalUser, Oidc, OidcLogout, OidcRoleMapping, Proxy, RoleMapping,
 };
