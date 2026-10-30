@@ -3,13 +3,14 @@ import type { Schemas } from "#lib/api/client.js";
 export type Transfer = Schemas["Transfer"];
 export type Direction = "download" | "upload";
 
-/** The failures a transfer can end in other than a cancel */
-export const ERRORED = [
-  "Completed, TimedOut",
-  "Completed, Errored",
-  "Completed, Rejected",
-  "Completed, Aborted"
-];
+/**
+ * The outcomes of a failed transfer: a timeout, an error, a refusal or a size mismatch. A
+ * cancel is not a failure, nor is an end with no outcome
+ */
+export const FAILED_OUTCOMES = ["TimedOut", "Errored", "Rejected", "Aborted"];
+
+/** The states of a failed transfer */
+export const ERRORED = FAILED_OUTCOMES.map((outcome) => `Completed, ${outcome}`);
 
 /** It ended other than successfully, so it can be tried again */
 export const isRetryable = (state: string) =>

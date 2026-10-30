@@ -54,15 +54,19 @@ describe("the dashboard's reports", () => {
     expect(queries.summary(w)).toEqual({ start: w.start, end: w.end });
   });
 
-  it("counts every outcome but success as an error, Rejected and Aborted too", () => {
-    expect(
-      errorCount({
-        Succeeded: summary(5, 0),
-        Rejected: summary(1, 0),
-        Aborted: summary(2, 0),
-        Errored: summary(3, 0)
-      })
-    ).toBe(6);
+  it("counts failures as errors, as the outcome bars do, and not cancels", () => {
+    const d = {
+      Succeeded: summary(5, 0),
+      Rejected: summary(1, 0),
+      Aborted: summary(2, 0),
+      Errored: summary(3, 0),
+      TimedOut: summary(4, 0),
+      Cancelled: summary(7, 0),
+      None: summary(8, 0)
+    };
+    expect(errorCount(d)).toBe(10);
+    const [bars] = outcomes({ Download: d, Upload: {}, distinctUsers: 0 });
+    expect(bars.failed).toBe(10);
   });
 
   it("makes the chart's points in time order with rates and the ratio", () => {

@@ -1,5 +1,6 @@
 import { api, type Schemas } from "#lib/api/client.js";
 import { call } from "#lib/request.js";
+import { FAILED_OUTCOMES } from "#lib/transfers/states.js";
 
 export type Direction = "Upload" | "Download";
 export type Summaries = Schemas["DirectionSummaries"]["Upload"];
@@ -103,18 +104,15 @@ export const reports = {
     )
 };
 
-/** Every outcome but success counts as an error */
-const FAILED = ["Cancelled", "TimedOut", "Errored", "Rejected", "Aborted"];
-
 /** How many transfers a direction's summaries hold, whatever their outcome */
 export const sumCounts = (d: Summaries | undefined) =>
   Object.values(d ?? {}).reduce((n, s) => n + s.count, 0);
 /** How many bytes a direction's summaries hold, whatever their outcome */
 export const sumBytes = (d: Summaries | undefined) =>
   Object.values(d ?? {}).reduce((n, s) => n + s.totalBytes, 0);
-/** How many of a direction's transfers ended in anything but success */
+/** How many of a direction's transfers failed */
 export const errorCount = (d: Summaries | undefined) =>
-  FAILED.reduce((n, outcome) => n + (d?.[outcome]?.count ?? 0), 0);
+  FAILED_OUTCOMES.reduce((n, outcome) => n + (d?.[outcome]?.count ?? 0), 0);
 
 /** One bucket of the history chart */
 export type Point = {
@@ -204,11 +202,7 @@ export const shortDirectory = (path: string) =>
 /** How the transfers of one direction ended in the range: done, failed, or canceled here */
 export type Outcome = { direction: string; succeeded: number; failed: number; canceled: number };
 
-/**
- * Each direction's finished transfers by how they ended, for the outcome bars. A timeout, an
- * error, a refusal and a size mismatch are all failures, as the transfers list's Failed filter
- * counts them
- */
+/** Each direction's finished transfers by how they ended, for the outcome bars */
 export const outcomes = (summary: Schemas["SummaryReport"]): Outcome[] =>
   (
     [
@@ -218,9 +212,6 @@ export const outcomes = (summary: Schemas["SummaryReport"]): Outcome[] =>
   ).map(([direction, d]) => ({
     direction,
     succeeded: d.Succeeded?.count ?? 0,
-    failed: ["Errored", "TimedOut", "Rejected", "Aborted"].reduce(
-      (n, s) => n + (d[s]?.count ?? 0),
-      0
-    ),
+    failed: errorCount(d),
     canceled: d.Cancelled?.count ?? 0
   }));
