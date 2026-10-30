@@ -33,7 +33,7 @@ const STATES: usize = 16;
 /// How often a download's progress is written and pushed at most.
 const PROGRESS_EVERY: Duration = Duration::from_millis(250);
 
-/// The size an old 32-bit client reports as 0.
+/// The smallest size an old 32-bit client reports as 0, one byte short of 2 GiB.
 const OVERFLOWED_SIZE: u64 = i32::MAX as u64;
 
 /// Why a download that held its turn too long failed.
@@ -134,8 +134,8 @@ pub(super) fn failure(error: &ClientError) -> Failure {
 
 /// Settles a size the peer reports differently from ours: the peer's is taken when no partial
 /// file was resumed, else the download is aborted, the partial left for a later try with the
-/// size a fresh search gives. The 0 an old client reports for a file of 2 GiB or more keeps
-/// ours.
+/// size a fresh search gives. The 0 an old client reports for a file of `OVERFLOWED_SIZE`
+/// bytes or more keeps ours.
 fn peers_size() -> SizeMismatchResolver {
   Arc::new(|transfer, remote| {
     if remote == 0 && transfer.size >= OVERFLOWED_SIZE {

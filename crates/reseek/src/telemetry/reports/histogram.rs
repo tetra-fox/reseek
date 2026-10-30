@@ -30,7 +30,7 @@ pub const MOST_BUCKETS: i64 = 100_000;
 /// What a histogram could not be made of.
 #[derive(Debug, thiserror::Error)]
 pub enum HistogramError {
-  /// the interval cuts the window into more than [`MOST_BUCKETS`] buckets
+  /// the interval cuts the window into more than `MOST_BUCKETS` buckets
   #[error("the interval cuts the window into {0} buckets, more than {MOST_BUCKETS}")]
   TooManyBuckets(i64),
   /// the database failed

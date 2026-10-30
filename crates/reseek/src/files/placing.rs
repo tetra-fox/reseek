@@ -53,8 +53,8 @@ pub fn create_directories(dir: &Path, mode: Option<u32>) -> io::Result<()> {
   Ok(())
 }
 
-/// Opens `path` for a download to write from `offset`: the directories above it made as
-/// [`create_directories`] makes them, the file created with `mode` when it is new, and cut at
+/// Opens `path` for a download to write from `offset`: the missing directories above it made
+/// with `mode` and an execute bit for every read bit, the file created with `mode` when it is new, and cut at
 /// `offset` so what follows is written after the bytes kept.
 pub fn create_file(path: &Path, mode: Option<u32>, offset: u64) -> io::Result<File> {
   let created = (|| {
@@ -151,10 +151,10 @@ fn copy_beside(source: &Path, dir: &Path, name: &str) -> io::Result<PathBuf> {
   Ok(part)
 }
 
-/// Moves `source` into `dir` under its own name, made with `mode` as [`create_directories`]
-/// makes directories, and gives the moved file `mode`. With `overwrite` a file of that name is
-/// replaced; without, the file takes the first free numbered name. The source's directory is
-/// deleted when the move leaves it empty. Returns where the file is now.
+/// Moves `source` into `dir` under its own name, the missing directories made with `mode` and
+/// an execute bit for every read bit, and gives the moved file `mode`. With `overwrite` a file
+/// of that name is replaced; without, the file takes the first free numbered name. The
+/// source's directory is deleted when the move leaves it empty. Returns where the file is now.
 pub fn move_file(
   source: &Path,
   dir: &Path,
