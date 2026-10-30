@@ -146,9 +146,11 @@ describe("field tokens", () => {
     expect(matches("bitrate:320 length:5:00", { bitRate: null })).toBe(true);
   });
 
-  it("keeps files of a type, by extension or by name", () => {
+  it("keeps files of a type by the extension of their name", () => {
     expect(matches("type:flac|mp3", { filename: "a\\b.MP3" })).toBe(true);
-    expect(matches("type:flac", { filename: "a.mp3", extension: "flac" })).toBe(true);
+    // a search result also carries the extension the peer sent, which may disagree
+    const result = { filename: "a.mp3", extension: "flac" };
+    expect(matches("type:flac", result)).toBe(false);
     expect(matches("type:flac", { filename: "noextension" })).toBe(false);
     expect(matches("!type:mp3", { filename: "a.mp3" })).toBe(false);
     expect(matches("!type:mp3", { filename: "a.flac" })).toBe(true);

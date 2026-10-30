@@ -54,9 +54,10 @@ fn state(state: SearchState) -> SearchStates {
 
 /// `file` as a search result shows it, with the size hint.
 fn file(file: peer::File, locked: bool) -> api_types::search::File {
+  let format = file.derived_extension();
   let mut shown = api_types::search::File::from(file);
   shown.is_locked = locked;
-  shown.suspect = suspect::hint(&shown);
+  shown.suspect = suspect::hint(&shown, &format);
   shown
 }
 

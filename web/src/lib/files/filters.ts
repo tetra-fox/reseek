@@ -269,7 +269,6 @@ export const parseFilters = (text: string, keys: readonly string[] = []): Filter
 export type FilterFile = {
   filename: string;
   size: number;
-  extension?: string | null;
   bitRate?: number | null;
   bitDepth?: number | null;
   sampleRate?: number | null;
@@ -306,9 +305,11 @@ const VALUE: Record<Field, (file: FilterFile) => number | null | undefined> = {
   length: (f) => f.length
 };
 
-/** A file's type: its extension, or the end of its name after the last dot */
-export const typeOf = (file: { filename: string; extension?: string | null }) => {
-  if (file.extension) return file.extension.toLowerCase().replace(/^\./, "");
+/**
+ * A file's type: the end of its name after the last dot, in lower case. The extension a peer
+ * sends is often empty or disagrees with the name, so it is not used
+ */
+export const typeOf = (file: { filename: string }) => {
   const name = file.filename.split(/[/\\]/).pop() ?? "";
   const dot = name.lastIndexOf(".");
   return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
