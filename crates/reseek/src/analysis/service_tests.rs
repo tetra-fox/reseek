@@ -1,7 +1,7 @@
 //! The analysis calls against the in-memory daemon: a downloaded file analyzed by its path and
 //! by its download, its report, its spectrogram and its waveform, the event and the frame raised
-//! once, files outside the roots refused, unreadable files reported rather than failed, and the
-//! user's judgment kept across a restart.
+//! once, files outside the roots refused, unreadable files reported rather than failed, the
+//! user's judgment kept across a restart, and a batch larger than the queue run whole.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -14,6 +14,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde_json::{Value, json};
 
 use super::analyzer::fixtures::{music, pink, write_flac};
+use super::jobs::QUEUE_LIMIT;
 use crate::testing::{TRUSTED, TestApp, app, request};
 use crate::transfers::{Record, store as transfers};
 
@@ -499,4 +500,51 @@ async fn a_report_from_an_older_version_lists_as_stale_keeps_its_judgment_and_is
     report["override"]["note"], "sounds like 128k",
     "the judgment stays"
   );
+}
+
+#[tokio::test]
+async fn a_batch_past_the_queue_limit_joins_the_queue_as_it_drains() {
+  let app = app(&format!("{TRUSTED}{ONE_WORKER}"), &[]).await;
+  let names: Vec<String> = (0..QUEUE_LIMIT + 20)
+    .map(|n| format!("batch/{n:02}.flac"))
+    .collect();
+  for name in &names {
+    lossless(&app, name);
+  }
+  let file = |path: &str| json!({ "kind": "file", "root": "downloads", "path": path });
+  let files: Vec<Value> = [file("../escape.flac"), file("batch/missing.flac")]
+    .into_iter()
+    .chain(names.iter().map(|name| file(name)))
+    .collect();
+  let (status, answer) = app
+    .call(
+      "POST",
+      "/api/v0/analysis/batch",
+      Some(json!({ "files": files })),
+    )
+    .await;
+  assert_eq!(status, 202, "{answer}");
+  let count = |key: &str| answer[key].as_u64().unwrap();
+  assert_eq!(
+    count("queued") + count("following"),
+    names.len() as u64,
+    "{answer}"
+  );
+  assert!(
+    count("following") > 0,
+    "the queue took every file: {answer}"
+  );
+  let refused: Vec<u64> = answer["refused"]
+    .as_array()
+    .unwrap()
+    .iter()
+    .map(|refusal| refusal["index"].as_u64().unwrap())
+    .collect();
+  assert_eq!(refused, [0, 1], "{answer}");
+
+  settled(&app).await;
+  for name in &names {
+    let (status, report) = app.call("GET", &route(name), None).await;
+    assert_eq!(status, 200, "{name} was not analyzed: {report}");
+  }
 }

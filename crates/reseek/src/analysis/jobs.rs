@@ -1,8 +1,8 @@
-//! The analysis queue: files wait in the order they were asked for, by the API or by a download
-//! that finished while `analysis.on_download` is on, and as many run as `analysis.workers`
-//! allows, each on a blocking thread of its own. A finished analysis is stored with its
-//! spectrogram and waveform, pushed to the event stream and raised as an event; one canceled by
-//! shutdown leaves nothing behind.
+//! The analysis queue: files wait in the order they were asked for, by the API, by a batch's
+//! backlog as the queue drains, or by a download that finished while `analysis.on_download` is
+//! on, and as many run as `analysis.workers` allows, each on a blocking thread of its own. A
+//! finished analysis is stored with its spectrogram and waveform, pushed to the event stream and
+//! raised as an event; one canceled by shutdown leaves nothing behind.
 
 use std::collections::VecDeque;
 use std::path::Path;
@@ -29,8 +29,8 @@ use crate::files::LocalFile;
 use crate::services::FileTarget;
 use crate::sync::lock;
 
-/// The most files that may wait in the queue.
-pub(super) const QUEUE_LIMIT: usize = 1000;
+/// The most files that may wait in the queue. A test fills it with a few.
+pub(super) const QUEUE_LIMIT: usize = if cfg!(test) { 4 } else { 1000 };
 
 /// A file waiting for or under analysis.
 #[derive(Clone, Debug)]
@@ -194,6 +194,9 @@ pub(super) async fn dispatch(analysis: Arc<Analysis>) {
   let mut changes = analysis.config.changes();
   loop {
     start_free(&analysis);
+    if analysis.feed().await {
+      start_free(&analysis);
+    }
     tokio::select! {
       () = analysis.shutdown.cancelled() => return,
       () = analysis.wake.notified() => {}

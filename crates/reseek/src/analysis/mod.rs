@@ -7,6 +7,7 @@
 //! one.
 
 mod analyzer;
+mod backlog;
 mod jobs;
 mod kept;
 mod report;
@@ -23,8 +24,8 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use api_types::analysis::{
-  AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
-  SetAnalysisOverride, WindowSpectrum,
+  AnalysisBatchQueued, AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery,
+  AudioAnalysis, SetAnalysisOverride, WindowSpectrum,
 };
 use api_types::auth::Principal;
 use async_trait::async_trait;
@@ -61,6 +62,8 @@ pub struct Analysis {
   /// where the spectrogram and waveform files are kept
   dir: PathBuf,
   queue: Mutex<Queue>,
+  /// the files of batches waiting for room in the queue
+  backlog: Mutex<backlog::Backlog>,
   /// paths of reports and spectrogram files that did not read, so each is warned about once
   unreadable: Mutex<HashSet<String>>,
   /// woken when a job is queued or one ends
@@ -97,6 +100,7 @@ impl Analysis {
       events,
       dir,
       queue: Mutex::new(Queue::default()),
+      backlog: Mutex::default(),
       unreadable: Mutex::default(),
       wake: Notify::new(),
       full: AtomicBool::new(false),
@@ -178,6 +182,13 @@ impl AnalysisService for Analysis {
         "The analysis queue is full ({QUEUE_LIMIT} files)"
       ))),
     }
+  }
+
+  async fn run_batch(
+    &self,
+    files: Vec<(u32, FileTarget)>,
+  ) -> Result<AnalysisBatchQueued, ApiError> {
+    Ok(self.batch(files).await)
   }
 
   async fn report(

@@ -293,6 +293,62 @@ pub struct AnalysisJobCreated {
   pub job_id: Uuid,
 }
 
+/// A file a batch analysis names: one under a root, or a succeeded download's.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AnalysisTarget {
+  /// a file under a root
+  File {
+    /// the directory the file is under
+    root: FileRoot,
+    /// the file's path under the root, `/`-separated, as plain text
+    #[schema(example = "Album/01 Track.flac")]
+    path: String,
+  },
+  /// the file a succeeded download was moved to
+  Download {
+    /// the peer
+    #[schema(example = "alice")]
+    username: String,
+    /// the download's id
+    id: Uuid,
+  },
+}
+
+/// The body of `POST /analysis/batch`: the files to analyze, in the order they are to run.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisBatch {
+  /// the files, each analyzed once its report is not current
+  pub files: Vec<AnalysisTarget>,
+}
+
+/// A file of a batch that was not queued and why.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisBatchRefusal {
+  /// the file's place in the batch's `files`, from 0
+  pub index: u32,
+  /// why it was not queued
+  #[schema(example = "The file is being written by a download")]
+  pub error: String,
+}
+
+/// The answer to `POST /analysis/batch`: what became of its files.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisBatchQueued {
+  /// files put in the analysis queue now
+  pub queued: u32,
+  /// files kept past the queue's limit, which join it in their order as it drains; one whose
+  /// report is current by then is left alone
+  pub following: u32,
+  /// files left alone because their report is current or they are queued or running already
+  pub current: u32,
+  /// files that were not queued, each with its reason
+  pub refused: Vec<AnalysisBatchRefusal>,
+}
+
 /// The query of `GET .../analysis`, which reads a file's report.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]

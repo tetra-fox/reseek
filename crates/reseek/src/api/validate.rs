@@ -59,9 +59,8 @@ pub fn room_name(name: &str) -> Result<(), ApiError> {
 }
 
 /// The path a files route names in base64 of its UTF-8 text, standard or URL-safe, padded or
-/// not, as a `/`-separated path relative to its root. `\` counts as a separator; a deletion
-/// drops leading separators, which older clients send. An absolute path, a `.` or `..`
-/// segment and a NUL are refused.
+/// not, as [`relative_path`] reads it; older clients send a deletion's path with leading
+/// separators.
 pub fn files_path(encoded: &str, deleting: bool) -> Result<String, ApiError> {
   let config = GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent);
   let engine = if encoded.contains(['+', '/']) {
@@ -74,6 +73,13 @@ pub fn files_path(encoded: &str, deleting: bool) -> Result<String, ApiError> {
     .map_err(|e| ApiError::invalid("The path is not valid base64", e.to_string()))?;
   let text =
     String::from_utf8(bytes).map_err(|_| ApiError::bad_request("The path is not valid UTF-8"))?;
+  relative_path(&text, deleting)
+}
+
+/// A path under a root as a `/`-separated relative path: `\` counts as a separator, and a
+/// deletion drops leading separators. An absolute path, a `.` or `..` segment and a NUL are
+/// refused.
+pub fn relative_path(text: &str, deleting: bool) -> Result<String, ApiError> {
   if text.contains('\0') {
     return Err(ApiError::bad_request("The path contains a NUL character"));
   }

@@ -3,8 +3,9 @@
 //! queue. A file is named as the files routes name it, or as a succeeded download.
 
 use api_types::analysis::{
-  AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
-  RunAnalysisQuery, SetAnalysisOverride, TileQuery, WindowSpectrum,
+  AnalysisBatch, AnalysisBatchQueued, AnalysisBatchRefusal, AnalysisJob, AnalysisJobCreated,
+  AnalysisListQuery, AnalysisReportQuery, AnalysisTarget, AudioAnalysis, RunAnalysisQuery,
+  SetAnalysisOverride, TileQuery, WindowSpectrum,
 };
 use api_types::files::FileRoot;
 use axum::extract::State;
@@ -39,6 +40,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(window_file))
     .routes(routes!(window_download))
     .routes(routes!(list))
+    .routes(routes!(run_batch))
     .routes(routes!(jobs))
     .routes(routes!(cancel_job))
 }
@@ -464,6 +466,53 @@ async fn list(
 ) -> Result<Json<Vec<AudioAnalysis>>, ApiError> {
   validate::positive("limit", query.limit)?;
   app.services.analysis.list(query).await.map(Json)
+}
+
+/// Queues many files for analysis in their order, each left alone when its report is current.
+/// What the queue has no room for is kept and joins it as it drains.
+#[utoipa::path(
+  post, path = "/analysis/batch", tag = "analysis",
+  request_body = AnalysisBatch,
+  responses(
+    (status = 202, body = AnalysisBatchQueued), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn run_batch(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+  Json(batch): Json<AnalysisBatch>,
+) -> Result<Response, ApiError> {
+  let mut refused = Vec::new();
+  let mut files = Vec::with_capacity(batch.files.len());
+  for (index, target) in (0u32..).zip(batch.files) {
+    let named = match target {
+      AnalysisTarget::File { root, path } => {
+        validate::relative_path(&path, false).map(|path| FileTarget::File { root, path })
+      }
+      AnalysisTarget::Download { username, id } => Ok(FileTarget::Download { username, id }),
+    };
+    match named {
+      Ok(target) => files.push((index, target)),
+      Err(e) => refused.push(AnalysisBatchRefusal {
+        index,
+        error: e.message().to_string(),
+      }),
+    }
+  }
+  let mut queued = app.services.analysis.run_batch(files).await?;
+  queued.refused.extend(refused);
+  queued.refused.sort_by_key(|refusal| refusal.index);
+  info!(
+    by = caller.principal.subject,
+    queued = queued.queued,
+    following = queued.following,
+    current = queued.current,
+    refused = queued.refused.len(),
+    "analysis batch queued"
+  );
+  Ok((StatusCode::ACCEPTED, Json(queued)).into_response())
 }
 
 /// The analyses queued and running.

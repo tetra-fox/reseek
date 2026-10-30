@@ -151,6 +151,77 @@
         }
       }
     },
+    "/api/v0/analysis/batch": {
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Queues many files for analysis in their order, each left alone when its report is current.\nWhat the queue has no room for is kept and joins it as it drains.",
+        "operationId": "run_batch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisBatchQueued"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/analysis/jobs": {
       "get": {
         "tags": [
@@ -14766,6 +14837,80 @@
         ],
         "description": "What another user did with us."
       },
+      "AnalysisBatch": {
+        "type": "object",
+        "description": "The body of `POST /analysis/batch`: the files to analyze, in the order they are to run.",
+        "required": [
+          "files"
+        ],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalysisTarget"
+            },
+            "description": "the files, each analyzed once its report is not current"
+          }
+        }
+      },
+      "AnalysisBatchQueued": {
+        "type": "object",
+        "description": "The answer to `POST /analysis/batch`: what became of its files.",
+        "required": [
+          "queued",
+          "following",
+          "current",
+          "refused"
+        ],
+        "properties": {
+          "current": {
+            "type": "integer",
+            "format": "int32",
+            "description": "files left alone because their report is current or they are queued or running already",
+            "minimum": 0
+          },
+          "following": {
+            "type": "integer",
+            "format": "int32",
+            "description": "files kept past the queue's limit, which join it in their order as it drains; one whose\nreport is current by then is left alone",
+            "minimum": 0
+          },
+          "queued": {
+            "type": "integer",
+            "format": "int32",
+            "description": "files put in the analysis queue now",
+            "minimum": 0
+          },
+          "refused": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalysisBatchRefusal"
+            },
+            "description": "files that were not queued, each with its reason"
+          }
+        }
+      },
+      "AnalysisBatchRefusal": {
+        "type": "object",
+        "description": "A file of a batch that was not queued and why.",
+        "required": [
+          "index",
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "why it was not queued",
+            "example": "The file is being written by a download"
+          },
+          "index": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the file's place in the batch's `files`, from 0",
+            "minimum": 0
+          }
+        }
+      },
       "AnalysisCompleted": {
         "type": "object",
         "description": "The data of a `files.analysis` frame: a report finished.",
@@ -15053,6 +15198,64 @@
             "description": "the judgment"
           }
         }
+      },
+      "AnalysisTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "a file under a root",
+            "required": [
+              "root",
+              "path",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "file"
+                ]
+              },
+              "path": {
+                "type": "string",
+                "description": "the file's path under the root, `/`-separated, as plain text",
+                "example": "Album/01 Track.flac"
+              },
+              "root": {
+                "$ref": "#/components/schemas/FileRoot",
+                "description": "the directory the file is under"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "the file a succeeded download was moved to",
+            "required": [
+              "username",
+              "id",
+              "kind"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "the download's id"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "download"
+                ]
+              },
+              "username": {
+                "type": "string",
+                "description": "the peer",
+                "example": "alice"
+              }
+            }
+          }
+        ],
+        "description": "A file a batch analysis names: one under a root, or a succeeded download's."
       },
       "AnalysisVerdict": {
         "type": "string",

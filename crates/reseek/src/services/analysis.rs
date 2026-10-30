@@ -2,8 +2,8 @@
 //! judgment.
 
 use api_types::analysis::{
-  AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
-  SetAnalysisOverride, WindowSpectrum,
+  AnalysisBatchQueued, AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery,
+  AudioAnalysis, SetAnalysisOverride, WindowSpectrum,
 };
 use api_types::auth::Principal;
 use async_trait::async_trait;
@@ -35,6 +35,15 @@ pub trait AnalysisService: Send + Sync {
   /// Queues an analysis of a file, again with `force` when it has one. One queued or running
   /// for the file already is a conflict.
   async fn run(&self, target: FileTarget, force: bool) -> Result<AnalysisJobCreated, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// Queues the files of a batch in their order, each named with its place in the batch. What
+  /// the queue has no room for is kept and joins it as it drains.
+  async fn run_batch(
+    &self,
+    files: Vec<(u32, FileTarget)>,
+  ) -> Result<AnalysisBatchQueued, ApiError> {
     Err(not_yet(DOMAIN))
   }
 
