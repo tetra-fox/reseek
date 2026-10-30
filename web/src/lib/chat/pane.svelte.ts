@@ -255,8 +255,9 @@ export class MessagePane {
         }
       })
     );
-    // a conversation not started yet has nothing stored, which is no error
     if (outcome.ok) this.conversation = outcome.data;
+    // a conversation not started yet has nothing stored, which is no error
+    else if (outcome.status !== 404) this.error = outcome.error;
   }
 
   /** The first unread message: unacknowledged in a conversation, after a room's read marker */
