@@ -322,8 +322,7 @@ impl Downloads {
         record.size = transfer.size;
         record.exception = None;
         record.place_in_queue = None;
-        record.removed = self.removal_pending(record.id);
-        self.save(record, true).await;
+        // written once the file is moved, so no reader sees it succeeded without its path
         self
           .telemetry
           .metrics()

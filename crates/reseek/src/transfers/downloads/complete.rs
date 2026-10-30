@@ -1,9 +1,9 @@
 //! What follows a download whose file arrived: the file is moved from the incomplete
-//! directory to its destination under the downloads directory and the record learns where it
-//! is, then `DownloadFileComplete` is raised, the file is queued for analysis when the options
-//! ask for it, and `DownloadDirectoryComplete` is raised too when no other download from the
-//! same remote directory of the same user is left. A move that fails keeps the download
-//! succeeded with the move's error, and raises `DownloadFileFailed`.
+//! directory to its destination under the downloads directory and the record is written as
+//! succeeded with where the file is, then `DownloadFileComplete` is raised, the file is queued
+//! for analysis when the options ask for it, and `DownloadDirectoryComplete` is raised too when
+//! no other download from the same remote directory of the same user is left. A move that fails
+//! keeps the download succeeded with the move's error, and raises `DownloadFileFailed`.
 
 use std::path::{Path, PathBuf};
 
@@ -27,8 +27,8 @@ use crate::transfers::listing::remote_directory;
 use crate::transfers::{Record, direction_text};
 
 impl Downloads {
-  /// Moves the arrived file of `record` from `incomplete` to its destination and raises the
-  /// events that follow.
+  /// Moves the arrived file of `record`, succeeded but not yet written, from `incomplete` to its
+  /// destination, writes the record with where the file is, and raises the events that follow.
   pub(super) async fn complete(&self, mut record: Record, incomplete: PathBuf) {
     let options = self.config.current().values.clone();
     let destination = &options.transfers.download.destination;
@@ -57,7 +57,8 @@ impl Downloads {
       Err(reason) => return self.move_failed(&mut record, &incomplete, reason).await,
     };
     record.local_path = Some(path.display().to_string());
-    self.save(&record, false).await;
+    record.removed = self.removal_pending(record.id);
+    self.save(&record, true).await;
     info!(path = %path.display(), "download moved into the downloads directory");
     if let Some(relay) = &self.relay {
       relay.download_completed(&path).await;
@@ -139,7 +140,8 @@ impl Downloads {
   async fn move_failed(&self, record: &mut Record, incomplete: &Path, reason: String) {
     error!(path = %incomplete.display(), reason, "downloaded file not moved into the downloads directory");
     record.exception = Some(reason.clone());
-    self.save(record, false).await;
+    record.removed = self.removal_pending(record.id);
+    self.save(record, true).await;
     self.events.raise_at(
       Event::DownloadFileFailed(DownloadFileFailed {
         version: 0,

@@ -78,8 +78,9 @@ async fn a_download_lands_at_its_destination_and_a_failed_move_keeps_it() {
 
   let id = enqueue(&api, &peer, ALBUM, SIZE as u64).await;
   serve(&uploader, &mut requests, ALBUM, &one).await;
-  let done = download_when(&api, &peer, id, "moved", |t| t.local_path.is_some()).await;
-  assert_eq!(done.state, completed(TransferStates::Succeeded));
+  // a download reads as succeeded only once its file is in place
+  let succeeded = |t: &Transfer| t.state == completed(TransferStates::Succeeded);
+  let done = download_when(&api, &peer, id, "succeeded", succeeded).await;
   let landed = dir
     .path()
     .join("data")
@@ -144,12 +145,8 @@ async fn a_download_lands_at_its_destination_and_a_failed_move_keeps_it() {
   .unwrap();
   let id = enqueue(&api, &peer, blocked, SIZE as u64).await;
   serve(&uploader, &mut requests, blocked, &one).await;
-  let kept = download_when(&api, &peer, id, "failed to move", |t| t.exception.is_some()).await;
-  assert_eq!(
-    kept.state,
-    completed(TransferStates::Succeeded),
-    "every byte arrived"
-  );
+  // every byte arrived, so the download succeeded with the move's error
+  let kept = download_when(&api, &peer, id, "succeeded", succeeded).await;
   assert!(
     kept
       .exception
