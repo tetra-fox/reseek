@@ -41,15 +41,6 @@ pub struct Flags {
   /// messages.
   #[cascade(env = "RESEEK_LOG_SQL", cli = "--log-sql")]
   pub log_sql: bool,
-  /// Logs failures of background work that nothing waits on.
-  #[cascade(
-    env = "RESEEK_LOG_UNOBSERVED_EXCEPTIONS",
-    cli = "--log-unobserved-exceptions"
-  )]
-  pub log_unobserved_exceptions: bool,
-  /// Enables experimental features.
-  #[cascade(env = "RESEEK_EXPERIMENTAL", cli = "--experimental")]
-  pub experimental: bool,
   /// Keeps every database in memory. Nothing is saved across restarts.
   #[cascade(env = "RESEEK_VOLATILE", cli = "--volatile")]
   pub volatile: bool,

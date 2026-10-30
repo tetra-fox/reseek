@@ -62,12 +62,10 @@
     "flags": {
       "case_sensitive_regex": false,
       "config_watch_poll": false,
-      "experimental": false,
       "force_migrations": false,
       "force_share_scan": false,
       "legacy_windows_tcp_keepalive": false,
       "log_sql": false,
-      "log_unobserved_exceptions": false,
       "no_config_watch": false,
       "no_connect": false,
       "no_logo": false,
@@ -893,21 +891,6 @@
       "secret": false,
       "notApplied": null
     },
-    "flags.experimental": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_EXPERIMENTAL",
-      "cliFlag": "--experimental",
-      "kind": "bool",
-      "doc": "Enables experimental features.",
-      "choices": null,
-      "default": false,
-      "apply": "restart",
-      "secret": false,
-      "notApplied": null
-    },
     "flags.force_migrations": {
       "source": {
         "layer": "default"
@@ -962,21 +945,6 @@
       "cliFlag": "--log-sql",
       "kind": "bool",
       "doc": "Logs every SQL statement with its values. The log then contains usernames, filenames and messages.",
-      "choices": null,
-      "default": false,
-      "apply": "restart",
-      "secret": false,
-      "notApplied": null
-    },
-    "flags.log_unobserved_exceptions": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_LOG_UNOBSERVED_EXCEPTIONS",
-      "cliFlag": "--log-unobserved-exceptions",
-      "kind": "bool",
-      "doc": "Logs failures of background work that nothing waits on.",
       "choices": null,
       "default": false,
       "apply": "restart",

@@ -572,8 +572,6 @@ export const sections: Section[] = [
           ["case_sensitive_regex", "Case-sensitive patterns"],
           ["volatile", "In-memory databases"],
           ["log_sql", "Log SQL"],
-          ["log_unobserved_exceptions", "Log background failures"],
-          ["experimental", "Experimental features"],
           ["optimistic_relay_file_info", "Trust agent share listings"],
           ["force_migrations", "Force migrations"],
           ["legacy_windows_tcp_keepalive", "Legacy Windows keep-alive"],
