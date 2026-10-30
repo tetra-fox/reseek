@@ -25,8 +25,8 @@ const QUEUE: usize = 1000;
 /// How many read directories wait for the writer at most.
 const WRITES: usize = 64;
 
-/// What decides what a scan puts in the index: the shares, the filters and whether links are
-/// followed.
+/// What decides what a scan puts in the index: the shares, the filters, whether they match
+/// case and whether links are followed.
 #[derive(Clone, Debug)]
 pub struct Settings {
   /// the shares, deepest path first
@@ -47,20 +47,21 @@ pub(super) fn filter_set(filters: &[String]) -> BTreeSet<&str> {
 }
 
 impl Settings {
-  /// The settings of `options` for the share list `shares`.
-  pub fn new(shares: Vec<Share>, options: &Options) -> Self {
+  /// The settings of `options` for the share list `shares`, the filters matching case when
+  /// `case_sensitive`.
+  pub fn new(shares: Vec<Share>, options: &Options, case_sensitive: bool) -> Self {
     let filters = options
       .shares
       .filters
       .iter()
       .filter_map(|f| {
-        patterns::compile(f, options.flags.case_sensitive_regex)
+        patterns::compile(f, case_sensitive)
           .inspect_err(|e| warn!(filter = f, error = e, "share filter not used"))
           .ok()
       })
       .collect();
     let snapshot = json!({
-      "content": content_of(&shares, options),
+      "content": content_of(&shares, options, case_sensitive),
       "shares": options.shares,
     });
     Self {
@@ -79,14 +80,19 @@ impl Settings {
 }
 
 /// What decides what a scan of `shares` with `options` shares: the entries, the filters as a
-/// set and whether links are followed.
-pub(super) fn content_of(shares: &[Share], options: &Options) -> serde_json::Value {
+/// set, whether they match case and whether links are followed.
+pub(super) fn content_of(
+  shares: &[Share],
+  options: &Options,
+  case_sensitive: bool,
+) -> serde_json::Value {
   let mut directories: Vec<&str> = shares.iter().map(|s| s.raw.as_str()).collect();
   directories.sort_unstable();
   directories.dedup();
   json!({
     "directories": directories,
     "filters": filter_set(&options.shares.filters),
+    "caseSensitive": case_sensitive,
     "followSymlinks": options.shares.follow_symlinks,
   })
 }
@@ -365,7 +371,7 @@ pub(super) mod tests {
     options.shares.filters = filters.iter().map(|f| f.to_string()).collect();
     options.shares.follow_symlinks = follow;
     let shares = share::configure(&options.shares, Path::new("/nowhere"));
-    Arc::new(Settings::new(shares, &options))
+    Arc::new(Settings::new(shares, &options, false))
   }
 
   pub async fn names(db: &Database) -> Vec<String> {

@@ -186,13 +186,14 @@ struct Rules {
 }
 
 impl Rules {
-  fn of(options: &Options) -> Self {
+  /// The blacklist of `options`, its name patterns matching case when `case_sensitive`.
+  fn of(options: &Options, case_sensitive: bool) -> Self {
     let blacklisted = &options.transfers.groups.blacklisted;
     let patterns = blacklisted
       .patterns
       .iter()
       .filter_map(|text| {
-        crate::config::patterns::compile(text, options.flags.case_sensitive_regex)
+        crate::config::patterns::compile(text, case_sensitive)
           .inspect_err(|e| warn!(pattern = text, error = %e, "blacklist pattern not used"))
           .ok()
       })
@@ -259,6 +260,8 @@ impl Decision {
 /// Who is blocked: our blocks and the configuration's blacklist, with the remembered answers.
 #[derive(Default)]
 pub struct Blocks {
+  /// whether the blacklist's name patterns match case, as the daemon started with
+  case_sensitive: bool,
   active: RwLock<HashMap<String, Active>>,
   rules: RwLock<Arc<Rules>>,
   blocklist: RwLock<Option<LoadedBlocklist>>,
@@ -268,7 +271,10 @@ pub struct Blocks {
 impl Blocks {
   /// The check for `options`, with our unexpired blocks `ours`.
   pub fn new(options: &Options, ours: &[Block]) -> Self {
-    let blocks = Self::default();
+    let blocks = Self {
+      case_sensitive: options.flags.case_sensitive_regex,
+      ..Self::default()
+    };
     blocks.configure(options);
     for block in ours {
       blocks.set(block);
@@ -278,7 +284,8 @@ impl Blocks {
 
   /// Takes the configuration's blacklist from `options` and forgets every remembered answer.
   pub fn configure(&self, options: &Options) {
-    *self.rules.write().unwrap_or_else(PoisonError::into_inner) = Arc::new(Rules::of(options));
+    let rules = Rules::of(options, self.case_sensitive);
+    *self.rules.write().unwrap_or_else(PoisonError::into_inner) = Arc::new(rules);
     lock(&self.decisions).clear();
   }
 
@@ -540,6 +547,12 @@ mod tests {
     options.transfers.groups.blacklisted.members.clear();
     blocks.configure(&options);
     assert!(!blocks.is_blocked("Mallory", None, BlockScope::Distributed));
+    options.flags.case_sensitive_regex = true;
+    blocks.configure(&options);
+    assert!(
+      blocks.is_blocked("SPAMBOT", None, BlockScope::Searches),
+      "patterns match case only after a restart"
+    );
   }
 
   #[test]

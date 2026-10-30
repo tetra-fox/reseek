@@ -162,6 +162,8 @@ pub struct Shares {
   /// a debug relay serves its own files through itself as an agent
   relay_debug: bool,
   workers: u32,
+  /// whether the share filters match case, as the daemon started with
+  case_sensitive: bool,
   quiet: Duration,
   shutdown: CancellationToken,
   /// the configured shares with their counts
@@ -236,6 +238,7 @@ impl Shares {
       in_memory: storage.in_memory,
       relay_debug: options.relay.enabled && options.relay.mode == RelayMode::Debug,
       workers: options.shares.cache.workers,
+      case_sensitive: options.flags.case_sensitive_regex,
       quiet,
       shutdown,
       covered: Mutex::new(None),
@@ -429,6 +432,16 @@ impl Shares {
     let (agents, added) = self.agent_totals();
     let api = status.to_api(agents, added);
     self.state.update(|state| state.shares = api);
+  }
+
+  /// What a scan started now would go by: the configured shares and the current share
+  /// options, with the filters matching case as at startup.
+  fn scan_settings(&self) -> Settings {
+    Settings::new(
+      self.listed(),
+      &self.config.current().values,
+      self.case_sensitive,
+    )
   }
 
   /// The configured shares with their counts.

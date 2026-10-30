@@ -340,7 +340,7 @@ impl AppState {
       releases: releases.clone(),
       state: state.clone(),
       databases: databases.clone(),
-      config: config.clone(),
+      no_version_check: startup.values.flags.no_version_check,
     });
     Ok(Self {
       config,

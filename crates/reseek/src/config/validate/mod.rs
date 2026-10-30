@@ -29,8 +29,8 @@ pub struct Context {
   pub default_incomplete: PathBuf,
   /// the directory of the running program, which `web.content_path` is relative to
   pub program_dir: PathBuf,
-  /// whether the daemon started with case-sensitive patterns: the flag takes a restart, so the
-  /// search request filters are compiled with it until then, and checked the same way
+  /// whether the daemon started with case-sensitive patterns: the flag takes a restart, so every
+  /// pattern is compiled with it until then, and checked the same way
   pub started_case_sensitive: bool,
 }
 
@@ -43,7 +43,7 @@ pub fn validate(options: &Options, context: &Context) -> Result<(), Vec<Invalid>
     .downloads
     .clone()
     .unwrap_or_else(|| context.default_downloads.clone());
-  let case_sensitive = options.flags.case_sensitive_regex;
+  let case_sensitive = context.started_case_sensitive;
   shares::check(&options.shares, &downloads, case_sensitive, &mut report);
   transfers::check(&options.transfers, case_sensitive, &mut report);
   web::check(&options.web, context, &mut report);
@@ -97,6 +97,34 @@ mod tests {
   fn the_defaults_are_valid() {
     let dir = tempfile::tempdir().unwrap();
     assert_eq!(validate(&Options::default(), &context(dir.path())), Ok(()));
+  }
+
+  #[test]
+  fn patterns_are_checked_with_the_case_sensitivity_the_daemon_started_with() {
+    // compiles matching case, and is too large to compile ignoring it
+    let pattern = "[a-z]{50000}".to_string();
+    let dir = tempfile::tempdir().unwrap();
+    let mut options = Options::default();
+    options.shares.filters = vec![pattern.clone()];
+    options.transfers.groups.blacklisted.patterns = vec![pattern.clone()];
+    options.filters.search.request = vec![pattern];
+    let started_sensitive = Context {
+      started_case_sensitive: true,
+      ..context(dir.path())
+    };
+    assert_eq!(validate(&options, &started_sensitive), Ok(()));
+    options.flags.case_sensitive_regex = true;
+    let invalid = validate(&options, &context(dir.path())).unwrap_err();
+    let keys: Vec<&str> = invalid.iter().map(|i| i.key.as_str()).collect();
+    assert_eq!(
+      keys,
+      [
+        "filters.search.request",
+        "shares.filters",
+        "transfers.groups.blacklisted.patterns"
+      ],
+      "{invalid:?}"
+    );
   }
 
   #[test]

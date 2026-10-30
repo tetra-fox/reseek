@@ -42,6 +42,8 @@ pub(super) async fn start(app: &AppState) {
 async fn run(app: AppState) {
   info!("Application started");
   let options = app.config.current().values.clone();
+  // the flags take a restart, so they are read as the daemon started with
+  let flags = &app.startup.values.flags;
   let soulseek = &options.soulseek;
   info!(
     address = soulseek.listen_ip_address,
@@ -52,7 +54,7 @@ async fn run(app: AppState) {
   if proxy.enabled {
     info!(address = ?proxy.address, port = ?proxy.port, "Using Proxy");
   }
-  if !options.flags.no_version_check {
+  if !flags.no_version_check {
     tokio::spawn(check_versions(app.clone()).in_current_span());
   }
   app.shares.initialized().await;
@@ -142,7 +144,7 @@ async fn run(app: AppState) {
       warn!("Running in Debug relay mode; connecting to controller");
     }
   }
-  if options.flags.no_connect {
+  if flags.no_connect {
     warn!("Not connecting to the Soulseek server; 'no-connect' option is enabled");
   } else if network::credentials(soulseek).is_none() {
     network::warn_no_credentials();

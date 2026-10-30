@@ -63,8 +63,7 @@ impl Shares {
       status.files = 0;
     });
     info!("Share scan started");
-    let options = self.config.current();
-    let settings = Arc::new(Settings::new(self.listed(), &options.values));
+    let settings = Arc::new(self.scan_settings());
     let reporter = {
       let shares = self.clone();
       move |progress: scanner::Progress| {
@@ -172,7 +171,8 @@ impl Shares {
   /// link following.
   fn covers_current(&self, settings: &Settings) -> bool {
     let options = self.config.current();
-    settings.snapshot.get("content") == Some(&scanner::content_of(&self.listed(), &options.values))
+    let content = scanner::content_of(&self.listed(), &options.values, self.case_sensitive);
+    settings.snapshot.get("content") == Some(&content)
   }
 
   /// Puts a failed scan into the state: the cache served is what was there before.

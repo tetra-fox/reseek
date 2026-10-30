@@ -355,10 +355,7 @@ async fn lost_events_rescan_the_directory_and_drop_what_is_gone() {
   let album = files.path().join("music/Album");
   std::fs::remove_file(album.join("01.mp3")).unwrap();
   std::fs::write(album.join("02.mp3"), "two").unwrap();
-  let settings = Arc::new(scanner::Settings::new(
-    shares.listed(),
-    &app.state.config.current().values,
-  ));
+  let settings = Arc::new(shares.scan_settings());
   let roots = vec![files.path().join("music")];
   watcher::apply(
     &shares,
@@ -438,10 +435,7 @@ async fn changes_waiting_for_quiet_are_applied_when_the_watches_are_replaced() {
   std::fs::write(files.path().join("music/Album/05.mp3"), "five").unwrap();
   // the notification needs a moment to reach the watcher before the watches are replaced
   tokio::time::sleep(Duration::from_millis(300)).await;
-  let settings = Arc::new(scanner::Settings::new(
-    shares.listed(),
-    &app.state.config.current().values,
-  ));
+  let settings = Arc::new(shares.scan_settings());
   shares.watch_shares(settings).await;
   eventually(async || names(&shares, "05").await == ["Music\\Album\\05.mp3"]).await;
   drop(files);

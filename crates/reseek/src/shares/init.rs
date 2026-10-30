@@ -129,8 +129,7 @@ impl Shares {
     if latest.suspect {
       return Err("Previous share scan was marked as suspect".into());
     }
-    let options = self.config.current();
-    let settings = Arc::new(Settings::new(self.listed(), &options.values));
+    let settings = Arc::new(self.scan_settings());
     let recorded = scanner::content(&latest.options)
       .map_err(|e| format!("Previous share scan recorded options that cannot be read: {e}"))?;
     if recorded != settings.snapshot.get("content").cloned() {
