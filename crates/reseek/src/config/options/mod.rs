@@ -224,7 +224,8 @@ pub struct SearchThrottling {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct IncomingSearchThrottling {
-  /// Maximum number of incoming searches answered at once.
+  /// Bounds how many incoming searches are answered at once. Further searches wait in the
+  /// search queue until a worker is free.
   #[cascade(
     env = "RESEEK_THROTTLING_SEARCH_INCOMING_CONCURRENCY",
     cli = "--throttling-search-incoming-concurrency",

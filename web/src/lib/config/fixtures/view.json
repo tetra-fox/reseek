@@ -2790,7 +2790,7 @@
       "envVar": "RESEEK_THROTTLING_SEARCH_INCOMING_CONCURRENCY",
       "cliFlag": "--throttling-search-incoming-concurrency",
       "kind": "integer",
-      "doc": "Maximum number of incoming searches answered at once.",
+      "doc": "Bounds how many incoming searches are answered at once. Further searches wait in the search queue until a worker is free.",
       "choices": null,
       "default": 10,
       "apply": "restart",

@@ -446,7 +446,7 @@ export const sections: Section[] = [
     fields: [
       {
         key: "throttling.search.incoming.concurrency",
-        label: "Concurrent search responses",
+        label: "Search workers",
         min: 1,
         max: 100
       },
