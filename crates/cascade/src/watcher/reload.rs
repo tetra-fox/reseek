@@ -34,6 +34,7 @@ impl<T: Root> State<T> {
 
   /// Loads the files and makes them the configuration in effect.
   pub(super) fn load(&mut self, shared: &Shared<T>) -> Result<Option<Arc<Change<T>>>, Failure> {
+    // a file that cannot be read fails the load below, which says why
     if let Ok(files) = self.layers.files_now() {
       self.attempted = files;
     }

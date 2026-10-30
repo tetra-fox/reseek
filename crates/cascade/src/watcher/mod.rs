@@ -173,7 +173,7 @@ impl<T: Root> Watcher<T> {
       match FileEvents::new(poll, self.shared.entries.clone(), events.clone()) {
         Ok(files) => Some(files),
         Err(e) => {
-          warn!(error = %e, "configuration files are not watched; reload with a signal or the API");
+          warn!(error = %e, "configuration files are not watched; a change takes effect on the next reload");
           None
         }
       }
