@@ -117,7 +117,8 @@ option_enum! {
 option_enum! {
   /// Where the share index is kept.
   pub enum StorageMode {
-    /// in memory, rebuilt by a scan at every start
+    /// in memory, restored at each start from the backup of the last scan, or rebuilt by a
+    /// scan when there is no backup
     #[default]
     Memory = "memory",
     /// in a database file in the cache directory

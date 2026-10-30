@@ -65,7 +65,7 @@ pub async fn open(
       match Database::open_as(&SCHEMA, &location(false), STEM).await {
         Ok(db) => db,
         Err(e) => {
-          warn!(error = %e, "Share cache and backup are both missing, corrupt, or is out of date");
+          warn!(error = %e, "Share cache and backup are both missing, corrupt, or out of date");
           let file = primary.clone();
           on_blocking_thread(move || remove_database(&file)).await?;
           Database::open_as(&SCHEMA, &location(false), STEM).await?

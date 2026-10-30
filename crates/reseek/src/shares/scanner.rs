@@ -164,7 +164,7 @@ pub async fn scan(
   db.write(move |conn| repository::insert_scan(conn, timestamp, &options))
     .await?;
   if settings.shares.is_empty() {
-    warn!("Aborting shared file scan; no shares configured.");
+    warn!("No shares configured; the scan leaves the share index empty");
   }
   for share in &settings.shares {
     if share.excluded {
