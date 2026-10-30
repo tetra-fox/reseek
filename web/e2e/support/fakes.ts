@@ -672,3 +672,28 @@ export const fakeAnalysis = async (page: Page, { stale = false, duration = 30.5 
     }
   );
 };
+
+/** A file a batch analysis names, as the page sends it */
+type BatchFile =
+  | { kind: "file"; root: string; path: string }
+  | { kind: "download"; username: string; id: string };
+
+/**
+ * Answers the batch analysis call: `each` says what became of each file it names, in order;
+ * nothing follows past the queue's limit
+ */
+export const fakeBatch = async (
+  page: Page,
+  each: (file: BatchFile) => "queued" | "current" | "refused"
+) => {
+  await page.route("**/api/v0/analysis/batch", (route) => {
+    const { files } = route.request().postDataJSON() as { files: BatchFile[] };
+    const result = { queued: 0, following: 0, current: 0, refused: [] as unknown[] };
+    files.forEach((file, index) => {
+      const outcome = each(file);
+      if (outcome === "refused") result.refused.push({ index, error: "The file is gone" });
+      else result[outcome]++;
+    });
+    return route.fulfill({ status: 202, json: result });
+  });
+};

@@ -42,6 +42,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/analysis/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queues many files for analysis in their order, each left alone when its report is current.
+         *     What the queue has no room for is kept and joins it as it drains.
+         */
+        post: operations["run_batch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/analysis/jobs": {
         parameters: {
             query?: never;
@@ -2890,6 +2910,45 @@ export interface components {
             /** @enum {string} */
             type: "privateRoom";
         };
+        /** @description The body of `POST /analysis/batch`: the files to analyze, in the order they are to run. */
+        AnalysisBatch: {
+            /** @description the files, each analyzed once its report is not current */
+            files: components["schemas"]["AnalysisTarget"][];
+        };
+        /** @description The answer to `POST /analysis/batch`: what became of its files. */
+        AnalysisBatchQueued: {
+            /**
+             * Format: int32
+             * @description files left alone because their report is current or they are queued or running already
+             */
+            current: number;
+            /**
+             * Format: int32
+             * @description files kept past the queue's limit, which join it in their order as it drains; one whose
+             *     report is current by then is left alone
+             */
+            following: number;
+            /**
+             * Format: int32
+             * @description files put in the analysis queue now
+             */
+            queued: number;
+            /** @description files that were not queued, each with its reason */
+            refused: components["schemas"]["AnalysisBatchRefusal"][];
+        };
+        /** @description A file of a batch that was not queued and why. */
+        AnalysisBatchRefusal: {
+            /**
+             * @description why it was not queued
+             * @example The file is being written by a download
+             */
+            error: string;
+            /**
+             * Format: int32
+             * @description the file's place in the batch's `files`, from 0
+             */
+            index: number;
+        };
         /** @description The data of a `files.analysis` frame: a report finished. */
         AnalysisCompleted: {
             /**
@@ -3058,6 +3117,31 @@ export interface components {
             note?: string | null;
             /** @description the judgment */
             verdict: components["schemas"]["Judgment"];
+        };
+        /** @description A file a batch analysis names: one under a root, or a succeeded download's. */
+        AnalysisTarget: {
+            /** @enum {string} */
+            kind: "file";
+            /**
+             * @description the file's path under the root, `/`-separated, as plain text
+             * @example Album/01 Track.flac
+             */
+            path: string;
+            /** @description the directory the file is under */
+            root: components["schemas"]["FileRoot"];
+        } | {
+            /**
+             * Format: uuid
+             * @description the download's id
+             */
+            id: string;
+            /** @enum {string} */
+            kind: "download";
+            /**
+             * @description the peer
+             * @example alice
+             */
+            username: string;
         };
         /**
          * @description The analyzer's reading of whether the audio matches the format the file claims.
@@ -7715,6 +7799,61 @@ export interface operations {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    run_batch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalysisBatch"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisBatchQueued"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,7 +1,7 @@
 import { expect, type Locator, test } from "@playwright/test";
 
 import { newId } from "../src/lib/ids";
-import { ANALYZED_DOWNLOAD, fakeAnalysis, fakeDownloads } from "./support/fakes";
+import { ANALYZED_DOWNLOAD, fakeAnalysis, fakeBatch, fakeDownloads } from "./support/fakes";
 import { login } from "./support/login";
 import { wav } from "./support/pictures";
 
@@ -523,21 +523,12 @@ test("queues a user's downloads, a folder and a selection for analysis", async (
   await fakeDownloads(page);
   await fakeAnalysis(page);
   const queued: string[] = [];
-  await page.route(
-    (url) => /\/transfers\/downloads\/[^/]+\/[^/]+\/analysis$/.test(url.pathname),
-    (route) => {
-      if (route.request().method() !== "POST") return route.fallback();
-      const id = new URL(route.request().url()).pathname.split("/").at(-2)!;
-      if (id === ANALYZED_DOWNLOAD) {
-        return route.fulfill({
-          status: 409,
-          json: { error: "The file has already been analyzed" }
-        });
-      }
-      queued.push(id);
-      return route.fulfill({ status: 202, json: { jobId: newId() } });
-    }
-  );
+  await fakeBatch(page, (file) => {
+    if (file.kind !== "download") return "refused";
+    if (file.id === ANALYZED_DOWNLOAD) return "current";
+    queued.push(file.id);
+    return "queued";
+  });
   await login(page, "/downloads");
   const grid = page.getByRole("treegrid", { name: "Downloads" });
   const header = (name: string) => grid.getByRole("rowheader").filter({ hasText: name });
@@ -603,6 +594,11 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
     })
   );
   const queued: { id: string; path: string }[] = [];
+  await fakeBatch(page, (file) => {
+    if (file.kind !== "file") return "refused";
+    queued.push({ id: newId(), path: file.path });
+    return "queued";
+  });
   await page.route("**/api/v0/files/downloads/directories/*", (route) =>
     route.fulfill({
       json: {
