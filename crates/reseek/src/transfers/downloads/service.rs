@@ -22,7 +22,7 @@ use crate::transfers::{Record, listing, removal, store};
 
 /// What a refused enqueue call is told when every one allowed at once runs already.
 const BUSY: &str =
-  "Only one concurrent operation is permitted. Wait until the previous request completes";
+  "Too many download requests are being handled at once. Wait until one of them completes.";
 
 /// One of the client's transfers as `GET /debug/transfers` shows it.
 fn client_transfer(transfer: &soulseek_client::Transfer) -> serde_json::Value {
