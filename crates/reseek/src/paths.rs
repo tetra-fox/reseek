@@ -4,7 +4,7 @@
 //! The defaults come from the platform's conventional places (the `directories` crate), or from
 //! one tree under the application directory when `--app-dir` is given. A `paths.*` or
 //! `directories.*` option overrides either. Downloads go under the data directory, except on
-//! Windows, where finished ones go to the user's Downloads folder.
+//! Windows, where finished ones go to a `reseek` folder in the user's Downloads folder.
 
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
@@ -147,12 +147,13 @@ impl Defaults {
   }
 }
 
-/// The user's Downloads folder on `os`, from `find`, when finished downloads go there: on
-/// Windows, where reseek runs as the user. Elsewhere it usually runs as a service, whose
-/// downloads stay with its data.
+/// The `reseek` folder in the user's Downloads folder on `os`, which `find` gives, when
+/// finished downloads go there: on Windows, where reseek runs as the user. A folder of its own
+/// keeps the retention of finished downloads and sharing them to reseek's files. Elsewhere
+/// reseek usually runs as a service, whose downloads stay with its data.
 fn user_downloads(os: Os, find: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
   match os {
-    Os::Windows => find(),
+    Os::Windows => find().map(|downloads| downloads.join("reseek")),
     Os::Unix => None,
   }
 }
@@ -301,10 +302,11 @@ mod tests {
   }
 
   #[test]
-  fn finished_downloads_go_to_the_downloads_folder_on_windows_only() {
-    let folder = PathBuf::from(r"C:\Users\alice\Downloads");
+  fn finished_downloads_go_to_a_reseek_folder_in_downloads_on_windows_only() {
+    let downloads = PathBuf::from(r"C:\Users\alice\Downloads");
+    let folder = downloads.join("reseek");
     assert_eq!(
-      user_downloads(Os::Windows, || Some(folder.clone())),
+      user_downloads(Os::Windows, || Some(downloads)),
       Some(folder.clone())
     );
     assert_eq!(user_downloads(Os::Windows, || None), None);
