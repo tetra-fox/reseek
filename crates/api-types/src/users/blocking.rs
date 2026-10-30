@@ -15,13 +15,13 @@ pub enum BlockScope {
   Searches,
   /// the user's browse and folder requests get an empty listing
   Browse,
-  /// the user's private messages are acknowledged and discarded, and we can not message them
+  /// the user's private messages are acknowledged and discarded, and we cannot message them
   Messages,
   /// the user's room messages are stored hidden and not pushed
   Rooms,
-  /// we can not download from the user, and our downloads from them are canceled
+  /// we cannot download from the user, and our downloads from them are canceled
   Downloads,
-  /// the user can not be our child in the distributed network
+  /// the user cannot be our child in the distributed network
   Distributed,
 }
 

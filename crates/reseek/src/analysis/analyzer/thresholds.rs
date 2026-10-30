@@ -19,14 +19,14 @@ pub(in crate::analysis) const SHARP_SHELF_DB: f64 = 30.0;
 /// A cutoff at or above this fraction of the band's top counts as reaching it.
 pub(in crate::analysis) const FULL_BAND: f64 = 0.9;
 /// Content that rolls off gently below this fraction of the band's top is band-limited by
-/// nature, and the reading says it can not tell.
+/// nature, and the reading says it cannot tell.
 pub(in crate::analysis) const NATURAL_LIMIT: f64 = 0.75;
 /// The lowest frequency a step inside a full band is looked for at, in Hz.
 pub(in crate::analysis) const INNER_SHELF_FROM_HZ: f64 = 10_000.0;
 /// A step of at least this many dB inside a full band is a band-limited layer under it.
 pub(in crate::analysis) const INNER_SHELF_DB: f64 = 20.0;
 /// A step of at least this many dB where the highest bitrates cut, under a band that reaches
-/// the top, is reason enough to doubt the band: it reads as something the analyzer can not
+/// the top, is reason enough to doubt the band: it reads as something the analyzer cannot
 /// tell, which costs an honest file nothing. Honest spectra step by a decibel or two there.
 pub(in crate::analysis) const HIGH_STEP_DB: f64 = 10.0;
 /// The band above such a step is content only when it is at least this many dB over the
@@ -92,7 +92,7 @@ pub(in crate::analysis) struct Profile {
 }
 
 /// Profiles at this bitrate and above cut where some recordings are filtered when they are
-/// made, so a sharp shelf there reads as something the analyzer can not tell, never as a
+/// made, so a sharp shelf there reads as something the analyzer cannot tell, never as a
 /// transcode.
 pub(in crate::analysis) const HIGH_BITRATE_KBPS: u32 = 320;
 

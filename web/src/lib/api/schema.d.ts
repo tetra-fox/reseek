@@ -1898,7 +1898,7 @@ export interface paths {
         put?: never;
         /**
          * Creates a token with at most the caller's own role. Its secret is in the answer and is
-         *     never shown again. Needs a login session: a token can not make tokens.
+         *     never shown again. Needs a login session: a token cannot make tokens.
          */
         post: operations["create"];
         delete?: never;
@@ -3613,7 +3613,7 @@ export interface components {
             /** @description false once the conversation was closed; the next message either way opens it again */
             isActive: boolean;
             /**
-             * @description the conversation holds the server's own notices, which can not be answered and never
+             * @description the conversation holds the server's own notices, which cannot be answered and never
              *     count as unread
              */
             isServerNotice: boolean;
@@ -4362,7 +4362,7 @@ export interface components {
             name: string;
             /** @description where the file is */
             path: string;
-            /** @description why the file can not be written */
+            /** @description why the file cannot be written */
             readOnlyReason?: string | null;
             /**
              * @description a hash of its contents, null when the file does not exist
@@ -10030,7 +10030,7 @@ export interface operations {
                  */
                 topics?: string;
                 /**
-                 * @description an API token or a configuration API key, for clients that can not set an
+                 * @description an API token or a configuration API key, for clients that cannot set an
                  *     `Authorization` header; never a session cookie's value
                  */
                 access_token?: string;

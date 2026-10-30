@@ -346,7 +346,7 @@ async fn a_report_and_its_judgment_outlive_the_file() {
   let (status, _) = app
     .call("POST", &format!("{by_download}?force=true"), None)
     .await;
-  assert_eq!(status, 404, "a file that is gone can not be analyzed again");
+  assert_eq!(status, 404, "a file that is gone cannot be analyzed again");
 }
 
 #[tokio::test]

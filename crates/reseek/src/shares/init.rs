@@ -1,5 +1,5 @@
 //! The shares' background work besides scanning: loading the index at startup or scanning
-//! when it can not be trusted, the scheduled rescan, and marking a rescan pending when the
+//! when it cannot be trusted, the scheduled rescan, and marking a rescan pending when the
 //! share options change.
 
 use std::sync::Arc;
@@ -36,7 +36,7 @@ pub(super) fn start(shares: &Arc<Shares>, options: &Options) {
 }
 
 impl Shares {
-  /// Loads the index, or scans when it can not be trusted. A loaded index is served at once:
+  /// Loads the index, or scans when it cannot be trusted. A loaded index is served at once:
   /// the shares are watched, the engine is marked initialized, and one scan reusing the loaded
   /// rows runs in the background to find what changed while reseek was not running. Otherwise
   /// the engine is marked initialized once the scan is done.
@@ -96,7 +96,7 @@ impl Shares {
   }
 
   /// Loads the index from its backup or its file and checks the last scan it records covers
-  /// the shares as configured now; says why when it can not be used.
+  /// the shares as configured now; says why when it cannot be used.
   async fn load(&self, mode: StorageMode) -> Result<Arc<Settings>, String> {
     if self.in_memory {
       info!("Share cache StorageMode is 'Memory'. Attempting to load from backup...");
@@ -132,7 +132,7 @@ impl Shares {
     let options = self.config.current();
     let settings = Arc::new(Settings::new(self.listed(), &options.values));
     let recorded = scanner::content(&latest.options)
-      .map_err(|e| format!("Previous share scan recorded options that can not be read: {e}"))?;
+      .map_err(|e| format!("Previous share scan recorded options that cannot be read: {e}"))?;
     if recorded != settings.snapshot.get("content").cloned() {
       return Err("Share options changed since previous scan".into());
     }

@@ -1,6 +1,6 @@
 //! Our own profile picture as it is kept: an upload re-encoded to one small JPEG in the data
 //! directory, which `soulseek.picture` points at. Every client can show a JPEG, and the older
-//! ones can not show a PNG.
+//! ones cannot show a PNG.
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};

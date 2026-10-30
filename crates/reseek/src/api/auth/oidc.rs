@@ -332,7 +332,7 @@ async fn test(
   }))
 }
 
-/// The 503 for a provider whose discovery document can not be read, logged with why.
+/// The 503 for a provider whose discovery document cannot be read, logged with why.
 fn unavailable(name: &str, error: &str) -> ApiError {
   if let Some(suppressed) = PROVIDER_DOWN.allow() {
     warn!(

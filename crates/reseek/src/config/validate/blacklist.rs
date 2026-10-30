@@ -19,7 +19,7 @@ pub(crate) enum Format {
   Dat,
 }
 
-/// The message for a file whose format can not be told.
+/// The message for a file whose format cannot be told.
 pub(crate) const UNDETECTED: &str =
   "Could not detect the blacklist format. Only the CIDR, P2P and DAT formats are supported.";
 

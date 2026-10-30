@@ -345,7 +345,7 @@ fn to_value(key: &str, value: &Value) -> Result<toml_edit::Value, Error> {
       }
       toml_edit::Value::InlineTable(table)
     }
-    Value::Null => return Err(unrepresentable("a list can not hold null".to_string())),
+    Value::Null => return Err(unrepresentable("a list cannot hold null".to_string())),
   })
 }
 

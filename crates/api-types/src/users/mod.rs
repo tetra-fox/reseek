@@ -199,7 +199,7 @@ pub struct UserStatusChanged {
 }
 
 /// Names a user by query parameter instead of by path segment, for usernames such as `.` and
-/// `..` that a path can not carry. When present it wins over the path's username.
+/// `..` that a path cannot carry. When present it wins over the path's username.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]
 #[into_params(parameter_in = Query)]

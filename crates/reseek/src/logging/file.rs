@@ -68,7 +68,7 @@ pub fn file_name(date: NaiveDate) -> String {
 }
 
 /// Deletes the log files in `dir` last written more than `retention` before `now`. A file that
-/// can not be read or deleted is left; this runs inside the log writer, which has nowhere to
+/// cannot be read or deleted is left; this runs inside the log writer, which has nowhere to
 /// report it.
 fn prune(dir: &Path, retention: Duration, now: SystemTime) {
   let Ok(entries) = std::fs::read_dir(dir) else {

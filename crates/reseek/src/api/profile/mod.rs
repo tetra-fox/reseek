@@ -309,7 +309,7 @@ enum Target {
 /// Where a change of `key` by `by` goes, as a save from the settings page would: the file a
 /// write of the key goes to when it can be written, which takes someone at the UI, else a
 /// runtime override. Refused, before anything changes, for a key the environment or the
-/// command line sets, and for taking out (`unsetting`) a key a file that can not be written
+/// command line sets, and for taking out (`unsetting`) a key a file that cannot be written
 /// sets, also under a runtime override, since the file's value would then be in effect.
 fn target(
   current: &Loaded<Options>,
@@ -332,13 +332,13 @@ fn target(
     }
     Err(reason) => reason,
   };
-  // the file that sets a key is the one a save of it goes to, which can not be written
+  // the file that sets a key is the one a save of it goes to, which cannot be written
   if let (true, Some(file)) = (unsetting, current.file_setting(key)) {
     warn!(
       key,
-      file, reason, "profile value can not be taken out of its file"
+      file, reason, "profile value cannot be taken out of its file"
     );
-    let detail = format!("{file} sets {key}, which can not be changed from here: {reason}");
+    let detail = format!("{file} sets {key}, which cannot be changed from here: {reason}");
     let refused = ApiError::conflict(format!("{file} is read-only"), Some(detail));
     return Err(refused.logged());
   }

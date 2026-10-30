@@ -147,7 +147,7 @@ fn hash(secret: &str) -> Vec<u8> {
   Sha256::digest(secret.as_bytes()).to_vec()
 }
 
-/// The characters after `slsk_` that find the token, `None` when `presented` can not be one.
+/// The characters after `slsk_` that find the token, `None` when `presented` cannot be one.
 fn prefix(presented: &str) -> Option<&str> {
   let secret = presented.strip_prefix(TOKEN_PREFIX)?;
   let well_formed =

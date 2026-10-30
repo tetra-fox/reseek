@@ -49,7 +49,7 @@ impl Entry {
 
 /// The files `entries` name, in order: a plain file whether or not it exists, then each
 /// pattern's matches in lexical order. A file named twice is listed once, where it comes last.
-/// A pattern's directory that exists but can not be listed is an error, so its files are never
+/// A pattern's directory that exists but cannot be listed is an error, so its files are never
 /// taken for gone.
 pub(crate) fn expand(entries: &[Entry]) -> Result<Vec<(String, PathBuf)>, Error> {
   let mut files: Vec<(String, PathBuf)> = Vec::new();
@@ -243,7 +243,7 @@ mod tests {
     }];
     assert!(
       matches!(expand(&not_a_dir), Err(Error::Read { .. })),
-      "a directory that can not be listed is not an empty one"
+      "a directory that cannot be listed is not an empty one"
     );
   }
 

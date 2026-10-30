@@ -257,7 +257,7 @@ pub struct ReadMarker {
   pub local_id: i64,
 }
 
-/// Names a room by query parameter instead of by path segment, for names a path can not
+/// Names a room by query parameter instead of by path segment, for names a path cannot
 /// carry. When present it wins over the path's room name.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]

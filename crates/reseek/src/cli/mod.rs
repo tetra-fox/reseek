@@ -103,7 +103,7 @@ pub struct Invocation {
   pub supervised: Option<bool>,
 }
 
-/// A command line that can not be understood; printed as `Invalid command line input: ...`.
+/// A command line that cannot be understood; printed as `Invalid command line input: ...`.
 #[derive(Debug, PartialEq, thiserror::Error)]
 #[error("Invalid command line input: {0}")]
 pub struct UsageError(pub String);

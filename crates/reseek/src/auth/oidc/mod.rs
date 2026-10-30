@@ -268,7 +268,7 @@ pub fn error_chain(error: &dyn std::error::Error) -> String {
   text
 }
 
-/// Discovers every configured provider once at startup. A provider that can not be reached
+/// Discovers every configured provider once at startup. A provider that cannot be reached
 /// stays unavailable until a login tries it again; the daemon runs on.
 pub fn discover_at_start(app: &AppState) {
   let current = app.config.current();

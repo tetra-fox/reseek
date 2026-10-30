@@ -47,7 +47,7 @@ fn stem(path: &Path) -> Option<String> {
     .map(str::to_string)
 }
 
-/// The size of the file at `path`, 0 when there is none or it can not be read.
+/// The size of the file at `path`, 0 when there is none or it cannot be read.
 async fn size(path: &Path) -> u64 {
   match tokio::fs::metadata(path).await {
     Ok(metadata) => metadata.len(),

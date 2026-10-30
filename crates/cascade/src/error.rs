@@ -68,12 +68,12 @@ pub enum Error {
   /// the file changed since the revision an edit was based on
   #[error("config file changed on disk")]
   Stale,
-  /// the file can not be written
+  /// the file cannot be written
   #[error("{file} is read-only: {reason}")]
   ReadOnly {
     /// the file's name
     file: String,
-    /// why it can not be written
+    /// why it cannot be written
     reason: String,
   },
   /// the key's value comes from an env var or a flag, which nothing at run time changes, or from

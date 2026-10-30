@@ -312,7 +312,7 @@ fn whole(
   }
 }
 
-/// Measures one window at each of `picks`, seeking to each; when the file can not be sought
+/// Measures one window at each of `picks`, seeking to each; when the file cannot be sought
 /// in, reads it from the start and measures the picked seconds as they come.
 fn sampled(
   decoder: &mut Decoder,
@@ -335,7 +335,7 @@ fn sampled(
         measured.problems.push(problem);
         return Ok(());
       }
-      debug!(problem, "the file can not be sought in, reading it through");
+      debug!(problem, "the file cannot be sought in, reading it through");
       whole(
         decoder,
         analyzer,

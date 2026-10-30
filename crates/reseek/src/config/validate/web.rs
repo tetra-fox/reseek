@@ -333,7 +333,7 @@ mod tests {
       .authentication
       .oidc
       .insert("two words".into(), provider("https://auth.example.net/"));
-    assert_eq!(problems(&web).len(), 2, "a name that can not be a cookie's");
+    assert_eq!(problems(&web).len(), 2, "a name that cannot be a cookie's");
     web.authentication.oidc.remove("two words");
     web
       .authentication

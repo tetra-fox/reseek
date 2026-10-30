@@ -1,5 +1,5 @@
 //! The analyzer's own reading of its measures: whether the audio is consistent with the format
-//! it claims, a likely transcode, a mix of sources, or something it can not tell, with how sure
+//! it claims, a likely transcode, a mix of sources, or something it cannot tell, with how sure
 //! it is, the findings independent of that, one summary, and what made it less reliable. The
 //! reading works from the spread over windows, not an average, so a band-limited minority of
 //! the time or of the band reads as mixed sources rather than as a transcode.
@@ -345,7 +345,7 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     reading.limitations.push(filtered_at_20_khz());
     reading.summary = format!(
       "{} of the time stops at {} with a sharp shelf, where an encoder at {} cuts off; a \
-       recording filtered there when it was made looks the same, and the analyzer can not \
+       recording filtered there when it was made looks the same, and the analyzer cannot \
        tell the two apart.",
       percent(clustered),
       khz(median),

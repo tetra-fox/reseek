@@ -340,7 +340,7 @@ async fn removing_a_picture_a_read_only_file_sets_under_an_override_is_refused()
     body["detail"]
       .as_str()
       .unwrap()
-      .starts_with("config.toml sets soulseek.picture, which can not be changed from here"),
+      .starts_with("config.toml sets soulseek.picture, which cannot be changed from here"),
     "{body}"
   );
   let after = profile(&app).await;

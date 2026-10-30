@@ -128,7 +128,7 @@ enum FileEdit {
 
 impl<T: Root> Watcher<T> {
   /// Loads the configuration, reading the files on this thread. An error here is a
-  /// configuration the application can not start with. Call [`Watcher::start`] to have it kept
+  /// configuration the application cannot start with. Call [`Watcher::start`] to have it kept
   /// current.
   pub fn new(mut layers: Layers<T>) -> Result<Self, Error> {
     let loaded = layers.load()?;
@@ -217,7 +217,7 @@ impl<T: Root> Watcher<T> {
   /// comments, then reloads. `revision` is the file's revision the edit was made against,
   /// `None` when there was no file.
   ///
-  /// Refused, in this order, when the file changed since `revision`, can not be written, would
+  /// Refused, in this order, when the file changed since `revision`, cannot be written, would
   /// leave a configuration that does not load, or when a key's value comes from an env var or
   /// flag, which nothing at run time changes, or from a later file, which this file would not
   /// beat. For a secret, `*****` keeps the value and an empty string removes it.

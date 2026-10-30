@@ -129,7 +129,7 @@ fn check_blacklist(blacklist: &Blacklist, report: &mut Report) {
     Some(file) => match readable_file(key, file) {
       Err(message) => report.add(key, message),
       Ok(()) if blacklist.enabled => {
-        // a file that can not be read was refused by the readable check above
+        // a file that cannot be read was refused by the readable check above
         if detect_file(file).ok().flatten().is_none() {
           report.add(key, UNDETECTED);
         }

@@ -18,7 +18,7 @@ use crate::{Error, Key, Root, tree};
 impl<T: Root> State<T> {
   /// Loads the files, unless `only_if_changed` and they are as the last attempt read them.
   pub(super) fn attempt(&mut self, shared: &Shared<T>, only_if_changed: bool) -> Attempt<T> {
-    // a file that can not be read counts as changed, and loading it says why
+    // a file that cannot be read counts as changed, and loading it says why
     if let Ok(files) = self.layers.files_now()
       && only_if_changed
       && files == self.attempted

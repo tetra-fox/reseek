@@ -109,7 +109,7 @@ impl FileEvents {
           debug!(dir = %dir.display(), "watching configuration directory");
           self.watched.insert(dir);
         }
-        Err(e) => warn!(dir = %dir.display(), error = %e, "can not watch configuration directory"),
+        Err(e) => warn!(dir = %dir.display(), error = %e, "cannot watch configuration directory"),
       }
     }
   }

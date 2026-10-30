@@ -81,7 +81,7 @@ async fn list(
 }
 
 /// Creates a token with at most the caller's own role. Its secret is in the answer and is
-/// never shown again. Needs a login session: a token can not make tokens.
+/// never shown again. Needs a login session: a token cannot make tokens.
 #[utoipa::path(
   post, path = "/tokens", tag = "tokens", request_body = CreateToken,
   responses(

@@ -156,7 +156,7 @@ fn moved(location: &str) -> Response {
     // the request's path and query are header text, but a URL base written with characters no
     // header holds, such as non-ASCII ones, is not
     Err(e) => {
-      warn!(location, error = %e, "redirect not sent; the URL base can not be sent in a header");
+      warn!(location, error = %e, "redirect not sent; the URL base cannot be sent in a header");
       StatusCode::NOT_FOUND.into_response()
     }
   }

@@ -102,7 +102,7 @@ impl<T: Root> Layers<T> {
   ///
   /// # Panics
   ///
-  /// When `T`'s schema can not be built; see [`Schema::of`].
+  /// When `T`'s schema cannot be built; see [`Schema::of`].
   pub fn new() -> Self {
     let schema = Schema::of::<T>();
     let defaults = serde_json::to_value(T::default()).expect("checked by Schema::of");
@@ -270,7 +270,7 @@ impl<T: Root> Layers<T> {
   }
 
   /// Puts the runtime layer on `declared`: drops the overrides that no longer apply, then
-  /// those the configuration can not load with, saving both removals.
+  /// those the configuration cannot load with, saving both removals.
   pub(crate) fn apply(
     &mut self,
     declared: &Declared,

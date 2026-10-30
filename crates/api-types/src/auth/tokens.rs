@@ -57,7 +57,7 @@ pub struct ConfigApiKey {
 pub enum ListedToken {
   /// a token created through the API
   Api(Token),
-  /// a key from the configuration, which the API can not change
+  /// a key from the configuration, which the API cannot change
   Config(ConfigApiKey),
 }
 

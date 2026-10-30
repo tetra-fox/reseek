@@ -36,7 +36,7 @@ pub(super) enum Connection {
   Unix(tokio::net::UnixStream),
 }
 
-/// Binds every listener `web` asks for. A listener that can not be bound fails the start.
+/// Binds every listener `web` asks for. A listener that cannot be bound fails the start.
 pub async fn bind(web: &Web) -> Result<Listeners, String> {
   let mut http = Vec::new();
   for ip in addresses(web.ip_address.as_deref())? {

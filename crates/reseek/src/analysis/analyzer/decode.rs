@@ -223,7 +223,7 @@ impl Decoder {
   }
 
   /// Decodes the next packet of the track into `pending`; false at the end of the file or when
-  /// decoding can not go on, with the reason in `stopped`.
+  /// decoding cannot go on, with the reason in `stopped`.
   fn decode_next(&mut self) -> bool {
     let shift = self.taken;
     for pending in &mut self.pending {

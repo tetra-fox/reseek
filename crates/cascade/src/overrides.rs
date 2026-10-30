@@ -224,7 +224,7 @@ fn without_nulls(value: &Value) -> Value {
 }
 
 /// A tree value as TOML, nulls inside tables left out; `None` for null itself, a null in a
-/// list, or a number TOML can not hold.
+/// list, or a number TOML cannot hold.
 fn to_toml(value: &Value) -> Option<toml::Value> {
   Some(match value {
     Value::Null => return None,

@@ -3389,7 +3389,7 @@
           {
             "name": "access_token",
             "in": "query",
-            "description": "an API token or a configuration API key, for clients that can not set an\n`Authorization` header; never a session cookie's value",
+            "description": "an API token or a configuration API key, for clients that cannot set an\n`Authorization` header; never a session cookie's value",
             "required": false,
             "schema": {
               "type": "string"
@@ -9355,7 +9355,7 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Creates a token with at most the caller's own role. Its secret is in the answer and is\nnever shown again. Needs a login session: a token can not make tokens.",
+        "summary": "Creates a token with at most the caller's own role. Its secret is in the answer and is\nnever shown again. Needs a login session: a token cannot make tokens.",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -16179,7 +16179,7 @@
           },
           "isServerNotice": {
             "type": "boolean",
-            "description": "the conversation holds the server's own notices, which can not be answered and never\ncount as unread"
+            "description": "the conversation holds the server's own notices, which cannot be answered and never\ncount as unread"
           },
           "lastMessage": {
             "oneOf": [
@@ -17916,7 +17916,7 @@
               "string",
               "null"
             ],
-            "description": "why the file can not be written"
+            "description": "why the file cannot be written"
           },
           "revision": {
             "type": [
@@ -18545,7 +18545,7 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ConfigApiKey",
-                "description": "a key from the configuration, which the API can not change"
+                "description": "a key from the configuration, which the API cannot change"
               },
               {
                 "type": "object",
@@ -18562,7 +18562,7 @@
                 }
               }
             ],
-            "description": "a key from the configuration, which the API can not change"
+            "description": "a key from the configuration, which the API cannot change"
           }
         ],
         "description": "An entry of `GET /tokens`, told apart by `source`."

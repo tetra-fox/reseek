@@ -1,4 +1,4 @@
-//! The derive refuses attributes it can not use, with the reason at the attribute.
+//! The derive refuses attributes it cannot use, with the reason at the attribute.
 
 #[test]
 fn bad_attributes_do_not_compile() {

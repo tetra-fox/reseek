@@ -144,7 +144,7 @@ pub struct FileView {
   pub revision: Option<String>,
   /// whether a save to the file can be made
   pub writable: bool,
-  /// why the file can not be written
+  /// why the file cannot be written
   pub read_only_reason: Option<String>,
 }
 

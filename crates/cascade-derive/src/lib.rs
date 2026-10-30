@@ -26,7 +26,7 @@ fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
   if !input.generics.params.is_empty() {
     errors.push(syn::Error::new_spanned(
       &input.generics,
-      "a configuration struct can not be generic",
+      "a configuration struct cannot be generic",
     ));
   }
   let fields = match &input.data {
@@ -142,7 +142,7 @@ mod tests {
           a: T,
         }
       ))
-      .contains("can not be generic")
+      .contains("cannot be generic")
     );
     assert!(
       error(parse_quote!(

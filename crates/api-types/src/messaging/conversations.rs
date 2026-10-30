@@ -50,7 +50,7 @@ pub struct Conversation {
   pub username: String,
   /// false once the conversation was closed; the next message either way opens it again
   pub is_active: bool,
-  /// the conversation holds the server's own notices, which can not be answered and never
+  /// the conversation holds the server's own notices, which cannot be answered and never
   /// count as unread
   pub is_server_notice: bool,
   /// inbound messages not acknowledged

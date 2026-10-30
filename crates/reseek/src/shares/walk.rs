@@ -20,7 +20,7 @@ use super::share::{self, CASE_SENSITIVE, Share};
 use crate::db::Database;
 use crate::entries;
 
-/// Directories the walk can not read, which a large share can hold many of.
+/// Directories the walk cannot read, which a large share can hold many of.
 static UNREADABLE: LogLimiter = LogLimiter::new();
 
 /// The key that tells two directory paths apart by this system's case rule.
@@ -93,7 +93,7 @@ pub(super) fn directories_under(
     if cancel.is_cancelled() {
       break;
     }
-    // a directory that can not be read is left out, with everything under it. walkdir yields
+    // a directory that cannot be read is left out, with everything under it. walkdir yields
     // the directory itself before it fails to list it, so it is taken back out here
     let entry = match entry {
       Ok(entry) => entry,
@@ -103,7 +103,7 @@ pub(super) fn directories_under(
           seen.remove(&key(path));
         }
         if let Some(suppressed) = UNREADABLE.allow() {
-          warn!(error = %e, suppressed, "a shared directory can not be read; it is left out");
+          warn!(error = %e, suppressed, "a shared directory cannot be read; it is left out");
         }
         continue;
       }
@@ -151,7 +151,7 @@ pub(super) struct Read {
 
 /// Reads the files directly in `directory`, which `share` owns: their size, modification time
 /// and attributes, reusing those of `known` rows that did not change unless `force`. One file
-/// that can not be read is logged and left out; its siblings are read.
+/// that cannot be read is logged and left out; its siblings are read.
 pub(super) fn read_directory(
   settings: &Settings,
   share: &Share,
@@ -315,6 +315,6 @@ mod tests {
       .map(|p| p.strip_prefix(&music).unwrap().display().to_string())
       .collect();
     assert_eq!(names, ["", "open"]);
-    assert_eq!(lines.matches("can not be read").count(), 1, "{lines}");
+    assert_eq!(lines.matches("cannot be read").count(), 1, "{lines}");
   }
 }
