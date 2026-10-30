@@ -192,7 +192,7 @@ impl Downloads {
         version: 0,
         local_directory_name: local.display().to_string(),
         remote_directory_name: directory,
-        username: Some(record.username.clone()),
+        username: record.username.clone(),
       }),
       record.ended_at.unwrap_or_else(Utc::now),
     );

@@ -16699,7 +16699,8 @@
         "required": [
           "version",
           "localDirectoryName",
-          "remoteDirectoryName"
+          "remoteDirectoryName",
+          "username"
         ],
         "properties": {
           "localDirectoryName": {
@@ -16711,10 +16712,7 @@
             "description": "the remote directory, the remote filename without its last segment; empty for a file\nwithout a directory"
           },
           "username": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": "string",
             "description": "the user the directory came from"
           },
           "version": {

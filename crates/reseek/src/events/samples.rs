@@ -47,7 +47,7 @@ pub fn sample(kind: EventType, d: &str, now: DateTime<Utc>) -> Option<Event> {
         version: 0,
         local_directory_name: text("local.directory"),
         remote_directory_name: text("remote.directory"),
-        username: Some(text("username")),
+        username: text("username"),
       })
     }
     EventType::DownloadFileFailed => Event::DownloadFileFailed(DownloadFileFailed {

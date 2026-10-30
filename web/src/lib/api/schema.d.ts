@@ -3894,7 +3894,7 @@ export interface components {
              */
             remoteDirectoryName: string;
             /** @description the user the directory came from */
-            username?: string | null;
+            username: string;
             /**
              * Format: int32
              * @description the shape version of this event type, 0

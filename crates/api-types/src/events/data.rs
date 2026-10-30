@@ -47,7 +47,7 @@ pub struct DownloadDirectoryComplete {
   /// without a directory
   pub remote_directory_name: String,
   /// the user the directory came from
-  pub username: Option<String>,
+  pub username: String,
 }
 
 /// Where a download failed.
