@@ -332,6 +332,8 @@ pub fn write_flac(audio: &Audio, bits: u32, padded: bool, path: &Path) {
     .unwrap();
   // flacenc states the short last block as the stream's smallest, which readers take as a
   // stream of varying block sizes; whole blocks only keep the stream a fixed-size one
+  // (https://github.com/yotarok/flacenc-rs/issues/242)
+  // TODO: encode the tail once a flacenc release after 0.5.1 carries the fix (PR #255)
   let frames = planes[0].len() / config.block_size * config.block_size;
   let interleaved: Vec<i32> = (0..frames)
     .flat_map(|i| planes.iter().map(move |p| p[i]))

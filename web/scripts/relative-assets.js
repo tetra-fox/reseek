@@ -5,6 +5,8 @@
 // root-relative asset URLs (`/_app/...`) whatever `paths.relative` says (`render_response` in
 // kit's src/runtime/server/page/render.js computes relative paths only for other pages). The page
 // always lives at the base itself, so `./_app/` is right there.
+// Upstream: https://github.com/sveltejs/kit/issues/9569 (the hash router's case is raised in
+// https://github.com/sveltejs/kit/issues/13858, closed without a change).
 // TODO: remove once kit writes relative asset paths for the hash router's page.
 import { readFileSync, writeFileSync } from "node:fs";
 
