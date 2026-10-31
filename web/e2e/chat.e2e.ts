@@ -92,13 +92,65 @@ test("the server's notices are one read-only entry, reached by the keys", async 
   await expect(log.locator("[data-message]").first().locator("time")).toBeVisible();
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/notices.png` });
 
-  // the reserved name is offered as nothing a user could be
+  // the reserved name is offered as a room, never as a user
   const search = page.getByRole("combobox", { name: "Search chats" });
   await search.fill("server");
   await expect(page.getByRole("option", { name: "Join room server" })).toBeVisible();
   await expect(page.getByRole("option", { name: /Start a conversation/ })).toHaveCount(0);
   await page.goto("./#/users/server");
   await expect(page).toHaveURL(/#\/chat\/server$/);
+});
+
+test("New message picks a known user with the pointer and refuses server", async ({ page }) => {
+  await fakeChat(page);
+  await page.route(
+    (url) => url.pathname.endsWith("/api/v0/users"),
+    (route) =>
+      route.fulfill({
+        json: {
+          users: [
+            {
+              username: "alice",
+              known: true,
+              group: { name: "default", source: "builtin", priority: 1, color: null },
+              tags: [],
+              lastSeenAt: null
+            }
+          ],
+          total: 1
+        }
+      })
+  );
+  await login(page, "/chat");
+  await page.getByRole("button", { name: "New message" }).click();
+  const dialog = page.getByRole("dialog", { name: "New message" });
+  const name = dialog.getByRole("combobox", { name: "Username" });
+  await expect(name).toBeFocused();
+  await name.fill("server");
+  await expect(dialog.getByText("server is not a user")).toBeVisible();
+  await name.fill("ali");
+  const entry = page.getByRole("option", { name: /alice/ });
+  await entry.click();
+  // the dialog stays, the name is taken and the message is next
+  await expect(name).toHaveValue("alice");
+  await expect(entry).toBeHidden();
+  await expect(dialog.getByRole("textbox", { name: "Message" })).toBeFocused();
+});
+
+test("a conversation's menu blocks the user, the server's notices have no such item", async ({
+  page
+}) => {
+  await fakeChat(page);
+  await login(page, "/chat");
+  await page.goto("./#/chat/alice");
+  await page.getByRole("button", { name: "Conversation menu" }).click();
+  await page.getByRole("menuitem", { name: "Block" }).click();
+  await expect(page.getByRole("dialog", { name: /block/i })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.goto("./#/chat/server");
+  await page.getByRole("button", { name: "Server notices menu" }).click();
+  await expect(page.getByRole("menuitem", { name: "Export as text" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Block" })).toHaveCount(0);
 });
 
 test("a busy room's comings and goings stay out of its messages", async ({ page }) => {

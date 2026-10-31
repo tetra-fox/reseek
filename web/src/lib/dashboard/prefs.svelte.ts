@@ -18,5 +18,5 @@ export const readPrefs = (saved: unknown) => {
   };
 };
 
-/** The dashboard's chosen range and chart, kept in this browser */
+/** The dashboard's chosen range, chart and directions, kept in this browser */
 export const dashboardPrefs = stored("reseek.dashboard", readPrefs);

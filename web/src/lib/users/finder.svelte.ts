@@ -19,6 +19,9 @@ const SETTLE_MS = 200;
 /** The entry that opens a user, or looks them up when the directory does not hold them */
 export const userValue = (name: string) => `user:${name}`;
 
+/** The name in an entry from `userValue` */
+export const userOf = (value: string) => value.slice(userValue("").length);
+
 /**
  * The users a text finds for a search box: those the directory holds and, for a name it does
  * not, a look-up that asks the network with the name as typed. Made while a component starts,
@@ -31,7 +34,7 @@ export class UserFinder {
   #looking = $state<string | null>(null);
   #text: () => string;
   #tab: string | undefined;
-  #onmissed: () => void;
+  #onmissed: (() => void) | undefined;
   /** the text the directory last answered for, and the read under way or done */
   #answered = "";
   #reading: { text: string; done: Promise<void> } | null = null;
@@ -60,7 +63,7 @@ export class UserFinder {
    */
   constructor(
     text: () => string,
-    options: { tab?: string; onread?: (text: string) => void; onmissed: () => void }
+    options: { tab?: string; onread?: (text: string) => void; onmissed?: () => void } = {}
   ) {
     this.#text = text;
     this.#tab = options.tab;
@@ -110,13 +113,13 @@ export class UserFinder {
     this.#looking = null;
     if (this.#text() !== name) return;
     if (outcome.ok) return void goto(userHref(name, this.#tab));
-    this.#onmissed();
+    this.#onmissed?.();
     toast(outcome.status === 404 ? `No user named ${name} was found.` : outcome.error, "error");
   }
 
   /** Opens the user an entry names, one the directory does not hold once the network knows them */
   choose = (value: string) => {
-    const name = value.slice(userValue("").length);
+    const name = userOf(value);
     if (this.found.some((u) => u.username === name)) void goto(userHref(name, this.#tab));
     else void this.#lookUp(name);
   };

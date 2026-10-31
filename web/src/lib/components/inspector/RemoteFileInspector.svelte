@@ -21,8 +21,9 @@
   import Inspector from "./Inspector.svelte";
   import TransferInspector from "./TransferInspector.svelte";
 
-  // a file in someone's share, as search results and Browse list it. Once it has a download the
-  // inspector shows that, as the Downloads screen would, with what the list knows of the file
+  // a file in someone's share, as search results and the Shares tab list it. Once it has a
+  // download the inspector shows that, as the Downloads screen would, with what the list knows of
+  // the file
   type Props = {
     file: Schemas["File"] & { locked?: boolean };
     username: string;

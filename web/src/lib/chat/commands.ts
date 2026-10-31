@@ -1,4 +1,4 @@
-import { SERVER } from "./notices";
+import { NOT_A_USER, SERVER } from "./notices";
 
 /** Where a command is typed: a room's composer or a conversation's */
 export type Place = "room" | "user";
@@ -53,8 +53,8 @@ const firstWord = (rest: string): [string, string] => {
   return cut === -1 ? [rest, ""] : [rest.slice(0, cut), rest.slice(cut).trimStart()];
 };
 
-/** The name the server's notices come from, which a command takes for a user */
-const NOT_A_USER: Parsed = { kind: "error", message: `${SERVER} is not a user` };
+/** The answer to a command that takes the name the server's notices come from for a user */
+const REFUSED_SERVER: Parsed = { kind: "error", message: NOT_A_USER };
 
 const usage = (c: CommandInfo) => `/${c.name}${c.args ? ` ${c.args}` : ""}`;
 
@@ -83,7 +83,7 @@ export const parseCommand = (input: string, place: Place): Parsed => {
   if (name === "msg") {
     const [target, message] = firstWord(rest);
     if (!message) return { kind: "error", message: `Usage: ${usage(command)}` };
-    if (target === SERVER) return NOT_A_USER;
+    if (target === SERVER) return REFUSED_SERVER;
     return { kind: "command", name, target, text: message };
   }
   if (name === "leave" && !rest && place !== "room") {
@@ -91,7 +91,7 @@ export const parseCommand = (input: string, place: Place): Parsed => {
   }
   const takesTarget = ["join", "leave", "browse", "whois", "block"].includes(name);
   const target = takesTarget ? rest.replace(/^"(.*)"$/, "$1") : "";
-  if (target === SERVER && name !== "join" && name !== "leave") return NOT_A_USER;
+  if (target === SERVER && name !== "join" && name !== "leave") return REFUSED_SERVER;
   return takesTarget
     ? { kind: "command", name, target, text: "" }
     : { kind: "command", name, target: "", text: rest };
