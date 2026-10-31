@@ -1,4 +1,4 @@
-# merges dependabot's minor and patch bumps when lint and tests pass, with the web hash brought up
+# merges dependabot's minor and patch bumps when `just ci` passes, with the web hash brought up
 # to date first, since dependabot cannot change it
 name: deps
 
@@ -30,9 +30,10 @@ jobs:
           test -n "$hash"
           sed -i "s|hash = \"\"|hash = \"$hash\"|" nix/web.nix
       - if: steps.bump.outputs.update-type != 'version-update:semver-major'
-        run: nix develop -c just lint
-      - if: steps.bump.outputs.update-type != 'version-update:semver-major'
-        run: nix develop -c just test
+        run: nix develop -c just ci
+        env:
+          SOULFIND_REQUIRED: "1"
+          CARGO_INCREMENTAL: "0"
       - name: Commit the hash
         if: steps.bump.outputs.update-type != 'version-update:semver-major' && steps.bump.outputs.package-ecosystem == 'npm_and_yarn'
         run: |
