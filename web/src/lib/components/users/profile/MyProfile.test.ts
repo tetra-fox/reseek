@@ -11,6 +11,8 @@ import MyProfile from "./MyProfile.svelte";
 
 vi.mock("$app/navigation", () => ({ beforeNavigate: () => {}, goto: vi.fn() }));
 
+const interests = { liked: ["jazz", "dub"], hated: ["polka"] };
+
 const own = {
   description: "hello",
   hasPicture: false,
@@ -47,6 +49,8 @@ describe("your own profile page", () => {
     const net = fakeNetwork((url, method) => {
       if (url.pathname.endsWith("/api/v0/options/view")) return view;
       if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return own;
+      if (url.pathname.endsWith("/api/v0/interests") && method === "GET") return interests;
+      if (url.pathname.endsWith("/api/v0/interests")) return interests;
       if (method === "PUT") return { status: 204 };
       return undefined;
     });
@@ -82,5 +86,29 @@ describe("your own profile page", () => {
     const puts = net.requests.filter((r) => r.method === "PUT");
     expect(puts.map((r) => r.url.pathname)).toEqual(["/api/v0/profile/picture", "/api/v0/profile"]);
     expect(puts[1].body).toEqual({ description: "plays bass\nlikes dub" });
+  });
+
+  it("saves interests as they change, each on one list only", async () => {
+    session.principal = { name: "me", role: "Administrator" } as never;
+    app.state = { user: { username: "me" }, server: { isLoggedIn: true } } as never;
+    const net = fakeNetwork((url, method) => {
+      if (url.pathname.endsWith("/api/v0/options/view")) return fixture;
+      if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return own;
+      if (url.pathname.endsWith("/api/v0/interests")) return interests;
+      return undefined;
+    });
+    component = mount(MyProfile, { target: document.body });
+    await flush();
+
+    const dislike = document.querySelector<HTMLInputElement>('[aria-label="Add a dislike"]')!;
+    dislike.value = " jazz ";
+    dislike.dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+    dislike.closest("form")!.requestSubmit();
+    await flush();
+    const puts = net.requests.filter((r) => r.method === "PUT");
+    expect(puts.map((r) => r.body)).toEqual([{ liked: ["dub"], hated: ["polka", "jazz"] }]);
+    expect(dislike.value).toBe("");
+    expect(document.querySelector('[aria-label="Remove jazz"]')).not.toBeNull();
   });
 });

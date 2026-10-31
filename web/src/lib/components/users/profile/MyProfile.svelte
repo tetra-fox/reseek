@@ -1,7 +1,5 @@
 <script lang="ts">
   import { beforeNavigate } from "$app/navigation";
-  import ImageUpIcon from "@lucide/svelte/icons/image-up";
-  import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import { untrack } from "svelte";
 
   import { api } from "#lib/api/client.js";
@@ -12,22 +10,25 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
-  import Avatar from "#lib/components/users/Avatar.svelte";
   import UserCard from "#lib/components/users/UserCard.svelte";
   import { editability } from "#lib/config/editability.js";
   import { valueAt } from "#lib/config/sections.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
+  import { plural } from "#lib/format.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
+  import { OwnInterests } from "#lib/users/interests.svelte.js";
   import { ownProfile } from "#lib/users/profile.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
+  import AccountCard from "./AccountCard.svelte";
+  import InterestsEditor from "./InterestsEditor.svelte";
+  import PicturePicker from "./PicturePicker.svelte";
   import ProfileView from "./ProfileView.svelte";
 
-  // our own profile: the text and picture on the left, and on the right how others see them
-  const PICTURE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-  const MAX_PICTURE = 1024 * 1024;
+  // everything about our own profile: what others are sent and the account behind it, with how
+  // others see it always in view, beside the editors or above them on a phone
 
   const admin = $derived(session.can("Administrator"));
   const view = new Loader(() => call(() => api.GET("/api/v0/options/view")));
@@ -35,6 +36,8 @@
     if (admin) untrack(() => void view.load());
   });
   ownProfile.need();
+  const interests = new OwnInterests();
+  void interests.loader.load();
 
   const profile = $derived(ownProfile.data);
   const name = $derived(app.state?.user.username ?? session.principal?.name ?? "");
@@ -43,6 +46,8 @@
   const pictureEdit = $derived(view.data ? editability(view.data, "soulseek.picture") : null);
   const canText = $derived(admin && remote && !!textEdit && textEdit.mode !== "locked");
   const canPicture = $derived(admin && remote && !!pictureEdit && pictureEdit.mode !== "locked");
+  const passwordEdit = $derived(view.data ? editability(view.data, "soulseek.password") : null);
+  const canPassword = $derived(admin && remote && !!passwordEdit && passwordEdit.mode !== "locked");
 
   let text = $state("");
   /** the text as saved, which the draft is compared with */
@@ -52,8 +57,6 @@
   let removed = $state(false);
   let error = $state("");
   let saving = $state(false);
-  let input = $state<HTMLInputElement | null>(null);
-  let over = $state(false);
 
   // the saved text arrives, or changes elsewhere while nothing is typed: the draft follows it
   $effect(() => {
@@ -75,19 +78,14 @@
     };
   });
 
+  const shownLists = $derived([
+    { title: "Interests", list: interests.lists.liked },
+    { title: "Dislikes", list: interests.lists.hated }
+  ]);
   const dirty = $derived((saved !== null && text !== saved) || !!picked || removed);
   const shownPicture = $derived(removed ? null : (profile?.pictureUrl ?? null));
 
-  const take = (file: File | undefined) => {
-    if (!file) return;
-    if (!PICTURE_TYPES.includes(file.type)) {
-      error = "Choose a JPEG, PNG, GIF or WebP picture";
-      return;
-    }
-    if (file.size > MAX_PICTURE) {
-      error = "Choose a picture no larger than 1 MiB";
-      return;
-    }
+  const pick = (file: File) => {
     error = "";
     picked = file;
     removed = false;
@@ -167,93 +165,86 @@
 {#if !profile}
   <Skeleton class="h-80" />
 {:else}
-  <!-- the column never takes its content's width, so large text wraps rather than widens it -->
-  <div class="grid grid-cols-[minmax(0,1fr)] gap-section md:grid-cols-2">
-    <Card title="Edit profile">
-      <div class="flex flex-wrap items-center gap-4">
-        <!-- a picture dropped here is taken like one picked -->
-        <div
-          role="region"
-          aria-label="Picture: drop an image here"
-          class={["rounded-full", over && "ring-2 ring-accent"]}
-          ondragover={(e) => {
-            if (!canPicture) return;
-            e.preventDefault();
-            over = true;
-          }}
-          ondragleave={() => (over = false)}
-          ondrop={(e) => {
-            if (!canPicture) return;
-            e.preventDefault();
-            over = false;
-            take(e.dataTransfer?.files[0]);
-          }}>
-          <Avatar {name} pictureUrl={shownPicture} src={pickedUrl} class="size-32 text-4xl" />
-        </div>
-        <div class="flex flex-col gap-2">
-          <input
-            bind:this={input}
-            type="file"
-            accept={PICTURE_TYPES.join(",")}
-            class="hidden"
-            aria-label="Picture file"
-            onchange={(e) => {
-              take(e.currentTarget.files?.[0]);
-              e.currentTarget.value = "";
-            }} />
-          <Button variant="outline" size="sm" disabled={!canPicture} onclick={() => input?.click()}>
-            <ImageUpIcon />Upload
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!canPicture || (!profile.hasPicture && !picked) || removed}
-            onclick={() => {
-              picked = null;
-              removed = profile.hasPicture;
-            }}>
-            <Trash2Icon />Remove
-          </Button>
-        </div>
-      </div>
-      {#if pictureEdit?.notice}<p class="text-xs text-fg-muted">{pictureEdit.notice}</p>{/if}
-      <div class="flex flex-col gap-1">
-        <label for="profile-text" class="text-xs font-medium text-fg-muted">Profile text</label>
-        <Textarea
-          id="profile-text"
-          class="min-h-48 text-sm"
-          placeholder="Text shown to other users"
-          bind:value={text}
-          disabled={!canText} />
-        <p class="flex justify-between text-xs text-fg-muted">
-          <span>{textEdit?.notice ?? ""}</span>
-          <span class="tabular-nums">{[...text].length} characters</span>
-        </p>
-      </div>
-      {#if error}<Notice kind="error">{error}</Notice>{/if}
-      <div class="flex justify-end gap-inline">
-        <Button variant="ghost" disabled={!dirty || saving} onclick={discard}>Discard</Button>
-        <Button disabled={!dirty || saving || (!canText && !canPicture)} onclick={() => void save()}
-          >Save</Button>
-      </div>
-    </Card>
-
-    <Card title="Public view">
-      <ProfileView
-        {name}
-        pictureUrl={shownPicture}
-        src={pickedUrl}
-        description={text}
-        uploadSlots={profile.uploadSlots}
-        freeUploadSlot={profile.freeUploadSlot}
-        queueLength={profile.queueLength} />
-      <div class="mt-2 w-80 max-w-full rounded-card border bg-overlay p-3 shadow-raised">
-        <UserCard
+  <!-- a column never takes its content's width, so large text wraps rather than widens it. The
+       public view comes first, for a phone; beside the editors it goes to the right -->
+  <div class="grid grid-cols-[minmax(0,1fr)] items-start gap-section md:grid-cols-2">
+    <div class="md:sticky md:top-gutter md:col-start-2 md:row-start-1">
+      <Card title="What others see">
+        <ProfileView
           {name}
-          user={me}
-          onblock={() => {}}
-          draft={{ description: text, src: pickedUrl, pictureUrl: shownPicture }} />
-      </div>
-    </Card>
+          pictureUrl={shownPicture}
+          src={pickedUrl}
+          description={text}
+          uploadSlots={profile.uploadSlots}
+          freeUploadSlot={profile.freeUploadSlot}
+          queueLength={profile.queueLength} />
+        {#if shownLists.some(({ list }) => list.length)}
+          <dl class="flex flex-col gap-1 text-xs">
+            {#each shownLists as { title, list } (title)}
+              {#if list.length}
+                <div class="flex gap-inline">
+                  <dt class="shrink-0 text-fg-muted">{title}</dt>
+                  <dd class="min-w-0 wrap-anywhere">{list.join(", ")}</dd>
+                </div>
+              {/if}
+            {/each}
+          </dl>
+        {/if}
+        <div class="w-80 max-w-full rounded-card border bg-overlay p-3 shadow-raised">
+          <UserCard
+            {name}
+            user={me}
+            onblock={() => {}}
+            draft={{ description: text, src: pickedUrl, pictureUrl: shownPicture }} />
+        </div>
+      </Card>
+    </div>
+
+    <div class="flex min-w-0 flex-col gap-section md:col-start-1 md:row-start-1">
+      <Card title="Picture and text">
+        <PicturePicker
+          {name}
+          pictureUrl={shownPicture}
+          src={pickedUrl}
+          disabled={!canPicture}
+          removable={!removed && (profile.hasPicture || !!picked)}
+          onpick={pick}
+          onrefuse={(reason) => (error = reason)}
+          onremove={() => {
+            picked = null;
+            removed = profile.hasPicture;
+          }} />
+        {#if pictureEdit?.notice}<p class="text-xs text-fg-muted">{pictureEdit.notice}</p>{/if}
+        <div class="flex flex-col gap-1">
+          <label for="profile-text" class="text-xs font-medium text-fg-muted">Profile text</label>
+          <Textarea
+            id="profile-text"
+            class="min-h-48 text-sm"
+            placeholder="Text shown to other users"
+            bind:value={text}
+            disabled={!canText} />
+          <p class="flex justify-between gap-inline text-xs text-fg-muted">
+            <span>{textEdit?.notice ?? ""}</span>
+            <span class="shrink-0 tabular-nums"
+              >{plural([...text].length, "character", "characters")}</span>
+          </p>
+        </div>
+        {#if error}<Notice kind="error">{error}</Notice>{/if}
+        <div class="flex justify-end gap-inline">
+          <Button variant="ghost" disabled={!dirty || saving} onclick={discard}>Discard</Button>
+          <Button
+            disabled={!dirty || saving || (!canText && !canPicture)}
+            onclick={() => void save()}>Save</Button>
+        </div>
+      </Card>
+
+      <Card
+        title="Interests and dislikes"
+        description="Told to the Soulseek server, which matches you with people who share them. Saved as you go.">
+        <InterestsEditor {interests} disabled={!admin} />
+      </Card>
+
+      <AccountCard {name} allowed={canPassword} notice={passwordEdit?.notice ?? null} />
+    </div>
   </div>
 {/if}
