@@ -4,7 +4,7 @@ import { login } from "./support/login";
 
 test("opens the dashboard, chat, rooms, a profile and your profile", async ({ page }) => {
   await login(page, "/dashboard");
-  await expect(page.getByRole("group", { name: "Time range" })).toBeVisible();
+  await expect(page.getByRole("radiogroup", { name: "Time range" })).toBeVisible();
   await expect(page.getByText("Users transferred with")).toBeVisible();
   await expect(page.getByRole("img", { name: "Transfers over time" })).toBeVisible();
 

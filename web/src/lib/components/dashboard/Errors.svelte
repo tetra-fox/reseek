@@ -6,6 +6,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
+  import Segmented from "#lib/components/ui/Segmented.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import {
     type Direction,
@@ -93,15 +94,11 @@
 </script>
 
 {#snippet which(value: Which, set: (w: Which) => void, label: string)}
-  <div class="flex gap-1" role="group" aria-label={label}>
-    {#each ["Upload", "Download", "All"] as const as w (w)}
-      <Button
-        size="sm"
-        variant={value === w ? "secondary" : "outline"}
-        aria-pressed={value === w}
-        onclick={() => set(w)}>{WHICH[w]}</Button>
-    {/each}
-  </div>
+  <Segmented
+    options={(["Upload", "Download", "All"] as const).map((w) => ({ id: w, label: WHICH[w] }))}
+    bind:value={() => value, set}
+    {label}
+    size="sm" />
 {/snippet}
 
 <AreaChart {data} view={ERRORS} bind:hidden label="Errors over time" />

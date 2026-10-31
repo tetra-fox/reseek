@@ -101,18 +101,18 @@
 
 <Glance />
 
-<div class="flex flex-wrap items-center gap-1" role="group" aria-label="Time range">
-  {#each RANGES as r (r.label)}
-    <button
-      type="button"
-      aria-pressed={dashboardPrefs.range === r.label}
-      class="h-control-sm rounded-control px-2.5 text-sm text-fg-muted hover:bg-hover aria-pressed:bg-surface-muted aria-pressed:text-fg"
-      onclick={() => {
-        dashboardPrefs.range = r.label;
-        now = Date.now();
-      }}>{r.label}</button>
-  {/each}
-</div>
+<Segmented
+  class="self-start"
+  options={RANGES.map((r) => ({ id: r.label, label: r.label }))}
+  bind:value={
+    () => dashboardPrefs.range,
+    (range) => {
+      dashboardPrefs.range = range;
+      now = Date.now();
+    }
+  }
+  label="Time range"
+  size="sm" />
 
 {#if summaryError}<p class="text-sm text-danger">Could not load totals: {summaryError}</p>{/if}
 {#if summary}
