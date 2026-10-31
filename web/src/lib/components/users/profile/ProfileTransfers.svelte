@@ -10,6 +10,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import Segmented from "#lib/components/ui/Segmented.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { getDirectoryName, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
@@ -114,18 +115,21 @@
 </script>
 
 <div class="flex flex-wrap items-center gap-inline">
-  <div class="flex gap-1" role="group" aria-label="Direction">
-    {#each [{ id: "both", label: "Both" }, { id: "Download", label: "Downloads" }, { id: "Upload", label: "Uploads" }] as d (d.id)}
-      <Button
-        size="sm"
-        variant={which === d.id ? "secondary" : "outline"}
-        aria-pressed={which === d.id}
-        onclick={() => {
-          which = d.id as Which;
-          wanted = PAGE;
-        }}>{d.label}</Button>
-    {/each}
-  </div>
+  <Segmented
+    options={[
+      { id: "both" as Which, label: "Both" },
+      { id: "Download" as Which, label: "Downloads" },
+      { id: "Upload" as Which, label: "Uploads" }
+    ]}
+    bind:value={
+      () => which,
+      (next) => {
+        which = next;
+        wanted = PAGE;
+      }
+    }
+    label="Direction"
+    size="sm" />
   <span class="ml-auto text-sm text-fg-muted">{plural(total, "transfer", "transfers")}</span>
 </div>
 
@@ -150,8 +154,7 @@
           role="row"
           {...list.line(t, i)}
           class={[
-            "group relative isolate grid min-w-max items-center list-row py-1 pl-2 hover:bg-hover",
-            list.selected.has(t.id) && "bg-accent-soft/60",
+            "group relative isolate grid min-w-max items-center list-row py-1 pl-2",
             rows.removed.has(t.id) && "opacity-40"
           ]}
           style:grid-template-columns={template}>

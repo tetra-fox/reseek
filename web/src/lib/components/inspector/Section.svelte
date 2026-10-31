@@ -15,7 +15,7 @@
   <h3>
     <button
       type="button"
-      class="flex w-full items-center gap-1.5 px-4 py-2 text-left text-sm font-medium"
+      class="flex w-full items-center gap-1.5 px-4 py-2 text-left text-sm font-medium transition-colors duration-(--motion-fast) hover:bg-hover"
       aria-expanded={inspectorPrefs.sections[id]}
       onclick={() => (inspectorPrefs.sections[id] = !inspectorPrefs.sections[id])}>
       <ChevronRightIcon

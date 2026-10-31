@@ -161,7 +161,8 @@
     class={[
       "flex min-w-0 items-center gap-1.5 px-2",
       ["size", "speed", "eta", "elapsed", "attempts", "transferred"].includes(column) &&
-        "justify-end whitespace-nowrap tabular-nums"
+        "justify-end whitespace-nowrap tabular-nums",
+      column === "actions" && "pl-0"
     ]}
     style:padding-left={column === "file" ? fileInset : undefined}>
     {#if column === "select"}

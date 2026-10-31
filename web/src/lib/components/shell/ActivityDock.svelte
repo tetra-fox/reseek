@@ -17,6 +17,7 @@
     activityPrefs,
     type ActivityEntry,
     type ActivityType,
+    DOCK_HEIGHT,
     DOCK_MIN,
     dockMax
   } from "#lib/activity/activity.svelte.js";
@@ -97,6 +98,7 @@
       bind:value={height}
       min={DOCK_MIN}
       max={dockMax()}
+      initial={DOCK_HEIGHT}
       edge="top"
       label="Height of the activity log"
       onchange={(h) => (activityPrefs.height = h)}
@@ -152,7 +154,7 @@
         role="row"
         {...list.line(e, i)}
         aria-label={activityText(e, formatBytes)}
-        class={["log-row", list.selected.has(String(e.id)) && "bg-accent-soft/60"]}>
+        class="log-row">
         <LogTime at={e.at} />
         <span role="gridcell" class="flex justify-center pt-1">
           <Icon

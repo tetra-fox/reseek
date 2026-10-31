@@ -27,7 +27,8 @@
     ...rest
   }: Props = $props();
 
-  // a search box gets a button that empties it; the browser's own is hidden in app.css
+  // a search box gets a button that empties it, and keeps room for it only while it shows, so a
+  // placeholder has the whole box; the browser's own is hidden in app.css
   const clearable = $derived(type === "search");
 
   const clear = () => {
@@ -42,9 +43,9 @@
   <input
     bind:this={ref}
     class={cn(
-      "h-control w-full min-w-0 rounded-control border border-input bg-surface px-3 text-base text-fg shadow-xs transition-colors duration-(--motion-fast) placeholder:text-fg-muted hover:border-fg-subtle/50 focus-visible:border-accent disabled:opacity-50 aria-invalid:border-danger md:text-sm",
+      "h-control w-full min-w-0 rounded-control border border-input bg-surface px-3 text-base text-fg shadow-xs transition-colors duration-(--motion-fast) placeholder:text-fg-muted placeholder-shown:text-ellipsis hover:border-fg-subtle/50 focus-visible:border-accent disabled:opacity-50 aria-invalid:border-danger md:text-sm",
       Icon && "pl-8",
-      clearable && "pr-8",
+      clearable && value && "pr-8",
       className
     )}
     {type}

@@ -33,66 +33,54 @@
   };
 </script>
 
-<div class="flex items-center gap-1">
-  {#if !sidebar.collapsed}
-    <a
-      href={href("/profile")}
-      aria-label="Your profile"
-      class="shrink-0 rounded-full transition-opacity hover:opacity-80">
-      <Avatar {name} pictureUrl={ownProfile.data?.pictureUrl} class="size-control text-xs" />
-    </a>
-  {/if}
-  <Menu.Root>
-    <Tooltip text={sidebar.collapsed ? `${name} (${role})` : undefined} side="right">
-      {#snippet child({ props })}
-        <Menu.Trigger {...props}>
-          {#snippet child({ props: trigger })}
-            <button
-              {...trigger}
-              aria-label={sidebar.collapsed ? name : undefined}
-              class={[
-                "flex min-w-0 flex-1 items-center gap-2 rounded-control text-left text-sm transition-colors duration-(--motion-fast) hover:bg-hover active:bg-press data-[state=open]:bg-hover",
-                sidebar.collapsed ? "p-0" : "p-1"
-              ]}>
-              {#if sidebar.collapsed}
-                <Avatar
-                  {name}
-                  pictureUrl={ownProfile.data?.pictureUrl}
-                  class="size-control text-xs" />
-              {:else}
-                <span class="grid flex-1 leading-tight">
-                  <span class="truncate font-medium">{name}</span>
-                  <span class="truncate text-xs text-fg-muted">{role}</span>
-                </span>
-                <EllipsisVerticalIcon class="size-4 shrink-0" />
-              {/if}
-            </button>
-          {/snippet}
-        </Menu.Trigger>
-      {/snippet}
-    </Tooltip>
-    <Menu.Content
-      class="w-(--bits-dropdown-menu-anchor-width) min-w-56"
-      side={sidebar.phone ? "bottom" : "right"}
-      align="end">
-      <Menu.Item onSelect={() => goto(href("/profile"))}>
-        <ContactIcon />
-        Your profile
+<!-- the avatar, the name and the role are one card, one hit area with one highlight, whose first
+     entry goes to the profile. Its avatar is under the sidebar's icons -->
+<Menu.Root>
+  <Tooltip text={sidebar.collapsed ? `${name} (${role})` : undefined} side="right">
+    {#snippet child({ props })}
+      <Menu.Trigger {...props}>
+        {#snippet child({ props: trigger })}
+          <button
+            {...trigger}
+            aria-label={sidebar.collapsed ? name : undefined}
+            class={[
+              "flex min-h-control w-full min-w-0 items-center gap-2 rounded-control text-left text-sm transition-colors duration-(--motion-fast) hover:bg-hover active:bg-press data-[state=open]:bg-hover",
+              sidebar.collapsed ? "justify-center" : "py-1 pr-1.5 pl-0.5"
+            ]}>
+            <Avatar {name} pictureUrl={ownProfile.data?.pictureUrl} class="size-7 text-xs" />
+            {#if !sidebar.collapsed}
+              <span class="grid flex-1 leading-tight">
+                <span class="truncate font-medium">{name}</span>
+                <span class="truncate text-xs text-fg-muted">{role}</span>
+              </span>
+              <EllipsisVerticalIcon class="size-4 shrink-0 text-fg-muted" />
+            {/if}
+          </button>
+        {/snippet}
+      </Menu.Trigger>
+    {/snippet}
+  </Tooltip>
+  <Menu.Content
+    class="w-(--bits-dropdown-menu-anchor-width) min-w-56"
+    side={sidebar.phone ? "bottom" : "right"}
+    align="end">
+    <Menu.Item onSelect={() => goto(href("/profile"))}>
+      <ContactIcon />
+      Your profile
+    </Menu.Item>
+    <Menu.Item onSelect={() => goto(href("/system/account"))}>
+      <CircleUserIcon />
+      Account
+    </Menu.Item>
+    {#if session.canSignOut}
+      <Menu.Separator />
+      <Menu.Item onSelect={() => (confirming = true)}>
+        <LogOutIcon />
+        Log out
       </Menu.Item>
-      <Menu.Item onSelect={() => goto(href("/system/account"))}>
-        <CircleUserIcon />
-        Account
-      </Menu.Item>
-      {#if session.canSignOut}
-        <Menu.Separator />
-        <Menu.Item onSelect={() => (confirming = true)}>
-          <LogOutIcon />
-          Log out
-        </Menu.Item>
-      {/if}
-    </Menu.Content>
-  </Menu.Root>
-</div>
+    {/if}
+  </Menu.Content>
+</Menu.Root>
 
 <ConfirmDialog
   bind:open={confirming}

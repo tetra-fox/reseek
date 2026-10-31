@@ -183,8 +183,7 @@
           role="row"
           {...list.line(row, index)}
           class={[
-            "group absolute inset-x-0 top-0 grid items-center list-row hover:bg-hover",
-            selected.has(row.key) && "bg-accent-soft/60",
+            "group absolute inset-x-0 top-0 grid items-center list-row",
             arrivals.isFresh(row.key) && "animate-row-in"
           ]}
           style:transform={`translateY(${start - headerHeight}px)`}

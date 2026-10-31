@@ -28,9 +28,6 @@
   const current = $derived(navCurrent(route(page.url).path)?.path);
   const agent = $derived(app.mode === "agent");
   const canary = $derived(app.state?.version.isCanary ?? false);
-
-  const itemClass =
-    "flex h-control w-full items-center gap-2.5 rounded-control px-2 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) select-none hover:bg-hover hover:text-fg active:bg-press aria-[current]:nav-current";
 </script>
 
 {#snippet link(item: NavItem)}
@@ -45,7 +42,7 @@
           href={href(item.path)}
           aria-label={sidebar.collapsed ? item.title : undefined}
           aria-current={current === item.path ? "page" : undefined}
-          class={[itemClass, "relative"]}>
+          class="relative nav-item">
           <span class="relative shrink-0">
             <item.icon class={["size-4", current === item.path && "text-accent"]} />
             {#if item.path === "/chat" && chat.total && sidebar.collapsed}
@@ -95,14 +92,14 @@
     <nav aria-label="Screens" class="flex flex-1 flex-col justify-between gap-4 pt-4 pb-2">
       <ul class="flex flex-col gap-1">
         {#if canary}
-          <li class={[itemClass, "pointer-events-none"]}>
+          <li class="pointer-events-none nav-item">
             <FlaskConicalIcon class="size-4 shrink-0 text-warning" />
             <span class={["truncate", sidebar.collapsed && "hidden"]}>Canary</span>
           </li>
         {/if}
         {#if agent}
           <!-- a relay agent has only the System area, so the screens are one plain label -->
-          <li class={[itemClass, "pointer-events-none"]}>
+          <li class="pointer-events-none nav-item">
             <UserSearchIcon class="size-4 shrink-0" />
             <span class={["truncate", sidebar.collapsed && "hidden"]}>Agent mode</span>
           </li>
@@ -119,7 +116,7 @@
               <button
                 {...props}
                 type="button"
-                class={itemClass}
+                class="nav-item"
                 aria-label="Switch between light and dark theme"
                 onclick={() =>
                   void crossFade(async () => {

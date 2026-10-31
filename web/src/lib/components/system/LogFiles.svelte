@@ -86,10 +86,7 @@
       <div
         role="row"
         {...list.line(f, i)}
-        class={[
-          "grid items-center list-row py-1 hover:bg-hover",
-          list.selected.has(f.name) && "bg-accent-soft/60"
-        ]}
+        class="grid items-center list-row py-1"
         style:grid-template-columns={grid.template}
         style:min-width={grid.width}>
         <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2"

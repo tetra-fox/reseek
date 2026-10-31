@@ -32,11 +32,7 @@
     {@attach list.attach}
     {@attach freezesWhileUsed}>
     {#each shown as burst, i (burst.key)}
-      <div
-        role="row"
-        {...list.line(burst, i)}
-        aria-label={burstText(burst)}
-        class={["log-row", list.selected.has(burst.key) && "bg-accent-soft/60"]}>
+      <div role="row" {...list.line(burst, i)} aria-label={burstText(burst)} class="log-row">
         <PresenceRow {burst} />
       </div>
     {:else}

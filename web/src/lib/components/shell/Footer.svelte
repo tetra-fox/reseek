@@ -52,7 +52,7 @@
     <button
       type="button"
       aria-pressed={activityPrefs.open}
-      class="flex shrink-0 items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg max-md:ml-auto"
+      class="flex h-control-sm shrink-0 items-center gap-1.5 rounded-badge px-2 text-fg-muted hover:bg-hover hover:text-fg aria-pressed:bg-surface-muted aria-pressed:text-fg max-md:ml-auto"
       title={`Activity log: browses, searches and downloads by other users (${shortcutText("J")})`}
       aria-keyshortcuts={shortcutAria("J")}
       onclick={() => (activityPrefs.open = !activityPrefs.open)}>
@@ -63,7 +63,7 @@
     href={REPOSITORY}
     target="_blank"
     rel="noreferrer"
-    class="ml-auto flex shrink-0 items-center gap-1.5 text-fg-muted hover:text-fg max-md:hidden">
+    class="ml-auto flex h-control-sm shrink-0 items-center gap-1.5 text-fg-muted hover:text-fg max-md:hidden">
     <img src="./favicon.svg" width="18" height="18" alt="" />
     <span class="font-medium">reseek</span>
     <span class="font-mono opacity-70">{app.state?.version.current ?? ""}</span>

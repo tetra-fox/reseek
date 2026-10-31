@@ -5,6 +5,7 @@
   let { parts }: { parts: SnippetPart[] } = $props();
 </script>
 
-{#each parts as part (part.at)}{#if part.hit}<mark class="rounded-sm bg-warning-soft px-0.5 text-fg"
-      >{part.text}</mark
+<!-- the mark's padding is taken back by its margin, so a mark in a word doesn't split it -->
+{#each parts as part (part.at)}{#if part.hit}<mark
+      class="rounded-sm -mx-px bg-warning-soft px-px text-fg">{part.text}</mark
     >{:else}{part.text}{/if}{/each}

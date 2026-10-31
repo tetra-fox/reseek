@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
 
 import { fakeBrowse, fakeChat, fakeSearch, manyDownloads, SEARCH_ID } from "./support/fakes";
 import { login } from "./support/login";
@@ -148,6 +148,108 @@ test("shows a list's focus ring for the keys, not after a click", async ({ page 
   await page.keyboard.press("ArrowDown");
   await expect(list.locator("[data-focused]")).toHaveCount(1);
   await expect(list.locator("[data-focused]")).not.toHaveCSS("box-shadow", "none");
+});
+
+test("a row's hidden menu takes no width, and comes up without moving the row", async ({
+  page
+}) => {
+  await fakeChat(page);
+  await login(page, "/chat");
+  const row = page.locator('[data-line="room:indie"]');
+  const text = row.getByRole("gridcell");
+  const menu = row.getByRole("button", { name: "Menu for indie" });
+  const end = async () => (await row.boundingBox())!.x + (await row.boundingBox())!.width;
+  const padding = 12;
+  await expect(row).toBeVisible();
+  await page.mouse.move(0, 0);
+  await expect(menu).toHaveCSS("opacity", "0");
+  // the text runs to the row's padding with nothing kept for the control
+  const rest = (await text.boundingBox())!;
+  expect(rest.x + rest.width).toBe((await end()) - padding);
+  await row.hover();
+  await expect(menu).toHaveCSS("opacity", "1");
+  expect(await text.boundingBox()).toEqual(rest);
+  // the keys reach it with the pointer away
+  await page.mouse.move(0, 0);
+  await expect(menu).toHaveCSS("opacity", "0");
+  await page.getByRole("grid", { name: "Rooms and conversations" }).focus();
+  // past the section's own toggle, the first stop in the list
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(menu).toBeFocused();
+  await expect(menu).toHaveCSS("opacity", "1");
+});
+
+test("a highlight holds the avatar it belongs to", async ({ page }) => {
+  await fakeChat(page);
+  await login(page, "/chat");
+  const within = async (outer: Locator, inner: Locator) => {
+    const a = (await outer.boundingBox())!;
+    const b = (await inner.boundingBox())!;
+    expect(b.x).toBeGreaterThanOrEqual(a.x);
+    expect(b.y).toBeGreaterThanOrEqual(a.y);
+    expect(b.x + b.width).toBeLessThanOrEqual(a.x + a.width);
+    expect(b.y + b.height).toBeLessThanOrEqual(a.y + a.height);
+  };
+  const account = page.getByRole("button", { name: /Administrator/ });
+  await within(account, account.locator("span").first());
+  const row = page.locator('[data-line="user:alice"]');
+  await within(row, row.locator("span").first());
+});
+
+test("two highlighted rows stay apart, with no gap for the pointer", async ({ page }) => {
+  await fakeChat(page);
+  await page.route("**/api/v0/rooms/joined", (route) =>
+    route.fulfill({
+      json: ["indie", "jazz"].map((name) => ({
+        name,
+        unread: 0,
+        mentions: 0,
+        notify: "mentions",
+        userCount: 3,
+        lastMessageAt: null,
+        lastReadId: 0
+      }))
+    })
+  );
+  await login(page, "/chat");
+  const first = page.locator('[data-line="room:indie"]');
+  const second = page.locator('[data-line="room:jazz"]');
+  await first.click({ modifiers: ["Control"] });
+  await second.click({ modifiers: ["Control"] });
+  await expect(first).toHaveAttribute("aria-selected", "true");
+  await expect(second).toHaveAttribute("aria-selected", "true");
+  // each tint stops at its padding box, inside the row's box, and the boxes meet
+  const painted = (row: Locator) =>
+    row.evaluate((e) => {
+      const box = e.getBoundingClientRect();
+      const style = getComputedStyle(e);
+      return {
+        clip: style.backgroundClip,
+        top: box.top + parseFloat(style.borderTopWidth),
+        bottom: box.bottom - parseFloat(style.borderBottomWidth),
+        boxTop: box.top,
+        boxBottom: box.bottom
+      };
+    });
+  const [a, b] = [await painted(first), await painted(second)];
+  expect(a.clip).toBe("padding-box");
+  expect(Math.abs(a.boxBottom - b.boxTop)).toBeLessThanOrEqual(1);
+  expect(b.top - a.bottom).toBeGreaterThanOrEqual(2);
+});
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("a row's menu is always there for a finger", async ({ page }) => {
+    await fakeChat(page);
+    await login(page, "/chat");
+    const menu = page.getByRole("button", { name: "Menu for indie" });
+    await expect(menu).toHaveCSS("opacity", "1");
+    await expect(menu).toHaveCSS("position", "static");
+    await menu.tap();
+    await expect(page.getByRole("menuitem", { name: "Pin", exact: true })).toBeVisible();
+  });
 });
 
 test("fades between screens without morphing the content area", async ({ page }) => {

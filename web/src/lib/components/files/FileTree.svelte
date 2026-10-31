@@ -336,7 +336,7 @@
         role="row"
         class={[
           "group absolute inset-x-0 flex items-center list-row",
-          framed && "pr-3",
+          framed && "pr-1",
           folderTint(pin.line.node)
         ]}
         id={pinnedId(pin.index)}
@@ -366,7 +366,7 @@
           {...list.line(line, index)}
           class={[
             "group absolute inset-x-0 top-0 flex items-center list-row",
-            framed && "pr-3",
+            framed && "pr-1",
             !folderId && "cursor-pointer",
             folderTint(line.node),
             arrivals.isFresh(line.key) && "animate-line-in",
@@ -385,8 +385,7 @@
           role="row"
           {...list.line(line, index)}
           class={[
-            "group absolute inset-x-0 top-0 isolate grid items-center list-row hover:bg-hover",
-            selected.has(idOf(line.item)) && "bg-accent-soft/60",
+            "group absolute inset-x-0 top-0 isolate grid items-center list-row",
             arrivals.isFresh(line.key) && "animate-line-in",
             lineClass?.(line)
           ]}

@@ -128,10 +128,7 @@
   {@const data = view.data}
   <nav aria-label="Settings views" class="flex gap-1">
     {#each [{ id: false, title: "Settings", to: "/system/settings" }, { id: true, title: "Raw file", to: "/system/settings?tab=raw" }] as t (t.title)}
-      <a
-        href={href(t.to)}
-        aria-current={raw === t.id ? "page" : undefined}
-        class="flex h-control items-center rounded-control px-3 text-sm text-fg-muted hover:bg-hover hover:text-fg aria-[current]:nav-current"
+      <a href={href(t.to)} aria-current={raw === t.id ? "page" : undefined} class="nav-tab"
         >{t.title}</a>
     {/each}
   </nav>
@@ -159,10 +156,7 @@
             <a
               href={href(`/system/settings?section=${section.id}`)}
               aria-current={current === section.id ? "location" : undefined}
-              class={[
-                "flex h-control-sm shrink-0 items-center gap-2 rounded-control px-2.5 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) hover:bg-hover hover:text-fg aria-[current]:nav-current",
-                q && !n && "hidden"
-              ]}
+              class={["nav-tab h-control-sm gap-2 px-2.5", q && !n && "hidden"]}
               onclick={(e) => {
                 e.preventDefault();
                 jump(section.id);

@@ -5,6 +5,26 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* inside a row someone is using: the pointer is on it, the keys are on it or on a control in it, or
+   one of its menus is open. A row's control keeps no state from a mouse click, which leaves focus
+   on it */
+@custom-variant row-active {
+  @media (hover: hover) {
+    &:is(:where(.group, [data-line]):hover *) {
+      @slot;
+    }
+  }
+  &:is(:where(.group, [data-line]):has(:focus-visible) *) {
+    @slot;
+  }
+  &:is(:where(.group, [data-line]):has([data-state="open"]) *) {
+    @slot;
+  }
+  &:is([data-line][data-focused] *) {
+    @slot;
+  }
+}
+
 @theme {
   /* only the tokens below exist, tailwind's default palette and radius scale are off */
   --color-*: initial;
@@ -438,15 +458,61 @@
   backdrop-filter: none;
 }
 
-/* the nav link for where the page is, marked with aria-current */
+/* the nav link for where the page is, marked with aria-current. No change of weight, which would
+   move the links beside it */
 @utility nav-current {
-  @apply bg-surface-muted font-medium text-fg shadow-xs ring-1 ring-border;
+  @apply bg-surface-muted text-fg shadow-xs ring-1 ring-border;
+}
+
+/* a line of the sidebar */
+@utility nav-item {
+  @apply flex h-control w-full items-center gap-2.5 rounded-control px-2 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) select-none not-disabled:hover:bg-hover not-disabled:hover:text-fg not-disabled:active:bg-press aria-[current]:nav-current;
+}
+
+/* a tab of a screen, a link to one of its parts */
+@utility nav-tab {
+  @apply flex h-control shrink-0 items-center gap-1.5 rounded-control px-3 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) hover:bg-hover hover:text-fg aria-[current]:nav-current;
+}
+
+/* a list line's tint: hovered, its menu open, the page it leads to, and selected, which hover
+   deepens and never hides */
+@utility line-tint {
+  @media (hover: hover) {
+    &:hover {
+      background-color: var(--color-hover);
+    }
+  }
+  &:has([data-state="open"]) {
+    background-color: var(--color-hover);
+  }
+  &[aria-current] {
+    background-color: var(--color-surface-muted);
+  }
+  &[aria-selected="true"] {
+    background-color: color-mix(in oklab, var(--color-accent-soft) 60%, transparent);
+  }
+  @media (hover: hover) {
+    &[aria-selected="true"]:hover {
+      background-color: var(--color-accent-soft);
+    }
+  }
+}
+
+/* a line of a list without dividers. Its tint is rounded and stops a little short of the next
+   line's, inside a clear border, so two tinted lines read as two while the pointer never falls
+   between lines */
+@utility pick-row {
+  @apply rounded-control border-y border-transparent line-tint bg-clip-padding;
+  --spacing-control-sm: min(
+    --theme(--spacing-control-sm inline),
+    calc(var(--line-h, 100vh) - 0.25rem)
+  );
 }
 
 /* a line of an activity log, the network's and a room's: the time, which never wraps, an icon,
    and what happened */
 @utility log-row {
-  @apply grid grid-cols-[4.5rem_1.25rem_minmax(0,1fr)] items-start gap-2 rounded-badge px-1 py-0.5 hover:bg-hover;
+  @apply grid grid-cols-[4.5rem_1.25rem_minmax(0,1fr)] items-start gap-2 pick-row rounded-badge px-1 py-0.5;
 }
 
 /* the bar of what is selected in a list, which stays at the bottom of the content area */
@@ -479,17 +545,15 @@
 }
 
 /* a line of a list with a divider under it, but for the last line, which the list controller
-   marks and whose divider would double the frame below it. A list that sets its lines' height in
-   --line-h keeps their small controls a little shorter than a line less its divider, so on a short
-   line a control's tint stays between the dividers as on a tall one */
+   marks and whose divider would double the frame below it: clear, so the line keeps its height. A
+   list that sets its lines' height in --line-h keeps their small controls a little shorter than a
+   line less its divider, so on a short line a control's tint stays between the dividers as on a
+   tall one */
 @utility list-row {
+  @apply line-tint;
   border-bottom-width: 1px;
   &[data-last] {
-    border-bottom-width: 0;
-  }
-  /* the line the open inspector shows, which stays marked while focus is elsewhere */
-  &[data-inspected] {
-    box-shadow: inset 2px 0 0 var(--color-accent);
+    border-bottom-color: transparent;
   }
   --spacing-control-sm: min(
     --theme(--spacing-control-sm inline),
@@ -497,25 +561,107 @@
   );
 }
 
-/* a row's buttons, put on an element inside a `group` row. Half shown until the row is hovered or
-   focused where the pointer can hover, always shown on touch screens */
+/* a row's buttons, put on an element inside a `group` row or a list line. Half shown until the row
+   is in use where the pointer can hover, always shown on touch screens */
 @utility row-action {
   transition-property: color, background-color, opacity;
   transition-duration: var(--motion-fast);
   transition-timing-function: var(--ease-out-soft);
   @media (hover: hover) {
     opacity: 0.5;
-    &:is(:where(.group):hover *, :where(.group):focus-within *) {
+    @variant row-active {
       opacity: 1;
     }
   }
 }
 
-/* the line of a list that the keys moved to: a ring inside its box, clear of the dividers. The
-   list controller marks it only while focus came from the keys, as :focus-visible would */
+/* a row's control that only shows while the row is in use, on a `relative` row. Where the pointer
+   can hover it takes no width: it comes up over the row's end, which holds still, and row-text
+   clears the way. It stays in the tab order. A touch screen has no hover to bring it up, so there
+   it is a plain part of the row, always shown */
+@utility row-menu {
+  transition: opacity var(--motion-fast) var(--ease-out-soft);
+  @media (hover: hover) {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0.25rem;
+    margin-block: auto;
+    opacity: 0;
+    @variant row-active {
+      opacity: 1;
+    }
+  }
+}
+
+/* the part of a row a row-menu comes up over: it fades out under the control */
+@utility row-text {
+  @media (hover: hover) {
+    @variant row-active {
+      mask-image: linear-gradient(to left, transparent 1.75rem, black 2.75rem);
+    }
+  }
+}
+
+/* what the row-menu comes up over at the row's end, a time or a count: gone while the control is
+   there, its place kept, rather than half cut by the fade */
+@utility row-meta {
+  @media (hover: hover) {
+    @variant row-active {
+      visibility: hidden;
+    }
+  }
+}
+
+/* a name beside its stats on one line. At rest the name gives way and the stats stay. While the row
+   is in use the name stops giving way, and stats with no room left wrap to a second line, which
+   the line's clip hides, so they go only when the name needs their place and the row keeps its
+   height. The stats are the last child, and the name's part the first */
+@utility name-stats {
+  display: flex;
+  height: 1lh;
+  min-width: 0;
+  align-items: center;
+  align-content: flex-start;
+  gap: 1rem 0.5rem;
+  overflow: clip;
+  overflow-clip-margin: 3px;
+  & > :first-child {
+    min-width: 0;
+  }
+  & > :last-child {
+    flex: none;
+    margin-inline-start: auto;
+  }
+  @variant row-active {
+    flex-wrap: wrap;
+    & > :first-child {
+      flex: none;
+      max-width: 100%;
+    }
+  }
+}
+
+/* what marks a line over its tint, each inside its box and clear of the dividers: a bar for the line
+   the open inspector shows, which stays while focus is elsewhere, and a ring for the page it leads
+   to or, stronger, the line the keys moved to. The list controller marks that one only while focus
+   came from the keys, as :focus-visible would. A control in a line takes a tint one step past the
+   line's own, which would hide it on a hovered line */
 @layer components {
+  [data-line]:is([data-inspected], [aria-current], [data-focused]) {
+    box-shadow: var(--line-bar, 0 0 #0000), var(--line-ring, 0 0 #0000);
+  }
+  [data-line][data-inspected] {
+    --line-bar: inset 2px 0 0 var(--color-accent);
+  }
+  [data-line][aria-current] {
+    --line-ring: inset 0 0 0 1px var(--color-border);
+  }
   [data-line][data-focused] {
-    @apply ring-1 ring-accent ring-inset;
+    --line-ring: inset 0 0 0 1px var(--color-accent);
+  }
+  [data-line] > * {
+    --color-hover: var(--color-press);
+    --color-press: var(--color-input);
   }
 }
 

@@ -27,14 +27,17 @@
     <div
       role="columnheader"
       aria-sort={sort === "asc" ? "ascending" : sort === "desc" ? "descending" : undefined}
-      class={["relative flex min-w-0 items-center px-2 text-xs", column.end && "justify-end"]}>
+      class={[
+        "relative flex min-w-0 items-center self-stretch px-2 text-xs",
+        column.end && "justify-end"
+      ]}>
       {#if column.quiet}
         <span class="sr-only">{column.label}</span>
         {@render cell?.(column)}
       {:else if grid.sorts(column)}
         <button
           type="button"
-          class="flex min-w-0 items-center gap-1 hover:text-fg"
+          class="flex min-w-0 items-center gap-1 self-stretch hover:text-fg"
           title={column.label}
           onclick={() => grid.toggle(column)}>
           <span class="truncate">{column.label}</span>
@@ -50,7 +53,7 @@
              and touch events, not pointer events -->
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <span
-          class="absolute top-1 right-0 bottom-1 w-1.5 cursor-col-resize touch-none border-r"
+          class="absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none after:absolute after:inset-y-3 after:right-0 after:border-r"
           role="separator"
           aria-orientation="vertical"
           aria-label={`Width of ${column.label}`}

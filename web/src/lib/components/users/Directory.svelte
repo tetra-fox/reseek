@@ -187,12 +187,17 @@
 
   // the columns; below a very wide screen the group column is left out, so the table fits
   // beside the sidebar without a sideways scroll. The group shows on the user's card
+  // every row is a grid of its own, so the user's cell has no say in its width, and the last
+  // track holds all five of a row's buttons
   const COLUMNS =
-    "grid-cols-[2rem_minmax(11rem,1fr)_5rem_7rem_7rem_6rem_6rem_4rem_7rem] 2xl:grid-cols-[2rem_minmax(11rem,1fr)_5rem_8rem_7rem_7rem_6rem_6rem_4rem_7rem]";
+    "grid-cols-[2rem_minmax(11rem,1fr)_5rem_7rem_7rem_6rem_6rem_4rem_9rem] 2xl:grid-cols-[2rem_minmax(11rem,1fr)_5rem_8rem_7rem_7rem_6rem_6rem_4rem_9rem]";
 </script>
 
 {#snippet sortHeader(label: string, by: Schemas["UserSort"])}
-  <button type="button" class="flex items-center gap-1 truncate" onclick={() => sortBy(by)}>
+  <button
+    type="button"
+    class="-my-2.5 flex items-center gap-1 truncate py-2.5 hover:text-fg"
+    onclick={() => sortBy(by)}>
     {label}
     {#if sort.by === by}
       {#if sort.order === "asc"}<ArrowUpIcon class="size-3" />{:else}<ArrowDownIcon
@@ -296,10 +301,9 @@
           role="row"
           {...list.line(u, i)}
           class={[
-            "grid min-w-max items-center gap-2 list-row px-2 py-1.5 hover:bg-hover",
+            "grid min-w-max items-center gap-2 list-row px-2 py-1.5",
             COLUMNS,
             u.block && "bg-danger-soft/40",
-            list.selected.has(u.username) && "bg-accent-soft/60",
             rows.removed.has(u.username) && "opacity-40"
           ]}>
           <span role="gridcell">
@@ -313,7 +317,7 @@
               onCheckedChange={(on) =>
                 on !== list.selected.has(u.username) && list.toggle(u.username)} />
           </span>
-          <span role="gridcell" class="flex min-w-0 items-center gap-2">
+          <span role="gridcell" class="flex w-0 min-w-full items-center gap-2">
             <Avatar name={u.username} pictureUrl={u.info?.pictureUrl} class="size-7 text-xs" />
             <Username name={u.username} />
             {#if u.pinned}<Badge tone="info">{BUDDY.badge}</Badge>{/if}

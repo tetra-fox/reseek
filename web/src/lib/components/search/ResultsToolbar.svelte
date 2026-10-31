@@ -63,7 +63,7 @@
           bind:value={searchOptions.sort}
           options={SORTS}
           aria-label="Sort"
-          class="w-64 min-w-0"
+          class="h-control-sm w-64 min-w-0"
           disabled={!sortable} />
       </div>
     {/if}

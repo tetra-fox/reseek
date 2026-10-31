@@ -9,9 +9,11 @@
   import { MediaQuery } from "svelte/reactivity";
 
   import { paneKey } from "#lib/chat/chat.svelte.js";
+  import { columns } from "#lib/chat/columns.svelte.js";
   import { chatName } from "#lib/chat/notices.js";
   import { notifier, notifyOptions } from "#lib/chat/notify.svelte.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
+  import { chatLayout } from "#lib/chat/prefs.svelte.js";
   import { chatOrder } from "#lib/chat/rooms/order.js";
   import { resultsHref } from "#lib/chat/route.js";
   import type { SearchKind } from "#lib/chat/search/match.js";
@@ -19,6 +21,7 @@
   import JoinRoomDialog from "#lib/components/chat/rooms/JoinRoomDialog.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import { chatHref, roomHref } from "#lib/nav.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
@@ -46,6 +49,9 @@
   const RESULTS_PAGE = 50;
 
   const wide = new MediaQuery("min-width: 1024px");
+  $effect(() => {
+    columns.listShown = wide.current;
+  });
   let sheet = $state(false);
   let joining = $state(false);
   let joinName = $state("");
@@ -137,10 +143,23 @@
 
 <!-- the whole content area, edge to edge, as a desktop chat app: the list, the conversation and
      its side panel are columns divided by borders -->
-<div class="flex h-(--content-h) overflow-hidden bg-surface" data-chat>
+<div
+  class="flex h-(--content-h) overflow-hidden bg-surface"
+  data-chat
+  bind:clientWidth={columns.total}>
   {#if wide.current}
-    <div class="flex w-72 shrink-0 flex-col border-r">
+    {@const { width, min, max, initial } = columns.listColumn}
+    <div class="relative flex shrink-0 flex-col border-r" style:width={`${width}px`}>
       {@render list()}
+      <ResizeHandle
+        bind:value={() => width, (w) => (columns.list = w)}
+        {min}
+        {max}
+        {initial}
+        edge="right"
+        label="Width of the chat list"
+        onchange={(w) => (chatLayout.listWidth = w)}
+        class="absolute inset-y-0 -right-1 z-10 w-2" />
     </div>
   {/if}
   <div class="flex min-w-0 flex-1 flex-col">

@@ -25,13 +25,14 @@
   }: Props = $props();
 </script>
 
-<!-- controlled: the caller decides what checking it does and passes the result back -->
+<!-- controlled: the caller decides what checking it does and passes the result back. The box is
+     small to look at, so its ::after takes clicks a little past it -->
 <Checkbox.Root
   {checked}
   {indeterminate}
   {onCheckedChange}
   class={cn(
-    "inline-flex size-4 shrink-0 items-center justify-center rounded-[0.25rem] border border-input bg-surface text-accent-fg shadow-xs transition-colors duration-(--motion-fast) disabled:opacity-50 data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent",
+    "relative inline-flex size-4 shrink-0 items-center justify-center rounded-[0.25rem] border border-input bg-surface align-middle text-accent-fg shadow-xs transition-colors duration-(--motion-fast) after:absolute after:-inset-x-1 after:-inset-y-1.5 disabled:opacity-50 data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent",
     className
   )}
   {...rest}>

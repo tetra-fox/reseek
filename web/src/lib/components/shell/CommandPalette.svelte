@@ -186,8 +186,8 @@
           bind:value={query}
           aria-label="Go to a screen, user, room or setting, or search"
           placeholder="Go to a screen, user, room or setting, or search"
-          class="h-12 w-full border-b bg-transparent px-4 text-base outline-none placeholder:text-fg-muted" />
-        <Command.List class="overflow-y-auto p-1.5">
+          class="h-12 w-full shrink-0 border-b bg-transparent px-4 text-base outline-none placeholder:text-fg-muted" />
+        <Command.List class="min-h-0 overflow-y-auto p-1.5">
           <Command.Viewport>
             <Command.Empty class="px-3 py-6 text-center text-sm text-fg-muted">
               No matches

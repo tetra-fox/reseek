@@ -60,6 +60,14 @@
 
   const PINNED = "h:pinned";
 
+  /**
+   * where a row's content starts, the same in a section's heading. Past the row's icon, the left
+   * padding holds a pin's grip; on a touch screen the grip takes its own place in the row instead
+   */
+  const rowStart = "pl-4 pointer-coarse:pl-2";
+  /** a count at a row's end, which keeps to the height of its line */
+  const count = "-my-px ml-auto py-0 row-meta";
+
   const folded = new SvelteSet<string>();
   /** the row whose menu is open, from its button or a right click */
   let menuFor = $state<string | null>(null);
@@ -236,13 +244,13 @@
     {@attach freezesWhileUsed}>
     {#each lines as line, i (line.key)}
       {#if line.kind === "header"}
-        <div
-          role="row"
-          {...list.line(line, i)}
-          class="flex items-center gap-1 px-1 pt-2 pb-1 text-xs font-medium text-fg-muted">
+        <div role="row" {...list.line(line, i)} class="rounded-control pt-1.5 pb-0.5">
           <button
             type="button"
-            class="flex items-center gap-1 hover:text-fg"
+            class={[
+              "flex h-control-sm w-full items-center gap-1 rounded-control text-xs font-medium text-fg-muted hover:bg-hover hover:text-fg",
+              rowStart
+            ]}
             aria-expanded={!folded.has(line.key)}
             onclick={() => (folded.has(line.key) ? folded.delete(line.key) : folded.add(line.key))}>
             {#if folded.has(line.key)}<ChevronRightIcon class="size-3.5" />{:else}<ChevronDownIcon
@@ -274,11 +282,10 @@
           aria-keyshortcuts={movable ? "Alt+Shift+ArrowUp Alt+Shift+ArrowDown" : undefined}
           style:translate={drag.shift(line.key)}
           class={[
-            "group/row flex items-center gap-2 rounded-control px-2 py-1.5 hover:bg-hover",
-            current === line.key && "bg-hover",
-            list.selected.has(line.key) && "bg-accent-soft/60",
-            movable && "relative select-none",
-            drag.key === line.key && "z-10 cursor-grabbing bg-surface shadow-raised",
+            "relative flex items-center gap-2 pick-row py-1.5 pr-3",
+            rowStart,
+            movable && "select-none",
+            drag.key === line.key && "z-10 cursor-grabbing bg-surface bg-clip-border shadow-raised",
             drag.key !== null &&
               drag.key !== line.key &&
               "transition-[translate] duration-(--motion-fast) ease-(--ease-out-soft)"
@@ -301,7 +308,7 @@
               tabindex="-1"
               aria-hidden="true"
               title={`Drag to reorder, or press ${moveKeys}`}
-              class="absolute inset-y-0 left-0 flex w-2 cursor-grab touch-none items-center justify-center text-fg-subtle opacity-0 group-hover/row:opacity-100 active:cursor-grabbing pointer-coarse:static pointer-coarse:-mx-1 pointer-coarse:w-7 pointer-coarse:shrink-0 pointer-coarse:self-stretch pointer-coarse:opacity-100"
+              class="absolute inset-y-0 left-0 flex w-4 cursor-grab touch-none items-center justify-center text-fg-subtle opacity-0 hover:text-fg-muted active:cursor-grabbing pointer-coarse:static pointer-coarse:-mx-1 pointer-coarse:w-7 pointer-coarse:shrink-0 pointer-coarse:self-stretch pointer-coarse:opacity-100 row-active:opacity-100"
               onpointerdown={(e) => drag.press(e, line.key, line.ids)}
               ><GripVerticalIcon class="size-3.5 shrink-0" /></button>
           {/if}
@@ -313,20 +320,23 @@
               class="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-muted"
               ><Icon class="size-4 text-fg-muted" /></span>
           {/if}
-          <span role="gridcell" class="flex min-w-0 flex-1 flex-col">
-            <span class="flex items-center gap-1">
-              <span
-                class="truncate text-sm font-medium"
-                style:color={person ? nameColor(t.name) : undefined}>{chatName(t)}</span>
-              {#if notify === "none" || summary?.muted}<BellOffIcon
-                  class="size-3 shrink-0 text-fg-subtle"
-                  aria-label="muted" />{/if}
-              {#if summary?.block}<Badge tone="danger">blocked</Badge>{/if}
-              {#if at}<span class="ml-auto shrink-0 text-xs text-fg-subtle"
-                  >{ago(at, clock.now)}</span
-                >{/if}
+          <!-- two lines' height on every row, so a row is as tall with a badge or without a preview,
+               and a row with one line has it in the middle -->
+          <span role="gridcell" class="flex h-9 min-w-0 flex-1 flex-col justify-center row-text">
+            <span class="name-count gap-2">
+              <span class="flex min-w-0 items-center gap-1">
+                <span
+                  class="truncate text-sm font-medium"
+                  style:color={person ? nameColor(t.name) : undefined}>{chatName(t)}</span>
+                {#if notify === "none" || summary?.muted}<BellOffIcon
+                    class="size-3 shrink-0 text-fg-subtle"
+                    aria-label="muted" />{/if}
+                {#if summary?.block}<Badge tone="danger" class="-my-px py-0">blocked</Badge>{/if}
+              </span>
+              <span class="row-meta text-right text-xs text-fg-subtle"
+                ><span>{at ? ago(at, clock.now) : ""}</span></span>
             </span>
-            <span class="flex items-center gap-1">
+            <span class="flex items-center gap-2">
               <span class="truncate text-xs text-fg-muted">
                 {#if preview}{@const action = actionOf(preview.text)}{preview.author &&
                   t.kind === "room"
@@ -338,11 +348,11 @@
                   )}{/if}
               </span>
               {#if counts?.mentions}
-                <Badge tone="accent" class="ml-auto" title="mentions">@{counts.mentions}</Badge>
+                <Badge tone="accent" class={count} title="mentions">@{counts.mentions}</Badge>
               {:else if counts?.unread}
-                <Badge class="ml-auto">{counts.unread}</Badge>
+                <Badge class={count}>{counts.unread}</Badge>
               {:else if unread}
-                <Badge tone="danger" class="ml-auto">{unread}</Badge>
+                <Badge tone="danger" class={count}>{unread}</Badge>
               {/if}
             </span>
           </span>
@@ -355,7 +365,7 @@
                   {...props}
                   variant="ghost"
                   size="icon-sm"
-                  class="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                  class="row-menu"
                   aria-label={`Menu for ${chatName(t)}`}><EllipsisIcon /></Button>
               {/snippet}
             </Menu.Trigger>

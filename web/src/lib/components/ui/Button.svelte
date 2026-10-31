@@ -27,13 +27,14 @@
 
   const variants = {
     primary:
-      "bg-accent text-accent-fg shadow-xs not-disabled:hover:bg-accent-hover not-disabled:active:bg-accent-press",
-    secondary: "bg-surface-muted text-fg not-disabled:hover:bg-hover not-disabled:active:bg-press",
+      "border-transparent bg-accent text-accent-fg shadow-xs not-disabled:hover:bg-accent-hover not-disabled:active:bg-accent-press",
+    secondary:
+      "border-transparent bg-surface-muted text-fg not-disabled:hover:bg-hover not-disabled:active:bg-press",
     outline:
-      "border border-input bg-surface text-fg shadow-xs not-disabled:hover:bg-hover not-disabled:active:bg-press",
-    ghost: "text-fg not-disabled:hover:bg-hover not-disabled:active:bg-press",
+      "border-input bg-surface text-fg shadow-xs not-disabled:hover:bg-hover not-disabled:active:bg-press",
+    ghost: "border-transparent text-fg not-disabled:hover:bg-hover not-disabled:active:bg-press",
     danger:
-      "bg-danger text-danger-fg not-disabled:hover:bg-danger-hover not-disabled:active:bg-danger-press",
+      "border-transparent bg-danger text-danger-fg not-disabled:hover:bg-danger-hover not-disabled:active:bg-danger-press",
     link: "text-accent underline-offset-2 not-disabled:hover:underline"
   };
 
@@ -46,7 +47,8 @@
 </script>
 
 <!-- link buttons sit inside a line of text, so they take its size instead of a control height.
-     not-disabled rather than enabled, since a link never matches :enabled -->
+     not-disabled rather than enabled, since a link never matches :enabled. Every other variant has
+     a border, clear where it doesn't show, so a toggle between two keeps its width -->
 <svelte:element
   this={href ? "a" : "button"}
   {href}
@@ -54,7 +56,7 @@
   class={cn(
     "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-medium whitespace-nowrap transition duration-(--motion-fast) disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
     variants[variant],
-    variant !== "link" && sizes[size],
+    variant !== "link" && ["border", sizes[size]],
     className
   )}
   data-label

@@ -303,7 +303,10 @@
 {/snippet}
 
 {#snippet sortable(label: string, by: SortBy)}
-  <button type="button" class="flex items-center gap-1" onclick={() => sortBy(by)}>
+  <button
+    type="button"
+    class="-my-1.5 flex items-center gap-1 py-1.5 hover:text-fg"
+    onclick={() => sortBy(by)}>
     {label}
     {#if sort.by === by}
       {#if sort.dir === "asc"}<ArrowUpIcon class="size-3" />{:else}<ArrowDownIcon
@@ -317,8 +320,7 @@
     <a
       href={href(`/system/files?root=${t.id}`)}
       aria-current={root === t.id ? "page" : undefined}
-      class="flex h-control items-center rounded-control px-3 text-sm text-fg-muted hover:bg-hover hover:text-fg aria-[current]:nav-current"
-      >{t.title}</a>
+      class="nav-tab">{t.title}</a>
   {/each}
 </nav>
 
@@ -472,7 +474,9 @@
         {e?.modifiedAt ? dateTime(e.modifiedAt) : ""}
       </span>
       <span class="w-28 shrink-0 max-md:hidden"></span>
-      {#if e}<span class="row-action max-md:ml-auto">{@render menu(e)}</span>{/if}
+      <!-- the width that leaves the columns above under the file lines' columns -->
+      {#if e}<span class="flex w-8 justify-end row-action max-md:ml-auto">{@render menu(e)}</span>
+      {/if}
     {/snippet}
     {#snippet item(e)}
       <span role="gridcell" class="flex">
@@ -505,7 +509,7 @@
         <span role="gridcell" class="pr-3 text-right tabular-nums"
           >{e.size ? formatBytes(e.size) : ""}</span>
       {/if}
-      <span role="gridcell" class="flex justify-end"
+      <span role="gridcell" class="flex justify-end pr-1"
         >{#if e.kind !== "up"}{@render menu(e)}{/if}</span>
     {/snippet}
   </FileTree>
