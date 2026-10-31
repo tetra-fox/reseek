@@ -159,6 +159,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/application/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Changes the password of our Soulseek account. Takes being logged in; refused when the
+         *     environment or the command line sets the password, since the next login would use that one.
+         */
+        put: operations["change_password"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/application/version": {
         parameters: {
             query?: never;
@@ -670,6 +690,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/files/{root}/files/{path}/wav": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A file as a WAV made as it is read, for AIFF and ALAC, which browsers cannot play: never
+         *     stored, a single range honored. Anything else, and AIFF that is compressed, is refused.
+         */
+        get: operations["file_wav"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /** The headers a file's WAV would be served with, without the bytes. */
+        head: operations["file_wav_head"];
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/interests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What we like and hate. */
+        get: operations["get_interests"];
+        /**
+         * Replaces what we like and hate and answers with the lists kept, trimmed and without repeats.
+         *     The server is told what changed, now when logged in and at the next login otherwise.
+         */
+        put: operations["put_interests"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/live": {
         parameters: {
             query?: never;
@@ -940,7 +1002,7 @@ export interface paths {
         /** The picture other users are sent with our profile. */
         get: operations["get_profile_picture"];
         /**
-         * Sets the picture other users are sent: a JPEG, PNG, GIF or WebP image of at most 1 MiB,
+         * Sets the picture other users are sent: a JPEG, PNG, GIF, WebP or BMP image of at most 1 MiB,
          *     kept as a JPEG at most 512 pixels on its longest side.
          */
         put: operations["put_profile_picture"];
@@ -1714,6 +1776,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/shares/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The folders of this machine a new share can be picked from, directly in a folder or at the top
+         *     of the machine. Files never appear, nor anything a scan would leave out; that and a path that
+         *     does not exist answer alike.
+         */
+        get: operations["folders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/shares/{id}": {
         parameters: {
             query?: never;
@@ -2249,6 +2332,24 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/transfers/downloads/{username}/{id}/wav": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The file a succeeded download was moved to as a WAV, served as a file's is. */
+        get: operations["download_wav"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /** The headers a succeeded download's WAV would be served with, without the bytes. */
+        head: operations["download_wav_head"];
         patch?: never;
         trace?: never;
     };
@@ -4670,6 +4771,16 @@ export interface components {
             queueDepth: number;
         };
         /**
+         * @description What we like and what we hate, each in the order listed. The reply of `GET /interests` and the
+         *     body of `PUT /interests`.
+         */
+        Interests: {
+            /** @description what we hate */
+            hated: string[];
+            /** @description what we like */
+            liked: string[];
+        };
+        /**
          * @description A room to join, the body of `POST /rooms/joined`. Joining a room that does not exist creates
          *     it.
          */
@@ -5493,6 +5604,11 @@ export interface components {
              * @description how many items match, on every page together
              */
             total: number;
+        };
+        /** @description A new password for our Soulseek account, the body of `PUT /application/password`. */
+        PasswordChange: {
+            /** @description the new password */
+            password: string;
         };
         /**
          * @description How the router was asked to forward our port.
@@ -6493,6 +6609,22 @@ export interface components {
             raw: string;
             /** @description the path other users see, the same as `alias` */
             remotePath: string;
+        };
+        /** @description One folder of this machine, a choice in the folder picker. */
+        ShareFolder: {
+            /** @description the folder's own name, or a drive's letter on Windows */
+            name: string;
+            /** @description the absolute path, what a share entry is written with */
+            path: string;
+        };
+        /** @description The folders directly in one folder, or the drives of a Windows machine. Files never appear. */
+        ShareFolders: {
+            /** @description the folders in it, by name */
+            folders: components["schemas"]["ShareFolder"][];
+            /** @description the folder listed; null for the drive list */
+            path?: string | null;
+            /** @description more folders are there than were listed */
+            truncated: boolean;
         };
         /**
          * @description The shares of every host by host name: `local` for this instance, always present, and each
@@ -8160,6 +8292,76 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    change_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10291,6 +10493,282 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    file_wav: {
+        parameters: {
+            query?: {
+                /** @description whether the browser shows the file or saves it */
+                disposition?: components["schemas"]["ContentDisposition"];
+                /** @description the name the browser saves the file under, null for the file's own name */
+                name?: string;
+                /** @description a file token for this file, for a link that carries no session */
+                t?: string;
+            };
+            header?: never;
+            path: {
+                /** @description the directory root */
+                root: components["schemas"]["FileRoot"];
+                /** @description the file's path under the root, base64 */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/wav": components["schemas"]["FileContent"];
+                };
+            };
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/wav": components["schemas"]["FileContent"];
+                };
+            };
+            /** @description unchanged */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    file_wav_head: {
+        parameters: {
+            query?: {
+                /** @description whether the browser shows the file or saves it */
+                disposition?: components["schemas"]["ContentDisposition"];
+                /** @description the name the browser saves the file under, null for the file's own name */
+                name?: string;
+                /** @description a file token for this file, for a link that carries no session */
+                t?: string;
+            };
+            header?: never;
+            path: {
+                /** @description the directory root */
+                root: components["schemas"]["FileRoot"];
+                /** @description the file's path under the root, base64 */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the headers of the whole WAV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description the headers of the range asked for */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description unchanged */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_interests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Interests"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_interests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Interests"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Interests"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
             };
         };
     };
@@ -14125,6 +14603,68 @@ export interface operations {
             };
         };
     };
+    folders: {
+        parameters: {
+            query?: {
+                /** @description the absolute path of the folder; without it the top of the machine, `/` or the drives */
+                path?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareFolders"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     share: {
         parameters: {
             query?: never;
@@ -16248,6 +16788,194 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
+            };
+        };
+    };
+    download_wav: {
+        parameters: {
+            query?: {
+                /** @description whether the browser shows the file or saves it */
+                disposition?: components["schemas"]["ContentDisposition"];
+                /** @description the name the browser saves the file under, null for the file's own name */
+                name?: string;
+                /** @description a file token for this file, for a link that carries no session */
+                t?: string;
+            };
+            header?: never;
+            path: {
+                /** @description the peer */
+                username: string;
+                /** @description the download's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/wav": components["schemas"]["FileContent"];
+                };
+            };
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/wav": components["schemas"]["FileContent"];
+                };
+            };
+            /** @description unchanged */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    download_wav_head: {
+        parameters: {
+            query?: {
+                /** @description whether the browser shows the file or saves it */
+                disposition?: components["schemas"]["ContentDisposition"];
+                /** @description the name the browser saves the file under, null for the file's own name */
+                name?: string;
+                /** @description a file token for this file, for a link that carries no session */
+                t?: string;
+            };
+            header?: never;
+            path: {
+                /** @description the peer */
+                username: string;
+                /** @description the download's id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the headers of the whole WAV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description the headers of the range asked for */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description unchanged */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

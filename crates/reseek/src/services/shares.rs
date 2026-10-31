@@ -1,6 +1,6 @@
 //! What we share: the shares of every host and the scan that indexes them.
 
-use api_types::shares::{Share, SharesByHost};
+use api_types::shares::{Share, ShareFolders, SharesByHost};
 use api_types::users::Directory;
 use async_trait::async_trait;
 
@@ -31,6 +31,12 @@ pub trait ShareService: Send + Sync {
 
   /// What the share with the id `id` holds, its own directory included.
   async fn share_contents(&self, id: &str) -> Result<Vec<Directory>, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// The folders of this machine a share could be made of, directly in `path` or at the top
+  /// without one. Never a file, and nothing a scan would leave out.
+  async fn folders(&self, path: Option<String>) -> Result<ShareFolders, ApiError> {
     Err(not_yet(DOMAIN))
   }
 

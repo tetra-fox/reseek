@@ -41,6 +41,38 @@ pub struct Share {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct SharesByHost(pub BTreeMap<String, Vec<Share>>);
 
+/// One folder of this machine, a choice in the folder picker.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareFolder {
+  /// the folder's own name, or a drive's letter on Windows
+  pub name: String,
+  /// the absolute path, what a share entry is written with
+  pub path: String,
+}
+
+/// The folders directly in one folder, or the drives of a Windows machine. Files never appear.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareFolders {
+  /// the folder listed; null for the drive list
+  pub path: Option<String>,
+  /// the folders in it, by name
+  pub folders: Vec<ShareFolder>,
+  /// more folders are there than were listed
+  pub truncated: bool,
+}
+
+/// Which folder to list.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct ShareFoldersQuery {
+  /// the absolute path of the folder; without it the top of the machine, `/` or the drives
+  #[serde(default)]
+  pub path: Option<String>,
+}
+
 /// How a share scan is started.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
 #[serde(rename_all = "camelCase")]

@@ -168,6 +168,8 @@ fn body(method: &Method, route: &str) -> Option<Payload> {
     ("PUT", r) if r.ends_with("/notify") => json(json!({ "notify": "all" })),
     ("PUT", "/api/v0/conversations/{username}/draft") => json(json!({ "draft": "hel" })),
     ("PUT", "/api/v0/chat/pins") => json(json!([{ "kind": "room", "name": "indie" }])),
+    ("PUT", "/api/v0/interests") => json(json!({ "liked": ["jazz"], "hated": [] })),
+    ("PUT", "/api/v0/application/password") => json(json!({ "password": "new-password" })),
     ("POST", "/api/v0/rooms/joined") => json(json!({ "name": "indie" })),
     ("POST", "/api/v0/rooms/joined/{roomName}/messages") => json(json!("hello")),
     ("POST", "/api/v0/rooms/joined/{roomName}/ticker") => json(json!("listening")),

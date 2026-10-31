@@ -10,6 +10,7 @@
 
 mod attributes;
 mod browse;
+mod folders;
 mod hosts;
 mod init;
 mod repository;

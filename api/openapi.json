@@ -526,6 +526,90 @@
         }
       }
     },
+    "/api/v0/application/password": {
+      "put": {
+        "tags": [
+          "application"
+        ],
+        "summary": "Changes the password of our Soulseek account. Takes being logged in; refused when the\nenvironment or the command line sets the password, since the next login would use that one.",
+        "operationId": "change_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "changed"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/application/version": {
       "get": {
         "tags": [
@@ -3558,6 +3642,346 @@
         }
       }
     },
+    "/api/v0/files/{root}/files/{path}/wav": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "summary": "A file as a WAV made as it is read, for AIFF and ALAC, which browsers cannot play: never\nstored, a single range honored. Anything else, and AIFF that is compressed, is refused.",
+        "operationId": "file_wav",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "disposition",
+            "in": "query",
+            "description": "whether the browser shows the file or saves it",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ContentDisposition"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the name the browser saves the file under, null for the file's own name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "t",
+            "in": "query",
+            "description": "a file token for this file, for a link that carries no session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "unchanged"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "files"
+        ],
+        "summary": "The headers a file's WAV would be served with, without the bytes.",
+        "operationId": "file_wav_head",
+        "parameters": [
+          {
+            "name": "root",
+            "in": "path",
+            "description": "the directory root",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileRoot"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "the file's path under the root, base64",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "disposition",
+            "in": "query",
+            "description": "whether the browser shows the file or saves it",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ContentDisposition"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the name the browser saves the file under, null for the file's own name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "t",
+            "in": "query",
+            "description": "a file token for this file, for a link that carries no session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the headers of the whole WAV"
+          },
+          "206": {
+            "description": "the headers of the range asked for"
+          },
+          "304": {
+            "description": "unchanged"
+          },
+          "400": {
+            "description": ""
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          },
+          "415": {
+            "description": ""
+          },
+          "416": {
+            "description": ""
+          },
+          "503": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v0/interests": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "What we like and hate.",
+        "operationId": "get_interests",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Interests"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Replaces what we like and hate and answers with the lists kept, trimmed and without repeats.\nThe server is told what changed, now when logged in and at the next login otherwise.",
+        "operationId": "put_interests",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Interests"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Interests"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/live": {
       "get": {
         "tags": [
@@ -4629,7 +5053,7 @@
         "tags": [
           "profile"
         ],
-        "summary": "Sets the picture other users are sent: a JPEG, PNG, GIF or WebP image of at most 1 MiB,\nkept as a JPEG at most 512 pixels on its longest side.",
+        "summary": "Sets the picture other users are sent: a JPEG, PNG, GIF, WebP or BMP image of at most 1 MiB,\nkept as a JPEG at most 512 pixels on its longest side.",
         "operationId": "put_profile_picture",
         "requestBody": {
           "description": "the image",
@@ -8587,6 +9011,88 @@
         }
       }
     },
+    "/api/v0/shares/folders": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "The folders of this machine a new share can be picked from, directly in a folder or at the top\nof the machine. Files never appear, nor anything a scan would leave out; that and a path that\ndoes not exist answer alike.",
+        "operationId": "folders",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "description": "the absolute path of the folder; without it the top of the machine, `/` or the drives",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareFolders"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/shares/{id}": {
       "get": {
         "tags": [
@@ -11787,6 +12293,245 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v0/transfers/downloads/{username}/{id}/wav": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "summary": "The file a succeeded download was moved to as a WAV, served as a file's is.",
+        "operationId": "download_wav",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "disposition",
+            "in": "query",
+            "description": "whether the browser shows the file or saves it",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ContentDisposition"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the name the browser saves the file under, null for the file's own name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "t",
+            "in": "query",
+            "description": "a file token for this file, for a link that carries no session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "unchanged"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "files"
+        ],
+        "summary": "The headers a succeeded download's WAV would be served with, without the bytes.",
+        "operationId": "download_wav_head",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the peer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "the download's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "disposition",
+            "in": "query",
+            "description": "whether the browser shows the file or saves it",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ContentDisposition"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the name the browser saves the file under, null for the file's own name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "t",
+            "in": "query",
+            "description": "a file token for this file, for a link that carries no session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the headers of the whole WAV"
+          },
+          "206": {
+            "description": "the headers of the range asked for"
+          },
+          "304": {
+            "description": "unchanged"
+          },
+          "400": {
+            "description": ""
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "415": {
+            "description": ""
+          },
+          "416": {
+            "description": ""
+          },
+          "503": {
+            "description": ""
           }
         }
       }
@@ -18674,6 +19419,30 @@
           }
         }
       },
+      "Interests": {
+        "type": "object",
+        "description": "What we like and what we hate, each in the order listed. The reply of `GET /interests` and the\nbody of `PUT /interests`.",
+        "required": [
+          "liked",
+          "hated"
+        ],
+        "properties": {
+          "hated": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "what we hate"
+          },
+          "liked": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "what we like"
+          }
+        }
+      },
       "JoinRoom": {
         "type": "object",
         "description": "A room to join, the body of `POST /rooms/joined`. Joining a room that does not exist creates\nit.",
@@ -20782,6 +21551,19 @@
           }
         }
       },
+      "PasswordChange": {
+        "type": "object",
+        "description": "A new password for our Soulseek account, the body of `PUT /application/password`.",
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "the new password"
+          }
+        }
+      },
       "PortMappingMethod": {
         "type": "string",
         "description": "How the router was asked to forward our port.",
@@ -22663,6 +23445,52 @@
           "remotePath": {
             "type": "string",
             "description": "the path other users see, the same as `alias`"
+          }
+        }
+      },
+      "ShareFolder": {
+        "type": "object",
+        "description": "One folder of this machine, a choice in the folder picker.",
+        "required": [
+          "name",
+          "path"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "the folder's own name, or a drive's letter on Windows"
+          },
+          "path": {
+            "type": "string",
+            "description": "the absolute path, what a share entry is written with"
+          }
+        }
+      },
+      "ShareFolders": {
+        "type": "object",
+        "description": "The folders directly in one folder, or the drives of a Windows machine. Files never appear.",
+        "required": [
+          "folders",
+          "truncated"
+        ],
+        "properties": {
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShareFolder"
+            },
+            "description": "the folders in it, by name"
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the folder listed; null for the drive list"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "more folders are there than were listed"
           }
         }
       },

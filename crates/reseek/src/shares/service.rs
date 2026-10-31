@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use api_types::shares::{Share, SharesByHost};
+use api_types::shares::{Share, ShareFolders, SharesByHost};
 use api_types::users::Directory;
 use async_trait::async_trait;
 
@@ -53,6 +53,13 @@ impl ShareService for Shares {
       .await
       .map_err(failed)?;
     Ok(listed.into_iter().map(Directory::from).collect())
+  }
+
+  async fn folders(&self, path: Option<String>) -> Result<ShareFolders, ApiError> {
+    let settings = self.scan_settings();
+    tokio::task::spawn_blocking(move || super::folders::list(&settings, path.as_deref()))
+      .await
+      .map_err(ApiError::internal)?
   }
 
   async fn scan(&self, force: bool) -> Result<(), ApiError> {
