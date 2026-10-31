@@ -1,42 +1,48 @@
-# weekly minor and patch bumps, committed straight to main when lint and tests pass
+# merges dependabot's minor and patch bumps when lint and tests pass, with the web hash brought up
+# to date first, since dependabot cannot change it
 name: deps
 
-on:
-  schedule:
-    - cron: "0 6 * * 1"
-  workflow_dispatch:
+on: pull_request
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  bump:
+  merge:
+    if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v31
-      # both stay within the version ranges in the manifests, so neither takes a major version
-      - run: nix develop -c cargo update
-      - run: nix develop -c pnpm --dir web update
-      - name: Stop when nothing changed
-        id: changed
-        run: |
-          if git diff --quiet; then echo "any=false" >> "$GITHUB_OUTPUT"; else echo "any=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: dependabot/fetch-metadata@v2
+        id: bump
+      - if: steps.bump.outputs.update-type != 'version-update:semver-major'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - if: steps.bump.outputs.update-type != 'version-update:semver-major'
+        uses: cachix/install-nix-action@v31
       # the hash of the web dependencies follows the lockfile; nix reports it when it is empty
       - name: Update the web dependency hash
-        if: steps.changed.outputs.any == 'true' && hashFiles('web/pnpm-lock.yaml') != ''
+        if: steps.bump.outputs.update-type != 'version-update:semver-major' && steps.bump.outputs.package-ecosystem == 'npm_and_yarn'
         run: |
           sed -i 's|hash = "sha256-[^"]*"|hash = ""|' nix/web.nix
           hash=$(nix build .#packages.x86_64-linux.web 2>&1 | sed -n 's/.*got: *\(sha256-[^ ]*\).*/\1/p' | head -1)
           test -n "$hash"
           sed -i "s|hash = \"\"|hash = \"$hash\"|" nix/web.nix
-      - if: steps.changed.outputs.any == 'true'
+      - if: steps.bump.outputs.update-type != 'version-update:semver-major'
         run: nix develop -c just lint
-      - if: steps.changed.outputs.any == 'true'
+      - if: steps.bump.outputs.update-type != 'version-update:semver-major'
         run: nix develop -c just test
-      - if: steps.changed.outputs.any == 'true'
+      - name: Commit the hash
+        if: steps.bump.outputs.update-type != 'version-update:semver-major' && steps.bump.outputs.package-ecosystem == 'npm_and_yarn'
         run: |
+          git diff --quiet && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore(deps): weekly minor and patch bumps"
-          git push origin HEAD:main
+          git commit -am "chore(deps): update the web hash"
+          git push
+      - if: steps.bump.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge "$PR" --squash --delete-branch --subject "chore(deps): bump minor and patch versions" --body ""
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
