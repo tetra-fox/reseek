@@ -123,8 +123,7 @@
 
   const write = $derived(session.can("ReadWrite"));
   const empty = $derived(!lines.length && !search.error);
-  const row =
-    "flex items-center gap-2 rounded-control px-2 py-1.5 hover:bg-hover data-focused:ring-2 data-focused:ring-accent data-focused:ring-inset";
+  const row = "flex items-center gap-2 pick-row px-2 py-1.5";
 </script>
 
 <div class="flex min-h-0 flex-1 flex-col">

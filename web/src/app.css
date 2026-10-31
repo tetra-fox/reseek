@@ -602,6 +602,16 @@
   }
 }
 
+/* what the row-menu comes up over at the row's end, a time or a count: gone while the control is
+   there, its place kept, rather than half cut by the fade */
+@utility row-meta {
+  @media (hover: hover) {
+    @variant row-active {
+      visibility: hidden;
+    }
+  }
+}
+
 /* a name beside its stats on one line. At rest the name gives way and the stats stay. While the row
    is in use the name stops giving way, and stats with no room left wrap to a second line, which
    the line's clip hides, so they go only when the name needs their place and the row keeps its
