@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CheckIcon from "@lucide/svelte/icons/check";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
   import { untrack } from "svelte";
@@ -179,8 +180,6 @@
         {selected}
         idOf={() => ""}
         height="18rem"
-        lineClass={(line) =>
-          line.kind === "folder" && line.node.path === chosen ? "bg-accent-soft" : ""}
         onopenfolder={(node) => (chosen = node.path)}
         ontoggle={(opened, keys) => {
           // a folder's key is its path
@@ -191,11 +190,17 @@
           <FolderIcon class="size-4 shrink-0 text-fg-muted" />
           <button
             type="button"
-            class="min-w-0 truncate text-left hover:underline"
+            class={[
+              "min-w-0 truncate text-left hover:underline",
+              node.path === chosen && "font-medium text-accent"
+            ]}
             aria-pressed={node.path === chosen}
             onclick={() => (chosen = node.path)}>
             {node.label}
           </button>
+          {#if node.path === chosen}
+            <CheckIcon class="mr-2 ml-auto size-4 shrink-0 text-accent" aria-hidden="true" />
+          {/if}
         {/snippet}
         {#snippet item()}{/snippet}
       </FileTree>

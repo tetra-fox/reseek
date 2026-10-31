@@ -3,6 +3,7 @@
   import PlusIcon from "@lucide/svelte/icons/plus";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import { tick, untrack } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
 
   import type { Schemas } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
@@ -11,6 +12,7 @@
   import Switch from "#lib/components/ui/Switch.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import type { Draft } from "#lib/config/fields.js";
+  import { helpParts } from "#lib/config/help.js";
   import type { Control, Field } from "#lib/config/sections.js";
   import {
     cellOf,
@@ -80,14 +82,19 @@
   });
 
   /** rows added since the control started, which open by themselves */
-  const added = new Set<number>();
+  const added = new SvelteSet<number>();
   /** what each secret cell held before it was typed in, to go back to when it is emptied */
   const before = new Map<string, unknown>();
   let root = $state<HTMLElement | null>(null);
 
   const problems = $derived(rowProblems(control, rows, columns));
   const said = $derived(rowErrors(field.key, control, rows, error));
-  const trouble = (row: Row) => problems.get(row.id) ?? said.byRow.get(row.id);
+  /** the daemon's and a refused save's messages that name no row, which go over the table */
+  const unplaced = $derived(said.rest.filter((m) => ![...problems.values()].includes(m)));
+  /** A row just added says nothing about its empty name until a save has been refused */
+  const fresh = (row: Row) => added.has(row.id) && !row.name.trim() && !error;
+  const trouble = (row: Row) =>
+    fresh(row) ? undefined : (problems.get(row.id) ?? said.byRow.get(row.id));
 
   const commit = (next: Row[]) => {
     rows = next;
@@ -224,7 +231,7 @@
   aria-label={field.label}
   aria-describedby={described}
   class="flex min-w-0 flex-col gap-2">
-  {#each said.rest as message (message)}
+  {#each unplaced as message (message)}
     <p class="text-xs text-danger" role="alert">{message}</p>
   {/each}
   {#if !rows.length}
@@ -236,7 +243,12 @@
         <tr class="text-left text-xs font-medium text-fg-muted">
           {#if named}<th scope="col" class="font-medium">{nameLabel}</th>{/if}
           {#each columns as column (column.key)}
-            <th scope="col" class="font-medium" title={column.doc}>{column.label}</th>
+            <th
+              scope="col"
+              class="font-medium"
+              title={helpParts(column.doc)
+                .map((part) => part.text)
+                .join("")}>{column.label}</th>
           {/each}
           {#if !disabled}<th scope="col"><span class="sr-only">Remove</span></th>{/if}
         </tr>
@@ -290,7 +302,11 @@
                   <div class="flex flex-col gap-1">
                     <span class="text-xs font-medium text-fg-muted">{column.label}</span>
                     {@render cell(row, i, column)}
-                    <span class="text-xs text-pretty text-fg-subtle">{column.doc}</span>
+                    <span class="text-xs text-pretty text-fg-subtle">
+                      {#each helpParts(column.doc) as part, at (at)}{#if part.code}<code
+                            class="font-mono wrap-anywhere">{part.text}</code
+                          >{:else}{part.text}{/if}{/each}
+                    </span>
                   </div>
                 {/each}
               </div>

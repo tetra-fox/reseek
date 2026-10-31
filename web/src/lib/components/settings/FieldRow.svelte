@@ -86,12 +86,15 @@
         <button
           type="button"
           class="flex items-center gap-1 rounded-badge border border-dashed border-accent/50 px-1.5 text-xs text-accent-soft-fg hover:bg-accent-soft"
-          title={`Changed from the default (${shown(info.default)}). Click to restore it.`}
+          title={tabular
+            ? "Changed from the default. Click to restore it."
+            : `Changed from the default (${shown(info.default)}). Click to restore it.`}
           onclick={ondefault}>
           <RotateCcwIcon class="size-3" />default
         </button>
       {:else if custom}
-        <Badge tone="outline" title={`The default is ${shown(info.default)}`}>not default</Badge>
+        <Badge tone="outline" title={tabular ? undefined : `The default is ${shown(info.default)}`}
+          >not default</Badge>
       {/if}
       <SourceBadge source={info.source} />
       {#if info.apply !== "live"}<Badge tone="warning">{info.apply}</Badge>{/if}
@@ -100,7 +103,7 @@
       {#each helpParts(info.doc) as part, i (i)}{#if part.code}<code class="font-mono wrap-anywhere"
             >{part.text}</code
           >{:else}{part.text}{/if}{/each}
-      {#if info.default !== null && info.default !== undefined && !(Array.isArray(info.default) && !info.default.length)}
+      {#if !tabular && info.default !== null && info.default !== undefined && !(Array.isArray(info.default) && !info.default.length)}
         <span class="text-fg-subtle"
           >Default <code class="font-mono wrap-anywhere">{shown(info.default)}</code>.</span>
       {/if}
