@@ -60,7 +60,12 @@ async fn change_password(
   client
     .change_password(&change.password)
     .await
-    .map_err(|e| ApiError::upstream("The server did not change the password", Some(e.to_string())))?;
+    .map_err(|e| {
+      ApiError::upstream(
+        "The server did not change the password",
+        Some(e.to_string()),
+      )
+    })?;
   let password = Value::String(change.password);
   write(&app, &admin.principal, PASSWORD, target, Some(password))
     .await

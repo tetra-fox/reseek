@@ -21,8 +21,11 @@ enum Change<'a> {
 /// The lists as stored.
 fn stored(conn: &Connection) -> rusqlite::Result<Interests> {
   let mut interests = Interests::default();
-  let mut statement = conn.prepare_cached("SELECT interest, liked FROM interests ORDER BY rowid")?;
-  let rows = statement.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?)))?;
+  let mut statement =
+    conn.prepare_cached("SELECT interest, liked FROM interests ORDER BY rowid")?;
+  let rows = statement.query_map([], |row| {
+    Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?))
+  })?;
   for row in rows {
     let (interest, liked) = row?;
     let list = if liked {

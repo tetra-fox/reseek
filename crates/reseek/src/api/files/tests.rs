@@ -422,7 +422,12 @@ async fn alac_decodes_to_pcm_whose_ranges_match_the_whole_across_packets() {
   assert_eq!(whole.body.len(), 44 + 2 * 8000 * 4);
   let silent = whole.body[44..].iter().filter(|b| **b == 0).count();
   assert!(silent < whole.body.len() / 2, "the tone came out silent");
-  for (first, last) in [(44, 47), (10_001, 10_500), (30_000, 60_001), (32_000, 32_043)] {
+  for (first, last) in [
+    (44, 47),
+    (10_001, 10_500),
+    (30_000, 60_001),
+    (32_000, 32_043),
+  ] {
     let range = format!("bytes={first}-{last}");
     let part = app
       .send(with(request("GET", &uri, None), "range", &range))
@@ -445,6 +450,8 @@ async fn what_cannot_be_served_plainly_is_refused_with_the_reason() {
       .unwrap()
       .contains("compressed as ulaw")
   );
-  let flac = app.send(request("GET", &wav_uri("Album/01.flac"), None)).await;
+  let flac = app
+    .send(request("GET", &wav_uri("Album/01.flac"), None))
+    .await;
   assert_eq!(flac.status, 415);
 }

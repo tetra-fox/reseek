@@ -342,7 +342,11 @@ mod tests {
   async fn a_map_entry_keeps_the_secret_it_shows_hidden() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.toml");
-    fs::write(&path, "[api_keys.robot]\nkey = \"real\"\nrole = \"reader\"\n").unwrap();
+    fs::write(
+      &path,
+      "[api_keys.robot]\nkey = \"real\"\nrole = \"reader\"\n",
+    )
+    .unwrap();
     let watcher = watched(dir.path());
     let revision = watcher.current().files[0].revision.clone();
     // a client changes one field of the entry and sends back the whole map as it read it
@@ -362,7 +366,10 @@ mod tests {
     let text = fs::read_to_string(&path).unwrap();
     assert!(text.contains("real") && !text.contains(REDACTED), "{text}");
     let robot = watcher.current().values.api_keys["robot"].clone();
-    assert_eq!((robot.key.as_str(), robot.role.as_str()), ("real", "writer"));
+    assert_eq!(
+      (robot.key.as_str(), robot.role.as_str()),
+      ("real", "writer")
+    );
 
     watcher
       .set_overrides(

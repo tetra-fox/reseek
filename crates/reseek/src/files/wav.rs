@@ -76,7 +76,12 @@ impl Format {
     put(&self.tag.to_le_bytes());
     put(&self.channels.to_le_bytes());
     put(&self.sample_rate.to_le_bytes());
-    put(&self.sample_rate.saturating_mul(u32::from(block)).to_le_bytes());
+    put(
+      &self
+        .sample_rate
+        .saturating_mul(u32::from(block))
+        .to_le_bytes(),
+    );
     put(&block.to_le_bytes());
     put(&(self.width * 8).to_le_bytes());
     put(b"data");
@@ -258,7 +263,10 @@ fn read_pcm(
   let block = format.block();
   let first = start / block;
   let failed = |reason: String| {
-    warn!(path = shown, reason, "a file served as WAV could not be read");
+    warn!(
+      path = shown,
+      reason, "a file served as WAV could not be read"
+    );
     if pieces.blocking_send(Err(io::Error::other(reason))).is_err() {
       debug!(path = shown, "nobody is reading the WAV any more");
     }
@@ -288,7 +296,10 @@ fn read_pcm(
     let piece = &pcm[skip..];
     let piece = &piece[..piece.len().min(left as usize)];
     left -= piece.len() as u64;
-    if pieces.blocking_send(Ok(Bytes::copy_from_slice(piece))).is_err() {
+    if pieces
+      .blocking_send(Ok(Bytes::copy_from_slice(piece)))
+      .is_err()
+    {
       return;
     }
   }

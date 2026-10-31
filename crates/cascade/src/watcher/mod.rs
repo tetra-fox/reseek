@@ -237,7 +237,10 @@ impl<T: Root> Watcher<T> {
   }
 
   /// `set` with the secrets its lists of tables and user-keyed maps show as `*****` put back.
-  fn with_entry_secrets(&self, mut set: BTreeMap<Key, Value>) -> Result<BTreeMap<Key, Value>, Error> {
+  fn with_entry_secrets(
+    &self,
+    mut set: BTreeMap<Key, Value>,
+  ) -> Result<BTreeMap<Key, Value>, Error> {
     let current = self.current();
     for (key, value) in &mut set {
       let field = current.schema().field(key);

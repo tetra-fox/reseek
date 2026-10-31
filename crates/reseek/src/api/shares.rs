@@ -163,8 +163,17 @@ mod tests {
   /// A folder holding one of everything the route tells apart. Its name is not hidden, as the
   /// default of a temporary directory is.
   fn tree() -> TempDir {
-    let dir = tempfile::Builder::new().prefix("folders").tempdir().unwrap();
-    for folder in ["Music/Albums", "photos", ".hidden/in", "Skipped/in", "Gone/in"] {
+    let dir = tempfile::Builder::new()
+      .prefix("folders")
+      .tempdir()
+      .unwrap();
+    for folder in [
+      "Music/Albums",
+      "photos",
+      ".hidden/in",
+      "Skipped/in",
+      "Gone/in",
+    ] {
       std::fs::create_dir_all(dir.path().join(folder)).unwrap();
     }
     std::fs::write(dir.path().join("secret.txt"), b"a file").unwrap();
@@ -199,7 +208,9 @@ mod tests {
     assert_eq!(listed.status, 200, "{path:?}: {:?}", listed.body);
     let listed = listed.json();
     let names = listed["folders"].as_array().unwrap().iter();
-    names.map(|folder| folder["name"].as_str().unwrap().to_string()).collect()
+    names
+      .map(|folder| folder["name"].as_str().unwrap().to_string())
+      .collect()
   }
 
   #[tokio::test]
@@ -258,7 +269,11 @@ mod tests {
     let dir = tree();
     let path = uri(dir.path());
     let on = app(&config(dir.path(), true, false), &[]).await;
-    let keyed = with(request("GET", &path, None), "x-api-key", "editor-key-0123456789");
+    let keyed = with(
+      request("GET", &path, None),
+      "x-api-key",
+      "editor-key-0123456789",
+    );
     assert_eq!(on.send_from("192.0.2.1:1", keyed).await.status, 403);
     let anonymous = request("GET", &path, None);
     assert_eq!(on.send_from("192.0.2.1:1", anonymous).await.status, 401);
