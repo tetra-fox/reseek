@@ -1,7 +1,6 @@
 <script lang="ts">
   import ClockIcon from "@lucide/svelte/icons/clock";
   import CopyIcon from "@lucide/svelte/icons/copy";
-  import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import ReplyIcon from "@lucide/svelte/icons/reply";
 
   import { LONG, type Message } from "#lib/chat/messages/messages.js";
@@ -12,8 +11,8 @@
   import Username from "#lib/components/users/Username.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { chatTime, formatDate, shortTime } from "#lib/format.js";
-  import { chatHref } from "#lib/nav.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { reach } from "#lib/users/actions.js";
   import { nameColor } from "#lib/users/colors.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -159,12 +158,14 @@
         title="Copy the text"
         onclick={() => void copyText(m.text)}><CopyIcon /></Button>
       {#if room && !m.self}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          href={chatHref(m.author)}
-          aria-label={`Message ${m.author}`}
-          title={`Message ${m.author}`}><MessageSquareIcon /></Button>
+        {#each reach(m.author, { only: ["message"] }) as action (action.id)}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            href={action.href}
+            aria-label={action.of(m.author)}
+            title={action.of(m.author)}><action.icon /></Button>
+        {/each}
       {/if}
     </div>
   {/if}

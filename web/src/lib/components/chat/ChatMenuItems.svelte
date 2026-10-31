@@ -3,12 +3,10 @@
   import CheckCheckIcon from "@lucide/svelte/icons/check-check";
   import DownloadIcon from "@lucide/svelte/icons/download";
   import EraserIcon from "@lucide/svelte/icons/eraser";
-  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import HighlighterIcon from "@lucide/svelte/icons/highlighter";
   import LogOutIcon from "@lucide/svelte/icons/log-out";
   import PinIcon from "@lucide/svelte/icons/pin";
   import PinOffIcon from "@lucide/svelte/icons/pin-off";
-  import UserIcon from "@lucide/svelte/icons/user";
   import UserCheckIcon from "@lucide/svelte/icons/user-check";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import XIcon from "@lucide/svelte/icons/x";
@@ -20,11 +18,12 @@
   import { pins } from "#lib/chat/pins.svelte.js";
   import { chatLayout } from "#lib/chat/prefs.svelte.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import UserMenuItems from "#lib/components/users/UserMenuItems.svelte";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { href, segment, userHref } from "#lib/nav.js";
+  import { href, segment } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
-  import { links, pin } from "#lib/users/actions.js";
+  import { pin } from "#lib/users/actions.js";
   import { users } from "#lib/users/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";
 
@@ -118,9 +117,7 @@
   <Menu.Separator />
 {/if}
 {#if user && !notices}
-  <Menu.Item onSelect={() => goto(userHref(target.name))}><UserIcon />View profile</Menu.Item>
-  <Menu.Item onSelect={() => goto(links(target.name).browse)}
-    ><FolderOpenIcon />Browse shares</Menu.Item>
+  <UserMenuItems name={target.name} only={["profile", "shares", "search"]} />
   {#if write}
     <Menu.Item onSelect={() => void pin(target.name, !summary?.pinned).then(report)}>
       {#if summary?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}

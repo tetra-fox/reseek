@@ -6,11 +6,9 @@
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
-  import { SERVER } from "#lib/chat/notices.js";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import { sections } from "#lib/config/sections.js";
   import {
-    chatHref,
     href,
     navItems,
     profileItem,
@@ -26,6 +24,7 @@
   import { paletteScore, paletteValue } from "#lib/shell/palette.js";
   import { palette } from "#lib/shell/palette.svelte.js";
   import { opensPalette, shortcutText } from "#lib/ui/keys.js";
+  import { reach, USER_ACTIONS } from "#lib/users/actions.js";
 
   /** One thing the palette can do: go to a screen, a user, a room, a setting, a search */
   type PaletteEntry = {
@@ -109,49 +108,28 @@
         id: `user:${name}`,
         group: "Users",
         label: name,
-        hint: "Profile",
+        hint: USER_ACTIONS.profile.label,
         run: () => goto(userHref(name))
       });
     }
     return entries;
   });
 
-  /** What the typed text can be: a search, a user to browse, view or message */
+  /** What the typed text can be: a search, or a user to reach */
   const typed = $derived.by((): PaletteEntry[] => {
     const text = query.trim();
     if (!text || app.mode === "agent") return [];
     const write = session.can("ReadWrite");
-    const person = text !== SERVER;
     return [
       ...(write && app.isServerConnected
         ? [{ id: "do:search", group: "Actions", label: `Search for ${text}`, run: search(text) }]
         : []),
-      ...(person
-        ? [
-            {
-              id: "do:browse",
-              group: "Actions",
-              label: `Browse ${text}'s shares`,
-              run: go(`/browse?user=${encodeURIComponent(text)}`)
-            },
-            {
-              id: "do:profile",
-              group: "Actions",
-              label: `${text}'s profile`,
-              run: () => goto(userHref(text))
-            }
-          ]
-        : []),
-      ...(write && person
-        ? [
-            {
-              id: "do:message",
-              group: "Actions",
-              label: `Message ${text}`,
-              run: () => goto(chatHref(text))
-            }
-          ]
-        : [])
+      ...reach(text).map((action) => ({
+        id: `do:${action.id}`,
+        group: "Actions",
+        label: action.of(text),
+        run: () => goto(action.href)
+      }))
     ];
   });
 

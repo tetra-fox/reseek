@@ -111,7 +111,7 @@ describe("browse progress", () => {
       return undefined;
     });
     session.principal = { name: "me", role: "Administrator" } as never;
-    app.state = { server: { isConnected: true } } as never;
+    app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
     component = mount(BrowsePage, {
       target: document.body,
       props: { user: "alice", path: null }

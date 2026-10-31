@@ -1,0 +1,38 @@
+import { afterEach, describe, expect, it } from "vitest";
+
+import { app } from "#lib/app.svelte.js";
+import { session } from "#lib/session.svelte.js";
+
+import { reach } from "./actions";
+
+const ids = (name: string) => reach(name).map((a) => a.id);
+
+describe("the ways to reach a user", () => {
+  afterEach(() => {
+    session.principal = null;
+    app.state = null;
+  });
+
+  it("are all there for someone else, in one order, the links going where they say", () => {
+    session.principal = { name: "me", role: "ReadWrite" } as never;
+    expect(reach("al ice", { folder: "Album" }).map((a) => [a.id, a.href])).toEqual([
+      ["profile", "#/users/al%20ice"],
+      ["message", "#/chat/al%20ice"],
+      ["shares", "#/users/al%20ice/shares"],
+      ["search", "#/searches?user=al%20ice&text=Album"]
+    ]);
+  });
+
+  it("leave out what the account may not do, and messaging ourselves", () => {
+    session.principal = { name: "me", role: "ReadOnly" } as never;
+    expect(ids("alice")).toEqual(["profile", "shares"]);
+    session.principal = { name: "me", role: "ReadWrite" } as never;
+    app.state = { user: { username: "me" } } as never;
+    expect(ids("me")).toEqual(["profile", "shares", "search"]);
+  });
+
+  it("never offer server as a user", () => {
+    session.principal = { name: "me", role: "Administrator" } as never;
+    expect(ids("server")).toEqual([]);
+  });
+});

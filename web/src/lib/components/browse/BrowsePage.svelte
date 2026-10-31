@@ -5,7 +5,6 @@
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import LinkIcon from "@lucide/svelte/icons/link";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
-  import SearchIcon from "@lucide/svelte/icons/search";
   import { untrack } from "svelte";
 
   import { app } from "#lib/app.svelte.js";
@@ -40,7 +39,7 @@
   import { formatBytes, getFileName, plural } from "#lib/format.js";
   import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
-  import { href, sharesHref, userHref } from "#lib/nav.js";
+  import { sharesHref, userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import {
@@ -53,6 +52,7 @@
     treeLines
   } from "#lib/tree/folders.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
+  import { reach } from "#lib/users/actions.js";
 
   type Props = {
     /** whose shares these are */
@@ -321,14 +321,10 @@
           <Button variant="ghost" size="sm" onclick={() => void browser.browse(user)}>
             <RefreshCwIcon />Browse again
           </Button>
-          {#if canWrite}
-            <Button
-              variant="ghost"
-              size="sm"
-              href={href(`/searches?user=${encodeURIComponent(user)}`)}>
-              <SearchIcon />Search this user's shares
-            </Button>
-          {/if}
+          {#each reach(user, { only: ["search"] }) as action (action.id)}
+            <Button variant="ghost" size="sm" href={action.href}
+              ><action.icon />{action.label}</Button>
+          {/each}
         </span>
       </header>
       <div class="flex flex-wrap items-center gap-inline px-4 py-3">

@@ -1,17 +1,74 @@
+import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
+import MessageSquareIcon from "@lucide/svelte/icons/message-square";
+import SearchIcon from "@lucide/svelte/icons/search";
+import UserIcon from "@lucide/svelte/icons/user";
+
 import { api, byUser } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
-import { chatHref, href, sharesHref } from "#lib/nav.js";
+import { SERVER } from "#lib/chat/notices.js";
+import { chatHref, href, sharesHref, userHref } from "#lib/nav.js";
 import { call } from "#lib/request.js";
+import { session } from "#lib/session.svelte.js";
 import { fields } from "#lib/stored.svelte.js";
 
-/** Where the menu's links go for `username`, with the folder it was shown in when there is one */
+/**
+ * What every list calls the ways to reach a user, in the order every list offers them, with their
+ * icons, so a user reads the same wherever they are offered. `of` names the user, for a place
+ * that shows no name of its own
+ */
+export const USER_ACTIONS = {
+  profile: {
+    label: "View profile",
+    of: (name: string) => `View ${name}'s profile`,
+    icon: UserIcon
+  },
+  message: { label: "Message", of: (name: string) => `Message ${name}`, icon: MessageSquareIcon },
+  shares: {
+    label: "Browse shares",
+    of: (name: string) => `Browse ${name}'s shares`,
+    icon: FolderOpenIcon
+  },
+  search: {
+    label: "Search their shares",
+    of: (name: string) => `Search ${name}'s shares`,
+    icon: SearchIcon
+  }
+} as const;
+
+export type UserActionId = keyof typeof USER_ACTIONS;
+
+/** Where the ways to reach `username` go, with the folder it was shown in when there is one */
 export const links = (username: string, folder?: string) => ({
+  profile: userHref(username),
   browse: sharesHref(username),
   message: chatHref(username),
   search: href(
     `/searches?user=${encodeURIComponent(username)}${folder ? `&text=${encodeURIComponent(folder)}` : ""}`
   )
 });
+
+/**
+ * The ways to reach `username` this session has, `only` narrowing them. Messaging and searching
+ * take ReadWrite, nobody messages themselves, and `server` is no user, so it has none
+ */
+export const reach = (
+  username: string,
+  { only, folder }: { only?: UserActionId[]; folder?: string } = {}
+) => {
+  if (username === SERVER) return [];
+  const to = links(username, folder);
+  const write = session.can("ReadWrite");
+  const open = {
+    profile: to.profile,
+    message: write && app.state?.user.username !== username ? to.message : null,
+    shares: to.browse,
+    search: write ? to.search : null
+  };
+  return (Object.keys(USER_ACTIONS) as UserActionId[]).flatMap((id) => {
+    const href = open[id];
+    return href && (!only || only.includes(id)) ? [{ id, href, ...USER_ACTIONS[id] }] : [];
+  });
+};
 
 /** A user's profile as stored, or with `refresh` after asking the network about them */
 export const profileOf = (username: string, refresh: boolean) =>

@@ -7,8 +7,6 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
-  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
-  import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
@@ -34,7 +32,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { assignGroup, links, pin, userGroups } from "#lib/users/actions.js";
+  import { assignGroup, pin, reach, userGroups } from "#lib/users/actions.js";
   import { blocking, unblock } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
   import { flag } from "#lib/users/hover.svelte.js";
@@ -54,7 +52,6 @@
   const name = $derived(p.username);
   /** our own account, which can't be blocked */
   const own = $derived(app.state?.user.username === name);
-  const to = $derived(links(name));
   const write = $derived(session.can("ReadWrite"));
   const admin = $derived(session.can("Administrator"));
   const stats = $derived(p.statistics);
@@ -167,11 +164,9 @@
   </div>
 
   <div class="flex flex-wrap items-center gap-inline" role="toolbar" aria-label="User actions">
-    {#if write}
-      <Button variant="outline" size="sm" href={to.message}><MessageSquareIcon />Message</Button>
-    {/if}
-    <Button variant="outline" size="sm" href={userHref(name, "shares")}
-      ><FolderOpenIcon />Browse</Button>
+    {#each reach(name, { only: ["message", "shares", "search"] }) as action (action.id)}
+      <Button variant="outline" size="sm" href={action.href}><action.icon />{action.label}</Button>
+    {/each}
     <Button variant="outline" size="sm" disabled={refreshing} onclick={onrefresh}
       ><RefreshCwIcon />Refresh</Button>
     {#if write && p.known}

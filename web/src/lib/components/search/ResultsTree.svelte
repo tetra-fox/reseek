@@ -7,7 +7,6 @@
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import LinkIcon from "@lucide/svelte/icons/link";
   import ListIcon from "@lucide/svelte/icons/list";
-  import SearchIcon from "@lucide/svelte/icons/search";
   import { SvelteSet } from "svelte/reactivity";
 
   import type { Schemas } from "#lib/api/client.js";
@@ -24,6 +23,7 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import GroupBadge from "#lib/components/users/GroupBadge.svelte";
   import Presence from "#lib/components/users/Presence.svelte";
+  import UserMenuItems from "#lib/components/users/UserMenuItems.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -34,7 +34,6 @@
   import { slskLink } from "#lib/files/slsk.js";
   import { formatAttributes, getFileName, plural } from "#lib/format.js";
   import { inspector } from "#lib/inspector/inspector.svelte.js";
-  import { href } from "#lib/nav.js";
   import { offerFields, type Picked, userFacts } from "#lib/search/facts.js";
   import { type Result, type ResultFile, resultFiles } from "#lib/search/results.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
@@ -47,6 +46,7 @@
     treeLines
   } from "#lib/tree/folders.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
+  import { reach } from "#lib/users/actions.js";
   import { users } from "#lib/users/users.svelte.js";
 
   import Country from "./Country.svelte";
@@ -215,12 +215,7 @@
           </Button>
         {/snippet}
         <Menu.Content align="end" class="min-w-56">
-          <Menu.Item onSelect={() => goto(href(`/browse?user=${encodeURIComponent(name)}`))}
-            ><FolderOpenIcon />Browse</Menu.Item>
-          {#if canWrite}
-            <Menu.Item onSelect={() => goto(href(`/searches?user=${encodeURIComponent(name)}`))}
-              ><SearchIcon />More from this user</Menu.Item>
-          {/if}
+          <UserMenuItems {name} only={["shares", "search"]} />
           {#if write}
             <Menu.Item onSelect={() => void downloadNow(itemsUnder(node))}
               ><DownloadIcon />Download all</Menu.Item>
@@ -229,14 +224,9 @@
         </Menu.Content>
       </Menu.LazyRoot>
     {:else}
-      <Button variant="ghost" size="sm" href={href(`/browse?user=${encodeURIComponent(name)}`)}>
-        <FolderOpenIcon />Browse
-      </Button>
-      {#if canWrite}
-        <Button variant="ghost" size="sm" href={href(`/searches?user=${encodeURIComponent(name)}`)}>
-          <SearchIcon />More from this user
-        </Button>
-      {/if}
+      {#each reach(name, { only: ["shares", "search"] }) as action (action.id)}
+        <Button variant="ghost" size="sm" href={action.href}><action.icon />{action.label}</Button>
+      {/each}
       {#if write}
         <Button variant="ghost" size="sm" onclick={() => void downloadNow(itemsUnder(node))}>
           <DownloadIcon />Download all

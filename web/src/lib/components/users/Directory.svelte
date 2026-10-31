@@ -3,9 +3,8 @@
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import BanIcon from "@lucide/svelte/icons/ban";
+  import CopyIcon from "@lucide/svelte/icons/copy";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
-  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
-  import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
   import UserCheckIcon from "@lucide/svelte/icons/user-check";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
@@ -34,7 +33,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { links, pin, userGroups } from "#lib/users/actions.js";
+  import { pin, reach, userGroups } from "#lib/users/actions.js";
   import { blocking, unblock, unblockMany } from "#lib/users/block.svelte.js";
   import { type UserSummary, users as usersStore } from "#lib/users/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";
@@ -43,6 +42,7 @@
   import GroupBadge from "./GroupBadge.svelte";
   import GroupDialog from "./GroupDialog.svelte";
   import Presence from "./Presence.svelte";
+  import UserMenuItems from "./UserMenuItems.svelte";
   import Username from "./Username.svelte";
   import UserSearch from "./UserSearch.svelte";
 
@@ -292,7 +292,6 @@
     </div>
     <div role="rowgroup" {@attach freezesWhileUsed}>
       {#each shown as u, i (u.username)}
-        {@const to = links(u.username)}
         <div
           role="row"
           {...list.line(u, i)}
@@ -343,14 +342,14 @@
             {#if u.unreadMessages}<Badge tone="danger">{u.unreadMessages}</Badge>{/if}
           </span>
           <span role="gridcell" class="flex justify-end">
-            {#if write}
-              <Button variant="ghost" size="icon-sm" href={to.message} aria-label="Message">
-                <MessageSquareIcon />
-              </Button>
-            {/if}
-            <Button variant="ghost" size="icon-sm" href={to.browse} aria-label="Browse shares">
-              <FolderOpenIcon />
-            </Button>
+            {#each reach(u.username, { only: ["message", "shares"] }) as action (action.id)}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                href={action.href}
+                aria-label={action.label}
+                title={action.label}><action.icon /></Button>
+            {/each}
             {#if write}
               <Button
                 variant="ghost"
@@ -384,8 +383,9 @@
                 {/snippet}
               </Menu.Trigger>
               <Menu.Content align="end">
-                <Menu.Item onSelect={() => goto(userHref(u.username))}>View profile</Menu.Item>
-                <Menu.Item onSelect={() => void copyText(u.username)}>Copy username</Menu.Item>
+                <UserMenuItems name={u.username} only={["profile", "search"]} />
+                <Menu.Item onSelect={() => void copyText(u.username)}
+                  ><CopyIcon />Copy username</Menu.Item>
               </Menu.Content>
             </Menu.Root>
           </span>

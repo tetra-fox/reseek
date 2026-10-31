@@ -2,15 +2,12 @@
   import { goto } from "$app/navigation";
   import BanIcon from "@lucide/svelte/icons/ban";
   import CopyIcon from "@lucide/svelte/icons/copy";
-  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
-  import MessageSquareIcon from "@lucide/svelte/icons/message-square";
-  import SearchIcon from "@lucide/svelte/icons/search";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
-  import UserIcon from "@lucide/svelte/icons/user";
   import UserCheckIcon from "@lucide/svelte/icons/user-check";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import { DropdownMenu, Popover } from "bits-ui";
 
+  import { SERVER } from "#lib/chat/notices.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
@@ -27,6 +24,7 @@
 
   import GroupBadge from "./GroupBadge.svelte";
   import UserCard from "./UserCard.svelte";
+  import UserMenuItems from "./UserMenuItems.svelte";
 
   type Props = {
     /** the username, shown exactly as it is */
@@ -142,36 +140,41 @@
 <!-- a name takes only its text's width: its menu opens from a right-click, a long press,
      Shift+F10 or the card's More button, never from a control beside it -->
 <span class={cn("inline-flex max-w-full items-center align-baseline", className)}>
-  <a
-    bind:this={link}
-    href={userHref(name)}
-    class="truncate font-medium underline-offset-2 hover:underline"
-    style:color={nameColor(name)}
-    onpointerenter={enter}
-    onpointerleave={leave}
-    onpointerdown={down}
-    onpointerup={() => clearTimeout(timer)}
-    onclick={(e) => {
-      // the click that ends a long press only opened the menu
-      if (pressed) e.preventDefault();
-      pressed = false;
-      // a modified click still opens the profile where the browser puts it
-      if (!card || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
-      e.preventDefault();
-      if (active === "card" && clicked) hide();
-      else show("card", false, true);
-    }}
-    ondblclick={(e) => {
-      if (!card || !readWrite) return;
-      e.preventDefault();
-      hide();
-      void goto(to.message);
-    }}
-    oncontextmenu={(e) => {
-      e.preventDefault();
-      show("menu");
-    }}
-    onkeydown={keydown}>{name}</a>
+  {#if name === SERVER}
+    <!-- where the name the server's notices come from turns up, as in the events: no user -->
+    <span class="truncate font-medium">{name}</span>
+  {:else}
+    <a
+      bind:this={link}
+      href={userHref(name)}
+      class="truncate font-medium underline-offset-2 hover:underline"
+      style:color={nameColor(name)}
+      onpointerenter={enter}
+      onpointerleave={leave}
+      onpointerdown={down}
+      onpointerup={() => clearTimeout(timer)}
+      onclick={(e) => {
+        // the click that ends a long press only opened the menu
+        if (pressed) e.preventDefault();
+        pressed = false;
+        // a modified click still opens the profile where the browser puts it
+        if (!card || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+        e.preventDefault();
+        if (active === "card" && clicked) hide();
+        else show("card", false, true);
+      }}
+      ondblclick={(e) => {
+        if (!card || !readWrite) return;
+        e.preventDefault();
+        hide();
+        void goto(to.message);
+      }}
+      oncontextmenu={(e) => {
+        e.preventDefault();
+        show("menu");
+      }}
+      onkeydown={keydown}>{name}</a>
+  {/if}
 </span>
 
 {#if active === "card"}
@@ -215,12 +218,7 @@
         {#if user}<span class="ml-auto"><GroupBadge group={user.group} /></span>{/if}
       </div>
       <Menu.Separator />
-      <Menu.Item onSelect={() => goto(userHref(name))}><UserIcon />View profile</Menu.Item>
-      <Menu.Item onSelect={() => goto(to.browse)}><FolderOpenIcon />Browse shares</Menu.Item>
-      {#if readWrite}
-        <Menu.Item onSelect={() => goto(to.message)}><MessageSquareIcon />Message</Menu.Item>
-      {/if}
-      <Menu.Item onSelect={() => goto(to.search)}><SearchIcon />Search their shares</Menu.Item>
+      <UserMenuItems {name} {folder} />
       {#if readWrite}
         <Menu.Separator />
         <Menu.Item onSelect={togglePin}>

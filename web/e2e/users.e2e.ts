@@ -198,7 +198,7 @@ test("the dropdown fits a phone at the largest text size", async ({ page }) => {
   await expect(entries.last()).toBeInViewport();
 });
 
-test("a user's card and row offer Message, Browse and Add buddy", async ({ page }) => {
+test("a user's card and row offer Message, Browse shares and Add buddy", async ({ page }) => {
   let pinned = false;
   await page.route("**/api/v0/users?**", (route) =>
     route.fulfill({ json: { users: [{ ...alice, pinned }], total: 1 } })
@@ -220,7 +220,7 @@ test("a user's card and row offer Message, Browse and Add buddy", async ({ page 
   await expect(card).toBeVisible();
   await expect(card).toContainText("last seen");
   await expect(card.getByRole("link", { name: "Message" })).toBeVisible();
-  await expect(card.getByRole("link", { name: "Browse" })).toBeVisible();
+  await expect(card.getByRole("link", { name: "Browse shares" })).toBeVisible();
   await card.getByRole("button", { name: "Add buddy" }).click();
   await expect(card.getByRole("button", { name: "Remove buddy" })).toBeVisible();
   await page.mouse.move(5, 5);

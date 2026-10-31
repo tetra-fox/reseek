@@ -1,10 +1,7 @@
 <script lang="ts">
   import BanIcon from "@lucide/svelte/icons/ban";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
-  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
-  import MessageSquareIcon from "@lucide/svelte/icons/message-square";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
-  import UserIcon from "@lucide/svelte/icons/user";
   import UserCheckIcon from "@lucide/svelte/icons/user-check";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
 
@@ -19,7 +16,7 @@
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { links, pin } from "#lib/users/actions.js";
+  import { pin, reach, USER_ACTIONS } from "#lib/users/actions.js";
   import { nameColor } from "#lib/users/colors.js";
   import { flag } from "#lib/users/hover.svelte.js";
   import { firstLines, ownProfile } from "#lib/users/profile.svelte.js";
@@ -42,7 +39,6 @@
 
   let { name, user, onblock, onmenu, draft }: Props = $props();
 
-  const to = $derived(links(name));
   // our own name shows what peers are sent now, from our profile
   const own = $derived(!!app.state?.user.username && app.state.user.username === name);
   // our own presence and share counts are the daemon's, not the directory's
@@ -162,10 +158,10 @@
   {/if}
 
   <div class="flex flex-wrap items-center gap-1 border-t pt-2">
-    {#if readWrite && !own}
-      <Button size="sm" href={to.message}><MessageSquareIcon />Message</Button>
-    {/if}
-    <Button size="sm" variant="outline" href={to.browse}><FolderOpenIcon />Browse</Button>
+    {#each reach(name, { only: ["message", "shares"] }) as action (action.id)}
+      <Button size="sm" variant={action.id === "message" ? "primary" : "outline"} href={action.href}
+        ><action.icon />{action.label}</Button>
+    {/each}
     {#if readWrite && !own}
       <Button
         size="sm"
@@ -191,15 +187,15 @@
           {/snippet}
         </Tooltip>
       {/if}
-      <Tooltip text="Profile">
+      <Tooltip text={USER_ACTIONS.profile.label}>
         {#snippet child({ props })}
           <Button
             {...props}
             variant="ghost"
             size="icon-sm"
             href={userHref(name)}
-            aria-label="Profile">
-            <UserIcon />
+            aria-label={USER_ACTIONS.profile.label}>
+            <USER_ACTIONS.profile.icon />
           </Button>
         {/snippet}
       </Tooltip>
