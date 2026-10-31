@@ -1,0 +1,42 @@
+# weekly minor and patch bumps, committed straight to main when lint and tests pass
+name: deps
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      # both stay within the version ranges in the manifests, so neither takes a major version
+      - run: nix develop -c cargo update
+      - run: nix develop -c pnpm --dir web update
+      - name: Stop when nothing changed
+        id: changed
+        run: |
+          if git diff --quiet; then echo "any=false" >> "$GITHUB_OUTPUT"; else echo "any=true" >> "$GITHUB_OUTPUT"; fi
+      # the hash of the web dependencies follows the lockfile; nix reports it when it is empty
+      - name: Update the web dependency hash
+        if: steps.changed.outputs.any == 'true' && hashFiles('web/pnpm-lock.yaml') != ''
+        run: |
+          sed -i 's|hash = "sha256-[^"]*"|hash = ""|' nix/web.nix
+          hash=$(nix build .#packages.x86_64-linux.web 2>&1 | sed -n 's/.*got: *\(sha256-[^ ]*\).*/\1/p' | head -1)
+          test -n "$hash"
+          sed -i "s|hash = \"\"|hash = \"$hash\"|" nix/web.nix
+      - if: steps.changed.outputs.any == 'true'
+        run: nix develop -c just lint
+      - if: steps.changed.outputs.any == 'true'
+        run: nix develop -c just test
+      - if: steps.changed.outputs.any == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(deps): weekly minor and patch bumps"
+          git push origin HEAD:main
