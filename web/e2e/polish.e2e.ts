@@ -150,6 +150,46 @@ test("shows a list's focus ring for the keys, not after a click", async ({ page 
   await expect(list.locator("[data-focused]")).not.toHaveCSS("box-shadow", "none");
 });
 
+test("a row's hidden menu takes no width, and comes up without moving the row", async ({ page }) => {
+  await fakeChat(page);
+  await login(page, "/chat");
+  const row = page.locator('[data-line="room:indie"]');
+  const text = row.getByRole("gridcell");
+  const menu = row.getByRole("button", { name: "Menu for indie" });
+  const end = async () => (await row.boundingBox())!.x + (await row.boundingBox())!.width;
+  const padding = 12;
+  await expect(row).toBeVisible();
+  await page.mouse.move(0, 0);
+  await expect(menu).toHaveCSS("opacity", "0");
+  // the text runs to the row's padding with nothing kept for the control
+  const rest = (await text.boundingBox())!;
+  expect(rest.x + rest.width).toBe((await end()) - padding);
+  await row.hover();
+  await expect(menu).toHaveCSS("opacity", "1");
+  expect(await text.boundingBox()).toEqual(rest);
+  // the keys reach it with the pointer away
+  await page.mouse.move(0, 0);
+  await expect(menu).toHaveCSS("opacity", "0");
+  await page.getByRole("grid", { name: "Rooms and conversations" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(menu).toBeFocused();
+  await expect(menu).toHaveCSS("opacity", "1");
+});
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("a row's menu is always there for a finger", async ({ page }) => {
+    await fakeChat(page);
+    await login(page, "/chat");
+    const menu = page.getByRole("button", { name: "Menu for indie" });
+    await expect(menu).toHaveCSS("opacity", "1");
+    await expect(menu).toHaveCSS("position", "static");
+    await menu.tap();
+    await expect(page.getByRole("menuitem", { name: "Pin", exact: true })).toBeVisible();
+  });
+});
+
 test("fades between screens without morphing the content area", async ({ page }) => {
   await fakeChat(page);
   await login(page, "/dashboard");
