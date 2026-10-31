@@ -74,7 +74,7 @@ const fakeSearch = async (page: Page) => {
   await page.route("**/api/v0/users?**", (route) => {
     const q = new URL(route.request().url()).searchParams.get("q") ?? "";
     const users = "floyd_fan".includes(q)
-      ? [{ username: "floyd_fan", presence: "Online", tags: [] }]
+      ? [{ username: "floyd_fan", presence: "Online", group: { name: "default" }, tags: [] }]
       : [];
     return route.fulfill({ json: { users, total: users.length } });
   });

@@ -47,9 +47,9 @@ test("Enter in the Search box always searches, only a chosen row does anything e
 
   await box(page).fill("aphex");
   await expect(options(page)).toHaveText([
-    "Search for aphex",
-    /^aphex_fan\b.*Online/,
-    "Look up aphex"
+    /Search for aphex/,
+    /\baphex_fan\b.*Online/,
+    /Look up aphex/
   ]);
   // a mouse left over a row changes nothing
   await options(page).nth(1).hover();

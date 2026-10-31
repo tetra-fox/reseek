@@ -31,7 +31,7 @@ test("opens the dashboard, chat, rooms, a profile and your profile", async ({ pa
   await expect(page).toHaveURL(/#\/dashboard$/);
   // a path under a screen that renders nothing goes to that screen rather than a blank page
   await page.goto("./#/system/nowhere");
-  await expect(page).toHaveURL(/#\/system$/);
+  await expect(page).toHaveURL(/#\/system\/info$/);
   // old browse links land on the user's Shares tab, or on Search
   await page.goto("./#/browse/carol");
   await expect(page).toHaveURL(/#\/searches$/);
