@@ -6,6 +6,7 @@
   import { Combobox } from "bits-ui";
   import type { Snippet } from "svelte";
 
+  import { chatName, SERVER } from "#lib/chat/notices.js";
   import { foundHref, resultsHref } from "#lib/chat/route.js";
   import {
     dropdown,
@@ -211,7 +212,7 @@
                 <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span class="flex items-baseline gap-2 text-xs text-fg-muted">
                     <span class="min-w-0 truncate font-medium">
-                      {chat.kind === "room" ? `#${chat.name}, ${hit.username}` : chat.name}
+                      {chat.kind === "room" ? `#${chat.name}, ${hit.username}` : chatName(chat)}
                     </span>
                     <time
                       class="ml-auto shrink-0"
@@ -239,7 +240,7 @@
             <UsersRoundIcon class="size-4 shrink-0 text-fg-muted" aria-hidden="true" />
             <span class="min-w-0 truncate">Join room <span class="font-medium">{text}</span></span>
           {/snippet}
-          {@render item(NEW, talk)}
+          {#if text !== SERVER}{@render item(NEW, talk)}{/if}
           {@render item(JOIN, enterRoom)}
         {/if}
         {#if listed.hard}{@render everything()}{/if}

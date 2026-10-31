@@ -6,6 +6,7 @@
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
+  import { SERVER } from "#lib/chat/notices.js";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import { sections } from "#lib/config/sections.js";
   import {
@@ -125,23 +126,28 @@
     const text = query.trim();
     if (!text || app.mode === "agent") return [];
     const write = session.can("ReadWrite");
+    const person = text !== SERVER;
     return [
       ...(write && app.isServerConnected
         ? [{ id: "do:search", group: "Actions", label: `Search for ${text}`, run: search(text) }]
         : []),
-      {
-        id: "do:browse",
-        group: "Actions",
-        label: `Browse ${text}'s shares`,
-        run: go(`/browse?user=${encodeURIComponent(text)}`)
-      },
-      {
-        id: "do:profile",
-        group: "Actions",
-        label: `${text}'s profile`,
-        run: () => goto(userHref(text))
-      },
-      ...(write
+      ...(person
+        ? [
+            {
+              id: "do:browse",
+              group: "Actions",
+              label: `Browse ${text}'s shares`,
+              run: go(`/browse?user=${encodeURIComponent(text)}`)
+            },
+            {
+              id: "do:profile",
+              group: "Actions",
+              label: `${text}'s profile`,
+              run: () => goto(userHref(text))
+            }
+          ]
+        : []),
+      ...(write && person
         ? [
             {
               id: "do:message",

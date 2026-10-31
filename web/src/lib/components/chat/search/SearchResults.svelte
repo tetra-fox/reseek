@@ -3,9 +3,11 @@
   import HashIcon from "@lucide/svelte/icons/hash";
   import MessageSquarePlusIcon from "@lucide/svelte/icons/message-square-plus";
   import SearchIcon from "@lucide/svelte/icons/search";
+  import ServerIcon from "@lucide/svelte/icons/server";
   import UsersRoundIcon from "@lucide/svelte/icons/users-round";
   import type { Snippet } from "svelte";
 
+  import { chatName, isNotices, SERVER } from "#lib/chat/notices.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { foundHref, resultsHref } from "#lib/chat/route.js";
   import {
@@ -158,8 +160,10 @@
       {#snippet action()}
         {#if write}
           <div class="flex flex-wrap justify-center gap-1">
-            <Button variant="outline" size="sm" onclick={() => onnew(q)}
-              ><MessageSquarePlusIcon />Start a conversation</Button>
+            {#if q !== SERVER}
+              <Button variant="outline" size="sm" onclick={() => onnew(q)}
+                ><MessageSquarePlusIcon />Start a conversation</Button>
+            {/if}
             <Button variant="outline" size="sm" onclick={() => onjoin(q)}
               ><UsersRoundIcon />Join this room</Button>
           </div>
@@ -197,6 +201,9 @@
               {#if line.target.kind === "room"}
                 <HashIcon class="size-3.5 shrink-0" /><span class="truncate"
                   >{line.target.name}</span>
+              {:else if isNotices(line.target)}
+                <ServerIcon class="size-3.5 shrink-0" /><span class="truncate"
+                  >{chatName(line.target)}</span>
               {:else}
                 <Username name={line.target.name} />
               {/if}

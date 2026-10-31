@@ -7,6 +7,7 @@
 
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
+  import { SERVER } from "#lib/chat/notices.js";
   import Input from "#lib/components/ui/Input.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -45,7 +46,8 @@
   // no username has spaces around it, so what is around the text is no part of the name
   const text = $derived(typed.trim());
   const matches = $derived(bestMatches(found, text, (u) => u.username).slice(0, LISTED));
-  const unknown = $derived(!found.some((u) => u.username === text));
+  // the name the server's notices come from is no user to look up
+  const unknown = $derived(text !== SERVER && !found.some((u) => u.username === text));
   const asking = $derived(looking === text);
 
   $effect(() => {
@@ -94,7 +96,7 @@
 <!-- a look-up holds the dropdown open, where its entry shows it running -->
 <Combobox.Root
   type="single"
-  bind:open={() => (open || asking) && !!text, (on) => (open = on)}
+  bind:open={() => (open || asking) && !!text && (unknown || !!matches.length), (on) => (open = on)}
   bind:value={chosen}
   onValueChange={choose}>
   <Combobox.Input oninput={() => (open = true)} onclick={() => (open = true)}>
