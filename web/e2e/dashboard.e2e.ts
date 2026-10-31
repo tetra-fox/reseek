@@ -86,14 +86,14 @@ test("the activity log opens from the footer and lists what others did", async (
 test("the activity log docks under the screen, keeps its height and opens with a key", async ({
   page
 }) => {
-  await login(page, "/browse");
+  await login(page, "/users");
   const area = page.locator("[data-content]");
   const dock = page.getByRole("region", { name: "Activity on the network" });
   const height = () => dock.evaluate((e) => e.getBoundingClientRect().height);
   const before = await area.evaluate((e) => e.clientHeight);
 
   // Ctrl+J opens it while a field has focus, and the field keeps it
-  const field = page.getByLabel("Username");
+  const field = page.getByRole("combobox", { name: "Search users" });
   await field.fill("car");
   await page.keyboard.press("Control+j");
   await expect(dock).toBeVisible();

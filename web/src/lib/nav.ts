@@ -1,7 +1,6 @@
 import ChartColumnIcon from "@lucide/svelte/icons/chart-column";
 import CircleUserIcon from "@lucide/svelte/icons/circle-user";
 import DownloadIcon from "@lucide/svelte/icons/download";
-import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
 import MessageSquareIcon from "@lucide/svelte/icons/message-square";
 import SearchIcon from "@lucide/svelte/icons/search";
 import SettingsIcon from "@lucide/svelte/icons/settings";
@@ -28,6 +27,10 @@ export const segment = (name: string) =>
 export const userHref = (username: string, tab?: string) =>
   href(`/users/${segment(username)}${tab ? `/${tab}` : ""}`);
 
+/** The link to a user's Shares tab, opened at `folder` when one is given */
+export const sharesHref = (username: string, folder?: string | null) =>
+  `${userHref(username, "shares")}${folder ? `?path=${encodeURIComponent(folder)}` : ""}`;
+
 /** The link to the conversation with a user; names the chat routes use are written encoded */
 export const chatHref = (username: string) =>
   href(
@@ -50,8 +53,7 @@ export const navItems: NavItem[] = [
   { title: "Downloads", path: "/downloads", icon: DownloadIcon },
   { title: "Uploads", path: "/uploads", icon: UploadIcon },
   { title: "Chat", path: "/chat", icon: MessageSquareIcon },
-  { title: "Users", path: "/users", icon: UsersIcon },
-  { title: "Browse", path: "/browse", icon: FolderOpenIcon }
+  { title: "Users", path: "/users", icon: UsersIcon }
 ];
 
 /** The System screen, kept apart from the screens above to sit at the navigation's foot */
@@ -133,12 +135,20 @@ export const redirectFor = (path: string, agent: boolean): string | null => {
 };
 
 /**
- * Where a path that no screen renders goes: the chat page for the old rooms paths, the screen
- * whose path it starts with, such as Browse for /browse/carol, else the dashboard
+ * Where a path that no screen renders goes: the chat page for the old rooms paths, Search for
+ * what is under the old browse path, the screen whose path it starts with, such as System for
+ * /system/nowhere, else the dashboard
  */
 export const unknownTarget = (path: string): string => {
   if (path === "/rooms" || path.startsWith("/rooms/")) return "/chat";
+  if (path.startsWith("/browse/")) return "/searches";
   return navCurrent(path)?.path ?? "/dashboard";
+};
+
+/** Where an old `/browse?user=&path=` link goes: that user's Shares tab, else Search */
+export const browseTarget = (query: URLSearchParams): string => {
+  const user = query.get("user")?.trim();
+  return user ? sharesHref(user, query.get("path")) : href("/searches");
 };
 
 /** Where to go after login: a route of this app, never the login itself, else the dashboard */

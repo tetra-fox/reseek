@@ -11,10 +11,6 @@ import { fakeNetwork } from "#lib/testing/network.js";
 
 import BrowsePage from "./BrowsePage.svelte";
 
-// clearing a browse opened from a link takes the user parameter out of the URL; there is no
-// router in these tests
-vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
-
 const file = (filename: string): Schemas["File"] => ({
   filename,
   size: 10,
@@ -91,49 +87,6 @@ describe("browse progress", () => {
       "folder:Music",
       "folder:Music\\Album"
     ]);
-  });
-
-  it("leaves Escape to an open card, the filter field and a selection", async () => {
-    fakeNetwork((url) =>
-      url.pathname.endsWith("/users/alice/browse")
-        ? {
-            directories: [{ name: "Music", fileCount: 1, files: [file("1.flac")] }],
-            directoryCount: 1,
-            lockedDirectories: [],
-            lockedDirectoryCount: 0
-          }
-        : undefined
-    );
-    component = mount(BrowsePage, {
-      target: document.body,
-      props: { user: "alice", path: null }
-    });
-    await flushFaked();
-    await flushFaked();
-
-    const region = document.querySelector("[role=region][aria-label=Browse]")!;
-    const card = document.createElement("div");
-    card.setAttribute("role", "dialog");
-    document.body.append(card);
-    region.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    flushSync();
-    expect(browser.phase).toBe("complete");
-    card.remove();
-    // Escape in the filter field is the field's
-    document
-      .querySelector("input[aria-label=Filter]")!
-      .dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    flushSync();
-    expect(browser.phase).toBe("complete");
-    // a selection is cleared first
-    browser.tick(["Music\\1.flac"], true);
-    region.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    flushSync();
-    expect(browser.phase).toBe("complete");
-    browser.selected.clear();
-    region.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    flushSync();
-    expect(browser.phase).toBe("idle");
   });
 
   it("ticks a folder over the files under it and downloads one batch per top folder", async () => {

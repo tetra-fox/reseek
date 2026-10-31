@@ -30,9 +30,15 @@ test("opens the dashboard, chat, rooms, a profile and your profile", async ({ pa
   await page.goto("./#/nowhere");
   await expect(page).toHaveURL(/#\/dashboard$/);
   // a path under a screen that renders nothing goes to that screen rather than a blank page
+  await page.goto("./#/system/nowhere");
+  await expect(page).toHaveURL(/#\/system$/);
+  // old browse links land on the user's Shares tab, or on Search
   await page.goto("./#/browse/carol");
-  await expect(page).toHaveURL(/#\/browse$/);
-  await expect(page.getByLabel("Username")).toBeVisible();
+  await expect(page).toHaveURL(/#\/searches$/);
+  await page.goto("./#/browse?user=carol&path=Music");
+  await expect(page).toHaveURL(/#\/users\/carol\/shares\?path=Music$/);
+  await page.goto("./#/browse");
+  await expect(page).toHaveURL(/#\/searches$/);
 
   await page.goto("./#/users/alice");
   await expect(page.getByRole("heading", { name: "alice" })).toBeVisible();

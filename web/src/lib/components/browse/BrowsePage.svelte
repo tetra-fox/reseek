@@ -1,19 +1,16 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
-  import HistoryIcon from "@lucide/svelte/icons/history";
   import LinkIcon from "@lucide/svelte/icons/link";
+  import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import SearchIcon from "@lucide/svelte/icons/search";
-  import XIcon from "@lucide/svelte/icons/x";
   import { untrack } from "svelte";
 
   import { app } from "#lib/app.svelte.js";
   import { browser } from "#lib/browse/browse.svelte.js";
   import { browseFilter } from "#lib/browse/filter.js";
-  import { browsed, forgetBrowsed, restoreBrowsed } from "#lib/browse/recent.svelte.js";
   import FileCells from "#lib/components/files/FileCells.svelte";
   import FileHeader from "#lib/components/files/FileHeader.svelte";
   import FileTree from "#lib/components/files/FileTree.svelte";
@@ -30,7 +27,6 @@
   import Username from "#lib/components/users/Username.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { undoable } from "#lib/feedback/undo.js";
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
   import {
     asItem,
@@ -44,7 +40,7 @@
   import { formatBytes, getFileName, plural } from "#lib/format.js";
   import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
-  import { href } from "#lib/nav.js";
+  import { href, sharesHref, userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import {
@@ -56,12 +52,11 @@
     tickedCounts,
     treeLines
   } from "#lib/tree/folders.js";
-  import { keepsKey, layerOpen, withModifier } from "#lib/ui/keys.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
   type Props = {
-    /** a user to browse now, from a link */
-    user: string | null;
+    /** whose shares these are */
+    user: string;
     /** a folder of theirs to go to once the browse is here */
     path: string | null;
   };
@@ -71,8 +66,6 @@
   /** how often the progress is asked for while the stream can't push it */
   const POLL_MS = 500;
 
-  let input = $state("");
-  let field = $state<HTMLInputElement | null>(null);
   let typed = $state("");
   let query = $state("");
   let tree = $state<ReturnType<typeof FileTree<RemoteFile>> | null>(null);
@@ -107,20 +100,17 @@
     void tree?.navigate(`folder:${target}`);
   };
 
-  // a link names a user: browse them unless their browse is what's shown, then go to the folder
+  // the user's browse is what was left in this browser, what is shown, or asked for now; then
+  // the tree goes to the folder the address names
   $effect(() => {
-    const wanted = user?.trim();
+    const folder = path;
+    const wanted = user;
     untrack(async () => {
-      if (!wanted) {
-        await browser.restore();
-        input = browser.username;
-        return;
-      }
-      input = wanted;
+      await browser.restore(wanted);
       if (browser.username !== wanted || browser.phase !== "complete") {
         await browser.browse(wanted);
       }
-      if (path) browser.target = path;
+      if (folder) browser.target = folder;
     });
   });
   // a folder to go to waits until the tree is drawn
@@ -156,28 +146,22 @@
     return () => clearTimeout(timer);
   });
 
-  const start = () => void browser.browse(input);
-  const clear = async () => {
-    browser.clear();
-    input = "";
-    typed = "";
-    if (user) await goto(href("/browse"), { replaceState: true });
-    field?.focus();
-  };
-
   const info = $derived(browser.info);
 
-  // the user, then each folder down to the line with focus; a folder step goes to its line
+  // the user, the tab, then each folder down to the line with focus; a folder step goes to its
+  // line
   useCrumbs(() => {
-    if (!browser.username || browser.phase === "idle") return [];
-    const owner = { label: browser.username };
-    const line = tree?.focused();
-    if (!line) return [owner];
+    const steps = [
+      { label: user, href: userHref(user) },
+      { label: "Shares", href: sharesHref(user) }
+    ];
+    const line = browser.username === user ? tree?.focused() : null;
+    if (!line) return steps;
     const at = line.kind === "folder" ? line.node.path : line.folder.path;
     const sep = browser.separator;
     const parts = at.split(sep);
     return [
-      owner,
+      ...steps,
       ...parts.map((part, i) => {
         const step = parts.slice(0, i + 1).join(sep);
         const last = i === parts.length - 1;
@@ -266,29 +250,6 @@
     });
     toast(outcome.text, outcome.kind === "done" ? "info" : "error");
   };
-
-  const forget = (username: string) => {
-    const at = forgetBrowsed(username);
-    undoable(
-      `Removed ${username} from recently browsed`,
-      () => {},
-      () => restoreBrowsed(username, at)
-    );
-  };
-
-  const escapeClears = (node: HTMLElement) => {
-    const keydown = (e: KeyboardEvent) => {
-      // Escape in the filter field clears what was typed there, not the browse
-      if (e.key !== "Escape" || withModifier(e) || keepsKey(e)) return;
-      if (browser.phase === "idle" || browser.phase === "pending") return;
-      // a card, menu or dialog open over the screen closes first, and a selection is cleared
-      // before the browse
-      if (layerOpen() || browser.selected.size) return;
-      void clear();
-    };
-    node.addEventListener("keydown", keydown);
-    return () => node.removeEventListener("keydown", keydown);
-  };
 </script>
 
 {#snippet inspected()}
@@ -301,82 +262,7 @@
   {/if}
 {/snippet}
 
-<!-- Escape clears the screen only while focus is in it, not in a dialog over it -->
-<div class="flex flex-col gap-section" role="region" aria-label="Browse" {@attach escapeClears}>
-  <form
-    class="flex items-center gap-inline rounded-card border bg-surface p-3 shadow-card"
-    onsubmit={(e) => {
-      e.preventDefault();
-      start();
-    }}>
-    <div class="relative min-w-0 flex-1">
-      <Input
-        bind:ref={field}
-        bind:value={input}
-        type="search"
-        icon={FolderOpenIcon}
-        data-lpignore="true"
-        aria-label="Username"
-        placeholder="Username"
-        disabled={browser.phase !== "idle"}
-        class="h-11 pl-10 text-base md:text-base" />
-      {#if browser.phase === "pending"}
-        <Spinner class="absolute top-1/2 right-3 size-4 -translate-y-1/2" label="Browsing" />
-      {/if}
-    </div>
-    {#if browser.phase === "idle"}
-      <Button
-        type="submit"
-        size="icon"
-        class="size-11"
-        aria-label="Browse"
-        disabled={!input.trim()}>
-        <SearchIcon />
-      </Button>
-    {:else if browser.phase !== "pending"}
-      <Button
-        variant="danger"
-        size="icon"
-        class="size-11"
-        aria-label="Clear"
-        onclick={() => void clear()}>
-        <XIcon />
-      </Button>
-    {/if}
-  </form>
-
-  {#if browser.phase === "idle" && !browser.restoring}
-    {#if browsed.users.length}
-      <section class="flex flex-col gap-2" aria-label="Recently browsed">
-        <h2 class="flex items-center gap-1.5 text-sm text-fg-muted">
-          <HistoryIcon class="size-4" />Recently browsed
-        </h2>
-        <ul class="flex flex-wrap gap-1.5">
-          {#each browsed.users as name (name)}
-            <li class="group flex items-center rounded-full border bg-surface shadow-xs">
-              <button
-                type="button"
-                class="py-1 pl-3 text-sm hover:text-accent"
-                onclick={() => {
-                  input = name;
-                  start();
-                }}>{name}</button>
-              <button
-                type="button"
-                class="rounded-full p-1.5 text-fg-muted row-action"
-                aria-label={`Remove ${name} from recently browsed`}
-                onclick={() => forget(name)}>
-                <XIcon class="size-3" />
-              </button>
-            </li>
-          {/each}
-        </ul>
-      </section>
-    {:else}
-      <EmptyState icon={FolderOpenIcon} title="Browse a user's shares" />
-    {/if}
-  {/if}
-
+<div class="flex flex-col gap-section" role="region" aria-label="Shares">
   {#if browser.phase === "pending"}
     {@const percent = Math.round(browser.progress?.percentComplete ?? 0)}
     <div class="flex flex-col items-center gap-3 py-10" role="status">
@@ -403,6 +289,9 @@
     <div class="mt-12 flex flex-col items-center gap-1 text-center">
       <p class="text-lg">Could not browse {browser.username}</p>
       {#if browser.errorMessage}<p class="text-sm text-fg-muted">{browser.errorMessage}</p>{/if}
+      <Button variant="outline" size="sm" class="mt-3" onclick={() => void browser.browse(user)}>
+        <RefreshCwIcon />Try again
+      </Button>
     </div>
   {:else if !browser.tree.roots.length}
     {#if browser.restoring}
@@ -428,15 +317,19 @@
               : ""}
           </span>
         {/if}
-        {#if canWrite}
-          <Button
-            variant="ghost"
-            size="sm"
-            class="ml-auto"
-            href={href(`/searches?user=${encodeURIComponent(browser.username)}`)}>
-            <SearchIcon />Search this user's shares
+        <span class="ml-auto flex flex-wrap items-center gap-inline">
+          <Button variant="ghost" size="sm" onclick={() => void browser.browse(user)}>
+            <RefreshCwIcon />Browse again
           </Button>
-        {/if}
+          {#if canWrite}
+            <Button
+              variant="ghost"
+              size="sm"
+              href={href(`/searches?user=${encodeURIComponent(user)}`)}>
+              <SearchIcon />Search this user's shares
+            </Button>
+          {/if}
+        </span>
       </header>
       <div class="flex flex-wrap items-center gap-inline px-4 py-3">
         <div class="min-w-48 flex-1">

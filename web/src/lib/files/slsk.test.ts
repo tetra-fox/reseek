@@ -37,12 +37,12 @@ describe("slsk:// links", () => {
     expect(parseSlsk("slsk://a b/c")).toBeNull();
   });
 
-  it("open the folder in Browse", () => {
+  it("open the folder on the user's Shares tab", () => {
     expect(slskBrowse({ username: "al ice", path: "Music\\Album\\1.flac", folder: false })).toBe(
-      "#/browse?user=al%20ice&path=Music%5CAlbum"
+      "#/users/al%20ice/shares?path=Music%5CAlbum"
     );
     expect(slskBrowse({ username: "bob", path: "Music\\Album", folder: true })).toBe(
-      "#/browse?user=bob&path=Music%5CAlbum"
+      "#/users/bob/shares?path=Music%5CAlbum"
     );
   });
 });

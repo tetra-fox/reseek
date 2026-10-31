@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { changesScreen, redirectFor, route, safeReturn, unknownTarget, userHref } from "./nav";
+import {
+  browseTarget,
+  changesScreen,
+  redirectFor,
+  route,
+  safeReturn,
+  unknownTarget,
+  userHref
+} from "./nav";
 
 describe("routes after the hash", () => {
   it("read the path and the query from the hash", () => {
-    const at = route(new URL("http://host/reseek/#/browse?user=a%20b"));
-    expect(at.path).toBe("/browse");
+    const at = route(new URL("http://host/reseek/#/searches?user=a%20b"));
+    expect(at.path).toBe("/searches");
     expect(at.query.get("user")).toBe("a b");
     expect(route(new URL("http://host/reseek/")).path).toBe("/");
   });
@@ -17,6 +25,16 @@ describe("routes after the hash", () => {
 });
 
 describe("redirects", () => {
+  it("send an old browse link to the user's Shares tab, the folder and odd names kept", () => {
+    const target = (query: string) => browseTarget(new URLSearchParams(query));
+    expect(target("user=a%2Fb%20c&path=Music%5CAlbum")).toBe(
+      "#/users/a%2Fb%20c/shares?path=Music%5CAlbum"
+    );
+    expect(target("user=bob")).toBe("#/users/bob/shares");
+    expect(target("")).toBe("#/searches");
+    expect(target("user=%20")).toBe("#/searches");
+  });
+
   it("send the root to the dashboard and an agent to System", () => {
     expect(redirectFor("/", false)).toBe("/dashboard");
     expect(redirectFor("/searches/42", false)).toBeNull();
@@ -27,7 +45,7 @@ describe("redirects", () => {
 
   it("send a path no screen renders to the screen it belongs to, else the dashboard", () => {
     expect(unknownTarget("/nowhere")).toBe("/dashboard");
-    expect(unknownTarget("/browse/carol")).toBe("/browse");
+    expect(unknownTarget("/browse/carol")).toBe("/searches");
     expect(unknownTarget("/downloads/x/y")).toBe("/downloads");
     expect(unknownTarget("/system/nothing")).toBe("/system");
     expect(unknownTarget("/rooms")).toBe("/chat");
@@ -35,7 +53,7 @@ describe("redirects", () => {
   });
 
   it("only return to a route of this app after login", () => {
-    expect(safeReturn("/browse?user=x")).toBe("/browse?user=x");
+    expect(safeReturn("/searches?user=x")).toBe("/searches?user=x");
     expect(safeReturn(null)).toBe("/dashboard");
     expect(safeReturn("//evil.example")).toBe("/dashboard");
     expect(safeReturn("https://evil.example/")).toBe("/dashboard");
@@ -58,7 +76,6 @@ describe("screen changes", () => {
       ["/system/info", "/system/settings", false],
       ["/system/settings", "/system/logs", false],
       ["/system/info", "/dashboard", true],
-      ["/browse", "/browse", false],
       ["/profile", "/users", true]
     ];
     for (const [from, to, changes] of moves)

@@ -24,7 +24,7 @@ export const MAX_SELECTED_FILES = 5000;
 
 const META_KEY = "reseek-browse-state";
 
-/** What is kept of the screen besides the listing: never a browse under way, which can't resume */
+/** What is kept of the tab besides the listing: never a browse under way, which can't resume */
 type Meta = {
   username: string;
   phase: "idle" | "complete" | "error";
@@ -42,10 +42,10 @@ type Meta = {
 const EMPTY_TREE: Listing = { roots: [], byPath: new Map() };
 
 /**
- * The Browse screen's state: one user's shares at a time, fetched whole, kept as a tree with the
- * folders open and the files ticked in it, and remembered in this browser until it is cleared.
- * Progress comes from the `users` topic while a browse arrives, or from polling its status while
- * the stream is down
+ * What the Shares tab shows: one user's shares at a time, fetched whole, kept as a tree with the
+ * folders open and the files ticked in it, and remembered in this browser until another user is
+ * browsed. Progress comes from the `users` topic while a browse arrives, or from polling its
+ * status while the stream is down
  */
 class Browse {
   username = $state("");
@@ -59,7 +59,7 @@ class Browse {
   expansion = new Expansion(false);
   /** full paths of the ticked files */
   selected = new SvelteSet<string>();
-  /** a folder the screen goes to once it shows the listing, then forgets */
+  /** a folder the tab goes to once it shows the listing, then forgets */
   target = $state<string | null>(null);
   /** a saved listing is being read back */
   restoring = $state(false);
@@ -132,7 +132,7 @@ class Browse {
     }
   };
 
-  /** Back to an empty screen, the kept browse forgotten */
+  /** Back to nothing shown, the kept browse forgotten */
   clear = () => {
     this.username = "";
     this.phase = "idle";
@@ -165,18 +165,18 @@ class Browse {
     return true;
   };
 
-  /** Brings back the screen as it was left, once per page load */
-  restore = async () => {
+  /** Brings back the browse of `username` as it was left, when that is what is kept, once per page load */
+  restore = async (username: string) => {
     if (this.#restored) return;
     this.#restored = true;
     let meta: Meta | null = null;
     try {
       meta = readMeta(JSON.parse(localStorage.getItem(META_KEY) ?? "null"));
     } catch {
-      // nothing readable saved: the screen starts empty
+      // nothing readable saved: the user is browsed anew
     }
     // a browse under way, as one a link started, wins over what was saved
-    if (!meta?.username || this.phase !== "idle") return;
+    if (meta?.username !== username || this.phase !== "idle") return;
     this.username = meta.username;
     this.restoring = true;
     // an IndexedDB that can't be read (blocked, private window) leaves only the saved meta
@@ -199,7 +199,7 @@ class Browse {
     this.save();
   };
 
-  /** Keeps the screen as it is in this browser: the user, the open folders, the ticked files */
+  /** Keeps the browse as it is in this browser: the user, the open folders, the ticked files */
   save = () => {
     const meta: Meta = {
       username: this.username,
@@ -234,7 +234,7 @@ const strings = (list: unknown) =>
 
 /**
  * A saved meta as far as it makes sense; a browse saved as under way comes back as idle. A meta
- * whose `selected` is an object names a folder in it, which the screen goes to once
+ * whose `selected` is an object names a folder in it, which the tab goes to once
  */
 const readMeta = (saved: unknown): Meta | null => {
   const s = fields(saved);

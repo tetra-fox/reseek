@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { remoteFolder } from "./links";
 
 describe("file links", () => {
-  it("point Browse at the folder a remote file is in", () => {
+  it("point a user's Shares tab at the folder a remote file is in", () => {
     expect(remoteFolder("al ice", "Music\\Artist\\01.flac")).toEqual({
       folder: "Music\\Artist",
-      browse: "#/browse?user=al%20ice&path=Music%5CArtist"
+      browse: "#/users/al%20ice/shares?path=Music%5CArtist"
     });
   });
 });

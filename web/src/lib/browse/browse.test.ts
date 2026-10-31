@@ -5,7 +5,7 @@ import { fakeNetwork } from "#lib/testing/network.js";
 
 import { browser } from "./browse.svelte";
 
-describe("the browse screen's state", () => {
+describe("the kept browse", () => {
   afterEach(() => {
     browser.clear();
     localStorage.clear();
@@ -18,11 +18,11 @@ describe("the browse screen's state", () => {
     fakeNetwork((url) => (url.pathname.endsWith("/users/alice/browse") ? listing : undefined));
     localStorage.setItem(
       "reseek-browse-state",
-      JSON.stringify({ username: "bob", phase: "complete", separator: "\\" })
+      JSON.stringify({ username: "alice", phase: "complete", separator: "\\" })
     );
 
     const browsing = browser.browse("alice");
-    await browser.restore();
+    await browser.restore("alice");
     expect(browser.username).toBe("alice");
     expect(browser.phase).toBe("pending");
 

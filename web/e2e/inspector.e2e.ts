@@ -166,9 +166,7 @@ test.describe("on a wide screen", () => {
   test("shows a browsed file", async ({ page }) => {
     await fakeConnected(page);
     await fakeBrowse(page);
-    await login(page, "/browse");
-    await page.getByLabel("Username").fill("carol");
-    await page.getByLabel("Username").press("Enter");
+    await login(page, "/users/carol/shares");
     await page.locator('[data-line$="Bootlegs"]').click();
     await page.getByRole("treegrid", { name: "Shared folders" }).getByText("2.flac").click();
     await page.keyboard.press("i");

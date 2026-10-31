@@ -334,29 +334,40 @@ export const dir = (name: string, files: string[]) => ({
 });
 
 /**
- * Answers a browse of carol's shares with three folders, never asking the daemon, so no other
- * test sees her
+ * Answers a browse of carol's shares with `directories`, never asking the daemon, so no other test
+ * sees her. Her profile is left to the daemon, which has not heard of her
  */
-export const fakeBrowse = async (page: Page) => {
-  await page.route(
+export const carolShares = (
+  page: Page,
+  directories: ReturnType<typeof dir>[],
+  lockedDirectories: ReturnType<typeof dir>[] = []
+) =>
+  page.route(
     (url) => url.pathname.includes("/api/v0/users/carol/"),
-    (route) =>
-      !new URL(route.request().url()).pathname.endsWith("/carol/browse")
-        ? route.fulfill({ status: 404, json: { error: "not found" } })
-        : route.fulfill({
-            json: {
-              directories: [
-                dir("@@c\\Music", []),
-                dir("@@c\\Music\\Albums", ["1.flac"]),
-                dir("@@c\\Music\\Bootlegs", ["2.flac"])
-              ],
-              directoryCount: 3,
-              lockedDirectories: [],
-              lockedDirectoryCount: 0
-            }
-          })
+    (route) => {
+      const { pathname } = new URL(route.request().url());
+      if (pathname.endsWith("/carol/profile")) return route.fallback();
+      if (!pathname.endsWith("/carol/browse")) {
+        return route.fulfill({ status: 404, json: { error: "not found" } });
+      }
+      return route.fulfill({
+        json: {
+          directories,
+          directoryCount: directories.length,
+          lockedDirectories,
+          lockedDirectoryCount: lockedDirectories.length
+        }
+      });
+    }
   );
-};
+
+/** Answers a browse of carol's shares with three folders */
+export const fakeBrowse = (page: Page) =>
+  carolShares(page, [
+    dir("@@c\\Music", []),
+    dir("@@c\\Music\\Albums", ["1.flac"]),
+    dir("@@c\\Music\\Bootlegs", ["2.flac"])
+  ]);
 
 /** Answers alice's whole folder, asked from a search result, with its files and a subfolder */
 export const fakeFolder = async (page: Page) => {
@@ -525,20 +536,7 @@ export const wideBrowse = async (page: Page, n: number) => {
       );
     }
   }
-  await page.route(
-    (url) => url.pathname.includes("/api/v0/users/carol/"),
-    (route) =>
-      !new URL(route.request().url()).pathname.endsWith("/carol/browse")
-        ? route.fulfill({ status: 404, json: { error: "not found" } })
-        : route.fulfill({
-            json: {
-              directories,
-              directoryCount: directories.length,
-              lockedDirectories: [],
-              lockedDirectoryCount: 0
-            }
-          })
-  );
+  await carolShares(page, directories);
 };
 
 /** Room "indie" with `n` messages in its history, all in one page */

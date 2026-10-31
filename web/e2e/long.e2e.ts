@@ -72,9 +72,7 @@ test("1000 search results in the dense view draw a window and scroll to the last
 
 test("a browse of 5000 folders draws a window and scrolls to the last", async ({ page }) => {
   await wideBrowse(page, 5000);
-  await login(page, "/browse");
-  await page.getByLabel("Username").fill("carol");
-  await page.getByLabel("Username").press("Enter");
+  await login(page, "/users/carol/shares");
   const tree = page.getByRole("treegrid", { name: "Shared folders" });
   await expect(tree.locator("[role=rowgroup] [role=row]").first()).toBeVisible();
   await page.getByRole("button", { name: "Expand all" }).click();

@@ -98,7 +98,7 @@ for (const [width, height] of [
             }
           })
       );
-      await page.goto("./#/browse?user=carol");
+      await page.goto("./#/users/carol/shares");
       const shares = page.getByRole("treegrid", { name: "Shared folders" });
       const albums = shares.getByText("Albums", { exact: true });
       const readme = shares.getByText("readme.txt", { exact: true });

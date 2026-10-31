@@ -3,7 +3,7 @@ import { fields, stored } from "#lib/stored.svelte.js";
 /** How many browsed users are remembered */
 export const RECENT_USERS = 10;
 
-/** The users browsed in this browser, the latest first, for the start screen */
+/** The users browsed in this browser, the latest first, listed under the search box */
 export const browsed = stored("reseek.browse.recent", (saved) => {
   const users = fields(saved).users;
   return {

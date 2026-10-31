@@ -1,5 +1,5 @@
 import { getDirectoryName } from "#lib/format.js";
-import { href } from "#lib/nav.js";
+import { sharesHref } from "#lib/nav.js";
 
 /**
  * A `slsk://` link: a user's shared file or folder. The path's backslashes are written as
@@ -32,10 +32,6 @@ export const parseSlsk = (text: string): SlskLink | null => {
   return { username: decode(user), path: parts.join("\\"), folder: rest.endsWith("/") };
 };
 
-/** Where a link opens: the Browse screen at its folder, or at the folder holding its file */
-export const slskBrowse = (link: SlskLink): string => {
-  const folder = link.folder ? link.path : getDirectoryName(link.path);
-  return href(
-    `/browse?user=${encodeURIComponent(link.username)}&path=${encodeURIComponent(folder)}`
-  );
-};
+/** Where a link opens: the user's Shares tab at its folder, or at the folder holding its file */
+export const slskBrowse = (link: SlskLink): string =>
+  sharesHref(link.username, link.folder ? link.path : getDirectoryName(link.path));

@@ -1,11 +1,11 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
 
-  import BrowsePage from "#lib/components/browse/BrowsePage.svelte";
-  import { route } from "#lib/nav.js";
+  import { browseTarget, route } from "#lib/nav.js";
 
-  // /browse?user=<name>&path=<remote folder>, every part optional
-  const query = $derived(route(page.url).query);
+  // browsing lives on each user's Shares tab, and links to this address still land there
+  $effect(() => {
+    void goto(browseTarget(route(page.url).query), { replaceState: true });
+  });
 </script>
-
-<BrowsePage user={query.get("user")} path={query.get("path")} />

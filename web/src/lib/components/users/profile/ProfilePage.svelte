@@ -71,7 +71,7 @@
   ];
 </script>
 
-<!-- the Shares tab is the Browse screen, whose own steps name the folders -->
+<!-- the Shares tab has its own steps, which name the folders -->
 {#if tab !== "shares"}
   <Crumbs
     steps={[

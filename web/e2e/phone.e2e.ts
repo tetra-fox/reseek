@@ -215,9 +215,7 @@ const everyScreen = async (page: Page) => {
   await fits(page, "/users", shows("No users yet"));
   await fits(page, "/users?tab=blocked", shows("No blocked users"));
   await fits(page, "/users/alice", shows("Not seen before"));
-  await fits(page, "/browse", shows("Browse a user's shares"));
-  await page.getByLabel("Username").fill("carol");
-  await page.getByLabel("Username").press("Enter");
+  await fits(page, "/users/carol/shares", shows("Bootlegs"));
   await page.locator('[data-line$="Bootlegs"]').click();
   await holds(page, "a browse with a folder open", shows("2.flac"));
   await fits(page, "/profile", shows("Public view"));

@@ -8,7 +8,8 @@
   import { session } from "#lib/session.svelte.js";
 
   // a chat message's text, shown as text: web links open in a new tab, slsk:// links open the
-  // folder in Browse with a download button for a file, and the watched words are marked
+  // folder on the user's Shares tab with a download button for a file, and the watched words are
+  // marked
   let { text, watch }: { text: string; watch: string[] } = $props();
 
   const parts = $derived(richText(text, watch));

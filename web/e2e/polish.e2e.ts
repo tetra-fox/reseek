@@ -74,9 +74,7 @@ test("cross-fades between screens", async ({ page }) => {
 
 test("browses a user, finds a folder by typing and shows where it is", async ({ page }) => {
   await fakeBrowse(page);
-  await login(page, "/browse");
-  await page.getByLabel("Username").fill("carol");
-  await page.getByLabel("Username").press("Enter");
+  await login(page, "/users/carol/shares");
   const tree = page.getByRole("treegrid", { name: "Shared folders" });
   const bootlegs = tree.locator('[data-line$="Bootlegs"]');
   await expect(bootlegs).toBeVisible();
@@ -92,11 +90,12 @@ test("browses a user, finds a folder by typing and shows where it is", async ({ 
   await crumbs.getByRole("button", { name: "Music" }).click();
   const active = await tree.getAttribute("aria-activedescendant");
   await expect(page.locator(`#${active}`)).toHaveAttribute("data-line", "folder:@@c\\Music");
-  // carol is remembered on the start screen
-  await page.getByRole("button", { name: "Clear" }).first().click();
-  await expect(
-    page.getByRole("region", { name: "Recently browsed" }).getByText("carol")
-  ).toBeVisible();
+  // carol is remembered under the search box
+  await page.goto("./#/searches");
+  const shares = page.getByRole("list", { name: "Recently browsed" }).getByRole("link");
+  await expect(shares).toHaveText("carol");
+  await shares.click();
+  await expect(page).toHaveURL(/#\/users\/carol\/shares$/);
 });
 
 test("goes to a screen from the command palette", async ({ page }) => {

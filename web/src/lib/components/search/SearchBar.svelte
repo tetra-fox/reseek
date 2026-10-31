@@ -26,7 +26,7 @@
     onclearscope?: () => void;
     /** the text the box starts with */
     text?: string;
-    /** lists the recent and pinned searches under the box */
+    /** lists the recent and pinned searches and the users browsed under the box */
     history?: boolean;
   };
 

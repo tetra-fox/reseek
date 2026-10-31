@@ -1,12 +1,12 @@
 import { api, byUser } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
-import { chatHref, href } from "#lib/nav.js";
+import { chatHref, href, sharesHref } from "#lib/nav.js";
 import { call } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
 
 /** Where the menu's links go for `username`, with the folder it was shown in when there is one */
 export const links = (username: string, folder?: string) => ({
-  browse: href(`/browse?user=${encodeURIComponent(username)}`),
+  browse: sharesHref(username),
   message: chatHref(username),
   search: href(
     `/searches?user=${encodeURIComponent(username)}${folder ? `&text=${encodeURIComponent(folder)}` : ""}`

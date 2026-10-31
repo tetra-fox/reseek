@@ -26,13 +26,13 @@ test("a room reads like a chat: names, actions, links and the wall", async ({ pa
       a.parentElement!.getBoundingClientRect().width
     ]);
   expect(widths[1]).toBeCloseTo(widths[0], 0);
-  // a /me message is an action, a slsk:// link opens Browse, a mention is marked
+  // a /me message is an action, a slsk:// link opens the shares, a mention is marked
   await expect(log.getByText("waves at everyone")).toBeVisible();
   // a message's text is for reading and copying: the I-beam; the name above it is a link
   await expect(log.getByText("320 too if you want it smaller")).toHaveCSS("cursor", "text");
   await expect(log.getByRole("link", { name: /^slsk:\/\/bob/ })).toHaveAttribute(
     "href",
-    /#\/browse\?user=bob&path=Music/
+    /#\/users\/bob\/shares\?path=Music/
   );
   await expect(log.locator('[data-message="6"]')).toHaveClass(/border-warning/);
 

@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
-import { dir, fakeConnected, transfer } from "./support/fakes";
+import { carolShares, dir, fakeConnected, transfer } from "./support/fakes";
 import { login } from "./support/login";
 
 const MUSIC = "@@c\\Music";
@@ -9,30 +9,20 @@ const tracks = (prefix: string, n: number) =>
 
 /**
  * Answers a browse of carol's shares: Music with Albums of thirty tracks, Bootlegs of three and
- * Deep\CD1 of forty, and a locked folder, never asking the daemon
+ * Deep\CD1 of forty, and a locked folder
  */
-const fakeShare = async (page: Page) => {
-  await page.route(
-    (url) => url.pathname.includes("/api/v0/users/carol/"),
-    (route) =>
-      !new URL(route.request().url()).pathname.endsWith("/carol/browse")
-        ? route.fulfill({ status: 404, json: { error: "not found" } })
-        : route.fulfill({
-            json: {
-              directories: [
-                dir(MUSIC, []),
-                dir(`${MUSIC}\\Albums`, tracks("A", 30)),
-                dir(`${MUSIC}\\Bootlegs`, tracks("B", 3)),
-                dir(`${MUSIC}\\Deep`, []),
-                dir(`${MUSIC}\\Deep\\CD1`, tracks("D", 40))
-              ],
-              directoryCount: 5,
-              lockedDirectories: [dir(`${MUSIC}\\Locked`, ["secret.flac"])],
-              lockedDirectoryCount: 1
-            }
-          })
+const fakeShare = (page: Page) =>
+  carolShares(
+    page,
+    [
+      dir(MUSIC, []),
+      dir(`${MUSIC}\\Albums`, tracks("A", 30)),
+      dir(`${MUSIC}\\Bootlegs`, tracks("B", 3)),
+      dir(`${MUSIC}\\Deep`, []),
+      dir(`${MUSIC}\\Deep\\CD1`, tracks("D", 40))
+    ],
+    [dir(`${MUSIC}\\Locked`, ["secret.flac"])]
   );
-};
 
 /** A line by its key, its backslashes escaped for the selector */
 const line = (tree: Locator, key: string) =>
@@ -42,11 +32,11 @@ const line = (tree: Locator, key: string) =>
 const folder = (tree: Locator, path: string) => line(tree, `folder:${MUSIC}${path}`);
 const fileLine = (tree: Locator, path: string) => line(tree, `${MUSIC}${path}`);
 
-/** Opens Browse at carol's shares, the tree drawn */
-const browseCarol = async (page: Page, route = "/browse?user=carol") => {
+/** Opens carol's Shares tab, the tree drawn */
+const browseCarol = async (page: Page, opened?: string) => {
   await fakeShare(page);
-  await login(page, "/browse");
-  await page.goto(`./#${route}`);
+  await login(page, "/users/carol/shares");
+  if (opened) await page.goto(`./#/users/carol/shares?path=${encodeURIComponent(opened)}`);
   const tree = page.getByRole("treegrid", { name: "Shared folders" });
   await expect(folder(tree, "")).toBeVisible();
   return tree;
@@ -141,10 +131,7 @@ test("the filter shows the way to each match, open", async ({ page }) => {
 });
 
 test("a link to a folder opens the tree down to it and goes to its line", async ({ page }) => {
-  const tree = await browseCarol(
-    page,
-    `/browse?user=carol&path=${encodeURIComponent(`${MUSIC}\\Deep\\CD1`)}`
-  );
+  const tree = await browseCarol(page, `${MUSIC}\\Deep\\CD1`);
   await expect(fileLine(tree, "\\Deep\\CD1\\D01.flac")).toBeVisible();
   const active = await tree.getAttribute("aria-activedescendant");
   await expect(page.locator(`#${active}`)).toHaveAttribute(
