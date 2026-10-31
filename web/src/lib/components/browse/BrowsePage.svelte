@@ -23,7 +23,6 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
-  import Username from "#lib/components/users/Username.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
@@ -305,7 +304,6 @@
   {:else}
     <section class="flex flex-col rounded-card border bg-surface shadow-card">
       <header class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-3">
-        <Username name={browser.username} />
         {#if info}
           <span class="text-sm text-fg-muted">
             {plural(info.files + info.lockedFiles, "file", "files")} in {plural(
