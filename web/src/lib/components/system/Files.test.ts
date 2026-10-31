@@ -59,9 +59,9 @@ describe("the file explorer", () => {
     press(grid, "Enter");
     expect(goto).toHaveBeenCalledWith("#/system/files?root=downloads&path=Album%2FCD1");
     press(grid, "ArrowDown");
-    press(grid, " ");
+    press(grid, " ", { shiftKey: true });
     press(grid, "ArrowDown");
-    press(grid, " ");
+    press(grid, " ", { shiftKey: true });
     expect(ticked()).toEqual(["f:Album/a.flac", "f:Album/b.flac"]);
     press(grid, "Delete");
     expect(confirmation.question?.title).toBe("Delete 2 items?");

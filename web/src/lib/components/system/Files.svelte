@@ -7,24 +7,25 @@
   import FileArchiveIcon from "@lucide/svelte/icons/file-archive";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
-  import PlayIcon from "@lucide/svelte/icons/play";
+  import InfoIcon from "@lucide/svelte/icons/info";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
-  import { type Component, untrack } from "svelte";
+  import { untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
-  import type { Target } from "#lib/analysis/analysis.js";
+  import { type Target, targetKey } from "#lib/analysis/analysis.js";
   import { analyzeBatch } from "#lib/analysis/batch.js";
   import { FILE_FILTERS, type MarkFilter, passes } from "#lib/analysis/marks.js";
   import { analyzable, analyzerOffered, marks } from "#lib/analysis/marks.svelte.js";
   import { api, type Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
-  import AnalysisDrawer from "#lib/components/analysis/AnalysisDrawer.svelte";
   import AnalysisJobs from "#lib/components/analysis/AnalysisJobs.svelte";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
   import FileTree from "#lib/components/files/FileTree.svelte";
   import LocalFileItems from "#lib/components/files/LocalFileItems.svelte";
   import SelectionBar from "#lib/components/files/SelectionBar.svelte";
+  import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
+  import LocalFileInspector from "#lib/components/inspector/LocalFileInspector.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
@@ -32,7 +33,6 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
-  import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -41,6 +41,7 @@
   import { player } from "#lib/files/player.svelte.js";
   import { folderCaption } from "#lib/files/summary.js";
   import { dateTime, formatBytes, plural } from "#lib/format.js";
+  import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
@@ -153,11 +154,13 @@
   const shows = (e: Entry) =>
     e.kind !== "file" || !only || passes(only, marks.file(root, e.path), analyzable(e.name));
   $effect(() => marks.retain());
-  /** the file whose analysis the drawer shows, queued when it has none with `start` */
-  let analyzing = $state<{ entry: Entry; start: boolean; large: boolean } | null>(null);
+  /** the key of the file the inspector shows, which follows focus in the tree */
+  let shownKey = $state<string | null>(null);
+  const shown = $derived(shownKey === null ? undefined : byKey.get(shownKey));
+  useInspector(inspected, () => !!shown);
   $effect(() => {
     void root;
-    analyzing = null;
+    shownKey = null;
   });
 
   /** Queues every file under a folder whose extension the analyzer is offered for */
@@ -227,8 +230,6 @@
       }
     }
     selected.clear();
-    const shown = analyzing?.entry.path;
-    if (targets.some((e) => e.path === shown)) analyzing = null;
     load();
     if (failed.length) toast(`Could not delete ${failed.join("; ")}`, "error");
     else
@@ -288,6 +289,19 @@
   );
 </script>
 
+{#snippet inspected()}
+  {#if shown}
+    {@const e = shown}
+    <LocalFileInspector
+      entry={e}
+      {root}
+      onopen={() => void open(e)}
+      onpreview={() => preview(e)}
+      onsave={() => void save(e)}
+      ondelete={canDelete ? () => askRemove([e]) : undefined} />
+  {/if}
+{/snippet}
+
 {#snippet sortable(label: string, by: SortBy)}
   <button type="button" class="flex items-center gap-1" onclick={() => sortBy(by)}>
     {label}
@@ -340,6 +354,7 @@
     {/if}
     <Button variant="outline" size="sm" disabled={loading} onclick={load}
       ><RefreshCwIcon />Refresh</Button>
+    <InspectorToggle />
   </div>
 </div>
 
@@ -357,10 +372,18 @@
           onopen={() => void open(e)}
           onpreview={isAudio(e.name) ? () => preview(e) : undefined}
           onanalyze={analyzable(e.name)
-            ? () => (analyzing = { entry: e, start: write, large: shiftHeld() })
+            ? () => {
+                shownKey = e.key;
+                inspector.analyze(targetKey({ kind: "file", root, path: e.path }), shiftHeld());
+              }
             : undefined}
           onsave={() => void save(e)}
           path={e.path} />
+        <Menu.Item
+          onSelect={() => {
+            shownKey = e.key;
+            inspector.show();
+          }}><InfoIcon />Details</Menu.Item>
       {:else}
         <Menu.Item onSelect={() => void open(e)}><FolderOpenIcon />Open</Menu.Item>
         <Menu.Item onSelect={() => window.location.assign(archiveUrl(root, e.path))}
@@ -417,6 +440,9 @@
     onopen={(e) => void open(e)}
     onopenfolder={(node) => go(node.path.split("/"))}
     {onkey}
+    inspect={(e) => {
+      if (e.kind === "file") shownKey = e.key;
+    }}
     nameOf={(line) => (line.kind === "folder" ? line.node.label : line.item.name)}
     ontoggle={(opened, keys) => {
       // a folder's key is its path
@@ -501,34 +527,4 @@
           ? "No finished downloads yet"
           : "This folder is empty"} />
   {/if}
-{/if}
-
-{#snippet tool(label: string, Icon: Component, run: () => void)}
-  <Tooltip text={label}>
-    {#snippet child({ props })}
-      <Button {...props} variant="ghost" size="icon-sm" aria-label={label} onclick={run}
-        ><Icon /></Button>
-    {/snippet}
-  </Tooltip>
-{/snippet}
-
-{#if analyzing}
-  {@const e = analyzing.entry}
-  <AnalysisDrawer
-    target={{ kind: "file", root, path: e.path }}
-    track={fileTrack(root, e.path)}
-    name={e.name}
-    start={analyzing.start}
-    large={analyzing.large}
-    onclose={() => (analyzing = null)}>
-    {#snippet actions()}
-      {#if isAudio(e.name)}
-        {@render tool("Preview", PlayIcon, () => preview(e))}
-      {/if}
-      {@render tool(A.save.label, A.save.icon, () => void save(e))}
-      {#if canDelete}
-        {@render tool("Delete", Trash2Icon, () => askRemove([e]))}
-      {/if}
-    {/snippet}
-  </AnalysisDrawer>
 {/if}

@@ -8,13 +8,16 @@
   let {
     source,
     onopen = () => {},
-    layer = () => false,
+    inspects,
+    onfocus,
     headersFocus = false,
     named = false
   }: {
     source: { value: Line[] };
     onopen?: (line: Line) => void;
-    layer?: () => boolean;
+    /** the inspector can show a line */
+    inspects?: (line: Line) => boolean;
+    onfocus?: (line: Line) => void;
     /** headers take focus as rows do */
     headersFocus?: boolean;
     /** each line is named by its key, for type-ahead */
@@ -29,7 +32,9 @@
     id: (l) => (l.header ? null : l.key),
     group: (l) => lines.value.filter((x) => !x.header && x.group === l.group).map((x) => x.key),
     onopen: (line) => onopen(line),
-    layer: () => layer(),
+    // svelte-ignore state_referenced_locally
+    inspects,
+    onfocus: (line) => onfocus?.(line),
     // svelte-ignore state_referenced_locally
     headersFocus,
     // svelte-ignore state_referenced_locally

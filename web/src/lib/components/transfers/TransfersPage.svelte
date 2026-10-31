@@ -4,16 +4,19 @@
   import { untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
+  import { targetKey } from "#lib/analysis/analysis.js";
   import { analyzableDownload, analyzeBatch, downloadCandidate } from "#lib/analysis/batch.js";
   import { MARK_FILTERS, type MarkFilter, passes } from "#lib/analysis/marks.js";
   import { analyzerOffered, marks } from "#lib/analysis/marks.svelte.js";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
+  import TransferInspector from "#lib/components/inspector/TransferInspector.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatBytes, getDirectoryName, getFileName, plural } from "#lib/format.js";
+  import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
   import { heldOrder } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { session } from "#lib/session.svelte.js";
@@ -43,7 +46,6 @@
   import { users } from "#lib/users/users.svelte.js";
 
   import AddDownload from "./AddDownload.svelte";
-  import DetailsDrawer from "./DetailsDrawer.svelte";
   import MessageAll from "./MessageAll.svelte";
   import Toolbar from "./Toolbar.svelte";
   import TransferTable from "./TransferTable.svelte";
@@ -80,11 +82,8 @@
   let working = $state(false);
   let adding = $state(false);
   let messaging = $state(false);
-  let detailId = $state<string | null>(null);
-  /** the transfer whose drawer opened at its analysis, which starts one when it has none */
-  let analyzeId = $state<string | null>(null);
-  /** the analysis opens straight in the large view */
-  let analyzeLarge = $state(false);
+  /** the transfer the inspector shows, which follows focus in the table */
+  let shownId = $state<string | null>(null);
   const folds = new Expansion(true);
   const selected = new SvelteSet<string>();
   let confirm = $state<{ title: string; body: string; label: string; run: () => void } | null>(
@@ -141,18 +140,10 @@
   const items = $derived(hold(layout(grid.rows, view.groupBy, folds.isOpen)));
   const rows = $derived(items.flatMap((i) => (i.type === "row" ? [i.transfer] : [])));
   const chosen = $derived(all.filter((t) => selected.has(t.id)));
-  const detail = $derived(
-    detailId && !store.hidden.has(detailId) ? store.list.get(detailId) : undefined
+  const shown = $derived(
+    shownId && !store.hidden.has(shownId) ? store.list.get(shownId) : undefined
   );
-  const detailAround = $derived(
-    detail
-      ? all.filter(
-          (t) =>
-            getDirectoryName(t.filename) === getDirectoryName(detail.filename) &&
-            t.username === detail.username
-        )
-      : []
-  );
+  useInspector(inspected, () => !!shown);
 
   // the users on screen are looked up for their group, color and block
   $effect(() => {
@@ -236,10 +227,11 @@
     void runBulk(key, [t]);
   };
 
-  const step = (by: -1 | 1) => {
-    const at = rows.findIndex((r) => r.id === detailId);
-    const next = rows[at + by];
-    if (next) detailId = next.id;
+  /** Opens the inspector on a transfer, at its analysis with `analyze` */
+  const details = (t: Transfer, analyze?: boolean, large?: boolean) => {
+    shownId = t.id;
+    if (!analyze) return inspector.show();
+    inspector.analyze(targetKey({ kind: "download", username: t.username, id: t.id }), !!large);
   };
 
   const oneFolder = $derived(
@@ -248,16 +240,22 @@
   const oneUser = $derived(new Set(chosen.map((t) => t.username)).size === 1);
   const write = $derived(session.can("ReadWrite"));
 
-  // with the details open, the breadcrumb names the transfer and goes back to the list
+  // with the inspector open, the breadcrumb names the transfer and closes it
   useCrumbs(() =>
-    detail
+    shown && inspector.open
       ? [
-          { label: detail.username, onclick: () => (detailId = null) },
-          { label: getFileName(detail.filename), copy: detail.filename }
+          { label: shown.username, onclick: () => inspector.close() },
+          { label: getFileName(shown.filename), copy: shown.filename }
         ]
       : []
   );
 </script>
+
+{#snippet inspected()}
+  {#if shown}
+    <TransferInspector transfer={shown} onremove={() => remove([shown])} />
+  {/if}
+{/snippet}
 
 <Toolbar
   {direction}
@@ -297,17 +295,13 @@
     {view}
     expansion={folds}
     {selected}
-    ondetails={(t, analyze, large) => {
-      detailId = t.id;
-      analyzeId = analyze ? t.id : null;
-      analyzeLarge = !!large;
-    }}
+    ondetails={details}
+    inspect={(t) => (shownId = t.id)}
     onremove={remove}
     ondelete={remove}
     oncancel={cancel}
     onblock={blockUser}
-    {onkey}
-    drawerOpen={!!detail} />
+    {onkey} />
 {/if}
 
 {#if selected.size}
@@ -346,24 +340,6 @@
     <Button size="sm" variant="outline" onclick={() => exportJson(chosen)}>Export JSON</Button>
     <Button size="sm" variant="ghost" onclick={() => selected.clear()}>Clear</Button>
   </div>
-{/if}
-
-{#if detail}
-  <DetailsDrawer
-    transfer={detail}
-    {store}
-    {direction}
-    around={detailAround}
-    analyze={analyzeId === detail.id}
-    analyzeLarge={analyzeId === detail.id && analyzeLarge}
-    onanalyze={(large) => {
-      analyzeId = detail.id;
-      analyzeLarge = large;
-    }}
-    onclose={() => (detailId = null)}
-    onstep={step}
-    onremove={() => remove([detail])}
-    onblock={(deny) => blockUser(detail.username, deny)} />
 {/if}
 
 <AddDownload bind:open={adding} />

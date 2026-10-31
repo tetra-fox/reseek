@@ -1,6 +1,8 @@
+import { untrack } from "svelte";
 import { on } from "svelte/events";
 import { SvelteSet } from "svelte/reactivity";
 
+import { inspector } from "#lib/inspector/inspector.svelte.js";
 import { inControl, keepsKey, layerOpen, withModifier } from "#lib/ui/keys.js";
 
 import { TYPE_AHEAD_MS, typeAhead } from "./typeahead";
@@ -24,8 +26,13 @@ export type ListSpec<L> = {
   openOnClick?: boolean;
   /** a key of the list's own for the focused row, such as Delete; true when it acted */
   onkey?: (e: KeyboardEvent, line: L) => boolean;
-  /** a layer of the list's own is open, such as a drawer, which Escape closes before the selection */
-  layer?: () => boolean;
+  /**
+   * Whether the inspector can show a line. On such a line Space and `i` open or close it, and
+   * Shift+Space ticks the row, which Space does in a list without an inspector
+   */
+  inspects?: (line: L) => boolean;
+  /** focus came to a line, for the inspector to follow it */
+  onfocus?: (line: L) => void;
   /**
    * Whether the line at `index` is rendered now, `element` being the one a focused control is
    * in; every line by default. A virtualized list renders a window of its lines
@@ -76,10 +83,11 @@ let lists = 0;
  * control is in. Ctrl/Cmd+A selects the focused line's group, or every row; any other key with
  * Ctrl, Cmd or Alt is the browser's. Home, End, Page Up and Page Down move as Up and Down do,
  * further. On a row Space toggles it, Enter opens it and the list's own keys act; on a group
- * header only Ctrl/Cmd+A and Space act, unless headers take focus. Letters typed one after
- * another go to the next line whose name starts with them, in a list that names its lines.
- * Escape closes what is open first (a menu, a dialog, a card, the list's own layer) and
- * otherwise clears the selection
+ * header only Ctrl/Cmd+A and Space act, unless headers take focus. In a list with an inspector,
+ * Space and `i` on a line it shows open or close it instead, and Shift+Space ticks. Letters typed
+ * one after another go to the next line whose name starts with them, in a list that names its
+ * lines; an `i` in the middle of those is one of them. Escape closes what is open first (a menu,
+ * a dialog, a card) and otherwise clears the selection
  */
 export class ListControl<L> {
   /** the selected rows' ids */
@@ -140,6 +148,11 @@ export class ListControl<L> {
       if (this.#found !== -1) this.#lastIndex = this.#found;
       else if (this.focused) this.focusedKey = this.#spec.key(this.focused);
     });
+    // the inspector shows the line with focus, which the mouse and the keys both move
+    $effect(() => {
+      const line = this.focused;
+      if (line !== null) untrack(() => this.#spec.onfocus?.(line));
+    });
     // a change that removed the line holding focus left the page focused; the list takes it back
     $effect(() => {
       void this.lines;
@@ -156,8 +169,8 @@ export class ListControl<L> {
   }
 
   /**
-   * The attributes a line's element carries: `data-focused` draws the focus ring, and `data-last`
-   * leaves the last line's divider off
+   * The attributes a line's element carries: `data-focused` draws the focus ring, `data-inspected`
+   * marks the line the open inspector shows, and `data-last` leaves the last line's divider off
    */
   line(line: L, index: number) {
     const id = this.#spec.id(line);
@@ -165,6 +178,7 @@ export class ListControl<L> {
       "id": this.lineId(index),
       "data-line": this.#spec.key(line),
       "data-focused": this.isFocused(line) || undefined,
+      "data-inspected": this.#inspected(line) || undefined,
       "data-last": index === this.lines.length - 1 || undefined,
       "aria-selected": id === null ? undefined : this.selected.has(id)
     };
@@ -173,6 +187,13 @@ export class ListControl<L> {
   /** Whether the line shows the focus ring: it is the focused one and focus came from the keys */
   isFocused(line: L) {
     return this.#ringed && this.#spec.key(line) === this.focusedKey;
+  }
+
+  /** Whether the inspector is open on the line */
+  #inspected(line: L) {
+    return (
+      inspector.open && this.#spec.key(line) === this.focusedKey && !!this.#spec.inspects?.(line)
+    );
   }
 
   /** Gives the container DOM focus, without scrolling */
@@ -369,8 +390,10 @@ export class ListControl<L> {
       const to = past !== -1 ? past : this.#next(want, step === 1 ? -1 : 1);
       if (to !== -1) this.#moveTo(to);
     } else if (e.key === "Escape") {
-      if (this.#spec.layer?.() || layerOpen()) return;
+      if (layerOpen()) return;
       this.clear();
+    } else if (this.#togglesInspector(e, line)) {
+      inspector.toggle();
     } else if (this.#findTyped(e)) {
       // a letter went to the line named by what was typed
     } else if (line === null) return;
@@ -385,6 +408,14 @@ export class ListControl<L> {
     } else if (!this.#spec.onkey?.(e, line)) return;
     e.preventDefault();
   };
+
+  /** Whether a key opens or closes the inspector: Space, or `i` unless a name is being typed */
+  #togglesInspector(e: KeyboardEvent, line: L | null) {
+    const inspects = this.#spec.inspects;
+    if (!inspects || (line !== null && !inspects(line))) return false;
+    if (e.key === " ") return !e.shiftKey;
+    return e.key === "i" && Date.now() - this.#typedAt > TYPE_AHEAD_MS;
+  }
 
   /**
    * A letter typed while the list names its lines: what was typed in the last moment, with it,

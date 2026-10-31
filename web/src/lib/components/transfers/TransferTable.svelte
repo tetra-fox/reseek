@@ -32,8 +32,10 @@
     expansion: Expansion;
     /** the selected transfers' ids, which the page acts on */
     selected: SvelteSet<string>;
-    /** opens the details drawer, at the file's analysis with `analyze` */
+    /** opens the inspector on a transfer, at the file's analysis with `analyze` */
     ondetails: (t: Transfer, analyze?: boolean, large?: boolean) => void;
+    /** focus came to a transfer, which the inspector shows */
+    inspect: (t: Transfer) => void;
     onremove: (transfers: Transfer[]) => void;
     /** removes with the Delete key, which asks first for more than one */
     ondelete: (transfers: Transfer[]) => void;
@@ -41,8 +43,6 @@
     onblock: (username: string, deny: boolean) => void;
     /** a key the row with focus acts on: retry, cancel, open */
     onkey: (key: "retry" | "cancel" | "open", t: Transfer) => void;
-    /** the details drawer is open, so Escape is the drawer's */
-    drawerOpen: boolean;
   };
 
   let {
@@ -54,12 +54,12 @@
     expansion,
     selected,
     ondetails,
+    inspect,
     onremove,
     ondelete,
     oncancel,
     onblock,
-    onkey,
-    drawerOpen
+    onkey
   }: Props = $props();
 
   /** a line's height in rem for each density, on a wider screen and on a phone */
@@ -153,7 +153,7 @@
   {slot}
   framed={false}
   class="tabular-nums shadow-card"
-  layer={() => drawerOpen}
+  {inspect}
   onopen={(t) => ondetails(t)}
   onkey={actOnKey}
   lineClass={(line) =>

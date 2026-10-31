@@ -1,6 +1,7 @@
-import { flushSync, mount, unmount } from "svelte";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { createRawSnippet, flushSync, mount, unmount } from "svelte";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { inspector, inspectorPrefs } from "#lib/inspector/inspector.svelte.js";
 import { press, ticked } from "#lib/testing/keys.js";
 import List from "#lib/testing/List.svelte";
 import { box } from "#lib/testing/state.svelte.js";
@@ -161,14 +162,62 @@ describe("a list's selection and focus", () => {
     expect(ticked()).toEqual(["a1", "a2", "b1"]);
   });
 
+  describe("with an inspector", () => {
+    beforeEach(() => {
+      inspector.content = createRawSnippet(() => ({ render: () => "<p></p>" }));
+    });
+    afterEach(() => {
+      inspector.content = null;
+      inspectorPrefs.open = false;
+    });
+    const inspects = (line: Line) => !line.header;
+
+    it("opens and closes it with Space and i on a line it shows, and ticks with Shift+Space", () => {
+      start(grouped(), { inspects });
+      press(grid(), "ArrowDown");
+      expect(press(grid(), " ").defaultPrevented).toBe(true);
+      expect(inspector.open).toBe(true);
+      expect(ticked()).toEqual([]);
+      press(grid(), "i");
+      expect(inspector.open).toBe(false);
+      press(grid(), " ", { shiftKey: true });
+      expect(ticked()).toEqual(["a1"]);
+      expect(inspector.open).toBe(false);
+    });
+
+    it("leaves Space on a group header to tick the group", () => {
+      start(grouped(), { inspects, headersFocus: true });
+      press(grid(), "ArrowDown");
+      press(grid(), " ");
+      expect(ticked()).toEqual(["a1", "a2"]);
+      expect(inspector.open).toBe(false);
+    });
+
+    it("takes i as a letter in the middle of a typed name", () => {
+      const fruit = (key: string) => ({ key, group: "x" });
+      start([fruit("apple"), fruit("pie"), fruit("pig")], { inspects, named: true });
+      press(grid(), "p");
+      press(grid(), "i");
+      expect(inspector.open).toBe(false);
+      press(grid(), "g");
+      expect(focused()).toBe("pig");
+    });
+
+    it("tells the page each line focus comes to", () => {
+      const onfocus = vi.fn();
+      start(grouped(), { inspects, onfocus });
+      press(grid(), "ArrowDown");
+      flushSync();
+      press(grid(), "ArrowDown");
+      flushSync();
+      expect(onfocus.mock.calls.map(([l]) => l.key)).toEqual(["a1", "a2"]);
+    });
+  });
+
   it("closes what is open with Escape before it clears the selection", () => {
-    let drawer = true;
-    start(grouped(), { layer: () => drawer });
+    start(grouped());
     press(grid(), "ArrowDown");
     press(grid(), " ");
-    expect(press(grid(), "Escape").defaultPrevented).toBe(false);
-    expect(ticked()).toEqual(["a1"]);
-    drawer = false;
     const menu = document.createElement("div");
     menu.setAttribute("role", "menu");
     document.body.append(menu);

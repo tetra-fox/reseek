@@ -23,9 +23,9 @@ import {
 type Zooming = { to: View; across: number; tau: number; last: number };
 
 /**
- * What one report's viewer shows, shared by the drawer and the large view so both agree: the
- * stretch of time in sight, the cursor (the moment picked, which is also the playhead while the
- * file plays), the guide lines hidden, and the pictures loaded
+ * What one report's viewer shows, kept while the inspector stays on the file so the large view
+ * opens where it was left: the stretch of time in sight, the cursor (the moment picked, which is
+ * also the playhead while the file plays), the guide lines hidden, and the pictures loaded
  */
 export class Scope {
   readonly report: Report;

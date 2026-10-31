@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { WIDEST } from "../src/lib/format";
 import {
@@ -113,19 +113,42 @@ const holds = async (page: Page, what: string, ready: (page: Page) => Promise<vo
 };
 
 /**
- * Checks a drawer at the side holds what it shows: it stays on the screen and nothing in it runs
- * past its right edge, but in a box that scrolls sideways on its own
+ * Checks a layer holds what it shows: it stays on the screen and nothing in it runs past its right
+ * edge, but in a box that scrolls sideways on its own
  */
-const drawerHolds = async (page: Page, name: string) => {
-  const drawer = page.getByRole("complementary", { name });
-  await expect(drawer.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
-  const off = await drawer.evaluate((aside) => {
-    const { left, right } = aside.getBoundingClientRect();
+const layerHolds = async (layer: Locator, name: string) => {
+  const off = await layer.evaluate((box) => {
+    const { left, right } = box.getBoundingClientRect();
     return left < -0.5 || right > innerWidth + 0.5;
   });
-  expect(off, `the ${name} drawer runs off the screen`).toBe(false);
-  const cut = await drawer.evaluate(cutOff, "*");
-  expect(cut, `the ${name} drawer cuts off ${cut}`).toBeNull();
+  expect(off, `the ${name} runs off the screen`).toBe(false);
+  const cut = await layer.evaluate(cutOff, "*");
+  expect(cut, `the ${name} cuts off ${cut}`).toBeNull();
+};
+
+/**
+ * From a finished download's row, checks the inspector holds the file and its analysis, then the
+ * large view with the analyzer's reading open, and closes both
+ */
+const analysisHolds = async (page: Page) => {
+  await page.getByRole("button", { name: "More for 2.flac" }).click();
+  await page.getByRole("menuitem", { name: "Analyze" }).click();
+  const inspector = page.locator("[data-inspector]");
+  const open = inspector.getByRole("button", { name: "Technical" });
+  await expect(inspector.getByText("Likely a transcode")).toBeVisible();
+  if ((await open.getAttribute("aria-expanded")) === "false") await open.click();
+  await layerHolds(inspector, "inspector");
+  await inspector.getByRole("button", { name: "Open large" }).click();
+  const large = page.getByRole("dialog", { name: "2.flac" });
+  await large.getByText("Analyzer reading", { exact: true }).click();
+  await large.getByRole("radio", { name: "Mel" }).click();
+  await expect(large.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
+  await expect(large.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
+  await layerHolds(large, "large view");
+  await page.keyboard.press("Escape");
+  await expect(large).toBeHidden();
+  await inspector.getByRole("button", { name: "Close details" }).click();
+  await expect(inspector).toBeHidden();
 };
 
 /** Opens `path` and checks it fits */
@@ -180,14 +203,7 @@ const everyScreen = async (page: Page) => {
   await page.getByRole("menuitemradio", { name: "Speed" }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Sort: Speed" })).toBeVisible();
-  // a finished download's analysis, with its reading open, fits the drawer
-  await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyze" }).click();
-  await page.getByText("Analyzer reading", { exact: true }).click();
-  await page.getByRole("radio", { name: "Mel" }).click();
-  await expect(page.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
-  await drawerHolds(page, "Transfer details");
-  await page.keyboard.press("Escape");
+  await analysisHolds(page);
   await fits(page, "/uploads", shows("No uploads yet"));
   await fits(page, "/chat", shows("indie"));
   await fits(page, "/chat/rooms/indie", shows("anyone have the new boards of canada rip?"));
@@ -274,11 +290,7 @@ test.describe("at a 24 px text size", () => {
       await holds(page, "the dense results", shows("02 Two.flac"));
       await page.getByRole("radio", { name: "Tree" }).click();
       await fits(page, "/downloads", shows("3.flac"));
-      await page.getByRole("button", { name: "More for 2.flac" }).click();
-      await page.getByRole("menuitem", { name: "Analyze" }).click();
-      await page.getByText("Analyzer reading", { exact: true }).click();
-      await drawerHolds(page, "Transfer details");
-      await page.keyboard.press("Escape");
+      await analysisHolds(page);
       await fits(page, "/system/info", shows("Process ID"));
     });
   });

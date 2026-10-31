@@ -2,8 +2,10 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
+import InspectorPane from "#lib/components/inspector/InspectorPane.svelte";
 import { toasts } from "#lib/feedback/toast.svelte.js";
 import { UNDO_MS } from "#lib/feedback/undo.js";
+import { inspectorPrefs, SETTLE_MS } from "#lib/inspector/inspector.svelte.js";
 import { interaction } from "#lib/lists/interaction.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
@@ -26,6 +28,7 @@ const grouped = (rows: Transfer[]) =>
 
 describe("the transfers table", () => {
   let component: ReturnType<typeof mount> | null = null;
+  let hostPane: ReturnType<typeof mount> | null = null;
   let listing: Transfer[] = [];
 
   beforeEach(() => {
@@ -44,6 +47,8 @@ describe("the transfers table", () => {
   afterEach(() => {
     session.principal = null;
     if (component) unmount(component);
+    if (hostPane) unmount(hostPane);
+    inspectorPrefs.open = false;
     live.stop();
     downloads.clear();
     toasts.splice(0);
@@ -59,6 +64,7 @@ describe("the transfers table", () => {
     live.start();
     net.frame("hello", { principal: { name: "a", role: "ReadOnly" } } as Schemas["Hello"]);
     component = mount(TransfersPage, { target: document.body, props: { direction: "download" } });
+    hostPane = mount(InspectorPane, { target: document.body });
     await flushFaked();
     await flushFaked();
     return net;
@@ -80,7 +86,12 @@ describe("the transfers table", () => {
       role: "Administrator",
       session: null
     } as unknown as typeof session.principal);
-  const drawer = () => document.querySelector('aside[aria-label="Transfer details"]');
+  const pane = () => document.querySelector('aside[aria-label="Details"]');
+  /** Lets the inspector's waits run out and its answers come back */
+  const settle = async () => {
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    flushSync();
+  };
 
   it("patches a row in place by frame and by reconcile, and holds the order while frozen", async () => {
     const a = transfer({ filename: "x\\b.flac" });
@@ -172,7 +183,7 @@ describe("the transfers table", () => {
       // the checkbox takes both: Enter does nothing, Space ticks its row
       press(box, "Enter");
       await flushFaked();
-      expect(drawer()).toBeNull();
+      expect(pane()).toBeNull();
       press(box, " ");
       expect(ticked()).toEqual([a.id]);
 
@@ -193,9 +204,9 @@ describe("the transfers table", () => {
       listing = [a, b, c];
       const net = await start();
       press(grid(), "ArrowDown");
-      press(grid(), " ");
+      press(grid(), " ", { shiftKey: true });
       press(grid(), "ArrowDown");
-      press(grid(), " ");
+      press(grid(), " ", { shiftKey: true });
       press(grid(), "ArrowDown");
       expect(ticked()).toEqual([a.id, b.id]);
       press(grid(), "Delete");
@@ -230,7 +241,7 @@ describe("the transfers table", () => {
       }
       await flushFaked();
       expect(bulk(net)).toEqual([]);
-      expect(drawer()).toBeNull();
+      expect(pane()).toBeNull();
       // a header is a folder line: Enter closes its group
       press(grid(), "Enter");
       expect(row(b.id)).toBeNull();
@@ -261,7 +272,7 @@ describe("the transfers table", () => {
       await start();
       press(grid(), "ArrowDown");
       row(b.id)!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-      press(grid(), " ");
+      press(grid(), " ", { shiftKey: true });
       expect(ticked()).toEqual([b.id]);
       const active = grid().getAttribute("aria-activedescendant")!;
       expect(document.getElementById(active)?.getAttribute("data-line")).toBe(b.id);
@@ -282,13 +293,13 @@ describe("the transfers table", () => {
       // carol's header, then her row
       press(grid(), "ArrowDown");
       press(grid(), "ArrowDown");
-      press(grid(), " ");
+      press(grid(), " ", { shiftKey: true });
       expect(ticked()).toEqual([c.id]);
       // her header, bob's folded one, then alice's row
       press(grid(), "ArrowUp");
       press(grid(), "ArrowUp");
       press(grid(), "ArrowUp");
-      press(grid(), " ");
+      press(grid(), " ", { shiftKey: true });
       expect(ticked().toSorted()).toEqual([a.id, c.id].toSorted());
     });
 
@@ -309,10 +320,10 @@ describe("the transfers table", () => {
       await flushFaked();
       expect(row(b.id)).toBeNull();
       // c took b's place, so Down has nowhere further to go and Up reaches a
-      press(grid(), " ");
+      press(grid(), " ", { shiftKey: true });
       expect(ticked()).toEqual([c.id]);
       press(grid(), "ArrowUp");
-      press(grid(), " ");
+      press(grid(), " ", { shiftKey: true });
       expect(ticked().toSorted()).toEqual([a.id, c.id].toSorted());
     });
 
@@ -408,48 +419,86 @@ describe("the transfers table", () => {
       expect(open).not.toHaveBeenCalled();
     });
 
-    it("close the drawer with Escape before the selection, and a menu before the drawer", async () => {
+    it("open and close the inspector on a row, which follows the focus", async () => {
+      const a = transfer({ filename: "x\\a.flac" });
+      const b = transfer({ filename: "x\\b.flac" });
+      listing = [a, b];
+      await start();
+      press(grid(), "ArrowDown");
+      expect(pane()).toBeNull();
+      expect(press(grid(), "i").defaultPrevented).toBe(true);
+      expect(pane()?.querySelector("h2")?.textContent).toBe("a.flac");
+      expect(row(a.id)!.hasAttribute("data-inspected")).toBe(true);
+
+      press(grid(), "ArrowDown");
+      expect(pane()?.querySelector("h2")?.textContent).toBe("b.flac");
+      expect(row(a.id)!.hasAttribute("data-inspected")).toBe(false);
+      expect(row(b.id)!.hasAttribute("data-inspected")).toBe(true);
+
+      // Space closes it as `i` did and leaves the row unticked; Shift+Space ticks
+      await flushFaked();
+      press(grid(), " ");
+      await vi.runOnlyPendingTimersAsync();
+      flushSync();
+      expect(pane()).toBeNull();
+      expect(ticked()).toEqual([]);
+      press(grid(), " ", { shiftKey: true });
+      expect(ticked()).toEqual([b.id]);
+      expect(pane()).toBeNull();
+    });
+
+    it("leave the docked inspector open on Escape, a menu taking it first", async () => {
       const a = transfer();
       listing = [a];
       await start();
       press(grid(), "ArrowDown");
-      press(grid(), " ");
+      press(grid(), " ", { shiftKey: true });
       press(grid(), "Enter");
-      expect(drawer()).not.toBeNull();
+      expect(pane()).not.toBeNull();
 
-      // a menu open over the drawer takes the Escape
       const menu = document.createElement("div");
       menu.setAttribute("role", "menu");
       document.body.append(menu);
       press(grid(), "Escape");
-      expect(drawer()).not.toBeNull();
       expect(ticked()).toEqual([a.id]);
       menu.remove();
 
       press(grid(), "Escape");
-      expect(drawer()).toBeNull();
-      expect(ticked()).toEqual([a.id]);
-
-      press(grid(), "Escape");
       expect(ticked()).toEqual([]);
+      expect(pane()).not.toBeNull();
     });
   });
 
-  it("asks for the drawer's timeline again when its transfer moves to a new state", async () => {
+  it("asks for a transfer's history again when it moves to a new state", async () => {
     const a = transfer({ state: "Queued, Remotely" });
     listing = [a];
     const net = await start();
     press(grid(), "ArrowDown");
     press(grid(), "Enter");
-    await flushFaked();
+    await settle();
     const asks = () =>
       net.requests.filter((r) => r.url.searchParams.get("includeHistory") === "true").length;
     expect(asks()).toBe(1);
     net.frame("transfers.updated", { ...a, percentComplete: 0 });
-    await flushFaked();
+    await settle();
     expect(asks()).toBe(1);
     net.frame("transfers.updated", { ...a, state: "InProgress" });
-    await flushFaked();
+    await settle();
     expect(asks()).toBe(2);
+  });
+
+  it("asks about the file focus rests on, not those it passes", async () => {
+    const files = ["a", "b", "c"].map((n) => transfer({ filename: `x\\${n}.flac` }));
+    listing = files;
+    const net = await start();
+    press(grid(), "ArrowDown");
+    press(grid(), "Enter");
+    const histories = () =>
+      net.requests.filter((r) => r.url.searchParams.get("includeHistory") === "true");
+    press(grid(), "ArrowDown");
+    await vi.advanceTimersByTimeAsync(SETTLE_MS / 2);
+    press(grid(), "ArrowDown");
+    await settle();
+    expect(histories().map((r) => r.url.pathname.split("/").at(-1))).toEqual([files[2].id]);
   });
 });

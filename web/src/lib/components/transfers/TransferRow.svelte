@@ -10,6 +10,7 @@
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import XIcon from "@lucide/svelte/icons/x";
 
+  import { analyzableDownload } from "#lib/analysis/batch.js";
   import { marks } from "#lib/analysis/marks.svelte.js";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
   import DownloadFill from "#lib/components/files/DownloadFill.svelte";
@@ -65,8 +66,8 @@
     /** ticks the row; `range` when shift was held */
     onselect: (range: boolean) => void;
     /**
-     * Opens the details drawer, at the file's analysis with `analyze`, in the large view with
-     * `large`; a screen without the drawer leaves it out
+     * Opens the inspector on the file, at its analysis with `analyze`, in the large view with
+     * `large`; a screen without the inspector leaves it out
      */
     ondetails?: (analyze?: boolean, large?: boolean) => void;
     onremove: () => void;
@@ -315,7 +316,9 @@
             {onremove}
             {onblock}
             ondetails={ondetails ? () => ondetails() : undefined}
-            onanalyze={ondetails ? (large) => ondetails(true, large) : undefined} />
+            onanalyze={ondetails && can.open && analyzableDownload(t)
+              ? (large) => ondetails(true, large)
+              : undefined} />
         </Menu.LazyRoot>
       </div>
     {/if}

@@ -1,7 +1,6 @@
 <script lang="ts">
   import LocateFixedIcon from "@lucide/svelte/icons/locate-fixed";
   import LocateOffIcon from "@lucide/svelte/icons/locate-off";
-  import Maximize2Icon from "@lucide/svelte/icons/maximize-2";
   import PauseIcon from "@lucide/svelte/icons/pause";
   import PlayIcon from "@lucide/svelte/icons/play";
   import ScanIcon from "@lucide/svelte/icons/scan";
@@ -27,18 +26,15 @@
 
   // the spectrogram, the waveform and the spectrum at the cursor as one unit on one time axis,
   // with the frequency scale, zoom and playback above it, the guide lines' legend, a strip of the
-  // whole file, what the cursor is on, and the disclaimer under it all. The large view puts the
-  // spectrum beside the rest when there is room
+  // whole file, what the cursor is on, and the disclaimer under it all. The spectrum goes beside
+  // the rest when there is room
   type Props = {
     scope: Scope;
     /** the file as the player plays it, null when it can't be played */
     track: Track | null;
-    large?: boolean;
-    /** opens the view across the whole screen; left out where it is shown that way */
-    onlarge?: () => void;
   };
 
-  let { scope, track, large = false, onlarge }: Props = $props();
+  let { scope, track }: Props = $props();
 
   const layout = $derived(scope.layout);
   const scale = $derived(spectrogramView.scale ?? layout.scale);
@@ -77,22 +73,13 @@
     return `${at}, in the window at ${formatTime(window.t)}: ${window.rmsDbfs.toFixed(1)} dBFS, ${level}`;
   });
 
-  let hint = $state(false);
-  let hintTimer: ReturnType<typeof setTimeout> | undefined;
-  const showHint = () => {
-    hint = true;
-    clearTimeout(hintTimer);
-    hintTimer = setTimeout(() => (hint = false), 2500);
-  };
-  $effect(() => () => clearTimeout(hintTimer));
-
   const all = $derived(showsAll(scope.view, scope.duration));
-  /** the mouse and keyboard controls, shown under the graph; the drawer zooms on Ctrl+scroll */
+  /** the mouse and keyboard controls, shown under the graph */
   const controls = $derived([
     ["Click", "Place the cursor"],
     ["Drag line", "Move the cursor"],
     ["Drag", "Pan"],
-    [large ? "Scroll" : "Ctrl+scroll", "Zoom"],
+    ["Scroll", "Zoom"],
     ["Shift+scroll", "Pan"],
     ["+ / −", "Zoom"],
     ["← / →", "Previous or next window"],
@@ -112,7 +99,7 @@
   </Tooltip>
 {/snippet}
 
-<div class={["grid gap-3", large && "xl:grid-cols-[minmax(0,1fr)_22rem]"]}>
+<div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_22rem]">
   <div class="flex min-w-0 flex-col gap-2">
     <div class="flex flex-wrap items-center gap-1">
       {#if canPlay}
@@ -153,7 +140,6 @@
         {@render tool("Zoom out", ZoomOutIcon, () => scope.zoomAtCursor(0.5), all)}
         {@render tool("Zoom in", ZoomInIcon, () => scope.zoomAtCursor(2), deepest)}
         {@render tool("Show the whole file", ScanIcon, () => scope.showAll(), all)}
-        {#if onlarge}{@render tool("Open large", Maximize2Icon, onlarge)}{/if}
       </span>
     </div>
     <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Guide lines">
@@ -184,14 +170,7 @@
         {sentence(scope.pictures.error)}
       </p>
     {:else}
-      <Timeline
-        {scope}
-        {motion}
-        {large}
-        {readout}
-        onseek={seek}
-        ontoggle={toggle}
-        onwheelhint={showHint} />
+      <Timeline {scope} {motion} {readout} onseek={seek} ontoggle={toggle} />
       <Minimap {scope} {motion} />
       {#if scope.pictures.lost}
         <p class="text-xs text-fg-muted" role="status">
@@ -201,11 +180,8 @@
         </p>
       {/if}
       <!-- read out as the user moves the cursor, not as playback moves it every frame -->
-      <p
-        class="flex flex-wrap items-baseline gap-x-2 text-xs text-fg-muted"
-        aria-live={playing ? "off" : "polite"}>
-        <span class="font-medium text-fg tabular-nums">{readout}</span>
-        {#if hint}<span>Hold Ctrl and scroll to zoom.</span>{/if}
+      <p class="text-xs font-medium tabular-nums" aria-live={playing ? "off" : "polite"}>
+        {readout}
       </p>
       {#if track && !canPlay}
         <p class="text-xs text-fg-muted">
@@ -215,7 +191,7 @@
     {/if}
   </div>
   <WindowSpectrum {scope} curve={motion.curve} />
-  <div class={["flex flex-col gap-2", large && "xl:col-span-2"]}>
+  <div class="flex flex-col gap-2 xl:col-span-2">
     <dl
       class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted"
       aria-label="Mouse and keyboard">

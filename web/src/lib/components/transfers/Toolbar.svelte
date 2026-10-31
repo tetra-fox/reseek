@@ -12,6 +12,7 @@
   import { MARK_FILTERS, type MarkFilter } from "#lib/analysis/marks.js";
   import { analyzerOffered } from "#lib/analysis/marks.svelte.js";
   import { app } from "#lib/app.svelte.js";
+  import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -225,6 +226,7 @@
         </Menu.Content>
       </Menu.Root>
     {/if}
+    <InspectorToggle />
     {#if write}
       <div class="ml-auto flex flex-wrap items-center gap-inline">
         {#if direction === "download"}

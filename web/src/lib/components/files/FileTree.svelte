@@ -79,8 +79,8 @@
      * column headers in a row of its own; a screen whose snippets do all three passes false
      */
     framed?: boolean;
-    /** a layer of the screen's own is open, such as a drawer, which Escape closes first */
-    layer?: () => boolean;
+    /** focus came to an item, for the inspector; a tree without it has no inspector */
+    inspect?: (item: T) => void;
     class?: ClassValue;
   };
 
@@ -108,7 +108,7 @@
     width,
     lineClass,
     framed = true,
-    layer,
+    inspect,
     class: className
   }: Props = $props();
 
@@ -178,7 +178,10 @@
       return !!onkey?.(e, line);
     },
     headersFocus: true,
-    layer: () => !!layer?.(),
+    inspects: (line) => !!inspect && line.kind === "item",
+    onfocus: (line) => {
+      if (line.kind === "item") inspect?.(line.item);
+    },
     typeahead: (line) => nameOf(line),
     page: () => Math.max(1, Math.floor((boxHeight - rowsTop) / row) - 1),
     // the pinned copy of a folder line is rendered only while it is pinned

@@ -18,25 +18,21 @@
   // the spectrogram over the waveform on one time axis, drawn on one canvas at device pixels,
   // with the cursor across both. Pressing on the cursor and dragging moves it; pressing
   // elsewhere and dragging pans a zoomed view (or moves the cursor when the whole file is in
-  // view); a click puts the cursor there. The wheel with Ctrl, or a pinch, zooms around the
-  // pointer, and the arrow keys step the cursor a window at a time
+  // view); a click puts the cursor there. The wheel, or a pinch, zooms around the pointer, and
+  // the arrow keys step the cursor a window at a time
   type Props = {
     scope: Scope;
     /** the frequency axis, drawn where it is at each frame's time */
     motion: ScaleMotion;
-    /** the large view: taller plots, and the plain wheel zooms as nothing scrolls under it */
-    large?: boolean;
     /** what the cursor reads as, for assistive technology */
     readout: string;
     /** the cursor was put somewhere by the user, for playback to follow */
     onseek: (t: number) => void;
     /** play or pause, from the space bar */
     ontoggle?: () => void;
-    /** the plain wheel was turned where it scrolls the page, so a hint can say how to zoom */
-    onwheelhint?: () => void;
   };
 
-  let { scope, motion, large = false, readout, onseek, ontoggle, onwheelhint }: Props = $props();
+  let { scope, motion, readout, onseek, ontoggle }: Props = $props();
 
   let canvas = $state<HTMLCanvasElement | null>(null);
   let width = $state(0);
@@ -46,7 +42,7 @@
   let hover = $state.raw<{ x: number; y: number } | null>(null);
   const rasters = new Rasters();
 
-  const stage = $derived<Stage>(stageOf(width, dpr, rem, large ? 22 : 13, large ? 5 : 3.5));
+  const stage = $derived<Stage>(stageOf(width, dpr, rem, 22, 5));
   /** a plot's place in CSS pixels, written on the canvas for what drives the page from outside */
   const box = (rect: Stage["waveform"]) =>
     [rect.x, rect.y, rect.width, rect.height].map((v) => (v / dpr).toFixed(1)).join(" ");
@@ -230,11 +226,6 @@
     if (Math.abs(sideways) > Math.abs(e.shiftKey ? 0 : e.deltaY) && !e.ctrlKey) {
       e.preventDefault();
       scope.pan(((sideways * lines) / (stage.spectrogram.width / dpr)) * scope.view.span);
-      return;
-    }
-    // a pinch on a touchpad arrives as the wheel with Ctrl
-    if (!e.ctrlKey && !e.metaKey && !large) {
-      onwheelhint?.();
       return;
     }
     e.preventDefault();

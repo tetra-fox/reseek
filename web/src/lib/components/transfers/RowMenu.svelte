@@ -48,9 +48,9 @@
     onremove: () => void;
     /** blocks the user, asking first; with `deny` their unfinished uploads are canceled first */
     onblock: (deny: boolean) => void;
-    /** opens the details drawer; without it the menu has no Details */
+    /** opens the inspector on the file; without it the menu has no Details */
     ondetails?: () => void;
-    /** opens the file's analysis; without it the menu has no Analyze */
+    /** opens the file's analysis, for a file the analyzer takes; without it the menu has no Analyze */
     onanalyze?: (large: boolean) => void;
   };
 
@@ -120,7 +120,7 @@
     <Menu.Separator />
     <Menu.Item onSelect={ondetails}><InfoIcon />Details</Menu.Item>
   {/if}
-  {#if onanalyze && can.open}
+  {#if onanalyze}
     {#if !ondetails}<Menu.Separator />{/if}
     <Menu.Item onSelect={() => onanalyze(shiftHeld())}><AudioLinesIcon />Analyze</Menu.Item>
   {/if}

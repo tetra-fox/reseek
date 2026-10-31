@@ -8,6 +8,7 @@
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
+  import InspectorPane from "#lib/components/inspector/InspectorPane.svelte";
   import ActivityDock from "#lib/components/shell/ActivityDock.svelte";
   import CommandPalette from "#lib/components/shell/CommandPalette.svelte";
   import ConfirmHost from "#lib/components/shell/ConfirmHost.svelte";
@@ -50,7 +51,7 @@
     if (!from?.url || !to?.url || !changesScreen(route(from.url).path, route(to.url).path)) return;
     // the content area fades, not the screen, whose box differs between padded and full-height
     // screens and would morph. It is named only during the transition: a name makes a stacking
-    // context that puts fixed layers, such as the transfer details drawer, under the header
+    // context that puts fixed layers, such as the phone's activity sheet, under the header
     const page = content.scroller;
     if (page) page.style.viewTransitionName = "page";
     return new Promise((ready) => {
@@ -76,15 +77,12 @@
   let contentHeight = $state(0);
   let dockHeight = $state(0);
   let bottomHeight = $state(0);
-  let topHeight = $state(0);
   $effect(() => {
     const root = document.documentElement.style;
     if (contentHeight) root.setProperty("--content-h", `${contentHeight}px`);
-    if (topHeight) root.setProperty("--top-h", `${topHeight}px`);
     if (bottomHeight) root.setProperty("--bottom-h", `${dockHeight + bottomHeight}px`);
     return () => {
       root.removeProperty("--content-h");
-      root.removeProperty("--top-h");
       root.removeProperty("--bottom-h");
     };
   });
@@ -159,34 +157,39 @@
     <div class="flex min-h-0">
       <Sidebar />
       <div class="flex min-w-0 flex-1 flex-col">
-        <div bind:clientHeight={topHeight}>
+        <div>
           <Header />
           <LostBanner />
         </div>
-        <!-- relative, so what is placed absolutely inside, such as a screen reader's hidden label,
-             is held and clipped here rather than stretching the window past the shell -->
-        <div
-          bind:this={content.scroller}
-          bind:clientHeight={contentHeight}
-          class="relative min-h-0 flex-1 overflow-y-auto"
-          data-content>
-          <main
-            class={[
-              "mx-auto flex min-h-full w-full min-w-0 flex-col",
-              fillsContent(at.path) ? "h-full" : "max-w-page gap-section p-gutter"
-            ]}>
-            <svelte:boundary>
-              {@render children()}
-              {#snippet failed(error, reset)}
-                <!-- SvelteKit hands a boundary an App.Error, which hooks.client.ts gives the message -->
-                <ErrorSegment
-                  caption={SCREEN_FAILED}
-                  detail={(error as App.Error).message}
-                  retry={reset}
-                  retryLabel="Reload" />
-              {/snippet}
-            </svelte:boundary>
-          </main>
+        <!-- the inspector stands beside the content area and takes its width from it, as the
+             activity log under them takes their height -->
+        <div class="flex min-h-0 flex-1">
+          <!-- relative, so what is placed absolutely inside, such as a screen reader's hidden
+               label, is held and clipped here rather than stretching the window past the shell -->
+          <div
+            bind:this={content.scroller}
+            bind:clientHeight={contentHeight}
+            class="relative min-h-0 min-w-0 flex-1 overflow-y-auto"
+            data-content>
+            <main
+              class={[
+                "mx-auto flex min-h-full w-full min-w-0 flex-col",
+                fillsContent(at.path) ? "h-full" : "max-w-page gap-section p-gutter"
+              ]}>
+              <svelte:boundary>
+                {@render children()}
+                {#snippet failed(error, reset)}
+                  <!-- SvelteKit hands a boundary an App.Error, which hooks.client.ts gives the message -->
+                  <ErrorSegment
+                    caption={SCREEN_FAILED}
+                    detail={(error as App.Error).message}
+                    retry={reset}
+                    retryLabel="Reload" />
+                {/snippet}
+              </svelte:boundary>
+            </main>
+          </div>
+          <InspectorPane />
         </div>
         <div bind:clientHeight={dockHeight}>
           {#if activityPrefs.open && app.mode !== "agent"}<ActivityDock />{/if}
