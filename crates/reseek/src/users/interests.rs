@@ -103,11 +103,7 @@ async fn send(client: &Client, change: Change<'_>) {
 impl Directory {
   /// What we like and hate.
   pub async fn interests(&self) -> Result<Interests, ApiError> {
-    self
-      .db
-      .read(stored)
-      .await
-      .map_err(ApiError::internal)
+    self.db.read(stored).await.map_err(ApiError::internal)
   }
 
   /// Makes the lists `new` and tells the server what changed when logged in. An interest is in
