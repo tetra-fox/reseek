@@ -9,6 +9,7 @@
 //! writing is held in [`Writing`] and is neither served, deleted nor pruned until the download
 //! lets go of it.
 
+mod aiff;
 mod archive;
 mod delete;
 mod link;
@@ -20,6 +21,7 @@ mod placing;
 mod prune;
 mod roots;
 mod serve;
+mod wav;
 mod writing;
 
 use std::collections::HashSet;
@@ -56,6 +58,9 @@ pub use placing::{create_file, move_file};
 use roots::{Refused, locate};
 use serve::Served;
 pub use writing::{WriteGuard, Writing};
+
+#[cfg(test)]
+pub(crate) use aiff::tests::{aiff_c_file, aiff_file};
 
 /// How many pieces of an archive wait to be sent before its writer waits.
 const ARCHIVE_BACKLOG: usize = 8;
@@ -187,6 +192,51 @@ impl Files {
     Ok(segments.ok_or_else(missing)?.join("/"))
   }
 
+  /// The file `request` asks for, once it is let in by its principal or its link token.
+  async fn located(
+    &self,
+    target: FileTarget,
+    request: &ContentRequest,
+  ) -> Result<Served, ApiError> {
+    let link = match (&request.principal, request.link.as_deref()) {
+      (Some(_), _) => None,
+      (None, Some(token)) => Some(token),
+      (None, None) => return Err(ApiError::unauthorized("Authentication required")),
+    };
+    let (root, path) = match target {
+      FileTarget::File { root, path } => (root, path),
+      FileTarget::Download { username, id } => (
+        FileRoot::Downloads,
+        self.download_file(Some(&username), id).await?,
+      ),
+    };
+    if let Some(token) = link {
+      let claimed = link::claimed(&root.to_string(), &path);
+      match link::check(&self.auth.secret, token, &claimed, Utc::now()) {
+        Ok(subject) => debug!(subject, "file served by its link token"),
+        Err(reason) => {
+          return Err(ApiError::unauthorized(format!(
+            "The link token is not valid: {reason}"
+          )));
+        }
+      }
+    }
+    let dir = self.root(root).to_path_buf();
+    let relative = path.clone();
+    let resolved = blocking(move || served_path(&dir, &relative)).await?;
+    let lexical = self.root(root).join(&path);
+    if root == FileRoot::Incomplete && self.writing.holds(&[&lexical, &resolved]) {
+      return Err(ApiError::conflict(
+        "The file is being written by a download",
+        Some("Files in the incomplete directory are served once their download ends".to_string()),
+      ));
+    }
+    Served::at(&resolved)
+      .await
+      .map_err(|e| unreadable("file", &lexical, e))?
+      .ok_or_else(|| ApiError::not_found(format!("'{}' is not a file", lexical.display())))
+  }
+
   fn root(&self, root: FileRoot) -> &Path {
     match root {
       FileRoot::Downloads => &self.downloads,
@@ -298,44 +348,13 @@ impl FileService for Files {
     target: FileTarget,
     request: ContentRequest,
   ) -> Result<Response, ApiError> {
-    let link = match (&request.principal, request.link.as_deref()) {
-      (Some(_), _) => None,
-      (None, Some(token)) => Some(token),
-      (None, None) => return Err(ApiError::unauthorized("Authentication required")),
-    };
-    let (root, path) = match target {
-      FileTarget::File { root, path } => (root, path),
-      FileTarget::Download { username, id } => (
-        FileRoot::Downloads,
-        self.download_file(Some(&username), id).await?,
-      ),
-    };
-    if let Some(token) = link {
-      let claimed = link::claimed(&root.to_string(), &path);
-      match link::check(&self.auth.secret, token, &claimed, Utc::now()) {
-        Ok(subject) => debug!(subject, "file served by its link token"),
-        Err(reason) => {
-          return Err(ApiError::unauthorized(format!(
-            "The link token is not valid: {reason}"
-          )));
-        }
-      }
-    }
-    let dir = self.root(root).to_path_buf();
-    let relative = path.clone();
-    let resolved = blocking(move || served_path(&dir, &relative)).await?;
-    let lexical = self.root(root).join(&path);
-    if root == FileRoot::Incomplete && self.writing.holds(&[&lexical, &resolved]) {
-      return Err(ApiError::conflict(
-        "The file is being written by a download",
-        Some("Files in the incomplete directory are served once their download ends".to_string()),
-      ));
-    }
-    let served = Served::at(&resolved)
-      .await
-      .map_err(|e| unreadable("file", &lexical, e))?
-      .ok_or_else(|| ApiError::not_found(format!("'{}' is not a file", lexical.display())))?;
+    let served = self.located(target, &request).await?;
     serve::respond(served, &request, &self.speed).await
+  }
+
+  async fn wav(&self, target: FileTarget, request: ContentRequest) -> Result<Response, ApiError> {
+    let served = self.located(target, &request).await?;
+    wav::respond(served, &request, &self.speed).await
   }
 
   async fn archive(

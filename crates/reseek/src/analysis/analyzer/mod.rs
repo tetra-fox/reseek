@@ -3,7 +3,7 @@
 //! or the files the service keeps.
 
 mod aggregate;
-mod decode;
+pub(crate) mod decode;
 pub(super) mod engine;
 mod flags;
 pub(super) mod measure;

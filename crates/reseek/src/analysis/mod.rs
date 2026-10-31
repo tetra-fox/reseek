@@ -46,6 +46,7 @@ use crate::files::Files;
 use crate::live::Live;
 use crate::services::{AnalysisService, FileTarget, Piece};
 use crate::sync::lock;
+pub(crate) use analyzer::decode::Decoder;
 use analyzer::{engine, picture, reading};
 use jobs::{Job, QUEUE_LIMIT, Queue, Queued};
 use report::modified_text;

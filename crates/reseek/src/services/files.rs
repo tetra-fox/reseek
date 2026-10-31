@@ -89,6 +89,13 @@ pub trait FileService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
+  /// A file the browser cannot play as a WAV made as it is read, ranges and caching headers
+  /// honored, let in as [`Self::content`] is. Only AIFF and ALAC are served; anything else, and
+  /// AIFF that is compressed, is refused.
+  async fn wav(&self, target: FileTarget, request: ContentRequest) -> Result<Response, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
   /// A directory under a root as a zip archive streamed as the whole response, named `name`
   /// or after the directory. One archive per principal at a time.
   async fn archive(

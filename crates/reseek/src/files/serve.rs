@@ -69,7 +69,7 @@ impl Served {
   }
 
   /// The file's own name.
-  fn name(&self) -> String {
+  pub fn name(&self) -> String {
     self
       .path
       .file_name()
@@ -80,14 +80,34 @@ impl Served {
 
   /// An entity tag that changes when the size or the modification time does.
   fn etag(&self) -> String {
+    format!("\"{}\"", self.digest())
+  }
+
+  /// The entity tag of what `kind` makes of the file, which follows the file as [`Self::etag`]
+  /// does.
+  pub fn etag_of(&self, kind: &str) -> String {
+    format!("\"{}-{kind}\"", self.digest())
+  }
+
+  fn digest(&self) -> String {
     let nanos = self
       .modified
       .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
       .map_or(0, |d| d.as_nanos());
     let digest = Sha256::digest(format!("{}-{nanos}", self.size));
-    let hex: String = digest.iter().take(8).map(|b| format!("{b:02x}")).collect();
-    format!("\"{hex}\"")
+    digest.iter().take(8).map(|b| format!("{b:02x}")).collect()
   }
+}
+
+/// What a response of bytes says about them, whatever they are read from.
+pub(super) struct Entity {
+  /// the name it is shown or saved under
+  pub name: String,
+  pub etag: String,
+  /// its type
+  pub kind: String,
+  /// its length in bytes
+  pub size: u64,
 }
 
 /// The byte range a `Range` header asks for, as a first and a last byte, inclusive.
@@ -194,12 +214,53 @@ pub(super) async fn respond(
   request: &ContentRequest,
   speed: &ServeSpeed,
 ) -> Result<Response, ApiError> {
-  let etag = file.etag();
   let name = file.name();
-  let kind = match file.content_type {
-    Some(kind) => kind.to_string(),
-    None => content_type(&name),
+  let entity = Entity {
+    etag: file.etag(),
+    kind: match file.content_type {
+      Some(kind) => kind.to_string(),
+      None => content_type(&name),
+    },
+    size: file.size,
+    name,
   };
+  match ranged(&entity, request) {
+    Ranged::Answered(response) => Ok(response),
+    Ranged::Bytes(part) => {
+      let bytes = body(&file.path, part.start, part.length, speed.clone()).await?;
+      Ok(part.with(bytes))
+    }
+  }
+}
+
+/// What a request for an entity comes to.
+pub(super) enum Ranged {
+  /// the response, nothing of the entity read: unchanged, refused or only its headers
+  Answered(Response),
+  /// a part to read and send
+  Bytes(Part),
+}
+
+/// The part of an entity a response sends.
+pub(super) struct Part {
+  status: StatusCode,
+  headers: HeaderMap,
+  /// where it starts
+  pub start: u64,
+  /// its length in bytes
+  pub length: u64,
+}
+
+impl Part {
+  /// The response that sends `body`, what was read for this part.
+  pub fn with(self, body: Body) -> Response {
+    (self.status, self.headers, body).into_response()
+  }
+}
+
+/// What `request` asks of `entity`: unchanged when the caller has it, else its headers and,
+/// unless they are all that is wanted, one part of it or the whole.
+pub(super) fn ranged(entity: &Entity, request: &ContentRequest) -> Ranged {
   let mut headers = HeaderMap::new();
   let put =
     |headers: &mut HeaderMap, name: header::HeaderName, value: &str| match HeaderValue::from_str(
@@ -210,53 +271,57 @@ pub(super) async fn respond(
       }
       Err(e) => debug!(header = %name, error = %e, "header not sent"),
     };
-  put(&mut headers, header::ETAG, &etag);
+  put(&mut headers, header::ETAG, &entity.etag);
   put(&mut headers, header::CACHE_CONTROL, "private, no-cache");
   put(&mut headers, header::X_CONTENT_TYPE_OPTIONS, "nosniff");
-  if not_modified(&request.headers, &etag) {
-    return Ok((StatusCode::NOT_MODIFIED, headers).into_response());
+  if not_modified(&request.headers, &entity.etag) {
+    return Ranged::Answered((StatusCode::NOT_MODIFIED, headers).into_response());
   }
   put(&mut headers, header::ACCEPT_RANGES, "bytes");
   let range = request
     .headers
     .get(header::RANGE)
     .and_then(|v| v.to_str().ok());
-  let (status, start, length) = match wanted(range, file.size) {
-    Wanted::Whole => (StatusCode::OK, 0, file.size),
+  let size = entity.size;
+  let (status, start, length) = match wanted(range, size) {
+    Wanted::Whole => (StatusCode::OK, 0, size),
     Wanted::Range(first, last) => {
       put(
         &mut headers,
         header::CONTENT_RANGE,
-        &format!("bytes {first}-{last}/{}", file.size),
+        &format!("bytes {first}-{last}/{size}"),
       );
       (StatusCode::PARTIAL_CONTENT, first, last - first + 1)
     }
     Wanted::Unsatisfiable => {
       let mut response = ApiError::range_not_satisfiable(format!(
-        "The file has {} bytes. Only one range within them can be requested.",
-        file.size
+        "The file has {size} bytes. Only one range within them can be requested."
       ))
       .into_response();
       put(
         response.headers_mut(),
         header::CONTENT_RANGE,
-        &format!("bytes */{}", file.size),
+        &format!("bytes */{size}"),
       );
-      return Ok(response);
+      return Ranged::Answered(response);
     }
   };
-  put(&mut headers, header::CONTENT_TYPE, &kind);
+  put(&mut headers, header::CONTENT_TYPE, &entity.kind);
   put(
     &mut headers,
     header::CONTENT_DISPOSITION,
-    &disposition(request, &name, &kind),
+    &disposition(request, &entity.name, &entity.kind),
   );
   headers.insert(header::CONTENT_LENGTH, HeaderValue::from(length));
   if request.head {
-    return Ok((status, headers).into_response());
+    return Ranged::Answered((status, headers).into_response());
   }
-  let body = body(&file.path, start, length, speed.clone()).await?;
-  Ok((status, headers, body).into_response())
+  Ranged::Bytes(Part {
+    status,
+    headers,
+    start,
+    length,
+  })
 }
 
 /// `length` bytes of the file at `path` from `start`, read as they are sent and no faster

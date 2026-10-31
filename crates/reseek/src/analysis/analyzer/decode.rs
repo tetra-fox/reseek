@@ -18,7 +18,7 @@ use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::units::Time;
+use symphonia::core::units::{Time, TimeBase, Timestamp};
 use tracing::{debug, trace};
 
 /// The most channels the analyzer reads; the rest of a surround file is left out.
@@ -33,7 +33,7 @@ const MAX_SKIPPED: u32 = 1000;
 
 /// The format a file's container and codec claim.
 #[derive(Clone, Debug, PartialEq)]
-pub(in crate::analysis) struct Claimed {
+pub(crate) struct Claimed {
   /// the codec's short name, such as `flac` or `mp3`
   pub codec: String,
   /// samples per second
@@ -49,10 +49,12 @@ pub(in crate::analysis) struct Claimed {
 }
 
 /// An audio file open for decoding.
-pub(in crate::analysis) struct Decoder {
+pub(crate) struct Decoder {
   format: Box<dyn FormatReader>,
   decoder: Box<dyn AudioDecoder>,
   track: u32,
+  /// what the track's timestamps count, when the container says
+  time_base: Option<TimeBase>,
   /// what the file claims
   pub claimed: Claimed,
   /// the channels analyzed: one for mono, else the first two
@@ -114,6 +116,7 @@ impl Decoder {
       .ok_or("the audio track has no codec parameters")?
       .clone();
     let track_id = track.id;
+    let time_base = track.time_base;
     let frames = track.num_frames;
     let codecs = symphonia::default::get_codecs();
     let codec = codecs
@@ -142,6 +145,7 @@ impl Decoder {
       format,
       decoder,
       track: track_id,
+      time_base,
       claimed: Claimed {
         codec,
         sample_rate,
@@ -180,7 +184,7 @@ impl Decoder {
   }
 
   /// Fills `window`, one vector per analyzed channel, with the next `frames` sample frames.
-  pub fn fill(&mut self, window: &mut [Vec<f32>], frames: usize) -> Filled {
+  pub(in crate::analysis) fn fill(&mut self, window: &mut [Vec<f32>], frames: usize) -> Filled {
     for channel in window.iter_mut() {
       channel.clear();
     }
@@ -222,6 +226,45 @@ impl Decoder {
     Ok(())
   }
 
+  /// Moves to the packet holding sample frame `frame`.
+  pub fn seek_frame(&mut self, frame: u64) -> Result<(), String> {
+    let (numer, denom) = self.ticks();
+    let rate = u128::from(self.claimed.sample_rate);
+    let ticks = u128::from(frame) * denom / (numer * rate);
+    let ts = i64::try_from(ticks).map_err(|_| "the position is out of range")?;
+    self
+      .format
+      .seek(
+        SeekMode::Accurate,
+        SeekTo::Timestamp {
+          ts: Timestamp::new(ts),
+          track_id: self.track,
+        },
+      )
+      .map_err(|e| format!("seeking failed: {e}"))?;
+    self.decoder.reset();
+    Ok(())
+  }
+
+  /// Decodes the next packet into `samples`, interleaved over every channel with each sample at
+  /// the top of its 32 bits, and returns the sample frame it starts at; `None` at the end of the
+  /// file or when decoding cannot go on, with the reason in `stopped`.
+  pub fn next_interleaved(&mut self, samples: &mut Vec<i32>) -> Option<u64> {
+    let pts = self.step()?;
+    self.decoder.last_decoded().copy_to_vec_interleaved(samples);
+    let (numer, denom) = self.ticks();
+    let frame = u128::try_from(pts).unwrap_or(0) * numer * u128::from(self.claimed.sample_rate);
+    Some(u64::try_from(frame / denom).unwrap_or(u64::MAX))
+  }
+
+  /// A timestamp tick as a fraction of a second; one sample frame when the container gives none.
+  fn ticks(&self) -> (u128, u128) {
+    self.time_base.map_or_else(
+      || (1, u128::from(self.claimed.sample_rate)),
+      |base| (u128::from(base.numer.get()), u128::from(base.denom.get())),
+    )
+  }
+
   /// Decodes the next packet of the track into `pending`; false at the end of the file or when
   /// decoding cannot go on, with the reason in `stopped`.
   fn decode_next(&mut self) -> bool {
@@ -230,19 +273,45 @@ impl Decoder {
       pending.drain(..shift);
     }
     self.taken = 0;
+    if self.step().is_none() {
+      return false;
+    }
+    self
+      .decoder
+      .last_decoded()
+      .copy_to_vecs_planar::<f32>(&mut self.scratch);
+    // the analyzed channels must stay the same length
+    if self.scratch.len() < self.channels {
+      debug!(
+        planes = self.scratch.len(),
+        "a packet holds fewer channels than the stream"
+      );
+      self.stopped = Some("a packet holds fewer channels than the stream".to_string());
+      return false;
+    }
+    for (pending, plane) in self.pending.iter_mut().zip(&self.scratch) {
+      pending.extend_from_slice(plane);
+    }
+    true
+  }
+
+  /// Decodes the next packet of the track that holds samples, which the decoder then holds, and
+  /// returns its timestamp; `None` at the end of the file or when decoding cannot go on, with
+  /// the reason in `stopped`.
+  fn step(&mut self) -> Option<i64> {
     loop {
       let packet = match self.format.next_packet() {
         Ok(Some(packet)) => packet,
-        Ok(None) => return false,
+        Ok(None) => return None,
         Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
           debug!("audio ends early");
           self.stopped = Some("the file ends before its last packet".to_string());
-          return false;
+          return None;
         }
         Err(e) => {
           debug!(error = %e, "audio could not be read on");
           self.stopped = Some(format!("reading stopped: {e}"));
-          return false;
+          return None;
         }
       };
       if packet.track_id != self.track {
@@ -253,21 +322,21 @@ impl Decoder {
         Err(Error::DecodeError(reason)) => {
           trace!(reason, "audio packet skipped");
           if self.skip() {
-            return false;
+            return None;
           }
           continue;
         }
         Err(Error::IoError(e)) => {
           trace!(error = %e, "audio packet skipped");
           if self.skip() {
-            return false;
+            return None;
           }
           continue;
         }
         Err(e) => {
           debug!(error = %e, "audio could not be decoded on");
           self.stopped = Some(format!("decoding stopped: {e}"));
-          return false;
+          return None;
         }
       };
       if decoded.frames() == 0 {
@@ -276,20 +345,7 @@ impl Decoder {
       note_bits(&mut self.bits, &decoded);
       self.decoded.0 += packet.data.len() as u64;
       self.decoded.1 += decoded.frames() as u64;
-      decoded.copy_to_vecs_planar::<f32>(&mut self.scratch);
-      // the analyzed channels must stay the same length
-      if self.scratch.len() < self.channels {
-        debug!(
-          planes = self.scratch.len(),
-          "a packet holds fewer channels than the stream"
-        );
-        self.stopped = Some("a packet holds fewer channels than the stream".to_string());
-        return false;
-      }
-      for (pending, plane) in self.pending.iter_mut().zip(&self.scratch) {
-        pending.extend_from_slice(plane);
-      }
-      return true;
+      return Some(packet.pts.get());
     }
   }
 

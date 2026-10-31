@@ -362,3 +362,89 @@ async fn log_files_are_listed_and_read_in_ranges() {
     .await;
   assert_eq!(missing.status, 404);
 }
+
+/// The WAV of `name` under the downloads directory, as the URI that loads it.
+fn wav_uri(name: &str) -> String {
+  format!("/api/v0/files/downloads/files/{}/wav", b64(name))
+}
+
+#[tokio::test]
+async fn aiff_is_served_as_little_endian_pcm_and_a_range_lands_on_its_place() {
+  let app = with_files(CONFIG).await;
+  let samples: Vec<u8> = (0..24).collect();
+  let file = crate::files::aiff_file(2, 16, &samples);
+  std::fs::write(app.state.paths.downloads.join("a.aiff"), file).unwrap();
+  let uri = wav_uri("a.aiff");
+
+  let whole = app.send(request("GET", &uri, None)).await;
+  assert_eq!(whole.status, 200);
+  assert_eq!(whole.headers["content-type"], "audio/wav");
+  assert_eq!(whole.headers["accept-ranges"], "bytes");
+  assert_eq!(whole.headers["content-length"], "68");
+  assert_eq!(
+    whole.headers["content-disposition"],
+    "inline; filename*=UTF-8''a.wav"
+  );
+  assert_eq!(&whole.body[..4], b"RIFF");
+  let swapped: Vec<u8> = samples
+    .chunks(2)
+    .flat_map(|sample| [sample[1], sample[0]])
+    .collect();
+  assert_eq!(&whole.body[44..], swapped);
+
+  // a range starts and ends inside a sample, and one crosses the header's end
+  for (first, last) in [(49, 54), (40, 47), (0, 3), (67, 67)] {
+    let range = format!("bytes={first}-{last}");
+    let part = app
+      .send(with(request("GET", &uri, None), "range", &range))
+      .await;
+    assert_eq!(part.status, 206, "{range}");
+    assert_eq!(part.body, whole.body[first..=last], "{range}");
+    assert_eq!(
+      part.headers["content-range"],
+      format!("bytes {first}-{last}/68")
+    );
+  }
+  let head = app.send(request("HEAD", &uri, None)).await;
+  assert_eq!(head.headers["content-length"], "68");
+  assert!(head.body.is_empty());
+}
+
+#[tokio::test]
+async fn alac_decodes_to_pcm_whose_ranges_match_the_whole_across_packets() {
+  let app = with_files(CONFIG).await;
+  let tone = include_bytes!("../../files/fixtures/tone.m4a");
+  std::fs::write(app.state.paths.downloads.join("tone.m4a"), tone).unwrap();
+  let uri = wav_uri("tone.m4a");
+  let whole = app.send(request("GET", &uri, None)).await;
+  assert_eq!(whole.status, 200);
+  // two seconds of two 16-bit channels at 8000 Hz
+  assert_eq!(whole.body.len(), 44 + 2 * 8000 * 4);
+  let silent = whole.body[44..].iter().filter(|b| **b == 0).count();
+  assert!(silent < whole.body.len() / 2, "the tone came out silent");
+  for (first, last) in [(44, 47), (10_001, 10_500), (30_000, 60_001), (32_000, 32_043)] {
+    let range = format!("bytes={first}-{last}");
+    let part = app
+      .send(with(request("GET", &uri, None), "range", &range))
+      .await;
+    assert_eq!(part.status, 206, "{range}");
+    assert_eq!(part.body, whole.body[first..=last], "{range}");
+  }
+}
+
+#[tokio::test]
+async fn what_cannot_be_served_plainly_is_refused_with_the_reason() {
+  let app = with_files(CONFIG).await;
+  let compressed = crate::files::aiff_c_file(b"ulaw", &[0; 16]);
+  std::fs::write(app.state.paths.downloads.join("c.aifc"), compressed).unwrap();
+  let refused = app.send(request("GET", &wav_uri("c.aifc"), None)).await;
+  assert_eq!(refused.status, 415);
+  assert!(
+    refused.json()["error"]
+      .as_str()
+      .unwrap()
+      .contains("compressed as ulaw")
+  );
+  let flac = app.send(request("GET", &wav_uri("Album/01.flac"), None)).await;
+  assert_eq!(flac.status, 415);
+}

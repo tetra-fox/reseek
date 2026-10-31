@@ -36,6 +36,8 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(file_content, file_content_head))
     .routes(routes!(archive))
     .routes(routes!(download_content, download_content_head))
+    .routes(routes!(file_wav, file_wav_head))
+    .routes(routes!(download_wav, download_wav_head))
     .routes(routes!(link_token))
 }
 
@@ -267,6 +269,132 @@ async fn file_content_head(
   headers: HeaderMap,
 ) -> Result<Response, ApiError> {
   file_content(state, authentication, path, query, method, headers).await
+}
+
+/// A file as a WAV made as it is read, for AIFF and ALAC, which browsers cannot play: never
+/// stored, a single range honored. Anything else, and AIFF that is compressed, is refused.
+#[utoipa::path(
+  get, path = "/files/{root}/files/{path}/wav", tag = "files",
+  params(
+    ("root" = FileRoot, Path, description = "the directory root"),
+    ("path" = String, Path, description = "the file's path under the root, base64"),
+    ContentQuery
+  ),
+  responses(
+    (status = 200, content_type = "audio/wav", body = api_types::files::FileContent),
+    (status = 206, content_type = "audio/wav", body = api_types::files::FileContent),
+    (status = 304, description = "unchanged"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 409, body = api_types::ErrorBody),
+    (status = 415, body = api_types::ErrorBody), (status = 416, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn file_wav(
+  State(app): State<AppState>,
+  Extension(authentication): Extension<Authentication>,
+  Path((name, path)): Path<(String, String)>,
+  Query(query): Query<ContentQuery>,
+  method: Method,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  let principal = by_principal_or_link(&authentication, &query)?;
+  let root = root(&name)?;
+  let path = validate::files_path(&path, false)?;
+  serving(&app)?;
+  let request = content_request(&method, headers, principal, query);
+  app
+    .services
+    .files
+    .wav(FileTarget::File { root, path }, request)
+    .await
+}
+
+/// The headers a file's WAV would be served with, without the bytes.
+#[utoipa::path(
+  head, path = "/files/{root}/files/{path}/wav", tag = "files",
+  params(
+    ("root" = FileRoot, Path, description = "the directory root"),
+    ("path" = String, Path, description = "the file's path under the root, base64"),
+    ContentQuery
+  ),
+  responses(
+    (status = 200, description = "the headers of the whole WAV"),
+    (status = 206, description = "the headers of the range asked for"),
+    (status = 304, description = "unchanged"), (status = 400), (status = 401), (status = 403),
+    (status = 404), (status = 409), (status = 415), (status = 416), (status = 503)
+  )
+)]
+async fn file_wav_head(
+  state: State<AppState>,
+  authentication: Extension<Authentication>,
+  path: Path<(String, String)>,
+  query: Query<ContentQuery>,
+  method: Method,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  file_wav(state, authentication, path, query, method, headers).await
+}
+
+/// The file a succeeded download was moved to as a WAV, served as a file's is.
+#[utoipa::path(
+  get, path = "/transfers/downloads/{username}/{id}/wav", tag = "files",
+  params(
+    ("username" = String, Path, description = "the peer"),
+    ("id" = Uuid, Path, description = "the download's id"),
+    ContentQuery
+  ),
+  responses(
+    (status = 200, content_type = "audio/wav", body = api_types::files::FileContent),
+    (status = 206, content_type = "audio/wav", body = api_types::files::FileContent),
+    (status = 304, description = "unchanged"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 415, body = api_types::ErrorBody),
+    (status = 416, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn download_wav(
+  State(app): State<AppState>,
+  Extension(authentication): Extension<Authentication>,
+  Path((username, id)): Path<(String, Uuid)>,
+  Query(query): Query<ContentQuery>,
+  method: Method,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  let principal = by_principal_or_link(&authentication, &query)?;
+  serving(&app)?;
+  let request = content_request(&method, headers, principal, query);
+  app
+    .services
+    .files
+    .wav(FileTarget::Download { username, id }, request)
+    .await
+}
+
+/// The headers a succeeded download's WAV would be served with, without the bytes.
+#[utoipa::path(
+  head, path = "/transfers/downloads/{username}/{id}/wav", tag = "files",
+  params(
+    ("username" = String, Path, description = "the peer"),
+    ("id" = Uuid, Path, description = "the download's id"),
+    ContentQuery
+  ),
+  responses(
+    (status = 200, description = "the headers of the whole WAV"),
+    (status = 206, description = "the headers of the range asked for"),
+    (status = 304, description = "unchanged"), (status = 400), (status = 401), (status = 403),
+    (status = 404), (status = 415), (status = 416), (status = 503)
+  )
+)]
+async fn download_wav_head(
+  state: State<AppState>,
+  authentication: Extension<Authentication>,
+  path: Path<(String, Uuid)>,
+  query: Query<ContentQuery>,
+  method: Method,
+  headers: HeaderMap,
+) -> Result<Response, ApiError> {
+  download_wav(state, authentication, path, query, method, headers).await
 }
 
 /// The file a succeeded download was moved to, served as a file is.
