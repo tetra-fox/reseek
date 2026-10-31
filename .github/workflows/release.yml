@@ -43,11 +43,39 @@ jobs:
     needs: [linux, macos]
     runs-on: ubuntu-latest
     steps:
+      # the release notes need the previous tag and the commits since it
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
+      - name: Write the release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          prev=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          if [ -z "$prev" ]; then
+            echo "First release." > notes.md
+            exit 0
+          fi
+          log=$(git log --no-merges --format='%s (%h)' "$prev..HEAD")
+          # section <title> <grep args>; grep exits 1 when a section has no commits
+          section() {
+            [ -n "$log" ] || return 0
+            title=$1
+            shift
+            lines=$(grep -E "$@" <<<"$log" | sed 's/^/- /' || true)
+            if [ -n "$lines" ]; then printf '## %s\n\n%s\n\n' "$title" "$lines"; fi
+          }
+          {
+            section features '^feat[(:!]'
+            section fixes '^fix[(:!]'
+            section other -v '^(feat|fix)[(:!]'
+            echo "https://github.com/$GITHUB_REPOSITORY/compare/$prev...$TAG"
+          } > notes.md
       - uses: softprops/action-gh-release@v3
         with:
           draft: true
-          generate_release_notes: true
+          body_path: notes.md
           files: reseek-*
