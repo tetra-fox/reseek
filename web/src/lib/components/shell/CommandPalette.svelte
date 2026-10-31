@@ -19,7 +19,7 @@
   } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { recent } from "#lib/search/recent.svelte.js";
-  import { openSearch } from "#lib/search/searches.svelte.js";
+  import { openSearch, searchFor } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { paletteScore, paletteValue } from "#lib/shell/palette.js";
   import { palette } from "#lib/shell/palette.svelte.js";
@@ -122,7 +122,7 @@
     const write = session.can("ReadWrite");
     return [
       ...(write && app.isServerConnected
-        ? [{ id: "do:search", group: "Actions", label: `Search for ${text}`, run: search(text) }]
+        ? [{ id: "do:search", group: "Actions", label: searchFor(text), run: search(text) }]
         : []),
       ...reach(text).map((action) => ({
         id: `do:${action.id}`,

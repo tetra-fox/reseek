@@ -13,7 +13,12 @@
   import UserEntries from "#lib/components/users/UserEntries.svelte";
   import { parseSlsk, slskBrowse } from "#lib/files/slsk.js";
   import { recent } from "#lib/search/recent.svelte.js";
-  import { openSearch, type SearchScope, scopeLabel } from "#lib/search/searches.svelte.js";
+  import {
+    openSearch,
+    type SearchScope,
+    scopeLabel,
+    searchFor
+  } from "#lib/search/searches.svelte.js";
   import { UserFinder } from "#lib/users/finder.svelte.js";
   import { bestMatches, nameParts } from "#lib/users/match.js";
 
@@ -104,7 +109,7 @@
       disabled={!connected}
       class="h-11 pl-10 text-base md:text-base">
       <Suggest.Item value={RUN} icon={link ? LinkIcon : SearchIcon}>
-        {link ? "Open this slsk:// link" : `Search for ${phrase}`}
+        {link ? "Open this slsk:// link" : searchFor(phrase)}
       </Suggest.Item>
       {#if earlier.length}
         <Suggest.Group heading="Recent searches">

@@ -11,7 +11,7 @@
   import { sharesHref } from "#lib/nav.js";
   import { forget, recent, restore, togglePin } from "#lib/search/recent.svelte.js";
 
-  // what the user went back to last: searches and shares, each with its way to drop out
+  // the searches and the users browsed lately, each with a way to remove it
   type Props = {
     /** runs a search again, while the server is connected */
     onsearch: (text: string) => void;

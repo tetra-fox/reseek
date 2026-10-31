@@ -22,6 +22,9 @@ export const isDone = (state: string) => state.includes("Completed");
 export const scopeLabel = (scope: SearchScope): string | null =>
   scope.type === "network" ? null : `${scope.type}: ${(scope.subjects ?? []).join(", ")}`;
 
+/** What an offer to run a search says */
+export const searchFor = (text: string) => `Search for ${text}`;
+
 /** The row a search has while the daemon is asked to start it */
 const placeholder = (id: string, text: string, scope?: SearchScope): Search => ({
   id,
