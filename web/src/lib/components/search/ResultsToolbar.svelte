@@ -4,6 +4,7 @@
   import FolderTreeIcon from "@lucide/svelte/icons/folder-tree";
   import Rows3Icon from "@lucide/svelte/icons/rows-3";
 
+  import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
@@ -79,6 +80,7 @@
           disabled={!sortable} />
       </div>
     {/if}
+    <InspectorToggle />
     <p class="ml-auto flex items-center gap-1.5 text-sm text-fg-muted tabular-nums" role="status">
       {#if running}<Spinner class="size-3.5" />{/if}
       {plural(counts.files, "file", "files")} from {plural(counts.users, "user", "users")}

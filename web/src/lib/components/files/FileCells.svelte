@@ -35,9 +35,11 @@
     ontick: (range: boolean) => void;
     /** enqueues the file, where it can be downloaded now */
     ondownload?: () => void;
+    /** opens the inspector on the file, on a screen that has one */
+    ondetails?: () => void;
   };
 
-  let { file, username, columns, selected, ontick, ondownload }: Props = $props();
+  let { file, username, columns, selected, ontick, ondownload, ondetails }: Props = $props();
 
   const icons = { audio: FileAudioIcon, video: FileVideoIcon, other: FileIcon };
   const Icon = $derived(file.locked ? LockIcon : icons[kindOf(file.filename)]);
@@ -109,7 +111,7 @@
 {/if}
 {#if shows("menu")}
   <span role="gridcell" class="flex justify-end pr-1">
-    <FileMenu path={file.filename} {username} {ondownload}>
+    <FileMenu path={file.filename} {username} {ondownload} {ondetails}>
       {#snippet trigger({ props })}
         <Button
           {...props}

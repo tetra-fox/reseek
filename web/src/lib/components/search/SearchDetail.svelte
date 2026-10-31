@@ -11,6 +11,7 @@
 
   import { app } from "#lib/app.svelte.js";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
+  import RemoteFileInspector from "#lib/components/inspector/RemoteFileInspector.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
@@ -18,12 +19,15 @@
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { undoable } from "#lib/feedback/undo.js";
+  import { asItem, enqueue } from "#lib/files/downloads.js";
   import { parseFilters } from "#lib/files/filters.js";
   import { plural } from "#lib/format.js";
+  import { useInspector } from "#lib/inspector/inspector.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
   import { denseRows } from "#lib/search/dense.js";
+  import type { Picked } from "#lib/search/facts.js";
   import { recent, remember, togglePin } from "#lib/search/recent.svelte.js";
   import { pipeline } from "#lib/search/results.js";
   import { Results } from "#lib/search/results.svelte.js";
@@ -55,6 +59,10 @@
   );
   // the counts come with the list's frames
   $effect(() => live.retain("search"));
+
+  /** the file the inspector shows, which follows focus in the results */
+  let picked = $state.raw<Picked | null>(null);
+  useInspector(inspected, () => !!picked);
 
   const search = $derived(searches.list.get(id));
   const refused = $derived(searches.refused.get(id));
@@ -177,6 +185,12 @@
     void goto(href("/searches"));
   };
 
+  /** Enqueues the file the inspector shows and says what came of it */
+  const downloadPicked = async ({ username, file }: Picked) => {
+    const outcome = await enqueue({ username, files: [asItem(file)], searchId: id });
+    toast(outcome.text, outcome.kind === "done" ? "info" : "error");
+  };
+
   const dismiss = (username: string) => {
     dismissed.add(username);
     undoable(
@@ -186,6 +200,19 @@
     );
   };
 </script>
+
+{#snippet inspected()}
+  {#if picked}
+    {@const shown = picked}
+    <RemoteFileInspector
+      file={shown.file}
+      username={shown.username}
+      facts={shown.facts}
+      ondownload={canWrite && connected && !shown.file.locked
+        ? () => void downloadPicked(shown)
+        : undefined} />
+  {/if}
+{/snippet}
 
 <!-- what is out of view and how to bring each part back -->
 {#snippet hiddenLine()}
@@ -284,10 +311,21 @@
 
     {#if searchOptions.view === "dense"}
       {#if rows.length}
-        <DenseResults {rows} searchId={id} canDownload={canWrite && connected} />
+        <DenseResults
+          {rows}
+          searchId={id}
+          canDownload={canWrite && connected}
+          inspect={(file) => (picked = file)} />
       {/if}
     {:else if view.length}
-      <ResultsTree {view} searchId={id} {expansion} {connected} {canWrite} ondismiss={dismiss} />
+      <ResultsTree
+        {view}
+        searchId={id}
+        {expansion}
+        {connected}
+        {canWrite}
+        ondismiss={dismiss}
+        inspect={(file) => (picked = file)} />
     {/if}
     {#if !view.length}
       <EmptyState icon={SearchXIcon} title="All results are hidden">

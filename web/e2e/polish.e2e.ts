@@ -41,7 +41,7 @@ test("shows search results as cards and as dense rows walked by key", async ({ p
   await grid.focus();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
-  await page.keyboard.press(" ");
+  await page.keyboard.press("Shift+Space");
   const active = await grid.getAttribute("aria-activedescendant");
   await expect(page.locator(`#${active}`)).toContainText("02 Two.flac");
   await expect(grid.locator('[aria-selected="true"]')).toHaveCount(1);

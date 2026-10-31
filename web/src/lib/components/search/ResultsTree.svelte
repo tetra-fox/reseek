@@ -33,8 +33,9 @@
   import { fetchFolder } from "#lib/files/remote.js";
   import { slskLink } from "#lib/files/slsk.js";
   import { formatAttributes, getFileName, plural } from "#lib/format.js";
+  import { inspector } from "#lib/inspector/inspector.svelte.js";
   import { href } from "#lib/nav.js";
-  import { userFacts } from "#lib/search/facts.js";
+  import { offerFields, type Picked, userFacts } from "#lib/search/facts.js";
   import { type Result, type ResultFile, resultFiles } from "#lib/search/results.js";
   import type { Expansion } from "#lib/tree/expansion.svelte.js";
   import {
@@ -63,9 +64,11 @@
     connected: boolean;
     canWrite: boolean;
     ondismiss: (username: string) => void;
+    /** focus came to a file, which the inspector shows */
+    inspect: (file: Picked) => void;
   };
 
-  let { view, searchId, expansion, connected, canWrite, ondismiss }: Props = $props();
+  let { view, searchId, expansion, connected, canWrite, ondismiss, inspect }: Props = $props();
 
   const write = $derived(canWrite && connected);
   const selected = new SvelteSet<string>();
@@ -108,6 +111,18 @@
   });
   const attributed = $derived(all.some((f) => f.suspect || formatAttributes(f)));
   const columns = $derived(fileColumns({ quality: attributed, phone: viewport.phone }));
+
+  /** A file for the inspector, with what its response says of its user */
+  const pick = (f: Item): Picked => {
+    const response = results.get(`user:${f.result}`)?.response;
+    return {
+      file: f,
+      username: f.owner,
+      facts: response
+        ? offerFields(response.uploadSpeed, response.hasFreeUploadSlot, response.queueLength)
+        : []
+    };
+  };
 
   /** Whose share a folder is in, from its key, which starts with its response's */
   const ownerOf = (node: FolderNode<Item>) =>
@@ -251,7 +266,8 @@
   nameOf={(line) => (line.kind === "folder" ? line.node.label : getFileName(line.item.filename))}
   slot={(depth) => (viewport.phone ? Math.min(depth, 1) : depth)}
   onopen={write ? (f) => void downloadNow([f]) : undefined}
-  onmiddleclick={write ? (f) => void downloadNow([f]) : undefined}>
+  onmiddleclick={write ? (f) => void downloadNow([f]) : undefined}
+  inspect={(f) => inspect(pick(f))}>
   {#snippet header()}
     <FileHeader {columns} />
   {/snippet}
@@ -296,7 +312,11 @@
       {columns}
       selected={selected.has(idOf(file))}
       ontick={tickRow}
-      ondownload={write && !file.locked ? () => void downloadNow([file]) : undefined} />
+      ondownload={write && !file.locked ? () => void downloadNow([file]) : undefined}
+      ondetails={() => {
+        inspect(pick(file));
+        inspector.show();
+      }} />
   {/snippet}
 </FileTree>
 {#if canWrite && chosen.length}

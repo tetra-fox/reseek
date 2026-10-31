@@ -14,12 +14,14 @@
   import type { FileColumn } from "#lib/files/columns.js";
   import { asItem, type Enqueued, enqueue, followDownloads } from "#lib/files/downloads.js";
   import { formatBytes, formatSpeed, getFileName, plural } from "#lib/format.js";
+  import { inspector } from "#lib/inspector/inspector.svelte.js";
   import { Arrivals } from "#lib/lists/arrivals.svelte.js";
   import { freezesWhileUsed, heldOrder } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { Grid } from "#lib/lists/table.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { DENSE_COLUMNS, type DenseColumn, type DenseRow, denseView } from "#lib/search/dense.js";
+  import { offerFields, type Picked } from "#lib/search/facts.js";
   import { rem } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -31,9 +33,11 @@
     searchId: string;
     /** downloads need the Soulseek server and write access */
     canDownload: boolean;
+    /** focus came to a file, which the inspector shows */
+    inspect: (file: Picked) => void;
   };
 
-  let { rows, searchId, canDownload }: Props = $props();
+  let { rows, searchId, canDownload, inspect }: Props = $props();
 
   /** the file's own cells, drawn as every list of remote files draws them */
   const FILE_CELLS: FileColumn[] = ["name", "size", "quality", "length"];
@@ -110,6 +114,13 @@
     toast(outcome.text, outcome.kind === "done" ? "info" : "error");
   };
 
+  /** A row's file for the inspector, with what its user offers */
+  const pick = (r: DenseRow): Picked => ({
+    file: r.file,
+    username: r.username,
+    facts: offerFields(r.speed, r.free, r.queue)
+  });
+
   const list = new ListControl<DenseRow>({
     lines: () => sorted,
     key: (r) => r.key,
@@ -117,6 +128,8 @@
     onopen: (r) => {
       if (canDownload) void downloadNow(selected.size > 1 ? chosen : [r]);
     },
+    inspects: () => true,
+    onfocus: (r) => inspect(pick(r)),
     rendered: (index) => lines.isDrawn(index),
     reveal: (index) => lines.scrollTo(index),
     selected
@@ -231,7 +244,11 @@
             <FileMenu
               path={row.file.filename}
               username={row.username}
-              ondownload={canDownload ? () => void downloadNow([row]) : undefined}>
+              ondownload={canDownload ? () => void downloadNow([row]) : undefined}
+              ondetails={() => {
+                inspect(pick(row));
+                inspector.show();
+              }}>
               {#snippet trigger({ props })}
                 <Button
                   {...props}
