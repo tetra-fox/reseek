@@ -98,7 +98,7 @@ export const changesScreen = (from: string, to: string): boolean =>
 
 /**
  * One step of the header's breadcrumb: a link back to it, or an action for a step that is the
- * same route (closing a drawer). The last step is where the user is. `copy` gives the step a
+ * same route (closing the inspector). The last step is where the user is. `copy` gives the step a
  * copy button for its text, such as a folder's full path
  */
 export type Crumb = { label: string; href?: string; onclick?: () => void; copy?: string };
