@@ -45,6 +45,13 @@ describe("chat commands", () => {
     expect(parseCommand("/clear", "user")).toMatchObject({ kind: "command", name: "clear" });
   });
 
+  it("take no command for a user with the name the server's notices come from", () => {
+    const refused = { kind: "error", message: "server is not a user" };
+    expect(parseCommand("/whois server", "room")).toEqual(refused);
+    expect(parseCommand("/msg server hello", "room")).toEqual(refused);
+    expect(parseCommand("/join server", "room")).toMatchObject({ name: "join", target: "server" });
+  });
+
   it("say what is wrong rather than send a command", () => {
     expect(parseCommand("/dance", "room")).toEqual({
       kind: "error",
