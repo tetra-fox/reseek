@@ -322,10 +322,10 @@ fn logged_in(app: &AppState, username: &str) {
   tokio::spawn(after_login(app.clone()).in_current_span());
 }
 
-/// Once the shares are initialized: the server is told what we share, our statistics are
-/// fetched, the users with queued uploads and the members of the user-defined groups are
-/// watched, and, after the first login, the downloads a stop interrupted are enqueued again.
-/// The messaging engine joins the rooms.
+/// Once the shares are initialized: the server is told what we share and what we like and hate,
+/// our statistics are fetched, the users with queued uploads and the members of the user-defined
+/// groups are watched, and, after the first login, the downloads a stop interrupted are enqueued
+/// again. The messaging engine joins the rooms.
 async fn after_login(app: AppState) {
   app.shares.initialized().await;
   let client = app.network.client();
@@ -336,6 +336,7 @@ async fn after_login(app: AppState) {
   {
     warn!(error = %e, "Failed to execute post-login actions: shared counts not sent");
   }
+  app.users.send_interests(client).await;
   if let Err(e) = app.network.refresh_user_statistics(true).await {
     warn!(error = %e, "Failed to execute post-login actions: statistics not fetched");
   }

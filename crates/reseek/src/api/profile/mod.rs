@@ -6,6 +6,9 @@
 //! Reading takes any role; changing takes an administrator and `remote_configuration`, and a
 //! change written to the file also someone at the UI rather than a stored API key.
 
+mod interests;
+mod password;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -48,6 +51,8 @@ pub fn routes() -> OpenApiRouter<AppState> {
       put_profile_picture,
       delete_profile_picture
     ))
+    .merge(interests::routes())
+    .merge(password::routes())
 }
 
 /// Our profile as a user asking for our user info is sent it now: the text, whether a picture
@@ -133,7 +138,7 @@ async fn get_profile_picture(
   Ok(picture_response(picture, "private, no-cache"))
 }
 
-/// Sets the picture other users are sent: a JPEG, PNG, GIF or WebP image of at most 1 MiB,
+/// Sets the picture other users are sent: a JPEG, PNG, GIF, WebP or BMP image of at most 1 MiB,
 /// kept as a JPEG at most 512 pixels on its longest side.
 #[utoipa::path(
   put, path = "/profile/picture", tag = "profile",
@@ -169,7 +174,7 @@ async fn put_profile_picture(
     .unwrap_or_default();
   if !UPLOAD_TYPES.contains(&declared.as_str()) {
     return Err(ApiError::unsupported_media(
-      "The picture must be a JPEG, PNG, GIF or WebP image",
+      "The picture must be a JPEG, PNG, GIF, WebP or BMP image",
     ));
   }
   // every refusal comes before the upload is read, so a refused one changes no picture

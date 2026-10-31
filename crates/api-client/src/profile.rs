@@ -1,6 +1,6 @@
 //! The calls on our own profile: the text and picture other users are sent.
 
-use api_types::profile::{OwnProfile, ProfileText};
+use api_types::profile::{Interests, OwnProfile, ProfileText};
 use bytes::Bytes;
 
 use super::{Client, Result, Route, bytes, done, json};
@@ -17,6 +17,16 @@ impl Client {
       description: description.to_string(),
     };
     done(self.put(Route::new("profile")).json(&text)).await
+  }
+
+  /// `GET /interests`: what we like and hate.
+  pub async fn interests(&self) -> Result<Interests> {
+    json(self.get(Route::new("interests"))).await
+  }
+
+  /// `PUT /interests`: replaces what we like and hate.
+  pub async fn set_interests(&self, interests: &Interests) -> Result<Interests> {
+    json(self.put(Route::new("interests")).json(interests)).await
   }
 
   /// `GET /profile/picture`: the picture other users are sent.

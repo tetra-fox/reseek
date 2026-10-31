@@ -1,12 +1,16 @@
 //! Watching a user takes one round trip however many ask at once: against a scripted server
 //! that counts the watch requests and answers them slowly, two requests to watch the same user
-//! both succeed on one watch.
+//! both succeed on one watch. What we like and hate goes to the server at every login, not only
+//! when it changes.
 
 mod support;
 
 use std::time::Duration;
 
-use soulseek_proto::server::{UserStats, UserStatus, WatchUserResponse, WatchedUser};
+use api_types::profile::Interests;
+use soulseek_proto::server::{
+  HatedInterestAdd, LikedInterestAdd, UserStats, UserStatus, WatchUserResponse, WatchedUser,
+};
 use soulseek_proto::{ServerRequest, ServerResponse, UserPresence};
 use support::scripted;
 
@@ -69,4 +73,40 @@ async fn two_watches_of_one_user_at_once_ask_the_server_once() {
   }
   assert_eq!(watches, 1);
   assert_eq!(api.watched().await.unwrap(), ["bob"]);
+}
+
+#[tokio::test]
+async fn our_interests_reach_the_server_when_changed_and_at_every_login() {
+  let dir = tempfile::tempdir().unwrap();
+  let (running, api, mut server) = scripted(dir.path()).await;
+  let lists = Interests {
+    liked: vec!["jazz".into()],
+    hated: vec!["polka".into()],
+  };
+  assert_eq!(api.set_interests(&lists).await.unwrap(), lists);
+  let told = server
+    .request_matching(|request| match request {
+      ServerRequest::LikedInterestAdd(LikedInterestAdd { interest }) => Some(interest),
+      _ => None,
+    })
+    .await;
+  assert_eq!(told, "jazz");
+  drop(running);
+
+  // the server keeps nothing between sessions, so a new one is told both lists
+  let (_running, api, mut server) = scripted(dir.path()).await;
+  assert_eq!(api.interests().await.unwrap(), lists);
+  let liked = server
+    .request_matching(|request| match request {
+      ServerRequest::LikedInterestAdd(LikedInterestAdd { interest }) => Some(interest),
+      _ => None,
+    })
+    .await;
+  let hated = server
+    .request_matching(|request| match request {
+      ServerRequest::HatedInterestAdd(HatedInterestAdd { interest }) => Some(interest),
+      _ => None,
+    })
+    .await;
+  assert_eq!((liked.as_str(), hated.as_str()), ("jazz", "polka"));
 }

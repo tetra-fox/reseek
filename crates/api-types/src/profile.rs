@@ -44,3 +44,22 @@ pub struct ProfileText {
   /// the text other users read, newlines kept
   pub description: String,
 }
+
+/// What we like and what we hate, each in the order listed. The reply of `GET /interests` and the
+/// body of `PUT /interests`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Interests {
+  /// what we like
+  pub liked: Vec<String>,
+  /// what we hate
+  pub hated: Vec<String>,
+}
+
+/// A new password for our Soulseek account, the body of `PUT /application/password`.
+#[derive(Clone, PartialEq, Eq, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PasswordChange {
+  /// the new password
+  pub password: String,
+}

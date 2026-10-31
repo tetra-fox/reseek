@@ -13,6 +13,7 @@ mod blocklist;
 mod browse;
 mod group_cache;
 mod groups;
+mod interests;
 mod known;
 mod listing;
 mod network;
