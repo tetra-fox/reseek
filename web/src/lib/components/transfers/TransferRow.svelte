@@ -154,7 +154,7 @@
 {/snippet}
 
 <!-- behind the cells, the transfer's bytes as a fill, its finish as a pulse, a failure as a tint -->
-<DownloadFill transfer={t} track={false} />
+<DownloadFill transfer={t} track={direction === "download"} />
 {#each columns as column (column)}
   <div
     role="gridcell"
