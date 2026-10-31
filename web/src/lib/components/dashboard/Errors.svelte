@@ -130,8 +130,8 @@
         {#each pareto as row (`${row.direction}-${row.exception}`)}
           <tr
             class={[
-              "border-b last:border-b-0 hover:bg-hover",
-              exception === row.exception && "bg-accent-soft/60"
+              "border-b last:border-b-0",
+              exception === row.exception ? "bg-accent-soft/60" : "hover:bg-hover"
             ]}>
             <td class="px-2 py-1">{row.direction}</td>
             <td class="px-2 py-1" title={row.exception ?? ""}>
