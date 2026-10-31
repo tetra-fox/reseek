@@ -165,7 +165,10 @@ class Browse {
     return true;
   };
 
-  /** Brings back the browse of `username` as it was left, when that is what is kept, once per page load */
+  /**
+   * Brings back the browse of `username` as it was left, when that is what is kept, once per page
+   * load
+   */
   restore = async (username: string) => {
     if (this.#restored) return;
     this.#restored = true;

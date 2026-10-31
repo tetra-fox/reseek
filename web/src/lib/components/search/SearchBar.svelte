@@ -126,8 +126,8 @@
         </Suggest.Group>
       {/if}
     </Suggest.Box>
-    <!-- below 16rem, about what a phone at the largest text size has, the word takes the box's room
-         and the button keeps it for a screen reader -->
+    <!-- below 16rem, a phone at a large text size, the word gives its room to the box and stays
+         for a screen reader -->
     <Button
       type="submit"
       class="h-11 px-4 @max-[16rem]:w-11 @max-[16rem]:px-0"

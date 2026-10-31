@@ -1,14 +1,11 @@
-/** How the UI names a runtime change that ends when reseek stops; the words are the owner's */
+/** How the UI names a runtime change that ends when reseek stops */
 export const UNTIL_RESTART = "until restart";
 
-/** The line where a room's history has a hole, `span` saying when; the words are the owner's */
+/** The line where a room's history has a hole, `span` saying when */
 export const gapNotice = (span: string) =>
   `Chat history unavailable ${span} (disconnected from Soulseek)`;
 
-/**
- * The words for pinning a user, which keeps them first in lists and is the buddy list; the
- * words are the owner's
- */
+/** The words for pinning a user, which keeps them first in lists and is the buddy list */
 export const BUDDY = {
   add: "Add buddy",
   remove: "Remove buddy",

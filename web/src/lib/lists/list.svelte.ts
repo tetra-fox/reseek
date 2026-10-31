@@ -86,8 +86,8 @@ let lists = 0;
  *
  * Keys: a focused control keeps the keys it handles (`keepsKey`); the rest act on the line the
  * control is in. Ctrl/Cmd+A selects the focused line's group, or every row; any other key with
- * Ctrl, Cmd or Alt is the browser's, unless the list takes it as its own. Home, End, Page Up and Page Down move as Up and Down do,
- * further. On a row Space toggles it, Enter opens it and the list's own keys act; on a group
+ * Ctrl, Cmd or Alt is the browser's, unless the list takes it as its own. Home, End, Page Up and
+ * Page Down move as Up and Down do, further. On a row Space toggles it, Enter opens it and the list's own keys act; on a group
  * header only Ctrl/Cmd+A and Space act, unless headers take focus. In a list with an inspector,
  * Space and `i` on a line it shows open or close it instead, and Shift+Space ticks. Letters typed
  * one after another go to the next line whose name starts with them, in a list that names its
@@ -320,7 +320,10 @@ export class ListControl<L> {
     return this.#spec.headersFocus || this.#spec.id(line) !== null;
   }
 
-  /** The index of the nearest line focus stops on after (`step` 1) or before (-1) `from`, -1 when none */
+  /**
+   * The index of the nearest line focus stops on after (`step` 1) or before (-1) `from`, -1 when
+   * none
+   */
   #next(from: number, step: 1 | -1) {
     for (let i = from + step; i >= 0 && i < this.lines.length; i += step) {
       if (this.#stops(this.lines[i])) return i;

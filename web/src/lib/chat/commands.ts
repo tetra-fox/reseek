@@ -53,7 +53,7 @@ const firstWord = (rest: string): [string, string] => {
   return cut === -1 ? [rest, ""] : [rest.slice(0, cut), rest.slice(cut).trimStart()];
 };
 
-/** The name the server's notices come from, which a command takes for a user */
+/** The answer to a command that takes the name the server's notices come from for a user */
 const REFUSED_SERVER: Parsed = { kind: "error", message: NOT_A_USER };
 
 const usage = (c: CommandInfo) => `/${c.name}${c.args ? ` ${c.args}` : ""}`;
