@@ -9,11 +9,9 @@ import { userHref } from "#lib/nav.js";
 import { call } from "#lib/request.js";
 
 import { profileOf } from "./actions";
-import { bestMatches } from "./match";
+import { bestMatches, CANDIDATES } from "./match";
 import type { UserSummary } from "./users.svelte";
 
-/** how many users are read for each text, the closest of them are listed */
-const CANDIDATES = 100;
 const LISTED = 8;
 /** how long after typing stops the text is read */
 const SETTLE_MS = 200;
@@ -57,9 +55,8 @@ export class UserFinder {
   });
 
   /**
-   * @param text the text in the box, trimmed
-   * @param options `tab` is the page of the user's profile a pick opens, `onread` is told the text
-   * once typing stops, and `onmissed` when the network has no user of the name
+   * `text` gives the box's text, trimmed. `tab` is the tab of the profile a pick opens, `onread`
+   * hears the text once typing stops, and `onmissed` when a look-up found nobody
    */
   constructor(
     text: () => string,
@@ -117,7 +114,7 @@ export class UserFinder {
     toast(outcome.status === 404 ? `No user named ${name} was found.` : outcome.error, "error");
   }
 
-  /** Opens the user an entry names, a user the directory does not hold once the network knows them */
+  /** Opens the user an entry names, one the directory does not hold once the network knows them */
   choose = (value: string) => {
     const name = value.slice(userValue("").length);
     if (this.found.some((u) => u.username === name)) void goto(userHref(name, this.#tab));

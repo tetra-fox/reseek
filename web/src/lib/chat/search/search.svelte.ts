@@ -1,6 +1,7 @@
 import { api } from "#lib/api/client.js";
 import { chat } from "#lib/chat/chat.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
+import { CANDIDATES } from "#lib/users/match.js";
 import type { UserSummary } from "#lib/users/users.svelte.js";
 
 import {
@@ -12,9 +13,6 @@ import {
   type RoomFound,
   type SearchKind
 } from "./match";
-
-/** How many users are read for each text, the closest of them are listed */
-const CANDIDATES = 100;
 
 const hitsIn = (q: string, kind: SearchKind, offset: number, limit: number) =>
   call(() => api.GET("/api/v0/messages/search", { params: { query: { q, kind, offset, limit } } }));

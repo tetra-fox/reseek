@@ -4,7 +4,7 @@
 
   import Input from "#lib/components/ui/Input.svelte";
 
-  import { shareHighlight } from "./highlight";
+  import { type Highlight, shareHighlight } from "./highlight";
 
   type Props = Omit<ComponentProps<typeof Input>, "value" | "ref" | "children" | "onkeydown"> & {
     /** the text in the box */
@@ -48,7 +48,7 @@
 
   /** what the dropdown reports as picked, emptied at once so an entry can be picked again */
   let picked = $state("");
-  const highlight = $state({ lit: null });
+  const highlight = $state<Highlight>({ lit: null });
   shareHighlight(highlight);
 
   // no name has spaces around it, so what is around the text is no part of it

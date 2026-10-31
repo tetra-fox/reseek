@@ -5,6 +5,9 @@ import type { UserSummary } from "./users.svelte";
 /** A user found by name, `summary` when the directory answered for them */
 export type UserFound = { name: string; summary?: UserSummary };
 
+/** How many users the directory is asked for per text; the closest of them are listed */
+export const CANDIDATES = 100;
+
 /** How close a name is to the typed text, lower is closer; null when it does not hold the text */
 export const closeness = (name: string, text: string): number | null => {
   if (name === text) return 0;
