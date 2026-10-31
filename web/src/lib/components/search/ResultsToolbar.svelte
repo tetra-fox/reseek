@@ -6,6 +6,7 @@
 
   import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import Segmented from "#lib/components/ui/Segmented.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
@@ -54,21 +55,7 @@
 
 <div class="flex flex-col gap-2.5 rounded-card border bg-surface p-3 shadow-card">
   <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-    <div class="inline-flex rounded-control border p-0.5" role="radiogroup" aria-label="View">
-      {#each VIEWS as v (v.id)}
-        <button
-          type="button"
-          role="radio"
-          aria-checked={searchOptions.view === v.id}
-          class={[
-            "flex items-center gap-1.5 rounded-badge px-2 py-0.5 text-sm",
-            searchOptions.view === v.id ? "bg-surface-muted font-medium" : "text-fg-muted"
-          ]}
-          onclick={() => (searchOptions.view = v.id)}>
-          <v.icon class="size-3.5" />{v.label}
-        </button>
-      {/each}
-    </div>
+    <Segmented options={VIEWS} bind:value={searchOptions.view} label="View" size="sm" />
     {#if searchOptions.view === "cards"}
       <div class="flex max-w-full min-w-0 items-center gap-2">
         <ArrowUpDownIcon class="size-4 shrink-0 text-fg-muted" />

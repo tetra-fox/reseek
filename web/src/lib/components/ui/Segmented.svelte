@@ -1,9 +1,11 @@
 <script lang="ts" generics="T extends string">
+  import type { Component } from "svelte";
+
   import { cn } from "#lib/ui/cn.js";
 
   // a choice of one among a few, all in view
   type Props = {
-    options: readonly { id: T; label: string }[];
+    options: readonly { id: T; label: string; icon?: Component }[];
     value: T;
     /** what is being chosen, for a screen reader */
     label: string;
@@ -24,10 +26,12 @@
       role="radio"
       aria-checked={value === option.id}
       class={[
-        "rounded-badge px-2 py-0.5",
+        "flex items-center gap-1.5 rounded-badge px-2 py-0.5",
         size === "xs" ? "text-xs" : "text-sm",
         value === option.id ? "bg-surface-muted font-medium" : "text-fg-muted"
       ]}
-      onclick={() => (value = option.id)}>{option.label}</button>
+      onclick={() => (value = option.id)}>
+      {#if option.icon}<option.icon class="size-3.5" />{/if}{option.label}
+    </button>
   {/each}
 </div>
