@@ -123,6 +123,18 @@
     shown.scrollToEnd();
     fresh = 0;
   };
+  /**
+   * Keeps a view that follows the newest message on it as a change of width wraps the messages
+   * taller, which moves no scroll position and so would push the newest out of view
+   */
+  const followsEnd = (node: HTMLElement) => {
+    const observer = new ResizeObserver(() => {
+      if (placed && atBottom && !interaction.frozen) toBottom();
+    });
+    observer.observe(node);
+    if (node.firstElementChild) observer.observe(node.firstElementChild);
+    return () => observer.disconnect();
+  };
   /** where the line marking the first unread message is, -1 without one */
   const unreadAt = $derived(lines.findIndex((l) => l.kind === "unread"));
   /** how many messages came after the unread line */
@@ -237,6 +249,7 @@
     onscroll={scrolled}
     onpointerdown={grip}
     {@attach shown.attach}
+    {@attach followsEnd}
     {@attach freezesWhileUsed}>
     <div class="relative" style:height={`${shown.total}px`}>
       {#each shown.drawn as { line, index, start } (line.key)}
