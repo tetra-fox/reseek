@@ -27,14 +27,17 @@
     <div
       role="columnheader"
       aria-sort={sort === "asc" ? "ascending" : sort === "desc" ? "descending" : undefined}
-      class={["relative flex min-w-0 items-center px-2 text-xs", column.end && "justify-end"]}>
+      class={[
+        "relative flex min-w-0 items-center self-stretch px-2 text-xs",
+        column.end && "justify-end"
+      ]}>
       {#if column.quiet}
         <span class="sr-only">{column.label}</span>
         {@render cell?.(column)}
       {:else if grid.sorts(column)}
         <button
           type="button"
-          class="flex min-w-0 items-center gap-1 hover:text-fg"
+          class="flex min-w-0 items-center gap-1 self-stretch hover:text-fg"
           title={column.label}
           onclick={() => grid.toggle(column)}>
           <span class="truncate">{column.label}</span>
