@@ -9,6 +9,7 @@
   import { MediaQuery } from "svelte/reactivity";
 
   import { paneKey } from "#lib/chat/chat.svelte.js";
+  import { chatName } from "#lib/chat/notices.js";
   import { notifier, notifyOptions } from "#lib/chat/notify.svelte.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { chatOrder } from "#lib/chat/rooms/order.js";
@@ -74,7 +75,7 @@
   useCrumbs(() => {
     if (target === "search") return [{ label: "Search results" }];
     if (!target) return [];
-    return [{ label: target.kind === "room" ? `#${target.name}` : target.name }];
+    return [{ label: target.kind === "room" ? `#${target.name}` : chatName(target) }];
   });
 
   // a narrow screen shows the list in a sheet, which going to a chat closes

@@ -7,11 +7,13 @@
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import HashIcon from "@lucide/svelte/icons/hash";
   import MessageSquarePlusIcon from "@lucide/svelte/icons/message-square-plus";
+  import ServerIcon from "@lucide/svelte/icons/server";
   import UsersRoundIcon from "@lucide/svelte/icons/users-round";
   import { SvelteSet } from "svelte/reactivity";
 
   import { chat, paneKey, paneOf } from "#lib/chat/chat.svelte.js";
   import { actionOf } from "#lib/chat/messages/rich.js";
+  import { chatName, isNotices, NOTICES } from "#lib/chat/notices.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { sortedConversations, sortedRooms } from "#lib/chat/rooms/order.js";
   import type { SearchKind } from "#lib/chat/search/match.js";
@@ -89,7 +91,8 @@
         "h:conversations",
         "Conversations",
         conversations.map((c) => ({ kind: "user", name: c.username }))
-      )
+      ),
+      ...(chat.latestNotice ? section("h:notices", "Notices", [NOTICES]) : [])
     ]);
   });
   // focus stays on the list, so the arrows go on from the chat just opened
@@ -111,17 +114,19 @@
 
   // every chat selected, those a folded section hides too
   const chosen = $derived([...list.selected].map(paneOf));
+  // the server's notices are never unread, and they cannot be closed
+  const chosenChats = $derived(chosen.filter((t) => !isNotices(t)));
   const write = $derived(session.can("ReadWrite"));
 
   const markChosen = async () => {
-    for (const t of chosen) {
+    for (const t of chosenChats) {
       const outcome =
         t.kind === "user" ? await chat.acknowledge(t.name) : await chat.markRoomReadNewest(t.name);
       if (!outcome.ok) toast(`${t.name}: ${outcome.error}`, "error");
     }
   };
   const closeChosen = async () => {
-    for (const t of chosen) {
+    for (const t of chosenChats) {
       const outcome = t.kind === "user" ? await chat.close(t.name) : await chat.leave(t.name);
       if (!outcome.ok) toast(`${t.name}: ${outcome.error}`, "error");
     }
@@ -196,16 +201,18 @@
         </div>
       {:else}
         {@const t = line.target}
+        {@const notices = isNotices(t)}
+        {@const person = t.kind === "user" && !notices}
         {@const room = t.kind === "room" ? chat.rooms.get(t.name) : undefined}
-        {@const conversation = t.kind === "user" ? chat.conversations.get(t.name) : undefined}
-        {@const last = conversation?.lastMessage}
+        {@const conversation = person ? chat.conversations.get(t.name) : undefined}
+        {@const last = notices ? chat.latestNotice : conversation?.lastMessage}
         {@const preview = last
           ? { author: "", text: last.message, at: last.timestamp }
           : chat.previews.get(line.key)}
         {@const counts = t.kind === "room" ? chat.roomUnread(t.name) : null}
-        {@const unread = t.kind === "user" ? chat.unreadOf(t.name) : 0}
+        {@const unread = person ? chat.unreadOf(t.name) : 0}
         {@const notify = (room ?? conversation)?.notify}
-        {@const summary = t.kind === "user" ? users.get(t.name) : undefined}
+        {@const summary = person ? users.get(t.name) : undefined}
         {@const at = preview?.at ?? room?.lastMessageAt}
         <div
           role="row"
@@ -221,18 +228,19 @@
             e.preventDefault();
             menuFor = line.key;
           }}>
-          {#if t.kind === "user"}
+          {#if person}
             <Avatar name={t.name} pictureUrl={summary?.info?.pictureUrl} class="size-8 text-xs" />
           {:else}
+            {@const Icon = notices ? ServerIcon : HashIcon}
             <span
               class="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-muted"
-              ><HashIcon class="size-4 text-fg-muted" /></span>
+              ><Icon class="size-4 text-fg-muted" /></span>
           {/if}
           <span role="gridcell" class="flex min-w-0 flex-1 flex-col">
             <span class="flex items-center gap-1">
               <span
                 class="truncate text-sm font-medium"
-                style:color={t.kind === "user" ? nameColor(t.name) : undefined}>{t.name}</span>
+                style:color={person ? nameColor(t.name) : undefined}>{chatName(t)}</span>
               {#if notify === "none" || summary?.muted}<BellOffIcon
                   class="size-3 shrink-0 text-fg-subtle"
                   aria-label="muted" />{/if}
@@ -271,7 +279,7 @@
                   variant="ghost"
                   size="icon-sm"
                   class="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
-                  aria-label={`Menu for ${t.name}`}><EllipsisIcon /></Button>
+                  aria-label={`Menu for ${chatName(t)}`}><EllipsisIcon /></Button>
               {/snippet}
             </Menu.Trigger>
             <Menu.Content align="end" class="min-w-52"><ChatMenuItems target={t} /></Menu.Content>

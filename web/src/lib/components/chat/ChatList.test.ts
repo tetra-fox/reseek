@@ -55,6 +55,35 @@ describe("the chat list", () => {
     expect(goto).toHaveBeenCalledWith("#/chat/alice", { reset: false });
   });
 
+  it("lists the server's notices apart and last, with no user and no closing", async () => {
+    start();
+    chat.latestNotice = {
+      localId: 1,
+      id: 1,
+      timestamp: "2026-10-26T10:00:00Z",
+      username: "server",
+      direction: "In",
+      message: "Room name invalid",
+      isAcknowledged: true,
+      wasReplayed: false
+    };
+    flushSync();
+    const row = document.querySelector("[data-line='user:server']")!;
+    expect(
+      [...document.querySelectorAll("[data-line]")]
+        .map((l) => l.getAttribute("data-line"))
+        .slice(-3)
+    ).toEqual(["user:bob", "h:notices", "user:server"]);
+    expect(row.textContent).toContain("Server");
+    expect(row.textContent).toContain("Room name invalid");
+    expect(row.querySelector("[style*=color]")).toBeNull();
+
+    press(grid(), "End");
+    expect(active(grid())).toBe("user:server");
+    press(grid(), "Enter");
+    expect(goto).toHaveBeenCalledWith("#/chat/server", { reset: false });
+  });
+
   it("selects with Space and Ctrl+A within a section, and clears with Escape", () => {
     start();
     press(grid(), "ArrowDown");

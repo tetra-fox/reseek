@@ -8,6 +8,7 @@
 
   import { type Line, layout, LONG, type Message } from "#lib/chat/messages/messages.js";
   import { pullOlder } from "#lib/chat/messages/older.js";
+  import { isNotices } from "#lib/chat/notices.js";
   import type { MessagePane } from "#lib/chat/pane.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
@@ -32,6 +33,8 @@
   };
 
   let { pane, at, watch, onreply, onread }: Props = $props();
+
+  const notices = $derived(isNotices(pane.target));
 
   /** this close to the bottom counts as at the bottom */
   const NEAR = 48;
@@ -261,10 +264,11 @@
           {:else}
             <MessageRow
               message={line.message}
-              head={line.head}
+              head={line.head && !notices}
               highlight={line.message.localId === at}
               {watch}
               room={pane.target.kind === "room"}
+              notice={notices}
               {onreply}
               onretry={() => void pane.retry(line.message)} />
           {/if}

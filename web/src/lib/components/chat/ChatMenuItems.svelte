@@ -12,7 +12,8 @@
   import XIcon from "@lucide/svelte/icons/x";
 
   import { root, type Schemas } from "#lib/api/client.js";
-  import { chat } from "#lib/chat/chat.svelte.js";
+  import { chat, paneKey } from "#lib/chat/chat.svelte.js";
+  import { isNotices } from "#lib/chat/notices.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { chatLayout } from "#lib/chat/prefs.svelte.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -30,6 +31,7 @@
   const write = $derived(session.can("ReadWrite"));
   const admin = $derived(session.can("Administrator"));
   const user = $derived(target.kind === "user");
+  const notices = $derived(isNotices(target));
   const row = $derived(user ? chat.conversations.get(target.name) : chat.rooms.get(target.name));
   const unread = $derived(user ? chat.unreadOf(target.name) : chat.roomUnread(target.name).unread);
   const summary = $derived(user ? users.get(target.name) : undefined);
@@ -65,12 +67,22 @@
   const clear = () =>
     confirmation.ask({
       title: "Clear history",
-      body: user
-        ? `Delete every stored message with ${target.name}? The conversation is also closed.`
-        : `Delete every stored message in ${target.name}?`,
+      body: notices
+        ? "Delete every stored notice from the server?"
+        : user
+          ? `Delete every stored message with ${target.name}? The conversation is also closed.`
+          : `Delete every stored message in ${target.name}?`,
       confirm: "Delete",
-      run: async () =>
-        report(user ? await chat.close(target.name, true) : await chat.clearRoom(target.name))
+      run: async () => {
+        const outcome = user
+          ? await chat.close(target.name, true)
+          : await chat.clearRoom(target.name);
+        report(outcome);
+        // nothing is left to show, and the chat list no longer has the entry
+        if (outcome.ok && notices && chat.openPane === paneKey(target.kind, target.name)) {
+          void goto(href("/chat"));
+        }
+      }
     });
 </script>
 
@@ -91,10 +103,12 @@
     ><HighlighterIcon />Watched words</Menu.Item>
   <Menu.Separator />
 {/if}
-<Menu.CheckboxItem checked={chatLayout.emoji} onCheckedChange={(on) => (chatLayout.emoji = on)}
-  >Suggest emoji after a colon</Menu.CheckboxItem>
-<Menu.Separator />
-{#if user}
+{#if !notices}
+  <Menu.CheckboxItem checked={chatLayout.emoji} onCheckedChange={(on) => (chatLayout.emoji = on)}
+    >Suggest emoji after a colon</Menu.CheckboxItem>
+  <Menu.Separator />
+{/if}
+{#if user && !notices}
   <Menu.Item onSelect={() => goto(userHref(target.name))}><UserIcon />View profile</Menu.Item>
   <Menu.Item onSelect={() => goto(links(target.name).browse)}
     ><FolderOpenIcon />Browse shares</Menu.Item>

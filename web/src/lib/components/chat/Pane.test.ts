@@ -83,6 +83,36 @@ describe("a chat pane", () => {
   const ids = () => rows().map((r) => r.dataset.message);
   const row = (id: number) => document.querySelector<HTMLElement>(`[data-message="${id}"]`)!;
 
+  it("shows the server's notices read-only, with no composer and nothing about a person", async () => {
+    const notice = (localId: number) =>
+      privateMessage(localId, { username: "server", message: `notice ${localId}` });
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/conversations/server/messages") ? [notice(1)] : undefined
+    );
+    live.start();
+    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    component = mount(Pane, {
+      target: document.body,
+      props: { target: { kind: "user", name: "server" } }
+    });
+    await flush();
+    expect(ids()).toEqual(["1"]);
+    expect(document.querySelector("h2")?.textContent).toBe("Server");
+    expect(document.querySelector("textarea")).toBeNull();
+    expect(document.querySelector("[aria-label='Reply with a quote']")).toBeNull();
+    expect(row(1).textContent).not.toContain("server");
+    expect(row(1).querySelector("a")).toBeNull();
+    expect(row(1).querySelector("time")?.className).not.toContain("invisible");
+
+    // a frame is built before the notice is acknowledged, which must not read as unread
+    const fresh = { ...notice(2), isAcknowledged: false };
+    net.frame("conversations.message", { username: "server", message: fresh });
+    await flush();
+    expect(ids()).toEqual(["1", "2"]);
+    expect(row(2).className).toContain("border-transparent");
+    expect(net.requests.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
   it("adds a conversation's new message without rebuilding the rows or losing a selection", async () => {
     const unread = [privateMessage(1), privateMessage(2, { isAcknowledged: false })];
     const net = fakeNetwork((url, method) => {

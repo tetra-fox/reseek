@@ -3,12 +3,14 @@
   import HashIcon from "@lucide/svelte/icons/hash";
   import LockIcon from "@lucide/svelte/icons/lock";
   import PanelRightIcon from "@lucide/svelte/icons/panel-right";
+  import ServerIcon from "@lucide/svelte/icons/server";
   import { Dialog } from "bits-ui";
   import type { Snippet } from "svelte";
 
   import { app } from "#lib/app.svelte.js";
   import { chat, paneKey } from "#lib/chat/chat.svelte.js";
   import type { Message } from "#lib/chat/messages/messages.js";
+  import { chatName, isNotices } from "#lib/chat/notices.js";
   import { MessagePane, type Target } from "#lib/chat/pane.svelte.js";
   import { chatLayout as layout, SIDE_TABS } from "#lib/chat/prefs.svelte.js";
   import { RoomMembers } from "#lib/chat/rooms/room.svelte.js";
@@ -17,6 +19,7 @@
   import RoomUsers from "#lib/components/chat/rooms/RoomUsers.svelte";
   import RoomWall from "#lib/components/chat/rooms/RoomWall.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
@@ -69,8 +72,9 @@
       if (chat.openPane === key) chat.openPane = null;
     };
   });
+  const notices = $derived(isNotices(target));
   $effect(() => {
-    if (target.kind === "user") void users.load(target.name);
+    if (target.kind === "user" && !notices) void users.load(target.name);
   });
 
   const write = $derived(session.can("ReadWrite"));
@@ -78,8 +82,6 @@
   const summary = $derived(target.kind === "user" ? users.get(target.name) : undefined);
   const disabled = $derived.by(() => {
     if (!write) return "Read-only accounts cannot send messages";
-    if (target.kind === "user" && target.name === "server")
-      return "Server notices cannot be answered";
     if (!joined) return "Join the room to send messages";
     if (!app.isServerConnected) return "Connect to the Soulseek server to send messages";
     if (summary?.block?.scopes.includes("messages")) return "Messages from this user are blocked";
@@ -139,10 +141,18 @@
   </div>
 {/snippet}
 
-<section class="flex min-h-0 min-w-0 flex-1 flex-col" aria-label={`Chat with ${target.name}`}>
+<section
+  class="flex min-h-0 min-w-0 flex-1 flex-col"
+  aria-label={notices ? "Server notices" : `Chat with ${target.name}`}>
   <header class="flex min-h-12 items-center gap-2 border-b px-3 py-2">
     {@render lead?.()}
-    {#if target.kind === "user"}
+    {#if notices}
+      <ServerIcon class="size-4 shrink-0 text-fg-muted" />
+      <div class="name-count flex-1 gap-2">
+        <h2 class="truncate font-semibold">{chatName(target)}</h2>
+        <span class="text-xs text-fg-muted"><span>Notices from the Soulseek server</span></span>
+      </div>
+    {:else if target.kind === "user"}
       <Presence presence={summary?.presence} />
       <Username name={target.name} class="text-base" />
       <span class="text-xs text-fg-muted">{summary?.presence ?? ""}</span>
@@ -185,8 +195,11 @@
               {...props}
               variant="ghost"
               size="icon-sm"
-              aria-label={target.kind === "room" ? "Room menu" : "Conversation menu"}
-              ><EllipsisIcon /></Button>
+              aria-label={target.kind === "room"
+                ? "Room menu"
+                : notices
+                  ? "Server notices menu"
+                  : "Conversation menu"}><EllipsisIcon /></Button>
           {/snippet}
         </Menu.Trigger>
         <Menu.Content align="end" class="min-w-56"><ChatMenuItems {target} /></Menu.Content>
@@ -215,19 +228,24 @@
             </div>
           {/each}
         </div>
+      {:else if notices && !pane.ordered.length && !pane.error}
+        <EmptyState
+          icon={ServerIcon}
+          class="flex-1 justify-center"
+          title="No notices from the server are stored" />
       {:else}
         <MessageList
           {pane}
           {at}
           {watch}
-          onreply={disabled ? undefined : reply}
+          onreply={disabled || notices ? undefined : reply}
           onread={() => write && void pane.markRead()} />
       {/if}
       {#if target.kind === "room" && !joined && !write}
         <p class="border-t px-3 py-2 text-xs text-fg-muted">
           This room is not joined. Its stored history is shown.
         </p>
-      {:else}
+      {:else if !notices}
         <Composer bind:this={composer} {pane} {disabled} {names} />
       {/if}
     </div>

@@ -29,23 +29,34 @@
     watch: string[];
     /** a room's message, which offers a private chat with its author */
     room: boolean;
+    /** a notice from the server: the time and the text, with nothing that belongs to a person */
+    notice?: boolean;
     /** quotes the message in the composer, when one can be sent */
     onreply?: (message: Message) => void;
     onretry: () => void;
   };
 
-  let { message: m, head, highlight, watch, room, onreply, onretry }: Props = $props();
+  let {
+    message: m,
+    head,
+    highlight,
+    watch,
+    room,
+    notice = false,
+    onreply,
+    onretry
+  }: Props = $props();
 
   let unfolded = $state(false);
   let shownHidden = $state(false);
   const long = $derived(m.text.length > LONG && !unfolded);
-  const action = $derived(actionOf(m.text));
+  const action = $derived(notice ? null : actionOf(m.text));
   const text = $derived(action ?? m.text);
 </script>
 
 {#snippet body()}
-  <!-- our own messages mark nothing: our name in them is no mention -->
-  <ChatText text={long ? `${text.slice(0, LONG)}…` : text} watch={m.self ? [] : watch} />
+  <!-- our own messages and the server's mark nothing: our name in them is no mention -->
+  <ChatText text={long ? `${text.slice(0, LONG)}…` : text} watch={m.self || notice ? [] : watch} />
   {#if long}
     <button
       type="button"
@@ -56,8 +67,9 @@
 
 <div
   class={[
-    "group/message relative grid grid-cols-[2.25rem_minmax(0,1fr)] gap-x-2.5 border-l-2 pr-3 pl-2.5",
-    head ? "pt-2.5 pb-0.5" : "py-px",
+    "group/message relative grid gap-x-2.5 border-l-2 pr-3 pl-2.5",
+    notice ? "grid-cols-[4rem_minmax(0,1fr)]" : "grid-cols-[2.25rem_minmax(0,1fr)]",
+    notice ? "py-1" : head ? "pt-2.5 pb-0.5" : "py-px",
     m.mention
       ? "border-warning bg-warning-soft/45"
       : m.unread
@@ -75,7 +87,10 @@
         class="mt-0.5 size-9 text-sm" />
     {:else}
       <time
-        class="invisible pt-px text-[0.625rem] leading-5 whitespace-nowrap text-fg-subtle tabular-nums group-hover/message:visible"
+        class={[
+          "pt-px leading-5 whitespace-nowrap text-fg-subtle tabular-nums",
+          notice ? "text-xs" : "invisible text-[0.625rem] group-hover/message:visible"
+        ]}
         datetime={m.timestamp}
         title={formatDate(m.timestamp)}>{shortTime(m.timestamp)}</time>
     {/if}
