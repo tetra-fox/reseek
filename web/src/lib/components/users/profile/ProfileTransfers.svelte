@@ -12,7 +12,7 @@
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
-  import { getDirectoryName, plural } from "#lib/format.js";
+  import { plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -170,9 +170,6 @@
             showFolder
             selected={list.selected.has(t.id)}
             speeds={[]}
-            around={shown.filter(
-              (o) => getDirectoryName(o.filename) === getDirectoryName(t.filename)
-            )}
             onselect={(range) => list.tick(t.id, range)}
             onremove={() => remove(t)}
             onblock={(deny) => (deny ? void denyAndBlock() : blocking.ask(username))} />

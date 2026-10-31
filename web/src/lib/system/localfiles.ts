@@ -1,5 +1,5 @@
+import type { Track } from "#lib/analysis/playback.svelte.js";
 import { api, root as base } from "#lib/api/client.js";
-import type { Track } from "#lib/files/player.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
 import { session } from "#lib/session.svelte.js";
 import { encodePath } from "#lib/transfers/content.js";
@@ -11,16 +11,18 @@ export type Root = "downloads" | "incomplete";
 export const joinPath = (parts: string[]) => parts.filter(Boolean).join("/");
 
 /**
- * The URL that loads a file under a root, shown in the browser or saved. Without a session
- * cookie, as on a trusted network, the link carries a ten-minute token for that one file
+ * The URL that loads a file under a root, shown in the browser or saved, as it is stored or as
+ * the WAV the daemon makes of it. Without a session cookie, as on a trusted network, the link
+ * carries a ten-minute token for that one file
  */
 export const fileUrl = async (
   root: Root,
   path: string,
-  disposition: "inline" | "attachment"
+  disposition: "inline" | "attachment",
+  as: "content" | "wav" = "content"
 ): Promise<Outcome<string>> => {
   const encoded = encodePath(path);
-  const url = `${base()}/api/v0/files/${root}/files/${encoded}/content`;
+  const url = `${base()}/api/v0/files/${root}/files/${encoded}/${as}`;
   const query = new URLSearchParams({ disposition });
   if (!session.canSignOut) {
     const token = await call(() =>
@@ -36,10 +38,8 @@ export const fileUrl = async (
 export const archiveUrl = (root: Root, path: string) =>
   `${base()}/api/v0/files/${root}/directories/${encodePath(path)}/archive`;
 
-/** A file under a root as a track of the player, its folder the one it is in */
+/** A file under a root as the analysis popup plays it */
 export const fileTrack = (root: Root, path: string): Track => ({
-  key: `${root}:${path}`,
   filename: path,
-  url: (disposition) => fileUrl(root, path, disposition),
-  folder: { root, path: path.split("/").slice(0, -1).join("/") }
+  url: (as) => fileUrl(root, path, "inline", as)
 });

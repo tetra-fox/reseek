@@ -15,7 +15,6 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import UserMenuItems from "#lib/components/users/UserMenuItems.svelte";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
-  import { isAudio } from "#lib/files/kinds.js";
   import { remoteFolder } from "#lib/files/links.js";
   import { getFileName } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
@@ -25,7 +24,6 @@
     copyPath,
     open,
     openFolder,
-    preview,
     queuePosition,
     redownload,
     saveToDevice,
@@ -37,8 +35,6 @@
   type Props = {
     transfer: Transfer;
     direction: Direction;
-    /** the transfers of its folder, which the player plays around it */
-    around: Transfer[];
     /** removes it, asking first when it is still running */
     onremove: () => void;
     /** blocks the user, asking first; with `deny` their unfinished uploads are canceled first */
@@ -49,7 +45,7 @@
     onanalyze?: (large: boolean) => void;
   };
 
-  let { transfer: t, direction, around, onremove, onblock, ondetails, onanalyze }: Props = $props();
+  let { transfer: t, direction, onremove, onblock, ondetails, onanalyze }: Props = $props();
 
   const can = $derived(rowActions(t, direction));
   const write = $derived(session.can("ReadWrite"));
@@ -62,7 +58,6 @@
   {#if can.open}
     <LocalFileItems
       onopen={() => void open(t)}
-      onpreview={isAudio(t.filename) ? () => preview(t, around) : undefined}
       onsave={() => void saveToDevice(t)}
       path={t.localPath}
       local />

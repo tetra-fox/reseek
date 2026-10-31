@@ -5,7 +5,6 @@ import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
 import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
 import LinkIcon from "@lucide/svelte/icons/link";
 import ListIcon from "@lucide/svelte/icons/list";
-import PlayIcon from "@lucide/svelte/icons/play";
 import SaveIcon from "@lucide/svelte/icons/save";
 
 /**
@@ -15,7 +14,6 @@ import SaveIcon from "@lucide/svelte/icons/save";
 export const FILE_ACTIONS = {
   download: { label: "Download", icon: DownloadIcon },
   open: { label: "Open", icon: ExternalLinkIcon },
-  preview: { label: "Preview", icon: PlayIcon },
   analyze: { label: "Analyze", icon: AudioLinesIcon },
   save: { label: "Save to this device", icon: SaveIcon },
   copyPath: { label: "Copy path", icon: CopyIcon },

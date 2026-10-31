@@ -77,10 +77,6 @@
   const tree = $derived(treeOf(items));
   const flat = $derived(view.groupBy === "flat" || view.groupBy === "batch");
   const ids = (group: Group) => group.transfers.map((t) => t.id);
-  /** the group each grouped row is in, whose files play after it */
-  const groupOf = $derived(
-    new Map(items.flatMap((i) => (i.type === "row" && i.group ? [[i.transfer.id, i.group]] : [])))
-  );
   const ticked = (group: Group) => group.transfers.filter((t) => selected.has(t.id)).length;
 
   let table = $state<ReturnType<typeof FileTree<Transfer>> | null>(null);
@@ -190,7 +186,6 @@
       showFolder={flat}
       selected={selected.has(t.id)}
       speeds={store.speeds.get(t.id) ?? []}
-      around={groupOf.get(t.id)?.transfers ?? [t]}
       onselect={tick}
       ondetails={(analyze, large) => ondetails(t, analyze, large)}
       onremove={() => onremove([t])}

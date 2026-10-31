@@ -5,11 +5,11 @@
 
   import { DISCLAIMER, type Target, VERDICTS } from "#lib/analysis/analysis.js";
   import { jobs } from "#lib/analysis/jobs.svelte.js";
+  import type { Track } from "#lib/analysis/playback.svelte.js";
   import type { FileReport } from "#lib/analysis/report.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
-  import { player, type Track } from "#lib/files/player.svelte.js";
   import { session } from "#lib/session.svelte.js";
 
   import Judgment from "./Judgment.svelte";
@@ -23,7 +23,7 @@
   type Props = {
     analyzed: FileReport;
     target: Target;
-    /** the file as the player plays it */
+    /** the file as the large view plays it */
     track: Track | null;
     name: string;
   };
@@ -35,19 +35,6 @@
   const job = $derived(analyzed.job);
   const write = $derived(session.can("ReadWrite"));
   const openLarge = () => (analyzed.large = true);
-
-  // while the large view shows the file and the player plays it, the cursor follows it a frame
-  // at a time
-  $effect(() => {
-    const shown = scope;
-    const key = track?.key;
-    if (!analyzed.large || !shown || !key || !player.playing || !player.holds(key)) return;
-    let frame = requestAnimationFrame(function followed() {
-      shown.played(player.position());
-      frame = requestAnimationFrame(followed);
-    });
-    return () => cancelAnimationFrame(frame);
-  });
 </script>
 
 <div class="flex flex-col gap-2">

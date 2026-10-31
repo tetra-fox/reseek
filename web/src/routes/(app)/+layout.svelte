@@ -15,7 +15,6 @@
   import Footer from "#lib/components/shell/Footer.svelte";
   import Header from "#lib/components/shell/Header.svelte";
   import LostBanner from "#lib/components/shell/LostBanner.svelte";
-  import PlayerBar from "#lib/components/shell/PlayerBar.svelte";
   import Sidebar from "#lib/components/shell/Sidebar.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import BlockDialog from "#lib/components/users/BlockDialog.svelte";
@@ -197,7 +196,6 @@
       </div>
     </div>
     <div bind:clientHeight={bottomHeight}>
-      <PlayerBar />
       <Footer />
     </div>
   </div>

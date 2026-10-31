@@ -4,13 +4,13 @@
   import type { Snippet } from "svelte";
 
   import type { Target } from "#lib/analysis/analysis.js";
+  import type { Track } from "#lib/analysis/playback.svelte.js";
   import { FileReport } from "#lib/analysis/report.svelte.js";
   import AnalysisSection from "#lib/components/analysis/AnalysisSection.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Username from "#lib/components/users/Username.svelte";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
-  import type { Track } from "#lib/files/player.svelte.js";
   import { type Field, inspector } from "#lib/inspector/inspector.svelte.js";
   import { session } from "#lib/session.svelte.js";
 

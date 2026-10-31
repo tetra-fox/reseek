@@ -8,7 +8,6 @@
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
-  import { isAudio } from "#lib/files/kinds.js";
   import { dateTime, formatBytes } from "#lib/format.js";
   import { inspector } from "#lib/inspector/inspector.svelte.js";
   import type { Entry } from "#lib/system/explorer.js";
@@ -22,16 +21,13 @@
     entry: Entry;
     root: Root;
     onopen: () => void;
-    /** plays it in the page's player */
-    onpreview: () => void;
     onsave: () => void;
     /** asks to delete it, where files can be deleted */
     ondelete?: () => void;
   };
 
-  let { entry, root, onopen, onpreview, onsave, ondelete }: Props = $props();
+  let { entry, root, onopen, onsave, ondelete }: Props = $props();
 
-  const audio = $derived(isAudio(entry.name));
   const mark = $derived(marks.file(root, entry.path));
   const analysis = $derived(
     analyzable(entry.name)
@@ -50,17 +46,12 @@
 
 {#snippet actions()}
   <Button variant="outline" size="sm" onclick={onopen}><A.open.icon />{A.open.label}</Button>
-  {#if audio}
-    <Button variant="outline" size="sm" onclick={onpreview}
-      ><A.preview.icon />{A.preview.label}</Button>
-  {/if}
 {/snippet}
 
 {#snippet menu()}
   <Menu.Content align="end" class="min-w-48">
     <LocalFileItems
       {onopen}
-      onpreview={audio ? onpreview : undefined}
       onanalyze={analysis
         ? () => inspector.analyze(targetKey(analysis.target), shiftHeld())
         : undefined}

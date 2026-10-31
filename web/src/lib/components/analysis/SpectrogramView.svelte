@@ -4,11 +4,13 @@
   import PauseIcon from "@lucide/svelte/icons/pause";
   import PlayIcon from "@lucide/svelte/icons/play";
   import ScanIcon from "@lucide/svelte/icons/scan";
+  import Volume2Icon from "@lucide/svelte/icons/volume-2";
   import ZoomInIcon from "@lucide/svelte/icons/zoom-in";
   import ZoomOutIcon from "@lucide/svelte/icons/zoom-out";
   import { type Component, untrack } from "svelte";
 
   import { DISCLAIMER, SCALES } from "#lib/analysis/analysis.js";
+  import { playable, Playback, type Track } from "#lib/analysis/playback.svelte.js";
   import { guideColor, guideKey } from "#lib/analysis/spectrogram/draw.js";
   import { formatHz } from "#lib/analysis/spectrogram/frequency.js";
   import { ScaleMotion } from "#lib/analysis/spectrogram/scalemotion.svelte.js";
@@ -18,7 +20,6 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
-  import { playable, player, type Track } from "#lib/files/player.svelte.js";
   import { formatDuration } from "#lib/format.js";
 
   import Minimap from "./Minimap.svelte";
@@ -28,10 +29,11 @@
   // the spectrogram, the waveform and the spectrum at the cursor as one unit on one time axis,
   // with the frequency scale, zoom and playback above it, the guide lines' legend, a strip of the
   // whole file, what the cursor is on, and the disclaimer under it all. The spectrum goes beside
-  // the rest when there is room
+  // the rest when there is room. This is the one place reseek plays a file: it goes when the
+  // popup closes, and the sound with it
   type Props = {
     scope: Scope;
-    /** the file as the player plays it, null when it can't be played */
+    /** the file to play, null when it can't be played */
     track: Track | null;
   };
 
@@ -43,15 +45,27 @@
   const motion = new ScaleMotion(untrack(() => scale));
   $effect(() => motion.to(scale));
   $effect(() => () => motion.stop());
-  const canPlay = $derived(!!track && playable(track.filename));
-  const loaded = $derived(!!track && player.holds(track.key));
-  const playing = $derived(loaded && player.playing);
+  const playback = new Playback();
+  const codec = $derived(scope.report.claimed.codec);
+  const canPlay = $derived(!!track && playable(track.filename, codec));
+  const canToggle = $derived(canPlay && !playback.problem);
+  const playing = $derived(playback.playing);
+  $effect(() => playback.apply());
 
-  /** Plays the file from the cursor, or pauses and resumes it once it is in the player */
+  // while it plays the cursor follows it a frame at a time
+  $effect(() => {
+    if (!playing) return;
+    const shown = scope;
+    let frame = requestAnimationFrame(function followed() {
+      shown.played(playback.position());
+      frame = requestAnimationFrame(followed);
+    });
+    return () => cancelAnimationFrame(frame);
+  });
+
+  /** Plays the file from the cursor, or pauses and resumes it once it has loaded */
   const toggle = () => {
-    if (!track || !canPlay) return;
-    if (loaded) player.playing = !player.playing;
-    else void player.play(track, [track], scope.cursor);
+    if (track && canToggle) void playback.toggle(track, codec, scope.cursor);
   };
   /** A reason the daemon gave, as a sentence */
   const sentence = (reason: string) =>
@@ -59,7 +73,7 @@
 
   /** The user put the cursor somewhere: playback moves there too */
   const seek = (t: number) => {
-    if (loaded) player.seek(t);
+    if (playback.src) playback.seek(t);
   };
 
   const windows = $derived(scope.report.windows ?? []);
@@ -86,7 +100,7 @@
     ["← / →", "Previous or next window"],
     ["Shift+← / →", "Ten windows back or forward"],
     ["Home / End", "First or last window"],
-    ...(canPlay ? [["Space", "Play or pause"]] : [])
+    ...(canToggle ? [["Space", "Play or pause"]] : [])
   ]);
   const deepest = $derived(scope.view.span <= Math.min(MIN_SPAN, scope.duration) + 1e-9);
 </script>
@@ -100,13 +114,35 @@
   </Tooltip>
 {/snippet}
 
+{#if playback.src}
+  <audio
+    bind:this={playback.element}
+    src={playback.src}
+    bind:volume={spectrogramView.volume}
+    onloadedmetadata={playback.loaded}
+    onplay={() => (playback.playing = true)}
+    onpause={() => (playback.playing = false)}
+    onerror={() => void playback.failed()}></audio>
+{/if}
+
 <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_22rem]">
   <div class="flex min-w-0 flex-col gap-2">
     <div class="flex flex-wrap items-center gap-1">
-      {#if canPlay}
+      {#if canToggle}
         <Button variant="outline" size="sm" aria-pressed={playing} onclick={toggle}>
           {#if playing}<PauseIcon />Pause{:else}<PlayIcon />Play{/if}
         </Button>
+        <span class="flex items-center gap-1 px-1">
+          <Volume2Icon class="size-4 text-fg-muted" aria-hidden="true" />
+          <input
+            type="range"
+            aria-label="Volume"
+            min="0"
+            max="1"
+            step="0.05"
+            bind:value={spectrogramView.volume}
+            class="w-20 accent-(--color-accent)" />
+        </span>
         <Tooltip text={scope.following ? "Following the playhead" : "Not following the playhead"}>
           {#snippet child({ props })}
             <Button
@@ -176,6 +212,8 @@
         <p class="text-xs text-fg-muted">
           This browser cannot play this file. The cursor does not follow playback.
         </p>
+      {:else if playback.problem}
+        <p class="text-xs text-fg-muted" role="status">{playback.problem}</p>
       {/if}
     {/if}
   </div>

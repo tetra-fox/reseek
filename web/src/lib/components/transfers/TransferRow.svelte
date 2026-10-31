@@ -62,7 +62,6 @@
     showFolder: boolean;
     selected: boolean;
     speeds: number[];
-    around: Transfer[];
     /** ticks the row; `range` when shift was held */
     onselect: (range: boolean) => void;
     /**
@@ -82,7 +81,6 @@
     showFolder,
     selected,
     speeds,
-    around,
     onselect,
     ondetails,
     onremove,
@@ -313,7 +311,6 @@
           <RowMenu
             transfer={t}
             {direction}
-            {around}
             {onremove}
             {onblock}
             ondetails={ondetails ? () => ondetails() : undefined}

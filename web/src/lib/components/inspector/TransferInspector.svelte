@@ -57,15 +57,6 @@
   const write = $derived(session.can("ReadWrite"));
   const chip = $derived(stateChip(t));
   const moving = $derived(t.state === "InProgress");
-  /** the transfers of its folder, which the player plays around it */
-  const around = $derived(
-    store.list.rows.filter(
-      (o) =>
-        !store.hidden.has(o.id) &&
-        o.username === t.username &&
-        getDirectoryName(o.filename) === getDirectoryName(t.filename)
-    )
-  );
   const target = $derived<Target>({ kind: "download", username: t.username, id: t.id });
   const analysis = $derived(
     can.open && analyzableDownload(t) ? { target, track: downloadTrack(t) } : null
@@ -144,7 +135,6 @@
   <RowMenu
     transfer={t}
     {direction}
-    {around}
     onremove={onremove ?? (() => store.removeLater([t.id]))}
     onblock={(deny) => (deny ? void denyAndBlock(t.username) : blocking.ask(t.username))}
     onanalyze={analysis ? (large) => inspector.analyze(targetKey(target), large) : undefined} />

@@ -6,14 +6,16 @@ import type { Transfer } from "./states";
 
 /**
  * The URL that loads a finished download's file: shown in the browser (`inline`) or saved
- * (`attachment`). With a session cookie the browser sends it along; without one, as on a
- * trusted network, the link carries a ten-minute token for that one file
+ * (`attachment`), as it is stored or as the WAV the daemon makes of it. With a session cookie the
+ * browser sends it along; without one, as on a trusted network, the link carries a ten-minute
+ * token for that one file
  */
 export const contentUrl = async (
   t: Transfer,
-  disposition: "inline" | "attachment"
+  disposition: "inline" | "attachment",
+  as: "content" | "wav" = "content"
 ): Promise<Outcome<string>> => {
-  const path = `${root()}/api/v0/transfers/downloads/${encodeURIComponent(t.username)}/${t.id}/content`;
+  const path = `${root()}/api/v0/transfers/downloads/${encodeURIComponent(t.username)}/${t.id}/${as}`;
   const query = new URLSearchParams({ disposition });
   if (!session.canSignOut) {
     const token = await call(() =>

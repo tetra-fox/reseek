@@ -481,6 +481,11 @@ test("the cursor follows playback and a click seeks it", async ({ page }) => {
   const paused = await now();
   await page.waitForTimeout(300);
   expect(await now()).toBe(paused);
+  await viewer.getByRole("button", { name: "Play", exact: true }).click();
+  // the sound belongs to the popup and goes with it
+  await page.keyboard.press("Escape");
+  await expect(viewer).toBeHidden();
+  await expect(audio).toHaveCount(0);
 });
 
 test("a report an older version made asks to be analyzed again", async ({ page }) => {
@@ -709,7 +714,7 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   await expect(inspector.getByText("Waiting in the analysis queue")).toBeVisible();
   await expect(inspector.getByText("Likely a transcode")).toBeVisible();
   // the file's own actions sit under its name, the rest in its menu
-  await expect(inspector.getByRole("button", { name: "Preview" })).toBeVisible();
+  await expect(inspector.getByRole("button", { name: "Open", exact: true })).toBeVisible();
   await inspector.getByRole("button", { name: "More actions" }).click();
   await expect(page.getByRole("menuitem", { name: "Save to this device" })).toBeVisible();
   await page.keyboard.press("Escape");

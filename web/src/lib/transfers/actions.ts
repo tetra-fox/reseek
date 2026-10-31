@@ -1,17 +1,17 @@
 import { goto } from "$app/navigation";
 
+import type { Track } from "#lib/analysis/playback.svelte.js";
 import { app } from "#lib/app.svelte.js";
 import { copyText } from "#lib/feedback/clipboard.svelte.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { enqueue } from "#lib/files/downloads.js";
-import { player, type Track } from "#lib/files/player.svelte.js";
 import { downloadFile } from "#lib/format.js";
 import { href } from "#lib/nav.js";
 import { blocking } from "#lib/users/block.svelte.js";
 
 import type { BulkAction } from "./bulk";
 import { contentUrl, localFolder } from "./content";
-import { isCancelable, isSucceeded, type Transfer } from "./states";
+import { isCancelable, type Transfer } from "./states";
 import { bump, downloads, type Transfers, uploads } from "./transfers.svelte";
 
 /** The store of a transfer's direction */
@@ -44,23 +44,11 @@ export const saveToDevice = async (t: Transfer) => {
   else toast(url.error, "error");
 };
 
-/** A finished download as a track of the player */
-export const downloadTrack = (t: Transfer): Track => {
-  const folder = folderOf([t]);
-  return {
-    key: t.id,
-    filename: t.filename,
-    url: (disposition) => contentUrl(t, disposition),
-    folder: folder === null ? null : { root: "downloads", path: folder }
-  };
-};
-
-/** Plays a finished download in the player, its folder's other finished files around it */
-export const preview = (t: Transfer, around: Transfer[]) =>
-  void player.play(
-    downloadTrack(t),
-    around.filter((o) => isSucceeded(o.state) && o.localPath).map(downloadTrack)
-  );
+/** A finished download as the analysis popup plays it */
+export const downloadTrack = (t: Transfer): Track => ({
+  filename: t.filename,
+  url: (as) => contentUrl(t, "inline", as)
+});
 
 /** The folder a finished download is in under the downloads directory, null when it isn't */
 export const folderOf = (transfers: Transfer[]) =>

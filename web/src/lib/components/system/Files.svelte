@@ -37,8 +37,6 @@
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
-  import { isAudio } from "#lib/files/kinds.js";
-  import { player } from "#lib/files/player.svelte.js";
   import { folderCaption } from "#lib/files/summary.js";
   import { dateTime, formatBytes, plural } from "#lib/format.js";
   import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
@@ -47,7 +45,7 @@
   import { session } from "#lib/session.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
   import { type Entry, entries, type SortBy } from "#lib/system/explorer.js";
-  import { archiveUrl, fileTrack, fileUrl, joinPath, type Root } from "#lib/system/localfiles.js";
+  import { archiveUrl, fileUrl, joinPath, type Root } from "#lib/system/localfiles.js";
   import { encodePath } from "#lib/transfers/content.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, folderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
@@ -199,16 +197,6 @@
     if (url.ok) window.location.assign(url.data);
     else toast(url.error, "error");
   };
-  /** Plays an audio file with the other files of its folder around it */
-  const preview = (e: Entry) => {
-    const folder = e.path.split("/").slice(0, -1).join("/");
-    const read = listings.get(folder);
-    const around = read ? entries(read, folder.split("/").filter(Boolean), sort.by, sort.dir) : [e];
-    void player.play(
-      fileTrack(root, e.path),
-      around.filter((r) => r.kind === "file").map((r) => fileTrack(root, r.path))
-    );
-  };
 
   const remove = async (targets: Entry[]) => {
     const failed: string[] = [];
@@ -296,7 +284,6 @@
       entry={e}
       {root}
       onopen={() => void open(e)}
-      onpreview={() => preview(e)}
       onsave={() => void save(e)}
       ondelete={canDelete ? () => askRemove([e]) : undefined} />
   {/if}
@@ -372,7 +359,6 @@
       {#if e.kind === "file"}
         <LocalFileItems
           onopen={() => void open(e)}
-          onpreview={isAudio(e.name) ? () => preview(e) : undefined}
           onanalyze={analyzable(e.name)
             ? () => {
                 shownKey = e.key;
