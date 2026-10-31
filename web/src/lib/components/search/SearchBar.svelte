@@ -1,20 +1,23 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import HistoryIcon from "@lucide/svelte/icons/history";
-  import PinIcon from "@lucide/svelte/icons/pin";
-  import PinOffIcon from "@lucide/svelte/icons/pin-off";
+  import LinkIcon from "@lucide/svelte/icons/link";
   import SearchIcon from "@lucide/svelte/icons/search";
   import XIcon from "@lucide/svelte/icons/x";
 
   import { app } from "#lib/app.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
-  import Input from "#lib/components/ui/Input.svelte";
-  import { toast } from "#lib/feedback/toast.svelte.js";
+  import Marked from "#lib/components/ui/Marked.svelte";
+  import * as Suggest from "#lib/components/ui/suggest/suggest.js";
+  import UserEntries from "#lib/components/users/UserEntries.svelte";
   import { parseSlsk, slskBrowse } from "#lib/files/slsk.js";
-  import { href } from "#lib/nav.js";
-  import { forget, recent, remember, restore, togglePin } from "#lib/search/recent.svelte.js";
-  import { type SearchScope, scopeLabel, searches } from "#lib/search/searches.svelte.js";
+  import { recent } from "#lib/search/recent.svelte.js";
+  import { openSearch, type SearchScope, scopeLabel } from "#lib/search/searches.svelte.js";
+  import { UserFinder } from "#lib/users/finder.svelte.js";
+  import { bestMatches, nameParts } from "#lib/users/match.js";
+
+  import Recent from "./Recent.svelte";
 
   type Props = {
     /** where the search goes; the whole network when not given */
@@ -29,42 +32,46 @@
 
   let { scope, onclearscope, text: initial = "", history = false }: Props = $props();
 
+  /** how many recent searches the dropdown lists */
+  const EARLIER = 4;
+  /** the entry that runs what is in the box, the first of the dropdown */
+  const RUN = "run";
+  const EARLIER_PREFIX = "earlier:";
+
   // the box starts from what the page was opened with and is the user's from then on
   // svelte-ignore state_referenced_locally
   let text = $state(initial);
+  let open = $state(false);
 
+  const phrase = $derived(text.trim());
+  // a pasted slsk:// link opens what it points at rather than searching for its text
+  const link = $derived(parseSlsk(phrase));
   const connected = $derived(app.isServerConnected);
   const scoped = $derived(scope ? scopeLabel(scope) : null);
+  const earlier = $derived(
+    bestMatches([...recent.pinned, ...recent.texts], phrase, (t) => t)
+      .filter((t) => t !== phrase)
+      .slice(0, EARLIER)
+  );
+  // a search of one user's shares and a link have no user to offer
+  const finder = new UserFinder(() => (scope || link ? "" : phrase), {
+    tab: "shares",
+    onmissed: () => (open = true)
+  });
 
-  /** Opens a search's page at once; the results stream in as the daemon finds them */
-  const open = (phrase: string) => {
-    const { id, done } = searches.start(phrase, scope);
-    remember(phrase);
-    void goto(href(`/searches/${id}`));
-    // a search refused while its page is open says so there; elsewhere it toasts
-    void done.then((outcome) => {
-      if (!outcome.ok && !location.hash.includes(id)) toast(outcome.error, "error");
-    });
-  };
+  const search = (words: string) => openSearch(words, scope);
 
-  const submit = () => {
-    const phrase = text.trim();
-    // a pasted slsk:// link opens what it points at rather than searching for its text
-    const link = parseSlsk(phrase);
+  const run = () => {
     if (link) {
       text = "";
       void goto(slskBrowse(link));
-      return;
-    }
-    if (!phrase || !connected) return;
-    open(phrase);
+    } else if (phrase && connected) search(phrase);
   };
 
-  const remove = (search: string) => {
-    const at = forget(search);
-    toast(`Removed '${search}' from recent searches`, "info", {
-      action: { label: "Undo", run: () => restore(search, at) }
-    });
+  const choose = (value: string) => {
+    if (value === RUN) run();
+    else if (value.startsWith(EARLIER_PREFIX)) search(value.slice(EARLIER_PREFIX.length));
+    else finder.choose(value);
   };
 </script>
 
@@ -72,15 +79,22 @@
   class="flex flex-col gap-2 rounded-card border bg-surface p-3 shadow-card"
   onsubmit={(e) => {
     e.preventDefault();
-    submit();
+    run();
   }}>
   <!-- the button isn't disabled while the box is empty: a browser ignores Enter when the form's
-       default button is disabled, and submit already ignores an empty phrase -->
+       default button is disabled, and run already ignores an empty phrase -->
   <div class="flex items-center gap-inline">
-    <Input
+    <!-- Enter takes the first entry, so it searches unless the keys moved to another -->
+    <Suggest.Box
       bind:value={text}
+      bind:open
+      first={RUN}
+      hold={finder.asking}
+      onchoose={choose}
+      ondismiss={finder.abandon}
       type="search"
       enterkeyhint="search"
+      autocomplete="off"
       icon={SearchIcon}
       wrapperClass="flex-1"
       autofocus
@@ -88,7 +102,25 @@
       aria-label="Search for files"
       placeholder="Search for files"
       disabled={!connected}
-      class="h-11 pl-10 text-base md:text-base" />
+      class="h-11 pl-10 text-base md:text-base">
+      <Suggest.Item value={RUN} icon={link ? LinkIcon : SearchIcon}>
+        {link ? "Open this slsk:// link" : `Search for ${phrase}`}
+      </Suggest.Item>
+      {#if earlier.length}
+        <Suggest.Group heading="Recent searches">
+          {#each earlier as words (words)}
+            <Suggest.Item value={`${EARLIER_PREFIX}${words}`} icon={HistoryIcon}>
+              <Marked parts={nameParts(words, phrase)} />
+            </Suggest.Item>
+          {/each}
+        </Suggest.Group>
+      {/if}
+      {#if finder.matches.length || finder.unknown}
+        <Suggest.Group heading="Users">
+          <UserEntries {finder} text={phrase} />
+        </Suggest.Group>
+      {/if}
+    </Suggest.Box>
     <Button type="submit" class="h-11 px-4" disabled={!connected}>Search</Button>
   </div>
   {#if app.state && !connected}
@@ -107,53 +139,7 @@
       </Badge>
     </div>
   {/if}
-  {#if history && (recent.pinned.length || recent.texts.length)}
-    <ul class="flex flex-wrap items-center gap-1.5" aria-label="Pinned and recent searches">
-      {#each recent.pinned as search (`pin:${search}`)}
-        <li class="group flex items-center rounded-full border bg-accent-soft text-accent-soft-fg">
-          <button
-            type="button"
-            class="flex items-center gap-1 py-0.5 pl-2.5 text-xs disabled:opacity-50"
-            title={`Search for ${search} again`}
-            disabled={!connected}
-            onclick={() => open(search)}>
-            <PinIcon class="size-3" />{search}
-          </button>
-          <button
-            type="button"
-            class="rounded-full p-1 opacity-60 hover:opacity-100"
-            aria-label={`Unpin ${search}`}
-            onclick={() => togglePin(search)}>
-            <PinOffIcon class="size-3" />
-          </button>
-        </li>
-      {/each}
-      {#each recent.texts as search (`recent:${search}`)}
-        <li class="group flex items-center rounded-full border text-fg-muted">
-          <button
-            type="button"
-            class="flex items-center gap-1 py-0.5 pl-2.5 text-xs hover:text-fg disabled:opacity-50"
-            title={`Search for ${search} again`}
-            disabled={!connected}
-            onclick={() => open(search)}>
-            <HistoryIcon class="size-3" />{search}
-          </button>
-          <button
-            type="button"
-            class="rounded-full p-1 row-action"
-            aria-label={`Pin ${search}`}
-            onclick={() => togglePin(search)}>
-            <PinIcon class="size-3" />
-          </button>
-          <button
-            type="button"
-            class="rounded-full p-1 pr-1.5 row-action"
-            aria-label={`Remove ${search} from recent searches`}
-            onclick={() => remove(search)}>
-            <XIcon class="size-3" />
-          </button>
-        </li>
-      {/each}
-    </ul>
+  {#if history}
+    <Recent onsearch={search} {connected} />
   {/if}
 </form>

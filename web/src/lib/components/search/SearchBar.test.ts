@@ -1,10 +1,12 @@
 import { goto } from "$app/navigation";
-import { flushSync, mount, unmount } from "svelte";
+import { flushSync, mount, tick, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "#lib/app.svelte.js";
+import { recent } from "#lib/search/recent.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
-import { pressEnter } from "#lib/testing/keys.js";
+import { flushFaked } from "#lib/testing/flush.js";
+import { press, pressEnter } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import SearchBar from "./SearchBar.svelte";
@@ -15,6 +17,15 @@ const connected = (isConnected: boolean) => {
   app.state = { server: { isConnected } } as never;
 };
 
+const summary = (username: string) => ({
+  username,
+  known: true,
+  group: { name: "default", source: "builtin", priority: 1, color: null },
+  tags: [],
+  lastSeenAt: null,
+  figures: {}
+});
+
 describe("the search box", () => {
   let component: ReturnType<typeof mount> | null = null;
   afterEach(() => {
@@ -22,7 +33,10 @@ describe("the search box", () => {
     component = null;
     app.state = null;
     searches.clear();
+    recent.texts = [];
+    recent.pinned = [];
     vi.mocked(goto).mockClear();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
   });
@@ -47,6 +61,94 @@ describe("the search box", () => {
         })
       )
     );
+  });
+
+  /** The box holding `text`, the directory's answer listed under it */
+  const typed = async (text: string, listed: string[] = []) => {
+    vi.useFakeTimers();
+    const net = fakeNetwork((url, method, body) => {
+      if (method === "POST") return body;
+      if (url.pathname.endsWith("/api/v0/users")) {
+        return { users: listed.map((username) => summary(username)), total: listed.length };
+      }
+      return url.pathname.endsWith("/AFX/profile") ? summary("AFX") : undefined;
+    });
+    connected(true);
+    component = mount(SearchBar, { target: document.body });
+    flushSync();
+    const box = document.querySelector<HTMLInputElement>("[role=combobox]")!;
+    box.value = text;
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushFaked();
+    await vi.advanceTimersByTimeAsync(250);
+    await flushFaked();
+    await tick();
+    return { box, net };
+  };
+  const entries = () =>
+    [...document.querySelectorAll<HTMLElement>("[role=option]")].map((e) => e.textContent.trim());
+  const nothingOpened = () =>
+    expect(vi.mocked(goto).mock.calls.filter(([to]) => String(to).includes("/users/"))).toEqual([]);
+
+  it("offers the search first, then recent searches, users and the look-up", async () => {
+    recent.texts = ["aphex twin", "boards of canada", "aphex"];
+    await typed("aphex", ["aphex_fan"]);
+    expect(entries()).toEqual([
+      "Search for aphex",
+      "aphex twin",
+      expect.stringContaining("aphex_fan"),
+      "Look up aphex"
+    ]);
+  });
+
+  it("runs the file search on Enter with users listed, whatever the pointer is on", async () => {
+    const { box } = await typed("aphex", ["aphex"]);
+    const user = document.querySelectorAll<HTMLElement>("[role=option]")[1];
+    user.dispatchEvent(
+      new PointerEvent("pointermove", { bubbles: true, cancelable: true, pointerType: "mouse" })
+    );
+    await tick();
+    press(box, "Enter");
+    expect(searches.list.rows[0]?.searchText).toBe("aphex");
+    nothingOpened();
+  });
+
+  it("opens a known user's shares when the keys move to them", async () => {
+    const { box, net } = await typed("aphex", ["aphex"]);
+    press(box, "ArrowDown");
+    await tick();
+    press(box, "Enter");
+    await flushFaked();
+    expect(goto).toHaveBeenCalledExactlyOnceWith("#/users/aphex/shares");
+    expect(net.requests.filter((r) => r.method === "POST")).toEqual([]);
+  });
+
+  it("looks up a name as typed and opens their shares once the network knows them", async () => {
+    const { box, net } = await typed("AFX");
+    press(box, "ArrowDown");
+    await tick();
+    press(box, "Enter");
+    await flushFaked();
+    const profile = net.requests.find((r) => r.url.pathname.endsWith("/AFX/profile"));
+    expect(profile?.url.searchParams.get("refresh")).toBe("true");
+    expect(goto).toHaveBeenCalledExactlyOnceWith("#/users/AFX/shares");
+  });
+
+  it("offers no user for a search of one user's shares", async () => {
+    vi.useFakeTimers();
+    fakeNetwork(() => undefined);
+    connected(true);
+    component = mount(SearchBar, {
+      target: document.body,
+      props: { scope: { type: "user", subjects: ["bob"] } }
+    });
+    flushSync();
+    const box = document.querySelector<HTMLInputElement>("[role=combobox]")!;
+    box.value = "aphex";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushFaked();
+    await tick();
+    expect(entries()).toEqual(["Search for aphex"]);
   });
 
   it("says why it can't search while disconnected", () => {
