@@ -107,24 +107,34 @@ export class Pictures {
   readonly #loading = new Set<string>();
   /** tiles whose load failed, which are not asked for again */
   readonly #failed = new Set<string>();
+  #overview: Promise<void> | null = null;
+  #started = false;
 
   constructor(target: Target, layout: Layout) {
     this.target = target;
     this.layout = layout;
   }
 
-  /** Loads the overviews and the window spectra */
+  /** Loads the whole file's spectrogram, once, which is all a thumbnail needs */
+  overview() {
+    this.#overview ??= load(this.target, "spectrogram").then((outcome) => {
+      if (outcome.ok) this.spectrogram = spectrogramCells(outcome.data);
+      else this.error = outcome.error;
+      this.version++;
+    });
+    return this.#overview;
+  }
+
+  /** Loads the rest of what the viewer shows, once: the waveform and the window spectra */
   async start() {
-    const [spectrogram, waveform, spectra] = await Promise.all([
-      load(this.target, "spectrogram"),
+    if (this.#started) return;
+    this.#started = true;
+    const [, waveform, spectra] = await Promise.all([
+      this.overview(),
       load(this.target, "waveform"),
       load(this.target, "spectra")
     ]);
-    if (!spectrogram.ok) {
-      this.error = spectrogram.error;
-      return;
-    }
-    this.spectrogram = spectrogramCells(spectrogram.data);
+    if (this.error) return;
     // without the waveform its strip stays hatched as unread, and the view says why
     if (waveform.ok) this.waveform = waveformCells(waveform.data);
     else this.lost = waveform.error;
