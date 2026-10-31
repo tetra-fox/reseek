@@ -28,6 +28,30 @@ const connected = async (page: Page) => {
   return answer.ok() && (await answer.json()).server.isLoggedIn === true;
 };
 
+test("looks up a user the server has, and says so of one it does not", async ({ page }) => {
+  await login(page, "/users");
+  test.skip(!(await connected(page)), "no soulfind and soulseek-rs: the daemon is not connected");
+  await expect.poll(() => peerOnline(page), { timeout: 30_000 }).toBe(true);
+  const box = page.getByRole("combobox", { name: "Search users" });
+
+  await box.fill("nobody-has-this-name");
+  await page.getByRole("option", { name: "Look up nobody-has-this-name" }).click();
+  await expect(page.getByText("No user named nobody-has-this-name was found.")).toBeVisible();
+  await expect(page).toHaveURL(/#\/users$/);
+
+  await box.fill(PEER);
+  await page.getByRole("option", { name: `Look up ${PEER}` }).click();
+  await expect(page).toHaveURL(new RegExp(`#/users/${PEER}$`));
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText(PEER);
+  // what the network said is written a moment after it is shown
+  const stored = async () =>
+    (await (await page.request.get(`api/v0/users/${PEER}/profile`)).json()).known;
+  await expect.poll(stored).toBe(true);
+  await page.goto("./#/users");
+  await expect(page.locator(`[data-line="${PEER}"]`)).toBeVisible();
+  await expect(page.locator('[data-line="nobody-has-this-name"]')).toHaveCount(0);
+});
+
 test("keeps a selection across two transfers while real ones are added and finish", async ({
   page
 }) => {
