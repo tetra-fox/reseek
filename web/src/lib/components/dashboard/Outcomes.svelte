@@ -28,7 +28,7 @@
     top: 0
   });
 
-  const motion = chartMotion();
+  const { motion, watch } = chartMotion();
 
   /** Each part of each bar: its series and where it lies in counts */
   const parts = (d: Row) => {
@@ -57,6 +57,7 @@
     <div
       class="h-28"
       role="img"
+      {@attach watch}
       aria-label={`Transfer outcomes: ${data
         .map(
           (d) =>

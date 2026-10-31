@@ -35,7 +35,7 @@
   const top = $derived(Math.max(0, ...data.flatMap((p) => shown.map((s) => p[s.key]))));
   // the axis labels' room, from the longest one they can show at the text size in use
   const padding = $derived(axisPadding([format(top), format(top * 1.25), format(0)], rem.px));
-  const motion = chartMotion();
+  const { motion, watch } = chartMotion();
   const toggle = (key: string) => (visible.has(key) ? visible.delete(key) : visible.add(key));
 
   /** What the chart says to a screen reader: each series' peak and when it was */
@@ -68,7 +68,7 @@
       </button>
     {/each}
   </div>
-  <div class="h-52" role="img" aria-label={summary}>
+  <div class="h-52" role="img" aria-label={summary} {@attach watch}>
     <Chart
       data={rows}
       x="at"

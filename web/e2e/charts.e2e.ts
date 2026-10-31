@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { fakeReports } from "./support/fakes";
 import { login } from "./support/login";
@@ -49,6 +49,59 @@ for (const [width, height] of [
     });
   }
 }
+
+/** What a chart's marks are on every frame for `ms`: how far past its box, and their paths */
+const marks = (chart: Locator, ms: number) =>
+  chart.evaluate((box, ms) => {
+    const seen: { past: number; paths: string }[] = [];
+    const end = performance.now() + ms;
+    return new Promise<typeof seen>((done) => {
+      const frame = () => {
+        const shapes = [...box.querySelectorAll("path, rect")];
+        const right = box.getBoundingClientRect().right;
+        seen.push({
+          past: Math.max(...shapes.map((s) => s.getBoundingClientRect().right - right)),
+          paths: shapes.map((s) => s.getAttribute("d")).join()
+        });
+        if (performance.now() < end) requestAnimationFrame(frame);
+        else done(seen);
+      };
+      frame();
+    });
+  }, ms);
+
+test("a chart's marks stay in its box while the window narrows", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await fakeReports(page);
+  await login(page, "/dashboard");
+  for (const name of ["Transfers over time", "Transfer outcomes"]) {
+    const chart = page.getByRole("img", { name }).first();
+    await chart.scrollIntoViewIfNeeded();
+    await expect(chart.locator("path, rect").first()).toBeVisible();
+    await page.waitForTimeout(700); // the marks have grown in
+    const sampled = marks(chart, 500);
+    await page.setViewportSize({ width: 900, height: 800 });
+    expect(Math.max(...(await sampled).map((f) => f.past)), name).toBeLessThan(1);
+    await page.setViewportSize({ width: 1280, height: 800 });
+  }
+});
+
+test("a series turned on still grows in", async ({ page }) => {
+  await fakeReports(page);
+  await login(page, "/dashboard");
+  const chart = page.getByRole("img", { name: "Transfers over time" }).first();
+  await chart.scrollIntoViewIfNeeded();
+  await expect(chart.locator("path").first()).toBeVisible();
+  await page.waitForTimeout(700); // the marks have grown in
+  const toggle = page
+    .getByRole("group", { name: "Transfers over time series" })
+    .getByRole("button")
+    .first();
+  await toggle.click();
+  const sampled = marks(chart, 400);
+  await toggle.click();
+  expect(new Set((await sampled).map((f) => f.paths)).size).toBeGreaterThan(3);
+});
 
 /** The alpha of a computed color, as `rgba(r, g, b, a)` or `oklch(l c h / a)` writes it */
 const alpha = (color: string) => {

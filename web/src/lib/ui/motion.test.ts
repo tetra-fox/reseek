@@ -26,10 +26,10 @@ describe("motion", () => {
   });
 
   it("still charts when reduced motion is asked for", () => {
-    expect(chartMotion()).toMatchObject({ type: "tween" });
+    expect(chartMotion().motion).toMatchObject({ type: "tween" });
     setMedia(REDUCE, true);
     flushSync();
-    expect(chartMotion()).toBe("none");
+    expect(chartMotion().motion).toBe("none");
   });
 
   it("cross-fades a change only where motion is welcome", async () => {

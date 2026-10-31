@@ -46,14 +46,37 @@ export const easeOutSoft = (t: number) => {
 export const disclose = (node: Element) =>
   slide(node, { duration: motionSlow(), easing: easeOutSoft });
 
+/** How long after a chart's box last changed size its marks still jump, in ms */
+const RESIZE_QUIET = 100;
+
 /**
  * How a chart's marks grow in as it first shows and move to new figures: a short tween, or none
- * when reduced motion is asked for. Read once as a mark mounts
+ * when reduced motion is asked for. Read once as a mark mounts. A new size is not a new figure,
+ * and the axes have no tween, so while `watch`, attached to the chart's box, sees the box change
+ * size the marks jump to it. 1 ms is the shortest tween, which divides by its duration
  */
-export const chartMotion = () =>
-  prefersReducedMotion.current
-    ? ("none" as const)
-    : { type: "tween" as const, duration: 500, easing: cubicOut };
+export const chartMotion = () => {
+  let resizedAt = -Infinity;
+  return {
+    motion: prefersReducedMotion.current
+      ? ("none" as const)
+      : {
+          type: "tween" as const,
+          duration: () => (performance.now() - resizedAt < RESIZE_QUIET ? 1 : 500),
+          easing: cubicOut
+        },
+    watch: (box: Element) => {
+      // an observer reports once as it starts, which is the box's first size and no change
+      let started = false;
+      const observer = new ResizeObserver(() => {
+        if (started) resizedAt = performance.now();
+        started = true;
+      });
+      observer.observe(box);
+      return () => observer.disconnect();
+    }
+  };
+};
 
 /**
  * Makes a change to the page as one cross-fade where the browser can, the old page fading into
