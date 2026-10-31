@@ -270,7 +270,10 @@ export const fakeReports = async (page: Page) => {
         json: Object.fromEntries(
           Array.from({ length: 24 }, (_, n) => [
             new Date(Date.UTC(2026, 9, 27, n)).toISOString(),
-            { Download: { Succeeded: summary(n) }, Upload: { Succeeded: summary(24 - n) } }
+            {
+              Download: { Succeeded: summary(n), Errored: summary(n % 3) },
+              Upload: { Succeeded: summary(24 - n) }
+            }
           ])
         )
       });
