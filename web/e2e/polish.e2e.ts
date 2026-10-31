@@ -173,6 +173,8 @@ test("a row's hidden menu takes no width, and comes up without moving the row", 
   await page.mouse.move(0, 0);
   await expect(menu).toHaveCSS("opacity", "0");
   await page.getByRole("grid", { name: "Rooms and conversations" }).focus();
+  // past the section's own toggle, the first stop in the list
+  await page.keyboard.press("Tab");
   await page.keyboard.press("Tab");
   await expect(menu).toBeFocused();
   await expect(menu).toHaveCSS("opacity", "1");
