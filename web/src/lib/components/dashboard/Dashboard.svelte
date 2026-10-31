@@ -106,7 +106,7 @@
     <button
       type="button"
       aria-pressed={dashboardPrefs.range === r.label}
-      class="h-control-sm rounded-control px-2.5 text-sm text-fg-muted hover:bg-hover aria-pressed:bg-surface-muted aria-pressed:font-medium aria-pressed:text-fg"
+      class="h-control-sm rounded-control px-2.5 text-sm text-fg-muted hover:bg-hover aria-pressed:bg-surface-muted aria-pressed:text-fg"
       onclick={() => {
         dashboardPrefs.range = r.label;
         now = Date.now();
