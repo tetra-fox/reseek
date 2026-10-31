@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
-import { fakeChat, fakeConnected } from "./support/fakes";
+import { fakeChat } from "./support/fakes";
 import { login } from "./support/login";
 
 /** Drags the handle sideways by `by` pixels */
@@ -18,7 +18,6 @@ const width = (handle: Locator) => handle.getAttribute("aria-valuenow").then(Num
 
 /** The room's chat, the pane its handles resize */
 const room = async (page: Page) => {
-  await fakeConnected(page);
   await fakeChat(page);
   await login(page, "/chat/rooms/indie");
 };
@@ -80,8 +79,7 @@ test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
   test("nothing is resized: the lists are sheets", async ({ page }) => {
-    await fakeChat(page);
-    await login(page, "/chat/rooms/indie");
+    await room(page);
     await expect(page.getByRole("heading", { name: "indie" })).toBeVisible();
     await expect(page.getByRole("separator")).toHaveCount(0);
   });
