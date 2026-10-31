@@ -267,6 +267,7 @@ mod tests {
         "apply": "reconnect",
         "secret": true,
         "notApplied": null,
+        "entries": [],
       })
     );
     assert_eq!(
