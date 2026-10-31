@@ -103,9 +103,10 @@
         <time class="text-xs text-fg-subtle" datetime={m.timestamp} title={formatDate(m.timestamp)}
           >{chatTime(m.timestamp, clock.now)}</time>
         {#if m.replayed}
-          <Tooltip text="Delivered late by the server">
+          <Tooltip
+            text="This message was sent while you were offline, and the server delivered it when you connected.">
             {#snippet child({ props })}
-              <span {...props} class="text-xs text-fg-subtle italic">replayed</span>
+              <span {...props} class="text-xs text-fg-subtle italic">sent while offline</span>
             {/snippet}
           </Tooltip>
         {/if}
