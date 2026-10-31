@@ -72,6 +72,7 @@ use crate::app::AppState;
     (name = "blocking", description = "Blocked users"),
     (name = "conversations", description = "Private messages"),
     (name = "rooms", description = "Chat rooms and their history"),
+    (name = "chat", description = "The chat list, across rooms and conversations"),
     (name = "messages", description = "Searching what was said"),
     (name = "shares", description = "What we share"),
     (name = "files", description = "The downloaded files, served to the browser"),

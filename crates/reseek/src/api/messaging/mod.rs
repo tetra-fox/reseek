@@ -1,10 +1,11 @@
 //! The messaging routes: private conversations, the rooms we are in, the stored history of
-//! every room, and searching what was said. Reading takes the ReadOnly role, sending, joining,
+//! every room, the pinned chats, and searching what was said. Reading takes the ReadOnly role, sending, joining,
 //! acknowledging and every other change ReadWrite. A username or room name is its path segment,
 //! or `?username=` and `?roomName=` when given, which reach names a path cannot hold.
 
 mod conversations;
 mod history;
+mod pins;
 mod rooms;
 
 use api_types::messaging::{MessageSearchQuery, MessageSearchResults};
@@ -27,6 +28,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .merge(conversations::routes())
     .merge(rooms::routes())
     .merge(history::routes())
+    .merge(pins::routes())
     .routes(routes!(search))
 }
 

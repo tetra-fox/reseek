@@ -41,7 +41,7 @@ pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
           Vec::new()
         }
       };
-      frames.extend(unread(app).await);
+      frames.extend(shared(app).await);
       frames
     }
     Topic::Rooms => {
@@ -52,7 +52,7 @@ pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
           Vec::new()
         }
       };
-      frames.extend(unread(app).await);
+      frames.extend(shared(app).await);
       frames
     }
     Topic::Metrics => vec![LiveFrame::MetricsUpdate(
@@ -63,13 +63,16 @@ pub async fn frames(topic: Topic, app: &AppState) -> Vec<LiveFrame> {
   }
 }
 
-/// The unread counts, the snapshot both chat topics end with.
-async fn unread(app: &AppState) -> Option<LiveFrame> {
-  match app.messaging.unread_counts().await {
-    Ok(counts) => Some(LiveFrame::ChatUnread(counts)),
-    Err(e) => {
-      warn!(error = %e, "unread counts not read for a stream's snapshot");
-      None
-    }
+/// The pinned chats and the unread counts, the snapshot both chat topics end with.
+async fn shared(app: &AppState) -> Vec<LiveFrame> {
+  let mut frames = Vec::new();
+  match app.services.messaging.pins().await {
+    Ok(pins) => frames.push(LiveFrame::ChatPins(pins)),
+    Err(e) => warn!(error = ?e, "chat pins not read for a stream's snapshot"),
   }
+  match app.messaging.unread_counts().await {
+    Ok(counts) => frames.push(LiveFrame::ChatUnread(counts)),
+    Err(e) => warn!(error = %e, "unread counts not read for a stream's snapshot"),
+  }
+  frames
 }

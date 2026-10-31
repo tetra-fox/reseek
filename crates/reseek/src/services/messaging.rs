@@ -7,7 +7,9 @@ use api_types::messaging::rooms::{
   JoinRoom, JoinedRoom, Room, RoomHistory, RoomHistoryList, RoomInfo, RoomMessagesQuery,
   RoomTicker, RoomUser,
 };
-use api_types::messaging::{ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel};
+use api_types::messaging::{
+  ChatPin, ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel,
+};
 use async_trait::async_trait;
 use axum::response::Response;
 
@@ -99,6 +101,16 @@ pub trait MessagingService: Send + Sync {
 
   /// Keeps the unsent text of a conversation.
   async fn set_draft(&self, username: &str, draft: String) -> Result<(), ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// The pinned chats in the user's order.
+  async fn pins(&self) -> Result<Vec<ChatPin>, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// Makes `pins` the pinned chats, in that order, and tells open streams.
+  async fn set_pins(&self, pins: Vec<ChatPin>) -> Result<(), ApiError> {
     Err(not_yet(DOMAIN))
   }
 

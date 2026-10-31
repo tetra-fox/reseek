@@ -271,6 +271,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/chat/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The pinned chats in the user's order, those of a room left or a conversation closed included. */
+        get: operations["pins"];
+        /**
+         * Replaces the pinned chats with the list given, in its order. The server's notices cannot be
+         *     pinned, and a chat is named once.
+         */
+        put: operations["set_pins"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/conversations": {
         parameters: {
             query?: never;
@@ -3524,6 +3545,21 @@ export interface components {
             /** @description the user */
             username: string;
         };
+        /**
+         * @description Whether a chat is a room or a private conversation.
+         * @enum {string}
+         */
+        ChatKind: "room" | "user";
+        /**
+         * @description A chat pinned above the others in the chat list. A list of these in the user's order is what
+         *     `GET /chat/pins` answers, the body of `PUT /chat/pins`, and the data of a `chat.pins` frame.
+         */
+        ChatPin: {
+            /** @description a room or a conversation */
+            kind: components["schemas"]["ChatKind"];
+            /** @description the room's name or the other user's name */
+            name: string;
+        };
         /** @description Unread counts over every conversation and room, the data of a `chat.unread` frame. */
         ChatUnread: {
             /** @description unacknowledged inbound messages, by peer */
@@ -4950,6 +4986,11 @@ export interface components {
             data: components["schemas"]["ChatUnread"];
             /** @enum {string} */
             type: "chat.unread";
+        } | {
+            /** @description the pinned chats in the user's order, on open and on change */
+            data: components["schemas"]["ChatPin"][];
+            /** @enum {string} */
+            type: "chat.pins";
         } | {
             /** @description an event was raised */
             data: components["schemas"]["EventRecord"];
@@ -8390,6 +8431,95 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    pins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatPin"][];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_pins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatPin"][];
+            };
+        };
+        responses: {
+            /** @description set */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

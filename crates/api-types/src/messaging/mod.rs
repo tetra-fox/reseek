@@ -39,6 +39,27 @@ pub struct NotifySetting {
   pub notify: NotifyLevel,
 }
 
+/// Whether a chat is a room or a private conversation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ChatKind {
+  /// a chat room
+  Room,
+  /// a private conversation
+  User,
+}
+
+/// A chat pinned above the others in the chat list. A list of these in the user's order is what
+/// `GET /chat/pins` answers, the body of `PUT /chat/pins`, and the data of a `chat.pins` frame.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatPin {
+  /// a room or a conversation
+  pub kind: ChatKind,
+  /// the room's name or the other user's name
+  pub name: String,
+}
+
 /// Unread counts over every conversation and room, the data of a `chat.unread` frame.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

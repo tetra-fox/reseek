@@ -11,6 +11,7 @@
 mod conversations;
 mod export;
 mod mentions;
+mod pins;
 mod retention;
 mod rooms;
 mod search;
@@ -43,10 +44,15 @@ use crate::sync::lock;
 use crate::users::Directory;
 use rooms::Rooms;
 
-/// `messaging.db`: conversations, private and room messages, room settings and the sessions.
+/// `messaging.db`: conversations, private and room messages, room settings, the pinned chats and
+/// the sessions.
 pub static SCHEMA: Schema = db::schema!(
   "messaging",
-  ["0001_initial", "0002_drop_session_end_reason"]
+  [
+    "0001_initial",
+    "0002_drop_session_end_reason",
+    "0003_chat_pins"
+  ]
 );
 
 /// How many client events may wait for the messaging task.

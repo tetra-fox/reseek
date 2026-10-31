@@ -137,6 +137,8 @@ async fn each_route_takes_its_least_role() {
     (Method::GET, "/api/v0/users/blocked", read),
     (Method::PUT, "/api/v0/users/{username}/block", write),
     (Method::POST, "/api/v0/users/blocked/import", admin),
+    (Method::GET, "/api/v0/chat/pins", read),
+    (Method::PUT, "/api/v0/chat/pins", write),
     (Method::GET, "/api/v0/rooms/joined", read),
     (Method::POST, "/api/v0/rooms/joined", write),
     (Method::GET, "/api/v0/messages/search", read),
@@ -324,6 +326,21 @@ async fn requests_are_checked_before_any_service_is_asked() {
       "PUT",
       "/api/v0/users/alice/block".into(),
       Some(json!({ "scopes": ["everything"] })),
+      400,
+    ),
+    (
+      "PUT",
+      "/api/v0/chat/pins".into(),
+      Some(json!([{ "kind": "user", "name": "server" }])),
+      400,
+    ),
+    (
+      "PUT",
+      "/api/v0/chat/pins".into(),
+      Some(json!([
+        { "kind": "room", "name": "jazz" },
+        { "kind": "room", "name": "jazz" }
+      ])),
       400,
     ),
     (

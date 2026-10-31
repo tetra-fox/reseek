@@ -9,8 +9,8 @@ use api_types::messaging::rooms::{
   RoomInfo, RoomMemberName, RoomMessagesQuery, RoomTicker, RoomUser, TickerText,
 };
 use api_types::messaging::{
-  ExportFormat, ExportQuery, MessageSearchQuery, MessageSearchResults, MessageText, NotifyLevel,
-  NotifySetting,
+  ChatPin, ExportFormat, ExportQuery, MessageSearchQuery, MessageSearchResults, MessageText,
+  NotifyLevel, NotifySetting,
 };
 use bytes::Bytes;
 use reqwest::StatusCode;
@@ -147,6 +147,16 @@ impl Client {
   /// `GET /rooms/joined/{roomName}/tickers`: the tickers in a room.
   pub async fn tickers(&self, room: &str) -> Result<Vec<RoomTicker>> {
     json(self.get(joined(room).then("tickers"))).await
+  }
+
+  /// `GET /chat/pins`: the pinned chats in the user's order.
+  pub async fn chat_pins(&self) -> Result<Vec<ChatPin>> {
+    json(self.get(Route::new("chat/pins"))).await
+  }
+
+  /// `PUT /chat/pins`: replaces the pinned chats, in the order given.
+  pub async fn set_chat_pins(&self, pins: &[ChatPin]) -> Result<()> {
+    done(self.put(Route::new("chat/pins")).json(pins)).await
   }
 
   /// `POST /rooms/joined/{roomName}/members`: adds a member to a private room.

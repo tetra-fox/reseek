@@ -7,7 +7,9 @@ use api_types::messaging::rooms::{
   JoinRoom, JoinedRoom, Room, RoomHistory, RoomHistoryList, RoomInfo, RoomMessagesQuery,
   RoomTicker, RoomUser,
 };
-use api_types::messaging::{ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel};
+use api_types::messaging::{
+  ChatPin, ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel,
+};
 use async_trait::async_trait;
 use axum::response::Response;
 
@@ -74,6 +76,14 @@ impl MessagingService for Messaging {
 
   async fn set_draft(&self, username: &str, draft: String) -> Result<(), ApiError> {
     Messaging::set_draft(self, username, draft).await
+  }
+
+  async fn pins(&self) -> Result<Vec<ChatPin>, ApiError> {
+    Messaging::pins(self).await
+  }
+
+  async fn set_pins(&self, pins: Vec<ChatPin>) -> Result<(), ApiError> {
+    Messaging::set_pins(self, pins).await
   }
 
   async fn joined_rooms(&self) -> Result<Vec<JoinedRoom>, ApiError> {

@@ -1,6 +1,6 @@
 //! Rooms over soulfind: a configured room is joined at login, what is said there is kept with
-//! the mentions of us marked and counted unread, the history survives a restart that joins it
-//! again with the gap the restart left in it; the rooms we were in are joined again after a
+//! the mentions of us marked and counted unread, the history and the pinned chats survive a
+//! restart that joins the room again with the gap the restart left in it; the rooms we were in are joined again after a
 //! restart until we leave them, and one taken by a private room is forgotten, while a room
 //! joined only because the configuration listed it is not; a room joined twice is joined once,
 //! left and joined again, and refused while logged out; the server's room list is asked for
@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 use api_client::Client;
 use api_types::messaging::rooms::{RoomHistory, RoomMessagesQuery};
+use api_types::messaging::{ChatKind, ChatPin};
 use soulseek_proto::RoomType;
 use support::soulfind::{self, User};
 use support::{PATIENCE, daemon, events, logged_in, quiet, signed_in, until};
@@ -90,6 +91,17 @@ async fn a_configured_room_keeps_its_history_and_its_gaps_across_a_restart() {
   assert_eq!((joined[0].unread, joined[0].mentions), (1, 1));
   api.mark_room_read(&room, mention.local_id).await.unwrap();
   assert_eq!(api.joined_rooms().await.unwrap()[0].unread, 0);
+  let pins = [
+    ChatPin {
+      kind: ChatKind::User,
+      name: peer.username.clone(),
+    },
+    ChatPin {
+      kind: ChatKind::Room,
+      name: room.clone(),
+    },
+  ];
+  api.set_chat_pins(&pins).await.unwrap();
 
   api.shut_down().await.unwrap();
   let mut stopped = running;
@@ -115,6 +127,11 @@ async fn a_configured_room_keeps_its_history_and_its_gaps_across_a_restart() {
     api.joined_rooms().await.unwrap()[0].unread,
     1,
     "the read marker stayed"
+  );
+  assert_eq!(
+    api.chat_pins().await.unwrap(),
+    pins,
+    "the pins stayed, in their order"
   );
 }
 
