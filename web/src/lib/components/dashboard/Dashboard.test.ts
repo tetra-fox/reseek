@@ -2,6 +2,7 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "#lib/app.svelte.js";
+import { dashboardPrefs } from "#lib/dashboard/prefs.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
@@ -82,6 +83,50 @@ describe("the dashboard", () => {
     expect(text()).toContain("Remote file not found");
   });
 
+  it("charts one unit at a time, the choice kept and the directions carried over", async () => {
+    app.state = {
+      server: { isConnected: true, listen: { port: 2234, reachable: "unknown" } },
+      user: { username: "me" },
+      shares: { files: 0, directories: 0, scanning: false, scanPending: false }
+    } as never;
+    fakeNetwork((url) => {
+      if (url.pathname.endsWith("/summary")) return { Download: {}, Upload: {}, distinctUsers: 0 };
+      if (url.pathname.endsWith("/histogram")) {
+        return {
+          "2026-10-26T10:00:00Z": {
+            Download: { Succeeded: summary(1, 100) },
+            Upload: { Succeeded: summary(2, 400) }
+          }
+        };
+      }
+      return [];
+    });
+    component = mount(Dashboard, { target: document.body });
+    await flush();
+    const chart = () =>
+      document.querySelector('[role=img][aria-label^="Transfers over time"]')!.ariaLabel;
+    const press = (label: string) => {
+      [...document.querySelectorAll<HTMLElement>("button")]
+        .find((b) => b.textContent?.trim() === label)!
+        .click();
+      flushSync();
+    };
+    expect(chart()).toMatch(/Upload size .*; Download size [^;]*$/);
+    press("Count");
+    expect(chart()).toMatch(/: Upload count peaks at 2, [^;]*; Download count peaks at 1, [^;]*$/);
+    press("Upload");
+    expect(chart()).toMatch(/: Download count peaks at 1, [^;]*$/);
+    press("Error rate");
+    expect(chart()).toMatch(/: Download error rate peaks at 0.0%, [^;]*$/);
+    // a view with one line has no direction to turn off
+    press("Queue wait");
+    expect(chart()).toMatch(/: Upload queue wait peaks at 1s, [^;]*$/);
+    press("Share ratio");
+    expect(chart()).toMatch(/: Share ratio peaks at 4.00, [^;]*$/);
+    expect(dashboardPrefs).toMatchObject({ view: "ratio", hidden: ["Upload"] });
+    Object.assign(dashboardPrefs, { view: "size", hidden: [] });
+  });
+
   it("keeps the leaderboard's column through a reload and starts a new range at Count", async () => {
     app.state = {
       server: { isConnected: true, listen: { port: 2234, reachable: "unknown" } },
@@ -99,7 +144,9 @@ describe("the dashboard", () => {
         .filter((r) => r.url.pathname.endsWith("/leaderboard"))
         .map((r) => r.url.searchParams.get("sortBy"));
     const button = (label: string) =>
-      [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === label)!;
+      [...document.querySelectorAll<HTMLElement>("button:not([role=radio])")].find(
+        (b) => b.textContent?.trim() === label
+      )!;
     button("Size").click();
     await flush();
     expect(sorts().slice(-2)).toEqual(["TotalBytes", "TotalBytes"]);

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { SvelteSet } from "svelte/reactivity";
 
   import type { Schemas } from "#lib/api/client.js";
   import { api } from "#lib/api/client.js";
@@ -15,7 +14,7 @@
     reports,
     type Window
   } from "#lib/dashboard/reports.js";
-  import { SERIES } from "#lib/dashboard/series.js";
+  import { ERRORS } from "#lib/dashboard/series.js";
   import { formatBytes, formatDate, formatSpeed, getFileName, truncate } from "#lib/format.js";
   import { call } from "#lib/request.js";
   import { endingText } from "#lib/transfers/states.js";
@@ -29,9 +28,7 @@
   type Pareto = Schemas["ExceptionCount"] & { direction: Direction };
   type Recent = Schemas["TransferExceptionDetail"];
 
-  const visible = new SvelteSet(["uploadErrors", "downloadErrors"]);
-  const series = SERIES.filter((s) => s.key === "uploadErrors" || s.key === "downloadErrors");
-
+  let hidden = $state<Direction[]>([]);
   let paretoWhich = $state<Which>("All");
   let recentWhich = $state<Which>("All");
   let exception = $state<string | null>(null);
@@ -107,7 +104,7 @@
   </div>
 {/snippet}
 
-<AreaChart {data} {series} {visible} label="Errors over time" />
+<AreaChart {data} view={ERRORS} bind:hidden label="Errors over time" />
 
 <section class="flex flex-col gap-2">
   <div class="flex flex-wrap items-center gap-inline">

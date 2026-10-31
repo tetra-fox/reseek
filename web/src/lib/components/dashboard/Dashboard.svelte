@@ -2,12 +2,12 @@
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import { untrack } from "svelte";
-  import { SvelteSet } from "svelte/reactivity";
 
   import type { Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import SearchBar from "#lib/components/search/SearchBar.svelte";
   import Card from "#lib/components/ui/Card.svelte";
+  import Segmented from "#lib/components/ui/Segmented.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { dashboardPrefs } from "#lib/dashboard/prefs.svelte.js";
   import {
@@ -18,7 +18,7 @@
     reports,
     windowOf
   } from "#lib/dashboard/reports.js";
-  import { SERIES } from "#lib/dashboard/series.js";
+  import { VIEWS } from "#lib/dashboard/series.js";
   import { formatBytes, formatSpeed } from "#lib/format.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
 
@@ -67,7 +67,7 @@
   let directories = $state.raw<Schemas["DirectoryCount"][]>([]);
   let directoriesError = $state("");
   let tab = $state<Tab>("users");
-  const visible = new SvelteSet(["uploadBytes", "downloadBytes"]);
+  const view = $derived(VIEWS.find((v) => v.id === dashboardPrefs.view)!);
 
   // each report loads on its own, so one failing never blanks the others; what loaded before
   // stays until the new answer is here
@@ -123,11 +123,18 @@
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-section lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
   <Card title="Transfers over time">
+    {#snippet action()}
+      <Segmented
+        options={VIEWS}
+        bind:value={dashboardPrefs.view}
+        label="What the chart measures"
+        class="flex-wrap max-sm:grid max-sm:w-full max-sm:grid-cols-3" />
+    {/snippet}
     {#if histogramError}<p class="text-sm text-danger">
         Could not load history: {histogramError}
       </p>{/if}
     {#if histogram}
-      <AreaChart {data} series={SERIES} {visible} label="Transfers over time" />
+      <AreaChart {data} {view} bind:hidden={dashboardPrefs.hidden} label="Transfers over time" />
     {:else if !histogramError}
       <Skeleton class="h-52" />
     {/if}

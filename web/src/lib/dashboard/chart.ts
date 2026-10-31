@@ -50,13 +50,8 @@ export const axisPadding = (labels: string[], remPx: number) => {
   };
 };
 
-const COMPACT = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
-
-/** A number short: 1.2K, 3.4M, 5.6B */
-const compact = (n: number) => COMPACT.format(n);
-
-/** How a value of `unit` reads; a mix of units reads as a short number */
-export const valueLabel = (unit: Unit | null) => {
+/** How a value of `unit` reads */
+export const valueLabel = (unit: Unit) => {
   switch (unit) {
     case "bytes":
       return (n: number) => formatBytes(n, 1);
@@ -70,7 +65,48 @@ export const valueLabel = (unit: Unit | null) => {
       return (n: number) => formatWait(n);
     case "speed":
       return (n: number) => formatSpeed(n);
-    default:
-      return compact;
   }
+};
+
+/** How many steps a value axis divides into at most */
+const MOST_STEPS = 5;
+
+const DECADE = [1, 2, 5, 10];
+/** Steps within a power of 1024, each landing on a label that reads whole: 512 MB, 1 GB, 1.5 GB */
+const BINARY = [1, 2, 5, 10, 20, 50, 100, 200, 512, 1024];
+/** Steps up to a minute, as a clock has them */
+const CLOCK = [1, 2, 5, 10, 15, 30, 60];
+
+/** `scale` times the first of `steps` that reaches `least` */
+const firstStep = (steps: number[], scale: number, least: number) =>
+  scale * steps.find((step) => step * scale >= least)!;
+
+const decimalStep = (least: number) =>
+  firstStep(DECADE, 10 ** Math.floor(Math.log10(least)), least);
+
+/** The smallest round step of `unit` at or above `least`, never finer than its label can show */
+const stepOf = (unit: Unit, least: number) => {
+  switch (unit) {
+    case "bytes":
+    case "speed":
+      return firstStep(BINARY, 1024 ** Math.max(0, Math.floor(Math.log2(least) / 10)), least);
+    case "count":
+      return Math.max(1, decimalStep(least));
+    case "rate":
+      return Math.max(0.1, decimalStep(least));
+    case "ratio":
+      return Math.max(0.01, decimalStep(least));
+    case "seconds":
+      return least <= 60 ? firstStep(CLOCK, 1, least) : 60 * decimalStep(least / 60);
+  }
+};
+
+/**
+ * The value ticks of a chart in `unit` whose values reach `top`, from 0 to the first round step at
+ * or past it, which is where the axis ends; a chart of nothing but zeroes has the one tick
+ */
+export const axisTicks = (unit: Unit, top: number) => {
+  if (top <= 0) return [0];
+  const step = stepOf(unit, top / MOST_STEPS);
+  return Array.from({ length: Math.ceil(top / step) + 1 }, (_, i) => i * step);
 };
