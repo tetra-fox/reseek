@@ -28,6 +28,8 @@
   import { session } from "#lib/session.svelte.js";
   import { contentsText } from "#lib/system/shares.js";
 
+  import AddShare from "./AddShare.svelte";
+
   // the shared directories by host, the exclusions, and the scan that counts them
   type Row = Schemas["Share"] & { host: string };
 
@@ -114,6 +116,7 @@
       </Button>
     {/if}
   {/if}
+  <AddShare onadded={() => void shares.load()} />
 </div>
 
 {#if scan?.faulted}

@@ -17,6 +17,12 @@ export const fileOf = (view: ConfigView, key: string): string =>
 export const lasting = (o: { untilRestart: boolean; expiresAt?: string | null }): string =>
   o.untilRestart ? UNTIL_RESTART : o.expiresAt ? `until ${dateTime(o.expiresAt)}` : "until removed";
 
+/** What manages the file a save of `key` writes, null when nothing does */
+export const managerOf = (view: ConfigView, key: string): string | null => {
+  const file = view.files.find((f) => f.name === fileOf(view, key));
+  return view.managedBy ?? (file?.path.startsWith("/nix/store/") ? "nix" : null);
+};
+
 export const editability = (view: ConfigView, key: string): Editability => {
   const field = view.fields[key];
   if (!field)
@@ -46,7 +52,7 @@ export const editability = (view: ConfigView, key: string): Editability => {
     source.layer === "runtime"
       ? `The value applied here lasts ${lasting(source)}.`
       : "Changes made here apply immediately and last until restart or until removed, as chosen when applying.";
-  const manager = view.managedBy ?? (file?.path.startsWith("/nix/store/") ? "nix" : null);
+  const manager = managerOf(view, key);
   if (manager) {
     return runtime
       ? {
