@@ -229,15 +229,24 @@ test("zooms around the pointer, pans, and loads the detail in view", async ({ pa
   await page.mouse.move(box.x + spec.x + spec.width / 4, box.y + spec.height / 2);
   for (let i = 0; i < 8; i++) await page.mouse.wheel(0, -200);
   const view = async () => (await plot.getAttribute("data-view"))!.split(" ").map(Number);
+  /** The view once it stops moving, as a zoom eases in */
+  const settledView = async () => {
+    for (let last = await view(); ;) {
+      await page.waitForTimeout(100);
+      const now = await view();
+      if (now[0] === last[0] && now[1] === last[1]) return now;
+      last = now;
+    }
+  };
   await expect.poll(async () => (await view())[1]).toBeLessThan(30);
   // the time under the pointer stays under it
-  const [start, span] = await view();
+  const [start, span] = await settledView();
   // within the pixel the pointer rounds to at the whole file's 300 s
   expect(Math.abs(start + span / 4 - 75)).toBeLessThan(1);
-  // the detail for what is in view loads, and nothing far from it
-  await expect.poll(() => tiles.size).toBeGreaterThan(0);
-  // tiles load once the view is narrower than the overview has columns for, around 100 s
-  for (const tile of tiles) expect(Number(tile) * 16).toBeLessThan(200);
+  // the detail for what is in view loads
+  for (let tile = Math.floor(start / 16); tile * 16 < start + span; tile++) {
+    await expect.poll(() => tiles.has(String(tile))).toBe(true);
+  }
 
   // dragging away from the cursor pans
   const y = box.y + spec.height / 2;
@@ -246,14 +255,26 @@ test("zooms around the pointer, pans, and loads the detail in view", async ({ pa
   await page.mouse.move(box.x + spec.x + spec.width / 4, y, { steps: 5 });
   await page.mouse.up();
   await expect.poll(async () => (await view())[0]).toBeCloseTo(start + span / 4, 0);
+
+  // a jump across the file loads the detail where it lands, and nothing far from it. Measured
+  // from a settled view: a zoom's first frames show most of the file and ask for tiles across it
+  const strip = viewer.locator("canvas[aria-hidden=true]");
+  const stripBox = (await strip.boundingBox())!;
+  tiles.clear();
+  await strip.click({ position: { x: stripBox.width * 0.8, y: stripBox.height / 2 } });
+  await expect.poll(() => tiles.size).toBeGreaterThan(0);
+  const [landed, shown] = await settledView();
+  for (const tile of tiles) {
+    expect(Number(tile) * 16 + 16).toBeGreaterThan(landed - shown / 2);
+    expect(Number(tile) * 16).toBeLessThan(landed + shown * 1.5);
+  }
+
   // the zoom buttons work around the cursor, and the whole file comes back with one press
   await viewer.getByRole("button", { name: "Show the whole file" }).click();
   await expect(plot).toHaveAttribute("data-view", "0.000 300.000");
   await viewer.getByRole("button", { name: "Zoom in" }).click();
   await expect.poll(async () => (await view())[1]).toBe(150);
   // a press on the strip of the whole file centers the view there
-  const strip = viewer.locator("canvas[aria-hidden=true]");
-  const stripBox = (await strip.boundingBox())!;
   await strip.click({ position: { x: stripBox.width * 0.8, y: stripBox.height / 2 } });
   await expect.poll(async () => (await view())[0]).toBe(150);
 });
