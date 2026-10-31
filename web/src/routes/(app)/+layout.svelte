@@ -150,8 +150,8 @@
 <svelte:window onkeydown={keydown} />
 
 {#if app.phase === "app"}
-  <!-- the window never scrolls: the content area does, and the activity log under it, the
-       player and the footer take their room from it rather than covering it -->
+  <!-- the window never scrolls: the content area does, and the activity log under it and the
+       footer take their room from it rather than covering it -->
   <div class="grid h-svh grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto]">
     <div class="flex min-h-0">
       <Sidebar />

@@ -105,7 +105,7 @@ impl Directory {
   pub async fn interests(&self) -> Result<Interests, ApiError> {
     self
       .db
-      .read(|conn| stored(conn))
+      .read(stored)
       .await
       .map_err(ApiError::internal)
   }

@@ -53,7 +53,7 @@
   import { shiftHeld } from "#lib/ui/keys.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
-  // the downloads or incomplete directory as a file explorer: browse, open, play, delete
+  // the downloads or incomplete directory as a file explorer: browse, open, delete
   let { root, path }: { root: Root; path: string } = $props();
 
   const parts = $derived(path.split("/").filter(Boolean));
