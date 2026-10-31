@@ -5,6 +5,7 @@ import {
   fakeAnalysis,
   fakeBrowse,
   fakeChat,
+  fakeConnected,
   fakeDownloads,
   fakeFiles,
   fakeFolder,
@@ -295,6 +296,21 @@ test.describe("at a 24 px text size", () => {
       await analysisHolds(page);
       await fits(page, "/system/info", shows("Process ID"));
     });
+  });
+
+  test("the Search button leaves the box its room on a 360 px phone", async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await textSize(page, 24);
+    await fakeConnected(page);
+    await login(page, "/searches");
+    const button = page.getByRole("button", { name: "Search", exact: true });
+    await expect(button).toBeVisible();
+    const box = (await page
+      .getByRole("combobox", { name: "Search files and users" })
+      .boundingBox())!;
+    const { width } = (await button.boundingBox())!;
+    expect(width).toBeLessThanOrEqual(24 * 2.75);
+    expect(box.width).toBeGreaterThan(24 * 7);
   });
 
   test("every screen fits a phone", async ({ page }) => {

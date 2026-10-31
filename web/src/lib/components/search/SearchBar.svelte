@@ -81,7 +81,7 @@
 </script>
 
 <form
-  class="flex flex-col gap-2 rounded-card border bg-surface p-3 shadow-card"
+  class="@container flex flex-col gap-2 rounded-card border bg-surface p-3 shadow-card"
   onsubmit={(e) => {
     e.preventDefault();
     run();
@@ -126,7 +126,14 @@
         </Suggest.Group>
       {/if}
     </Suggest.Box>
-    <Button type="submit" class="h-11 px-4" disabled={!connected}>Search</Button>
+    <!-- below 16rem, about what a phone at the largest text size has, the word takes the box's room
+         and the button keeps it for a screen reader -->
+    <Button
+      type="submit"
+      class="h-11 px-4 @max-[16rem]:w-11 @max-[16rem]:px-0"
+      disabled={!connected}>
+      <SearchIcon class="@min-[16rem]:hidden" /><span class="@max-[16rem]:sr-only">Search</span>
+    </Button>
   </div>
   {#if app.state && !connected}
     <p class="text-xs text-fg-muted">Connect to the Soulseek server to search.</p>
