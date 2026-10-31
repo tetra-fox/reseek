@@ -339,6 +339,73 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn a_map_entry_keeps_the_secret_it_shows_hidden() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    fs::write(&path, "[api_keys.robot]\nkey = \"real\"\nrole = \"reader\"\n").unwrap();
+    let watcher = watched(dir.path());
+    let revision = watcher.current().files[0].revision.clone();
+    // a client changes one field of the entry and sends back the whole map as it read it
+    let mut shown = watcher.current().redacted()["api_keys"].clone();
+    assert_eq!(shown["robot"]["key"], json!(REDACTED));
+    shown["robot"]["role"] = json!("writer");
+
+    watcher
+      .patch_file(
+        "config.toml",
+        revision.as_deref(),
+        values(&[("api_keys", shown.clone())]),
+        vec![],
+      )
+      .await
+      .unwrap();
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(text.contains("real") && !text.contains(REDACTED), "{text}");
+    let robot = watcher.current().values.api_keys["robot"].clone();
+    assert_eq!((robot.key.as_str(), robot.role.as_str()), ("real", "writer"));
+
+    watcher
+      .set_overrides(
+        values(&[("api_keys", shown)]),
+        vec![],
+        "a",
+        Lasts::UntilRemoved,
+      )
+      .await
+      .unwrap();
+    assert_eq!(watcher.current().values.api_keys["robot"].key, "real");
+  }
+
+  #[tokio::test]
+  async fn a_hidden_secret_with_nothing_to_keep_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    fs::write(&path, "[api_keys.robot]\nkey = \"real\"\n").unwrap();
+    let before = fs::read_to_string(&path).unwrap();
+    let watcher = watched(dir.path());
+    let refused = async |set: BTreeMap<Key, Value>| {
+      let revision = watcher.current().files[0].revision.clone();
+      let written = watcher
+        .patch_file("config.toml", revision.as_deref(), set, vec![])
+        .await;
+      match written {
+        Err(Error::Invalid(invalid)) => invalid[0].to_string(),
+        other => panic!("{:?}", other.map(|_| ())),
+      }
+    };
+    // an entry under a new name, whose secret nothing can tell
+    let renamed = json!({ "other": { "key": REDACTED, "role": "r" } });
+    let message = refused(values(&[("api_keys", renamed)])).await;
+    assert!(message.starts_with("api_keys: "), "{message}");
+    assert!(message.contains("api_keys.other.key"), "{message}");
+    // an element of a list, which can move
+    let list = json!([{ "url": "http://x", "token": REDACTED }]);
+    let message = refused(values(&[("webhooks", list)])).await;
+    assert!(message.contains("webhooks[0].token"), "{message}");
+    assert_eq!(fs::read_to_string(&path).unwrap(), before);
+  }
+
+  #[tokio::test]
   async fn patching_a_file_applies_it_and_reports_what_changed() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.toml");

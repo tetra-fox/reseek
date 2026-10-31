@@ -20,7 +20,8 @@ use crate::files::{Entry, LoadedFile};
 use crate::layers::{Checked, Failure, Layers};
 use crate::loaded::Loaded;
 use crate::overrides::Lasts;
-use crate::{Error, Key, Root, lock};
+use crate::schema::keep_secrets;
+use crate::{Error, Key, Root, lock, tree};
 use events::{DEBOUNCE, FileEvents, quiet};
 
 /// How long to wait before reading the files again after a reload failed, since an editor that
@@ -220,7 +221,8 @@ impl<T: Root> Watcher<T> {
   /// Refused, in this order, when the file changed since `revision`, cannot be written, would
   /// leave a configuration that does not load, or when a key's value comes from an env var or
   /// flag, which nothing at run time changes, or from a later file, which this file would not
-  /// beat. For a secret, `*****` keeps the value and an empty string removes it.
+  /// beat. For a secret, `*****` keeps the value and an empty string removes it; the same goes
+  /// for a secret in an entry of a user-keyed map.
   pub async fn patch_file(
     &self,
     name: &str,
@@ -228,9 +230,23 @@ impl<T: Root> Watcher<T> {
     set: BTreeMap<Key, Value>,
     unset: Vec<Key>,
   ) -> Result<Written<T>, Error> {
+    let set = self.with_entry_secrets(set)?;
     self
       .write_file(name, revision, FileEdit::Patch { set, unset })
       .await
+  }
+
+  /// `set` with the secrets its lists of tables and user-keyed maps show as `*****` put back.
+  fn with_entry_secrets(&self, mut set: BTreeMap<Key, Value>) -> Result<BTreeMap<Key, Value>, Error> {
+    let current = self.current();
+    for (key, value) in &mut set {
+      let field = current.schema().field(key);
+      if let Some(field) = field.filter(|field| !field.secret) {
+        keep_secrets(field, value, tree::get(&current.tree, key))
+          .map_err(|invalid| Error::Invalid(vec![invalid]))?;
+      }
+    }
+    Ok(set)
   }
 
   /// Replaces the whole text of the file `name`, with the checks of [`Watcher::patch_file`].
@@ -255,6 +271,7 @@ impl<T: Root> Watcher<T> {
     set_by: &str,
     lasts: Lasts,
   ) -> Result<Option<Arc<Change<T>>>, Error> {
+    let set = self.with_entry_secrets(set)?;
     let set_by = set_by.to_string();
     self
       .blocking(move |state, shared| state.change_overrides(shared, set, &unset, &set_by, lasts))

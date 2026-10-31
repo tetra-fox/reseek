@@ -6,9 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::Key;
 use crate::describe::{Apply, Cascade, Inner, Kind, Node};
-use crate::tree;
+use crate::{Invalid, Key, tree};
 
 /// What a secret value is shown as.
 pub const REDACTED: &str = "*****";
@@ -261,6 +260,75 @@ fn redact_field(field: &Field, value: &mut Value) {
       .for_each(|entry| redact_fields(&field.entries, entry)),
     _ => {}
   }
+}
+
+/// Puts back the secrets of `value`, a new value of `field`, which is a list of tables or a
+/// user-keyed map, wherever it shows them as `*****`: what a client read comes with its secrets
+/// hidden, and it sends the whole value back when it changes one entry. A map's entry keeps its
+/// secret from the entry of the same name in `current`, the value in effect. Nothing can tell
+/// whose secret a renamed entry or a list element shows, so those are refused, and the text
+/// `*****` never takes the place of a secret.
+pub(crate) fn keep_secrets(
+  field: &Field,
+  value: &mut Value,
+  current: Option<&Value>,
+) -> Result<(), Invalid> {
+  kept_in(field, &field.key, value, current).map_err(|path| {
+    Invalid::new(
+      field.key.clone(),
+      format!("The field {path} is hidden and has no value to keep here. Enter it again."),
+    )
+  })
+}
+
+/// [`keep_secrets`] for the value at `path`, whose error is the path of the hidden value.
+fn kept_in(
+  field: &Field,
+  path: &str,
+  value: &mut Value,
+  current: Option<&Value>,
+) -> Result<(), String> {
+  if field.secret {
+    if value.as_str() != Some(REDACTED) {
+      return Ok(());
+    }
+    *value = current
+      .filter(|real| !real.is_null())
+      .ok_or_else(|| path.to_string())?
+      .clone();
+    return Ok(());
+  }
+  match value {
+    Value::Object(entries) if field.kind == Kind::Map => {
+      for (name, entry) in entries {
+        let kept = current.and_then(|map| map.get(name.as_str()));
+        kept_in_entry(field, &format!("{path}.{name}"), entry, kept)?;
+      }
+    }
+    Value::Array(items) => {
+      for (index, item) in items.iter_mut().enumerate() {
+        kept_in_entry(field, &format!("{path}[{index}]"), item, None)?;
+      }
+    }
+    _ => {}
+  }
+  Ok(())
+}
+
+/// [`kept_in`] for each field of `entry`, an element of `field`.
+fn kept_in_entry(
+  field: &Field,
+  path: &str,
+  entry: &mut Value,
+  current: Option<&Value>,
+) -> Result<(), String> {
+  for inner in &field.entries {
+    if let Some(value) = get_mut(entry, &inner.key) {
+      let kept = current.and_then(|entry| tree::get(entry, &inner.key));
+      kept_in(inner, &format!("{path}.{}", inner.key), value, kept)?;
+    }
+  }
+  Ok(())
 }
 
 fn hide(value: &mut Value) {
