@@ -6,6 +6,7 @@ use api_types::users::{UserList, UserListQuery, UserSort};
 use chrono::Utc;
 use rusqlite::params_from_iter;
 use rusqlite::types::Value;
+use soulseek_proto::SERVER_USERNAME;
 
 use super::store::{COLUMNS, Stored, presence_text, stored};
 use super::{Directory, blocking, groups, transfers};
@@ -24,8 +25,12 @@ struct Candidate {
 impl Directory {
   /// The page `query` asks for.
   pub(crate) async fn list(&self, query: UserListQuery) -> Result<UserList, ApiError> {
-    let mut filter = vec!["1 = 1".to_string()];
-    let mut values = vec![Value::Text(timestamp(Utc::now()))];
+    // a row under the name the server's notices come from is no user
+    let mut filter = vec!["username <> ?2".to_string()];
+    let mut values = vec![
+      Value::Text(timestamp(Utc::now())),
+      Value::Text(SERVER_USERNAME.to_string()),
+    ];
     if let Some(pinned) = query.pinned {
       filter.push(format!("pinned = {}", i32::from(pinned)));
     }

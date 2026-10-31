@@ -154,6 +154,18 @@ async fn the_directory_filters_and_sorts_with_pinned_users_first() {
 }
 
 #[tokio::test]
+async fn the_directory_never_lists_the_servers_reserved_name() {
+  let app = app(CONFIG, &[]).await;
+  let directory = &app.state.users;
+  for name in ["server", "serverfan"] {
+    directory.change(name, Change::Pinned(true)).await.unwrap();
+  }
+  let mut asked = query();
+  asked.q = Some("server".into());
+  assert_eq!(names(directory.list(asked).await.unwrap()), ["serverfan"]);
+}
+
+#[tokio::test]
 async fn a_block_request_is_checked_before_it_is_made() {
   let app = app(CONFIG, &[]).await;
   for body in [
