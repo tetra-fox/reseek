@@ -25,6 +25,18 @@ release:
       install -m755 "$out/bin/reseek" "dist/reseek-linux-$arch"
     done
 
+# the universal macos binary into dist/, with the ui built in; run on a mac
+release-macos: web-build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p dist
+    for target in x86_64-apple-darwin aarch64-apple-darwin; do
+      rustup target add "$target"
+      cargo build --release -p reseek --target "$target"
+    done
+    lipo -create -output dist/reseek-macos-universal \
+      target/x86_64-apple-darwin/release/reseek target/aarch64-apple-darwin/release/reseek
+
 # the container image `reseek` from the release binaries, with podman or docker
 docker: release
     #!/usr/bin/env bash
