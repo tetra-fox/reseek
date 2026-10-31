@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { editability } from "./editability";
-import { type ConfigView, controlOf, errorsByKey, fromDraft, leftovers, toDraft } from "./fields";
+import { type ConfigView, controlOf, errorsByKey, fromDraft, toDraft } from "./fields";
 import fixture from "./fixtures/view.json";
 import { asNixSettings } from "./nix";
 import { sections, valueAt } from "./sections";
@@ -20,19 +20,24 @@ describe("the settings forms", () => {
       "Shares",
       "Transfers",
       "Groups",
+      "Chat",
+      "Notifications",
+      "Search filters",
+      "Throttling",
       "Folders",
       "Analysis",
+      "Retention",
       "Web",
       "Authentication",
-      "Search filters",
-      "Retention",
-      "Throttling",
       "Integrations",
       "Logging",
       "Metrics",
       "Relay",
       "Flags"
     ]);
+    // the side list gathers them by heading, so each heading's sections stand together
+    const groups = sections.map((s) => s.group);
+    expect(groups.filter((g, i) => g !== groups[i - 1])).toEqual(["Network", "Storage", "Server"]);
   });
 
   it("name only options the daemon has, each once", () => {
@@ -41,11 +46,29 @@ describe("the settings forms", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("leave the rest to Everything else", () => {
-    const rest = leftovers(view).fields.map((f) => f.key);
-    const named = sections.flatMap((s) => s.fields.map((f) => f.key));
-    expect([...named, ...rest].sort()).toEqual(Object.keys(view.fields).sort());
-    expect(rest).toContain("chat.max_message_length");
+  it("give every option of the daemon a section and a name of its own", () => {
+    const fields = sections.flatMap((s) => s.fields);
+    const named = new Set(fields.map((f) => f.key));
+    expect(Object.keys(view.fields).filter((key) => !named.has(key))).toEqual([]);
+    expect(fields.filter((f) => f.label === f.key)).toEqual([]);
+  });
+
+  it("label every field of every table", () => {
+    const fields = sections.flatMap((s) => s.fields);
+    for (const field of fields) {
+      const unlabeled = view.fields[field.key].entries
+        .map((entry) => entry.key)
+        .filter((key) => !field.columns?.[key]);
+      expect([field.key, unlabeled]).toEqual([field.key, []]);
+    }
+  });
+
+  it("leave no option a raw JSON box", () => {
+    for (const field of sections.flatMap((s) => s.fields)) {
+      const control = controlOf(field, view.fields[field.key]);
+      if (control !== "map" && control !== "table-list") continue;
+      expect(view.fields[field.key].entries.length).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -97,12 +120,10 @@ describe("controls and drafts", () => {
     expect(fromDraft(field("web.trusted_proxies"), "cidr-list", "lan")).toMatchObject({
       error: expect.any(String)
     });
-    expect(fromDraft(field("relay.agents"), "map", '{"a":{"secret":"*****"}}')).toEqual({
+    expect(fromDraft(field("relay.agents"), "map", '[["a",{"secret":"*****"}]]')).toEqual({
       set: { a: { secret: "*****" } }
     });
-    expect(fromDraft(field("relay.agents"), "map", "[]")).toMatchObject({
-      error: expect.any(String)
-    });
+    expect(fromDraft(field("relay.agents"), "map", "[]")).toEqual({ set: {} });
     expect(fromDraft(field("soulseek.password"), "secret", "")).toEqual({ set: "" });
     expect(fromDraft(field("relay.mode"), "select", "sideways", view.fields["relay.mode"])).toEqual(
       { error: "must be one of controller, agent, debug" }
@@ -116,12 +137,13 @@ describe("controls and drafts", () => {
     expect(toDraft("list", ["a", "b"])).toBe("a\nb");
     expect(toDraft("number", null)).toBe("");
     expect(toDraft("bool", true)).toBe(true);
-    expect(toDraft("map", { a: 1 })).toBe('{\n  "a": 1\n}');
+    expect(toDraft("map", { a: { b: null, c: 1 } })).toBe('[["a",{"c":1}]]');
   });
 
   it("place the daemon's refusals at their fields", () => {
     const found = errorsByKey("web.port: must be at least 1; web.ui: no", ["web.port", "web.ui"]);
     expect(Object.fromEntries(found)).toEqual({ "web.port": "must be at least 1", "web.ui": "no" });
+    expect(errorsByKey("a: one; a: two", ["a"]).get("a")).toBe("one; two");
   });
 });
 
@@ -215,8 +237,6 @@ describe("an option made of tables", () => {
     ).toEqual({
       set: [{ name: "FLAC", filter: "type:flac" }]
     });
-    expect(fromDraft(presets, "table-list", '["type:flac"]', info)).toEqual({
-      error: "must be a JSON list of objects"
-    });
+    expect(fromDraft(presets, "table-list", "[{}]", info)).toEqual({ error: "This row is empty" });
   });
 });

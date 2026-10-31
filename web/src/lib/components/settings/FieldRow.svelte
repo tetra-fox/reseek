@@ -63,12 +63,16 @@
   const shown = (value: unknown) => (typeof value === "string" ? value : JSON.stringify(value));
   const entry = $derived(field.derived?.entry(values) ?? null);
   const notApplied = $derived(info.notApplied);
+  /** a table takes the row's whole width, and says what is wrong by its rows */
+  const tabular = $derived(control === "map" || control === "table-list");
 </script>
 
-<!-- one setting: what it is on the left, its control on the right, stacked on phones -->
+<!-- one setting: what it is on the left, its control on the right, stacked on phones, and a table
+     under what it is at any width -->
 <div
   class={[
-    "grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-2 px-5 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:items-start",
+    "grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-2 px-5 py-4 md:items-start",
+    !tabular && "md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]",
     unused && "opacity-60"
   ]}>
   <div class="flex min-w-0 flex-col gap-1 md:pt-1.5">
@@ -144,16 +148,17 @@
         {field}
         {control}
         choices={info.choices ?? []}
+        entries={info.entries}
         bind:draft
         disabled={edit.mode === "locked" || unused}
         described={help}
-        invalid={!!error} />
+        {error} />
     {/key}
     {#if entry}
       <p class="font-mono text-xs wrap-anywhere text-fg-subtle">{entry}</p>
       <p class="text-xs text-fg-subtle">{field.derived?.note}</p>
     {/if}
-    {#if error}<p class="text-xs text-danger" role="alert">{error}</p>{/if}
+    {#if error && !tabular}<p class="text-xs text-danger" role="alert">{error}</p>{/if}
     {#if edit.notice}<p class="text-xs text-fg-muted">{edit.notice}</p>{/if}
     {#if notApplied}
       <p class="text-xs text-danger">

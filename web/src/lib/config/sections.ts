@@ -43,10 +43,25 @@ export type Field = {
   auto?: () => number | undefined;
   /** a list entry that follows from another option: shown dimmed under the list, never saved */
   derived?: { from: string; entry: (values: unknown) => string | null; note: string };
+  /** the subheading it goes under on a big form */
+  heading?: string;
+  /** for a table, the label of each field of a row, by the field's key */
+  columns?: Record<string, string>;
+  /** for a map, the label of the column that holds each row's name; Name by default */
+  rowName?: string;
 };
 
+/** The headings the side list of the settings page gathers its sections under */
+export type SectionGroup = "Network" | "Storage" | "Server";
+
 /** A form on the settings page; `extra` shows above its fields, such as a state the options set */
-export type Section = { id: string; title: string; fields: Field[]; extra?: Component };
+export type Section = {
+  id: string;
+  title: string;
+  group: SectionGroup;
+  fields: Field[];
+  extra?: Component;
+};
 
 const PORT = { min: 1, max: 65535 };
 const AT_LEAST_1 = { min: 1 };
@@ -58,16 +73,64 @@ export const valueAt = (values: unknown, key: string): unknown =>
     .split(".")
     .reduce<unknown>((at, part) => (at as Record<string, unknown> | null)?.[part], values);
 
+/** `fields` under the subheading `heading` */
+const under = (heading: string, fields: Field[]): Field[] =>
+  fields.map((field) => ({ ...field, heading }));
+
+const LIMIT_WINDOWS = ["queued", "daily", "weekly"];
+const LIMIT_MEASURES = ["files", "megabytes", "failures"];
+
 /** The nine per-user limits under `prefix`: files, megabytes and failures, queued, daily and weekly */
 const limits = (prefix: string, who: string): Field[] =>
-  ["queued", "daily", "weekly"].flatMap((window) =>
-    ["files", "megabytes", "failures"].map((what) => ({
+  LIMIT_WINDOWS.flatMap((window) =>
+    LIMIT_MEASURES.map((what) => ({
       key: `${prefix}.limits.${window}.${what}`,
       label: `${who}: ${window} ${what}`,
       ...AT_LEAST_1,
       placeholder: NO_LIMIT
     }))
   );
+
+const capitalized = (word: string) => `${word[0].toUpperCase()}${word.slice(1)}`;
+
+/** The row labels of a user-defined group: its members and what its upload settings are called */
+const GROUP_COLUMNS: Record<string, string> = {
+  "members": "Members",
+  "upload.priority": "Priority",
+  "upload.strategy": "Queue order",
+  "upload.slots": "Upload slots",
+  "upload.speed_limit": "Speed limit (KiB/s)",
+  ...Object.fromEntries(
+    LIMIT_WINDOWS.flatMap((window) =>
+      LIMIT_MEASURES.map((what) => [
+        `upload.limits.${window}.${what}`,
+        `${capitalized(window)} ${what}`
+      ])
+    )
+  )
+};
+
+const OIDC_COLUMNS: Record<string, string> = {
+  "issuer": "Issuer URL",
+  "client_id": "Client ID",
+  "client_secret": "Client secret",
+  "display_name": "Button label",
+  "scopes": "Scopes",
+  "role_mapping.claim": "Groups claim",
+  "role_mapping.administrator": "Administrator groups",
+  "role_mapping.readwrite": "Read and write groups",
+  "role_mapping.readonly": "Read-only groups",
+  "role_mapping.default": "Default role",
+  "allowed_subjects": "Allowed subjects",
+  "allowed_emails": "Allowed email addresses",
+  "username_claim": "Username claim",
+  "auto_login": "Log in automatically",
+  "session_ttl": "Session lifetime",
+  "logout.rp_initiated": "Log out at the provider",
+  "logout.back_channel": "Accept back-channel logout",
+  "ca_certificate": "Certificate authority file",
+  "require_https": "Require HTTPS"
+};
 
 /** A group's upload settings under `prefix` */
 const groupUpload = (prefix: string, group: string): Field[] => [
@@ -94,90 +157,113 @@ export const sections: Section[] = [
   {
     id: "soulseek",
     title: "Soulseek",
+    group: "Network",
     extra: PortMapping,
     fields: [
-      { key: "soulseek.username", label: "Username" },
-      { key: "soulseek.password", label: "Password", control: "secret" },
-      { key: "soulseek.address", label: "Server" },
-      { key: "soulseek.port", label: "Server port", min: 1024, max: 65535 },
-      { key: "soulseek.description", label: "Profile text" },
-      { key: "soulseek.picture", label: "Profile picture" },
-      { key: "soulseek.listen_ip_address", label: "Listen address" },
-      { key: "soulseek.listen_port", label: "Listen port", min: 1024, max: 65535 },
-      { key: "soulseek.port_mapping", label: "Port mapping" },
-      { key: "rooms", label: "Rooms to join" },
-      {
-        key: "soulseek.diagnostic_level",
-        label: "Protocol diagnostics"
-      },
-      { key: "soulseek.distributed_network.disabled", label: "Disable distributed network" },
-      { key: "soulseek.distributed_network.disable_children", label: "Refuse child connections" },
-      {
-        key: "soulseek.distributed_network.child_limit",
-        label: "Maximum child connections",
-        ...AT_LEAST_1
-      },
-      { key: "soulseek.distributed_network.logging", label: "Distributed network diagnostics" },
-      { key: "soulseek.connection.timeout.connect", label: "Connect timeout" },
-      { key: "soulseek.connection.timeout.inactivity", label: "Idle timeout" },
-      { key: "soulseek.connection.timeout.transfer", label: "Transfer stall timeout" },
-      { key: "soulseek.connection.timeout.transfer_response", label: "Transfer response timeout" },
-      { key: "soulseek.connection.buffer.read", label: "Read buffer (bytes)", min: 1024 },
-      { key: "soulseek.connection.buffer.write", label: "Write buffer (bytes)", min: 1024 },
-      { key: "soulseek.connection.buffer.transfer", label: "Transfer buffer (bytes)", min: 81920 },
-      { key: "soulseek.connection.buffer.write_queue", label: "Write queue", min: 5, max: 5000 },
-      {
-        key: "soulseek.connection.mtu",
-        label: "Server connection MTU",
-        min: 576,
-        max: 65535,
-        placeholder: "system default"
-      },
-      { key: "soulseek.connection.proxy.enabled", label: "SOCKS5 proxy" },
-      ...(["address", "port", "username", "password"] as const).map((part): Field => ({
-        key: `soulseek.connection.proxy.${part}`,
-        label: `Proxy ${part}`,
-        ...(part === "port" ? PORT : {}),
-        ...(part === "password" ? { control: "secret" as const } : {}),
-        enabledWhen: { key: "soulseek.connection.proxy.enabled", values: [true] }
-      })),
-      { key: "soulseek.server_keepalive.enabled", label: "Server keep-alive" },
-      ...(["idle", "interval", "probes"] as const).map((part): Field => ({
-        key: `soulseek.server_keepalive.${part}`,
-        label: `Keep-alive ${part}`,
-        ...(part === "probes" ? AT_LEAST_1 : {}),
-        enabledWhen: { key: "soulseek.server_keepalive.enabled", values: [true] }
-      })),
-      { key: "soulseek.limits.max_message_size", label: "Maximum peer message size" },
-      {
-        key: "soulseek.limits.max_concurrent_peer_connects",
-        label: "Concurrent peer connection attempts",
-        ...AT_LEAST_1
-      },
-      {
-        key: "soulseek.limits.max_cached_peer_connections",
-        label: "Cached peer connections",
-        ...AT_LEAST_1
-      },
-      {
-        key: "soulseek.limits.search_response_cache_size",
-        label: "Cached search responses",
-        ...AT_LEAST_1
-      },
-      {
-        key: "soulseek.limits.user_endpoint_cache_size",
-        label: "Cached user addresses",
-        ...AT_LEAST_1
-      },
-      {
-        key: "soulseek.limits.distributed_parent_negotiation_timeout",
-        label: "Distributed parent timeout"
-      }
+      ...under("Account", [
+        { key: "soulseek.username", label: "Username" },
+        { key: "soulseek.password", label: "Password", control: "secret" },
+        { key: "soulseek.description", label: "Profile text" },
+        { key: "soulseek.picture", label: "Profile picture" }
+      ]),
+      ...under("Server", [
+        { key: "soulseek.address", label: "Server" },
+        { key: "soulseek.port", label: "Server port", min: 1024, max: 65535 },
+        {
+          key: "soulseek.connection.mtu",
+          label: "Server connection MTU",
+          min: 576,
+          max: 65535,
+          placeholder: "system default"
+        },
+        { key: "soulseek.server_keepalive.enabled", label: "Server keep-alive" },
+        ...(["idle", "interval", "probes"] as const).map((part): Field => ({
+          key: `soulseek.server_keepalive.${part}`,
+          label: `Keep-alive ${part}`,
+          ...(part === "probes" ? AT_LEAST_1 : {}),
+          enabledWhen: { key: "soulseek.server_keepalive.enabled", values: [true] }
+        }))
+      ]),
+      ...under("Listening", [
+        { key: "soulseek.listen_ip_address", label: "Listen address" },
+        { key: "soulseek.listen_port", label: "Listen port", min: 1024, max: 65535 },
+        { key: "soulseek.port_mapping", label: "Port mapping" }
+      ]),
+      ...under("Distributed network", [
+        { key: "soulseek.distributed_network.disabled", label: "Disable distributed network" },
+        { key: "soulseek.distributed_network.disable_children", label: "Refuse child connections" },
+        {
+          key: "soulseek.distributed_network.child_limit",
+          label: "Maximum child connections",
+          ...AT_LEAST_1
+        },
+        {
+          key: "soulseek.limits.distributed_parent_negotiation_timeout",
+          label: "Distributed parent timeout"
+        }
+      ]),
+      ...under("Connections", [
+        { key: "soulseek.connection.timeout.connect", label: "Connect timeout" },
+        { key: "soulseek.connection.timeout.inactivity", label: "Idle timeout" },
+        { key: "soulseek.connection.timeout.transfer", label: "Transfer stall timeout" },
+        {
+          key: "soulseek.connection.timeout.transfer_response",
+          label: "Transfer response timeout"
+        },
+        { key: "soulseek.browse.response_timeout", label: "Browse response timeout" },
+        { key: "soulseek.connection.buffer.read", label: "Read buffer (bytes)", min: 1024 },
+        { key: "soulseek.connection.buffer.write", label: "Write buffer (bytes)", min: 1024 },
+        {
+          key: "soulseek.connection.buffer.transfer",
+          label: "Transfer buffer (bytes)",
+          min: 81920
+        },
+        { key: "soulseek.connection.buffer.write_queue", label: "Write queue", min: 5, max: 5000 }
+      ]),
+      ...under("Proxy", [
+        { key: "soulseek.connection.proxy.enabled", label: "SOCKS5 proxy" },
+        ...(["address", "port", "username", "password"] as const).map((part): Field => ({
+          key: `soulseek.connection.proxy.${part}`,
+          label: `Proxy ${part}`,
+          ...(part === "port" ? PORT : {}),
+          ...(part === "password" ? { control: "secret" as const } : {}),
+          enabledWhen: { key: "soulseek.connection.proxy.enabled", values: [true] }
+        }))
+      ]),
+      ...under("Limits", [
+        { key: "soulseek.search.max_concurrent", label: "Concurrent searches", ...AT_LEAST_1 },
+        { key: "soulseek.limits.max_message_size", label: "Maximum peer message size" },
+        {
+          key: "soulseek.limits.max_concurrent_peer_connects",
+          label: "Concurrent peer connection attempts",
+          ...AT_LEAST_1
+        },
+        {
+          key: "soulseek.limits.max_cached_peer_connections",
+          label: "Cached peer connections",
+          ...AT_LEAST_1
+        },
+        {
+          key: "soulseek.limits.search_response_cache_size",
+          label: "Cached search responses",
+          ...AT_LEAST_1
+        },
+        {
+          key: "soulseek.limits.user_endpoint_cache_size",
+          label: "Cached user addresses",
+          ...AT_LEAST_1
+        }
+      ]),
+      ...under("Diagnostics", [
+        { key: "soulseek.diagnostic_level", label: "Protocol diagnostics" },
+        { key: "soulseek.distributed_network.logging", label: "Distributed network diagnostics" }
+      ])
     ]
   },
   {
     id: "shares",
     title: "Shares",
+    group: "Network",
     fields: [
       {
         key: "shares.directories",
@@ -205,254 +291,158 @@ export const sections: Section[] = [
   {
     id: "transfers",
     title: "Transfers",
+    group: "Network",
     fields: [
-      { key: "transfers.upload.slots", label: "Upload slots", ...AT_LEAST_1 },
-      {
-        key: "transfers.upload.speed_limit",
-        label: "Upload speed limit (KiB/s)",
-        ...AT_LEAST_1,
-        placeholder: NO_LIMIT
-      },
-      ...limits("transfers.upload", "Per user"),
-      {
-        key: "transfers.download.slots",
-        label: "Download slots",
-        ...AT_LEAST_1,
-        placeholder: NO_LIMIT
-      },
-      {
-        key: "transfers.download.speed_limit",
-        label: "Download speed limit (KiB/s)",
-        ...AT_LEAST_1,
-        placeholder: NO_LIMIT
-      },
-      {
-        key: "transfers.download.request_style",
-        label: "Download request style"
-      },
-      { key: "transfers.download.retry.attempts", label: "Download attempts", ...AT_LEAST_1 },
-      { key: "transfers.download.retry.delay", label: "First retry delay" },
-      { key: "transfers.download.retry.max_delay", label: "Maximum retry delay" },
-      {
-        key: "transfers.download.retry.partial",
-        label: "Partial file on retry"
-      },
-      {
-        key: "transfers.download.destination.subdirectory",
-        label: "Download subdirectory",
-        placeholder: "${SOURCE_DIRECTORY}"
-      },
-      {
-        key: "transfers.download.destination.exists",
-        label: "If the file exists"
-      },
-      {
-        key: "transfers.download.destination.permissions.mode",
-        label: "File mode",
-        placeholder: "system default"
-      },
-      { key: "transfers.ui.queue_refresh", label: "Queue position refresh interval" }
+      ...under("Downloads", [
+        {
+          key: "transfers.download.slots",
+          label: "Download slots",
+          ...AT_LEAST_1,
+          placeholder: NO_LIMIT
+        },
+        {
+          key: "transfers.download.speed_limit",
+          label: "Download speed limit (KiB/s)",
+          ...AT_LEAST_1,
+          placeholder: NO_LIMIT
+        },
+        { key: "transfers.download.request_style", label: "Download request style" },
+        { key: "transfers.download.retry.attempts", label: "Download attempts", ...AT_LEAST_1 },
+        { key: "transfers.download.retry.delay", label: "First retry delay" },
+        { key: "transfers.download.retry.max_delay", label: "Maximum retry delay" },
+        { key: "transfers.download.retry.partial", label: "Partial file on retry" },
+        {
+          key: "transfers.download.destination.subdirectory",
+          label: "Download subdirectory",
+          placeholder: "${SOURCE_DIRECTORY}"
+        },
+        { key: "transfers.download.destination.exists", label: "If the file exists" },
+        {
+          key: "transfers.download.destination.permissions.mode",
+          label: "File mode",
+          placeholder: "system default"
+        },
+        { key: "transfers.ui.queue_refresh", label: "Queue position refresh interval" }
+      ]),
+      ...under("Uploads", [
+        { key: "transfers.upload.slots", label: "Upload slots", ...AT_LEAST_1 },
+        {
+          key: "transfers.upload.speed_limit",
+          label: "Upload speed limit (KiB/s)",
+          ...AT_LEAST_1,
+          placeholder: NO_LIMIT
+        }
+      ]),
+      ...under("Limits", limits("transfers.upload", "Per user"))
     ]
   },
   {
     id: "groups",
     title: "Groups",
+    group: "Network",
     fields: [
-      ...groupUpload("transfers.groups.default", "Default"),
-      ...groupUpload("transfers.groups.leechers", "Leechers"),
-      {
-        key: "transfers.groups.leechers.thresholds.files",
-        label: "Leechers: minimum shared files",
-        ...AT_LEAST_1
-      },
-      {
-        key: "transfers.groups.leechers.thresholds.directories",
-        label: "Leechers: minimum shared folders",
-        ...AT_LEAST_1
-      },
-      { key: "transfers.groups.blacklisted.members", label: "Blocked users" },
-      {
-        key: "transfers.groups.blacklisted.patterns",
-        label: "Blocked name patterns",
-        control: "regex-list"
-      },
-      {
-        key: "transfers.groups.blacklisted.cidrs",
-        label: "Blocked networks",
-        control: "cidr-list"
-      },
-      { key: "transfers.groups.user_defined", label: "User-defined groups" },
-      { key: "blacklist.enabled", label: "Address blocklist" },
-      {
-        key: "blacklist.file",
-        label: "Blocklist file",
-        enabledWhen: { key: "blacklist.enabled", values: [true] }
-      }
+      ...under("Default group", groupUpload("transfers.groups.default", "Default")),
+      ...under("Leechers", [
+        ...groupUpload("transfers.groups.leechers", "Leechers"),
+        {
+          key: "transfers.groups.leechers.thresholds.files",
+          label: "Leechers: minimum shared files",
+          ...AT_LEAST_1
+        },
+        {
+          key: "transfers.groups.leechers.thresholds.directories",
+          label: "Leechers: minimum shared folders",
+          ...AT_LEAST_1
+        }
+      ]),
+      ...under("Blocked", [
+        { key: "transfers.groups.blacklisted.members", label: "Blocked users" },
+        {
+          key: "transfers.groups.blacklisted.patterns",
+          label: "Blocked name patterns",
+          control: "regex-list"
+        },
+        {
+          key: "transfers.groups.blacklisted.cidrs",
+          label: "Blocked networks",
+          control: "cidr-list"
+        },
+        { key: "blocking.default_scopes", label: "Default block scopes" },
+        { key: "blacklist.enabled", label: "Address blocklist" },
+        {
+          key: "blacklist.file",
+          label: "Blocklist file",
+          enabledWhen: { key: "blacklist.enabled", values: [true] }
+        }
+      ]),
+      ...under("User-defined groups", [
+        {
+          key: "transfers.groups.user_defined",
+          label: "User-defined groups",
+          columns: GROUP_COLUMNS
+        }
+      ])
     ]
   },
   {
-    id: "directories",
-    title: "Folders",
+    id: "chat",
+    title: "Chat",
+    group: "Network",
     fields: [
+      { key: "rooms", label: "Rooms to join" },
       {
-        key: "directories.downloads",
-        label: "Downloads",
-        placeholder: "downloads in the data folder"
+        key: "chat.accept_private_room_invitations",
+        label: "Accept private room invitations"
       },
-      {
-        key: "directories.incomplete",
-        label: "Downloads in progress",
-        placeholder: "incomplete in the data folder"
-      }
+      { key: "chat.highlight_words", label: "Highlighted words" },
+      { key: "chat.max_message_length", label: "Maximum message length" }
     ]
   },
   {
-    id: "analysis",
-    title: "Analysis",
+    id: "notifications",
+    title: "Notifications",
+    group: "Network",
     fields: [
-      { key: "analysis.on_download", label: "Analyze finished downloads" },
-      { key: "analysis.extensions", label: "Extensions" },
-      {
-        key: "analysis.workers",
-        label: "Concurrent analyses",
-        control: "auto-count",
-        min: 1,
-        auto: () => app.state?.process.autoAnalysisWorkers
-      },
-      { key: "analysis.timeout", label: "Time limit per file" },
-      {
-        key: "analysis.max_full_minutes",
-        label: "Longest file analyzed in full (minutes)",
-        min: 1
-      },
-      { key: "analysis.sampled_windows", label: "Windows in a sampled file", min: 20, max: 2000 },
-      { key: "analysis.cache_max_bytes", label: "Spectrogram storage" },
-      { key: "analysis.spectrogram.scale", label: "Default frequency scale" }
-    ]
-  },
-  {
-    id: "web",
-    title: "Web",
-    fields: [
-      { key: "web.port", label: "HTTP port", ...PORT },
-      { key: "web.ip_address", label: "HTTP addresses", placeholder: "all addresses" },
-      { key: "web.socket", label: "Unix socket" },
-      { key: "web.url_base", label: "URL base" },
-      { key: "web.external_url", label: "Public URL", placeholder: "derived from each request" },
-      { key: "web.hostnames", label: "Host names" },
-      { key: "web.trusted_proxies", label: "Trusted proxies", control: "cidr-list" },
-      { key: "web.ui", label: "Web UI" },
-      { key: "web.content_path", label: "UI directory", placeholder: "built-in UI" },
-      { key: "web.cors.allowed_origins", label: "Allowed origins" },
-      { key: "web.logging", label: "Request logging" },
-      { key: "web.https.disabled", label: "Disable HTTPS" },
-      { key: "web.https.port", label: "HTTPS port", ...PORT },
-      { key: "web.https.ip_address", label: "HTTPS addresses", placeholder: "all addresses" },
-      { key: "web.https.force", label: "Redirect to HTTPS" },
-      { key: "web.https.certificate.cert", label: "Certificate (PEM)" },
-      { key: "web.https.certificate.key", label: "Private key (PEM)" },
-      { key: "web.https.certificate.pfx", label: "Certificate (PKCS#12)" },
-      { key: "web.https.certificate.password", label: "PKCS#12 password", control: "secret" },
-      { key: "web.live.max_streams_per_principal", label: "Event streams per user", ...AT_LEAST_1 },
-      { key: "web.files.serve", label: "Serve downloaded files" },
-      { key: "web.files.archive_max_bytes", label: "Maximum folder zip size" },
-      {
-        key: "web.files.serve_speed_limit",
-        label: "File serving speed limit (KiB/s)",
-        ...AT_LEAST_1,
-        placeholder: NO_LIMIT
-      },
-      { key: "feature.swagger", label: "API browser" }
-    ]
-  },
-  {
-    id: "authentication",
-    title: "Authentication",
-    fields: [
-      { key: "web.authentication.username", label: "Administrator username" },
-      { key: "web.authentication.password", label: "Administrator password", control: "secret" },
-      { key: "web.authentication.password_hash", label: "Password hash", control: "secret" },
-      { key: "web.authentication.local.enabled", label: "Password login" },
-      {
-        key: "web.authentication.local.only_from",
-        label: "Password login from",
-        control: "cidr-list"
-      },
-      { key: "web.authentication.local.users", label: "Additional accounts" },
-      { key: "web.authentication.session_ttl", label: "Session lifetime" },
-      { key: "web.authentication.session_idle", label: "Session idle timeout" },
-      {
-        key: "web.authentication.trusted_networks",
-        label: "Trusted networks",
-        control: "cidr-list"
-      },
-      {
-        key: "web.authentication.trusted_role",
-        label: "Trusted network role"
-      },
-      { key: "web.authentication.disabled", label: "Disable authentication" },
-      { key: "web.authentication.oidc", label: "OpenID Connect providers" },
-      { key: "web.authentication.proxy.enabled", label: "Proxy authentication" },
-      ...(["user_header", "email_header", "groups_header"] as const).map((part): Field => ({
-        key: `web.authentication.proxy.${part}`,
-        label: `Proxy ${part.replace("_", " ")}`,
-        enabledWhen: { key: "web.authentication.proxy.enabled", values: [true] }
-      })),
-      {
-        key: "web.authentication.proxy.session",
-        label: "Proxy sessions",
-        enabledWhen: { key: "web.authentication.proxy.enabled", values: [true] }
-      },
-      ...(["administrator", "readwrite", "readonly"] as const).map((role): Field => ({
-        key: `web.authentication.proxy.role_mapping.${role}`,
-        label: `Proxy groups: ${role}`,
-        enabledWhen: { key: "web.authentication.proxy.enabled", values: [true] }
-      })),
-      {
-        key: "web.authentication.proxy.role_mapping.default",
-        label: "Proxy default role",
-        enabledWhen: { key: "web.authentication.proxy.enabled", values: [true] }
-      },
-      { key: "web.authentication.api_key", label: "API key", control: "secret" },
-      { key: "web.authentication.api_keys", label: "API keys" }
+      ...under("Chat", [
+        { key: "chat.notifications.enabled", label: "Chat notifications" },
+        ...(
+          [
+            ["private_messages", "Private messages"],
+            ["mentions", "Mentions"],
+            ["room_messages", "Every message in notifying rooms"],
+            ["only_when_hidden", "Only while the chat is out of view"],
+            ["sound", "Notification sound"]
+          ] as const
+        ).map(([part, label]): Field => ({
+          key: `chat.notifications.${part}`,
+          label,
+          enabledWhen: { key: "chat.notifications.enabled", values: [true] }
+        }))
+      ]),
+      ...under("Transfers", [
+        { key: "notifications.transfers.download_finished", label: "A download finished" },
+        { key: "notifications.transfers.batch_finished", label: "A batch of downloads finished" },
+        { key: "notifications.transfers.upload_queued", label: "An upload was queued" }
+      ])
     ]
   },
   {
     id: "search-filters",
     title: "Search filters",
+    group: "Network",
     fields: [
       { key: "filters.search.request", label: "Ignored incoming searches", control: "regex-list" },
-      { key: "search.filter_presets", label: "Filter presets" }
-    ]
-  },
-  {
-    id: "retention",
-    title: "Retention",
-    fields: [
-      { key: "retention.search", label: "Searches", placeholder: "kept" },
-      ...transferRetention("upload"),
-      ...transferRetention("download"),
       {
-        key: "retention.transfers.purge_removed_after",
-        label: "Removed transfers",
-        placeholder: "kept"
-      },
-      { key: "retention.files.complete", label: "Downloaded files", placeholder: "kept" },
-      { key: "retention.files.incomplete", label: "Incomplete files", placeholder: "kept" },
-      { key: "retention.events", label: "Events" },
-      { key: "retention.events_max_rows", label: "Maximum events", min: 0 },
-      { key: "retention.logs", label: "Log files" },
-      { key: "retention.messages.private", label: "Private messages" },
-      { key: "retention.messages.max_per_conversation", label: "Maximum per conversation", min: 0 },
-      { key: "retention.messages.rooms", label: "Room messages" },
-      { key: "retention.messages.mentions", label: "Mentions" },
-      { key: "retention.messages.max_per_room", label: "Maximum per room", min: 0 },
-      { key: "retention.users", label: "Users not seen" }
+        key: "search.filter_presets",
+        label: "Filter presets",
+        columns: { name: "Name", filter: "Filter" }
+      }
     ]
   },
   {
     id: "throttling",
     title: "Throttling",
+    group: "Network",
     fields: [
       {
         key: "throttling.search.incoming.concurrency",
@@ -475,13 +465,241 @@ export const sections: Section[] = [
     ]
   },
   {
+    id: "directories",
+    title: "Folders",
+    group: "Storage",
+    fields: [
+      {
+        key: "directories.downloads",
+        label: "Downloads",
+        placeholder: "downloads in the data folder"
+      },
+      {
+        key: "directories.incomplete",
+        label: "Downloads in progress",
+        placeholder: "incomplete in the data folder"
+      },
+      { key: "paths.data", label: "Data folder" },
+      { key: "paths.cache", label: "Cache folder" },
+      { key: "paths.logs", label: "Log folder" },
+      { key: "paths.config", label: "Configuration folder" }
+    ]
+  },
+  {
+    id: "analysis",
+    title: "Analysis",
+    group: "Storage",
+    fields: [
+      { key: "analysis.on_download", label: "Analyze finished downloads" },
+      { key: "analysis.extensions", label: "Extensions" },
+      {
+        key: "analysis.workers",
+        label: "Concurrent analyses",
+        control: "auto-count",
+        min: 1,
+        auto: () => app.state?.process.autoAnalysisWorkers
+      },
+      { key: "analysis.timeout", label: "Time limit per file" },
+      {
+        key: "analysis.max_full_minutes",
+        label: "Longest file analyzed in full (minutes)",
+        min: 1
+      },
+      { key: "analysis.sampled_windows", label: "Windows in a sampled file", min: 20, max: 2000 },
+      { key: "analysis.cache_max_bytes", label: "Spectrogram storage" },
+      { key: "analysis.spectrogram.scale", label: "Default frequency scale" }
+    ]
+  },
+  {
+    id: "retention",
+    title: "Retention",
+    group: "Storage",
+    fields: [
+      ...under("Searches and transfers", [
+        { key: "retention.search", label: "Searches", placeholder: "kept" },
+        ...transferRetention("upload"),
+        ...transferRetention("download"),
+        {
+          key: "retention.transfers.purge_removed_after",
+          label: "Removed transfers",
+          placeholder: "kept"
+        }
+      ]),
+      ...under("Files", [
+        { key: "retention.files.complete", label: "Downloaded files", placeholder: "kept" },
+        { key: "retention.files.incomplete", label: "Incomplete files", placeholder: "kept" }
+      ]),
+      ...under("Events and logs", [
+        { key: "retention.events", label: "Events" },
+        { key: "retention.events_max_rows", label: "Maximum events", min: 0 },
+        { key: "retention.logs", label: "Log files" }
+      ]),
+      ...under("Messages", [
+        { key: "retention.messages.private", label: "Private messages" },
+        {
+          key: "retention.messages.max_per_conversation",
+          label: "Maximum per conversation",
+          min: 0
+        },
+        { key: "retention.messages.rooms", label: "Room messages" },
+        { key: "retention.messages.mentions", label: "Mentions" },
+        { key: "retention.messages.max_per_room", label: "Maximum per room", min: 0 }
+      ]),
+      ...under("Users", [
+        { key: "retention.users", label: "Users not seen" },
+        { key: "users.cache_pictures", label: "Keep profile pictures" },
+        { key: "users.picture_max_bytes", label: "Largest profile picture kept" }
+      ])
+    ]
+  },
+  {
+    id: "web",
+    title: "Web",
+    group: "Server",
+    fields: [
+      ...under("HTTP", [
+        { key: "web.port", label: "HTTP port", ...PORT },
+        { key: "web.ip_address", label: "HTTP addresses", placeholder: "all addresses" },
+        { key: "web.socket", label: "Unix socket" },
+        { key: "web.url_base", label: "URL base" },
+        { key: "web.external_url", label: "Public URL", placeholder: "derived from each request" },
+        { key: "web.hostnames", label: "Host names" },
+        { key: "web.trusted_proxies", label: "Trusted proxies", control: "cidr-list" },
+        { key: "web.cors.allowed_origins", label: "Allowed origins" },
+        { key: "web.logging", label: "Request logging" }
+      ]),
+      ...under("HTTPS", [
+        { key: "web.https.disabled", label: "Disable HTTPS" },
+        { key: "web.https.port", label: "HTTPS port", ...PORT },
+        { key: "web.https.ip_address", label: "HTTPS addresses", placeholder: "all addresses" },
+        { key: "web.https.force", label: "Redirect to HTTPS" },
+        { key: "web.https.certificate.cert", label: "Certificate (PEM)" },
+        { key: "web.https.certificate.key", label: "Private key (PEM)" },
+        { key: "web.https.certificate.pfx", label: "Certificate (PKCS#12)" },
+        { key: "web.https.certificate.password", label: "PKCS#12 password", control: "secret" }
+      ]),
+      ...under("Web UI", [
+        { key: "web.ui", label: "Web UI" },
+        { key: "web.content_path", label: "UI directory", placeholder: "built-in UI" },
+        {
+          key: "web.live.max_streams_per_principal",
+          label: "Event streams per user",
+          ...AT_LEAST_1
+        },
+        { key: "feature.swagger", label: "API browser" }
+      ]),
+      ...under("Serving files", [
+        { key: "web.files.serve", label: "Serve downloaded files" },
+        { key: "web.files.archive_max_bytes", label: "Maximum folder zip size" },
+        {
+          key: "web.files.serve_speed_limit",
+          label: "File serving speed limit (KiB/s)",
+          ...AT_LEAST_1,
+          placeholder: NO_LIMIT
+        }
+      ])
+    ]
+  },
+  {
+    id: "authentication",
+    title: "Authentication",
+    group: "Server",
+    fields: [
+      ...under("Administrator", [
+        { key: "web.authentication.username", label: "Administrator username" },
+        { key: "web.authentication.password", label: "Administrator password", control: "secret" },
+        { key: "web.authentication.password_hash", label: "Password hash", control: "secret" }
+      ]),
+      ...under("Password login", [
+        { key: "web.authentication.local.enabled", label: "Password login" },
+        {
+          key: "web.authentication.local.only_from",
+          label: "Password login from",
+          control: "cidr-list"
+        },
+        {
+          key: "web.authentication.local.users",
+          label: "Additional accounts",
+          rowName: "Username",
+          columns: { password_hash: "Password hash", password: "Password", role: "Role" }
+        }
+      ]),
+      ...under("Sessions", [
+        { key: "web.authentication.session_ttl", label: "Session lifetime" },
+        { key: "web.authentication.session_idle", label: "Session idle timeout" }
+      ]),
+      ...under("Trusted access", [
+        {
+          key: "web.authentication.trusted_networks",
+          label: "Trusted networks",
+          control: "cidr-list"
+        },
+        { key: "web.authentication.trusted_role", label: "Trusted network role" },
+        { key: "web.authentication.disabled", label: "Disable authentication" }
+      ]),
+      ...under("OpenID Connect", [
+        {
+          key: "web.authentication.oidc",
+          label: "OpenID Connect providers",
+          columns: OIDC_COLUMNS
+        }
+      ]),
+      ...under("Reverse proxy", [
+        { key: "web.authentication.proxy.enabled", label: "Proxy authentication" },
+        ...(["user_header", "email_header", "groups_header"] as const).map((part): Field => ({
+          key: `web.authentication.proxy.${part}`,
+          label: `Proxy ${part.replace("_", " ")}`,
+          enabledWhen: { key: "web.authentication.proxy.enabled", values: [true] }
+        })),
+        {
+          key: "web.authentication.proxy.session",
+          label: "Proxy sessions",
+          enabledWhen: { key: "web.authentication.proxy.enabled", values: [true] }
+        },
+        ...(["administrator", "readwrite", "readonly"] as const).map((role): Field => ({
+          key: `web.authentication.proxy.role_mapping.${role}`,
+          label: `Proxy groups: ${role}`,
+          enabledWhen: { key: "web.authentication.proxy.enabled", values: [true] }
+        })),
+        {
+          key: "web.authentication.proxy.role_mapping.default",
+          label: "Proxy default role",
+          enabledWhen: { key: "web.authentication.proxy.enabled", values: [true] }
+        }
+      ]),
+      ...under("API keys", [
+        { key: "web.authentication.api_key", label: "API key", control: "secret" },
+        {
+          key: "web.authentication.api_keys",
+          label: "API keys",
+          columns: { key: "Key", role: "Role", cidr: "Networks" }
+        }
+      ])
+    ]
+  },
+  {
     id: "integrations",
     title: "Integrations",
-    fields: [{ key: "integrations.scripts", label: "Scripts" }]
+    group: "Server",
+    fields: [
+      {
+        key: "integrations.scripts",
+        label: "Scripts",
+        columns: {
+          "on": "Events",
+          "run.command": "Shell command",
+          "run.executable": "Program",
+          "run.args": "Arguments",
+          "run.arglist": "Argument list",
+          "timeout": "Time limit"
+        }
+      }
+    ]
   },
   {
     id: "logging",
     title: "Logging",
+    group: "Server",
     fields: [
       {
         key: "logging.level",
@@ -496,6 +714,7 @@ export const sections: Section[] = [
   {
     id: "metrics",
     title: "Metrics",
+    group: "Server",
     fields: [
       { key: "metrics.enabled", label: "Prometheus metrics" },
       {
@@ -524,47 +743,55 @@ export const sections: Section[] = [
   {
     id: "relay",
     title: "Relay",
+    group: "Server",
     fields: [
       { key: "relay.enabled", label: "Relay mode" },
-      {
-        key: "relay.mode",
-        label: "Relay role"
-      },
+      { key: "relay.mode", label: "Relay role" },
       { key: "instance_name", label: "Instance name" },
-      { key: "relay.agents", label: "Agents" },
-      ...(
-        [
-          ["controller_timeouts.file_info", "File info timeout"],
-          ["controller_timeouts.file_ack", "File acknowledgment timeout"],
-          ["controller_timeouts.file_stream", "File stream timeout"],
-          ["controller_timeouts.sync_deferral", "Share sync deferral"],
-          ["limits.share_database_max", "Largest share database"]
-        ] as const
-      ).map(([part, label]): Field => ({
-        key: `relay.${part}`,
-        label,
-        enabledWhen: { key: "relay.mode", values: ["controller", "debug"] }
-      })),
-      ...(
-        [
-          ["address", "Controller URL"],
-          ["api_key", "Controller API key"],
-          ["secret", "Controller secret"],
-          ["ignore_certificate_errors", "Accept any certificate"],
-          ["downloads", "Fetch finished downloads"],
-          ["downloads_filter", "Download filter"]
-        ] as const
-      ).map(([part, label]): Field => ({
-        key: `relay.controller.${part}`,
-        label,
-        ...(part === "api_key" || part === "secret" ? { control: "secret" as const } : {}),
-        enabledWhen: { key: "relay.mode", values: ["agent", "debug"] }
-      }))
+      ...under("As a controller", [
+        {
+          key: "relay.agents",
+          label: "Agents",
+          columns: { instance_name: "Instance name", secret: "Secret", cidr: "Networks" }
+        },
+        ...(
+          [
+            ["controller_timeouts.file_info", "File info timeout"],
+            ["controller_timeouts.file_ack", "File acknowledgment timeout"],
+            ["controller_timeouts.file_stream", "File stream timeout"],
+            ["controller_timeouts.sync_deferral", "Share sync deferral"],
+            ["limits.share_database_max", "Largest share database"]
+          ] as const
+        ).map(([part, label]): Field => ({
+          key: `relay.${part}`,
+          label,
+          enabledWhen: { key: "relay.mode", values: ["controller", "debug"] }
+        }))
+      ]),
+      ...under(
+        "As an agent",
+        (
+          [
+            ["address", "Controller URL"],
+            ["api_key", "Controller API key"],
+            ["secret", "Controller secret"],
+            ["ignore_certificate_errors", "Accept any certificate"],
+            ["downloads", "Fetch finished downloads"],
+            ["downloads_filter", "Download filter"]
+          ] as const
+        ).map(([part, label]): Field => ({
+          key: `relay.controller.${part}`,
+          label,
+          ...(part === "api_key" || part === "secret" ? { control: "secret" as const } : {}),
+          enabledWhen: { key: "relay.mode", values: ["agent", "debug"] }
+        }))
+      )
     ]
   },
   {
     id: "flags",
     title: "Flags",
+    group: "Server",
     fields: [
       { key: "remote_configuration", label: "Remote configuration" },
       { key: "remote_file_management", label: "Remote file management" },

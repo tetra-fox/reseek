@@ -6,6 +6,7 @@
   import { SvelteSet } from "svelte/reactivity";
 
   import { api } from "#lib/api/client.js";
+  import AddShare from "#lib/components/system/AddShare.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -51,6 +52,11 @@
   const fields = $derived(section.fields.filter((f) => f.key in view.fields));
   /** the options the search finds; every one without a search */
   const found = $derived(fields.filter((f) => fieldMatches(f, view.fields[f.key], query)));
+  /** Whether `field` is the first of a subheading, and the search finds something under it */
+  const opensHeading = (field: Field, i: number) =>
+    !!field.heading &&
+    field.heading !== fields[i - 1]?.heading &&
+    found.some((f) => f.heading === field.heading);
   const controls = $derived(
     Object.fromEntries(fields.map((f) => [f.key, controlOf(f, view.fields[f.key])]))
   );
@@ -320,7 +326,12 @@
     </div>
   {/if}
   <div class="-mx-5 divide-y border-y">
-    {#each fields as field (field.key)}
+    {#each fields as field, i (field.key)}
+      {#if opensHeading(field, i)}
+        <h4 class="bg-surface-muted/50 px-5 py-1.5 text-xs font-semibold text-fg-muted">
+          {field.heading}
+        </h4>
+      {/if}
       <!-- the search hides a row rather than unmounting it, so an edit in progress is kept -->
       <div class={[!found.includes(field) && "hidden"]}>
         <FieldRow
@@ -343,6 +354,8 @@
             {:else if field.key === "soulseek.description" || field.key === "soulseek.picture"}
               <a href={href("/profile")} class="text-xs text-accent hover:underline"
                 >Edit on the profile page</a>
+            {:else if field.key === "shares.directories"}
+              <AddShare explain={false} />
             {:else if field.key === "search.filter_presets"}
               <span class="text-xs text-fg-muted"
                 >Presets can also be saved and removed from search results.</span>

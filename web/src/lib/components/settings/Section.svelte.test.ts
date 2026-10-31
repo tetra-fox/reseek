@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { type ConfigView, leftovers } from "#lib/config/fields.js";
+import type { ConfigView } from "#lib/config/fields.js";
 import fixture from "#lib/config/fixtures/view.json";
 import { helpParts } from "#lib/config/help.js";
 import { sections } from "#lib/config/sections.js";
@@ -29,7 +29,7 @@ describe("a settings section", () => {
   };
 
   it("renders a row for every option of every section, with its help and control", () => {
-    for (const section of [...sections, leftovers(view)]) {
+    for (const section of sections) {
       const target = render(section);
       const labels = [...target.querySelectorAll("label")].map((l) => l.getAttribute("for"));
       expect(labels).toEqual(section.fields.map((f) => f.key));

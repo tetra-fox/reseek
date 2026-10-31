@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Schemas } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Select from "#lib/components/ui/Select.svelte";
@@ -8,27 +9,35 @@
   import type { Control, Field } from "#lib/config/sections.js";
   import { plural } from "#lib/format.js";
 
+  import TableEditor from "./TableEditor.svelte";
+
   type Props = {
     field: Field;
     control: Control;
     /** the names a select offers */
     choices: string[];
+    /** the fields of a table's rows */
+    entries: Schemas["EntryView"][];
     draft: Draft;
     disabled: boolean;
     /** an id the help and error lines carry, for aria-describedby */
     described: string;
-    invalid: boolean;
+    /** what is wrong with the value, which a table shows by its rows */
+    error: string | undefined;
   };
 
   let {
     field,
     control,
     choices,
+    entries,
     draft = $bindable(),
     disabled,
     described,
-    invalid
+    error
   }: Props = $props();
+
+  const invalid = $derived(!!error);
 
   // a secret's input shows only once the user chooses to change it; `kept` is what it held then
   let changing = $state(false);
@@ -88,13 +97,15 @@
         }}>Change</Button>
     </div>
   {/if}
-{:else if control === "list" || control === "regex-list" || control === "cidr-list" || control === "map" || control === "table-list"}
+{:else if control === "map" || control === "table-list"}
+  <TableEditor {field} {control} {entries} bind:draft {disabled} {described} {error} />
+{:else if control === "list" || control === "regex-list" || control === "cidr-list"}
   <!-- grows with its lines between the two heights, then scrolls; lists take one entry a line -->
   <Textarea
     id={field.key}
     class="field-sizing-content max-h-64 min-h-20 font-mono text-xs leading-5"
     spellcheck="false"
-    placeholder={control === "map" ? "{}" : control === "table-list" ? "[]" : "One per line"}
+    placeholder="One per line"
     aria-describedby={described}
     aria-invalid={invalid || undefined}
     bind:value={draft as string}

@@ -16,7 +16,6 @@
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
-  import { leftovers } from "#lib/config/fields.js";
   import { currentSection, fieldMatches } from "#lib/config/find.js";
   import { sections } from "#lib/config/sections.js";
   import { plural } from "#lib/format.js";
@@ -37,7 +36,14 @@
   // a change from anywhere (another tab, the file, an expiry) arrives as new options
   $effect(() => live.on("application.options", () => void view.load()));
 
-  const all = $derived(view.data ? [...sections, leftovers(view.data)] : []);
+  const all = $derived(view.data ? sections : []);
+  /** the sections of the side list by their headings, in the order they come on the page */
+  const groups = $derived(
+    [...new Set(all.map((s) => s.group))].map((group) => ({
+      group,
+      members: all.filter((s) => s.group === group)
+    }))
+  );
   const query = $derived(route(page.url).query);
   // ?tab=raw shows the configuration file as text
   const raw = $derived(query.get("tab") === "raw");
@@ -150,26 +156,39 @@
         <nav
           aria-label="Settings sections"
           class="flex gap-1 overflow-x-auto max-lg:-mx-1 max-lg:px-1 max-lg:py-1 lg:min-h-0 lg:flex-col lg:overflow-y-auto">
-          {#each all as section (section.id)}
-            {@const n = hits.get(section.id) ?? 0}
-            {@const pending = changes.get(section.id) ?? 0}
-            <a
-              href={href(`/system/settings?section=${section.id}`)}
-              aria-current={current === section.id ? "location" : undefined}
-              class={["nav-tab h-control-sm gap-2 px-2.5", q && !n && "hidden"]}
-              onclick={(e) => {
-                e.preventDefault();
-                jump(section.id);
-              }}>
-              <span class="truncate">{section.title}</span>
-              {#if pending}
-                <span
-                  class="ml-auto size-1.5 shrink-0 rounded-full bg-accent"
-                  title={plural(pending, "unsaved change", "unsaved changes")}></span>
-              {:else if q}
-                <span class="ml-auto text-xs text-fg-subtle tabular-nums">{n}</span>
-              {/if}
-            </a>
+          {#each groups as { group, members } (group)}
+            <!-- one line of tabs on a phone, where the headings have no place -->
+            <div role="group" aria-label={group} class="contents lg:flex lg:flex-col lg:gap-1">
+              <p
+                aria-hidden="true"
+                class={[
+                  "px-2.5 pt-2 text-xs font-medium text-fg-subtle first:pt-0 max-lg:hidden",
+                  q && !members.some((s) => hits.get(s.id)) && "hidden"
+                ]}>
+                {group}
+              </p>
+              {#each members as section (section.id)}
+                {@const n = hits.get(section.id) ?? 0}
+                {@const pending = changes.get(section.id) ?? 0}
+                <a
+                  href={href(`/system/settings?section=${section.id}`)}
+                  aria-current={current === section.id ? "location" : undefined}
+                  class={["nav-tab h-control-sm gap-2 px-2.5", q && !n && "hidden"]}
+                  onclick={(e) => {
+                    e.preventDefault();
+                    jump(section.id);
+                  }}>
+                  <span class="truncate">{section.title}</span>
+                  {#if pending}
+                    <span
+                      class="ml-auto size-1.5 shrink-0 rounded-full bg-accent"
+                      title={plural(pending, "unsaved change", "unsaved changes")}></span>
+                  {:else if q}
+                    <span class="ml-auto text-xs text-fg-subtle tabular-nums">{n}</span>
+                  {/if}
+                </a>
+              {/each}
+            </div>
           {/each}
         </nav>
       </aside>
