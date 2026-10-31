@@ -1,4 +1,5 @@
 import { chat } from "#lib/chat/chat.svelte.js";
+import { NOTICES } from "#lib/chat/notices.js";
 import type { Target } from "#lib/chat/pane.svelte.js";
 import { users } from "#lib/users/users.svelte.js";
 
@@ -22,8 +23,9 @@ export const sortedConversations = () =>
       a.username.localeCompare(b.username)
   );
 
-/** Every chat in the order the list shows them, rooms then conversations, for moving between them */
+/** Every chat in the order the list shows them, the server's notices last, for moving between them */
 export const chatOrder = (): Target[] => [
   ...sortedRooms().map((r): Target => ({ kind: "room", name: r.name })),
-  ...sortedConversations().map((c): Target => ({ kind: "user", name: c.username }))
+  ...sortedConversations().map((c): Target => ({ kind: "user", name: c.username })),
+  ...(chat.latestNotice ? [NOTICES] : [])
 ];

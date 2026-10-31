@@ -6,6 +6,7 @@ import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 import { users } from "#lib/users/users.svelte.js";
 
+import { SERVER } from "./notices";
 import { notifier } from "./notify.svelte";
 
 export type Conversation = Schemas["Conversation"];
@@ -37,6 +38,8 @@ class Chat {
   readonly conversations = new Keyed<Conversation>((c) => c.username);
   /** the joined rooms, by name */
   readonly rooms = new Keyed<JoinedRoom>((r) => r.name);
+  /** the newest stored notice from the server, held apart as it is no conversation */
+  latestNotice = $state.raw<Schemas["PrivateMessage"] | null>(null);
   /** the counts from the last `chat.unread` frame, null until one came */
   unread = $state.raw<ChatUnread | null>(null);
   /** the latest message of each room seen since the page loaded, by pane key */
@@ -51,9 +54,15 @@ class Chat {
     live.on("conversations.list", (list) => {
       this.conversations.reconcile(list);
       this.#peers();
+      // the list leaves the server's notices out, and a lost stream may have missed one
+      void this.#readNotices();
     });
     live.on("conversations.update", ({ conversation }) => this.#upsertConversation(conversation));
     live.on("conversations.message", ({ username, message }) => {
+      if (username === SERVER) {
+        if ((this.latestNotice?.localId ?? 0) <= message.localId) this.latestNotice = message;
+        return;
+      }
       const conversation = this.conversations.get(username);
       if (conversation && (conversation.lastMessage?.localId ?? 0) <= message.localId) {
         conversation.lastMessage = message;
@@ -83,8 +92,7 @@ class Chat {
   get total(): number {
     if (this.unread) return this.unread.total;
     let n = 0;
-    for (const c of this.conversations.rows)
-      n += c.isServerNotice ? 0 : c.unAcknowledgedMessageCount;
+    for (const c of this.conversations.rows) n += c.unAcknowledgedMessageCount;
     for (const r of this.rooms.rows) n += r.mentions;
     return n;
   }
@@ -127,6 +135,7 @@ class Chat {
     this.#loading = null;
     this.conversations.clear();
     this.rooms.clear();
+    this.latestNotice = null;
     this.error = "";
     this.unread = null;
     this.previews.clear();
@@ -144,7 +153,8 @@ class Chat {
   #read = async () => {
     const [conversations, rooms] = await Promise.all([
       call(() => api.GET("/api/v0/conversations")),
-      call(() => api.GET("/api/v0/rooms/joined"))
+      call(() => api.GET("/api/v0/rooms/joined")),
+      this.#readNotices()
     ]);
     if (conversations.ok) {
       this.conversations.reconcile(conversations.data);
@@ -155,6 +165,24 @@ class Chat {
     if (!conversations.ok) reasons.push(`Conversations: ${conversations.error}`);
     if (!rooms.ok) reasons.push(`Rooms: ${rooms.error}`);
     this.error = reasons.join(". ");
+  };
+
+  /**
+   * Reads the newest notice. This asks for the one conversation, not the list, because a history
+   * cleared stays closed and the list leaves it out when a new notice comes. A read that fails
+   * leaves what is held; the next list frame reads it again
+   */
+  #readNotices = async () => {
+    const outcome = await call(() =>
+      api.GET("/api/v0/conversations/{username}", {
+        params: {
+          path: { username: SERVER },
+          query: { ...byUser(SERVER).query, includeMessages: false }
+        }
+      })
+    );
+    if (outcome.ok) this.latestNotice = outcome.data.lastMessage ?? null;
+    else if (outcome.status === 404) this.latestNotice = null;
   };
 
   /**
@@ -211,7 +239,10 @@ class Chat {
       })
     );
     // a conversation already gone is closed all the same
-    if (outcome.ok || outcome.status === 404) this.conversations.remove(username);
+    if (outcome.ok || outcome.status === 404) {
+      this.conversations.remove(username);
+      if (purge && username === SERVER) this.latestNotice = null;
+    }
     return outcome;
   };
 
@@ -257,6 +288,10 @@ class Chat {
   };
 
   #upsertConversation(conversation: Conversation) {
+    if (conversation.isServerNotice) {
+      this.latestNotice = conversation.lastMessage ?? null;
+      return;
+    }
     if (!conversation.isActive) return this.conversations.remove(conversation.username);
     // a frame carries no messages; the list never holds them either
     this.conversations.upsert({ ...conversation, messages: null });

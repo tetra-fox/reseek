@@ -1,4 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
+import { SERVER } from "#lib/chat/notices.js";
 
 /** One message of a room or a conversation, as the message list shows it */
 export type Message = {
@@ -14,7 +15,7 @@ export type Message = {
   hidden: boolean;
   /** delivered again by the server because it was not acknowledged before */
   replayed: boolean;
-  /** an inbound private message not acknowledged yet */
+  /** an inbound private message not acknowledged yet; a notice from the server never is unread */
   unread: boolean;
   /** a message we sent that the daemon has not stored yet, or failed to send */
   sending?: "sending" | "failed";
@@ -45,7 +46,7 @@ export const fromPrivate = (m: Schemas["PrivateMessage"], self: string): Message
   mention: false,
   hidden: false,
   replayed: m.wasReplayed,
-  unread: m.direction === "In" && !m.isAcknowledged
+  unread: m.direction === "In" && !m.isAcknowledged && m.username !== SERVER
 });
 
 /** A room message as the list shows it */
