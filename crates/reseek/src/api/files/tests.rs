@@ -417,7 +417,12 @@ async fn alac_decodes_to_pcm_whose_ranges_match_the_whole_across_packets() {
   std::fs::write(app.state.paths.downloads.join("tone.m4a"), tone).unwrap();
   let uri = wav_uri("tone.m4a");
   let whole = app.send(request("GET", &uri, None)).await;
-  assert_eq!(whole.status, 200, "{:?}", String::from_utf8_lossy(&whole.body));
+  assert_eq!(
+    whole.status,
+    200,
+    "{:?}",
+    String::from_utf8_lossy(&whole.body)
+  );
   // two seconds of two 16-bit channels at 8000 Hz
   assert_eq!(whole.body.len(), 44 + 2 * 8000 * 4);
   let silent = whole.body[44..].iter().filter(|b| **b == 0).count();
