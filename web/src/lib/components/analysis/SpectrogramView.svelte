@@ -16,6 +16,7 @@
   import { formatTime, MIN_SPAN, showsAll } from "#lib/analysis/spectrogram/timeview.js";
   import { spectrogramView } from "#lib/analysis/spectrogram/view.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import Segmented from "#lib/components/ui/Segmented.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { playable, player, type Track } from "#lib/files/player.svelte.js";
   import { formatDuration } from "#lib/format.js";
@@ -120,22 +121,10 @@
           {/snippet}
         </Tooltip>
       {/if}
-      <div
-        class="inline-flex rounded-control border p-0.5"
-        role="radiogroup"
-        aria-label="Frequency scale">
-        {#each SCALES as s (s.id)}
-          <button
-            type="button"
-            role="radio"
-            aria-checked={scale === s.id}
-            class={[
-              "rounded-badge px-2 py-0.5 text-xs",
-              scale === s.id ? "bg-surface-muted font-medium" : "text-fg-muted"
-            ]}
-            onclick={() => (spectrogramView.scale = s.id)}>{s.label}</button>
-        {/each}
-      </div>
+      <Segmented
+        options={SCALES}
+        bind:value={() => scale, (s) => (spectrogramView.scale = s)}
+        label="Frequency scale" />
       <span class="ml-auto flex gap-0.5">
         {@render tool("Zoom out", ZoomOutIcon, () => scope.zoomAtCursor(0.5), all)}
         {@render tool("Zoom in", ZoomInIcon, () => scope.zoomAtCursor(2), deepest)}

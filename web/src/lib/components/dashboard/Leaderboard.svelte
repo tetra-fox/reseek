@@ -7,6 +7,7 @@
 
   import type { Schemas } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import Segmented from "#lib/components/ui/Segmented.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { type RangeLabel, reports, type Window } from "#lib/dashboard/reports.js";
@@ -87,6 +88,8 @@
       phone: false
     }
   ];
+  /** the columns a phone keeps, for the switch that sorts where the header can't show */
+  const SORTS = COLUMNS.filter((c) => c.phone !== false).map((c) => ({ id: c.by, label: c.label }));
 </script>
 
 {#if error}<p class="text-sm text-danger">{error}</p>{/if}
@@ -102,22 +105,11 @@
           <table.Icon class="size-4" />{table.title}
           {#if loading}<Spinner class="size-3.5" />{/if}
         </h3>
-        <div
-          class="ml-auto inline-flex rounded-control border p-0.5 @min-[19rem]:hidden"
-          role="radiogroup"
-          aria-label={`Sort ${table.title.toLowerCase()} by`}>
-          {#each COLUMNS.filter((c) => c.phone !== false) as c (c.by)}
-            <button
-              type="button"
-              role="radio"
-              aria-checked={sortBy === c.by}
-              class={[
-                "rounded-badge px-2 py-0.5 text-xs",
-                sortBy === c.by ? "bg-surface-muted font-medium" : "text-fg-muted"
-              ]}
-              onclick={() => (picked = { range, by: c.by })}>{c.label}</button>
-          {/each}
-        </div>
+        <Segmented
+          options={SORTS}
+          bind:value={() => sortBy, (by) => (picked = { range, by })}
+          label={`Sort ${table.title.toLowerCase()} by`}
+          class="ml-auto @min-[19rem]:hidden" />
       </div>
       <table class="w-full table-fixed text-sm tabular-nums">
         <!-- the widths are set here, where the font is the cells', so a width in ch is theirs and
