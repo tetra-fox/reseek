@@ -2,23 +2,38 @@
   import { goto } from "$app/navigation";
 
   import { api } from "#lib/api/client.js";
+  import { NOT_A_USER, SERVER } from "#lib/chat/notices.js";
   import Field from "#lib/components/Field.svelte";
   import Form from "#lib/components/Form.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import * as Suggest from "#lib/components/ui/suggest/suggest.js";
+  import UserEntry from "#lib/components/users/UserEntry.svelte";
   import { chatHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
+  import { USER_ACTIONS } from "#lib/users/actions.js";
+  import { UserFinder, userOf, userValue } from "#lib/users/finder.svelte.js";
 
-  // a first message to someone, with the users the directory knows offered as the name is typed
+  // a first message to someone, with the users the directory knows offered as the name is typed.
+  // Names are exact, so Enter keeps the name as typed unless the keys moved to one of them
   let { open = $bindable(), username: start = "" }: { open: boolean; username?: string } = $props();
+
+  /** the entry that keeps the name as typed, first when the directory does not hold it */
+  const TYPED = "typed";
 
   let username = $state("");
   let message = $state("");
   let error = $state("");
   let sending = $state(false);
-  let known = $state<string[]>([]);
+  let suggesting = $state(false);
+  let messageBox = $state<HTMLInputElement | null>(null);
+
+  const name = $derived(username.trim());
+  const refused = $derived(name === SERVER);
+  const finder = new UserFinder(() => name);
+  const problem = $derived(refused ? NOT_A_USER : error);
 
   $effect(() => {
     if (!open) return;
@@ -27,24 +42,16 @@
     error = "";
   });
 
-  // the names the directory knows that hold what is typed
-  $effect(() => {
-    const q = username.trim();
-    if (!q) return void (known = []);
-    const timer = setTimeout(async () => {
-      const outcome = await call(() =>
-        api.GET("/api/v0/users", { params: { query: { q, limit: 8, sort: "username" } } })
-      );
-      known = outcome.ok ? outcome.data.users.map((u) => u.username) : [];
-    }, 200);
-    return () => clearTimeout(timer);
-  });
+  const choose = (value: string) => {
+    if (value !== TYPED) username = userOf(value);
+    messageBox?.focus();
+  };
 
   const send = async (e: SubmitEvent) => {
     e.preventDefault();
-    const to = username.trim();
     const text = message.trim();
-    if (!to || !text || sending) return;
+    if (!name || refused || !text || sending) return;
+    const to = name;
     sending = true;
     const outcome = await call(() =>
       api.POST("/api/v0/conversations/{username}", {
@@ -62,28 +69,46 @@
 <Dialog bind:open title="New message">
   <Form id="new-message" layout="stacked" class="flex flex-col gap-group" onsubmit={send}>
     <Field label="Username" for="new-message-user">
-      <!-- svelte-ignore a11y_autofocus -->
-      <Input
+      <Suggest.Box
         id="new-message-user"
-        list="new-message-known"
+        bind:value={username}
+        bind:open={suggesting}
+        first={refused ? null : finder.unknown ? TYPED : finder.first}
+        listed={!refused && (finder.unknown || !!finder.matches.length)}
+        onchoose={choose}
         autocomplete="off"
         required
-        autofocus
-        bind:value={username} />
-      <datalist id="new-message-known">
-        {#each known as name (name)}<option value={name}></option>{/each}
-      </datalist>
+        autofocus>
+        <!-- entries made anew move the highlight back to the first when the users arrive -->
+        {#key finder.found}
+          {#if finder.unknown}
+            <Suggest.Item value={TYPED} icon={USER_ACTIONS.message.icon}>
+              {USER_ACTIONS.message.of(name)}
+            </Suggest.Item>
+          {/if}
+          {#each finder.matches as u (u.username)}
+            <Suggest.Item value={userValue(u.username)}>
+              <UserEntry user={{ name: u.username, summary: u }} text={name} />
+            </Suggest.Item>
+          {/each}
+        {/key}
+      </Suggest.Box>
     </Field>
     <Field label="Message" for="new-message-text">
-      <Input id="new-message-text" autocomplete="off" required bind:value={message} />
+      <Input
+        id="new-message-text"
+        bind:ref={messageBox}
+        autocomplete="off"
+        required
+        bind:value={message} />
     </Field>
-    {#if error}<Notice kind="error">{error}</Notice>{/if}
+    {#if problem}<Notice kind="error">{problem}</Notice>{/if}
   </Form>
   {#snippet footer()}
     <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
     <Button
       type="submit"
       form="new-message"
-      disabled={!username.trim() || !message.trim() || sending}>Send</Button>
+      disabled={!name || refused || !message.trim() || sending}>Send</Button>
   {/snippet}
 </Dialog>
