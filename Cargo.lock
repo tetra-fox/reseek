@@ -3389,6 +3389,7 @@ dependencies = [
  "soulseek-proto",
  "subtle",
  "symphonia",
+ "symphonia-common",
  "sysinfo",
  "tempfile",
  "thiserror 2.0.21",

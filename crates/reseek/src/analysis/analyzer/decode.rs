@@ -12,13 +12,16 @@ use symphonia::core::audio::{Audio, AudioBuffer};
 use symphonia::core::codecs::audio::well_known::{
   CODEC_ID_ALAC, CODEC_ID_FLAC, CODEC_ID_PCM_ALAW, CODEC_ID_PCM_MULAW,
 };
-use symphonia::core::codecs::audio::{AudioCodecId, AudioDecoder, AudioDecoderOptions};
+use symphonia::core::codecs::audio::{
+  AudioCodecId, AudioCodecParameters, AudioDecoder, AudioDecoderOptions,
+};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Time, TimeBase, Timestamp};
+use symphonia_common::apple::audio::alac::MagicCookie;
 use tracing::{debug, trace};
 
 /// The most channels the analyzer reads; the rest of a surround file is left out.
@@ -149,7 +152,7 @@ impl Decoder {
       claimed: Claimed {
         codec,
         sample_rate,
-        bit_depth: params.bits_per_sample,
+        bit_depth: stated_bits(&params),
         channels: u32::try_from(all).unwrap_or(u32::MAX),
         lossless: lossless(params.codec),
         frames,
@@ -366,6 +369,17 @@ impl Decoder {
 
 /// Whether a codec keeps every bit: the lossless codecs and plain PCM, but not the companded
 /// telephone formats.
+/// The bits per sample `params` state. A container says nothing of them for ALAC, whose magic
+/// cookie does; the decoder made from `params` read the same cookie, so a cookie that does not
+/// read here never gets this far.
+fn stated_bits(params: &AudioCodecParameters) -> Option<u32> {
+  params.bits_per_sample.or_else(|| {
+    let cookie = params.extra_data.as_deref()?;
+    let read = (params.codec == CODEC_ID_ALAC).then(|| MagicCookie::read(cookie));
+    Some(u32::from(read?.ok()?.bit_depth))
+  })
+}
+
 fn lossless(codec: AudioCodecId) -> bool {
   if codec == CODEC_ID_FLAC || codec == CODEC_ID_ALAC {
     return true;
