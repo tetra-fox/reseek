@@ -416,7 +416,7 @@ async fn a_finished_download_is_analyzed_while_the_option_is_on() {
     "analyzed while off"
   );
 
-  let other = download("03 other.mp3").await;
+  let other = download("03 other.ogg").await;
   let after = download("04 after.flac").await;
   report_when(&api, &peer, after, |_| true).await;
   assert!(
