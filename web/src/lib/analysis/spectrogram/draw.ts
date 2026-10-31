@@ -22,7 +22,7 @@ import {
   warp
 } from "./paint";
 import type { Cells, Pictures } from "./pictures.svelte";
-import { acrossOf, formatTime, timeAt, timeTicks, type View } from "./timeview";
+import { acrossOf, formatTime, timeAt, timeTicks, type View, whole } from "./timeview";
 
 /** Where everything goes on the timeline's canvas, in device pixels */
 export type Stage = {
@@ -177,6 +177,23 @@ export class Rasters {
     drawRaster(context, this.#binsOf(cells, colors, top), cells, view, rect, this.#rows.table);
   }
 }
+
+/** Draws the whole of a file's overview into `rect` on `curve`, in the palette's levels */
+export const drawOverview = (
+  context: CanvasRenderingContext2D,
+  rasters: Rasters,
+  overview: Cells,
+  curve: Curve,
+  maxHz: number,
+  palette: Palette,
+  duration: number,
+  rect: Rect
+) => {
+  const top = loudest(overview);
+  const dbPerByte = ((overview.maxDb ?? 0) - (overview.minDb ?? -160)) / 255;
+  const colors = () => levelColors(palette.levels, top, dbPerByte);
+  rasters.draw(context, overview, curve, maxHz, colors, top, whole(duration), rect);
+};
 
 /** How many full-detail cells of `perSecond` a file `duration` seconds long has */
 const detailOf = (duration: number, perSecond: number) => Math.ceil(duration * perSecond - 1e-9);

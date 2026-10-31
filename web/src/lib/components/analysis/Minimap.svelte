@@ -1,13 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  import { Rasters } from "#lib/analysis/spectrogram/draw.js";
-  import {
-    levelColors,
-    loudest,
-    type Palette,
-    readPalette
-  } from "#lib/analysis/spectrogram/paint.js";
+  import { drawOverview, Rasters } from "#lib/analysis/spectrogram/draw.js";
+  import { type Palette, readPalette } from "#lib/analysis/spectrogram/paint.js";
   import type { ScaleMotion } from "#lib/analysis/spectrogram/scalemotion.svelte.js";
   import type { Scope } from "#lib/analysis/spectrogram/scope.svelte.js";
   import { acrossOf, whole } from "#lib/analysis/spectrogram/timeview.js";
@@ -41,12 +36,19 @@
     const w = Math.round(width * dpr);
     const h = Math.round(height * dpr);
     context.clearRect(0, 0, w, h);
-    const top = loudest(overview);
-    const dbPerByte = ((overview.maxDb ?? 0) - (overview.minDb ?? -160)) / 255;
-    const colors = () => levelColors(palette!.levels, top, dbPerByte);
     const all = whole(scope.duration);
     const rect = { x: 0, y: 0, width: w, height: h };
-    rasters.draw(context, overview, motion.at(now), scope.layout.maxHz, colors, top, all, rect);
+    const curve = motion.at(now);
+    drawOverview(
+      context,
+      rasters,
+      overview,
+      curve,
+      scope.layout.maxHz,
+      palette,
+      scope.duration,
+      rect
+    );
     const from = acrossOf(all, scope.view.start) * w;
     const to = acrossOf(all, scope.view.start + scope.view.span) * w;
     context.fillStyle = palette.plot;
