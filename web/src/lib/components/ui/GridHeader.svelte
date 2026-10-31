@@ -53,7 +53,7 @@
              and touch events, not pointer events -->
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <span
-          class="absolute top-1 right-0 bottom-1 w-1.5 cursor-col-resize touch-none border-r"
+          class="absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none after:absolute after:inset-y-3 after:right-0 after:border-r"
           role="separator"
           aria-orientation="vertical"
           aria-label={`Width of ${column.label}`}
