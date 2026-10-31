@@ -65,6 +65,8 @@ export class ChatSearch {
   /** what the last finished read was for */
   #read = $state("");
   #asked = 0;
+  /** the read under way and what it is for, so one text is read once however often it is asked */
+  #reading: { asking: string; done: Promise<void> } | null = null;
   /** the read of the room names under way or done, null until one holds the server's list */
   #namesRead: Promise<void> | null = null;
 
@@ -105,10 +107,22 @@ export class ChatSearch {
   };
 
   /** Reads what the daemon holds for the text, in place of what it held for another */
-  read = async () => {
+  read = (): Promise<void> => {
+    const asking = this.#asking();
+    if (this.#reading?.asking === asking) return this.#reading.done;
+    const reading = {
+      asking,
+      done: this.#readNow(asking).finally(() => {
+        if (this.#reading === reading) this.#reading = null;
+      })
+    };
+    this.#reading = reading;
+    return reading.done;
+  };
+
+  async #readNow(asking: string) {
     const text = this.#text();
     const kind = this.#kind();
-    const asking = this.#asking();
     const asked = ++this.#asked;
     if (!text) {
       this.#users = [];
@@ -136,7 +150,7 @@ export class ChatSearch {
     this.scrollTop = 0;
     this.line = null;
     this.#read = asking;
-  };
+  }
 
   /** Drops what was read, so the next look at the text reads it anew */
   forget = () => {
