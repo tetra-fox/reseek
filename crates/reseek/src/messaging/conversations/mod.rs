@@ -114,12 +114,15 @@ impl Messaging {
       if let Err(e) = self.acknowledge_ids(SERVER, &[message.id]).await {
         debug!(error = ?e, "server notice not acknowledged; it comes again at the next login");
       }
-      self
-        .live
-        .publish(LiveFrame::ApplicationServerMessage(ServerMessage {
-          message: stored.message.clone(),
-          received_at: now,
-        }));
+      // this push is what clients announce at once; one delivered again at a login is no news
+      if !stored.was_replayed {
+        self
+          .live
+          .publish(LiveFrame::ApplicationServerMessage(ServerMessage {
+            message: stored.message.clone(),
+            received_at: now,
+          }));
+      }
     } else {
       lock(&self.active).insert(username.clone());
       self.users.touch(&username, Touch::MessageIn).await;
@@ -440,7 +443,38 @@ impl Messaging {
 
 #[cfg(test)]
 mod tests {
+  use std::time::SystemTime;
+
   use super::one_line;
+  use crate::testing::{app, request};
+
+  #[tokio::test]
+  async fn only_a_new_server_notice_is_announced() {
+    let config = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
+    let app = app(config, &[]).await;
+    let mut stream = app
+      .stream_from(
+        "127.0.0.1:40000",
+        request("GET", "/api/v0/live?topics=application", None),
+      )
+      .await;
+    stream.until("hello").await;
+    let notice = |id, message: &str, replayed| soulseek_client::PrivateMessage {
+      id,
+      timestamp: SystemTime::now(),
+      username: "server".into(),
+      message: message.into(),
+      replayed,
+    };
+    app.state.messaging.received(notice(1, "old", true)).await;
+    app.state.messaging.received(notice(2, "new", false)).await;
+    let frames = stream.until("application.server_message").await;
+    let announced = frames.last().unwrap();
+    assert_eq!(
+      announced.data["message"], "new",
+      "the replayed one is skipped"
+    );
+  }
 
   #[test]
   fn a_private_message_goes_on_one_line() {
