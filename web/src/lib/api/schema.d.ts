@@ -12229,6 +12229,14 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
         };
     };
     remove_member: {
@@ -12282,6 +12290,14 @@ export interface operations {
                 };
             };
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            504: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12566,6 +12582,14 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
         };
     };
     remove_operator: {
@@ -12619,6 +12643,14 @@ export interface operations {
                 };
             };
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            504: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12924,6 +12956,14 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
         };
     };
     drop_ownership: {
@@ -12973,6 +13013,14 @@ export interface operations {
                 };
             };
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            504: {
                 headers: {
                     [name: string]: unknown;
                 };

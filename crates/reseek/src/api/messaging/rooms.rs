@@ -236,7 +236,8 @@ async fn tickers(
   responses(
     (status = 201, description = "added"), (status = 400, body = api_types::ErrorBody),
     (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
-    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody),
+    (status = 504, body = api_types::ErrorBody)
   )
 )]
 async fn add_member(
@@ -267,7 +268,7 @@ async fn add_member(
   responses(
     (status = 204, description = "removed"), (status = 401, body = api_types::ErrorBody),
     (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
-    (status = 503, body = api_types::ErrorBody)
+    (status = 503, body = api_types::ErrorBody), (status = 504, body = api_types::ErrorBody)
   )
 )]
 async fn remove_member(
@@ -296,7 +297,8 @@ async fn remove_member(
   responses(
     (status = 204, description = "made operator"), (status = 400, body = api_types::ErrorBody),
     (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
-    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody),
+    (status = 504, body = api_types::ErrorBody)
   )
 )]
 async fn add_operator(
@@ -331,7 +333,7 @@ async fn add_operator(
   responses(
     (status = 204, description = "no longer operator"), (status = 401, body = api_types::ErrorBody),
     (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
-    (status = 503, body = api_types::ErrorBody)
+    (status = 503, body = api_types::ErrorBody), (status = 504, body = api_types::ErrorBody)
   )
 )]
 async fn remove_operator(
@@ -359,7 +361,7 @@ async fn remove_operator(
   responses(
     (status = 204, description = "membership given up"), (status = 401, body = api_types::ErrorBody),
     (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
-    (status = 503, body = api_types::ErrorBody)
+    (status = 503, body = api_types::ErrorBody), (status = 504, body = api_types::ErrorBody)
   )
 )]
 async fn drop_membership(
@@ -382,7 +384,7 @@ async fn drop_membership(
   responses(
     (status = 204, description = "ownership given up"), (status = 401, body = api_types::ErrorBody),
     (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
-    (status = 503, body = api_types::ErrorBody)
+    (status = 503, body = api_types::ErrorBody), (status = 504, body = api_types::ErrorBody)
   )
 )]
 async fn drop_ownership(

@@ -1,19 +1,26 @@
 //! Changing a private room: adding and removing members and operators, and giving up our
-//! membership or our ownership. The server says yes by announcing the change; a change it does
-//! not announce in time was refused.
+//! membership or our ownership. The server says yes by announcing the change. A change it does
+//! not announce in time may still have been made.
 
 use soulseek_client::ClientError;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use super::not_in;
 use crate::api::error::ApiError;
 use crate::messaging::Messaging;
 use crate::messaging::conversations::unsent;
 
-/// The answer to a change of a private room that did not go through.
-fn refused(error: ClientError) -> ApiError {
+/// The answer to a change of a private room that came to no confirmation; `action` names it in
+/// the log.
+fn unconfirmed(room: &str, action: &str, error: ClientError) -> ApiError {
   match error {
-    ClientError::Timeout(_) => ApiError::forbidden("The server refused the change"),
+    ClientError::Timeout(_) => {
+      warn!(room, action, error = %error, "private room change not confirmed in time");
+      ApiError::gateway_timeout(
+        "The server did not confirm the change in time; it may still have happened",
+      )
+      .logged()
+    }
     other => unsent(other),
   }
 }
@@ -39,7 +46,7 @@ impl Messaging {
       .client()
       .add_private_room_member(room, username)
       .await
-      .map_err(refused)?;
+      .map_err(|e| unconfirmed(room, "add member", e))?;
     debug!(room, username, "member added to a private room");
     Ok(())
   }
@@ -54,7 +61,7 @@ impl Messaging {
       .client()
       .remove_private_room_member(room, username)
       .await
-      .map_err(refused)?;
+      .map_err(|e| unconfirmed(room, "remove member", e))?;
     debug!(room, username, "member removed from a private room");
     Ok(())
   }
@@ -69,7 +76,7 @@ impl Messaging {
       .client()
       .add_private_room_moderator(room, username)
       .await
-      .map_err(refused)?;
+      .map_err(|e| unconfirmed(room, "add operator", e))?;
     debug!(room, username, "operator added to a private room");
     Ok(())
   }
@@ -84,7 +91,7 @@ impl Messaging {
       .client()
       .remove_private_room_moderator(room, username)
       .await
-      .map_err(refused)?;
+      .map_err(|e| unconfirmed(room, "remove operator", e))?;
     debug!(room, username, "operator removed from a private room");
     Ok(())
   }
@@ -95,7 +102,7 @@ impl Messaging {
       .client()
       .drop_private_room_membership(room)
       .await
-      .map_err(refused)?;
+      .map_err(|e| unconfirmed(room, "drop membership", e))?;
     self.dropped(room).await;
     Ok(())
   }
@@ -106,7 +113,7 @@ impl Messaging {
       .client()
       .drop_private_room_ownership(room)
       .await
-      .map_err(refused)?;
+      .map_err(|e| unconfirmed(room, "drop ownership", e))?;
     self.dropped(room).await;
     Ok(())
   }
