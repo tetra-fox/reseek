@@ -60,3 +60,91 @@ describe("a room's pane opened by a link", () => {
     ]);
   });
 });
+
+describe("a pane opened at a message", () => {
+  afterEach(() => {
+    chat.clear();
+    vi.unstubAllGlobals();
+  });
+
+  /** A room of `total` messages; `after` and `before` page through it as the daemon does */
+  const stored = (total: number) => {
+    const asked: string[] = [];
+    fakeNetwork((url) => {
+      if (url.pathname.endsWith("/rooms/joined")) return [];
+      if (url.pathname.endsWith("/conversations")) return [];
+      if (!url.pathname.endsWith("/messages")) return undefined;
+      asked.push(url.search);
+      const limit = Number(url.searchParams.get("limit"));
+      const ids = Array.from({ length: total }, (_, n) => n + 1);
+      const after = url.searchParams.get("after");
+      if (after !== null) {
+        const past = ids.filter((id) => id > Number(after));
+        return {
+          messages: past.slice(0, limit).map(message),
+          hasMore: past.length > limit,
+          gaps: []
+        };
+      }
+      const before = Number(url.searchParams.get("before") ?? total + 1);
+      const up = ids.filter((id) => id < before);
+      return { messages: up.slice(-limit).map(message), hasMore: up.length > limit, gaps: [] };
+    });
+    return asked;
+  };
+  const ids = (pane: MessagePane) => pane.ordered.map((m) => m.localId);
+  const room = { kind: "room", name: "indie" } as const;
+
+  it("holds the pages around it, then reads down to the newest", async () => {
+    stored(450);
+    const pane = new MessagePane(room, () => "me", 150);
+    await pane.load();
+    expect(ids(pane)).toEqual(Array.from({ length: 200 }, (_, n) => n + 51));
+    expect([pane.hasMore, pane.hasNewer]).toEqual([true, true]);
+
+    await pane.newer();
+    expect(ids(pane).at(-1)).toBe(350);
+    expect(pane.hasNewer).toBe(true);
+    await pane.newer();
+    expect(ids(pane).at(-1)).toBe(450);
+    expect(pane.hasNewer).toBe(false);
+  });
+
+  it("is at the newest when its message is near them", async () => {
+    stored(120);
+    const pane = new MessagePane(room, () => "me", 100);
+    await pane.load();
+    expect(ids(pane).at(-1)).toBe(120);
+    expect([pane.hasMore, pane.hasNewer]).toEqual([false, false]);
+  });
+
+  it("leaves a message that arrives to its place past the pages held", async () => {
+    stored(450);
+    const pane = new MessagePane(room, () => "me", 150);
+    await pane.load();
+    const held = ids(pane).length;
+    const asked = stored(450);
+    await pane.load();
+    expect(asked, "a pane short of the newest reads nothing on a refresh").toEqual([]);
+    expect(ids(pane).length).toBe(held);
+  });
+
+  it("goes to the newest page before a message is sent", async () => {
+    stored(450);
+    const pane = new MessagePane(room, () => "me", 150);
+    await pane.load();
+    await pane.send("hello");
+    expect(pane.hasNewer).toBe(false);
+    expect(pane.returned).toBe(1);
+    expect(pane.ordered.at(-1)?.text).toBe("hello");
+    expect(ids(pane).slice(0, -1)).toEqual(Array.from({ length: 100 }, (_, n) => n + 351));
+  });
+
+  it("opens empty on a room known by name with nothing stored", async () => {
+    fakeNetwork((url) => (url.pathname.endsWith("/rooms/joined") ? [] : undefined));
+    const pane = new MessagePane({ kind: "room", name: "new" }, () => "me");
+    await pane.load();
+    expect(pane.error).toBe("");
+    expect(pane.ordered).toEqual([]);
+  });
+});

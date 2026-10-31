@@ -28,10 +28,12 @@ const sending = (m: Message) => (m.localId < 0 ? 1 : 0);
 
 /**
  * The messages of one conversation or room, oldest first: the newest page on open, older pages
- * as the list scrolls up, and new ones as frames arrive. Messages are kept by their id and never
- * change once shown, so the list keeps its nodes. A message we send shows at once and stays
- * until the stored one with its text arrives, which for a room is when the server echoes it; a
- * room message with no echo in time shows as not sent
+ * as the list scrolls up, and new ones as frames arrive. A pane opened at a message holds the
+ * pages around it instead, and reads newer pages as the list scrolls down until it reaches the
+ * newest, where frames count again. Messages are kept by their id and never change once shown,
+ * so the list keeps its nodes. A message we send shows at once and stays until the stored one
+ * with its text arrives, which for a room is when the server echoes it; a room message with no
+ * echo in time shows as not sent
  */
 export class MessagePane {
   /** whose conversation or which room */
@@ -42,6 +44,10 @@ export class MessagePane {
   gaps = $state.raw<Gap[]>([]);
   /** older messages are stored than the pane holds */
   hasMore = $state(false);
+  /** newer messages are stored than the pane holds, which it opened at an older message for */
+  hasNewer = $state(false);
+  /** counts the times the pane went back to the newest messages, which the list goes down to */
+  returned = $state(0);
   /** the first page is here */
   loaded = $state(false);
   /** why the last read failed, empty when it didn't */
@@ -51,6 +57,8 @@ export class MessagePane {
   /** the conversation as stored, for its draft; null for a room or a conversation not started */
   conversation = $state.raw<Schemas["Conversation"] | null>(null);
   #self: () => string;
+  /** the message the pane opens at, null for the newest */
+  #at: number | null;
 
   /** the messages in order: the stored ones by id, then those still being sent */
   readonly ordered = $derived(
@@ -59,9 +67,10 @@ export class MessagePane {
     )
   );
 
-  constructor(target: Target, self: () => string) {
+  constructor(target: Target, self: () => string, at: number | null = null) {
     this.target = target;
     this.#self = self;
+    this.#at = at;
   }
 
   /** Follows the pane's frames; call from a component's setup, it stops with the component */
@@ -70,14 +79,14 @@ export class MessagePane {
     if (kind === "user") {
       $effect(() =>
         live.on("conversations.message", ({ username, message }) => {
-          if (username === name) this.#store(fromPrivate(message, this.#self()));
+          if (username === name) this.#arrived(fromPrivate(message, this.#self()));
         })
       );
       return;
     }
     $effect(() =>
       live.on("rooms.message", ({ roomName, message }) => {
-        if (roomName === name) this.#store(fromRoom(message));
+        if (roomName === name) this.#arrived(fromRoom(message));
       })
     );
     // a session that began after a gap says so; an open gap is replaced by its end
@@ -88,12 +97,18 @@ export class MessagePane {
     );
   }
 
-  /** Reads the newest page; the first time it also finds where the unread messages start */
+  /**
+   * Reads the newest page, or the pages around the message the pane opens at; the first time it
+   * also finds where the unread messages start. A pane still short of the newest messages reads
+   * nothing here: they come as the list scrolls down to them
+   */
   load = async () => {
     // a room's read marker comes with the joined rooms, which a pane opened by a link or a
     // reload can be quicker than; its first unread message is placed from that marker
     if (!this.loaded && this.target.kind === "room") await chat.ready();
-    const page = await this.#page(undefined);
+    if (this.hasNewer) return;
+    if (!this.loaded && this.#at !== null) return this.#readAround(this.#at);
+    const page = await this.#page({});
     if (!page.ok) {
       this.error = page.error;
       this.loaded = true;
@@ -114,22 +129,40 @@ export class MessagePane {
   older = async () => {
     const oldest = this.ordered.find((m) => m.localId > 0)?.localId;
     if (oldest === undefined || !this.hasMore) return;
-    const page = await this.#page(oldest);
+    const page = await this.#page({ before: oldest });
     if (!page.ok) return void (this.error = page.error);
     for (const m of page.data.messages) this.#store(m);
     this.#gapsFrom(page.data.gaps);
     this.hasMore = page.data.hasMore;
   };
 
-  /** Reads older pages until the message `localId` is in the pane, twenty pages at most */
-  reach = async (localId: number) => {
-    for (
-      let pages = 0;
-      pages < 20 && this.hasMore && !this.messages.get(String(localId));
-      pages++
-    ) {
-      await this.older();
+  /** Reads the page after the newest message shown */
+  newer = async () => {
+    const newest = this.ordered.findLast((m) => m.localId > 0)?.localId;
+    if (newest === undefined || !this.hasNewer) return;
+    const page = await this.#page({ after: newest });
+    if (!page.ok) return void (this.error = page.error);
+    for (const m of page.data.messages) this.#store(m);
+    this.#gapsFrom(page.data.gaps);
+    this.hasNewer = page.data.hasMore;
+    // frames count from here on; this read brings what arrived while they did not
+    if (!this.hasNewer) await this.load();
+  };
+
+  /** Leaves the older messages for the newest page */
+  latest = async () => {
+    if (!this.hasNewer) return;
+    const page = await this.#page({});
+    if (!page.ok) return void (this.error = page.error);
+    for (const m of this.messages.rows.filter((m) => m.localId > 0)) {
+      this.messages.remove(String(m.localId));
     }
+    this.gaps = [];
+    this.hasNewer = false;
+    for (const m of page.data.messages) this.#store(m);
+    this.#gapsFrom(page.data.gaps);
+    this.hasMore = page.data.hasMore;
+    this.returned += 1;
   };
 
   /**
@@ -143,10 +176,13 @@ export class MessagePane {
     this.gaps = [];
     this.unreadFrom = null;
     this.hasMore = false;
+    this.hasNewer = false;
   };
 
   /** Sends `text`; it shows at once, marked until the daemon has it, failed if it can't */
   send = async (text: string) => {
+    // what we say goes after the newest messages, which the pane goes to first
+    if (this.hasNewer) await this.latest();
     const pending: Message = {
       localId: -++sent,
       timestamp: new Date().toISOString(),
@@ -236,6 +272,30 @@ export class MessagePane {
     return outcome;
   }
 
+  /** A message from a frame, which goes on the end of a pane holding the newest messages */
+  #arrived(m: Message) {
+    if (!this.hasNewer) this.#store(m);
+  }
+
+  /** Reads the page ending at the message `localId` and the page after it */
+  async #readAround(localId: number) {
+    const [upTo, after] = await Promise.all([
+      this.#page({ before: localId + 1 }),
+      this.#page({ after: localId })
+    ]);
+    this.loaded = true;
+    if (!upTo.ok) return void (this.error = upTo.error);
+    if (!after.ok) return void (this.error = after.error);
+    this.error = "";
+    for (const m of [...upTo.data.messages, ...after.data.messages]) this.#store(m);
+    this.#gapsFrom([...upTo.data.gaps, ...after.data.gaps]);
+    this.hasMore = upTo.data.hasMore;
+    this.hasNewer = after.data.hasMore;
+    // what is unread lies past the pages read when newer ones remain
+    if (!this.hasNewer) this.unreadFrom = this.#firstUnread();
+    if (this.target.kind === "user") void this.#readConversation();
+  }
+
   /**
    * Keeps a stored message; one of ours takes the place of the oldest row still waiting for
    * it, the one sent with the same text, or else of one whose echo was given up on
@@ -284,23 +344,23 @@ export class MessagePane {
     }
   }
 
-  async #page(
-    before: number | undefined
-  ): Promise<Outcome<{ messages: Message[]; hasMore: boolean; gaps: Gap[] }>> {
+  async #page(cursor: {
+    before?: number;
+    after?: number;
+  }): Promise<Outcome<{ messages: Message[]; hasMore: boolean; gaps: Gap[] }>> {
     const { kind, name } = this.target;
+    const none = { ok: true as const, data: { messages: [], hasMore: false, gaps: [] } };
     if (kind === "user") {
       const outcome = await call(() =>
         api.GET("/api/v0/conversations/{username}/messages", {
           params: {
             path: { username: name },
-            query: { ...byUser(name).query, before, limit: PAGE }
+            query: { ...byUser(name).query, ...cursor, limit: PAGE }
           }
         })
       );
       // no conversation yet: an empty one, which the first message starts
-      if (!outcome.ok && outcome.status === 404) {
-        return { ok: true, data: { messages: [], hasMore: false, gaps: [] } };
-      }
+      if (!outcome.ok && outcome.status === 404) return none;
       if (!outcome.ok) return outcome;
       const self = this.#self();
       return {
@@ -314,11 +374,13 @@ export class MessagePane {
     }
     const params = {
       path: { roomName: name },
-      query: { ...byRoom(name).query, before, limit: PAGE }
+      query: { ...byRoom(name).query, ...cursor, limit: PAGE }
     };
     const outcome = chat.rooms.get(name)
       ? await call(() => api.GET("/api/v0/rooms/joined/{roomName}/messages", { params }))
       : await call(() => api.GET("/api/v0/rooms/history/{roomName}/messages", { params }));
+    // a room known by name that never stored a message: an empty one, until it is joined
+    if (!outcome.ok && outcome.status === 404) return none;
     if (!outcome.ok) return outcome;
     return {
       ok: true,

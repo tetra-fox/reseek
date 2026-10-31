@@ -40,8 +40,14 @@ const fakeUnread = async (page: Page, messages: number, slow = 0) => {
     }
     if (url.pathname.endsWith("/messages")) {
       if (!url.pathname.includes("/alpha/")) return route.fulfill({ json: [] });
-      const before = Number(url.searchParams.get("before") ?? messages + 1);
       const limit = Number(url.searchParams.get("limit") ?? 100);
+      const after = url.searchParams.get("after");
+      if (after !== null) {
+        const from = Number(after) + 1;
+        const count = Math.min(limit, Math.max(0, messages - from + 1));
+        return route.fulfill({ json: Array.from({ length: count }, (_, n) => message(from + n)) });
+      }
+      const before = Number(url.searchParams.get("before") ?? messages + 1);
       const first = Math.max(1, before - limit);
       if (url.searchParams.has("before")) await new Promise((done) => setTimeout(done, slow));
       return route.fulfill({

@@ -45,7 +45,7 @@
   let { target, at = null, lead }: Props = $props();
 
   // svelte-ignore state_referenced_locally
-  const pane = new MessagePane(target, () => app.state?.user.username ?? "");
+  const pane = new MessagePane(target, () => app.state?.user.username ?? "", at);
   pane.follow();
   // svelte-ignore state_referenced_locally
   const members = target.kind === "room" ? new RoomMembers(target.name) : null;

@@ -44,6 +44,7 @@
   /** messages that arrived while scrolled up, for the pill */
   let fresh = $state(0);
   let loadingOlder = $state(false);
+  let loadingNewer = $state(false);
   /** the scrollbar is held down: a press on the list beside its content */
   let gripped = $state(false);
   let placed = false;
@@ -90,7 +91,8 @@
       paddingEnd: 8,
       // while the scrollbar is held at the top, older pages go above it rather than keep the view
       anchor: gripped ? undefined : (line) => line.kind === "message",
-      followOnAppend: !interaction.frozen,
+      // a page read on the way down stays below the view, which is reading older messages
+      followOnAppend: !interaction.frozen && !pane.hasNewer && !loadingNewer,
       anchorTo: "end",
       scrollEndThreshold: NEAR,
       rangeExtractor: (range) => {
@@ -138,7 +140,7 @@
   /** The newest messages count as read only when the view really is at them on a visible tab */
   const readIfSeen = () => {
     seen();
-    if (atBottom && document.visibilityState === "visible") onread();
+    if (atBottom && !pane.hasNewer && document.visibilityState === "visible") onread();
   };
 
   // the first page shows at the bottom, or at the message a link names
@@ -147,11 +149,21 @@
     placed = true;
     seenNewest = untrack(() => newest);
     untrack(async () => {
-      if (at !== null) await pane.reach(at);
       await tick();
       const index = at === null ? -1 : lines.findIndex((l) => l.key === `m:${at}`);
       if (index === -1) toBottom();
       else shown.scrollTo(index, "center");
+      await tick();
+      readIfSeen();
+    });
+  });
+
+  // back at the newest messages, from the pill or by sending, the view goes to the bottom
+  $effect(() => {
+    if (!pane.returned) return;
+    untrack(async () => {
+      await tick();
+      toBottom();
       await tick();
       readIfSeen();
     });
@@ -165,6 +177,8 @@
       // the first page is placed on its own; this follows the messages after it
       if (!placed || newest === seenNewest) return;
       seenNewest = newest;
+      // a page read on the way down is history, not news
+      if (loadingNewer) return;
       if (atBottom && !interaction.frozen) {
         await tick();
         readIfSeen();
@@ -193,6 +207,13 @@
         }
       });
       loadingOlder = false;
+    }
+    const left = box.scrollHeight - box.scrollTop - box.clientHeight;
+    if (left < NEAR * 2 && pane.hasNewer && !loadingNewer && placed) {
+      loadingNewer = true;
+      await pane.newer();
+      await tick();
+      loadingNewer = false;
     }
   };
 
@@ -279,12 +300,12 @@
       <Spinner class="size-4" />
     </div>
   {/if}
-  {#if !atBottom}
+  {#if !atBottom || pane.hasNewer}
     <Button
       size="sm"
       variant="secondary"
       class="absolute bottom-3 left-1/2 -translate-x-1/2 shadow-raised"
-      onclick={toBottom}>
+      onclick={() => (pane.hasNewer ? void pane.latest() : toBottom())}>
       <ArrowDownIcon />{fresh ? `${fresh} new` : "Jump to latest"}
     </Button>
   {/if}
