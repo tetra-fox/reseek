@@ -49,6 +49,18 @@ export const layerOpen = () =>
 /** Whether the keyboard is a Mac's, whose shortcuts take Cmd where others take Ctrl */
 export const mac = typeof navigator !== "undefined" && /mac|iphone|ipad/i.test(navigator.platform);
 
+/**
+ * Alt+Shift+Up or Down, Option on a Mac, on a row of an order the user sets: the way the row
+ * moves, 0 for any other key
+ */
+export const moveStep = (e: KeyboardEvent): -1 | 0 | 1 => {
+  if (!e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey) return 0;
+  return e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
+};
+
+/** The keys of `moveStep` as the keyboard in use names them */
+export const moveKeys = `${mac ? "Option" : "Alt"}+Shift+Up or Down`;
+
 /** Ctrl+J, or Cmd+J on a Mac: opens or closes the activity log from anywhere */
 export const togglesActivity = (e: KeyboardEvent) =>
   (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "j";

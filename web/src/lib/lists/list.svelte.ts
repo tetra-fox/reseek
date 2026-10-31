@@ -27,6 +27,11 @@ export type ListSpec<L> = {
   /** a key of the list's own for the focused row, such as Delete; true when it acted */
   onkey?: (e: KeyboardEvent, line: L) => boolean;
   /**
+   * The same for a key held with Ctrl, Cmd or Alt, for the focused line, which is the browser's
+   * unless this acts on it
+   */
+  onchord?: (e: KeyboardEvent, line: L) => boolean;
+  /**
    * Whether the inspector can show a line. On such a line Space and `i` open or close it, and
    * Shift+Space ticks the row, which Space does in a list without an inspector
    */
@@ -81,7 +86,7 @@ let lists = 0;
  *
  * Keys: a focused control keeps the keys it handles (`keepsKey`); the rest act on the line the
  * control is in. Ctrl/Cmd+A selects the focused line's group, or every row; any other key with
- * Ctrl, Cmd or Alt is the browser's. Home, End, Page Up and Page Down move as Up and Down do,
+ * Ctrl, Cmd or Alt is the browser's, unless the list takes it as its own. Home, End, Page Up and Page Down move as Up and Down do,
  * further. On a row Space toggles it, Enter opens it and the list's own keys act; on a group
  * header only Ctrl/Cmd+A and Space act, unless headers take focus. In a list with an inspector,
  * Space and `i` on a line it shows open or close it instead, and Shift+Space ticks. Letters typed
@@ -371,8 +376,10 @@ export class ListControl<L> {
     const id = line === null ? null : this.#spec.id(line);
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "a") {
       this.setAll((line && this.#spec.group?.(line)) ?? this.rows, true);
-    } else if (withModifier(e)) return;
-    else if (e.key === "ArrowDown") {
+    } else if (withModifier(e)) {
+      if (line === null || !this.#spec.onchord?.(e, line)) return;
+      this.#ringed = true;
+    } else if (e.key === "ArrowDown") {
       const to = this.#next(this.focusIndex, 1);
       if (to !== -1) this.#moveTo(to);
     } else if (e.key === "ArrowUp") {
