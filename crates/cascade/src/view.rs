@@ -86,6 +86,10 @@ pub struct EntryView {
   pub doc: String,
   /// the names the value is one of, `None` when it is not one of a fixed set
   pub choices: Option<Vec<String>>,
+  /// what a new entry holds until something sets the field, null for nothing, a secret's or
+  /// one of a list's elements
+  #[cfg_attr(feature = "utoipa", schema(value_type = Object))]
+  pub default: Value,
   /// whether the value is shown as `*****`
   pub secret: bool,
 }
@@ -160,6 +164,11 @@ impl ConfigView {
               kind: entry.kind.clone(),
               doc: entry.doc.clone(),
               choices: entry.choices.clone(),
+              default: if entry.secret {
+                Value::Null
+              } else {
+                entry.default.clone()
+              },
               secret: entry.secret,
             })
             .collect(),

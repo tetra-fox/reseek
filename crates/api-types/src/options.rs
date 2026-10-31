@@ -147,6 +147,10 @@ pub struct EntryView {
   pub doc: String,
   /// the names the value is one of; null for any other field
   pub choices: Option<Vec<String>>,
+  /// what a new entry holds until something sets the field, null for nothing, a secret's or
+  /// one of a list's elements
+  #[schema(value_type = Object)]
+  pub default: Value,
   /// whether the value is shown as `*****`
   pub secret: bool,
 }

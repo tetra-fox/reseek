@@ -116,6 +116,8 @@ pub struct Node {
   pub(crate) secret: bool,
   pub(crate) doc: String,
   pub(crate) entries: Vec<Node>,
+  /// what an entry of a user-keyed map holds until something sets its fields
+  pub(crate) entry_defaults: serde_json::Value,
   pub(crate) choices: Option<&'static [&'static str]>,
 }
 
@@ -142,6 +144,7 @@ impl Node {
       secret: attrs.secret,
       doc: attrs.doc.to_string(),
       entries,
+      entry_defaults: serde_json::Value::Null,
     }
   }
 
@@ -176,15 +179,17 @@ pub mod private {
 
   /// A map whose keys the user picks.
   pub trait UserKeyed {
-    /// the type of each entry
-    type Value: Cascade;
+    /// the type of each entry, whose default is what a new entry holds
+    type Value: Cascade + Default + serde::Serialize;
   }
 
-  impl<V: Cascade> UserKeyed for std::collections::BTreeMap<String, V> {
+  impl<V: Cascade + Default + serde::Serialize> UserKeyed for std::collections::BTreeMap<String, V> {
     type Value = V;
   }
 
-  impl<V: Cascade, S> UserKeyed for std::collections::HashMap<String, V, S> {
+  impl<V: Cascade + Default + serde::Serialize, S> UserKeyed
+    for std::collections::HashMap<String, V, S>
+  {
     type Value = V;
   }
 
@@ -225,12 +230,21 @@ pub mod private {
   }
 
   /// Adds a map whose keys the user picks, tracked as one value.
+  ///
+  /// # Panics
+  ///
+  /// When an entry's default does not serialize, which takes a `Serialize` of its own that fails.
   pub fn push_keyed<F: UserKeyed>(nodes: &mut Vec<Node>, attrs: Attrs) {
     let entries = match <F::Value as Cascade>::shape().0 {
       Inner::Section(children) => children,
       Inner::Leaf { .. } => Vec::new(),
     };
-    nodes.push(Node::leaf(&attrs, Kind::Map, entries));
+    let defaults = serde_json::to_value(F::Value::default())
+      .unwrap_or_else(|e| panic!("the default of `{}` does not serialize: {e}", attrs.name));
+    nodes.push(Node {
+      entry_defaults: defaults,
+      ..Node::leaf(&attrs, Kind::Map, entries)
+    });
   }
 
   /// The shape of a struct with these fields. `prefixes` are `(from, to)` pairs: every env var

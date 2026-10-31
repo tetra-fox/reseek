@@ -43,6 +43,7 @@ pub fn config_view(loaded: &Loaded<Options>) -> api::ConfigView {
               kind: option_kind(entry.kind),
               doc: entry.doc,
               choices: entry.choices,
+              default: hidden(entry.default),
               secret: entry.secret,
             })
             .collect(),

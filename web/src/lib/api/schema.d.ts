@@ -4233,6 +4233,11 @@ export interface components {
         EntryView: {
             /** @description the names the value is one of; null for any other field */
             choices?: string[] | null;
+            /**
+             * @description what a new entry holds until something sets the field, null for nothing, a secret's or
+             *     one of a list's elements
+             */
+            default: Record<string, unknown>;
             /** @description the key's help text */
             doc: string;
             /**

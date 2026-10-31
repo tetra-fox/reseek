@@ -65,7 +65,8 @@
 //! - `doc = "..."`: the field's help, the doc comment when not given.
 //! - `kind = "bool" | "integer" | "float" | "string" | "duration" | "size"`: the field's kind
 //!   when its type does not say, such as a size type or an enum written as a string.
-//! - `user_keyed`: a map whose keys the user picks, one value as a whole.
+//! - `user_keyed`: a map whose keys the user picks, one value as a whole. Its values need
+//!   `Default` and `Serialize`: their default is what a new entry holds.
 //!
 //! A field's key is its name, or its `#[serde(rename = "...")]`; `#[serde(skip)]` fields are
 //! not part of the configuration.

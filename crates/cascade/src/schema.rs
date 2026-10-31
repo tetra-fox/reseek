@@ -19,7 +19,8 @@ pub struct Field {
   pub key: Key,
   /// what kind of value the key holds
   pub kind: Kind,
-  /// the value when no layer sets the key, null for none
+  /// the value when no layer sets the key, null for none; for a field of an entry, what the
+  /// entry holds until something sets it, null when the entries are a list's
   pub default: Value,
   /// the environment variable that sets the key, the name shown to users
   pub env: Option<String>,
@@ -69,7 +70,7 @@ impl Field {
       entries: node
         .entries
         .into_iter()
-        .map(|entry| Field::from_node(entry, &Value::Null))
+        .map(|entry| Field::from_node(entry, &node.entry_defaults))
         .collect(),
     }
   }
