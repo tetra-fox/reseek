@@ -150,7 +150,9 @@ test("shows a list's focus ring for the keys, not after a click", async ({ page 
   await expect(list.locator("[data-focused]")).not.toHaveCSS("box-shadow", "none");
 });
 
-test("a row's hidden menu takes no width, and comes up without moving the row", async ({ page }) => {
+test("a row's hidden menu takes no width, and comes up without moving the row", async ({
+  page
+}) => {
   await fakeChat(page);
   await login(page, "/chat");
   const row = page.locator('[data-line="room:indie"]');

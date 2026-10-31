@@ -161,7 +161,9 @@ describe("the dashboard", () => {
     await flush();
     expect(sorts().length).toBe(asked + 2);
     expect(sorts().slice(-2)).toEqual(["TotalBytes", "TotalBytes"]);
-    document.querySelector<HTMLElement>('[aria-label="Time range"] [role=radio]:nth-child(2)')!.click();
+    document
+      .querySelector<HTMLElement>('[aria-label="Time range"] [role=radio]:nth-child(2)')!
+      .click();
     await flush();
     expect(sorts().slice(-2)).toEqual(["Count", "Count"]);
   });
