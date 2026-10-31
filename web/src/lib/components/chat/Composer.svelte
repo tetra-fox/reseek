@@ -26,9 +26,9 @@
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { plural } from "#lib/format.js";
-  import { chatHref, href, roomHref, userHref } from "#lib/nav.js";
+  import { chatHref, roomHref, userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
-  import { searches } from "#lib/search/searches.svelte.js";
+  import { openSearch } from "#lib/search/searches.svelte.js";
   import { fields } from "#lib/stored.svelte.js";
   import { links } from "#lib/users/actions.js";
   import { blocking } from "#lib/users/block.svelte.js";
@@ -206,9 +206,7 @@
     if (name === "search" || name === "rsearch") {
       const scope =
         name === "rsearch" ? { type: "room" as const, subjects: [target.name] } : undefined;
-      const { id, done } = searches.start(rest, scope);
-      void goto(href(`/searches/${id}`));
-      void done.then((outcome) => !outcome.ok && toast(outcome.error, "error"));
+      openSearch(rest, scope);
     }
   };
 

@@ -1,3 +1,4 @@
+import { goto } from "$app/navigation";
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
 import { api, type Schemas } from "#lib/api/client.js";
@@ -6,7 +7,10 @@ import { undoable } from "#lib/feedback/undo.js";
 import { newId } from "#lib/ids.js";
 import { Keyed } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
+import { href } from "#lib/nav.js";
 import { call, type Outcome } from "#lib/request.js";
+
+import { remember } from "./recent.svelte";
 
 export type Search = Schemas["Search"];
 export type SearchScope = Schemas["SearchScope"];
@@ -152,3 +156,16 @@ class Searches {
 }
 
 export const searches = new Searches();
+
+/**
+ * Starts a search and opens its page at once; the results stream in as the daemon finds them. A
+ * search refused while its page is open says so there, and toasts anywhere else
+ */
+export const openSearch = (text: string, scope?: SearchScope) => {
+  const { id, done } = searches.start(text, scope);
+  remember(text);
+  void goto(href(`/searches/${id}`));
+  void done.then((outcome) => {
+    if (!outcome.ok && !location.hash.includes(id)) toast(outcome.error, "error");
+  });
+};

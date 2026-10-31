@@ -28,10 +28,10 @@
   import { href } from "#lib/nav.js";
   import { denseRows } from "#lib/search/dense.js";
   import type { Picked } from "#lib/search/facts.js";
-  import { recent, remember, togglePin } from "#lib/search/recent.svelte.js";
+  import { recent, togglePin } from "#lib/search/recent.svelte.js";
   import { pipeline } from "#lib/search/results.js";
   import { Results } from "#lib/search/results.svelte.js";
-  import { scopeLabel, searches } from "#lib/search/searches.svelte.js";
+  import { openSearch, scopeLabel, searches } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { LONG_QUEUE, searchOptions } from "#lib/settings.svelte.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
@@ -167,9 +167,7 @@
 
   const again = () => {
     if (!search) return;
-    const started = searches.start(search.searchText, search.scope);
-    remember(search.searchText);
-    void goto(href(`/searches/${started.id}`));
+    openSearch(search.searchText, search.scope);
   };
 
   const stop = async () => {

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
   import CircleStopIcon from "@lucide/svelte/icons/circle-stop";
   import LockIcon from "@lucide/svelte/icons/lock";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
@@ -21,8 +20,7 @@
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { href } from "#lib/nav.js";
-  import { remember } from "#lib/search/recent.svelte.js";
-  import { isDone, scopeLabel, searches } from "#lib/search/searches.svelte.js";
+  import { isDone, openSearch, scopeLabel, searches } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
 
   import StatusIcon from "./StatusIcon.svelte";
@@ -55,13 +53,6 @@
     const outcome = await searches.stop(id);
     working.delete(id);
     if (!outcome.ok) toast(outcome.error, "error");
-  };
-
-  /** Runs a search again and opens it */
-  const again = (text: string, scope: (typeof rows)[number]["scope"]) => {
-    const { id } = searches.start(text, scope);
-    remember(text);
-    void goto(href(`/searches/${id}`));
   };
 </script>
 
@@ -136,7 +127,7 @@
                         aria-label="Search again"
                         title="Search again"
                         disabled={!app.isServerConnected}
-                        onclick={() => again(search.searchText, search.scope)}>
+                        onclick={() => openSearch(search.searchText, search.scope)}>
                         <RefreshCwIcon />
                       </Button>
                       <Button
