@@ -34,7 +34,7 @@ describe("the chat page", () => {
     ]);
     component = mount(ChatPage, {
       target: document.body,
-      props: { target: { kind: "room", name: "jazz" }, at: null, q: "" }
+      props: { target: { kind: "room", name: "jazz" }, at: null, q: "", kind: "all" }
     });
     flushSync();
     expect(document.querySelector('[aria-label="Rooms and conversations"]')).toBeNull();

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { afterNavigate, goto } from "$app/navigation";
+  import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
   import BellOffIcon from "@lucide/svelte/icons/bell-off";
   import BellRingIcon from "@lucide/svelte/icons/bell-ring";
   import MessagesSquareIcon from "@lucide/svelte/icons/messages-square";
   import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
-  import SearchIcon from "@lucide/svelte/icons/search";
   import { Dialog } from "bits-ui";
   import { MediaQuery } from "svelte/reactivity";
 
@@ -12,28 +12,37 @@
   import { notifier, notifyOptions } from "#lib/chat/notify.svelte.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { chatOrder } from "#lib/chat/rooms/order.js";
-  import MessageSearch from "#lib/components/chat/messages/MessageSearch.svelte";
+  import { resultsHref } from "#lib/chat/route.js";
+  import type { SearchKind } from "#lib/chat/search/match.js";
+  import { ChatSearch } from "#lib/chat/search/search.svelte.js";
   import JoinRoomDialog from "#lib/components/chat/rooms/JoinRoomDialog.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
-  import { chatHref, href, roomHref } from "#lib/nav.js";
+  import { chatHref, roomHref } from "#lib/nav.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
+  import { layerOpen } from "#lib/ui/keys.js";
 
   import ChatList from "./ChatList.svelte";
   import NewMessageDialog from "./NewMessageDialog.svelte";
   import Pane from "./Pane.svelte";
+  import SearchResults from "./search/SearchResults.svelte";
 
   type Props = {
-    /** the pane to show, "search" for the message search, null for none */
+    /** the pane to show, "search" for the search results, null for none */
     target: Target | "search" | null;
     /** a message to open the pane at */
     at: number | null;
-    /** the message search's query */
+    /** the search, on its results and on a chat opened from them */
     q: string;
+    /** the messages the search looks at */
+    kind: SearchKind;
   };
 
-  let { target, at, q }: Props = $props();
+  let { target, at, q, kind }: Props = $props();
+
+  /** how many messages one page of the search results holds */
+  const RESULTS_PAGE = 50;
 
   const wide = new MediaQuery("min-width: 1024px");
   let sheet = $state(false);
@@ -43,6 +52,18 @@
   let writeTo = $state("");
   let search = $state<HTMLInputElement | null>(null);
 
+  /** kept while the screen is open, so coming back from a chat finds the results as they were */
+  const results = new ChatSearch(
+    () => q,
+    () => kind,
+    RESULTS_PAGE
+  );
+  const fromResults = $derived(!!q && !!target && target !== "search");
+  // the results wait only while the search is what is being followed
+  $effect(() => {
+    if (!q) results.forget();
+  });
+
   const current = $derived(
     target && target !== "search" ? paneKey(target.kind, target.name) : null
   );
@@ -51,7 +72,7 @@
 
   // the breadcrumb names the chat on show
   useCrumbs(() => {
-    if (target === "search") return [{ label: "Search messages" }];
+    if (target === "search") return [{ label: "Search results" }];
     if (!target) return [];
     return [{ label: target.kind === "room" ? `#${target.name}` : target.name }];
   });
@@ -59,12 +80,29 @@
   // a narrow screen shows the list in a sheet, which going to a chat closes
   afterNavigate(() => (sheet = false));
 
+  const onjoin = (name = "") => {
+    joinName = name;
+    joining = true;
+  };
+  const onnew = (name = "") => {
+    writeTo = name;
+    writing = true;
+  };
+
   // focus stays where it was, so the keys go on working
   const go = (t: Target) =>
     void goto(t.kind === "user" ? chatHref(t.name) : roomHref(t.name), { reset: false });
 
-  // Ctrl/Cmd+K finds a chat; Alt+Up and Alt+Down move to the chat above or below
+  // the chat opened from the results gives way to them, so Back passes over neither twice
+  const backToResults = () => void goto(resultsHref(q, kind), { replaceState: true });
+
+  // Ctrl/Cmd+K finds a chat; Alt+Up and Alt+Down move to the chat above or below; Escape goes
+  // back to the search results a chat was opened from, once nothing open takes it
   const keydown = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && fromResults && !e.defaultPrevented && !layerOpen()) {
+      backToResults();
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k") {
       e.preventDefault();
       if (!wide.current) sheet = true;
@@ -87,17 +125,7 @@
 <svelte:window onkeydown={keydown} />
 
 {#snippet list()}
-  <ChatList
-    bind:search
-    {current}
-    onjoin={(name) => {
-      joinName = name ?? "";
-      joining = true;
-    }}
-    onnew={(name) => {
-      writeTo = name ?? "";
-      writing = true;
-    }} />
+  <ChatList bind:search {current} {q} {kind} {onjoin} {onnew} />
 {/snippet}
 
 {#snippet lead()}
@@ -113,10 +141,6 @@
   {#if wide.current}
     <div class="flex w-72 shrink-0 flex-col border-r">
       {@render list()}
-      <a
-        href={href("/chat/search")}
-        class="flex items-center gap-1.5 border-t px-3 py-2 text-sm text-fg-muted hover:text-fg"
-        ><SearchIcon class="size-4" />Search messages</a>
     </div>
   {/if}
   <div class="flex min-w-0 flex-1 flex-col">
@@ -138,15 +162,20 @@
       </p>
     {/if}
     {#if target === "search"}
-      <div class="flex flex-col gap-section overflow-y-auto p-4">
-        <div class="flex items-center gap-2">
-          {@render lead()}
-          <h2 class="font-semibold">Search messages</h2>
-        </div>
-        {#key q}<MessageSearch {q} />{/key}
-      </div>
+      {#key q}
+        <SearchResults search={results} {q} {kind} {lead} {onjoin} {onnew} />
+      {/key}
     {:else if target}
-      {#key current}
+      {#if fromResults}
+        <button
+          type="button"
+          class="flex min-w-0 items-center gap-1.5 border-b px-3 py-1.5 text-left text-xs text-fg-muted hover:text-fg"
+          onclick={backToResults}>
+          <ArrowLeftIcon class="size-3.5 shrink-0" />
+          <span class="truncate">Back to the results for "{q}"</span>
+        </button>
+      {/if}
+      {#key `${current} ${at}`}
         <Pane {target} {at} {lead} />
       {/key}
     {:else if wide.current}

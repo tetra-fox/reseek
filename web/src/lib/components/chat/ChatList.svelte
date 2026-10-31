@@ -7,7 +7,6 @@
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import HashIcon from "@lucide/svelte/icons/hash";
   import MessageSquarePlusIcon from "@lucide/svelte/icons/message-square-plus";
-  import SearchIcon from "@lucide/svelte/icons/search";
   import UsersRoundIcon from "@lucide/svelte/icons/users-round";
   import { SvelteSet } from "svelte/reactivity";
 
@@ -15,9 +14,10 @@
   import { actionOf } from "#lib/chat/messages/rich.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { sortedConversations, sortedRooms } from "#lib/chat/rooms/order.js";
+  import type { SearchKind } from "#lib/chat/search/match.js";
+  import SearchBox from "#lib/components/chat/search/SearchBox.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
-  import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
@@ -37,26 +37,28 @@
   type Props = {
     /** the pane on screen, by pane key */
     current: string | null;
+    /** the search the address holds, which the search box shows */
+    q?: string;
+    /** the messages the address searches */
+    kind?: SearchKind;
     onjoin: (name?: string) => void;
     onnew: (username?: string) => void;
     /** the search box, for Ctrl/Cmd+K */
     search?: HTMLInputElement | null;
   };
 
-  let { current, onjoin, onnew, search = $bindable(null) }: Props = $props();
+  let { current, q = "", kind = "all", onjoin, onnew, search = $bindable(null) }: Props = $props();
 
   type Line =
     | { kind: "header"; key: string; title: string; ids: string[] }
     | { kind: "row"; key: string; target: Target; ids: string[] };
 
-  let typed = $state("");
   const folded = new SvelteSet<string>();
   /** the row whose menu is open, from its button or a right click */
   let menuFor = $state<string | null>(null);
 
-  const filter = $derived(typed.trim().toLowerCase());
-  const rooms = $derived(sortedRooms(filter));
-  const conversations = $derived(sortedConversations(filter));
+  const rooms = $derived(sortedRooms());
+  const conversations = $derived(sortedConversations());
 
   // the list holds still while the pointer is on it, a text is selected in it or a row's menu
   // is open, so a row never moves away from a click
@@ -65,7 +67,6 @@
   const lines = $derived.by(() => {
     const section = (key: string, title: string, targets: Target[]): Line[] => {
       const ids = targets.map((t) => paneKey(t.kind, t.name));
-      if (!targets.length && filter) return [];
       return [
         { kind: "header", key, title, ids },
         ...(folded.has(key)
@@ -108,7 +109,7 @@
     openOnClick: true
   });
 
-  // every chat selected, those the search or a folded section hides too
+  // every chat selected, those a folded section hides too
   const chosen = $derived([...list.selected].map(paneOf));
   const write = $derived(session.can("ReadWrite"));
 
@@ -146,23 +147,10 @@
     }
     if (failed) toast(`Could not mark ${plural(failed, "chat", "chats")} as read`, "error");
   };
-
-  const offer = (e: KeyboardEvent) => {
-    if (e.key !== "Enter" || !filter) return;
-    const first = lines.find((l) => l.kind === "row");
-    if (first?.kind === "row") open(first.target);
-  };
 </script>
 
 <div class="flex min-h-0 flex-col gap-2 p-2">
-  <Input
-    bind:ref={search}
-    icon={SearchIcon}
-    type="search"
-    placeholder="Search chats"
-    aria-label="Search chats"
-    bind:value={typed}
-    onkeydown={offer} />
+  <SearchBox {q} {kind} {onjoin} {onnew} bind:input={search} />
   {#if write && unreadChats.length}
     <Button
       variant="ghost"
@@ -179,16 +167,6 @@
         <Button variant="ghost" size="sm" onclick={() => void chat.load()}>Retry</Button>
       {/snippet}
     </Notice>
-  {/if}
-  {#if filter && !lines.some((l) => l.kind === "row") && write}
-    <div class="flex flex-col gap-1 text-sm">
-      <Button variant="ghost" size="sm" class="justify-start" onclick={() => onnew(typed.trim())}>
-        Start a conversation with <span class="font-medium">{typed.trim()}</span>
-      </Button>
-      <Button variant="ghost" size="sm" class="justify-start" onclick={() => onjoin(typed.trim())}>
-        Join room <span class="font-medium">{typed.trim()}</span>
-      </Button>
-    </div>
   {/if}
 
   <div
