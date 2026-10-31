@@ -7,6 +7,7 @@
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import { DropdownMenu, Popover } from "bits-ui";
 
+  import { app } from "#lib/app.svelte.js";
   import { SERVER } from "#lib/chat/notices.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
@@ -54,6 +55,8 @@
   const user = $derived(users.get(name));
   const to = $derived(links(name, folder));
   const readWrite = $derived(session.can("ReadWrite"));
+  /** our own account, which is no buddy and can't be blocked */
+  const own = $derived(app.state?.user.username === name);
 
   // another username's card or menu opening closes this one
   const active = $derived(open.owner === me ? shown : null);
@@ -219,7 +222,7 @@
       </div>
       <Menu.Separator />
       <UserMenuItems {name} {folder} />
-      {#if readWrite}
+      {#if readWrite && !own}
         <Menu.Separator />
         <Menu.Item onSelect={togglePin}>
           {#if user?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}

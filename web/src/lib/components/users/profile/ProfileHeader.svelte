@@ -101,7 +101,7 @@
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Copy the username"
+          aria-label="Copy username"
           onclick={() => void copyText(name)}><CopyIcon /></Button>
         {#if !p.known}<Badge tone="outline">Not seen before</Badge>{/if}
         {#if p.isPrivileged}<Badge tone="warning">privileged</Badge>{/if}
