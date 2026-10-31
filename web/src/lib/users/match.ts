@@ -1,7 +1,5 @@
-import type { UserSummary } from "./users.svelte.js";
-
 /** How close a name is to the typed text, lower is closer; null when it does not hold the text */
-const closeness = (name: string, text: string): number | null => {
+export const closeness = (name: string, text: string): number | null => {
   if (name === text) return 0;
   const lower = name.toLowerCase();
   const wanted = text.toLowerCase();
@@ -16,15 +14,15 @@ const closeness = (name: string, text: string): number | null => {
 };
 
 /**
- * The users whose name holds `text` in any case, closest first: the exact name, the name in
+ * The items whose name holds `text` in any case, closest first: the exact name, the name in
  * another case, names starting with the text, then a word in the name starting with it, then
- * the text anywhere. Shorter names go first within each, then the order the users came in
+ * the text anywhere. Shorter names go first within each, then the order the items came in
  */
-export const bestMatches = (users: UserSummary[], text: string): UserSummary[] =>
-  users
-    .flatMap((user) => {
-      const rank = closeness(user.username, text);
-      return rank === null ? [] : [{ user, rank }];
+export const bestMatches = <T>(items: T[], text: string, name: (item: T) => string): T[] =>
+  items
+    .flatMap((item) => {
+      const rank = closeness(name(item), text);
+      return rank === null ? [] : [{ item, rank }];
     })
-    .toSorted((a, b) => a.rank - b.rank || a.user.username.length - b.user.username.length)
-    .map(({ user }) => user);
+    .toSorted((a, b) => a.rank - b.rank || name(a.item).length - name(b.item).length)
+    .map(({ item }) => item);

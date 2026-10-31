@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { bestMatches } from "./match.js";
-import type { UserSummary } from "./users.svelte.js";
-
-const named = (...names: string[]) => names.map((username) => ({ username }) as UserSummary);
-const ranked = (names: string[], text: string) =>
-  bestMatches(named(...names), text).map((u) => u.username);
+const ranked = (names: string[], text: string) => bestMatches(names, text, (name) => name);
 
 describe("bestMatches", () => {
   it("puts the exact name first, then the name in another case", () => {
@@ -29,7 +25,7 @@ describe("bestMatches", () => {
     ]);
   });
 
-  it("leaves out a user whose name does not hold the text", () => {
+  it("leaves out an item whose name does not hold the text", () => {
     expect(ranked(["alice", "tagged"], "jazz")).toEqual([]);
   });
 

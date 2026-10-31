@@ -44,7 +44,7 @@
 
   // no username has spaces around it, so what is around the text is no part of the name
   const text = $derived(typed.trim());
-  const matches = $derived(bestMatches(found, text).slice(0, LISTED));
+  const matches = $derived(bestMatches(found, text, (u) => u.username).slice(0, LISTED));
   const unknown = $derived(!found.some((u) => u.username === text));
   const asking = $derived(looking === text);
 
