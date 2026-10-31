@@ -117,7 +117,7 @@ pub struct Messaging {
 impl Messaging {
   /// The engine over `db`, reaching the server through `network`, asking `users` who is
   /// blocked and touching them, raising its events on `events`, pushing to `live` and keeping
-  /// `State.rooms` in `state`. A session the last run left open is closed as crashed.
+  /// `State.rooms` in `state`. A session the last run left open is closed when it was last seen.
   #[allow(
     clippy::too_many_arguments,
     reason = "the engine takes each part of the daemon it uses"
@@ -244,12 +244,8 @@ impl Messaging {
     match event {
       Event::PrivateMessageReceived(message) => self.received(message).await,
       Event::LoggedIn { username } => self.session_started(username).await,
-      Event::Disconnected { error, .. } => {
-        let shutdown = error
-          .as_ref()
-          .and_then(crate::network::Intent::of)
-          .is_some_and(|intent| intent == crate::network::Intent::Shutdown);
-        self.session_ended(shutdown).await;
+      Event::Disconnected { .. } => {
+        self.session_ended().await;
         self.rooms_disconnected();
       }
       other => {
@@ -260,7 +256,7 @@ impl Messaging {
   }
 
   /// Stops at shutdown, once the client is stopped: the events taken are handled, the session
-  /// is closed as shut down, and the work on the way gets a moment to end.
+  /// is closed, and the work on the way gets a moment to end.
   pub async fn stop(&self) {
     self.drained.cancel();
     let worker = lock(&self.worker).take();
@@ -269,7 +265,7 @@ impl Messaging {
     {
       warn!(error = %e, "the messaging task ended badly");
     }
-    self.session_ended(true).await;
+    self.session_ended().await;
     self.tasks.close();
     if tokio::time::timeout(STOPPING, self.tasks.wait())
       .await

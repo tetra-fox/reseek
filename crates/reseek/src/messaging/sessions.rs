@@ -1,10 +1,9 @@
 //! The session log: one row for each time we were logged in, so room history can say where it
 //! has holes. A gap is the time between one session's end and the next one's login, or now
-//! while we are not logged in; it was the daemon's own doing when the earlier session ended at a
-//! stop or a crash. Gaps under a second are not reported.
+//! while we are not logged in. Gaps under a second are not reported.
 
 use api_types::live::LiveFrame;
-use api_types::messaging::rooms::{GapReason, HistoryGap};
+use api_types::messaging::rooms::HistoryGap;
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, Row, params};
 use tracing::{debug, warn};
@@ -23,8 +22,6 @@ pub struct Session {
   pub logged_in_at: DateTime<Utc>,
   /// when it ended, `None` while it runs
   pub ended_at: Option<DateTime<Utc>>,
-  /// it ended with the connection while the daemon ran
-  pub disconnected: bool,
 }
 
 fn session(row: &Row) -> rusqlite::Result<Session> {
@@ -32,22 +29,18 @@ fn session(row: &Row) -> rusqlite::Result<Session> {
   Ok(Session {
     logged_in_at: read_timestamp(&row.get::<_, String>(0)?)?,
     ended_at: ended_at.as_deref().map(read_timestamp).transpose()?,
-    disconnected: row.get::<_, Option<String>>(2)?.as_deref() == Some("disconnected"),
   })
 }
 
 /// Closes the session a run that stopped without saying so left open, at the last time it was
-/// seen, as crashed.
+/// seen.
 pub fn close_crashed(conn: &mut Connection) -> rusqlite::Result<()> {
   let closed = conn.execute(
-    "UPDATE sessions SET ended_at = last_seen_at, end_reason = 'crashed' WHERE ended_at IS NULL",
+    "UPDATE sessions SET ended_at = last_seen_at WHERE ended_at IS NULL",
     [],
   )?;
   if closed > 0 {
-    debug!(
-      closed,
-      "session left open by the last run closed as crashed"
-    );
+    debug!(closed, "session left open by the last run closed");
   }
   Ok(())
 }
@@ -55,7 +48,7 @@ pub fn close_crashed(conn: &mut Connection) -> rusqlite::Result<()> {
 /// Every session, by when it started.
 pub fn sessions(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
   conn
-    .prepare_cached("SELECT logged_in_at, ended_at, end_reason FROM sessions ORDER BY id")?
+    .prepare_cached("SELECT logged_in_at, ended_at FROM sessions ORDER BY id")?
     .query_map([], session)?
     .collect()
 }
@@ -67,16 +60,11 @@ pub fn gaps(sessions: &[Session]) -> Vec<HistoryGap> {
     let Some(from) = earlier.ended_at else {
       continue;
     };
-    let reason = if earlier.disconnected {
-      GapReason::Disconnected
-    } else {
-      GapReason::DaemonDown
-    };
     let to = sessions.get(index + 1).map(|later| later.logged_in_at);
     if to.is_some_and(|to| to - from < SHORTEST) {
       continue;
     }
-    gaps.push(HistoryGap { from, to, reason });
+    gaps.push(HistoryGap { from, to });
   }
   gaps
 }
@@ -121,18 +109,17 @@ impl Messaging {
   }
 
   /// The session ended, with the daemon stopping or with the connection.
-  pub(super) async fn session_ended(&self, shutdown: bool) {
+  pub(super) async fn session_ended(&self) {
     let Some(id) = lock(&self.session).take() else {
       return;
     };
-    let reason = if shutdown { "shutdown" } else { "disconnected" };
     let now = Utc::now();
     if let Err(e) = self
       .db
       .write(move |conn| {
         conn.execute(
-          "UPDATE sessions SET ended_at = ?2, last_seen_at = ?2, end_reason = ?3 WHERE id = ?1",
-          params![id, timestamp(now), reason],
+          "UPDATE sessions SET ended_at = ?2, last_seen_at = ?2 WHERE id = ?1",
+          params![id, timestamp(now)],
         )
       })
       .await
@@ -199,22 +186,19 @@ mod tests {
   }
 
   #[test]
-  fn gaps_lie_between_sessions_and_say_whose_doing_they_were() {
+  fn gaps_lie_between_sessions() {
     let sessions = [
       Session {
         logged_in_at: at("2026-10-26T08:00:00Z"),
         ended_at: Some(at("2026-10-26T09:00:00Z")),
-        disconnected: true,
       },
       Session {
         logged_in_at: at("2026-10-26T09:05:00Z"),
         ended_at: Some(at("2026-10-26T10:00:00Z")),
-        disconnected: false,
       },
       Session {
         logged_in_at: at("2026-10-26T10:00:00.500Z"),
         ended_at: Some(at("2026-10-26T11:00:00Z")),
-        disconnected: true,
       },
     ];
     let found = gaps(&sessions);
@@ -224,12 +208,10 @@ mod tests {
         HistoryGap {
           from: at("2026-10-26T09:00:00Z"),
           to: Some(at("2026-10-26T09:05:00Z")),
-          reason: GapReason::Disconnected,
         },
         HistoryGap {
           from: at("2026-10-26T11:00:00Z"),
           to: None,
-          reason: GapReason::Disconnected,
         },
       ],
       "half a second between two sessions is no gap; the last one is still open"
@@ -257,7 +239,6 @@ mod tests {
     let gap = HistoryGap {
       from: at("2026-10-26T11:00:00Z"),
       to: Some(at("2026-10-26T12:00:00Z")),
-      reason: GapReason::Disconnected,
     };
     let oldest = at("2026-10-26T08:00:00Z");
     let meeting = at("2026-10-26T11:00:00Z");

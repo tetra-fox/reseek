@@ -36,8 +36,8 @@ describe("the message list's lines", () => {
     const lines = layout(
       [message(1, "2026-10-26T10:00:00Z"), message(2, "2026-10-26T10:01:00Z")],
       [
-        { from: "2026-10-26T10:02:00Z", to: null, reason: "disconnected" },
-        { from: "2026-10-26T10:00:30Z", to: "2026-10-26T10:00:50Z", reason: "daemonDown" }
+        { from: "2026-10-26T10:02:00Z", to: null },
+        { from: "2026-10-26T10:00:30Z", to: "2026-10-26T10:00:50Z" }
       ],
       null
     );

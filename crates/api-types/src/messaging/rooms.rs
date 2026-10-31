@@ -131,18 +131,9 @@ pub struct RoomInfo {
   pub joined: bool,
 }
 
-/// Why reseek missed a room's messages for a while.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub enum GapReason {
-  /// the daemon ran but was not connected to the Soulseek server
-  Disconnected,
-  /// the daemon was not running
-  DaemonDown,
-}
-
-/// An interval with no room history because reseek was not there to receive messages. The
-/// data of a `rooms.gap` frame, which is sent once logged in again.
+/// An interval with no room history because reseek was disconnected from Soulseek, whether or
+/// not the daemon was running. The data of a `rooms.gap` frame, which is sent once logged in
+/// again.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryGap {
@@ -150,8 +141,6 @@ pub struct HistoryGap {
   pub from: DateTime<Utc>,
   /// when it received again, null while it is still disconnected
   pub to: Option<DateTime<Utc>>,
-  /// why
-  pub reason: GapReason,
 }
 
 fn default_history_limit() -> u32 {

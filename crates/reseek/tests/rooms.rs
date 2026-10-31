@@ -11,7 +11,7 @@ mod support;
 use std::time::{Duration, Instant};
 
 use api_client::Client;
-use api_types::messaging::rooms::{GapReason, RoomHistory, RoomMessagesQuery};
+use api_types::messaging::rooms::{RoomHistory, RoomMessagesQuery};
 use soulseek_proto::RoomType;
 use support::soulfind::{self, User};
 use support::{PATIENCE, daemon, events, logged_in, quiet, signed_in, until};
@@ -110,7 +110,6 @@ async fn a_configured_room_keeps_its_history_and_its_gaps_across_a_restart() {
   );
   assert_eq!(after.gaps.len(), 1, "{:?}", after.gaps);
   let gap = after.gaps[0];
-  assert_eq!(gap.reason, GapReason::DaemonDown);
   assert!(gap.from >= mention.timestamp && gap.to.unwrap() <= after.messages[1].timestamp);
   assert_eq!(
     api.joined_rooms().await.unwrap()[0].unread,
