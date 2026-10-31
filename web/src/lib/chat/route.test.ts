@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { chatHref, roomHref } from "#lib/nav.js";
 
-import { chatTarget } from "./route";
+import { chatTarget, foundHref, resultsHref, searchKind } from "./route";
 
 const path = (link: string) => link.replace(/^#/, "");
 
@@ -12,6 +12,20 @@ describe("chat routes", () => {
     expect(chatTarget("/chat/search")).toBe("search");
     expect(chatTarget("/chat/rooms/indie%20rock")).toEqual({ kind: "room", name: "indie rock" });
     expect(chatTarget("/chat/alice")).toEqual({ kind: "user", name: "alice" });
+  });
+
+  it("carries the search through its results and the chats opened from them", () => {
+    expect(resultsHref("a&b c")).toBe("#/chat/search?q=a%26b%20c");
+    expect(resultsHref("x", "rooms")).toBe("#/chat/search?q=x&in=rooms");
+    expect(foundHref({ kind: "room", name: "indie" }, "x", "all", 12)).toBe(
+      "#/chat/rooms/indie?at=12&q=x"
+    );
+    expect(foundHref({ kind: "user", name: "alice" }, "x", "private")).toBe(
+      "#/chat/alice?q=x&in=private"
+    );
+    expect(searchKind("rooms")).toBe("rooms");
+    expect(searchKind("nonsense")).toBe("all");
+    expect(searchKind(null)).toBe("all");
   });
 
   it("reads nothing from another screen's path, which it sees as the chat screen closes", () => {

@@ -1,7 +1,10 @@
+import { chatHref, href, roomHref } from "#lib/nav.js";
+
 import type { Target } from "./pane.svelte";
+import type { SearchKind } from "./search/match";
 
 /**
- * What a chat route shows, from its path as written: `/chat/search` the message search,
+ * What a chat route shows, from its path as written: `/chat/search` the search results,
  * `/chat/rooms/<room>` a room, `/chat/<user>` a conversation, `/chat` none. The names are read
  * from the written path, so a user called `search` is reached as `/chat/%73earch`. A path outside
  * `/chat` shows none: the chat screen still reads the address for a moment after leaving it
@@ -15,4 +18,21 @@ export const chatTarget = (path: string): Target | "search" | null => {
   }
   if (parts.length === 1) return { kind: "user", name: decodeURIComponent(parts[0]) };
   return null;
+};
+
+/** Which messages the address searches: `in=` when it says, else all of them */
+export const searchKind = (value: string | null): SearchKind =>
+  value === "private" || value === "rooms" ? value : "all";
+
+const searchQuery = (q: string, kind: SearchKind) =>
+  `q=${encodeURIComponent(q)}${kind === "all" ? "" : `&in=${kind}`}`;
+
+/** The link to the search results for `q` */
+export const resultsHref = (q: string, kind: SearchKind = "all") =>
+  href(`/chat/search?${searchQuery(q, kind)}`);
+
+/** The link to a chat opened from the results for `q`, at the message `at` when given */
+export const foundHref = (target: Target, q: string, kind: SearchKind, at?: number) => {
+  const chat = target.kind === "user" ? chatHref(target.name) : roomHref(target.name);
+  return `${chat}?${at === undefined ? "" : `at=${at}&`}${searchQuery(q, kind)}`;
 };
