@@ -121,7 +121,7 @@
         {/if}
         {#if p.pinned}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
         {#each p.tags as tag (tag)}
-          <a href={href(`/users?tag=${encodeURIComponent(tag)}`)}>
+          <a class="inline-flex" href={href(`/users?tag=${encodeURIComponent(tag)}`)}>
             <Badge tone="outline">{tag}</Badge>
           </a>
         {/each}
