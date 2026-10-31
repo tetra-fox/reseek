@@ -115,6 +115,45 @@
     if (!interaction.frozen) held = keys;
   });
 
+  /** the message the arrow keys are on, whose actions show */
+  let active = $state<number | null>(null);
+  /** the message whose menu is open */
+  let menuFor = $state<number | null>(null);
+  // the lines stay as they are while a message's menu hangs from one
+  $effect(() => {
+    if (menuFor !== null) return interaction.hold();
+  });
+
+  /** The arrows walk the messages with an action, from the newest drawn; Enter opens the menu */
+  const keydown = (e: KeyboardEvent) => {
+    if (e.target !== box) return;
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      const indexes = lines.flatMap((line, i) => {
+        return line.kind === "message" && !line.message.hidden ? [i] : [];
+      });
+      const idOf = (i: number) => (lines[i] as Line & { kind: "message" }).message.localId;
+      const at = indexes.findIndex((i) => idOf(i) === active);
+      const from = at === -1 ? indexes.findLastIndex((i) => shown.isDrawn(i)) : at;
+      const step = at === -1 ? 0 : e.key === "ArrowUp" ? -1 : 1;
+      const to = indexes[Math.min(Math.max(from + step, 0), indexes.length - 1)];
+      if (to === undefined) return;
+      active = idOf(to);
+      shown.scrollTo(to);
+    } else if (e.key === "Escape") {
+      active = null;
+    } else if (active !== null) {
+      if (e.key !== "Enter" && e.key !== "ContextMenu" && !(e.key === "F10" && e.shiftKey)) return;
+      e.preventDefault();
+      menuFor = active;
+    }
+  };
+
+  /** Focus left the list, not for a control of the active message: the keys are off it */
+  const focusout = (e: FocusEvent) => {
+    if (menuFor === null && !box?.contains(e.relatedTarget as Node | null)) active = null;
+  };
+
   /** Reads whether the view is at the bottom */
   const seen = () => {
     if (box) atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < NEAR;
@@ -241,13 +280,20 @@
 <svelte:window onpointerup={() => (gripped = false)} onpointercancel={() => (gripped = false)} />
 
 <div class="relative flex min-h-0 flex-1 flex-col">
+  <!-- a log takes focus: it scrolls, and the arrow keys walk its messages from there -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
     bind:this={box}
-    class="relative min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
+    class="relative min-h-0 flex-1 overflow-y-auto outline-none [overflow-anchor:none] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
     role="log"
     aria-live="polite"
+    aria-label="Messages"
+    aria-keyshortcuts="ArrowUp ArrowDown Enter"
+    tabindex="0"
     onscroll={scrolled}
     onpointerdown={grip}
+    onkeydown={keydown}
+    onfocusout={focusout}
     {@attach shown.attach}
     {@attach followsEnd}
     {@attach freezesWhileUsed}>
@@ -282,6 +328,13 @@
               {watch}
               room={pane.target.kind === "room"}
               notice={notices}
+              active={line.message.localId === active}
+              menu={line.message.localId === menuFor}
+              onmenu={(open) => {
+                menuFor = open ? line.message.localId : null;
+                // the keys go on where the menu was opened from, the row itself having no focus
+                if (!open && active !== null) box?.focus({ preventScroll: true });
+              }}
               {onreply}
               onretry={() => void pane.retry(line.message)} />
           {/if}

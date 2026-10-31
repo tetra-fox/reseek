@@ -35,6 +35,9 @@ describe("a message", () => {
         highlight: false,
         watch: ["me"],
         room: true,
+        active: false,
+        menu: false,
+        onmenu: () => {},
         onretry: () => {}
       }
     });

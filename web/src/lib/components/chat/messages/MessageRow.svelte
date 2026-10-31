@@ -1,19 +1,24 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import ClockIcon from "@lucide/svelte/icons/clock";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import ReplyIcon from "@lucide/svelte/icons/reply";
+  import type { Component } from "svelte";
 
   import { LONG, type Message } from "#lib/chat/messages/messages.js";
   import { actionOf } from "#lib/chat/messages/rich.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import * as Menu from "#lib/components/ui/menu/menu.js";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import Avatar from "#lib/components/users/Avatar.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { chatTime, formatDate, shortTime } from "#lib/format.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { inControl } from "#lib/ui/keys.js";
   import { reach } from "#lib/users/actions.js";
   import { nameColor } from "#lib/users/colors.js";
+  import { LONG_PRESS_MS } from "#lib/users/hover.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
   import ChatText from "./ChatText.svelte";
@@ -30,6 +35,12 @@
     room: boolean;
     /** a notice from the server: the time and the text, with nothing that belongs to a person */
     notice?: boolean;
+    /** the keys are on it, so its actions show and Tab reaches them */
+    active: boolean;
+    /** its menu is open */
+    menu: boolean;
+    /** opens or closes its menu */
+    onmenu: (open: boolean) => void;
     /** quotes the message in the composer, when one can be sent */
     onreply?: (message: Message) => void;
     onretry: () => void;
@@ -42,6 +53,9 @@
     watch,
     room,
     notice = false,
+    active,
+    menu,
+    onmenu,
     onreply,
     onretry
   }: Props = $props();
@@ -51,6 +65,43 @@
   const long = $derived(m.text.length > LONG && !unfolded);
   const action = $derived(notice ? null : actionOf(m.text));
   const text = $derived(action ?? m.text);
+
+  /** What can be done with the message, on its toolbar and in its menu */
+  const actions = $derived.by(
+    (): { label: string; icon: Component; run?: () => void; href?: string }[] => {
+      if (m.hidden || m.sending !== undefined) return [];
+      return [
+        ...(onreply
+          ? [{ label: "Reply with a quote", icon: ReplyIcon, run: () => onreply(m) }]
+          : []),
+        { label: "Copy the text", icon: CopyIcon, run: () => void copyText(m.text) },
+        ...(room && !m.self
+          ? reach(m.author, { only: ["message"] }).map((reached) => ({
+              label: reached.of(m.author),
+              icon: reached.icon,
+              href: reached.href
+            }))
+          : [])
+      ];
+    }
+  );
+
+  let row = $state<HTMLElement | null>(null);
+  let press: ReturnType<typeof setTimeout> | undefined;
+  const released = () => clearTimeout(press);
+  $effect(() => released);
+  /** A touch held on the message opens its menu, there being no hover to show the toolbar */
+  const pressed = (e: PointerEvent) => {
+    if (e.pointerType !== "touch" || inControl(e) || !actions.length) return;
+    press = setTimeout(() => onmenu(true), LONG_PRESS_MS);
+  };
+  /** A right click opens the menu, but the browser's own stays for a link or selected text */
+  const contextmenu = (e: MouseEvent) => {
+    const link = e.target instanceof Element && e.target.closest("a");
+    if (link || !document.getSelection()?.isCollapsed || !actions.length) return;
+    e.preventDefault();
+    onmenu(true);
+  };
 </script>
 
 {#snippet body()}
@@ -65,6 +116,12 @@
 {/snippet}
 
 <div
+  bind:this={row}
+  role="article"
+  onpointerdown={pressed}
+  onpointerup={released}
+  onpointercancel={released}
+  oncontextmenu={contextmenu}
   class={[
     "group/message relative grid gap-x-2.5 border-l-2 pr-3 pl-2.5",
     notice ? "grid-cols-[4rem_minmax(0,1fr)]" : "grid-cols-[2.25rem_minmax(0,1fr)]",
@@ -75,7 +132,8 @@
         ? "border-accent"
         : "border-transparent",
     !m.mention && "hover:bg-hover/60",
-    highlight && "bg-accent-soft/50 ring-1 ring-accent/50 ring-inset"
+    highlight && "bg-accent-soft/50 ring-1 ring-accent/50 ring-inset",
+    active && "bg-hover/60 ring-2 ring-accent ring-inset"
   ]}
   data-message={m.localId}>
   <div class="flex justify-end">
@@ -139,34 +197,34 @@
       </span>
     {/if}
   </div>
-  {#if !m.hidden && m.sending === undefined}
-    <!-- what can be done with the message, shown over its top right corner on hover -->
+  {#if actions.length}
+    <!-- over the message's top right corner on hover, or while the keys are on it. Every action
+         is also in the menu, which a touch reaches with a long press -->
     <div
-      class="absolute -top-3 right-3 z-10 hidden items-center rounded-control border bg-overlay p-0.5 shadow-raised group-focus-within/message:flex group-hover/message:flex">
-      {#if onreply}
+      class={[
+        "absolute -top-3 right-3 z-10 items-center rounded-control border bg-overlay p-0.5 shadow-raised group-focus-within/message:flex group-hover/message:flex",
+        active ? "flex" : "hidden"
+      ]}>
+      {#each actions as action (action.label)}
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Reply with a quote"
-          title="Reply with a quote"
-          onclick={() => onreply(m)}><ReplyIcon /></Button>
-      {/if}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Copy the text"
-        title="Copy the text"
-        onclick={() => void copyText(m.text)}><CopyIcon /></Button>
-      {#if room && !m.self}
-        {#each reach(m.author, { only: ["message"] }) as action (action.id)}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            href={action.href}
-            aria-label={action.of(m.author)}
-            title={action.of(m.author)}><action.icon /></Button>
-        {/each}
-      {/if}
+          href={action.href}
+          aria-label={action.label}
+          title={action.label}
+          onclick={action.run}><action.icon /></Button>
+      {/each}
     </div>
+  {/if}
+  {#if menu}
+    <Menu.Root open onOpenChange={onmenu}>
+      <Menu.Content align="end" customAnchor={row}>
+        {#each actions as action (action.label)}
+          <Menu.Item onSelect={action.run ?? (() => void goto(action.href ?? ""))}>
+            <action.icon />{action.label}
+          </Menu.Item>
+        {/each}
+      </Menu.Content>
+    </Menu.Root>
   {/if}
 </div>

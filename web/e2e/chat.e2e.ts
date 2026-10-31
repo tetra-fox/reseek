@@ -193,6 +193,27 @@ test("a busy room's comings and goings stay out of its messages", async ({ page 
   await expect(log).not.toContainText(" left");
 });
 
+test("the keys reach what can be done with a message", async ({ page }) => {
+  await fakeChat(page);
+  await login(page, "/chat");
+  await page.goto("./#/chat/rooms/indie");
+  const log = page.getByRole("log");
+  await expect(log.getByText("anyone have the new boards of canada rip?")).toBeVisible();
+  const copy = log.getByRole("button", { name: "Copy the text" });
+  await expect(copy).toBeHidden();
+  await log.focus();
+  await page.keyboard.press("ArrowUp");
+  // the message the keys are on shows its toolbar, one Tab away
+  await expect(copy).toHaveCount(1);
+  await expect(copy).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menuitem", { name: "Copy the text" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(log).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(log.locator("[data-message] :focus")).toHaveCount(1);
+});
+
 test("a private message stays on one line", async ({ page }) => {
   await fakeConnected(page);
   await fakeChat(page);
