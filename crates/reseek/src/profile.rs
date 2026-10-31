@@ -14,7 +14,13 @@ pub const LONGEST_SIDE: u32 = 512;
 /// The largest upload taken, in bytes.
 pub const MAX_UPLOAD: usize = 1024 * 1024;
 /// The media types an upload may be sent as.
-pub const UPLOAD_TYPES: &[&str] = &["image/jpeg", "image/png", "image/gif", "image/webp"];
+pub const UPLOAD_TYPES: &[&str] = &[
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/bmp",
+];
 
 /// The JPEG quality a picture is kept at.
 const QUALITY: u8 = 85;
@@ -32,15 +38,15 @@ pub fn stored_path(data: &Path) -> PathBuf {
 /// Why an upload could not be made into a picture.
 #[derive(Debug, thiserror::Error)]
 pub enum PictureError {
-  /// the bytes are no JPEG, PNG, GIF or WebP image
-  #[error("not a JPEG, PNG, GIF or WebP image")]
+  /// the bytes are no JPEG, PNG, GIF, WebP or BMP image
+  #[error("not a JPEG, PNG, GIF, WebP or BMP image")]
   Format,
   /// the image does not decode within the limits, or does not encode
   #[error("{0}")]
   Image(#[from] image::ImageError),
 }
 
-/// `bytes`, a JPEG, PNG, GIF or WebP image, as a JPEG at most [`LONGEST_SIDE`] pixels on its
+/// `bytes`, a JPEG, PNG, GIF, WebP or BMP image, as a JPEG at most [`LONGEST_SIDE`] pixels on its
 /// longest side. Transparent parts are made white, since a JPEG has no transparency; a GIF
 /// gives its first frame. Decoding and encoding take a while, so this is run off the runtime.
 pub fn reencode(bytes: &[u8]) -> Result<Vec<u8>, PictureError> {
@@ -52,6 +58,7 @@ pub fn reencode(bytes: &[u8]) -> Result<Vec<u8>, PictureError> {
     ImageFormat::Png,
     ImageFormat::Gif,
     ImageFormat::WebP,
+    ImageFormat::Bmp,
   ];
   if !reader.format().is_some_and(|f| accepted.contains(&f)) {
     return Err(PictureError::Format);
@@ -108,6 +115,15 @@ mod tests {
     assert_eq!((picture.width(), picture.height()), (40, 20));
     let [r, g, b] = picture.to_rgb8().get_pixel(10, 10).0;
     assert!(r > 245 && g > 245 && b > 245, "{r} {g} {b}");
+  }
+
+  #[test]
+  fn a_bmp_becomes_a_jpeg() {
+    let source = image::load_from_memory(&png(16, 8, Rgba([200, 30, 30, 255]))).unwrap();
+    let mut bmp = Cursor::new(Vec::new());
+    source.write_to(&mut bmp, ImageFormat::Bmp).unwrap();
+    let picture = decoded(&reencode(bmp.get_ref()).unwrap());
+    assert_eq!((picture.width(), picture.height()), (16, 8));
   }
 
   #[test]
