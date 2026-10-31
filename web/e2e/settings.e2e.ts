@@ -66,3 +66,15 @@ test("finds options by search, follows the section in view and gathers unsaved c
   await bar.getByRole("button", { name: "Discard all" }).click();
   await expect(bar).toBeHidden();
 });
+
+test("says what auto stands for while the option holds it", async ({ page }) => {
+  await login(page, "/system/settings");
+  const workers = page.locator('[id="analysis.workers"]');
+  const count = page.locator("#analysis").getByText(/^\d+ files? at once$/);
+  await expect(workers).toHaveValue("auto");
+  await expect(count).toBeVisible();
+  await workers.fill("3");
+  await expect(count).toBeHidden();
+  await workers.fill("AUTO");
+  await expect(count).toBeVisible();
+});
