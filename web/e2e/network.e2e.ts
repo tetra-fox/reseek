@@ -28,6 +28,42 @@ const connected = async (page: Page) => {
   return answer.ok() && (await answer.json()).server.isLoggedIn === true;
 };
 
+test("the server's answer to adding a member shows once, and stays under Server", async ({
+  page
+}) => {
+  await login(page, "/chat");
+  test.skip(!(await connected(page)), "no soulfind and soulseek-rs: the daemon is not connected");
+  await expect.poll(() => peerOnline(page), { timeout: 30_000 }).toBe(true);
+  const room = "smoke_private";
+  const created = await page.request.post("api/v0/rooms/joined", {
+    data: { name: room, private: true },
+    headers: { Origin: new URL(page.url()).origin }
+  });
+  expect(created.status(), await created.text()).toBeLessThan(300);
+
+  await page.goto(`./#/chat/rooms/${room}`);
+  await page.getByRole("textbox", { name: "Username to add" }).fill(PEER);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const answer = page.getByText(/^Soulseek server: /);
+  await expect(answer).toHaveCount(1);
+  await expect(page.getByText("New message from server")).toHaveCount(0);
+
+  const entry = page.getByRole("row", { name: /^Server/ });
+  await expect(entry).toBeVisible();
+  await page.reload();
+  await entry.click();
+  await expect(page).toHaveURL(/#\/chat\/server$/);
+  await expect(page.getByRole("log").locator("[data-message]")).not.toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Message" })).toHaveCount(0);
+  await expect(page.getByRole("row", { name: /^server/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Server notices menu" }).click();
+  await page.getByRole("menuitem", { name: "Clear history" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+  await expect(entry).toHaveCount(0);
+});
+
 test("looks up a user the server has, and says so of one it does not", async ({ page }) => {
   await login(page, "/users");
   test.skip(!(await connected(page)), "no soulfind and soulseek-rs: the daemon is not connected");

@@ -47,7 +47,7 @@ export const fakeConnected = async (page: Page) => {
 
 const MEMBERS = ["alice", "bob", "carol", "dave", "erin", "frank", "grace", "heidi"];
 
-/** Answers the chat calls with one room, "indie", and one conversation, with "alice" */
+/** Answers the chat calls with one room, "indie", one conversation, with "alice", and two notices */
 export const fakeChat = async (page: Page) => {
   const said: [string, string][] = [
     ["alice", "anyone have the new boards of canada rip?"],
@@ -122,10 +122,36 @@ export const fakeChat = async (page: Page) => {
     lastMessage: null,
     messages: null
   };
+  const notices = [
+    "user portapuppy hasn't enabled private room add. please message them and ask them to do so before trying to add them again.",
+    "User portapuppy is now a member of room reseek_private_test"
+  ].map((message, n) => ({
+    localId: n + 1,
+    id: n + 1,
+    timestamp: at(20 + n),
+    username: "server",
+    direction: "In",
+    message,
+    isAcknowledged: true,
+    wasReplayed: false
+  }));
   await page.route("**/api/v0/conversations**", (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith("/api/v0/conversations"))
       return route.fulfill({ json: [conversation] });
+    if (url.pathname.endsWith("/conversations/server/messages")) {
+      return route.fulfill({ json: notices });
+    }
+    if (url.pathname.endsWith("/conversations/server")) {
+      return route.fulfill({
+        json: {
+          ...conversation,
+          username: "server",
+          isServerNotice: true,
+          lastMessage: notices.at(-1)
+        }
+      });
+    }
     if (url.pathname.endsWith("/messages")) {
       return route.fulfill({
         json: [

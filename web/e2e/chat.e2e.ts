@@ -61,6 +61,46 @@ test("a room reads like a chat: names, actions, links and the wall", async ({ pa
   await page.keyboard.press("Escape");
 });
 
+test("the server's notices are one read-only entry, reached by the keys", async ({ page }) => {
+  await fakeChat(page);
+  await login(page, "/chat");
+  const list = page.getByRole("grid", { name: "Rooms and conversations" });
+  const lines = list.locator("[data-line]");
+  await expect(lines.last()).toHaveAttribute("data-line", "user:server");
+  await expect(lines.nth(-2)).toContainText("Notices");
+  await expect(lines.last().getByRole("link")).toHaveCount(0);
+  await lines.last().getByRole("button", { name: "Menu for Server" }).focus();
+  await page.keyboard.press("Enter");
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    "Export as text",
+    "Export as JSON",
+    "Clear history"
+  ]);
+  await page.keyboard.press("Escape");
+
+  await list.focus();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/chat\/server$/);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Server");
+  await expect(page.getByRole("heading", { name: "Server" })).toBeVisible();
+  const log = page.getByRole("log");
+  await expect(log.getByText("is now a member of room")).toBeVisible();
+  await expect(log.getByRole("link")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Message" })).toHaveCount(0);
+  await expect(log.locator("[data-message]").first().locator("time")).toBeVisible();
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/notices.png` });
+
+  // the reserved name is offered as nothing a user could be
+  const search = page.getByRole("combobox", { name: "Search chats" });
+  await search.fill("server");
+  await expect(page.getByRole("option", { name: "Join room server" })).toBeVisible();
+  await expect(page.getByRole("option", { name: /Start a conversation/ })).toHaveCount(0);
+  await page.goto("./#/users/server");
+  await expect(page).toHaveURL(/#\/chat\/server$/);
+});
+
 test("a busy room's comings and goings stay out of its messages", async ({ page }) => {
   await fakeChat(page);
   // the first stream that carries the room's frames is a burst of 120 members joining and
