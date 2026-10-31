@@ -9,6 +9,7 @@
 
   import { app } from "#lib/app.svelte.js";
   import { chat, paneKey } from "#lib/chat/chat.svelte.js";
+  import { columns } from "#lib/chat/columns.svelte.js";
   import type { Message } from "#lib/chat/messages/messages.js";
   import { chatName, isNotices } from "#lib/chat/notices.js";
   import { MessagePane, type Target } from "#lib/chat/pane.svelte.js";
@@ -22,6 +23,7 @@
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
   import Scrim from "#lib/components/ui/Scrim.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Presence from "#lib/components/users/Presence.svelte";
@@ -99,6 +101,11 @@
   });
   // the side panel sits beside the messages on a wide screen and in a sheet on a phone
   let sheet = $state(false);
+  const sideShown = $derived(!!members && joined && !viewport.phone && layout.users);
+  $effect(() => {
+    columns.sideShown = sideShown;
+    return () => (columns.sideShown = false);
+  });
 
   let composer = $state<Composer | null>(null);
   const reply = (message: Message) => composer?.quote(message);
@@ -249,9 +256,19 @@
         <Composer bind:this={composer} {pane} {disabled} {names} />
       {/if}
     </div>
-    {#if members && joined && !viewport.phone && layout.users}
+    {#if members && sideShown}
       <!-- the side panel scrolls inside its own column, never past the pane -->
-      <div class="flex min-h-0 w-64 shrink-0 flex-col border-l">
+      {@const { width, min, max, initial } = columns.sideColumn}
+      <div class="relative flex min-h-0 shrink-0 flex-col border-l" style:width={`${width}px`}>
+        <ResizeHandle
+          bind:value={() => width, (w) => (columns.side = w)}
+          {min}
+          {max}
+          {initial}
+          edge="left"
+          label="Width of the side panel"
+          onchange={(w) => (layout.sideWidth = w)}
+          class="absolute inset-y-0 -left-1 z-10 w-2" />
         {@render side(members)}
       </div>
     {/if}

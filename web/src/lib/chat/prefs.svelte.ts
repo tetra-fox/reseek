@@ -18,16 +18,22 @@ export const SIDE_TABS = [
 
 export type SideTab = (typeof SIDE_TABS)[number]["id"];
 
+/** A column's width as `saved` holds it, null while it has not been dragged */
+const width = (saved: unknown) => (typeof saved === "number" && saved > 0 ? saved : null);
+
 /**
  * How the chat page is laid out in this browser: whether a room's side panel shows on a wide
  * screen, which of its tabs is open (one choice for every room, as a way of working rather than
- * a fact about a room), and whether `:name` offers emoji
+ * a fact about a room), the widths the chat list and the side panel were dragged to, and whether
+ * `:name` offers emoji
  */
 export const chatLayout = stored("reseek.chat.layout", (saved) => {
   const s = fields(saved);
   return {
     users: s.users !== false,
     side: (SIDE_TABS.find((t) => t.id === s.side)?.id ?? "users") as SideTab,
+    listWidth: width(s.listWidth),
+    sideWidth: width(s.sideWidth),
     emoji: s.emoji !== false
   };
 });
