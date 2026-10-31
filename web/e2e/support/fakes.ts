@@ -678,13 +678,10 @@ type BatchFile =
   | { kind: "file"; root: string; path: string }
   | { kind: "download"; username: string; id: string };
 
-/**
- * Answers the batch analysis call: `each` says what became of each file it names, in order;
- * nothing follows past the queue's limit
- */
+/** Answers the batch analysis call: `each` says what became of each file it names, in order */
 export const fakeBatch = async (
   page: Page,
-  each: (file: BatchFile) => "queued" | "current" | "refused"
+  each: (file: BatchFile) => "queued" | "following" | "current" | "refused"
 ) => {
   await page.route("**/api/v0/analysis/batch", (route) => {
     const { files } = route.request().postDataJSON() as { files: BatchFile[] };
