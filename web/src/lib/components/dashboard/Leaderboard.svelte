@@ -1,7 +1,6 @@
 <script lang="ts">
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import DownloadIcon from "@lucide/svelte/icons/download";
-  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import UploadIcon from "@lucide/svelte/icons/upload";
   import { untrack } from "svelte";
 
@@ -12,7 +11,7 @@
   import Username from "#lib/components/users/Username.svelte";
   import { type RangeLabel, reports, type Window } from "#lib/dashboard/reports.js";
   import { columnWidth, formatBytes, formatSpeed, plural, WIDEST } from "#lib/format.js";
-  import { links } from "#lib/users/actions.js";
+  import { reach, USER_ACTIONS } from "#lib/users/actions.js";
 
   // who moved the most with us each way, by count, bytes or speed
   let { span, range }: { span: Window; range: RangeLabel } = $props();
@@ -114,7 +113,7 @@
       <table class="w-full table-fixed text-sm tabular-nums">
         <!-- the widths are set here, where the font is the cells', so a width in ch is theirs and
              not the smaller header's; a phone leaves out the speed and the browse button, the
-             name's menu having Browse, so the name keeps room -->
+             name's menu having Browse shares, so the name keeps room -->
         <colgroup>
           <col class="w-6" />
           <col />
@@ -146,7 +145,7 @@
                 </button>
               </th>
             {/each}
-            <th class="max-md:hidden"><span class="sr-only">Browse</span></th>
+            <th class="max-md:hidden"><span class="sr-only">{USER_ACTIONS.shares.label}</span></th>
           </tr>
         </thead>
         <tbody>
@@ -169,11 +168,14 @@
                   ]}>{c.value(entry)}</td>
               {/each}
               <td class="py-0.5 max-md:hidden">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  href={links(entry.username).browse}
-                  aria-label={`Browse ${entry.username}`}><FolderOpenIcon /></Button>
+                {#each reach(entry.username, { only: ["shares"] }) as action (action.id)}
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    href={action.href}
+                    aria-label={action.of(entry.username)}
+                    title={action.of(entry.username)}><action.icon /></Button>
+                {/each}
               </td>
             </tr>
           {:else}
