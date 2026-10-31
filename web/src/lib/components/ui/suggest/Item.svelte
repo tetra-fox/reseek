@@ -21,7 +21,8 @@
 </script>
 
 <!-- the highlight is what Enter takes, so only the keys move it; the pointer gets a tint of its
-     own, and stopping its move here keeps bits-ui from moving the highlight along with it -->
+     own, and stopping its move here keeps bits-ui from moving the highlight along with it. The two
+     can sit on neighboring entries, so the tints stop short of the entry's edges -->
 <Combobox.Item
   {value}
   {disabled}
@@ -31,7 +32,7 @@
   }}
   onpointermove={(e) => e.preventDefault()}
   class={cn(
-    "flex items-center gap-2 rounded-badge px-2 py-1 text-sm not-data-disabled:hover:bg-hover/60 data-highlighted:bg-hover data-highlighted:not-data-disabled:hover:bg-hover",
+    "flex min-h-control-sm items-center gap-2 rounded-badge border-y border-transparent bg-clip-padding px-2 py-0.5 text-sm not-data-disabled:hover:bg-hover/60 data-highlighted:bg-hover data-highlighted:not-data-disabled:hover:bg-hover",
     className
   )}>
   {#if Icon}
