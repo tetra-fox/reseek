@@ -157,7 +157,7 @@ export const columnsFor = (direction: Direction) =>
  */
 export const PHONE_COLUMNS: Partial<Record<ColumnId, string>> = {
   file: "0rem",
-  actions: "2.5rem"
+  actions: "2.75rem"
 };
 
 /** A grid template of the columns `ids`, each at its default width, the file taking the rest */
