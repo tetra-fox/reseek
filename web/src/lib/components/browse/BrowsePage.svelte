@@ -51,7 +51,6 @@
     treeLines
   } from "#lib/tree/folders.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
-  import { reach } from "#lib/users/actions.js";
 
   type Props = {
     /** whose shares these are */
@@ -315,15 +314,9 @@
               : ""}
           </span>
         {/if}
-        <span class="ml-auto flex flex-wrap items-center gap-inline">
-          <Button variant="ghost" size="sm" onclick={() => void browser.browse(user)}>
-            <RefreshCwIcon />Browse again
-          </Button>
-          {#each reach(user, { only: ["search"] }) as action (action.id)}
-            <Button variant="ghost" size="sm" href={action.href}
-              ><action.icon />{action.label}</Button>
-          {/each}
-        </span>
+        <Button variant="ghost" size="sm" class="ml-auto" onclick={() => void browser.browse(user)}>
+          <RefreshCwIcon />Browse again
+        </Button>
       </header>
       <div class="flex flex-wrap items-center gap-inline px-4 py-3">
         <div class="min-w-48 flex-1">
