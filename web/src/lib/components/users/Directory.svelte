@@ -6,7 +6,6 @@
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import MessageSquareIcon from "@lucide/svelte/icons/message-square";
-  import SearchIcon from "@lucide/svelte/icons/search";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
   import UserCheckIcon from "@lucide/svelte/icons/user-check";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
@@ -20,7 +19,6 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
-  import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
@@ -46,6 +44,7 @@
   import GroupDialog from "./GroupDialog.svelte";
   import Presence from "./Presence.svelte";
   import Username from "./Username.svelte";
+  import UserSearch from "./UserSearch.svelte";
 
   type Props = {
     /** the tag the list starts filtered by, from the link that opened it */
@@ -67,7 +66,6 @@
   let wanted = $state(PAGE);
   let loaded = $state(false);
   let error = $state("");
-  let typed = $state("");
   let q = $state("");
   let blocked = $state(false);
   let pinned = $state(false);
@@ -82,16 +80,6 @@
     order: "desc"
   });
   let assigning = $state(false);
-
-  $effect(() => {
-    const value = typed.trim();
-    const timer = setTimeout(() => {
-      if (value === q) return;
-      q = value;
-      wanted = PAGE;
-    }, 200);
-    return () => clearTimeout(timer);
-  });
 
   const query = $derived({
     q: q || undefined,
@@ -186,6 +174,9 @@
     change();
     wanted = PAGE;
   };
+  const search = (text: string) => {
+    if (text !== q) refilter(() => (q = text));
+  };
 
   const togglePin = async (u: UserSummary) => {
     const outcome = await pin(u.username, !u.pinned);
@@ -211,13 +202,7 @@
 {/snippet}
 
 <div class="flex flex-wrap items-center gap-inline">
-  <Input
-    icon={SearchIcon}
-    wrapperClass="w-full max-w-xs"
-    type="search"
-    placeholder="Username, tag or note"
-    aria-label="Search users"
-    bind:value={typed} />
+  <UserSearch onsearch={search} />
   <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Filters">
     {#each [{ label: "Blocked", on: blocked, set: (v: boolean) => (blocked = v) }, { label: BUDDY.plural, on: pinned, set: (v: boolean) => (pinned = v) }, { label: "Has transfers", on: hasTransfers, set: (v: boolean) => (hasTransfers = v) }] as chip (chip.label)}
       <Button
