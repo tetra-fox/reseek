@@ -7,6 +7,7 @@ on: pull_request
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   merge:
@@ -20,7 +21,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - if: steps.bump.outputs.update-type != 'version-update:semver-major'
-        uses: cachix/install-nix-action@v31
+        uses: ./.github/actions/setup-nix
       # the hash of the web dependencies follows the lockfile; nix reports it when it is empty
       - name: Update the web dependency hash
         if: steps.bump.outputs.update-type != 'version-update:semver-major' && steps.bump.outputs.package-ecosystem == 'npm_and_yarn'

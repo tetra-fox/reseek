@@ -6,8 +6,12 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+  actions: write
+
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -19,13 +23,9 @@ jobs:
       CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@v7
-      - uses: cachix/install-nix-action@v31
-      - uses: actions/cache@v6
+      - uses: ./.github/actions/setup-nix
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
-          restore-keys: cargo-${{ runner.os }}-
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
       - run: nix develop -c just ci
