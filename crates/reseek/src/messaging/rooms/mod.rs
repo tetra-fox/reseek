@@ -339,6 +339,7 @@ impl Messaging {
       .ok_or_else(|| not_in(name))?;
     let query = RoomMessagesQuery {
       before: None,
+      after: None,
       limit: LATEST,
       include_hidden: false,
     };

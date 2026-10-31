@@ -239,7 +239,7 @@ impl Messaging {
           return Ok(None);
         };
         if include_messages {
-          conversation.messages = Some(store::messages(conn, &name, None, WINDOW, false)?);
+          conversation.messages = Some(store::messages(conn, &name, None, None, WINDOW, false)?);
         }
         Ok(Some(conversation))
       })
@@ -264,6 +264,7 @@ impl Messaging {
           conn,
           &name,
           query.before,
+          query.after,
           query.limit,
           query.un_acknowledged_only,
         )?;

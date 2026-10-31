@@ -123,6 +123,9 @@ pub struct ConversationMessagesQuery {
   pub un_acknowledged_only: bool,
   /// only messages stored before the one with this `localId`, the newest when left out
   pub before: Option<i64>,
+  /// only messages stored after the one with this `localId`, the page then holding the oldest
+  /// of them
+  pub after: Option<i64>,
   /// how many messages to return, at most 1000
   #[serde(default = "default_message_limit")]
   #[param(default = 100, maximum = 1000)]

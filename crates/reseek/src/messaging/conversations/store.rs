@@ -303,12 +303,14 @@ pub fn list(
     .collect()
 }
 
-/// A page of the messages with `username`, oldest first: the newest `limit` before the message
-/// `before` when given, else the newest, only the unacknowledged ones with `unacknowledged`.
+/// A page of the messages with `username`, oldest first: the oldest `limit` after the message
+/// `after` when given, else the newest `limit` before the message `before` when given, else the
+/// newest, only the unacknowledged ones with `unacknowledged`.
 pub fn messages(
   conn: &Connection,
   username: &str,
   before: Option<i64>,
+  after: Option<i64>,
   limit: u32,
   unacknowledged: bool,
 ) -> rusqlite::Result<Vec<PrivateMessage>> {
@@ -318,18 +320,25 @@ pub fn messages(
     values.push(Value::Integer(before));
     filter.push_str(&format!(" AND local_id < ?{}", values.len()));
   }
+  if let Some(after) = after {
+    values.push(Value::Integer(after));
+    filter.push_str(&format!(" AND local_id > ?{}", values.len()));
+  }
   if unacknowledged {
     filter.push_str(" AND direction = 1 AND is_acknowledged = 0");
   }
   values.push(Value::Integer(i64::from(limit)));
+  let order = if after.is_some() { "ASC" } else { "DESC" };
   let mut page: Vec<PrivateMessage> = conn
     .prepare(&format!(
-      "SELECT {MESSAGE} FROM private_messages WHERE {filter} ORDER BY local_id DESC LIMIT ?{}",
+      "SELECT {MESSAGE} FROM private_messages WHERE {filter} ORDER BY local_id {order} LIMIT ?{}",
       values.len()
     ))?
     .query_map(params_from_iter(&values), message)?
     .collect::<rusqlite::Result<_>>()?;
-  page.reverse();
+  if after.is_none() {
+    page.reverse();
+  }
   Ok(page)
 }
 
@@ -547,6 +556,25 @@ mod tests {
     );
     assert!(listed[1].last_message.is_none(), "bob has none");
     assert_eq!(listed[0].un_acknowledged_message_count, 1);
+  }
+
+  #[tokio::test]
+  async fn a_page_after_a_message_holds_the_oldest_past_it_in_order() {
+    let db = Database::memory(&crate::messaging::SCHEMA).await;
+    let (ids, page) = db
+      .write(|conn| {
+        let now = Utc::now();
+        activate(conn, "alice", now)?;
+        let ids = (0..4)
+          .map(|n| Ok(sent(conn, "alice", &format!("line {n}"), now)?.local_id))
+          .collect::<rusqlite::Result<Vec<_>>>()?;
+        let page = messages(conn, "alice", None, Some(ids[0]), 2, false)?;
+        Ok((ids, page))
+      })
+      .await
+      .unwrap();
+    let read: Vec<_> = page.iter().map(|m| m.local_id).collect();
+    assert_eq!(read, ids[1..3]);
   }
 
   #[tokio::test]

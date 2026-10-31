@@ -166,6 +166,8 @@ fn default_history_limit() -> u32 {
 pub struct RoomMessagesQuery {
   /// only messages before the one with this `localId`, the newest when left out
   pub before: Option<i64>,
+  /// only messages after the one with this `localId`, the page then holding the oldest of them
+  pub after: Option<i64>,
   /// how many messages to return, at most 500
   #[serde(default = "default_history_limit")]
   #[param(default = 100, maximum = 500)]
@@ -181,7 +183,7 @@ pub struct RoomMessagesQuery {
 pub struct RoomHistory {
   /// the messages, oldest first
   pub messages: Vec<RoomMessage>,
-  /// older messages exist
+  /// older messages exist, or with `after` newer ones
   pub has_more: bool,
   /// the intervals without history between the page's first message and its last, or now on
   /// the newest page, oldest first

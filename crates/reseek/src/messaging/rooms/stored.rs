@@ -14,9 +14,9 @@ use crate::messaging::{Messaging, export, sessions};
 
 impl Messaging {
   /// A page of `room`'s stored history, with the gaps from its first message to the message
-  /// its `before` cursor names, which starts the next newer page, so a gap between two pages is
-  /// on the older one. The newest page's gaps run to now while we are in the room, and once we
-  /// left it to when we left, or to its last message when that is not noted.
+  /// that starts the next newer page, so a gap between two pages is on the older one. The newest
+  /// page's gaps run to now while we are in the room, and once we left it to when we left, or to
+  /// its last message when that is not noted.
   async fn history_page(
     &self,
     room: &str,
@@ -28,8 +28,12 @@ impl Messaging {
       .db
       .read(move |conn| {
         let (messages, has_more) = history::page(conn, &room_name, &query)?;
-        let cursor = match query.before {
-          Some(before) => history::arrived_from(conn, &room_name, before)?,
+        let next_page = match query.after {
+          Some(_) => messages.last().map(|last| last.local_id + 1),
+          None => query.before,
+        };
+        let cursor = match next_page {
+          Some(id) => history::arrived_from(conn, &room_name, id)?,
           None => None,
         };
         // a cursor past every stored message ends the page as the newest page ends
@@ -74,7 +78,8 @@ impl Messaging {
     query: RoomMessagesQuery,
   ) -> Result<RoomHistory, ApiError> {
     let page = self.history_page(room, query).await?;
-    if page.messages.is_empty() && query.before.is_none() && self.tracks(room).is_err() {
+    let from_newest = query.before.is_none() && query.after.is_none();
+    if page.messages.is_empty() && from_newest && self.tracks(room).is_err() {
       return Err(ApiError::not_found(format!(
         "No messages of the room {room} are stored"
       )));
@@ -186,6 +191,7 @@ mod tests {
   async fn page(messaging: &Messaging, before: Option<i64>) -> RoomHistory {
     let query = RoomMessagesQuery {
       before,
+      after: None,
       limit: 1,
       include_hidden: false,
     };
@@ -218,6 +224,47 @@ mod tests {
       older.gaps[0].to,
       Some("2026-10-26T11:30:00Z".parse().unwrap())
     );
+  }
+
+  #[tokio::test]
+  async fn a_page_after_a_message_reaches_the_next_page_and_may_be_empty() {
+    let app = app("", &[]).await;
+    let messaging = &app.state.messaging;
+    // offline from 12:30 to 13:30, between the last two messages
+    let ids = stored(
+      messaging,
+      &[
+        "2026-10-26T10:00:00Z",
+        "2026-10-26T12:00:00Z",
+        "2026-10-26T14:00:00Z",
+      ],
+      "2026-10-26T12:30:00.000000Z",
+      "2026-10-26T13:30:00.000000Z",
+    )
+    .await;
+    let after = |id| RoomMessagesQuery {
+      before: None,
+      after: Some(id),
+      limit: 1,
+      include_hidden: false,
+    };
+    let middle = messaging
+      .stored_messages("indie", after(ids[0]))
+      .await
+      .unwrap();
+    assert_eq!(middle.messages[0].local_id, ids[1]);
+    assert!(middle.has_more, "the newest is past the page");
+    assert_eq!(
+      middle.gaps.len(),
+      1,
+      "the gap reaches the next page's start"
+    );
+    let end = messaging
+      .stored_messages("indie", after(ids[2]))
+      .await
+      .unwrap();
+    assert!(end.messages.is_empty(), "nothing past the newest, no error");
+    assert!(!end.has_more);
   }
 
   #[tokio::test]

@@ -73,9 +73,10 @@ pub fn insert(conn: &Connection, arrived: &Arrived) -> rusqlite::Result<RoomMess
   })
 }
 
-/// A page of `room`'s messages, oldest first, and whether older ones exist: the newest
-/// `query.limit` before `query.before` when given, else the newest; the hidden ones only with
-/// `query.include_hidden`.
+/// A page of `room`'s messages, oldest first, and whether more exist past it: the oldest
+/// `query.limit` after `query.after` when given, and newer ones past them, else the newest
+/// `query.limit` before `query.before` when given, else the newest, and older ones past them;
+/// the hidden ones only with `query.include_hidden`.
 pub fn page(
   conn: &Connection,
   room: &str,
@@ -87,21 +88,28 @@ pub fn page(
     values.push(Value::Integer(before));
     filter.push_str(&format!(" AND local_id < ?{}", values.len()));
   }
+  if let Some(after) = query.after {
+    values.push(Value::Integer(after));
+    filter.push_str(&format!(" AND local_id > ?{}", values.len()));
+  }
   if !query.include_hidden {
     filter.push_str(" AND hidden = 0");
   }
-  // one more than asked for says whether there are older ones
+  // one more than asked for says whether there are more
   values.push(Value::Integer(i64::from(query.limit) + 1));
+  let order = if query.after.is_some() { "ASC" } else { "DESC" };
   let mut page: Vec<RoomMessage> = conn
     .prepare(&format!(
-      "SELECT {MESSAGE} FROM room_messages WHERE {filter} ORDER BY local_id DESC LIMIT ?{}",
+      "SELECT {MESSAGE} FROM room_messages WHERE {filter} ORDER BY local_id {order} LIMIT ?{}",
       values.len()
     ))?
     .query_map(params_from_iter(&values), message)?
     .collect::<rusqlite::Result<_>>()?;
   let has_more = page.len() > query.limit as usize;
   page.truncate(query.limit as usize);
-  page.reverse();
+  if query.after.is_none() {
+    page.reverse();
+  }
   Ok((page, has_more))
 }
 
@@ -374,6 +382,7 @@ mod tests {
 
     let query = RoomMessagesQuery {
       before: None,
+      after: None,
       limit: 2,
       include_hidden: false,
     };
@@ -392,6 +401,7 @@ mod tests {
     );
     let older = RoomMessagesQuery {
       before: Some(newest[0].local_id),
+      after: None,
       limit: 10,
       include_hidden: true,
     };
@@ -401,6 +411,32 @@ mod tests {
       .unwrap();
     assert!(!more);
     assert_eq!(rest.len(), 2);
+
+    let newer = |limit| RoomMessagesQuery {
+      before: None,
+      after: Some(rest[0].local_id),
+      limit,
+      include_hidden: true,
+    };
+    let first = newer(1);
+    let (next, more) = db
+      .read(move |conn| page(conn, "indie", &first))
+      .await
+      .unwrap();
+    assert!(more, "newer ones are past the page");
+    assert_eq!(next[0].local_id, rest[1].local_id, "the oldest after it");
+    let every = newer(10);
+    let (all, more) = db
+      .read(move |conn| page(conn, "indie", &every))
+      .await
+      .unwrap();
+    assert!(!more);
+    assert_eq!(
+      all.len(),
+      4,
+      "the rest of the five, the hidden one with them"
+    );
+    assert!(all.is_sorted_by_key(|m| m.local_id), "oldest first");
   }
 
   #[tokio::test]

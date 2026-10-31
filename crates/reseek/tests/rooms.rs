@@ -19,6 +19,7 @@ use support::{PATIENCE, daemon, events, logged_in, quiet, signed_in, until};
 fn newest() -> RoomMessagesQuery {
   RoomMessagesQuery {
     before: None,
+    after: None,
     limit: 100,
     include_hidden: false,
   }

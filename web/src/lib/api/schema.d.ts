@@ -5895,7 +5895,7 @@ export interface components {
              *     the newest page, oldest first
              */
             gaps: components["schemas"]["HistoryGap"][];
-            /** @description older messages exist */
+            /** @description older messages exist, or with `after` newer ones */
             hasMore: boolean;
             /** @description the messages, oldest first */
             messages: components["schemas"]["RoomMessage"][];
@@ -8817,6 +8817,11 @@ export interface operations {
                 unAcknowledgedOnly?: boolean;
                 /** @description only messages stored before the one with this `localId`, the newest when left out */
                 before?: number;
+                /**
+                 * @description only messages stored after the one with this `localId`, the page then holding the oldest
+                 *     of them
+                 */
+                after?: number;
                 /** @description how many messages to return, at most 1000 */
                 limit?: number;
             };
@@ -11896,6 +11901,8 @@ export interface operations {
                 roomName?: string;
                 /** @description only messages before the one with this `localId`, the newest when left out */
                 before?: number;
+                /** @description only messages after the one with this `localId`, the page then holding the oldest of them */
+                after?: number;
                 /** @description how many messages to return, at most 500 */
                 limit?: number;
                 /** @description also return the messages of users blocked for rooms */
@@ -12297,6 +12304,8 @@ export interface operations {
                 roomName?: string;
                 /** @description only messages before the one with this `localId`, the newest when left out */
                 before?: number;
+                /** @description only messages after the one with this `localId`, the page then holding the oldest of them */
+                after?: number;
                 /** @description how many messages to return, at most 500 */
                 limit?: number;
                 /** @description also return the messages of users blocked for rooms */
