@@ -122,7 +122,7 @@
     const write = session.can("ReadWrite");
     return [
       ...(write && app.isServerConnected
-        ? [{ id: "do:search", group: "Actions", label: searchFor(text), run: search(text) }]
+        ? [{ id: "do:network", group: "Actions", label: searchFor(text), run: search(text) }]
         : []),
       ...reach(text).map((action) => ({
         id: `do:${action.id}`,
