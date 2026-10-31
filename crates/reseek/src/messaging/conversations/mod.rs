@@ -36,6 +36,25 @@ fn no_conversation(username: &str) -> ApiError {
   ApiError::not_found(format!("There is no conversation with {username}"))
 }
 
+/// `text` on one line, as a private message has to be: the server drops one holding a line
+/// break, in either direction, and tells the sender nothing. Each run of line breaks becomes one
+/// space and trailing whitespace goes.
+fn one_line(text: &str) -> String {
+  let mut line = String::with_capacity(text.len());
+  let mut in_break = false;
+  for c in text.chars() {
+    let breaks = c == '\n' || c == '\r';
+    if !breaks {
+      line.push(c);
+    } else if !in_break {
+      line.push(' ');
+    }
+    in_break = breaks;
+  }
+  line.truncate(line.trim_end().len());
+  line
+}
+
 /// The answer to a request the server could not take: 409 while not logged in, else 502.
 pub(super) fn unsent(error: ClientError) -> ApiError {
   match error {
@@ -255,11 +274,15 @@ impl Messaging {
       .ok_or_else(|| no_conversation(username))
   }
 
-  /// Sends a private message to `username` and stores it once the server took it; a user
-  /// blocked from messages is refused.
+  /// Sends a private message to `username`, on one line, and stores what was sent once the
+  /// server took it; a user blocked from messages is refused, as is a text of line breaks alone.
   pub(super) async fn send_private(&self, username: &str, message: String) -> Result<(), ApiError> {
     if self.users.is_blocked(username, None, BlockScope::Messages) {
       return Err(ApiError::forbidden("The user is blocked"));
+    }
+    let message = one_line(&message);
+    if message.is_empty() {
+      return Err(ApiError::bad_request("The message is empty"));
     }
     let name = username.to_string();
     let now = Utc::now();
@@ -411,5 +434,20 @@ impl Messaging {
       .write(move |conn| store::set_draft(conn, &name, &draft))
       .await
       .map_err(internal)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::one_line;
+
+  #[test]
+  fn a_private_message_goes_on_one_line() {
+    assert_eq!(one_line("one\ntwo"), "one two");
+    assert_eq!(one_line("one\r\ntwo"), "one two");
+    assert_eq!(one_line("one\n\r\n\ntwo\rthree"), "one two three");
+    assert_eq!(one_line("\nkept  apart  "), " kept  apart");
+    assert_eq!(one_line("trailing \n\r\n"), "trailing");
+    assert_eq!(one_line("\n\r\n"), "");
   }
 }

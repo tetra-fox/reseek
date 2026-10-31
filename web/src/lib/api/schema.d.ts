@@ -310,7 +310,7 @@ export interface paths {
         put: operations["acknowledge_all"];
         /**
          * Sends a private message, the body a JSON string. The server keeps it for a user who is
-         *     offline.
+         *     offline. Line breaks become spaces, as the server drops a message holding one.
          */
         post: operations["send"];
         /**

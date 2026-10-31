@@ -1127,7 +1127,7 @@
         "tags": [
           "conversations"
         ],
-        "summary": "Sends a private message, the body a JSON string. The server keeps it for a user who is\noffline.",
+        "summary": "Sends a private message, the body a JSON string. The server keeps it for a user who is\noffline. Line breaks become spaces, as the server drops a message holding one.",
         "operationId": "send",
         "parameters": [
           {

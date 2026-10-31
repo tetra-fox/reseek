@@ -110,7 +110,7 @@ async fn messages(
 }
 
 /// Sends a private message, the body a JSON string. The server keeps it for a user who is
-/// offline.
+/// offline. Line breaks become spaces, as the server drops a message holding one.
 #[utoipa::path(
   post, path = "/conversations/{username}", tag = "conversations", request_body = MessageText,
   params(("username" = String, Path, description = "the other user"), UsernameQuery),

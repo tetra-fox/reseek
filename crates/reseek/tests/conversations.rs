@@ -1,7 +1,8 @@
 //! Private messages over soulfind between the daemon and another user's client: a message sent
 //! while the daemon was away arrives at its login, is stored once however often the server
 //! delivers it again, and is delivered again only until it is read; the unread counts follow a
-//! read, a message sent and a purge; and each delivery, connect and disconnect is one event.
+//! read, a message sent and a purge; each delivery, connect and disconnect is one event; and a
+//! message with line breaks is sent, stored and pushed on one line.
 
 mod support;
 
@@ -11,6 +12,7 @@ use api_client::Client;
 use api_types::messaging::conversations::{
   ConversationListQuery, MessageDirection, PrivateMessage,
 };
+use soulseek_client::Event;
 use support::soulfind::{self, User};
 use support::{PATIENCE, daemon, events, logged_in, quiet, signed_in, until};
 
@@ -154,4 +156,41 @@ async fn a_message_from_while_we_were_away_is_stored_once_until_it_is_read() {
   assert_eq!(disconnects.len(), 3);
   assert_eq!(disconnects[0]["message"], "away");
   assert_eq!(disconnects[0]["exception"]["type"], "IntentionalDisconnect");
+}
+
+#[tokio::test]
+async fn a_message_with_line_breaks_arrives_as_it_is_stored_on_one_line() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let dir = tempfile::tempdir().unwrap();
+  let name = soulfind::username("daemon");
+  let running = daemon(dir.path(), &server, &name, &[]);
+  let api = signed_in(&running).await;
+  until(&api, "logged in", logged_in).await;
+  let peer = server.login("peer", quiet()).await;
+  let mut heard = peer.client.subscribe();
+
+  // the server drops a message holding a line break, so this one arriving is the point
+  api
+    .send_private(&peer.username, "first line\r\n\r\nsecond line \n")
+    .await
+    .unwrap();
+  let arrived = tokio::time::timeout(PATIENCE, async {
+    loop {
+      if let Event::PrivateMessageReceived(message) = heard.recv().await.unwrap() {
+        return message.message;
+      }
+    }
+  })
+  .await
+  .expect("the message never arrived");
+  assert_eq!(arrived, "first line second line");
+  let stored = messages_when(&api, &peer.username, "stored", |m| m.len() == 1).await;
+  assert_eq!(stored[0].message, arrived);
+
+  api
+    .send_private(&peer.username, "\n\r\n")
+    .await
+    .expect_err("a text of line breaks alone says nothing");
 }

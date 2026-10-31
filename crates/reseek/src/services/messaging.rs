@@ -57,7 +57,8 @@ pub trait MessagingService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// Sends a private message and records it. A blocked user is refused with 403.
+  /// Sends a private message on one line, line breaks turned into spaces, and records it as
+  /// sent. A blocked user is refused with 403.
   async fn send_private(&self, username: &str, message: String) -> Result<(), ApiError> {
     Err(not_yet(DOMAIN))
   }
