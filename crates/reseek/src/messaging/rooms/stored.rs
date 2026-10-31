@@ -151,8 +151,8 @@ mod tests {
   use crate::messaging::Messaging;
   use crate::testing::app;
 
-  /// Stores a message in `indie` at each of `times`, and one session that ended, disconnected,
-  /// at `ended` and the next, still running, from `again`; returns the messages' local ids.
+  /// Stores a message in `indie` at each of `times`, and one session that ended at `ended` and
+  /// the next, still running, from `again`; returns the messages' local ids.
   async fn stored(
     messaging: &Messaging,
     times: &[&'static str],
@@ -177,8 +177,8 @@ mod tests {
           ids.push(history::insert(conn, &arrived)?.local_id);
         }
         conn.execute(
-          "INSERT INTO sessions (logged_in_at, last_seen_at, ended_at, end_reason) \
-           VALUES ('2026-10-26T09:00:00.000000Z', ?1, ?1, 'disconnected'), (?2, ?2, NULL, NULL)",
+          "INSERT INTO sessions (logged_in_at, last_seen_at, ended_at) \
+           VALUES ('2026-10-26T09:00:00.000000Z', ?1, ?1), (?2, ?2, NULL)",
           params![ended, again],
         )?;
         Ok(ids)

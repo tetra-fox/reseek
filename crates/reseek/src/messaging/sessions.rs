@@ -180,6 +180,10 @@ impl Messaging {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::db::{self, Database, Location, Schema};
+
+  /// `messaging.db` as the first release of it was.
+  static FIRST: Schema = db::schema!("messaging", ["0001_initial"]);
 
   fn at(text: &str) -> DateTime<Utc> {
     text.parse().unwrap()
@@ -231,6 +235,64 @@ mod tests {
       .len(),
       1,
       "a gap before the room's oldest message is not the room's"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_database_with_end_reasons_keeps_its_sessions_and_gaps() {
+    let dir = tempfile::tempdir().unwrap();
+    let location = Location {
+      data: dir.path().join("data"),
+      backups: dir.path().join("backups"),
+      volatile: false,
+      log_sql: false,
+    };
+    std::fs::create_dir_all(&location.data).unwrap();
+    std::fs::create_dir_all(&location.backups).unwrap();
+    let first = Database::open(&FIRST, &location).await.unwrap();
+    first
+      .write(|conn| {
+        conn.execute_batch(
+          "INSERT INTO sessions (logged_in_at, last_seen_at, ended_at, end_reason) VALUES \
+           ('2026-10-26T09:00:00.000000Z', '2026-10-26T10:00:00.000000Z', \
+            '2026-10-26T10:00:00.000000Z', 'shutdown'), \
+           ('2026-10-26T10:05:00.000000Z', '2026-10-26T10:05:00.000000Z', NULL, NULL)",
+        )
+      })
+      .await
+      .unwrap();
+    first.close().await;
+    drop(first);
+
+    let latest = Database::open(&super::super::SCHEMA, &location)
+      .await
+      .unwrap();
+    let found = gaps(&latest.read(sessions).await.unwrap());
+    assert_eq!(
+      found,
+      [HistoryGap {
+        from: at("2026-10-26T10:00:00Z"),
+        to: Some(at("2026-10-26T10:05:00Z")),
+      }]
+    );
+    let dropped = latest
+      .read(|conn| conn.prepare("SELECT end_reason FROM sessions").map(drop))
+      .await;
+    assert!(dropped.is_err(), "the column is gone");
+    let next = latest
+      .write(|conn| {
+        conn.execute(
+          "INSERT INTO sessions (logged_in_at, last_seen_at) \
+           VALUES ('2026-10-26T11:00:00.000000Z', '2026-10-26T11:00:00.000000Z')",
+          [],
+        )?;
+        Ok(conn.last_insert_rowid())
+      })
+      .await
+      .unwrap();
+    assert_eq!(
+      next, 3,
+      "sessions are read by id, so ids go on from the old table's"
     );
   }
 

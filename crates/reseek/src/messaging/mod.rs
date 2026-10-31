@@ -44,7 +44,10 @@ use crate::users::Directory;
 use rooms::Rooms;
 
 /// `messaging.db`: conversations, private and room messages, room settings and the sessions.
-pub static SCHEMA: Schema = db::schema!("messaging", ["0001_initial"]);
+pub static SCHEMA: Schema = db::schema!(
+  "messaging",
+  ["0001_initial", "0002_drop_session_end_reason"]
+);
 
 /// How many client events may wait for the messaging task.
 const INTAKE: usize = 256;
