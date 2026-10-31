@@ -104,8 +104,8 @@
       wrapperClass="flex-1"
       autofocus
       data-lpignore="true"
-      aria-label="Search for files"
-      placeholder="Search for files"
+      aria-label="Search files and users"
+      placeholder="Files and users"
       disabled={!connected}
       class="h-11 pl-10 text-base md:text-base">
       <Suggest.Item value={RUN} icon={link ? LinkIcon : SearchIcon}>

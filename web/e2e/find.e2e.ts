@@ -3,7 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { fakeConnected, SEARCH_ID } from "./support/fakes";
 import { login, textSize } from "./support/login";
 
-const box = (page: Page) => page.getByRole("combobox", { name: "Search for files" });
+const box = (page: Page) => page.getByRole("combobox", { name: "Search files and users" });
 const options = (page: Page) => page.getByRole("option");
 
 /** Answers the directory with a user named like what is searched for */
