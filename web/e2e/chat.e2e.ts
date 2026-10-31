@@ -92,7 +92,7 @@ test("the server's notices are one read-only entry, reached by the keys", async 
   await expect(log.locator("[data-message]").first().locator("time")).toBeVisible();
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/notices.png` });
 
-  // the reserved name is offered as nothing a user could be
+  // the reserved name is offered as a room, never as a user
   const search = page.getByRole("combobox", { name: "Search chats" });
   await search.fill("server");
   await expect(page.getByRole("option", { name: "Join room server" })).toBeVisible();

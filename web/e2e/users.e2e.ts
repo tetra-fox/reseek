@@ -75,8 +75,8 @@ test("the search box lists matching users best first, and picks one by key or cl
 
   await searchBox(page).fill("bob");
   await expect(options(page)).toHaveText([/\bbob\b.*Online.*default.*Last seen/, /\bbobby\b/]);
-  // the list under the box filters as it did, tags too, and the look-up entry stays away from a
-  // name the directory holds
+  // the list under the box filters too, by tags as well, and the look-up entry stays away from
+  // a name the directory holds
   await expect(page.locator('[data-line="alice"]')).toBeVisible();
 
   await page.keyboard.press("ArrowDown");

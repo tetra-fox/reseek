@@ -102,7 +102,7 @@ test("the activity log docks under the screen, keeps its height and opens with a
   // the screen above gives up exactly the panel's height: nothing is covered
   expect(before - (await area.evaluate((e) => e.clientHeight))).toBe(288);
 
-  // its top edge drags it taller, and the height and the open state survive a reload
+  // its top edge drags it taller, and the height and the open state stay through a reload
   const edge = (await page
     .getByRole("slider", { name: "Height of the activity log" })
     .boundingBox())!;
