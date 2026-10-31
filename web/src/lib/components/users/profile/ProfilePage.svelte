@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, byUser, type Schemas } from "#lib/api/client.js";
+  import type { Schemas } from "#lib/api/client.js";
   import BrowsePage from "#lib/components/browse/BrowsePage.svelte";
   import Pane from "#lib/components/chat/Pane.svelte";
   import ErrorSegment from "#lib/components/ErrorSegment.svelte";
@@ -8,7 +8,7 @@
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { userHref } from "#lib/nav.js";
-  import { call } from "#lib/request.js";
+  import { profileOf } from "#lib/users/actions.js";
 
   import ProfileActivity from "./ProfileActivity.svelte";
   import ProfileHeader from "./ProfileHeader.svelte";
@@ -34,11 +34,7 @@
   let refreshing = $state(false);
 
   const fetch = async (refresh: boolean) => {
-    const outcome = await call(() =>
-      api.GET("/api/v0/users/{username}/profile", {
-        params: { path: { username }, query: { ...byUser(username).query, refresh } }
-      })
-    );
+    const outcome = await profileOf(username, refresh);
     if (outcome.ok) {
       profile = outcome.data;
       error = "";

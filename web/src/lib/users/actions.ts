@@ -13,6 +13,14 @@ export const links = (username: string, folder?: string) => ({
   )
 });
 
+/** A user's profile as stored, or with `refresh` after asking the network about them */
+export const profileOf = (username: string, refresh: boolean) =>
+  call(() =>
+    api.GET("/api/v0/users/{username}/profile", {
+      params: { path: { username }, query: { ...byUser(username).query, refresh } }
+    })
+  );
+
 /** Pins `username` to the top of the directory, or unpins them when `on` is false */
 export const pin = (username: string, on: boolean) =>
   call(() =>
