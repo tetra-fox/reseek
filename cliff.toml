@@ -1,0 +1,30 @@
+# release notes from commit subjects: features, fixes, then everything else
+
+[changelog]
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+## {{ group | striptags | trim }}
+
+{% for commit in commits -%}
+- {{ commit.raw_message | split(pat="\n") | first }} ({{ commit.id | truncate(length=8, end="") }})
+{% endfor %}
+{% endfor -%}
+{% if previous.version -%}
+https://github.com/tetra-fox/reseek/compare/{{ previous.version }}...{{ version }}
+{% endif %}
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+commit_parsers = [
+  { message = "^merge", skip = true },
+  { message = "^feat", group = "<!-- 0 -->features" },
+  { message = "^fix", group = "<!-- 1 -->fixes" },
+  { message = ".*", group = "<!-- 2 -->other" },
+]
+filter_commits = false
+tag_pattern = "v[0-9].*"
+sort_commits = "newest"
