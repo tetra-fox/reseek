@@ -88,7 +88,7 @@
   <div class="flex items-center gap-3">
     <Avatar {name} {pictureUrl} src={draft?.src} class="size-12" />
     <div class="flex min-w-0 flex-col">
-      <span class="truncate font-mono font-medium" style:color={nameColor(name)}>{name}</span>
+      <span class="font-mono font-medium wrap-anywhere" style:color={nameColor(name)}>{name}</span>
       <span class="flex items-center gap-1.5 text-xs text-fg-muted">
         <span class={["size-2 rounded-full", presence.dot]}></span>
         {presence.text}

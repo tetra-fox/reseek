@@ -201,7 +201,7 @@
     </form>
   {/if}
   <div
-    class="min-h-0 flex-1 overflow-y-auto rounded-control outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    class="min-h-0 flex-1 overflow-y-auto rounded-control outline-none focus-visible:ring-2 focus-visible:ring-accent pointer-fine:[--line-h:1.625rem]"
     role="grid"
     aria-label="Users in the room"
     aria-multiselectable="true"
@@ -224,28 +224,29 @@
           role="row"
           {...list.line(line, i)}
           class={[
-            "group flex items-center gap-1.5 rounded-badge px-1 py-0.5 text-sm hover:bg-hover",
-            list.selected.has(u.username) && "bg-accent-soft/60",
+            "group flex items-center gap-1.5 pick-row rounded-badge px-1 py-0.5 text-sm",
             members.users.removed.has(u.username) && "opacity-40"
           ]}>
-          <span role="gridcell" class="flex min-w-0 flex-1 items-center gap-1.5">
-            <Presence presence={u.status} />
-            <!-- the slot stays without a flag, so the names line up -->
-            <span class="flex w-5 shrink-0 justify-center"><Flag code={u.countryCode} /></span>
-            <span class={["min-w-0 truncate", blocked(u.username) && "line-through"]}>
-              <Username name={u.username} card />
+          <span role="none" class="name-stats flex-1">
+            <span role="gridcell" class="flex items-center gap-1.5">
+              <Presence presence={u.status} />
+              <!-- the slot stays without a flag, so the names line up -->
+              <span class="flex w-5 shrink-0 justify-center"><Flag code={u.countryCode} /></span>
+              <span class={["min-w-0 truncate", blocked(u.username) && "line-through"]}>
+                <Username name={u.username} card />
+              </span>
+              {#if u.username === room?.owner}<CrownIcon
+                  class="size-3 shrink-0 text-warning"
+                  aria-label="owner" />{/if}
+              {#if blocked(u.username)}<span
+                  class="size-2 shrink-0 rounded-full bg-danger"
+                  title="blocked"></span
+                >{/if}
+              {#if u.self}<span class="text-xs text-accent">you</span>{/if}
             </span>
-            {#if u.username === room?.owner}<CrownIcon
-                class="size-3 shrink-0 text-warning"
-                aria-label="owner" />{/if}
-            {#if blocked(u.username)}<span
-                class="size-2 shrink-0 rounded-full bg-danger"
-                title="blocked"></span
-              >{/if}
-            {#if u.self}<span class="text-xs text-accent">you</span>{/if}
+            <span role="gridcell" class="text-right text-xs text-fg-muted tabular-nums"
+              >{formatSpeed(u.averageSpeed)} · {u.fileCount.toLocaleString()}</span>
           </span>
-          <span role="gridcell" class="shrink-0 text-right text-xs text-fg-muted tabular-nums"
-            >{formatSpeed(u.averageSpeed)} · {u.fileCount.toLocaleString()}</span>
           {#if can}
             <Menu.Root
               open={menuFor === u.username}
