@@ -28,7 +28,7 @@
     top: 0
   });
 
-  const { motion, watch } = chartMotion();
+  const motion = chartMotion();
 
   /** Each part of each bar: its series and where it lies in counts */
   const parts = (d: Row) => {
@@ -57,7 +57,6 @@
     <div
       class="h-28"
       role="img"
-      {@attach watch}
       aria-label={`Transfer outcomes: ${data
         .map(
           (d) =>
@@ -76,7 +75,8 @@
         tooltipContext={{ mode: "band" }}>
         {#snippet children({ context })}
           {@const hovered = context.tooltipState.data as Row | null}
-          <Svg>
+          <!-- the marks tween to a new size, the box does not, so they are cut at its edge -->
+          <Svg clip>
             <Grid x class="stroke-border" />
             <Axis placement="left" tickLabelProps={tickLabel} />
             <Axis

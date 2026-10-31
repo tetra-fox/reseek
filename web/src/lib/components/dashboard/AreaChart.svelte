@@ -35,7 +35,7 @@
   const top = $derived(Math.max(0, ...data.flatMap((p) => shown.map((s) => p[s.key]))));
   // the axis labels' room, from the longest one they can show at the text size in use
   const padding = $derived(axisPadding([format(top), format(top * 1.25), format(0)], rem.px));
-  const { motion, watch } = chartMotion();
+  const motion = chartMotion();
   const toggle = (key: string) => (visible.has(key) ? visible.delete(key) : visible.add(key));
 
   /** What the chart says to a screen reader: each series' peak and when it was */
@@ -68,7 +68,7 @@
       </button>
     {/each}
   </div>
-  <div class="h-52" role="img" aria-label={summary} {@attach watch}>
+  <div class="h-52" role="img" aria-label={summary}>
     <Chart
       data={rows}
       x="at"
@@ -77,7 +77,8 @@
       yNice
       {padding}
       tooltipContext={{ mode: "bisect-x" }}>
-      <Svg>
+      <!-- the marks tween to a new size, the box does not, so they are cut at its edge -->
+      <Svg clip>
         <Grid y class="stroke-border" style="stroke-dasharray: 3 3" />
         <Axis placement="left" {format} tickSpacing={rem.px * 3} tickLabelProps={tickLabel} />
         <Axis
