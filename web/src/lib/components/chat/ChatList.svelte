@@ -5,17 +5,20 @@
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
+  import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
   import HashIcon from "@lucide/svelte/icons/hash";
   import MessageSquarePlusIcon from "@lucide/svelte/icons/message-square-plus";
   import ServerIcon from "@lucide/svelte/icons/server";
   import UsersRoundIcon from "@lucide/svelte/icons/users-round";
+  import { tick } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
   import { chat, paneKey, paneOf } from "#lib/chat/chat.svelte.js";
   import { actionOf } from "#lib/chat/messages/rich.js";
   import { chatName, isNotices, NOTICES } from "#lib/chat/notices.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
-  import { sortedConversations, sortedRooms } from "#lib/chat/rooms/order.js";
+  import { pins, samePin } from "#lib/chat/pins.svelte.js";
+  import { pinnedChats, sortedConversations, sortedRooms } from "#lib/chat/rooms/order.js";
   import type { SearchKind } from "#lib/chat/search/match.js";
   import SearchBox from "#lib/components/chat/search/SearchBox.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
@@ -27,9 +30,11 @@
   import { ago, plural } from "#lib/format.js";
   import { freezesWhileUsed, heldOrder, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
+  import { RowDrag } from "#lib/lists/rowdrag.svelte.js";
   import { chatHref, roomHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { inControl, moveKeys, moveStep } from "#lib/ui/keys.js";
   import { disclose } from "#lib/ui/motion.js";
   import { nameColor } from "#lib/users/colors.js";
   import { users } from "#lib/users/users.svelte.js";
@@ -53,12 +58,15 @@
 
   type Line =
     | { kind: "header"; key: string; title: string; ids: string[] }
-    | { kind: "row"; key: string; target: Target; ids: string[] };
+    | { kind: "row"; key: string; target: Target; ids: string[]; pinned: boolean };
+
+  const PINNED = "h:pinned";
 
   const folded = new SvelteSet<string>();
   /** the row whose menu is open, from its button or a right click */
   let menuFor = $state<string | null>(null);
 
+  const pinned = $derived(pinnedChats());
   const rooms = $derived(sortedRooms());
   const conversations = $derived(sortedConversations());
 
@@ -77,11 +85,13 @@
               kind: "row",
               key: paneKey(target.kind, target.name),
               target,
-              ids
+              ids,
+              pinned: key === PINNED
             })))
       ];
     };
     return hold([
+      ...(pinned.length ? section(PINNED, "Pinned", pinned) : []),
       ...section(
         "h:rooms",
         "Rooms",
@@ -109,13 +119,53 @@
     onopen: (l) => {
       if (l.kind === "row") open(l.target);
     },
+    onchord: (e, l) => {
+      const step = moveStep(e);
+      if (!step || !write || l.kind !== "row" || !l.pinned) return false;
+      nudge(l.target, step);
+      return true;
+    },
     openOnClick: true
   });
+
+  /** what the last move of a pin came to, for a screen reader */
+  let placed = $state("");
+  /** Puts a pin in front of `before`, or last without one */
+  const place = (pin: Target, before: Target | null) => {
+    pins.move(pin, before);
+    const shown = pinnedChats();
+    const at = shown.findIndex((p) => samePin(p, pin));
+    placed = `${chatName(pin)} moved to place ${at + 1} of ${shown.length} in Pinned`;
+  };
+  /** Moves a pin one place up or down, the row staying in view */
+  const nudge = (pin: Target, step: -1 | 1) => {
+    const shown = pinnedChats();
+    const to = shown.findIndex((p) => samePin(p, pin)) + step;
+    if (to < 0 || to >= shown.length) {
+      placed = `${chatName(pin)} is already ${step < 0 ? "first" : "last"} in Pinned`;
+      return;
+    }
+    place(pin, shown[step < 0 ? to : to + 1] ?? null);
+    void tick().then(() =>
+      document.getElementById(list.activeId ?? "")?.scrollIntoView({ block: "nearest" })
+    );
+  };
+
+  let box = $state<HTMLElement | null>(null);
+  const drag = new RowDrag(
+    () => box,
+    (key, before) => {
+      place(paneOf(key), before ? paneOf(before) : null);
+      // the row moved in the page, which took focus from a control in it
+      list.focus();
+    }
+  );
 
   // every chat selected, those a folded section hides too
   const chosen = $derived([...list.selected].map(paneOf));
   // the server's notices are never unread, and they cannot be closed
   const chosenChats = $derived(chosen.filter((t) => !isNotices(t)));
+  const chosenPinned = $derived(chosenChats.every((t) => pins.has(t)));
   const write = $derived(session.can("ReadWrite"));
 
   const markChosen = async () => {
@@ -174,7 +224,10 @@
     </Notice>
   {/if}
 
+  <p class="sr-only" role="status">{placed}</p>
+
   <div
+    bind:this={box}
     class="min-h-0 flex-1 overflow-y-auto rounded-control outline-none focus-visible:ring-2 focus-visible:ring-accent"
     role="grid"
     aria-label="Rooms and conversations"
@@ -214,20 +267,46 @@
         {@const notify = (room ?? conversation)?.notify}
         {@const summary = person ? users.get(t.name) : undefined}
         {@const at = preview?.at ?? room?.lastMessageAt}
+        {@const movable = write && line.pinned}
         <div
           role="row"
           {...list.line(line, i)}
           transition:disclose
           aria-current={current === line.key ? "page" : undefined}
+          aria-keyshortcuts={movable ? "Alt+Shift+ArrowUp Alt+Shift+ArrowDown" : undefined}
+          style:translate={drag.shift(line.key)}
           class={[
             "group/row flex items-center gap-2 rounded-control px-2 py-1.5 hover:bg-hover",
             current === line.key && "bg-hover",
-            list.selected.has(line.key) && "bg-accent-soft/60"
+            list.selected.has(line.key) && "bg-accent-soft/60",
+            movable && "relative select-none",
+            drag.key === line.key && "z-10 cursor-grabbing bg-surface shadow-raised",
+            drag.key !== null &&
+              drag.key !== line.key &&
+              "transition-[translate] duration-(--motion-fast) ease-(--ease-out-soft)"
           ]}
           oncontextmenu={(e) => {
             e.preventDefault();
             menuFor = line.key;
+          }}
+          onpointerdown={(e) => {
+            if (movable && e.pointerType === "mouse" && !inControl(e)) {
+              drag.press(e, line.key, line.ids);
+            }
+          }}
+          ondragstart={(e) => {
+            if (movable) e.preventDefault();
           }}>
+          {#if movable}
+            <button
+              type="button"
+              tabindex="-1"
+              aria-hidden="true"
+              title={`Drag to reorder, or press ${moveKeys}`}
+              class="absolute inset-y-0 left-0 flex w-2 cursor-grab touch-none items-center justify-center text-fg-subtle opacity-0 group-hover/row:opacity-100 active:cursor-grabbing pointer-coarse:static pointer-coarse:-mx-1 pointer-coarse:w-7 pointer-coarse:shrink-0 pointer-coarse:self-stretch pointer-coarse:opacity-100"
+              onpointerdown={(e) => drag.press(e, line.key, line.ids)}
+              ><GripVerticalIcon class="size-3.5 shrink-0" /></button>
+          {/if}
           {#if person}
             <Avatar name={t.name} pictureUrl={summary?.info?.pictureUrl} class="size-8 text-xs" />
           {:else}
@@ -297,6 +376,8 @@
       <span class="px-1">{chosen.length} selected</span>
       {#if write}
         <Button size="sm" variant="ghost" onclick={() => void markChosen()}>Mark read</Button>
+        <Button size="sm" variant="ghost" onclick={() => pins.set(chosenChats, !chosenPinned)}
+          >{chosenPinned ? "Unpin" : "Pin"}</Button>
         <Button size="sm" variant="ghost" onclick={() => void closeChosen()}>Close</Button>
       {/if}
       <Button size="sm" variant="ghost" onclick={() => list.clear()}>Clear</Button>

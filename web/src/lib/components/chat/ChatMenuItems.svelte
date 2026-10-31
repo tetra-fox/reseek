@@ -6,6 +6,8 @@
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import HighlighterIcon from "@lucide/svelte/icons/highlighter";
   import LogOutIcon from "@lucide/svelte/icons/log-out";
+  import PinIcon from "@lucide/svelte/icons/pin";
+  import PinOffIcon from "@lucide/svelte/icons/pin-off";
   import UserIcon from "@lucide/svelte/icons/user";
   import UserCheckIcon from "@lucide/svelte/icons/user-check";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
@@ -15,6 +17,7 @@
   import { chat, paneKey } from "#lib/chat/chat.svelte.js";
   import { isNotices } from "#lib/chat/notices.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
+  import { pins } from "#lib/chat/pins.svelte.js";
   import { chatLayout } from "#lib/chat/prefs.svelte.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
@@ -35,6 +38,7 @@
   const row = $derived(user ? chat.conversations.get(target.name) : chat.rooms.get(target.name));
   const unread = $derived(user ? chat.unreadOf(target.name) : chat.roomUnread(target.name).unread);
   const summary = $derived(user ? users.get(target.name) : undefined);
+  const pinned = $derived(pins.has(target));
   const exportUrl = (format: "text" | "json") =>
     user
       ? `${root()}/api/v0/conversations/${segment(target.name)}/export?format=${format}`
@@ -88,6 +92,11 @@
 
 {#if write && unread}
   <Menu.Item onSelect={() => void markRead()}><CheckCheckIcon />Mark read</Menu.Item>
+{/if}
+{#if write && !notices && (row || pinned)}
+  <Menu.Item onSelect={() => pins.set([target], !pinned)}>
+    {#if pinned}<PinOffIcon />Unpin{:else}<PinIcon />Pin{/if}
+  </Menu.Item>
 {/if}
 {#if write && row}
   <Menu.Label>Notify</Menu.Label>

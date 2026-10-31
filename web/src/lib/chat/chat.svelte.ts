@@ -8,6 +8,7 @@ import { users } from "#lib/users/users.svelte.js";
 
 import { SERVER } from "./notices";
 import { notifier } from "./notify.svelte";
+import { pins } from "./pins.svelte";
 
 export type Conversation = Schemas["Conversation"];
 export type JoinedRoom = Schemas["JoinedRoom"];
@@ -139,6 +140,7 @@ class Chat {
     this.error = "";
     this.unread = null;
     this.previews.clear();
+    pins.clear();
   }
 
   /** the read of the conversations and rooms under way, or the last one */
@@ -154,7 +156,8 @@ class Chat {
     const [conversations, rooms] = await Promise.all([
       call(() => api.GET("/api/v0/conversations")),
       call(() => api.GET("/api/v0/rooms/joined")),
-      this.#readNotices()
+      this.#readNotices(),
+      pins.read()
     ]);
     if (conversations.ok) {
       this.conversations.reconcile(conversations.data);
@@ -299,8 +302,8 @@ class Chat {
   }
 
   /**
-   * Reads the summaries of the conversation peers, for their pin, presence, block and mute on
-   * any screen. A summary already held and less than a minute old is not read again
+   * Reads the summaries of the conversation peers, for their buddy mark, presence, block and mute
+   * on any screen. A summary already held and less than a minute old is not read again
    */
   #peers() {
     const newest = this.conversations.rows.toSorted(

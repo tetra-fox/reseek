@@ -38,6 +38,11 @@ describe("the chat page", () => {
     });
     flushSync();
     expect(document.querySelector('[aria-label="Rooms and conversations"]')).toBeNull();
+    // with Shift it is the list's key for moving a pin
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, shiftKey: true })
+    );
+    expect(goto).not.toHaveBeenCalled();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true }));
     expect(goto).toHaveBeenCalledWith("#/chat/rooms/indie", { reset: false });
   });

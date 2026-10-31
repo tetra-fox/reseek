@@ -110,7 +110,13 @@
       queueMicrotask(() => search?.focus());
       return;
     }
-    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+    if (
+      e.altKey &&
+      !e.shiftKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      (e.key === "ArrowUp" || e.key === "ArrowDown")
+    ) {
       // from the chats themselves, so it works with the list closed in its sheet
       const order = chatOrder();
       const at = order.findIndex((t) => paneKey(t.kind, t.name) === current);

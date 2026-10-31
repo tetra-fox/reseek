@@ -3,11 +3,13 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { chat } from "#lib/chat/chat.svelte.js";
+import { pins } from "#lib/chat/pins.svelte.js";
 import { interaction } from "#lib/lists/interaction.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { conversation, joinedRoom } from "#lib/testing/fixtures.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { users } from "#lib/users/users.svelte.js";
 
 import ChatList from "./ChatList.svelte";
 
@@ -19,15 +21,19 @@ describe("the chat list", () => {
     if (component) unmount(component);
     component = null;
     chat.clear();
+    users.clear();
     session.principal = null;
     vi.unstubAllGlobals();
     vi.mocked(goto).mockClear();
     document.body.innerHTML = "";
   });
 
-  const start = () => {
-    session.principal = { name: "me", role: "ReadWrite" } as never;
-    fakeNetwork(() => undefined);
+  let network: ReturnType<typeof fakeNetwork>;
+  const start = (role = "ReadWrite") => {
+    session.principal = { name: "me", role } as never;
+    network = fakeNetwork((url) =>
+      url.pathname.endsWith("/chat/pins") ? { status: 204 } : undefined
+    );
     chat.rooms.reconcile([
       joinedRoom("indie", { lastMessageAt: "2026-10-26T10:00:00Z" }),
       joinedRoom("jazz", { lastMessageAt: "2026-10-26T11:00:00Z" })
@@ -40,6 +46,8 @@ describe("the chat list", () => {
     flushSync();
   };
   const grid = () => document.querySelector("[role=grid]")!;
+  const shown = () =>
+    [...document.querySelectorAll("[data-line]")].map((l) => l.getAttribute("data-line"));
 
   it("lists rooms by their last message, then conversations, and moves past the headers", () => {
     start();
@@ -135,6 +143,120 @@ describe("the chat list", () => {
     release();
     flushSync();
     expect(keys()).toEqual(["user:bob", "user:alice"]);
+  });
+
+  it("holds each pinned chat once, above the sections, in the user's order", () => {
+    start();
+    chat.unread = {
+      conversations: { bob: 3 },
+      rooms: {},
+      total: 3,
+      totalMentions: 0
+    };
+    pins.list = [
+      { kind: "user", name: "bob" },
+      { kind: "room", name: "indie" }
+    ];
+    flushSync();
+    expect(shown()).toEqual([
+      "h:pinned",
+      "user:bob",
+      "room:indie",
+      "h:rooms",
+      "room:jazz",
+      "h:conversations",
+      "user:alice"
+    ]);
+    expect(document.querySelector("[data-line='user:bob']")!.textContent).toContain("3");
+
+    // a newer message moves nothing in Pinned
+    chat.rooms.get("indie")!.lastMessageAt = "2026-10-26T09:00:00Z";
+    chat.conversations.get("bob")!.lastMessage = null;
+    flushSync();
+    expect(shown().slice(0, 3)).toEqual(["h:pinned", "user:bob", "room:indie"]);
+  });
+
+  it("leaves a pinned room we left out, and has it back in its place on joining again", () => {
+    start();
+    pins.list = [
+      { kind: "room", name: "indie" },
+      { kind: "user", name: "bob" }
+    ];
+    flushSync();
+    chat.rooms.remove("indie");
+    flushSync();
+    expect(shown().slice(0, 3)).toEqual(["h:pinned", "user:bob", "h:rooms"]);
+    expect(shown()).not.toContain("room:indie");
+    chat.rooms.upsert(joinedRoom("indie"));
+    flushSync();
+    expect(shown().slice(0, 3)).toEqual(["h:pinned", "room:indie", "user:bob"]);
+  });
+
+  it("does not sort a buddy first", async () => {
+    start();
+    fakeNetwork(() => ({ username: "bob", pinned: true }));
+    await users.load("bob");
+    flushSync();
+    expect(users.get("bob")?.pinned).toBe(true);
+    expect(shown().slice(-2)).toEqual(["user:alice", "user:bob"]);
+  });
+
+  it("moves a pin with Alt+Shift and the arrows, saying where it went", async () => {
+    start();
+    pins.list = [
+      { kind: "room", name: "jazz" },
+      { kind: "user", name: "alice" },
+      { kind: "room", name: "indie" }
+    ];
+    flushSync();
+    const status = () => document.querySelector("[role=status]")!.textContent;
+    const move = { altKey: true, shiftKey: true };
+    press(grid(), "ArrowDown");
+    expect(active(grid())).toBe("room:jazz");
+
+    expect(press(grid(), "ArrowDown", move).defaultPrevented).toBe(true);
+    expect(shown().slice(1, 4)).toEqual(["user:alice", "room:jazz", "room:indie"]);
+    expect(active(grid())).toBe("room:jazz");
+    expect(status()).toBe("jazz moved to place 2 of 3 in Pinned");
+
+    press(grid(), "ArrowDown", move);
+    expect(shown().slice(1, 4)).toEqual(["user:alice", "room:indie", "room:jazz"]);
+    press(grid(), "ArrowDown", move);
+    expect(status()).toBe("jazz is already last in Pinned");
+    press(grid(), "ArrowUp", move);
+    expect(shown().slice(1, 4)).toEqual(["user:alice", "room:jazz", "room:indie"]);
+
+    await vi.waitFor(() =>
+      expect(network.requests.filter((r) => r.method === "PUT").at(-1)?.body).toEqual([
+        { kind: "user", name: "alice" },
+        { kind: "room", name: "jazz" },
+        { kind: "room", name: "indie" }
+      ])
+    );
+  });
+
+  it("leaves the keys of a row that is not pinned, and of a reader, to the browser", () => {
+    start();
+    pins.list = [{ kind: "room", name: "jazz" }];
+    flushSync();
+    const move = { altKey: true, shiftKey: true };
+    press(grid(), "ArrowDown");
+    press(grid(), "ArrowDown");
+    expect(active(grid())).toBe("room:indie");
+    expect(press(grid(), "ArrowDown", move).defaultPrevented).toBe(false);
+    unmount(component!);
+    component = null;
+
+    start("ReadOnly");
+    pins.list = [
+      { kind: "room", name: "jazz" },
+      { kind: "user", name: "bob" }
+    ];
+    flushSync();
+    expect(document.querySelector("[aria-hidden=true][title]")).toBeNull();
+    press(grid(), "ArrowDown");
+    expect(press(grid(), "ArrowDown", move).defaultPrevented).toBe(false);
+    expect(shown().slice(1, 3)).toEqual(["room:jazz", "user:bob"]);
   });
 
   it("says when the chats can't be read, and reads them again on Retry", async () => {
