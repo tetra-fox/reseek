@@ -41,7 +41,7 @@
   let { q, kind, onjoin, onnew, input = $bindable(null) }: Props = $props();
 
   /** how many messages are read for each text, the best of them are listed */
-  const CANDIDATES = 20;
+  const HITS_READ = 20;
 
   const ALL = "all";
   const NEW = "new";
@@ -59,7 +59,7 @@
   const box = new ChatSearch(
     () => text,
     () => "all",
-    CANDIDATES
+    HITS_READ
   );
   const listed = $derived(dropdown(box.found, text));
   const noName = $derived(!box.found.rooms.length && !box.found.users.length);

@@ -79,8 +79,11 @@ const fakeSearch = async (page: Page) => {
     return route.fulfill({ json: { users, total: users.length } });
   });
   await page.route("**/api/v0/messages/search**", (route) => {
-    const q = new URL(route.request().url()).searchParams.get("q") ?? "";
-    const hits = q.includes("floyd") || q.includes("flo") ? HITS : [];
+    const asked = new URL(route.request().url()).searchParams;
+    const wanted = asked.get("kind") === "rooms" ? "room" : asked.get("kind");
+    const hits = HITS.filter(
+      (h) => asked.get("q")?.includes("flo") && (wanted === "all" || wanted === h.kind)
+    );
     return route.fulfill({ json: { hits, total: hits.length } });
   });
 };
@@ -187,7 +190,6 @@ test("Enter opens the results, a message opens its chat, Back and Escape return"
   await expect(page).toHaveURL(/#\/chat\/search\?q=floyd$/);
   await expect(results(page)).toBeVisible();
 
-  await page.keyboard.press("ArrowDown");
   await results(page).getByRole("row").filter({ hasText: "came up here" }).click();
   await expect(log.locator('[data-message="150"]')).toBeVisible();
   await page.keyboard.press("Escape");
@@ -200,6 +202,43 @@ test("Enter opens the results, a message opens its chat, Back and Escape return"
   await expect(page).toHaveURL(/#\/chat\/alice\?at=2&q=floyd$/);
   await page.getByRole("button", { name: 'Back to the results for "floyd"' }).click();
   await expect(results(page)).toBeVisible();
+});
+
+test("the results are walked by key, and a message opened by Enter", async ({ page }) => {
+  await fakeSearch(page);
+  await login(page, "/chat");
+  await box(page).fill("floyd");
+  await page.keyboard.press("Enter");
+  await expect(results(page)).toBeFocused();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/chat\/rooms\/jazz\?at=150&q=floyd$/);
+  await expect(page.getByRole("log").locator('[data-message="150"]')).toBeVisible();
+  // back on the same line
+  await page.keyboard.press("Escape");
+  await expect(results(page)).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/chat\/rooms\/jazz\?at=150&q=floyd$/);
+});
+
+test("the messages can be narrowed, and the address keeps it", async ({ page }) => {
+  await fakeSearch(page);
+  await login(page, "/chat");
+  await page.goto("./#/chat/search?q=floyd");
+  await expect(results(page)).toContainText("have you heard");
+  await page.getByRole("combobox", { name: "Which messages" }).click();
+  await page.getByRole("option", { name: "Room messages" }).click();
+  await expect(page).toHaveURL(/#\/chat\/search\?q=floyd&in=rooms$/);
+  await expect(results(page)).not.toContainText("have you heard");
+
+  await results(page).getByRole("row").filter({ hasText: "came up here" }).click();
+  await expect(page).toHaveURL(/#\/chat\/rooms\/jazz\?at=150&q=floyd&in=rooms$/);
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/#\/chat\/search\?q=floyd&in=rooms$/);
+  await page.reload();
+  await expect(results(page)).toContainText("came up here");
+  await expect(results(page)).not.toContainText("have you heard");
 });
 
 test("Jump to latest leaves the older messages for the newest", async ({ page }) => {

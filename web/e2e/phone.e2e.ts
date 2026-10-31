@@ -208,6 +208,9 @@ const everyScreen = async (page: Page) => {
   await fits(page, "/chat", shows("indie"));
   await fits(page, "/chat/rooms/indie", shows("anyone have the new boards of canada rip?"));
   await fits(page, "/chat/alice", shows("yes, browse away"));
+  await fits(page, "/chat/search?q=indie", (p) =>
+    expect(p.getByRole("grid", { name: "Search results" })).toContainText("indie")
+  );
   await fits(page, "/users", shows("No users yet"));
   await fits(page, "/users?tab=blocked", shows("No blocked users"));
   await fits(page, "/users/alice", shows("Not seen before"));

@@ -248,7 +248,21 @@ mod tests {
       .await
       .unwrap();
     assert_eq!(rooms_only.total, 1);
+    let typing = db
+      .read(|conn| search(conn, &query("\"pink\" \"flo\"*", MessageSearchKind::All)))
+      .await
+      .unwrap();
+    assert_eq!(
+      typing.total, 2,
+      "quoted words, the last one still being typed"
+    );
     let probe = db.read(Probe::of).await.unwrap();
+    for plain in ["\"sys-admin\" \"a:b\"*", "\"--\"*", "\"pink\" \"--\"*"] {
+      assert!(
+        probe.check(plain).is_ok(),
+        "{plain} is a search of plain words"
+      );
+    }
     let checked = [
       probe.check("\"pink floyd\" OR message:animals").is_ok(),
       probe.check("\"open").is_ok(),

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { fakeChat, frame, helloFrame } from "./support/fakes";
+import { fakeChat, fakeConnected, frame, helloFrame } from "./support/fakes";
 import { login, refuseCopy } from "./support/login";
 
 test("a room reads like a chat: names, actions, links and the wall", async ({ page }) => {
@@ -99,6 +99,42 @@ test("a busy room's comings and goings stay out of its messages", async ({ page 
   await expect(log.locator("[data-message]")).toHaveCount(6);
   await expect(log).not.toContainText("joined");
   await expect(log).not.toContainText(" left");
+});
+
+test("a private message stays on one line", async ({ page }) => {
+  await fakeConnected(page);
+  await fakeChat(page);
+  await login(page, "/chat");
+  await page.goto("./#/chat/alice");
+  const box = page.getByRole("textbox", { name: "Message" });
+  await box.click();
+  await page.keyboard.type("one");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("two");
+  await expect(box).toHaveValue("onetwo");
+
+  await box.fill("");
+  await page.keyboard.insertText("pasted\nlines");
+  const note = page.getByText("Line breaks are replaced with spaces in private messages.");
+  await expect(note).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(note).toHaveCount(0);
+  await expect(page.getByRole("log").getByText("pasted lines")).toBeVisible();
+});
+
+test("a room's message keeps its line breaks", async ({ page }) => {
+  await fakeConnected(page);
+  await fakeChat(page);
+  await login(page, "/chat");
+  await page.goto("./#/chat/rooms/indie");
+  const box = page.getByRole("textbox", { name: "Message" });
+  await box.click();
+  await page.keyboard.type("one");
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.type("two");
+  await expect(box).toHaveValue("one\ntwo");
+  await expect(page.getByText("Line breaks are replaced")).toHaveCount(0);
+  await box.fill("");
 });
 
 test("a toast sits above the docked activity log", async ({ page }) => {
