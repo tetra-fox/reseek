@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { app } from "#lib/app.svelte.js";
 import { session } from "#lib/session.svelte.js";
 
-import { reach } from "./actions";
+import { canManage, reach } from "./actions";
 
 const ids = (name: string) => reach(name).map((a) => a.id);
 
@@ -34,5 +34,22 @@ describe("the ways to reach a user", () => {
   it("never offer server as a user", () => {
     session.principal = { name: "me", role: "Administrator" } as never;
     expect(ids("server")).toEqual([]);
+  });
+});
+
+describe("who can be a buddy or blocked", () => {
+  afterEach(() => {
+    session.principal = null;
+    app.state = null;
+  });
+
+  it("is anyone but ourselves and server, for a ReadWrite account", () => {
+    session.principal = { name: "me", role: "ReadWrite" } as never;
+    app.state = { user: { username: "me" } } as never;
+    expect(canManage("alice")).toBe(true);
+    expect(canManage("me")).toBe(false);
+    expect(canManage("server")).toBe(false);
+    session.principal = { name: "me", role: "ReadOnly" } as never;
+    expect(canManage("alice")).toBe(false);
   });
 });

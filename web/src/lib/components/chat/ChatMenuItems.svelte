@@ -7,8 +7,6 @@
   import LogOutIcon from "@lucide/svelte/icons/log-out";
   import PinIcon from "@lucide/svelte/icons/pin";
   import PinOffIcon from "@lucide/svelte/icons/pin-off";
-  import UserCheckIcon from "@lucide/svelte/icons/user-check";
-  import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import XIcon from "@lucide/svelte/icons/x";
 
   import { root, type Schemas } from "#lib/api/client.js";
@@ -18,14 +16,13 @@
   import { pins } from "#lib/chat/pins.svelte.js";
   import { chatLayout } from "#lib/chat/prefs.svelte.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import UserManageItems from "#lib/components/users/UserManageItems.svelte";
   import UserMenuItems from "#lib/components/users/UserMenuItems.svelte";
   import { confirmation } from "#lib/feedback/confirm.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { href, segment } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
-  import { pin } from "#lib/users/actions.js";
-  import { users } from "#lib/users/users.svelte.js";
-  import { BUDDY } from "#lib/wording.js";
+  import { canManage } from "#lib/users/actions.js";
 
   // what can be done to a conversation or a room, for its row's menu and its pane's
   let { target }: { target: Target } = $props();
@@ -36,7 +33,6 @@
   const notices = $derived(isNotices(target));
   const row = $derived(user ? chat.conversations.get(target.name) : chat.rooms.get(target.name));
   const unread = $derived(user ? chat.unreadOf(target.name) : chat.roomUnread(target.name).unread);
-  const summary = $derived(user ? users.get(target.name) : undefined);
   const pinned = $derived(pins.has(target));
   const exportUrl = (format: "text" | "json") =>
     user
@@ -118,11 +114,7 @@
 {/if}
 {#if user && !notices}
   <UserMenuItems name={target.name} only={["profile", "shares", "search"]} />
-  {#if write}
-    <Menu.Item onSelect={() => void pin(target.name, !summary?.pinned).then(report)}>
-      {#if summary?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
-    </Menu.Item>
-  {/if}
+  {#if canManage(target.name)}<UserManageItems name={target.name} />{/if}
 {/if}
 <Menu.Item onSelect={() => window.location.assign(exportUrl("text"))}
   ><DownloadIcon />Export as text</Menu.Item>

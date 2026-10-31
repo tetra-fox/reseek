@@ -14,7 +14,6 @@
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
 
   import { api, byUser, type Schemas } from "#lib/api/client.js";
-  import { app } from "#lib/app.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
@@ -33,7 +32,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { assignGroup, pin, reach, userGroups } from "#lib/users/actions.js";
+  import { assignGroup, canManage, pin, reach, userGroups } from "#lib/users/actions.js";
   import { blocking, unblock } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
   import { BUDDY } from "#lib/wording.js";
@@ -50,8 +49,6 @@
   let { profile: p, refreshing, onrefresh, onchanged }: Props = $props();
 
   const name = $derived(p.username);
-  /** our own account, which can't be blocked */
-  const own = $derived(app.state?.user.username === name);
   const write = $derived(session.can("ReadWrite"));
   const admin = $derived(session.can("Administrator"));
   const stats = $derived(p.statistics);
@@ -169,22 +166,22 @@
     <Button variant="outline" size="sm" disabled={refreshing} onclick={onrefresh}
       ><RefreshCwIcon />Refresh</Button>
     {#if write && p.known}
-      {#if own}
-        <!-- our own account is never blocked -->
-      {:else if p.block}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={p.block.source === "config"}
-          title={p.block.source === "config" ? "Blocked by the configuration" : undefined}
-          onclick={() => void unblock(name).then(onchanged)}><ShieldCheckIcon />Unblock</Button>
-      {:else}
-        <Button variant="outline" size="sm" onclick={() => blocking.ask(name)}
-          ><BanIcon />Block</Button>
+      {#if canManage(name)}
+        {#if p.block}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={p.block.source === "config"}
+            title={p.block.source === "config" ? "Blocked by the configuration" : undefined}
+            onclick={() => void unblock(name).then(onchanged)}><ShieldCheckIcon />Unblock</Button>
+        {:else}
+          <Button variant="outline" size="sm" onclick={() => blocking.ask(name)}
+            ><BanIcon />Block</Button>
+        {/if}
+        <Button variant="outline" size="sm" onclick={() => void run(() => pin(name, !p.pinned))}>
+          {#if p.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
+        </Button>
       {/if}
-      <Button variant="outline" size="sm" onclick={() => void run(() => pin(name, !p.pinned))}>
-        {#if p.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
-      </Button>
       <Button variant="outline" size="sm" onclick={() => void run(() => mute(!p.muted))}>
         {#if p.muted}<BellIcon />Unmute{:else}<BellOffIcon />Mute{/if}
       </Button>

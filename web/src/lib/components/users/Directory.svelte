@@ -33,8 +33,8 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { pin, reach, userGroups } from "#lib/users/actions.js";
-  import { blocking, unblock, unblockMany } from "#lib/users/block.svelte.js";
+  import { canManage, pin, reach, userGroups } from "#lib/users/actions.js";
+  import { blocking, toggleBlock, unblockMany } from "#lib/users/block.svelte.js";
   import { type UserSummary, users as usersStore } from "#lib/users/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";
 
@@ -158,7 +158,7 @@
   const chosen = $derived(shown.filter((u) => list.selected.has(u.username)));
   /** every user selected, those a filter now hides too, as the transfers grid counts them */
   const picked = $derived([...list.selected]);
-  const write = $derived(session.can("ReadWrite"));
+  const blockable = $derived(picked.filter(canManage));
   const admin = $derived(session.can("Administrator"));
   const filtered = $derived(!!(q || blocked || pinned || hasTransfers || presence || group || tag));
 
@@ -350,7 +350,7 @@
                 aria-label={action.label}
                 title={action.label}><action.icon /></Button>
             {/each}
-            {#if write}
+            {#if canManage(u.username)}
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -360,13 +360,11 @@
                 onclick={() => void togglePin(u)}>
                 {#if u.pinned}<UserCheckIcon class="text-accent" />{:else}<UserPlusIcon />{/if}
               </Button>
-            {/if}
-            {#if write}
               <Button
                 variant="ghost"
                 size="icon-sm"
                 aria-label={u.block ? "Unblock" : "Block"}
-                onclick={() => (u.block ? void unblock(u.username) : blocking.ask(u.username))}>
+                onclick={() => toggleBlock(u.username, !!u.block)}>
                 {#if u.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
               </Button>
             {/if}
@@ -402,9 +400,10 @@
 {#if list.selected.size}
   <div class="selection-bar" role="toolbar" aria-label="Selected users">
     <span class="text-sm">{picked.length} selected</span>
-    {#if write}
-      <Button size="sm" variant="outline" onclick={() => blocking.ask(picked)}>Block</Button>
-      <Button size="sm" variant="outline" onclick={() => void unblockAll(picked)}>Unblock</Button>
+    {#if blockable.length}
+      <Button size="sm" variant="outline" onclick={() => blocking.ask(blockable)}>Block</Button>
+      <Button size="sm" variant="outline" onclick={() => void unblockAll(blockable)}
+        >Unblock</Button>
     {/if}
     {#if admin}
       <Button size="sm" variant="outline" onclick={() => (assigning = true)}>Assign group</Button>

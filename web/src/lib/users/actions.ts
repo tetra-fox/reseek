@@ -70,6 +70,13 @@ export const reach = (
   });
 };
 
+/**
+ * Whether this session can make `username` a buddy or block them: it takes ReadWrite, nobody does
+ * either to themselves, and `server` is no user
+ */
+export const canManage = (username: string) =>
+  session.can("ReadWrite") && username !== SERVER && app.state?.user.username !== username;
+
 /** A user's profile as stored, or with `refresh` after asking the network about them */
 export const profileOf = (username: string, refresh: boolean) =>
   call(() =>

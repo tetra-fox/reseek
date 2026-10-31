@@ -3,7 +3,9 @@ import { mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
+import { app } from "#lib/app.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
+import { session } from "#lib/session.svelte.js";
 import { flushFaked } from "#lib/testing/flush.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
@@ -38,6 +40,8 @@ describe("the users directory", () => {
     if (component) unmount(component);
     component = null;
     live.stop();
+    session.principal = null;
+    app.state = null;
     vi.useRealTimers();
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
@@ -67,6 +71,22 @@ describe("the users directory", () => {
     await flushFaked();
     expect(line("bob")).toBe(bob);
     expect(bob.textContent).toContain("3");
+  });
+
+  it("offers no buddy or block on our own row, nor in a selection of only it", async () => {
+    session.principal = { name: "me", role: "ReadWrite" } as never;
+    app.state = { user: { username: "me" } } as never;
+    await start([summary("me"), summary("bob")]);
+    const labels = (name: string) =>
+      [...line(name).querySelectorAll("button")].map((b) => b.ariaLabel);
+    expect(labels("bob")).toEqual(expect.arrayContaining(["Add buddy", "Block"]));
+    expect(labels("me")).not.toContain("Add buddy");
+    expect(labels("me")).not.toContain("Block");
+    line("me").querySelector<HTMLElement>("[role=checkbox]")!.click();
+    await flushFaked();
+    const bar = () => document.querySelector("[role=toolbar]")!;
+    expect(bar().textContent).toContain("1 selected");
+    expect(bar().textContent).not.toContain("Block");
   });
 
   it("moves, selects and opens with the list's keys", async () => {

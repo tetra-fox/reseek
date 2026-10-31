@@ -15,9 +15,8 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, formatSpeed, plural } from "#lib/format.js";
   import { userHref } from "#lib/nav.js";
-  import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { pin, reach, USER_ACTIONS } from "#lib/users/actions.js";
+  import { canManage, pin, reach, USER_ACTIONS } from "#lib/users/actions.js";
   import { nameColor } from "#lib/users/colors.js";
   import { firstLines, ownProfile } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users } from "#lib/users/users.svelte.js";
@@ -74,7 +73,7 @@
     const text = draft ? draft.description : own ? ownProfile.data?.description : null;
     return text === null || text === undefined ? user?.description : firstLines(text, 3) || null;
   });
-  const readWrite = $derived(session.can("ReadWrite"));
+  const manageable = $derived(canManage(name));
   const pinning = new Busy();
   const togglePin = () =>
     pinning.run(async () => {
@@ -161,7 +160,7 @@
       <Button size="sm" variant={action.id === "message" ? "primary" : "outline"} href={action.href}
         ><action.icon />{action.label}</Button>
     {/each}
-    {#if readWrite && !own}
+    {#if manageable}
       <Button
         size="sm"
         variant="outline"
@@ -172,7 +171,7 @@
       </Button>
     {/if}
     <span class="ml-auto flex">
-      {#if readWrite && !own}
+      {#if manageable}
         <Tooltip text={user?.block ? "Unblock" : "Block"}>
           {#snippet child({ props })}
             <Button

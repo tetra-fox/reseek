@@ -1,30 +1,24 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import BanIcon from "@lucide/svelte/icons/ban";
   import CopyIcon from "@lucide/svelte/icons/copy";
-  import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
-  import UserCheckIcon from "@lucide/svelte/icons/user-check";
-  import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import { DropdownMenu, Popover } from "bits-ui";
 
-  import { app } from "#lib/app.svelte.js";
   import { SERVER } from "#lib/chat/notices.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
-  import { Busy } from "#lib/feedback/busy.svelte.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { interaction } from "#lib/lists/interaction.svelte.js";
   import { userHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { cn } from "#lib/ui/cn.js";
-  import { links, pin } from "#lib/users/actions.js";
-  import { blocking, unblock } from "#lib/users/block.svelte.js";
+  import { canManage, links } from "#lib/users/actions.js";
+  import { toggleBlock } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
   import { CLOSE_DELAY_MS, LONG_PRESS_MS, OPEN_DELAY_MS, open } from "#lib/users/hover.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
-  import { BUDDY } from "#lib/wording.js";
 
   import GroupBadge from "./GroupBadge.svelte";
   import UserCard from "./UserCard.svelte";
+  import UserManageItems from "./UserManageItems.svelte";
   import UserMenuItems from "./UserMenuItems.svelte";
 
   type Props = {
@@ -55,8 +49,6 @@
   const user = $derived(users.get(name));
   const to = $derived(links(name, folder));
   const readWrite = $derived(session.can("ReadWrite"));
-  /** our own account, which is no buddy and can't be blocked */
-  const own = $derived(app.state?.user.username === name);
 
   // another username's card or menu opening closes this one
   const active = $derived(open.owner === me ? shown : null);
@@ -125,18 +117,9 @@
     }
   };
 
-  const busy = new Busy();
-  const togglePin = () =>
-    busy.run(async () => {
-      const outcome = await pin(name, !user?.pinned);
-      if (outcome.ok) await users.load(name, { fresh: true });
-      return outcome;
-    });
-  /** Blocking opens the block dialog; unblocking is one click, with an undo */
   const blockOrAsk = () => {
     shown = null;
-    if (user?.block) void unblock(name);
-    else blocking.ask(name);
+    toggleBlock(name, !!user?.block);
   };
 </script>
 
@@ -222,14 +205,9 @@
       </div>
       <Menu.Separator />
       <UserMenuItems {name} {folder} />
-      {#if readWrite && !own}
+      {#if canManage(name)}
         <Menu.Separator />
-        <Menu.Item onSelect={togglePin}>
-          {#if user?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
-        </Menu.Item>
-        <Menu.Item onSelect={blockOrAsk}>
-          {#if user?.block}<ShieldCheckIcon />Unblock{:else}<BanIcon />Block{/if}
-        </Menu.Item>
+        <UserManageItems {name} />
       {/if}
       <Menu.Separator />
       <Menu.Item onSelect={() => void copyText(name)}><CopyIcon />Copy username</Menu.Item>

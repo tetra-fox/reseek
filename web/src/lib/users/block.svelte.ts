@@ -129,3 +129,9 @@ export const unblockMany = async (usernames: string[]) => {
 
 /** Unblocks `username` in one click; the toast offers to undo it for a few seconds */
 export const unblock = (username: string) => unblockMany([username]);
+
+/** Unblocks `username` when `blocked`, else opens the block dialog for them */
+export const toggleBlock = (username: string, blocked: boolean) => {
+  if (blocked) void unblock(username);
+  else blocking.ask(username);
+};
