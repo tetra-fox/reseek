@@ -95,7 +95,7 @@
       onclick={toggle}
       disabled={!allowed || busy.running}
       aria-label={view.label}
-      class="flex h-control w-full items-center gap-2.5 rounded-control px-2 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) not-disabled:hover:bg-hover not-disabled:hover:text-fg">
+      class="nav-item">
       <span class="relative shrink-0">
         <PlugIcon class={["size-4", view.plug]} />
         {#if view.badge === "unreachable"}

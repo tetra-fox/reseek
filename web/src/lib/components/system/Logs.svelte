@@ -20,8 +20,7 @@
       <a
         href={href(`/system/logs?tab=${t.id}`)}
         aria-current={tab === t.id ? "page" : undefined}
-        class="flex h-control items-center rounded-control px-3 text-sm text-fg-muted hover:bg-hover hover:text-fg aria-[current]:nav-current"
-        >{t.title}</a>
+        class="nav-tab">{t.title}</a>
     {/each}
   </nav>
   {#if tab === "history"}<LogFiles />{:else}<LiveLogs />{/if}

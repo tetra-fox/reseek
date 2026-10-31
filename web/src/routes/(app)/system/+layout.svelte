@@ -25,10 +25,7 @@
 <nav aria-label="System" class="-mx-1 -my-1 flex gap-1 overflow-x-auto px-1 py-1">
   {#each systemTabs as { tab, title } (tab)}
     {@const current = path === `/system/${tab}` || path.startsWith(`/system/${tab}/`)}
-    <a
-      href={href(`/system/${tab}`)}
-      aria-current={current ? "page" : undefined}
-      class="flex h-control shrink-0 items-center gap-1.5 rounded-control px-3 text-sm whitespace-nowrap text-fg-muted transition-colors duration-(--motion-fast) hover:bg-hover hover:text-fg aria-[current]:nav-current">
+    <a href={href(`/system/${tab}`)} aria-current={current ? "page" : undefined} class="nav-tab">
       {#if flagged(tab)}
         <CircleAlertIcon class="size-4 text-warning" aria-label="needs attention" />
       {/if}

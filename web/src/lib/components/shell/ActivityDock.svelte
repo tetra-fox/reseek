@@ -152,7 +152,7 @@
         role="row"
         {...list.line(e, i)}
         aria-label={activityText(e, formatBytes)}
-        class={["log-row", list.selected.has(String(e.id)) && "bg-accent-soft/60"]}>
+        class="log-row">
         <LogTime at={e.at} />
         <span role="gridcell" class="flex justify-center pt-1">
           <Icon

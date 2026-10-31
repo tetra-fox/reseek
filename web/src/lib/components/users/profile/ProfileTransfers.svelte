@@ -150,8 +150,7 @@
           role="row"
           {...list.line(t, i)}
           class={[
-            "group relative isolate grid min-w-max items-center list-row py-1 pl-2 hover:bg-hover",
-            list.selected.has(t.id) && "bg-accent-soft/60",
+            "group relative isolate grid min-w-max items-center list-row py-1 pl-2",
             rows.removed.has(t.id) && "opacity-40"
           ]}
           style:grid-template-columns={template}>

@@ -73,13 +73,7 @@
     {@attach list.attach}
     {@attach freezesWhileUsed}>
     {#each members.wall as line, i (line.username)}
-      <div
-        role="row"
-        {...list.line(line, i)}
-        class={[
-          "list-row px-1 py-1.5 text-sm",
-          list.selected.has(line.username) && "bg-accent-soft/60"
-        ]}>
+      <div role="row" {...list.line(line, i)} class="list-row px-1 py-1.5 text-sm">
         <div role="gridcell">
           <div class="flex items-baseline gap-2">
             <Username name={line.username} card class="text-xs" />

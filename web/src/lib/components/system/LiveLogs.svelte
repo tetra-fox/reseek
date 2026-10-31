@@ -204,11 +204,7 @@
     <div
       role="row"
       {...list.line(l, i)}
-      class={[
-        "grid grid-cols-[4.5rem_2.5rem_1fr] gap-2 list-row px-2 py-0.5",
-        level?.row,
-        list.selected.has(String(l.seq)) && "bg-accent-soft/60"
-      ]}>
+      class={["grid grid-cols-[4.5rem_2.5rem_1fr] gap-2 list-row px-2 py-0.5", level?.row]}>
       <span role="gridcell" class="text-fg-muted">{logTime(l.record.timestamp)}</span>
       <span role="gridcell">{level?.short ?? l.record.level}</span>
       <span role="gridcell" class="break-all whitespace-pre-wrap">

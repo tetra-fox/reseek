@@ -385,8 +385,7 @@
           role="row"
           {...list.line(line, index)}
           class={[
-            "group absolute inset-x-0 top-0 isolate grid items-center list-row hover:bg-hover",
-            selected.has(idOf(line.item)) && "bg-accent-soft/60",
+            "group absolute inset-x-0 top-0 isolate grid items-center list-row",
             arrivals.isFresh(line.key) && "animate-line-in",
             lineClass?.(line)
           ]}

@@ -180,9 +180,8 @@
             role="row"
             {...sharedList.line(r, i)}
             class={[
-              "grid min-w-max items-center gap-2 list-row px-4 py-1.5 hover:bg-hover",
-              r.derivedFrom && "text-fg-muted",
-              sharedList.selected.has(key(r)) && "bg-accent-soft/60"
+              "grid min-w-max items-center gap-2 list-row px-4 py-1.5",
+              r.derivedFrom && "text-fg-muted"
             ]}
             style:grid-template-columns={COLUMNS}>
             <span role="gridcell">{r.host}</span>
@@ -230,10 +229,7 @@
           <div
             role="row"
             {...excludedList.line(r, i)}
-            class={[
-              "flex items-center gap-2 list-row px-4 py-1.5 hover:bg-hover",
-              excludedList.selected.has(key(r)) && "bg-accent-soft/60"
-            ]}>
+            class="flex items-center gap-2 list-row px-4 py-1.5">
             <XIcon class="size-4 text-danger" />
             <span role="gridcell" class="font-mono text-xs">{r.localPath}</span>
           </div>

@@ -21,10 +21,7 @@
 
 <nav aria-label="Users" class="flex gap-1">
   {#each [{ id: "all", title: "All users", to: "/users" }, { id: "blocked", title: "Blocked users", to: "/users?tab=blocked" }] as t (t.id)}
-    <a
-      href={href(t.to)}
-      aria-current={tab === t.id ? "page" : undefined}
-      class="flex h-control items-center rounded-control px-3 text-sm text-fg-muted hover:bg-hover hover:text-fg aria-[current]:nav-current">
+    <a href={href(t.to)} aria-current={tab === t.id ? "page" : undefined} class="nav-tab">
       {t.title}
     </a>
   {/each}

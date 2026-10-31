@@ -153,10 +153,7 @@
         <div
           role="row"
           {...list.line(b, i)}
-          class={[
-            "grid min-w-max items-center gap-2 list-row px-2 py-1.5 hover:bg-hover",
-            list.selected.has(b.username) && "bg-accent-soft/60"
-          ]}
+          class="grid min-w-max items-center gap-2 list-row px-2 py-1.5"
           style:grid-template-columns={COLUMNS}>
           <span role="gridcell">
             {#if b.source !== "config"}

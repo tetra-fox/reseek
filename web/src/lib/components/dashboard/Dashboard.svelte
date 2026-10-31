@@ -153,7 +153,7 @@
     <button
       type="button"
       aria-current={tab === t.id ? "page" : undefined}
-      class="flex h-control items-center rounded-control px-3 text-sm text-fg-muted hover:bg-hover hover:text-fg aria-[current]:nav-current"
+      class="nav-tab"
       onclick={() => (tab = t.id as Tab)}>{t.title}</button>
   {/each}
 </nav>

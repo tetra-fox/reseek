@@ -202,10 +202,7 @@
             style:transform={`translateY(${start - headerHeight}px)`}
             style:height={`${size}px`}
             style:grid-template-columns={grid.template}
-            class={[
-              "group absolute inset-x-0 top-0 grid items-center hover:bg-hover",
-              list.selected.has(room.name) && "bg-accent-soft/60"
-            ]}>
+            class="group absolute inset-x-0 top-0 grid items-center line-tint">
             <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
               {#if room.isPrivate}<LockIcon
                   class="size-3.5 text-fg-muted"

@@ -91,7 +91,7 @@
       <a
         href={userHref(username, t.id === "overview" ? undefined : t.id)}
         aria-current={tab === t.id ? "page" : undefined}
-        class="flex h-control shrink-0 items-center rounded-control px-3 text-sm text-fg-muted hover:bg-hover hover:text-fg aria-[current]:nav-current">
+        class="nav-tab">
         {t.title}
       </a>
     {/each}
