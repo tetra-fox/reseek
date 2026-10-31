@@ -102,7 +102,7 @@ pub use loaded::{Loaded, NotApplied};
 pub use overrides::{Lasts, Override, Overrides};
 pub use schema::{Field, REDACTED, Schema};
 pub use source::Source;
-pub use view::{ConfigView, FieldView, FileView, OverrideView};
+pub use view::{ConfigView, EntryView, FieldView, FileView, OverrideView};
 pub use watcher::{ByApply, Change, Watch, Watcher, Written};
 pub use write::writability;
 

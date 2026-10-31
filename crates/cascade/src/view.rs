@@ -68,6 +68,26 @@ pub struct FieldView {
   /// the files' value of the key when it is not the one in effect, and why; a secret's value is
   /// shown as `*****`
   pub not_applied: Option<NotApplied>,
+  /// the fields of each element of a list of tables or entry of a user-keyed map, so a client
+  /// can edit them one by one
+  pub entries: Vec<EntryView>,
+}
+
+/// One field of the elements of a list of tables or the entries of a user-keyed map.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EntryView {
+  /// the dotted key, relative to the element
+  pub key: Key,
+  /// what kind of value the key holds
+  pub kind: Kind,
+  /// the key's help text
+  pub doc: String,
+  /// the names the value is one of, `None` when it is not one of a fixed set
+  pub choices: Option<Vec<String>>,
+  /// whether the value is shown as `*****`
+  pub secret: bool,
 }
 
 /// One configuration file.
@@ -132,6 +152,17 @@ impl ConfigView {
             reason: n.reason.clone(),
             value: schema.redact_value(&field.key, &n.value),
           }),
+          entries: field
+            .entries
+            .iter()
+            .map(|entry| EntryView {
+              key: entry.key.clone(),
+              kind: entry.kind.clone(),
+              doc: entry.doc.clone(),
+              choices: entry.choices.clone(),
+              secret: entry.secret,
+            })
+            .collect(),
         };
         (field.key.clone(), view)
       })

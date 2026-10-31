@@ -474,7 +474,8 @@
       "default": "476.8 MiB",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "analysis.extensions": {
       "source": {
@@ -500,7 +501,8 @@
       ],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "analysis.max_full_minutes": {
       "source": {
@@ -515,7 +517,8 @@
       "default": 15,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "analysis.on_download": {
       "source": {
@@ -530,7 +533,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "analysis.sampled_windows": {
       "source": {
@@ -545,7 +549,8 @@
       "default": 240,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "analysis.spectrogram.scale": {
       "source": {
@@ -564,7 +569,8 @@
       "default": "log",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "analysis.timeout": {
       "source": {
@@ -579,7 +585,8 @@
       "default": "2m",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "analysis.workers": {
       "source": {
@@ -594,7 +601,8 @@
       "default": "auto",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "blacklist.enabled": {
       "source": {
@@ -609,7 +617,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "blacklist.file": {
       "source": {
@@ -624,7 +633,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "blocking.default_scopes": {
       "source": {
@@ -647,7 +657,8 @@
       ],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "chat.accept_private_room_invitations": {
       "source": {
@@ -662,7 +673,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "chat.highlight_words": {
       "source": {
@@ -679,7 +691,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "chat.max_message_length": {
       "source": {
@@ -694,7 +707,8 @@
       "default": 2000,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "chat.notifications.enabled": {
       "source": {
@@ -709,7 +723,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "chat.notifications.mentions": {
       "source": {
@@ -724,7 +739,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "chat.notifications.only_when_hidden": {
       "source": {
@@ -739,7 +755,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "chat.notifications.private_messages": {
       "source": {
@@ -754,7 +771,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "chat.notifications.room_messages": {
       "source": {
@@ -769,7 +787,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "chat.notifications.sound": {
       "source": {
@@ -784,7 +803,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "debug": {
       "source": {
@@ -799,7 +819,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "directories.downloads": {
       "source": {
@@ -814,7 +835,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "directories.incomplete": {
       "source": {
@@ -829,7 +851,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "feature.swagger": {
       "source": {
@@ -844,7 +867,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "filters.search.request": {
       "source": {
@@ -861,7 +885,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.case_sensitive_regex": {
       "source": {
@@ -876,7 +901,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.config_watch_poll": {
       "source": {
@@ -891,7 +917,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.force_migrations": {
       "source": {
@@ -906,7 +933,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.force_share_scan": {
       "source": {
@@ -921,7 +949,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.legacy_windows_tcp_keepalive": {
       "source": {
@@ -936,7 +965,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.log_sql": {
       "source": {
@@ -951,7 +981,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.no_config_watch": {
       "source": {
@@ -966,7 +997,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.no_connect": {
       "source": {
@@ -981,7 +1013,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.no_logo": {
       "source": {
@@ -996,7 +1029,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.no_share_scan": {
       "source": {
@@ -1011,7 +1045,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.no_start": {
       "source": {
@@ -1026,7 +1061,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.no_version_check": {
       "source": {
@@ -1041,7 +1077,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.optimistic_relay_file_info": {
       "source": {
@@ -1056,7 +1093,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "flags.volatile": {
       "source": {
@@ -1071,7 +1109,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "headless": {
       "source": {
@@ -1086,7 +1125,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "instance_name": {
       "source": {
@@ -1101,7 +1141,8 @@
       "default": "default",
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "integrations.scripts": {
       "source": {
@@ -1116,7 +1157,55 @@
       "default": {},
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": [
+        {
+          "key": "on",
+          "kind": {
+            "list": "string"
+          },
+          "doc": "Names of the events that run the script. `Any`, `All` or `*` matches every event.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "run.command",
+          "kind": "string",
+          "doc": "Command line run by the system shell.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "run.executable",
+          "kind": "string",
+          "doc": "Program started directly, with `args` or `arglist`.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "run.args",
+          "kind": "string",
+          "doc": "Program arguments as one string, quoted by the user.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "run.arglist",
+          "kind": {
+            "list": "string"
+          },
+          "doc": "Program arguments as a list, each passed unchanged. Safer than `args`, where quoting determines where each argument ends.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "timeout",
+          "kind": "duration",
+          "doc": "Maximum run time before the script is stopped. `0` for no limit.",
+          "choices": null,
+          "secret": false
+        }
+      ]
     },
     "logger.loki": {
       "source": {
@@ -1131,7 +1220,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "logger.no_color": {
       "source": {
@@ -1146,7 +1236,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "logger.no_disk": {
       "source": {
@@ -1161,7 +1252,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "logging.level": {
       "source": {
@@ -1182,7 +1274,8 @@
       "default": "info",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "logging.targets": {
       "source": {
@@ -1199,7 +1292,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "metrics.authentication.disabled": {
       "source": {
@@ -1214,7 +1308,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "metrics.authentication.password": {
       "source": {
@@ -1229,7 +1324,8 @@
       "default": "*****",
       "apply": "restart",
       "secret": true,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "metrics.authentication.username": {
       "source": {
@@ -1244,7 +1340,8 @@
       "default": "reseek",
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "metrics.enabled": {
       "source": {
@@ -1259,7 +1356,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "metrics.url": {
       "source": {
@@ -1274,7 +1372,8 @@
       "default": "/metrics",
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "notifications.transfers.batch_finished": {
       "source": {
@@ -1289,7 +1388,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "notifications.transfers.download_finished": {
       "source": {
@@ -1304,7 +1404,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "notifications.transfers.upload_queued": {
       "source": {
@@ -1319,7 +1420,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "paths.cache": {
       "source": {
@@ -1334,7 +1436,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "paths.config": {
       "source": {
@@ -1349,7 +1452,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "paths.data": {
       "source": {
@@ -1364,7 +1468,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "paths.logs": {
       "source": {
@@ -1379,7 +1484,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.agents": {
       "source": {
@@ -1394,7 +1500,30 @@
       "default": {},
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": [
+        {
+          "key": "instance_name",
+          "kind": "string",
+          "doc": "Instance name of the agent.",
+          "choices": null,
+          "secret": true
+        },
+        {
+          "key": "secret",
+          "kind": "string",
+          "doc": "Secret the agent presents.",
+          "choices": null,
+          "secret": true
+        },
+        {
+          "key": "cidr",
+          "kind": "string",
+          "doc": "Networks the agent may connect from, comma-separated.",
+          "choices": null,
+          "secret": false
+        }
+      ]
     },
     "relay.controller.address": {
       "source": {
@@ -1409,7 +1538,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.controller.api_key": {
       "source": {
@@ -1424,7 +1554,8 @@
       "default": null,
       "apply": "live",
       "secret": true,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.controller.downloads": {
       "source": {
@@ -1439,7 +1570,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.controller.downloads_filter": {
       "source": {
@@ -1456,7 +1588,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.controller.ignore_certificate_errors": {
       "source": {
@@ -1471,7 +1604,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.controller.secret": {
       "source": {
@@ -1486,7 +1620,8 @@
       "default": null,
       "apply": "live",
       "secret": true,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.controller_timeouts.file_ack": {
       "source": {
@@ -1501,7 +1636,8 @@
       "default": "5s",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.controller_timeouts.file_info": {
       "source": {
@@ -1516,7 +1652,8 @@
       "default": "3s",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.controller_timeouts.file_stream": {
       "source": {
@@ -1531,7 +1668,8 @@
       "default": "30s",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.controller_timeouts.sync_deferral": {
       "source": {
@@ -1546,7 +1684,8 @@
       "default": "12h",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.enabled": {
       "source": {
@@ -1561,7 +1700,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.limits.share_database_max": {
       "source": {
@@ -1576,7 +1716,8 @@
       "default": "2.0 GiB",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "relay.mode": {
       "source": {
@@ -1595,7 +1736,8 @@
       "default": "controller",
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "remote_configuration": {
       "source": {
@@ -1610,7 +1752,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "remote_file_management": {
       "source": {
@@ -1625,7 +1768,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.events": {
       "source": {
@@ -1640,7 +1784,8 @@
       "default": "30days",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.events_max_rows": {
       "source": {
@@ -1655,7 +1800,8 @@
       "default": 100000,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.files.complete": {
       "source": {
@@ -1670,7 +1816,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.files.incomplete": {
       "source": {
@@ -1685,7 +1832,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.logs": {
       "source": {
@@ -1700,7 +1848,8 @@
       "default": "14days",
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.messages.max_per_conversation": {
       "source": {
@@ -1715,7 +1864,8 @@
       "default": 100000,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.messages.max_per_room": {
       "source": {
@@ -1730,7 +1880,8 @@
       "default": 100000,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.messages.mentions": {
       "source": {
@@ -1745,7 +1896,8 @@
       "default": "5months 27days 19h 12m",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.messages.private": {
       "source": {
@@ -1760,7 +1912,8 @@
       "default": "2months 29days 2h 52m 48s",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.messages.rooms": {
       "source": {
@@ -1775,7 +1928,8 @@
       "default": "2months 29days 2h 52m 48s",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.search": {
       "source": {
@@ -1790,7 +1944,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.transfers.download.canceled": {
       "source": {
@@ -1805,7 +1960,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.transfers.download.errored": {
       "source": {
@@ -1820,7 +1976,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.transfers.download.failed": {
       "source": {
@@ -1835,7 +1992,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.transfers.download.succeeded": {
       "source": {
@@ -1850,7 +2008,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.transfers.purge_removed_after": {
       "source": {
@@ -1865,7 +2024,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.transfers.upload.canceled": {
       "source": {
@@ -1880,7 +2040,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.transfers.upload.errored": {
       "source": {
@@ -1895,7 +2056,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.transfers.upload.failed": {
       "source": {
@@ -1910,7 +2072,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.transfers.upload.succeeded": {
       "source": {
@@ -1925,7 +2088,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "retention.users": {
       "source": {
@@ -1940,7 +2104,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "rooms": {
       "source": {
@@ -1957,7 +2122,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "search.filter_presets": {
       "source": {
@@ -2003,7 +2169,23 @@
       ],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": [
+        {
+          "key": "name",
+          "kind": "string",
+          "doc": "Name shown in the presets menu.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "filter",
+          "kind": "string",
+          "doc": "Filter string placed in the filter box.",
+          "choices": null,
+          "secret": false
+        }
+      ]
     },
     "shares.cache.retention": {
       "source": {
@@ -2018,7 +2200,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "shares.cache.storage_mode": {
       "source": {
@@ -2036,7 +2219,8 @@
       "default": "memory",
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "shares.cache.workers": {
       "source": {
@@ -2051,7 +2235,8 @@
       "default": 32,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "shares.directories": {
       "source": {
@@ -2068,7 +2253,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "shares.filters": {
       "source": {
@@ -2085,7 +2271,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "shares.follow_symlinks": {
       "source": {
@@ -2100,7 +2287,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "shares.share_downloads": {
       "source": {
@@ -2115,7 +2303,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "shutdown_timeout": {
       "source": {
@@ -2130,7 +2319,8 @@
       "default": "10s",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.address": {
       "source": {
@@ -2145,7 +2335,8 @@
       "default": "vps.slsknet.org",
       "apply": "reconnect",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.browse.response_timeout": {
       "source": {
@@ -2160,7 +2351,8 @@
       "default": "1m",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.buffer.read": {
       "source": {
@@ -2175,7 +2367,8 @@
       "default": 16384,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.buffer.transfer": {
       "source": {
@@ -2190,7 +2383,8 @@
       "default": 262144,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.buffer.write": {
       "source": {
@@ -2205,7 +2399,8 @@
       "default": 16384,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.buffer.write_queue": {
       "source": {
@@ -2220,7 +2415,8 @@
       "default": 50,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.mtu": {
       "source": {
@@ -2235,7 +2431,8 @@
       "default": null,
       "apply": "reconnect",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.proxy.address": {
       "source": {
@@ -2250,7 +2447,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.proxy.enabled": {
       "source": {
@@ -2265,7 +2463,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.proxy.password": {
       "source": {
@@ -2280,7 +2479,8 @@
       "default": null,
       "apply": "live",
       "secret": true,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.proxy.port": {
       "source": {
@@ -2295,7 +2495,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.proxy.username": {
       "source": {
@@ -2310,7 +2511,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.timeout.connect": {
       "source": {
@@ -2325,7 +2527,8 @@
       "default": "10s",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.timeout.inactivity": {
       "source": {
@@ -2340,7 +2543,8 @@
       "default": "15s",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.timeout.transfer": {
       "source": {
@@ -2355,7 +2559,8 @@
       "default": "1m",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.connection.timeout.transfer_response": {
       "source": {
@@ -2370,7 +2575,8 @@
       "default": "15s",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.description": {
       "source": {
@@ -2385,7 +2591,8 @@
       "default": "A reseek user.",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.diagnostic_level": {
       "source": {
@@ -2405,7 +2612,8 @@
       "default": "info",
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.distributed_network.child_limit": {
       "source": {
@@ -2420,7 +2628,8 @@
       "default": 25,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.distributed_network.disable_children": {
       "source": {
@@ -2435,7 +2644,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.distributed_network.disabled": {
       "source": {
@@ -2450,7 +2660,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.distributed_network.logging": {
       "source": {
@@ -2465,7 +2676,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.limits.distributed_parent_negotiation_timeout": {
       "source": {
@@ -2480,7 +2692,8 @@
       "default": "5s",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.limits.max_cached_peer_connections": {
       "source": {
@@ -2495,7 +2708,8 @@
       "default": 1000,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.limits.max_concurrent_peer_connects": {
       "source": {
@@ -2510,7 +2724,8 @@
       "default": 50,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.limits.max_message_size": {
       "source": {
@@ -2525,7 +2740,8 @@
       "default": "256.0 MiB",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.limits.search_response_cache_size": {
       "source": {
@@ -2540,7 +2756,8 @@
       "default": 1000,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.limits.user_endpoint_cache_size": {
       "source": {
@@ -2555,7 +2772,8 @@
       "default": 10000,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.listen_ip_address": {
       "source": {
@@ -2570,7 +2788,8 @@
       "default": "0.0.0.0",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.listen_port": {
       "source": {
@@ -2585,7 +2804,8 @@
       "default": 50300,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.password": {
       "source": {
@@ -2600,7 +2820,8 @@
       "default": null,
       "apply": "reconnect",
       "secret": true,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.picture": {
       "source": {
@@ -2615,7 +2836,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.port": {
       "source": {
@@ -2630,7 +2852,8 @@
       "default": 2271,
       "apply": "reconnect",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.port_mapping": {
       "source": {
@@ -2645,7 +2868,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.search.max_concurrent": {
       "source": {
@@ -2660,7 +2884,8 @@
       "default": 2,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.server_keepalive.enabled": {
       "source": {
@@ -2675,7 +2900,8 @@
       "default": true,
       "apply": "reconnect",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.server_keepalive.idle": {
       "source": {
@@ -2690,7 +2916,8 @@
       "default": "10s",
       "apply": "reconnect",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.server_keepalive.interval": {
       "source": {
@@ -2705,7 +2932,8 @@
       "default": "2s",
       "apply": "reconnect",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.server_keepalive.probes": {
       "source": {
@@ -2720,7 +2948,8 @@
       "default": 3,
       "apply": "reconnect",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "soulseek.username": {
       "source": {
@@ -2735,7 +2964,8 @@
       "default": null,
       "apply": "reconnect",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "throttling.search.incoming.circuit_breaker": {
       "source": {
@@ -2750,7 +2980,8 @@
       "default": 500,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "throttling.search.incoming.concurrency": {
       "source": {
@@ -2765,7 +2996,8 @@
       "default": 10,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "throttling.search.incoming.response_file_limit": {
       "source": {
@@ -2780,7 +3012,8 @@
       "default": 500,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.download.destination.exists": {
       "source": {
@@ -2798,7 +3031,8 @@
       "default": "rename",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.download.destination.permissions.mode": {
       "source": {
@@ -2813,7 +3047,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.download.destination.subdirectory": {
       "source": {
@@ -2828,7 +3063,8 @@
       "default": "${SOURCE_DIRECTORY}",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.download.request_style": {
       "source": {
@@ -2846,7 +3082,8 @@
       "default": "queue",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.download.retry.attempts": {
       "source": {
@@ -2861,7 +3098,8 @@
       "default": 3,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.download.retry.delay": {
       "source": {
@@ -2876,7 +3114,8 @@
       "default": "5s",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.download.retry.max_delay": {
       "source": {
@@ -2891,7 +3130,8 @@
       "default": "1m",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.download.retry.partial": {
       "source": {
@@ -2909,7 +3149,8 @@
       "default": "resume",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.download.slots": {
       "source": {
@@ -2924,7 +3165,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.download.speed_limit": {
       "source": {
@@ -2939,7 +3181,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.blacklisted.cidrs": {
       "source": {
@@ -2956,7 +3199,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.blacklisted.members": {
       "source": {
@@ -2973,7 +3217,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.blacklisted.patterns": {
       "source": {
@@ -2990,7 +3235,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.limits.daily.failures": {
       "source": {
@@ -3005,7 +3251,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.limits.daily.files": {
       "source": {
@@ -3020,7 +3267,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.limits.daily.megabytes": {
       "source": {
@@ -3035,7 +3283,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.limits.queued.failures": {
       "source": {
@@ -3050,7 +3299,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.limits.queued.files": {
       "source": {
@@ -3065,7 +3315,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.limits.queued.megabytes": {
       "source": {
@@ -3080,7 +3331,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.limits.weekly.failures": {
       "source": {
@@ -3095,7 +3347,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.limits.weekly.files": {
       "source": {
@@ -3110,7 +3363,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.limits.weekly.megabytes": {
       "source": {
@@ -3125,7 +3379,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.priority": {
       "source": {
@@ -3140,7 +3395,8 @@
       "default": 1,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.slots": {
       "source": {
@@ -3155,7 +3411,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.speed_limit": {
       "source": {
@@ -3170,7 +3427,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.default.upload.strategy": {
       "source": {
@@ -3188,7 +3446,8 @@
       "default": "roundrobin",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.thresholds.directories": {
       "source": {
@@ -3203,7 +3462,8 @@
       "default": 1,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.thresholds.files": {
       "source": {
@@ -3218,7 +3478,8 @@
       "default": 1,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.limits.daily.failures": {
       "source": {
@@ -3233,7 +3494,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.limits.daily.files": {
       "source": {
@@ -3248,7 +3510,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.limits.daily.megabytes": {
       "source": {
@@ -3263,7 +3526,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.limits.queued.failures": {
       "source": {
@@ -3278,7 +3542,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.limits.queued.files": {
       "source": {
@@ -3293,7 +3558,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.limits.queued.megabytes": {
       "source": {
@@ -3308,7 +3574,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.limits.weekly.failures": {
       "source": {
@@ -3323,7 +3590,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.limits.weekly.files": {
       "source": {
@@ -3338,7 +3606,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.limits.weekly.megabytes": {
       "source": {
@@ -3353,7 +3622,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.priority": {
       "source": {
@@ -3368,7 +3638,8 @@
       "default": 1,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.slots": {
       "source": {
@@ -3383,7 +3654,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.speed_limit": {
       "source": {
@@ -3398,7 +3670,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.leechers.upload.strategy": {
       "source": {
@@ -3416,7 +3689,8 @@
       "default": "roundrobin",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.groups.user_defined": {
       "source": {
@@ -3431,7 +3705,112 @@
       "default": {},
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": [
+        {
+          "key": "upload.priority",
+          "kind": "integer",
+          "doc": "Priority of the group. A lower number is served first.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "upload.strategy",
+          "kind": "string",
+          "doc": "Order in which the queue of the group is served: `roundrobin` or `firstinfirstout`.",
+          "choices": [
+            "roundrobin",
+            "firstinfirstout"
+          ],
+          "secret": false
+        },
+        {
+          "key": "upload.slots",
+          "kind": "integer",
+          "doc": "Maximum number of uploads of the group running at once. Only the global limit applies when not set.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "upload.speed_limit",
+          "kind": "integer",
+          "doc": "Total upload speed limit of the group in KiB/s. No limit when not set.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "upload.limits.queued.files",
+          "kind": "integer",
+          "doc": "Maximum number of files.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "upload.limits.queued.megabytes",
+          "kind": "integer",
+          "doc": "Maximum number of megabytes.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "upload.limits.queued.failures",
+          "kind": "integer",
+          "doc": "Maximum number of failed transfers.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "upload.limits.daily.files",
+          "kind": "integer",
+          "doc": "Maximum number of files.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "upload.limits.daily.megabytes",
+          "kind": "integer",
+          "doc": "Maximum number of megabytes.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "upload.limits.daily.failures",
+          "kind": "integer",
+          "doc": "Maximum number of failed transfers.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "upload.limits.weekly.files",
+          "kind": "integer",
+          "doc": "Maximum number of files.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "upload.limits.weekly.megabytes",
+          "kind": "integer",
+          "doc": "Maximum number of megabytes.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "upload.limits.weekly.failures",
+          "kind": "integer",
+          "doc": "Maximum number of failed transfers.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "members",
+          "kind": {
+            "list": "string"
+          },
+          "doc": "Usernames in the group.",
+          "choices": null,
+          "secret": false
+        }
+      ]
     },
     "transfers.ui.queue_refresh": {
       "source": {
@@ -3446,7 +3825,8 @@
       "default": "2m",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.upload.limits.daily.failures": {
       "source": {
@@ -3461,7 +3841,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.upload.limits.daily.files": {
       "source": {
@@ -3476,7 +3857,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.upload.limits.daily.megabytes": {
       "source": {
@@ -3491,7 +3873,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.upload.limits.queued.failures": {
       "source": {
@@ -3506,7 +3889,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.upload.limits.queued.files": {
       "source": {
@@ -3521,7 +3905,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.upload.limits.queued.megabytes": {
       "source": {
@@ -3536,7 +3921,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.upload.limits.weekly.failures": {
       "source": {
@@ -3551,7 +3937,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.upload.limits.weekly.files": {
       "source": {
@@ -3566,7 +3953,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.upload.limits.weekly.megabytes": {
       "source": {
@@ -3581,7 +3969,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.upload.slots": {
       "source": {
@@ -3596,7 +3985,8 @@
       "default": 10,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "transfers.upload.speed_limit": {
       "source": {
@@ -3611,7 +4001,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "users.cache_pictures": {
       "source": {
@@ -3626,7 +4017,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "users.picture_max_bytes": {
       "source": {
@@ -3641,7 +4033,8 @@
       "default": "1.9 MiB",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.api_key": {
       "source": {
@@ -3656,7 +4049,8 @@
       "default": null,
       "apply": "restart",
       "secret": true,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.api_keys": {
       "source": {
@@ -3671,7 +4065,34 @@
       "default": {},
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": [
+        {
+          "key": "key",
+          "kind": "string",
+          "doc": "API key, 16 to 255 characters.",
+          "choices": null,
+          "secret": true
+        },
+        {
+          "key": "role",
+          "kind": "string",
+          "doc": "Role of the key.",
+          "choices": [
+            "readonly",
+            "readwrite",
+            "administrator"
+          ],
+          "secret": false
+        },
+        {
+          "key": "cidr",
+          "kind": "string",
+          "doc": "Networks the key may be used from, comma-separated.",
+          "choices": null,
+          "secret": false
+        }
+      ]
     },
     "web.authentication.disabled": {
       "source": {
@@ -3686,7 +4107,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.local.enabled": {
       "source": {
@@ -3701,7 +4123,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.local.only_from": {
       "source": {
@@ -3718,7 +4141,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.local.users": {
       "source": {
@@ -3733,7 +4157,34 @@
       "default": {},
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": [
+        {
+          "key": "password_hash",
+          "kind": "string",
+          "doc": "Password as an argon2id hash.",
+          "choices": null,
+          "secret": true
+        },
+        {
+          "key": "password",
+          "kind": "string",
+          "doc": "Password in plain text. Accepted with a warning at startup.",
+          "choices": null,
+          "secret": true
+        },
+        {
+          "key": "role",
+          "kind": "string",
+          "doc": "Role of the account.",
+          "choices": [
+            "readonly",
+            "readwrite",
+            "administrator"
+          ],
+          "secret": false
+        }
+      ]
     },
     "web.authentication.oidc": {
       "source": {
@@ -3748,7 +4199,159 @@
       "default": {},
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": [
+        {
+          "key": "issuer",
+          "kind": "string",
+          "doc": "Issuer URL. Discovery is read from under it.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "client_id",
+          "kind": "string",
+          "doc": "Client ID registered with the provider.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "client_secret",
+          "kind": "string",
+          "doc": "Client secret, for a confidential client.",
+          "choices": null,
+          "secret": true
+        },
+        {
+          "key": "display_name",
+          "kind": "string",
+          "doc": "Label of the login button. The provider name is used when not set.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "scopes",
+          "kind": {
+            "list": "string"
+          },
+          "doc": "Requested scopes.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "role_mapping.claim",
+          "kind": "string",
+          "doc": "Claim that holds the groups of the user. A dotted path selects a nested claim.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "role_mapping.administrator",
+          "kind": {
+            "list": "string"
+          },
+          "doc": "Groups granted the administrator role.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "role_mapping.readwrite",
+          "kind": {
+            "list": "string"
+          },
+          "doc": "Groups granted read and write access.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "role_mapping.readonly",
+          "kind": {
+            "list": "string"
+          },
+          "doc": "Groups granted read-only access.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "role_mapping.default",
+          "kind": "string",
+          "doc": "Role for users in none of the groups, or `deny` to refuse them.",
+          "choices": [
+            "deny",
+            "readonly",
+            "readwrite",
+            "administrator"
+          ],
+          "secret": false
+        },
+        {
+          "key": "allowed_subjects",
+          "kind": {
+            "list": "string"
+          },
+          "doc": "Subjects allowed to log in. Anyone when empty.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "allowed_emails",
+          "kind": {
+            "list": "string"
+          },
+          "doc": "Verified email addresses allowed to log in. Anyone when empty.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "username_claim",
+          "kind": "string",
+          "doc": "Claim that holds the username. Falls back to the email address, then the subject.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "auto_login",
+          "kind": "bool",
+          "doc": "Redirects the login page to this provider when it is the only one.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "session_ttl",
+          "kind": "duration",
+          "doc": "Lifetime of a session from this provider.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "logout.rp_initiated",
+          "kind": "bool",
+          "doc": "Redirects the browser to the logout page of the provider on logout, when the provider has one.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "logout.back_channel",
+          "kind": "bool",
+          "doc": "Accepts back-channel logout requests from the provider.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "ca_certificate",
+          "kind": "string",
+          "doc": "PEM file with an additional certificate authority, for a private provider.",
+          "choices": null,
+          "secret": false
+        },
+        {
+          "key": "require_https",
+          "kind": "bool",
+          "doc": "Refuses an `http://` issuer that is not on this machine.",
+          "choices": null,
+          "secret": false
+        }
+      ]
     },
     "web.authentication.password": {
       "source": {
@@ -3763,7 +4366,8 @@
       "default": "*****",
       "apply": "live",
       "secret": true,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.password_hash": {
       "source": {
@@ -3778,7 +4382,8 @@
       "default": null,
       "apply": "live",
       "secret": true,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.proxy.email_header": {
       "source": {
@@ -3793,7 +4398,8 @@
       "default": "X-Authentik-Email",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.proxy.enabled": {
       "source": {
@@ -3808,7 +4414,8 @@
       "default": false,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.proxy.groups_header": {
       "source": {
@@ -3823,7 +4430,8 @@
       "default": "X-Authentik-Groups",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.proxy.role_mapping.administrator": {
       "source": {
@@ -3840,7 +4448,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.proxy.role_mapping.default": {
       "source": {
@@ -3860,7 +4469,8 @@
       "default": "deny",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.proxy.role_mapping.readonly": {
       "source": {
@@ -3877,7 +4487,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.proxy.role_mapping.readwrite": {
       "source": {
@@ -3894,7 +4505,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.proxy.session": {
       "source": {
@@ -3909,7 +4521,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.proxy.user_header": {
       "source": {
@@ -3924,7 +4537,8 @@
       "default": "X-Authentik-Username",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.session_idle": {
       "source": {
@@ -3939,7 +4553,8 @@
       "default": "30days",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.session_ttl": {
       "source": {
@@ -3954,7 +4569,8 @@
       "default": "7days",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.trusted_networks": {
       "source": {
@@ -3971,7 +4587,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.trusted_role": {
       "source": {
@@ -3990,7 +4607,8 @@
       "default": "administrator",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.authentication.username": {
       "source": {
@@ -4005,7 +4623,8 @@
       "default": "reseek",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.content_path": {
       "source": {
@@ -4020,7 +4639,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.cors.allowed_origins": {
       "source": {
@@ -4037,7 +4657,8 @@
       "default": [],
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.external_url": {
       "source": {
@@ -4052,7 +4673,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.files.archive_max_bytes": {
       "source": {
@@ -4067,7 +4689,8 @@
       "default": "18.6 GiB",
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.files.serve": {
       "source": {
@@ -4082,7 +4705,8 @@
       "default": true,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.files.serve_speed_limit": {
       "source": {
@@ -4097,7 +4721,8 @@
       "default": null,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.hostnames": {
       "source": {
@@ -4114,7 +4739,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.https.certificate.cert": {
       "source": {
@@ -4129,7 +4755,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.https.certificate.key": {
       "source": {
@@ -4144,7 +4771,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.https.certificate.password": {
       "source": {
@@ -4159,7 +4787,8 @@
       "default": null,
       "apply": "restart",
       "secret": true,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.https.certificate.pfx": {
       "source": {
@@ -4174,7 +4803,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.https.disabled": {
       "source": {
@@ -4189,7 +4819,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.https.force": {
       "source": {
@@ -4204,7 +4835,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.https.ip_address": {
       "source": {
@@ -4219,7 +4851,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.https.port": {
       "source": {
@@ -4234,7 +4867,8 @@
       "default": 5031,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.ip_address": {
       "source": {
@@ -4249,7 +4883,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.live.max_streams_per_principal": {
       "source": {
@@ -4264,7 +4899,8 @@
       "default": 16,
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.logging": {
       "source": {
@@ -4279,7 +4915,8 @@
       "default": false,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.port": {
       "source": {
@@ -4294,7 +4931,8 @@
       "default": 5030,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.socket": {
       "source": {
@@ -4309,7 +4947,8 @@
       "default": null,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.trusted_proxies": {
       "source": {
@@ -4326,7 +4965,8 @@
       "default": [],
       "apply": "live",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.ui": {
       "source": {
@@ -4341,7 +4981,8 @@
       "default": true,
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     },
     "web.url_base": {
       "source": {
@@ -4356,7 +4997,8 @@
       "default": "/",
       "apply": "restart",
       "secret": false,
-      "notApplied": null
+      "notApplied": null,
+      "entries": []
     }
   },
   "files": [

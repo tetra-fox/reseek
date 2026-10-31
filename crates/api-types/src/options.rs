@@ -129,6 +129,26 @@ pub struct FieldView {
   pub secret: bool,
   /// the files' value when it is not the one in effect, and why
   pub not_applied: Option<NotApplied>,
+  /// the fields of each element of a list of tables or entry of a user-keyed map, so a client
+  /// can edit them one by one; empty for any other option
+  pub entries: Vec<EntryView>,
+}
+
+/// One field of the elements of a list of tables or the entries of a user-keyed map.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryView {
+  /// the dotted key, relative to the element
+  #[schema(example = "role_mapping.claim")]
+  pub key: String,
+  /// what kind of value the key holds
+  pub kind: OptionKind,
+  /// the key's help text
+  pub doc: String,
+  /// the names the value is one of; null for any other field
+  pub choices: Option<Vec<String>>,
+  /// whether the value is shown as `*****`
+  pub secret: bool,
 }
 
 /// One configuration file.
@@ -197,7 +217,8 @@ pub struct ConfigView {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OptionsPatch {
-  /// the keys to override and their values; `*****` for a secret keeps its override
+  /// the keys to override and their values; `*****` for a secret, or for one in an entry of a
+  /// map, keeps it
   #[serde(default)]
   #[schema(value_type = Object)]
   pub set: BTreeMap<String, Value>,
@@ -226,7 +247,8 @@ pub struct OptionsChanged {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FilePatch {
-  /// the keys to write and their values; `*****` for a secret keeps it, `""` clears it
+  /// the keys to write and their values; `*****` for a secret, or for one in an entry of a map,
+  /// keeps it, `""` clears it
   #[serde(default)]
   #[schema(value_type = Object)]
   pub set: BTreeMap<String, Value>,

@@ -18106,6 +18106,45 @@
           }
         }
       },
+      "EntryView": {
+        "type": "object",
+        "description": "One field of the elements of a list of tables or the entries of a user-keyed map.",
+        "required": [
+          "key",
+          "kind",
+          "doc",
+          "secret"
+        ],
+        "properties": {
+          "choices": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "the names the value is one of; null for any other field"
+          },
+          "doc": {
+            "type": "string",
+            "description": "the key's help text"
+          },
+          "key": {
+            "type": "string",
+            "description": "the dotted key, relative to the element",
+            "example": "role_mapping.claim"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OptionKind",
+            "description": "what kind of value the key holds"
+          },
+          "secret": {
+            "type": "boolean",
+            "description": "whether the value is shown as `*****`"
+          }
+        }
+      },
       "ErrorBody": {
         "type": "object",
         "description": "What went wrong, sent with every 4xx and 5xx status.",
@@ -18673,7 +18712,8 @@
           "doc",
           "default",
           "apply",
-          "secret"
+          "secret",
+          "entries"
         ],
         "properties": {
           "apply": {
@@ -18712,6 +18752,13 @@
           "doc": {
             "type": "string",
             "description": "the key's help text"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntryView"
+            },
+            "description": "the fields of each element of a list of tables or entry of a user-keyed map, so a client\ncan edit them one by one; empty for any other option"
           },
           "envVar": {
             "type": [
@@ -18947,7 +18994,7 @@
           },
           "set": {
             "type": "object",
-            "description": "the keys to write and their values; `*****` for a secret keeps it, `\"\"` clears it"
+            "description": "the keys to write and their values; `*****` for a secret, or for one in an entry of a map,\nkeeps it, `\"\"` clears it"
           },
           "unset": {
             "type": "array",
@@ -21255,7 +21302,7 @@
           },
           "set": {
             "type": "object",
-            "description": "the keys to override and their values; `*****` for a secret keeps its override"
+            "description": "the keys to override and their values; `*****` for a secret, or for one in an entry of a\nmap, keeps it"
           },
           "unset": {
             "type": "array",

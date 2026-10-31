@@ -35,6 +35,17 @@ pub fn config_view(loaded: &Loaded<Options>) -> api::ConfigView {
             reason: n.reason,
             value: hidden(n.value),
           }),
+          entries: field
+            .entries
+            .into_iter()
+            .map(|entry| api::EntryView {
+              key: entry.key,
+              kind: option_kind(entry.kind),
+              doc: entry.doc,
+              choices: entry.choices,
+              secret: entry.secret,
+            })
+            .collect(),
         };
         (key, field)
       })

@@ -4229,6 +4229,22 @@ export interface components {
             /** @description why it was not enqueued, such as `Skipped: Already in progress` */
             message: string;
         };
+        /** @description One field of the elements of a list of tables or the entries of a user-keyed map. */
+        EntryView: {
+            /** @description the names the value is one of; null for any other field */
+            choices?: string[] | null;
+            /** @description the key's help text */
+            doc: string;
+            /**
+             * @description the dotted key, relative to the element
+             * @example role_mapping.claim
+             */
+            key: string;
+            /** @description what kind of value the key holds */
+            kind: components["schemas"]["OptionKind"];
+            /** @description whether the value is shown as `*****` */
+            secret: boolean;
+        };
         /** @description What went wrong, sent with every 4xx and 5xx status. */
         ErrorBody: {
             /** @description a longer explanation, null when the message says it all */
@@ -4426,6 +4442,11 @@ export interface components {
             /** @description the key's help text */
             doc: string;
             /**
+             * @description the fields of each element of a list of tables or entry of a user-keyed map, so a client
+             *     can edit them one by one; empty for any other option
+             */
+            entries: components["schemas"]["EntryView"][];
+            /**
              * @description the environment variable that sets the key
              * @example RESEEK_SLSK_USERNAME
              */
@@ -4527,7 +4548,10 @@ export interface components {
             file?: string | null;
             /** @description the file's revision the change was made against, null when the file did not exist */
             revision?: string | null;
-            /** @description the keys to write and their values; `*****` for a secret keeps it, `""` clears it */
+            /**
+             * @description the keys to write and their values; `*****` for a secret, or for one in an entry of a map,
+             *     keeps it, `""` clears it
+             */
             set?: Record<string, unknown>;
             /** @description the keys to take out of the file */
             unset?: string[];
@@ -5432,7 +5456,10 @@ export interface components {
              * @example 2h
              */
             expiresIn?: string | null;
-            /** @description the keys to override and their values; `*****` for a secret keeps its override */
+            /**
+             * @description the keys to override and their values; `*****` for a secret, or for one in an entry of a
+             *     map, keeps it
+             */
             set?: Record<string, unknown>;
             /** @description the keys whose override ends */
             unset?: string[];
