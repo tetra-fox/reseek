@@ -19,6 +19,8 @@
   import FileTree from "#lib/components/files/FileTree.svelte";
   import FolderLine from "#lib/components/files/FolderLine.svelte";
   import SelectionBar from "#lib/components/files/SelectionBar.svelte";
+  import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
+  import RemoteFileInspector from "#lib/components/inspector/RemoteFileInspector.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Input from "#lib/components/ui/Input.svelte";
@@ -40,6 +42,7 @@
   import { FILTER_PLACEHOLDER } from "#lib/files/filters.js";
   import { slskLink } from "#lib/files/slsk.js";
   import { formatBytes, getFileName, plural } from "#lib/format.js";
+  import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
@@ -85,6 +88,12 @@
   const columns = $derived(fileColumns({ quality: true, phone: viewport.phone }));
 
   followDownloads();
+
+  /** the file the inspector shows, which follows focus in the tree, and whose share it is in */
+  let picked = $state.raw<{ username: string; file: RemoteFile } | null>(null);
+  const shown = $derived(picked?.username === browser.username ? picked : null);
+  useInspector(inspected, () => !!shown);
+  const inspect = (file: RemoteFile) => (picked = { username: browser.username, file });
 
   /** Opens the folders down to `target` and the folder itself, and goes to its line */
   const navigate = (target: string) => {
@@ -282,6 +291,16 @@
   };
 </script>
 
+{#snippet inspected()}
+  {#if shown}
+    {@const file = shown.file}
+    <RemoteFileInspector
+      {file}
+      username={shown.username}
+      ondownload={write && !file.locked ? () => void download([file]) : undefined} />
+  {/if}
+{/snippet}
+
 <!-- Escape clears the screen only while focus is in it, not in a dialog over it -->
 <div class="flex flex-col gap-section" role="region" aria-label="Browse" {@attach escapeClears}>
   <form
@@ -433,6 +452,7 @@
         <Button variant="outline" size="sm" onclick={() => expansion.reset(false)}>
           <ChevronUpIcon />Collapse all
         </Button>
+        <InspectorToggle />
       </div>
     </section>
     <FileTree
@@ -449,7 +469,8 @@
       nameOf={(line) =>
         line.kind === "folder" ? line.node.label : getFileName(line.item.filename)}
       onopen={write ? (f) => void download([f]) : undefined}
-      onmiddleclick={write ? (f) => void download([f]) : undefined}>
+      onmiddleclick={write ? (f) => void download([f]) : undefined}
+      {inspect}>
       {#snippet header()}
         <FileHeader {columns} />
       {/snippet}
@@ -485,7 +506,11 @@
           {columns}
           selected={browser.selected.has(file.filename)}
           ontick={tick}
-          ondownload={write && !file.locked ? () => void download([file]) : undefined} />
+          ondownload={write && !file.locked ? () => void download([file]) : undefined}
+          ondetails={() => {
+            inspect(file);
+            inspector.show();
+          }} />
       {/snippet}
     </FileTree>
     {#if chosen.length}
