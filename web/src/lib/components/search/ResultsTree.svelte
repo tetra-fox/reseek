@@ -20,6 +20,7 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
+  import Flag from "#lib/components/ui/Flag.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import GroupBadge from "#lib/components/users/GroupBadge.svelte";
@@ -48,8 +49,6 @@
   } from "#lib/tree/folders.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
-
-  import Country from "./Country.svelte";
 
   /** A file of a response, with whose it is and the response it came in */
   type Item = ResultFile & { owner: string; result: string };
@@ -200,7 +199,7 @@
     <Username {name} />
     {#if user}<Presence presence={user.presence} />{/if}
     {#if user?.group.color}<GroupBadge group={user.group} />{/if}
-    {#if response.country}<Country code={response.country} />{/if}
+    <Flag code={response.country} />
     {#if user?.block}<Badge tone="danger">blocked</Badge>{/if}
     <span class="truncate text-xs text-fg-muted max-md:hidden">
       {userFacts(response)} · {plural(node.count, "file", "files")}

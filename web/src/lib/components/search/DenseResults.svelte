@@ -8,6 +8,7 @@
   import SelectionBar from "#lib/components/files/SelectionBar.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
+  import Flag from "#lib/components/ui/Flag.svelte";
   import GridHeader from "#lib/components/ui/GridHeader.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -24,8 +25,6 @@
   import { offerFields, type Picked } from "#lib/search/facts.js";
   import { rem } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
-
-  import Country from "./Country.svelte";
 
   type Props = {
     /** one row per file, in the order the results are in */
@@ -210,7 +209,7 @@
           </span>
           <span role="gridcell" class="flex min-w-0 items-center gap-1.5 px-2">
             <span class="min-w-0 truncate"><Username name={row.username} /></span>
-            {#if row.country}<Country code={row.country} />{/if}
+            <Flag code={row.country} />
           </span>
           <span role="gridcell" class="truncate px-2 text-right tabular-nums"
             >{formatSpeed(row.speed)}</span>

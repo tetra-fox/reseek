@@ -21,6 +21,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
+  import Flag from "#lib/components/ui/Flag.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
@@ -37,7 +38,6 @@
   import { assignGroup, links, pin, userGroups } from "#lib/users/actions.js";
   import { blocking, unblock } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
-  import { flag } from "#lib/users/hover.svelte.js";
   import { BUDDY } from "#lib/wording.js";
 
   type Props = {
@@ -58,7 +58,6 @@
   const write = $derived(session.can("ReadWrite"));
   const admin = $derived(session.can("Administrator"));
   const stats = $derived(p.statistics);
-  const country = $derived(flag(p.countryCode));
   const groups = $derived(userGroups());
   const lostGroup = $derived(!!p.groupOverride && !groups.includes(p.groupOverride));
 
@@ -108,7 +107,7 @@
           onclick={() => void copyText(name)}><CopyIcon /></Button>
         {#if !p.known}<Badge tone="outline">Not seen before</Badge>{/if}
         {#if p.isPrivileged}<Badge tone="warning">privileged</Badge>{/if}
-        {#if country}<span title={p.countryCode ?? ""}>{country}</span>{/if}
+        <Flag code={p.countryCode} />
         <GroupBadge group={p.group} />
         {#if lostGroup}
           <Badge tone="warning" title={`This user is assigned to ${p.groupOverride}`}
