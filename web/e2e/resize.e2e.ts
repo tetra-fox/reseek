@@ -80,7 +80,9 @@ test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
   test("nothing is resized: the lists are sheets", async ({ page }) => {
-    await room(page);
+    await fakeChat(page);
+    await login(page, "/chat/rooms/indie");
+    await expect(page.getByRole("heading", { name: "indie" })).toBeVisible();
     await expect(page.getByRole("separator")).toHaveCount(0);
   });
 });
