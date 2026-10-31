@@ -37,6 +37,46 @@ fn listing(folders: usize) -> BrowseResponse {
 }
 
 #[tokio::test]
+async fn looking_up_a_name_nobody_has_keeps_nothing_of_them() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let dir = tempfile::tempdir().unwrap();
+  let name = soulfind::username("daemon");
+  let running = daemon(dir.path(), &server, &name, &[]);
+  let api = signed_in(&running).await;
+  until(&api, "logged in", logged_in).await;
+  let options = ClientOptions {
+    listen_port: free_port(),
+    ..ClientOptions::default()
+  };
+  let peer = server.login("peer", options).await;
+
+  let nobody = soulfind::username("nobody");
+  let refused = api.user_profile(&nobody, true).await.unwrap_err();
+  assert_eq!(refused.status().map(|s| s.as_u16()), Some(404));
+
+  // touches are written in the order they came, so a touch of the name nobody has would be
+  // written by the time one of the peer, looked up after it, is
+  api.user_profile(&peer.username, true).await.unwrap();
+  let started = Instant::now();
+  while !api
+    .user_profile(&peer.username, false)
+    .await
+    .unwrap()
+    .user
+    .known
+  {
+    assert!(started.elapsed() < PATIENCE, "the peer was never stored");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  }
+  let profile = api.user_profile(&nobody, false).await.unwrap();
+  assert!(!profile.user.known, "stored: {profile:?}");
+  let cached = api.user_cache().await.unwrap();
+  assert!(cached.iter().all(|u| u.username != nobody), "{cached:?}");
+}
+
+#[tokio::test]
 async fn a_user_is_browsed_with_progress_asked_about_and_watched() {
   let Some(server) = soulfind::server() else {
     return;

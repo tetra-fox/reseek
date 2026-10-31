@@ -154,9 +154,16 @@ impl Users {
 
   /// `username`'s profile after asking the network for their status, statistics and info,
   /// each on its own and all within five seconds; what could not be asked is the stored value,
-  /// marked stale. A user nobody stored who the server says does not exist is a 404.
+  /// marked stale. A user nobody stored who the server says does not exist is a 404, and is
+  /// asked about first: the server answers statistics for any name, and keeping those would
+  /// store a row for a user who does not exist.
   async fn refreshed_profile(&self, username: &str) -> Result<UserProfile, ApiError> {
     let mut profile = self.directory.profile(username).await?;
+    if !profile.user.known && !self.agent && !self.exists(username).await {
+      return Err(ApiError::not_found(format!(
+        "User {username} does not exist"
+      )));
+    }
     let client = self.network.client();
     let (status, statistics, fetched) = if self.agent {
       (None, None, None)
@@ -175,11 +182,6 @@ impl Users {
         refreshed("info", username, fetched),
       )
     };
-    if !profile.user.known && !self.agent && !self.exists(username).await {
-      return Err(ApiError::not_found(format!(
-        "User {username} does not exist"
-      )));
-    }
     let now = chrono::Utc::now();
     if let Some(status) = status {
       profile.user.presence = Some(status.presence);
