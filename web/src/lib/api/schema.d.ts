@@ -4524,11 +4524,6 @@ export interface components {
              */
             name: string;
         };
-        /**
-         * @description Why reseek missed a room's messages for a while.
-         * @enum {string}
-         */
-        GapReason: "disconnected" | "daemonDown";
         /** @description Assigns a user to a user-defined group, the body of `PUT /users/{username}/group`. */
         GroupAssignment: {
             /** @description a user-defined group from the configuration, null to remove the assignment */
@@ -4581,8 +4576,9 @@ export interface components {
             version: components["schemas"]["VersionInfo"];
         };
         /**
-         * @description An interval with no room history because reseek was not there to receive messages. The
-         *     data of a `rooms.gap` frame, which is sent once logged in again.
+         * @description An interval with no room history because reseek was disconnected from Soulseek, whether or
+         *     not the daemon was running. The data of a `rooms.gap` frame, which is sent once logged in
+         *     again.
          */
         HistoryGap: {
             /**
@@ -4590,8 +4586,6 @@ export interface components {
              * @description when reseek stopped receiving
              */
             from: string;
-            /** @description why */
-            reason: components["schemas"]["GapReason"];
             /**
              * Format: date-time
              * @description when it received again, null while it is still disconnected

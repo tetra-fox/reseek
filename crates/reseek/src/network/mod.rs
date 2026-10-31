@@ -52,7 +52,7 @@ const SHUTTING_DOWN: &str = "Shutting down";
 /// Why the daemon itself ended the server session, carried as the disconnect's error so that
 /// what follows the disconnect knows not to reconnect.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum Intent {
+enum Intent {
   /// someone asked to disconnect
   #[error("disconnected by the user")]
   User,
@@ -71,7 +71,7 @@ impl Intent {
   }
 
   /// The reason a disconnect's `error` carries, when the daemon asked for it.
-  pub fn of(error: &ClientError) -> Option<Self> {
+  fn of(error: &ClientError) -> Option<Self> {
     match error {
       ClientError::Client {
         source: Some(source),

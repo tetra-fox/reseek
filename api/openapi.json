@@ -18290,14 +18290,6 @@
           }
         }
       },
-      "GapReason": {
-        "type": "string",
-        "description": "Why reseek missed a room's messages for a while.",
-        "enum": [
-          "disconnected",
-          "daemonDown"
-        ]
-      },
       "GroupAssignment": {
         "type": "object",
         "description": "Assigns a user to a user-defined group, the body of `PUT /users/{username}/group`.",
@@ -18406,20 +18398,15 @@
       },
       "HistoryGap": {
         "type": "object",
-        "description": "An interval with no room history because reseek was not there to receive messages. The\ndata of a `rooms.gap` frame, which is sent once logged in again.",
+        "description": "An interval with no room history because reseek was disconnected from Soulseek, whether or\nnot the daemon was running. The data of a `rooms.gap` frame, which is sent once logged in\nagain.",
         "required": [
-          "from",
-          "reason"
+          "from"
         ],
         "properties": {
           "from": {
             "type": "string",
             "format": "date-time",
             "description": "when reseek stopped receiving"
-          },
-          "reason": {
-            "$ref": "#/components/schemas/GapReason",
-            "description": "why"
           },
           "to": {
             "type": [
