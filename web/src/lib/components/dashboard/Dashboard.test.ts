@@ -116,6 +116,10 @@ describe("the dashboard", () => {
     expect(chart()).toMatch(/: Upload count peaks at 2, [^;]*; Download count peaks at 1, [^;]*$/);
     press("Upload");
     expect(chart()).toMatch(/: Download count peaks at 1, [^;]*$/);
+    // the last direction on stays on
+    press("Download");
+    expect(chart()).toMatch(/: Download count peaks at 1, [^;]*$/);
+    expect(dashboardPrefs.hidden).toEqual(["Upload"]);
     press("Error rate");
     expect(chart()).toMatch(/: Download error rate peaks at 0.0%, [^;]*$/);
     // a view with one line has no direction to turn off

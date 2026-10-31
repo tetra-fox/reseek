@@ -237,10 +237,15 @@ describe("the dashboard's saved choices", () => {
     });
   });
 
-  it.each([null, "x", 3, [], { view: "bytes", hidden: "Upload" }, { view: 1, hidden: [1, null] }])(
-    "fall back from %j",
-    (saved) => {
-      expect(readPrefs(saved)).toEqual({ range: "30d", view: "size", hidden: [] });
-    }
-  );
+  it.each([
+    null,
+    "x",
+    3,
+    [],
+    { view: "bytes", hidden: "Upload" },
+    { view: 1, hidden: [1, null] },
+    { hidden: ["Upload", "Download"] }
+  ])("fall back from %j", (saved) => {
+    expect(readPrefs(saved)).toEqual({ range: "30d", view: "size", hidden: [] });
+  });
 });

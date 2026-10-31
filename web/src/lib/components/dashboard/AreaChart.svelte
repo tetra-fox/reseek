@@ -16,7 +16,7 @@
 
   // transfer history as areas over time on LayerChart, each a smooth line over a fill that fades
   // toward the floor, with the axes in the view's one unit and the tooltip of the bucket under the
-  // pointer; a view with both directions has a toggle for each
+  // pointer; a view with both directions has a toggle for each, and the last one on stays on
   type Props = {
     data: Point[];
     view: ChartView;
@@ -39,19 +39,22 @@
     (hidden = hidden.includes(direction)
       ? hidden.filter((d) => d !== direction)
       : [...hidden, direction]);
+  /** the one direction left on, which can't be turned off */
+  const lastOn = $derived.by(() => {
+    const on = shown.filter((s) => s.direction);
+    return on.length === 1 ? on[0].direction : undefined;
+  });
 
   /** What the chart says to a screen reader: each series' peak and when it was */
   const summary = $derived(
-    `${label}: ${
-      shown
-        .map((s) => {
-          const peak = data.reduce((a, b) => (b[s.key] > a[s.key] ? b : a), data[0]);
-          return peak
-            ? `${s.name} peaks at ${format(peak[s.key])}, ${xLabel(peak.timestamp)}`
-            : s.name;
-        })
-        .join("; ") || "no series shown"
-    }`
+    `${label}: ${shown
+      .map((s) => {
+        const peak = data.reduce((a, b) => (b[s.key] > a[s.key] ? b : a), data[0]);
+        return peak
+          ? `${s.name} peaks at ${format(peak[s.key])}, ${xLabel(peak.timestamp)}`
+          : s.name;
+      })
+      .join("; ")}`
   );
 </script>
 
@@ -67,8 +70,10 @@
         <button
           type="button"
           aria-pressed={!hidden.includes(direction)}
+          disabled={direction === lastOn}
+          title={direction === lastOn ? "One direction always stays on" : undefined}
           class={[
-            "flex items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-xs hover:bg-hover",
+            "flex items-center gap-1.5 rounded-badge px-1.5 py-0.5 text-xs not-disabled:hover:bg-hover",
             hidden.includes(direction) && "opacity-35"
           ]}
           onclick={() => toggle(direction)}>
