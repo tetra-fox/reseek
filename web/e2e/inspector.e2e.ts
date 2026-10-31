@@ -41,7 +41,7 @@ test.describe("on a wide screen", () => {
     expect(docked.x + docked.width).toBe(before.x + before.width);
 
     // wider with the keys, and the same after a reload
-    const handle = page.getByRole("slider", { name: "Width of the details pane" });
+    const handle = page.getByRole("separator", { name: "Width of the details pane" });
     await handle.focus();
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowLeft");

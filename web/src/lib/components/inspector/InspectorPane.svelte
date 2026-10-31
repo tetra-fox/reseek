@@ -5,7 +5,13 @@
 
   import Button from "#lib/components/ui/Button.svelte";
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
-  import { inspector, inspectorPrefs, PANE_MIN, paneMax } from "#lib/inspector/inspector.svelte.js";
+  import {
+    inspector,
+    inspectorPrefs,
+    PANE_MIN,
+    PANE_WIDTH,
+    paneMax
+  } from "#lib/inspector/inspector.svelte.js";
   import { motionFast } from "#lib/ui/motion.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
@@ -63,6 +69,7 @@
       bind:value={width}
       min={PANE_MIN}
       max={paneMax()}
+      initial={PANE_WIDTH}
       edge="left"
       label="Width of the details pane"
       onchange={(w) => (inspectorPrefs.width = w)}

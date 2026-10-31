@@ -17,6 +17,7 @@
     activityPrefs,
     type ActivityEntry,
     type ActivityType,
+    DOCK_HEIGHT,
     DOCK_MIN,
     dockMax
   } from "#lib/activity/activity.svelte.js";
@@ -97,6 +98,7 @@
       bind:value={height}
       min={DOCK_MIN}
       max={dockMax()}
+      initial={DOCK_HEIGHT}
       edge="top"
       label="Height of the activity log"
       onchange={(h) => (activityPrefs.height = h)}

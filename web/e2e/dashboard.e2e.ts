@@ -104,7 +104,7 @@ test("the activity log docks under the screen, keeps its height and opens with a
 
   // its top edge drags it taller, and the height and the open state survive a reload
   const edge = (await page
-    .getByRole("slider", { name: "Height of the activity log" })
+    .getByRole("separator", { name: "Height of the activity log" })
     .boundingBox())!;
   await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2);
   await page.mouse.down();

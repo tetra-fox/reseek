@@ -6,7 +6,7 @@ import { viewport } from "#lib/ui/viewport.svelte.js";
 /** The docked inspector's least width, in pixels */
 export const PANE_MIN = 320;
 /** The docked inspector's default width, in pixels */
-const PANE_WIDTH = 384;
+export const PANE_WIDTH = 384;
 
 /** The docked inspector's greatest width: half the window, the list keeping the rest */
 export const paneMax = () => Math.max(PANE_MIN, Math.round(window.innerWidth * 0.5));

@@ -10,7 +10,7 @@ export type ActivityType = Schemas["ActivityKind"]["type"];
 /** The docked activity log's least height, in pixels */
 export const DOCK_MIN = 120;
 /** The docked activity log's default height, in pixels */
-const DOCK_HEIGHT = 288;
+export const DOCK_HEIGHT = 288;
 
 /** The docked activity log's greatest height: most of the window, the screen above keeping some */
 export const dockMax = () => Math.max(DOCK_MIN, Math.round(window.innerHeight * 0.6));
