@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import CalendarCheckIcon from "@lucide/svelte/icons/calendar-check";
-  import CheckIcon from "@lucide/svelte/icons/check";
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import InfoIcon from "@lucide/svelte/icons/info";
   import Maximize2Icon from "@lucide/svelte/icons/maximize-2";
@@ -123,9 +122,10 @@
     </Menu.Trigger>
     <Menu.Content align="start" class="max-h-80 overflow-y-auto">
       {#each EVENT_TYPES as type (type)}
-        <Menu.Item closeOnSelect={false} onSelect={() => toggle(type)}>
-          <CheckIcon class={types.includes(type) ? "" : "invisible"} />{type}
-        </Menu.Item>
+        <Menu.CheckboxItem
+          closeOnSelect={false}
+          checked={types.includes(type)}
+          onCheckedChange={() => toggle(type)}>{type}</Menu.CheckboxItem>
       {/each}
     </Menu.Content>
   </Menu.Root>
