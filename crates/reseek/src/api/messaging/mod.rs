@@ -1,7 +1,8 @@
 //! The messaging routes: private conversations, the rooms we are in, the stored history of
-//! every room, the pinned chats, and searching what was said. Reading takes the ReadOnly role, sending, joining,
-//! acknowledging and every other change ReadWrite. A username or room name is its path segment,
-//! or `?username=` and `?roomName=` when given, which reach names a path cannot hold.
+//! every room, the pinned chats, and searching what was said. Reading takes the ReadOnly role,
+//! sending, joining, acknowledging and every other change ReadWrite. A username or room name is
+//! its path segment, or `?username=` and `?roomName=` when given, which reach names a path cannot
+//! hold.
 
 mod conversations;
 mod history;

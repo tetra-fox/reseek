@@ -54,8 +54,8 @@ pub fn create_directories(dir: &Path, mode: Option<u32>) -> io::Result<()> {
 }
 
 /// Opens `path` for a download to write from `offset`: the missing directories above it made
-/// with `mode` and an execute bit for every read bit, the file created with `mode` when it is new, and cut at
-/// `offset` so what follows is written after the bytes kept.
+/// with `mode` and an execute bit for every read bit, the file created with `mode` when it is
+/// new, and cut at `offset` so what follows is written after the bytes kept.
 pub fn create_file(path: &Path, mode: Option<u32>, offset: u64) -> io::Result<File> {
   let created = (|| {
     if let Some(dir) = path.parent() {
