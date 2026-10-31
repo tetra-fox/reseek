@@ -13,10 +13,10 @@ jobs:
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - uses: dependabot/fetch-metadata@v2
+      - uses: dependabot/fetch-metadata@v3
         id: bump
       - if: steps.bump.outputs.update-type != 'version-update:semver-major'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref }}
       - if: steps.bump.outputs.update-type != 'version-update:semver-major'
