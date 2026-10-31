@@ -61,6 +61,12 @@ export const fromRoom = (m: Schemas["RoomMessage"]): Message => ({
   unread: false
 });
 
+/**
+ * A private message as the daemon sends and stores it, so the row that shows at once matches the
+ * stored one: each run of line breaks is one space, and trailing whitespace goes
+ */
+export const oneLine = (text: string) => text.replace(/[\r\n]+/g, " ").trimEnd();
+
 const day = (iso: string) => new Date(iso).toDateString();
 
 /**

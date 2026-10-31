@@ -1,5 +1,11 @@
 import { api, byRoom, byUser, type Schemas } from "#lib/api/client.js";
-import { fromPrivate, fromRoom, type Gap, type Message } from "#lib/chat/messages/messages.js";
+import {
+  fromPrivate,
+  fromRoom,
+  type Gap,
+  type Message,
+  oneLine
+} from "#lib/chat/messages/messages.js";
 import { Keyed } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call, type Outcome } from "#lib/request.js";
@@ -146,7 +152,7 @@ export class MessagePane {
       timestamp: new Date().toISOString(),
       author: this.#self(),
       self: true,
-      text,
+      text: this.target.kind === "user" ? oneLine(text) : text,
       mention: false,
       hidden: false,
       replayed: false,

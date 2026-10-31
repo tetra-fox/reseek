@@ -258,9 +258,10 @@
       caret = text.length;
       return;
     }
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    // a private message goes on one line, so Shift+Enter breaks none
+    if (e.key === "Enter" && !e.isComposing && (!e.shiftKey || target.kind === "user")) {
       e.preventDefault();
-      void send();
+      if (!e.shiftKey) void send();
     }
   };
 
@@ -273,6 +274,8 @@
   };
 
   const length = $derived([...text].length);
+  /** a line break in the box of a private chat, from a paste or a draft, which the daemon replaces */
+  const flattened = $derived(target.kind === "user" && /[\r\n]/.test(text));
 </script>
 
 <div class="relative flex flex-col gap-1 border-t bg-surface p-2">
@@ -350,8 +353,8 @@
       disabled={!!disabled || !text.trim() || length > max}
       onclick={() => void send()}><SendIcon /></Button>
   </div>
-  {#if said?.kind === "error" || pasted || length > max * 0.9}
-    <div class="flex items-center gap-3 px-1 text-xs">
+  {#if said?.kind === "error" || pasted || flattened || length > max * 0.9}
+    <div class="flex flex-wrap items-center gap-x-3 px-1 text-xs">
       {#if said?.kind === "error"}
         <span class="text-danger" role="alert">{said.text}</span>
       {:else if pasted}
@@ -363,6 +366,9 @@
             "lines"
           )}
         </span>
+      {/if}
+      {#if flattened}
+        <span class="text-fg-muted">Line breaks are replaced with spaces in private messages.</span>
       {/if}
       {#if length > max * 0.9}
         <span class={["ml-auto tabular-nums", length > max ? "text-danger" : "text-fg-muted"]}>

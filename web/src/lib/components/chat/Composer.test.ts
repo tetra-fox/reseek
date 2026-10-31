@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { MessagePane } from "#lib/chat/pane.svelte.js";
+import { MessagePane, type Target } from "#lib/chat/pane.svelte.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import Composer from "./Composer.svelte";
@@ -18,10 +18,10 @@ describe("the composer", () => {
   });
 
   let fetchCalls: () => { method: string }[] = () => [];
-  const open = () => {
+  const open = (target: Target = { kind: "room", name: "indie" }) => {
     const net = fakeNetwork(() => undefined);
     fetchCalls = () => net.requests;
-    const pane = new MessagePane({ kind: "room", name: "indie" }, () => "me");
+    const pane = new MessagePane(target, () => "me");
     component = mount(Composer, {
       target: document.body,
       props: { pane, disabled: null, names: () => ["alice"] }
@@ -34,11 +34,14 @@ describe("the composer", () => {
       box.dispatchEvent(new Event("input", { bubbles: true }));
       flushSync();
     };
-    const press = (key: string) => {
-      box.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    const press = (key: string, shiftKey = false) => {
+      const passed = box.dispatchEvent(
+        new KeyboardEvent("keydown", { key, shiftKey, bubbles: true, cancelable: true })
+      );
       flushSync();
+      return passed;
     };
-    return { box, type, press };
+    return { box, type, press, pane };
   };
 
   it("puts an emoji in place of its name with Tab, the caret after it", async () => {
@@ -76,6 +79,27 @@ describe("the composer", () => {
     press("Enter");
     expect(document.querySelector('[role="dialog"][aria-label="Chat commands"]')).not.toBeNull();
     expect(box.value).toBe("");
+  });
+
+  it("keeps a private message on one line and a room's as written", async () => {
+    const note = "Line breaks are replaced with spaces in private messages.";
+    const room = open();
+    expect(room.press("Enter", true)).toBe(true);
+    room.type("one\ntwo");
+    expect(document.body.textContent).not.toContain(note);
+    // a room's draft stays in this browser, for the next test too
+    room.type("");
+    unmount(component!);
+
+    const chat = open({ kind: "user", name: "alice" });
+    expect(chat.press("Enter", true)).toBe(false);
+    expect(chat.box.value).toBe("");
+    chat.type("one\ntwo\n");
+    expect(document.body.textContent).toContain(note);
+    chat.press("Enter");
+    // the row shown at once is the text the daemon stores, which then takes its place
+    expect(chat.pane.ordered.map((m) => m.text)).toEqual(["one two"]);
+    expect(document.body.textContent).not.toContain(note);
   });
 
   it("quotes an action as what was done", async () => {
