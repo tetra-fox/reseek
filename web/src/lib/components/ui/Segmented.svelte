@@ -15,6 +15,16 @@
   };
 
   let { options, value = $bindable(), label, size = "xs", class: className }: Props = $props();
+
+  /** The arrows move to the next choice and take it, round the ends, as radio buttons do */
+  const arrow = (e: KeyboardEvent & { currentTarget: HTMLElement }, at: number) => {
+    const forward = e.key === "ArrowRight" || e.key === "ArrowDown";
+    if (!forward && e.key !== "ArrowLeft" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const next = (at + (forward ? 1 : -1) + options.length) % options.length;
+    value = options[next].id;
+    (e.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
+  };
 </script>
 
 <div
@@ -25,17 +35,19 @@
   )}
   role="radiogroup"
   aria-label={label}>
-  {#each options as option (option.id)}
+  {#each options as option, at (option.id)}
     <button
       type="button"
       role="radio"
       aria-checked={value === option.id}
+      tabindex={value === option.id ? 0 : -1}
       class={[
         "flex items-center gap-1.5 rounded-badge px-2 transition-colors duration-(--motion-fast)",
         size === "xs" ? "text-xs" : "text-sm",
         value === option.id ? "bg-surface-muted text-fg" : "text-fg-muted hover:text-fg"
       ]}
-      onclick={() => (value = option.id)}>
+      onclick={() => (value = option.id)}
+      onkeydown={(e) => arrow(e, at)}>
       {#if option.icon}<option.icon class="size-3.5" />{/if}{option.label}
     </button>
   {/each}
