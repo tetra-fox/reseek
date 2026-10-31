@@ -40,7 +40,7 @@ impl Default for Analysis {
   fn default() -> Self {
     Self {
       on_download: false,
-      extensions: ["flac", "wav", "aiff", "alac", "m4a", "ape", "wv"]
+      extensions: ["flac", "wav", "aiff", "alac", "m4a", "ape", "wv", "mp3"]
         .map(str::to_string)
         .to_vec(),
       workers: Workers::Auto,

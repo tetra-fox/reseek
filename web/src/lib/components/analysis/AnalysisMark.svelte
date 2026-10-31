@@ -9,14 +9,19 @@
   // a file's analysis in a list: the user's judgment with a person beside it, or else a muted
   // "Analyzed" whose tooltip gives the analyzer's reading, never in a warning color of its own
   let { mark }: { mark: Mark | undefined } = $props();
+
+  // the tooltip reads these lazily, and can do so after `mark` is gone but before the block below
+  // is torn down, so they are worked out here and not from `mark` inside it
+  const hint = $derived(mark && markHint(mark));
+  const judgment = $derived(mark?.judgment);
 </script>
 
 {#if mark}
-  <Tooltip text={markHint(mark)} hint>
+  <Tooltip text={hint} hint>
     {#snippet child({ props })}
-      {#if mark.judgment}
-        <Badge {...props} tone={mark.judgment === "fake" ? "danger" : "success"}
-          ><UserIcon aria-hidden="true" />{JUDGMENTS[mark.judgment]}</Badge>
+      {#if judgment}
+        <Badge {...props} tone={judgment === "fake" ? "danger" : "success"}
+          ><UserIcon aria-hidden="true" />{JUDGMENTS[judgment]}</Badge>
       {:else}
         <Badge {...props}>Analyzed</Badge>
       {/if}

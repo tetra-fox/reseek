@@ -9,7 +9,8 @@
         "alac",
         "m4a",
         "ape",
-        "wv"
+        "wv",
+        "mp3"
       ],
       "max_full_minutes": 15,
       "on_download": false,
@@ -494,7 +495,8 @@
         "alac",
         "m4a",
         "ape",
-        "wv"
+        "wv",
+        "mp3"
       ],
       "apply": "live",
       "secret": false,

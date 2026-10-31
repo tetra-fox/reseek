@@ -50,6 +50,8 @@ pub(in crate::analysis) const CONSISTENT_SHARE: f64 = 0.9;
 pub(in crate::analysis) const TRANSCODE_SHARE: f64 = 0.85;
 /// How far from the common cutoff a window's cutoff may be and still share it, in Hz.
 pub(in crate::analysis) const CLUSTER_HZ: f64 = 500.0;
+/// The share of a lossy file's cutoffs under which its encoder's ceiling is read
+pub(in crate::analysis) const CEILING: f64 = 0.9;
 /// The share of windows each of two sources must have for mixed sources.
 pub(in crate::analysis) const MIXED_SHARE: f64 = 0.15;
 /// The tops of the bands of the sample rates audio is commonly made at: 22.05, 32, 44.1 and
