@@ -15,24 +15,24 @@
     hitTarget,
     type MessageHit,
     type RoomFound as Room,
-    type SearchKind,
-    type UserFound as User
+    type SearchKind
   } from "#lib/chat/search/match.js";
   import type { ChatSearch } from "#lib/chat/search/search.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import Marked from "#lib/components/ui/Marked.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
+  import UserEntry from "#lib/components/users/UserEntry.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { formatDate, plural } from "#lib/format.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { session } from "#lib/session.svelte.js";
   import { snippetParts } from "#lib/text.js";
+  import type { UserFound as User } from "#lib/users/match.js";
 
-  import Marked from "./Marked.svelte";
   import RoomFound from "./RoomFound.svelte";
-  import UserFound from "./UserFound.svelte";
 
   type Props = {
     /** what is found for `q`, kept while the chat screen is open */
@@ -217,7 +217,7 @@
         {:else if line.kind === "user"}
           <div role="row" {...list.line(line, i)} class={row}>
             <span role="gridcell" class="flex min-w-0 flex-1 items-center gap-2"
-              ><UserFound user={line.user} text={q} /></span>
+              ><UserEntry user={line.user} text={q} /></span>
           </div>
         {:else}
           {@const hit = line.hit}

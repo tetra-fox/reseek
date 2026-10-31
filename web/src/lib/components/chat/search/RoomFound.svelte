@@ -1,10 +1,10 @@
 <script lang="ts">
   import HashIcon from "@lucide/svelte/icons/hash";
 
-  import { nameParts, type RoomFound } from "#lib/chat/search/match.js";
+  import type { RoomFound } from "#lib/chat/search/match.js";
+  import Marked from "#lib/components/ui/Marked.svelte";
   import { plural } from "#lib/format.js";
-
-  import Marked from "./Marked.svelte";
+  import { nameParts } from "#lib/users/match.js";
 
   let { room, text }: { room: RoomFound; text: string } = $props();
 

@@ -1,3 +1,10 @@
+import type { SnippetPart } from "#lib/text.js";
+
+import type { UserSummary } from "./users.svelte";
+
+/** A user found by name, `summary` when the directory answered for them */
+export type UserFound = { name: string; summary?: UserSummary };
+
 /** How close a name is to the typed text, lower is closer; null when it does not hold the text */
 export const closeness = (name: string, text: string): number | null => {
   if (name === text) return 0;
@@ -26,3 +33,15 @@ export const bestMatches = <T>(items: T[], text: string, name: (item: T) => stri
     })
     .toSorted((a, b) => a.rank - b.rank || name(a.item).length - name(b.item).length)
     .map(({ item }) => item);
+
+/** `name` as runs of text, the first place it holds `text`, in any case, marked as a hit */
+export const nameParts = (name: string, text: string): SnippetPart[] => {
+  const at = name.toLowerCase().indexOf(text.toLowerCase());
+  if (at === -1 || !text) return [{ at: 0, text: name, hit: false }];
+  const end = at + text.length;
+  return [
+    { at: 0, text: name.slice(0, at), hit: false },
+    { at, text: name.slice(at, end), hit: true },
+    { at: end, text: name.slice(end), hit: false }
+  ].filter((part) => part.text);
+};

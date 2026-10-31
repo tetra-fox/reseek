@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { Found, MessageHit, RoomFound, UserFound } from "./match";
+import type { UserFound } from "#lib/users/match.js";
+
+import type { Found, MessageHit, RoomFound } from "./match";
 import {
   dropdown,
   fullTextQuery,
@@ -8,7 +10,6 @@ import {
   hardResult,
   LISTED,
   matchNames,
-  nameParts,
   plainQuery,
   rankHits
 } from "./match";
@@ -98,14 +99,5 @@ describe("what a search lists", () => {
       ["room:indie", [1, 3]],
       ["user:alice", [2]]
     ]);
-  });
-
-  it("marks where a name holds the text, in any case", () => {
-    expect(nameParts("DJ Cobalt", "cob")).toEqual([
-      { at: 0, text: "DJ ", hit: false },
-      { at: 3, text: "Cob", hit: true },
-      { at: 6, text: "alt", hit: false }
-    ]);
-    expect(nameParts("alice", "bob")).toEqual([{ at: 0, text: "alice", hit: false }]);
   });
 });

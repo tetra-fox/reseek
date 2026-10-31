@@ -51,7 +51,6 @@
   let joinName = $state("");
   let writing = $state(false);
   let writeTo = $state("");
-  let search = $state<HTMLInputElement | null>(null);
 
   /** kept while the screen is open, so coming back from a chat finds the results as they were */
   const results = new ChatSearch(
@@ -97,17 +96,11 @@
   // the chat opened from the results gives way to them, so Back passes over neither twice
   const backToResults = () => void goto(resultsHref(q, kind), { replaceState: true });
 
-  // Ctrl/Cmd+K finds a chat; Alt+Up and Alt+Down move to the chat above or below; Escape goes
-  // back to the search results a chat was opened from, once nothing open takes it
+  // Alt+Up and Alt+Down move to the chat above or below; Escape goes back to the search results
+  // a chat was opened from, once nothing open takes it
   const keydown = (e: KeyboardEvent) => {
     if (e.key === "Escape" && fromResults && !e.defaultPrevented && !layerOpen()) {
       backToResults();
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k") {
-      e.preventDefault();
-      if (!wide.current) sheet = true;
-      queueMicrotask(() => search?.focus());
       return;
     }
     if (
@@ -132,7 +125,7 @@
 <svelte:window onkeydown={keydown} />
 
 {#snippet list()}
-  <ChatList bind:search {current} {q} {kind} {onjoin} {onnew} />
+  <ChatList {current} {q} {kind} {onjoin} {onnew} />
 {/snippet}
 
 {#snippet lead()}

@@ -1,17 +1,13 @@
 import type { Schemas } from "#lib/api/client.js";
 import { paneKey } from "#lib/chat/chat.svelte.js";
 import type { Target } from "#lib/chat/pane.svelte.js";
-import type { SnippetPart } from "#lib/text.js";
-import { bestMatches, closeness } from "#lib/users/match.js";
-import type { UserSummary } from "#lib/users/users.svelte.js";
+import { bestMatches, closeness, type UserFound } from "#lib/users/match.js";
 
 export type MessageHit = Schemas["MessageHit"];
 export type SearchKind = Schemas["MessageSearchKind"];
 
 /** A room found by name, `userCount` as the server gave it, null for one it did not list */
 export type RoomFound = { name: string; joined: boolean; userCount: number | null };
-/** A user found by name, `summary` when the directory answered for them */
-export type UserFound = { name: string; summary?: UserSummary };
 
 /** What a search found, the closest first */
 export type Found = { rooms: RoomFound[]; users: UserFound[]; hits: MessageHit[] };
@@ -100,16 +96,4 @@ export const dropdown = (found: Found, text: string) => {
     users: users.slice(0, LISTED),
     hits: rankHits(found.hits, text).slice(0, LISTED)
   };
-};
-
-/** `name` as runs of text, the first place it holds `text`, in any case, marked as a hit */
-export const nameParts = (name: string, text: string): SnippetPart[] => {
-  const at = name.toLowerCase().indexOf(text.toLowerCase());
-  if (at === -1 || !text) return [{ at: 0, text: name, hit: false }];
-  const end = at + text.length;
-  return [
-    { at: 0, text: name.slice(0, at), hit: false },
-    { at, text: name.slice(at, end), hit: true },
-    { at: end, text: name.slice(end), hit: false }
-  ].filter((part) => part.text);
 };

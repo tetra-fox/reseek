@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bestMatches } from "./match.js";
+import { bestMatches, nameParts } from "./match.js";
 const ranked = (names: string[], text: string) => bestMatches(names, text, (name) => name);
 
 describe("bestMatches", () => {
@@ -31,5 +31,16 @@ describe("bestMatches", () => {
 
   it("takes the text literally", () => {
     expect(ranked(["a.b", "axb"], "a.b")).toEqual(["a.b"]);
+  });
+});
+
+describe("nameParts", () => {
+  it("marks where a name holds the text, in any case", () => {
+    expect(nameParts("DJ Cobalt", "cob")).toEqual([
+      { at: 0, text: "DJ ", hit: false },
+      { at: 3, text: "Cob", hit: true },
+      { at: 6, text: "alt", hit: false }
+    ]);
+    expect(nameParts("alice", "bob")).toEqual([{ at: 0, text: "alice", hit: false }]);
   });
 });

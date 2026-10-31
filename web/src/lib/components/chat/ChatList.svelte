@@ -50,11 +50,9 @@
     kind?: SearchKind;
     onjoin: (name?: string) => void;
     onnew: (username?: string) => void;
-    /** the search box, for Ctrl/Cmd+K */
-    search?: HTMLInputElement | null;
   };
 
-  let { current, q = "", kind = "all", onjoin, onnew, search = $bindable(null) }: Props = $props();
+  let { current, q = "", kind = "all", onjoin, onnew }: Props = $props();
 
   type Line =
     | { kind: "header"; key: string; title: string; ids: string[] }
@@ -205,7 +203,7 @@
 </script>
 
 <div class="flex min-h-0 flex-col gap-2 p-2">
-  <SearchBox {q} {kind} {onjoin} {onnew} bind:input={search} />
+  <SearchBox {q} {kind} {onjoin} {onnew} />
   {#if write && unreadChats.length}
     <Button
       variant="ghost"
