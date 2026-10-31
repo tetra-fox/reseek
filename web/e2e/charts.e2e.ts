@@ -50,6 +50,84 @@ for (const [width, height] of [
   }
 }
 
+/** Each choice of the history chart and how every label on its value axis reads */
+const VIEWS: [string, RegExp][] = [
+  ["Size", /^[\d.]+ (B|KB|MB|GB)$/],
+  ["Count", /^[\d,]+$/],
+  ["Speed", /^[\d.]+ (B|KB|MB)\/s$/],
+  ["Error rate", /^[\d.]+%$/],
+  ["Queue wait", /^[\d.]+(s|m)$/],
+  ["Share ratio", /^\d+\.\d\d$/]
+];
+
+/** The labels of a chart's value axis: those at the left edge of its plot, top to bottom */
+const valueAxis = (page: Page) =>
+  page.getByRole("img", { name: "Transfers over time" }).evaluate((chart) => {
+    const labels = [...chart.querySelectorAll("text")].filter((t) => t.textContent?.trim());
+    const left = Math.min(...labels.map((t) => t.getBoundingClientRect().left));
+    return labels
+      .filter(
+        (t) => t.getBoundingClientRect().left < left + 60 && t.getAttribute("text-anchor") === "end"
+      )
+      .map((t) => t.textContent!.trim());
+  });
+
+for (const [width, height] of [
+  [390, 844],
+  [1280, 800]
+]) {
+  test(`at ${width} px, each view has an axis in its own unit`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await fakeReports(page);
+    await login(page, "/dashboard");
+    const measure = page.getByRole("radiogroup", { name: "What the chart measures" });
+    for (const [view, label] of VIEWS) {
+      await measure.getByRole("radio", { name: view }).click();
+      await expect(measure.getByRole("radio", { name: view })).toBeChecked();
+      await expect
+        .poll(async () => {
+          const labels = await valueAxis(page);
+          return labels.length > 1 && labels.every((l) => label.test(l));
+        }, view)
+        .toBe(true);
+      expect(await spills(page, "Transfers over time"), view).toEqual([]);
+      const box = await measure.boundingBox();
+      expect(box!.x + box!.width, view).toBeLessThanOrEqual(width);
+      if (process.env.SHOTS) {
+        await page
+          .getByRole("img", { name: "Transfers over time" })
+          .locator("xpath=ancestor::*[contains(@class, 'rounded-card')][1]")
+          .screenshot({ path: `${process.env.SHOTS}/view-${width}-${view.replace(" ", "-")}.png` });
+      }
+    }
+    // a view with one line has nothing to toggle
+    await expect(
+      page.getByRole("group", { name: "Transfers over time series" }).getByRole("button")
+    ).toHaveCount(0);
+  });
+}
+
+test("the chosen view and directions stay through a reload", async ({ page }) => {
+  await fakeReports(page);
+  await login(page, "/dashboard");
+  await page.getByRole("radio", { name: "Speed" }).click();
+  await page.getByRole("button", { name: "Upload", exact: true }).click();
+  await expect(page.getByRole("img", { name: "Transfers over time" })).toHaveAttribute(
+    "aria-label",
+    /: Download speed peaks at [^;]*$/
+  );
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "Speed" })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Upload", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
+  await expect(page.getByRole("img", { name: "Transfers over time" })).toHaveAttribute(
+    "aria-label",
+    /: Download speed peaks at [^;]*$/
+  );
+});
+
 test("a chart cuts its marks at its box while the window narrows", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await fakeReports(page);

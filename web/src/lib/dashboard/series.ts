@@ -1,85 +1,129 @@
 import type { Unit } from "./chart";
-import type { Point } from "./reports";
+import type { Direction, Point } from "./reports";
 
-/** A line of the history chart: what it plots, its name, unit and color token */
+/** A line of a history chart: what it plots, its name and color token */
 export type Series = {
   key: Exclude<keyof Point, "timestamp">;
   name: string;
-  unit: Unit;
+  /** the toggle that shows and hides it, on a line with a counterpart in the other direction */
+  direction?: Direction;
   color: string;
 };
 
-export const SERIES: Series[] = [
+/** What a history chart plots: lines of one unit, which share its axis */
+export type ChartView = { unit: Unit; series: Series[] };
+
+export type ViewId = "size" | "count" | "speed" | "errorRate" | "wait" | "ratio";
+
+/** The choices of Transfers over time. Error counts are the Errors chart's */
+export const VIEWS: (ChartView & { id: ViewId; label: string })[] = [
   {
-    key: "uploadBytes",
-    name: "Upload size",
+    id: "size",
+    label: "Size",
     unit: "bytes",
-    color: "var(--color-series-upload-bytes)"
+    series: [
+      {
+        key: "uploadBytes",
+        name: "Upload size",
+        direction: "Upload",
+        color: "var(--color-series-upload-bytes)"
+      },
+      {
+        key: "downloadBytes",
+        name: "Download size",
+        direction: "Download",
+        color: "var(--color-series-download-bytes)"
+      }
+    ]
   },
   {
-    key: "downloadBytes",
-    name: "Download size",
-    unit: "bytes",
-    color: "var(--color-series-download-bytes)"
-  },
-  {
-    key: "uploadCount",
-    name: "Upload count",
+    id: "count",
+    label: "Count",
     unit: "count",
-    color: "var(--color-series-upload-count)"
+    series: [
+      {
+        key: "uploadCount",
+        name: "Upload count",
+        direction: "Upload",
+        color: "var(--color-series-upload-count)"
+      },
+      {
+        key: "downloadCount",
+        name: "Download count",
+        direction: "Download",
+        color: "var(--color-series-download-count)"
+      }
+    ]
   },
   {
-    key: "downloadCount",
-    name: "Download count",
-    unit: "count",
-    color: "var(--color-series-download-count)"
-  },
-  {
-    key: "uploadSpeed",
-    name: "Upload speed",
+    id: "speed",
+    label: "Speed",
     unit: "speed",
-    color: "var(--color-series-upload-speed)"
+    series: [
+      {
+        key: "uploadSpeed",
+        name: "Upload speed",
+        direction: "Upload",
+        color: "var(--color-series-upload-speed)"
+      },
+      {
+        key: "downloadSpeed",
+        name: "Download speed",
+        direction: "Download",
+        color: "var(--color-series-download-speed)"
+      }
+    ]
   },
   {
-    key: "downloadSpeed",
-    name: "Download speed",
-    unit: "speed",
-    color: "var(--color-series-download-speed)"
-  },
-  {
-    key: "uploadErrors",
-    name: "Upload errors",
-    unit: "count",
-    color: "var(--color-series-upload-errors)"
-  },
-  {
-    key: "downloadErrors",
-    name: "Download errors",
-    unit: "count",
-    color: "var(--color-series-download-errors)"
-  },
-  {
-    key: "uploadErrorRate",
-    name: "Upload error rate",
+    id: "errorRate",
+    label: "Error rate",
     unit: "rate",
-    color: "var(--color-series-upload-error-rate)"
+    series: [
+      {
+        key: "uploadErrorRate",
+        name: "Upload error rate",
+        direction: "Upload",
+        color: "var(--color-series-upload-error-rate)"
+      },
+      {
+        key: "downloadErrorRate",
+        name: "Download error rate",
+        direction: "Download",
+        color: "var(--color-series-download-error-rate)"
+      }
+    ]
   },
   {
-    key: "downloadErrorRate",
-    name: "Download error rate",
-    unit: "rate",
-    color: "var(--color-series-download-error-rate)"
-  },
-  {
-    key: "uploadWait",
-    name: "Upload queue wait",
+    id: "wait",
+    label: "Queue wait",
     unit: "seconds",
-    color: "var(--color-series-upload-wait)"
+    series: [
+      { key: "uploadWait", name: "Upload queue wait", color: "var(--color-series-upload-wait)" }
+    ]
   },
   {
-    key: "shareRatio",
-    name: "Share ratio",
+    id: "ratio",
+    label: "Share ratio",
     unit: "ratio",
-    color: "var(--color-series-share-ratio)"
+    series: [{ key: "shareRatio", name: "Share ratio", color: "var(--color-series-share-ratio)" }]
   }
 ];
+
+/** The chart of the Errors tab */
+export const ERRORS: ChartView = {
+  unit: "count",
+  series: [
+    {
+      key: "uploadErrors",
+      name: "Upload errors",
+      direction: "Upload",
+      color: "var(--color-series-upload-errors)"
+    },
+    {
+      key: "downloadErrors",
+      name: "Download errors",
+      direction: "Download",
+      color: "var(--color-series-download-errors)"
+    }
+  ]
+};

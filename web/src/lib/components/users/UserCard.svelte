@@ -8,6 +8,7 @@
   import { app } from "#lib/app.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import Flag from "#lib/components/ui/Flag.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Tooltip from "#lib/components/ui/Tooltip.svelte";
   import { Busy } from "#lib/feedback/busy.svelte.js";
@@ -18,7 +19,6 @@
   import { clock } from "#lib/ui/clock.svelte.js";
   import { pin, reach, USER_ACTIONS } from "#lib/users/actions.js";
   import { nameColor } from "#lib/users/colors.js";
-  import { flag } from "#lib/users/hover.svelte.js";
   import { firstLines, ownProfile } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users } from "#lib/users/users.svelte.js";
   import { BUDDY } from "#lib/wording.js";
@@ -74,7 +74,6 @@
     const text = draft ? draft.description : own ? ownProfile.data?.description : null;
     return text === null || text === undefined ? user?.description : firstLines(text, 3) || null;
   });
-  const country = $derived(flag(user?.countryCode));
   const readWrite = $derived(session.can("ReadWrite"));
   const pinning = new Busy();
   const togglePin = () =>
@@ -94,7 +93,7 @@
       <span class="flex items-center gap-1.5 text-xs text-fg-muted">
         <span class={["size-2 rounded-full", presence.dot]}></span>
         {presence.text}
-        {#if country}<span title={user?.countryCode ?? ""}>{country}</span>{/if}
+        <Flag code={user?.countryCode} />
       </span>
     </div>
   </div>

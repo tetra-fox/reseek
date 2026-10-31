@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { axisPadding } from "./chart";
+import { axisPadding, axisTicks, valueLabel, type Unit } from "./chart";
+import { readPrefs } from "./prefs.svelte";
 import {
   chartData,
   errorCount,
@@ -11,6 +12,7 @@ import {
   tiles,
   windowOf
 } from "./reports";
+import { ERRORS, VIEWS } from "./series";
 
 const summary = (count: number, totalBytes: number) => ({
   count,
@@ -140,4 +142,105 @@ describe("chart axes", () => {
     expect(at16.left).toBeGreaterThan(axisPadding(["0 B", "9 MB"], 16).left);
     expect(axisPadding(["0 B", "953.7 MB"], 24).left).toBeGreaterThan(at16.left);
   });
+});
+
+describe("the history chart's views", () => {
+  it("draw every field of a point on one axis, in exactly one place", () => {
+    const keys = [...VIEWS, ERRORS].flatMap((v) => v.series.map((s) => s.key));
+    const point = chartData({ "2026-10-26T10:00:00Z": { Upload: {}, Download: {} } })[0];
+    const { timestamp: _, ...fields } = point;
+    expect(keys.toSorted()).toEqual(Object.keys(fields).toSorted());
+  });
+
+  it("have the toggles of both directions or none", () => {
+    for (const view of [...VIEWS, ERRORS]) {
+      const directions = view.series.map((s) => s.direction).filter(Boolean);
+      expect(directions.length ? directions : ["Upload", "Download"]).toEqual([
+        "Upload",
+        "Download"
+      ]);
+    }
+  });
+
+  const UNITS: Unit[] = ["bytes", "count", "rate", "ratio", "seconds", "speed"];
+  const TOPS = [
+    0.004,
+    0.3,
+    0.6,
+    1,
+    2,
+    3,
+    7,
+    10,
+    45,
+    59,
+    61,
+    100,
+    999,
+    1000,
+    1024,
+    1500,
+    7200,
+    900_000,
+    1024 ** 2,
+    1.1 * 1024 ** 3,
+    3 * 1024 ** 3,
+    1023.9 * 1024 ** 4
+  ];
+
+  it.each(UNITS)("end a %s axis on a round step past the top, each label its own", (unit) => {
+    const label = valueLabel(unit);
+    for (const top of TOPS) {
+      const ticks = axisTicks(unit, top);
+      expect(ticks[0]).toBe(0);
+      expect(ticks.at(-1)).toBeGreaterThanOrEqual(top);
+      expect(ticks.length).toBeLessThanOrEqual(7);
+      expect(new Set(ticks.map(label)).size, `${unit} up to ${top}`).toBe(ticks.length);
+    }
+  });
+
+  it("has one tick for a chart of zeroes", () => {
+    expect(axisTicks("bytes", 0)).toEqual([0]);
+  });
+
+  it("counts in whole files", () => {
+    expect(axisTicks("count", 2)).toEqual([0, 1, 2]);
+    expect(axisTicks("count", 3).every(Number.isInteger)).toBe(true);
+  });
+
+  it("steps bytes and speeds in labels that read whole", () => {
+    const labels = (unit: Unit, top: number) => axisTicks(unit, top).map(valueLabel(unit));
+    expect(labels("bytes", 3 * 1024 ** 3)).toEqual(["0 B", "1 GB", "2 GB", "3 GB"]);
+    expect(labels("bytes", 2 * 1024 ** 3)).toEqual(["0 B", "512 MB", "1 GB", "1.5 GB", "2 GB"]);
+    expect(labels("speed", 900 * 1024)).toEqual([
+      "0 B/s",
+      "200 KB/s",
+      "400 KB/s",
+      "600 KB/s",
+      "800 KB/s",
+      "1000 KB/s"
+    ]);
+  });
+
+  it("steps a queue wait as a clock does", () => {
+    expect(axisTicks("seconds", 45)).toEqual([0, 10, 20, 30, 40, 50]);
+    expect(axisTicks("seconds", 200)).toEqual([0, 60, 120, 180, 240]);
+  });
+});
+
+describe("the dashboard's saved choices", () => {
+  it("keep what is valid", () => {
+    expect(readPrefs({ range: "7d", view: "speed", hidden: ["Upload"] })).toEqual({
+      range: "7d",
+      view: "speed",
+      hidden: ["Upload"]
+    });
+  });
+
+  it.each([null, "x", 3, [], { view: "bytes", hidden: "Upload" }, { view: 1, hidden: [1, null] }])(
+    "fall back from %j",
+    (saved) => {
+      expect(readPrefs(saved)).toEqual({ range: "30d", view: "size", hidden: [] });
+    }
+  );
 });

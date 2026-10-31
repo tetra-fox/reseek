@@ -9,6 +9,7 @@
   import { app } from "#lib/app.svelte.js";
   import type { RoomMembers, RoomUser } from "#lib/chat/rooms/room.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import Flag from "#lib/components/ui/Flag.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Notice from "#lib/components/ui/Notice.svelte";
@@ -22,7 +23,6 @@
   import { userHref } from "#lib/nav.js";
   import type { Outcome } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { flag } from "#lib/users/hover.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
   // who is in a room: operators then members, online first, a filter and the counts; in a private
@@ -219,7 +219,6 @@
         </div>
       {:else}
         {@const u = line.user}
-        {@const country = flag(u.countryCode)}
         {@const can = powers(u.username)}
         <div
           role="row"
@@ -231,8 +230,8 @@
           ]}>
           <span role="gridcell" class="flex min-w-0 flex-1 items-center gap-1.5">
             <Presence presence={u.status} />
-            <span class="w-5 shrink-0 text-center" title={u.countryCode ?? "?"}
-              >{country ?? "?"}</span>
+            <!-- the slot stays without a flag, so the names line up -->
+            <span class="flex w-5 shrink-0 justify-center"><Flag code={u.countryCode} /></span>
             <span class={["min-w-0 truncate", blocked(u.username) && "line-through"]}>
               <Username name={u.username} card />
             </span>

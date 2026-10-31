@@ -16,6 +16,7 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
+  import Segmented from "#lib/components/ui/Segmented.svelte";
   import SplitButton from "#lib/components/ui/SplitButton.svelte";
   import { formatBytes, formatSpeed } from "#lib/format.js";
   import { session } from "#lib/session.svelte.js";
@@ -60,6 +61,10 @@
 
   const write = $derived(session.can("ReadWrite"));
   const metrics = $derived(app.metrics?.[direction === "download" ? "downloads" : "uploads"]);
+  const DENSITIES = [
+    { id: "comfortable", label: "Comfortable" },
+    { id: "compact", label: "Compact" }
+  ] as const;
   const GROUPINGS: { id: GroupBy; label: string }[] = $derived([
     { id: "user", label: "User › folder" },
     { id: "folder", label: "Folder" },
@@ -136,32 +141,8 @@
     </div>
   </div>
   <div class="flex flex-wrap items-center gap-inline">
-    <div class="inline-flex rounded-control border p-0.5" role="radiogroup" aria-label="Group by">
-      {#each GROUPINGS as g (g.id)}
-        <button
-          type="button"
-          role="radio"
-          aria-checked={view.groupBy === g.id}
-          class={[
-            "rounded-badge px-2 py-0.5 text-sm",
-            view.groupBy === g.id ? "bg-surface-muted font-medium" : "text-fg-muted"
-          ]}
-          onclick={() => (view.groupBy = g.id)}>{g.label}</button>
-      {/each}
-    </div>
-    <div class="inline-flex rounded-control border p-0.5" role="radiogroup" aria-label="Density">
-      {#each [["comfortable", "Comfortable"], ["compact", "Compact"]] as const as [id, label] (id)}
-        <button
-          type="button"
-          role="radio"
-          aria-checked={view.density === id}
-          class={[
-            "rounded-badge px-2 py-0.5 text-sm",
-            view.density === id ? "bg-surface-muted font-medium" : "text-fg-muted"
-          ]}
-          onclick={() => (view.density = id)}>{label}</button>
-      {/each}
-    </div>
+    <Segmented options={GROUPINGS} bind:value={view.groupBy} label="Group by" size="sm" />
+    <Segmented options={DENSITIES} bind:value={view.density} label="Density" size="sm" />
     <Menu.Root>
       <Menu.Trigger>
         {#snippet child({ props })}

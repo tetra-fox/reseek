@@ -17,6 +17,9 @@ importers:
       d3-shape:
         specifier: 3.2.0
         version: 3.2.0
+      flag-icons:
+        specifier: 7.6.0
+        version: 7.6.0
       mode-watcher:
         specifier: ^1.1.0
         version: 1.1.0(svelte@5.57.2)
@@ -1105,6 +1108,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  flag-icons@7.6.0:
+    resolution: {integrity: sha512-hir/PsXwr0EESyizKrXJzmkzpLIMf+1vlNKLqAfvdh+bsU94a7LYWTiubkHKqptGoCPzOUGcm6c4PfC9/BaGSQ==}
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
@@ -2538,6 +2544,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
+
+  flag-icons@7.6.0: {}
 
   fsevents@2.3.3:
     optional: true

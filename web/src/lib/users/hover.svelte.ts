@@ -11,9 +11,3 @@ class Open {
 }
 
 export const open = new Open();
-
-/** A country code as its flag, from the two regional indicator letters */
-export const flag = (code: string | null | undefined) =>
-  code && /^[A-Za-z]{2}$/.test(code)
-    ? String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
-    : null;

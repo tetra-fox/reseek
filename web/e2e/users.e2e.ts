@@ -49,6 +49,18 @@ const profile = (page: Page, name: string, refreshed: (route: Route) => Promise<
       : route.fulfill({ json: { ...alice, username: name } })
   );
 
+test("a country's flag is a real image, served from the build under the URL base", async ({
+  page
+}) => {
+  await profile(page, "alice", (route) => route.fulfill({ json: alice }));
+  await login(page, "/users/alice");
+  const flag = page.getByRole("img", { name: "Netherlands" });
+  await expect(flag).toBeVisible();
+  await expect
+    .poll(() => flag.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .not.toBe(0);
+});
+
 test("the search box lists matching users best first, and picks one by key or click", async ({
   page
 }) => {
