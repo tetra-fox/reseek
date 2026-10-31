@@ -28,7 +28,8 @@
   const label = $derived(options.find((o) => o.id === chosen)?.label ?? options[0].label);
 </script>
 
-<!-- an action with a scope picked from its menu; narrow screens show the icon with the words in a tooltip -->
+<!-- an action with a scope picked from its menu; narrow screens show the icon with the words in a
+     tooltip. An outline's border divides the two halves, a filled one gets a line of its own -->
 <div class="inline-flex">
   <Tooltip text={label}>
     {#snippet child({ props })}
@@ -36,7 +37,7 @@
         {...props}
         {variant}
         size="sm"
-        class="rounded-r-none"
+        class={["rounded-r-none", variant !== "outline" && "border-r-current/25"]}
         {disabled}
         aria-label={label}
         onclick={() => onclick(chosen)}>
