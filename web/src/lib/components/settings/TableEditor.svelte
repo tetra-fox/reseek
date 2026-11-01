@@ -248,7 +248,7 @@
     <!-- the whole width, rows parted by hairlines; on a phone each row stacks, its cells under
          their labels -->
     <table
-      class="-mx-5 w-[calc(100%+2.5rem)] border-y bg-field [&_td:first-child_input]:pl-5 [&_th:first-child]:pl-5 max-md:[&_td]:px-5">
+      class="-mx-5 w-[calc(100%+2.5rem)] border-y bg-field max-md:[&_td]:px-5 [&_td:first-child_input]:pl-5 [&_th:first-child]:pl-5">
       <thead class="max-md:sr-only">
         <tr class="border-b text-left text-xs font-medium text-fg-muted">
           {#if named}<th scope="col" class="px-2 py-1 font-medium">{nameLabel}</th>{/if}
