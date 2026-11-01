@@ -25,8 +25,8 @@
     label: string;
     /** the item rows' columns, as a grid template */
     columns: string;
-    /** the selected items' ids */
-    selected: SvelteSet<string>;
+    /** the selected items' ids; without it nothing in the tree can be selected */
+    selected?: SvelteSet<string>;
     /** an item's id in the selection */
     idOf: (item: T) => string;
     /** whether an item can be ticked; every item by default */
@@ -156,9 +156,13 @@
   const list = new ListControl<TreeLine<T>>({
     lines: () => lines,
     key: (line) => line.key,
-    id: (line) => (line.kind === "item" ? idOf(line.item) : (folderId?.(line.node) ?? null)),
+    id: (line) => {
+      if (!selected) return null;
+      return line.kind === "item" ? idOf(line.item) : (folderId?.(line.node) ?? null);
+    },
     // the items under the line's folder; a line with none there, as a flat list's, selects all
     group: (line) => {
+      if (!selected) return null;
       const ids = itemsUnder(line.kind === "folder" ? line.node : line.folder)
         .filter(tickable)
         .map(idOf);
@@ -274,7 +278,7 @@
   const activeId = $derived(focusedPin ? pinnedId(focusedPin.index) : list.activeId);
   /** opaque tints, so the lines scrolling under a pinned folder line don't show through */
   const folderTint = (node: FolderNode<T>) =>
-    folderId && selected.has(folderId(node))
+    folderId && selected?.has(folderId(node))
       ? "bg-[color-mix(in_srgb,var(--color-accent-soft)_60%,var(--color-surface))]"
       : "bg-[color-mix(in_srgb,var(--color-surface-muted)_50%,var(--color-surface))]";
 </script>
@@ -310,7 +314,7 @@
   role="treegrid"
   aria-label={label}
   aria-rowcount={lines.length}
-  aria-multiselectable="true"
+  aria-multiselectable={selected ? "true" : undefined}
   aria-activedescendant={activeId}
   tabindex="0"
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}

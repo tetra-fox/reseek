@@ -1,6 +1,5 @@
 import { goto } from "$app/navigation";
 
-import type { Track } from "#lib/analysis/playback.svelte.js";
 import { app } from "#lib/app.svelte.js";
 import { copyText } from "#lib/feedback/clipboard.svelte.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
@@ -43,12 +42,6 @@ export const saveToDevice = async (t: Transfer) => {
   if (url.ok) window.location.assign(url.data);
   else toast(url.error, "error");
 };
-
-/** A finished download as the analysis popup plays it */
-export const downloadTrack = (t: Transfer): Track => ({
-  filename: t.filename,
-  url: (as) => contentUrl(t, "inline", as)
-});
 
 /** The folder a finished download is in under the downloads directory, null when it isn't */
 export const folderOf = (transfers: Transfer[]) =>

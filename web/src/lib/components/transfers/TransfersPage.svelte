@@ -4,7 +4,6 @@
   import { untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
-  import { targetKey } from "#lib/analysis/analysis.js";
   import { analyzableDownload, analyzeBatch, downloadCandidate } from "#lib/analysis/batch.js";
   import { MARK_FILTERS, type MarkFilter, passes } from "#lib/analysis/marks.js";
   import { analyzerOffered, marks } from "#lib/analysis/marks.svelte.js";
@@ -227,11 +226,10 @@
     void runBulk(key, [t]);
   };
 
-  /** Opens the inspector on a transfer, at its analysis with `analyze` */
-  const details = (t: Transfer, analyze?: boolean, large?: boolean) => {
+  /** Opens the inspector on a transfer */
+  const details = (t: Transfer) => {
     shownId = t.id;
-    if (!analyze) return inspector.show();
-    inspector.analyze(targetKey({ kind: "download", username: t.username, id: t.id }), !!large);
+    inspector.show();
   };
 
   const oneFolder = $derived(

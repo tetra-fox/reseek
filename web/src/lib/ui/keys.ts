@@ -77,15 +77,3 @@ export const shortcutAria = (key: string) => `${mac ? "Meta" : "Control"}+${key}
  */
 export const opensPalette = (e: KeyboardEvent) =>
   (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k";
-
-/**
- * Whether Shift was held on the last press, click or key, for actions like menu items whose
- * handlers get no event of their own
- */
-let shifted = false;
-if (typeof window !== "undefined") {
-  const note = (e: PointerEvent | KeyboardEvent) => (shifted = e.shiftKey);
-  window.addEventListener("pointerdown", note, { capture: true });
-  window.addEventListener("keydown", note, { capture: true });
-}
-export const shiftHeld = () => shifted;

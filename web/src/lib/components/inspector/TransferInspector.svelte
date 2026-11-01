@@ -3,7 +3,7 @@
   import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
   import XIcon from "@lucide/svelte/icons/x";
 
-  import { type Target, targetKey } from "#lib/analysis/analysis.js";
+  import type { Target } from "#lib/analysis/analysis.js";
   import { analyzableDownload } from "#lib/analysis/batch.js";
   import { marks } from "#lib/analysis/marks.svelte.js";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
@@ -26,7 +26,7 @@
     SETTLE_MS
   } from "#lib/inspector/inspector.svelte.js";
   import { session } from "#lib/session.svelte.js";
-  import { act, denyAndBlock, downloadTrack, open, storeOf } from "#lib/transfers/actions.js";
+  import { act, denyAndBlock, open, storeOf } from "#lib/transfers/actions.js";
   import {
     type Direction,
     isQueued,
@@ -58,9 +58,7 @@
   const chip = $derived(stateChip(t));
   const moving = $derived(t.state === "InProgress");
   const target = $derived<Target>({ kind: "download", username: t.username, id: t.id });
-  const analysis = $derived(
-    can.open && analyzableDownload(t) ? { target, track: downloadTrack(t) } : null
-  );
+  const analysis = $derived(can.open && analyzableDownload(t) ? target : null);
 
   /** where the peer can be reached, asked for only while the section that shows it is open */
   let address = $state<string | null>(null);
@@ -137,7 +135,7 @@
     {direction}
     onremove={onremove ?? (() => store.removeLater([t.id]))}
     onblock={(deny) => (deny ? void denyAndBlock(t.username) : blocking.ask(t.username))}
-    onanalyze={analysis ? (large) => inspector.analyze(targetKey(target), large) : undefined} />
+    analysis={analysis && { target: analysis, name: getFileName(t.filename) }} />
 {/snippet}
 
 {#snippet history()}

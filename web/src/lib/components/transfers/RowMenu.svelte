@@ -1,5 +1,4 @@
 <script lang="ts">
-  import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
   import BanIcon from "@lucide/svelte/icons/ban";
   import ChevronsUpIcon from "@lucide/svelte/icons/chevrons-up";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
@@ -10,6 +9,8 @@
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import XIcon from "@lucide/svelte/icons/x";
 
+  import type { Target } from "#lib/analysis/analysis.js";
+  import AnalysisItems from "#lib/components/analysis/AnalysisItems.svelte";
   import LocalFileItems from "#lib/components/files/LocalFileItems.svelte";
   import RemoteFileItems from "#lib/components/files/RemoteFileItems.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -30,7 +31,6 @@
     storeOf
   } from "#lib/transfers/actions.js";
   import { type Direction, rowActions, type Transfer } from "#lib/transfers/states.js";
-  import { shiftHeld } from "#lib/ui/keys.js";
 
   type Props = {
     transfer: Transfer;
@@ -41,11 +41,11 @@
     onblock: (deny: boolean) => void;
     /** opens the inspector on the file; without it the menu has no Details */
     ondetails?: () => void;
-    /** opens the file's analysis, for a file the analyzer takes; without it the menu has no Analyze */
-    onanalyze?: (large: boolean) => void;
+    /** the file as the analyzer names it, for a file the analyzer takes */
+    analysis?: { target: Target; name: string } | null;
   };
 
-  let { transfer: t, direction, onremove, onblock, ondetails, onanalyze }: Props = $props();
+  let { transfer: t, direction, onremove, onblock, ondetails, analysis }: Props = $props();
 
   const can = $derived(rowActions(t, direction));
   const write = $derived(session.can("ReadWrite"));
@@ -103,8 +103,8 @@
     <Menu.Separator />
     <Menu.Item onSelect={ondetails}><InfoIcon />Details</Menu.Item>
   {/if}
-  {#if onanalyze}
+  {#if analysis}
     {#if !ondetails}<Menu.Separator />{/if}
-    <Menu.Item onSelect={() => onanalyze(shiftHeld())}><AudioLinesIcon />Analyze</Menu.Item>
+    <AnalysisItems {...analysis} />
   {/if}
 </Menu.Content>

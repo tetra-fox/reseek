@@ -1,3 +1,4 @@
+import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
 import ChartColumnIcon from "@lucide/svelte/icons/chart-column";
 import CircleUserIcon from "@lucide/svelte/icons/circle-user";
 import DownloadIcon from "@lucide/svelte/icons/download";
@@ -52,6 +53,7 @@ export const navItems: NavItem[] = [
   { title: "Search", path: "/searches", icon: SearchIcon },
   { title: "Downloads", path: "/downloads", icon: DownloadIcon },
   { title: "Uploads", path: "/uploads", icon: UploadIcon },
+  { title: "Analysis", path: "/analysis", icon: AudioLinesIcon },
   { title: "Chat", path: "/chat", icon: MessageSquareIcon },
   { title: "Users", path: "/users", icon: UsersIcon }
 ];

@@ -2,7 +2,7 @@ import { toast } from "#lib/feedback/toast.svelte.js";
 import { audioType, needsWav } from "#lib/files/kinds.js";
 import type { Outcome } from "#lib/request.js";
 
-/** A file the analysis popup can play */
+/** A file the Analysis page can play */
 export type Track = {
   /** its name or path */
   filename: string;
@@ -34,10 +34,12 @@ const refusal = async (url: string): Promise<string | null> => {
 };
 
 /**
- * The file being checked, played in the analysis popup: the audio element is in the popup, so the
- * sound stops when it closes and nothing else in the page plays
+ * The file being checked, played in its slot on the Analysis page: the audio element is in the
+ * slot, so the sound stops when the slot is cleared or the page left, and nothing else plays
  */
 export class Playback {
+  /** the slot playing now, which stops when another starts */
+  static #sounding: Playback | null = null;
   /** the element that plays, there once a URL is */
   element = $state.raw<HTMLAudioElement | null>(null);
   /** the URL the element plays, set the first time Play is pressed */
@@ -67,13 +69,17 @@ export class Playback {
   /** Makes the element do what `playing` says */
   apply = () => {
     if (!this.element || !this.src) return;
-    if (this.playing)
+    if (this.playing) {
+      if (Playback.#sounding && Playback.#sounding !== this) Playback.#sounding.playing = false;
+      Playback.#sounding = this;
       this.element.play().catch(() => {
         // refused, as a browser does without a user's click; a file that fails is reported by
         // the element's error event
         this.playing = false;
       });
-    else this.element.pause();
+    } else {
+      this.element.pause();
+    }
   };
 
   /** The file has loaded: it starts where it was asked to */

@@ -3,6 +3,7 @@ import CopyIcon from "@lucide/svelte/icons/copy";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
 import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
+import GitCompareArrowsIcon from "@lucide/svelte/icons/git-compare-arrows";
 import LinkIcon from "@lucide/svelte/icons/link";
 import ListIcon from "@lucide/svelte/icons/list";
 import SaveIcon from "@lucide/svelte/icons/save";
@@ -15,6 +16,8 @@ export const FILE_ACTIONS = {
   download: { label: "Download", icon: DownloadIcon },
   open: { label: "Open", icon: ExternalLinkIcon },
   analyze: { label: "Analyze", icon: AudioLinesIcon },
+  openAnalysis: { label: "Open in Analysis", icon: AudioLinesIcon },
+  compare: { label: "Compare", icon: GitCompareArrowsIcon },
   save: { label: "Save to this device", icon: SaveIcon },
   copyPath: { label: "Copy path", icon: CopyIcon },
   copyLocalPath: { label: "Copy local path", icon: CopyIcon },

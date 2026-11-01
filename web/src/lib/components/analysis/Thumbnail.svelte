@@ -7,7 +7,7 @@
   import type { Scope } from "#lib/analysis/spectrogram/scope.svelte.js";
   import { spectrogramView } from "#lib/analysis/spectrogram/view.svelte.js";
 
-  // the whole file's spectrogram, small, which opens the large view. The large view's button says
+  // the whole file's spectrogram, small, which opens the Analysis page. The inspector's button says
   // the same to assistive technology, so this is left out of the tab order
   type Props = { scope: Scope; onopen: () => void };
 

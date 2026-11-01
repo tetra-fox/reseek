@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import type { Report } from "./analysis";
 import { type Mark, markHint, markToken, passes } from "./marks";
+import { marks } from "./marks.svelte";
 
 const reading: Mark = {
   verdict: "likely_transcode",
@@ -43,5 +45,19 @@ describe("a chip's hint", () => {
     expect(markHint(reading)).toBe("Analyzer reading: likely a transcode, mp3 ~128 kbps");
 
     expect(markHint({ ...reading, stale: true })).toBe("Analyzed by an older version of reseek");
+  });
+});
+
+describe("a file uploaded for one look", () => {
+  it("never gets a mark, while a file on the daemon does", () => {
+    const report = {
+      root: "temporary",
+      relativePath: "id/a.flac",
+      analyzedAt: "2026-10-31T10:00:00Z"
+    };
+    marks.put(report as Report);
+    expect(marks.file("temporary", "id/a.flac")).toBeUndefined();
+    marks.put({ ...report, root: "downloads" } as Report);
+    expect(marks.file("downloads", "id/a.flac")).toBeDefined();
   });
 });

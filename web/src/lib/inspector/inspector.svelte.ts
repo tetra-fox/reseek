@@ -55,8 +55,6 @@ class Inspector {
   present = $state.raw<() => boolean>(() => false);
   /** whether a phone's sheet is up, which is not remembered: a screen never opens under one */
   sheet = $state(false);
-  /** the file whose analysis was asked for, by its target's key, with `large` for the large view */
-  asked = $state.raw<{ key: string; large: boolean } | null>(null);
 
   get open() {
     return !!this.content && (viewport.phone ? this.sheet : inspectorPrefs.open);
@@ -75,13 +73,6 @@ class Inspector {
   toggle() {
     if (this.open) this.close();
     else this.show();
-  }
-
-  /** Shows the file a target's key names at its analysis, which starts one when it has none */
-  analyze(key: string, large: boolean) {
-    this.asked = { key, large };
-    inspectorPrefs.sections.analysis = true;
-    this.show();
   }
 }
 

@@ -11,7 +11,7 @@ import type { Transfer } from "./states";
  * token for that one file
  */
 export const contentUrl = async (
-  t: Transfer,
+  t: Pick<Transfer, "username" | "id">,
   disposition: "inline" | "attachment",
   as: "content" | "wav" = "content"
 ): Promise<Outcome<string>> => {

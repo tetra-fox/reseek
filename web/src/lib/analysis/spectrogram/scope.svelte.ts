@@ -23,9 +23,9 @@ import {
 type Zooming = { to: View; across: number; tau: number; last: number };
 
 /**
- * What one report's viewer shows, kept while the inspector stays on the file so the large view
- * opens where it was left: the stretch of time in sight, the cursor (the moment picked, which is
- * also the playhead while the file plays), the guide lines hidden, and the pictures loaded
+ * What one report's viewer shows: the stretch of time in sight, the cursor (the moment picked,
+ * which is also the playhead while the file plays), the guide lines hidden, and the pictures
+ * loaded. Linked to another scope, the two show the same stretch of time
  */
 export class Scope {
   readonly report: Report;
@@ -33,7 +33,9 @@ export class Scope {
   readonly pictures: Pictures;
   /** where each analyzed window starts, in seconds */
   readonly starts: number[];
-  view = $state.raw<View>({ start: 0, span: 0 });
+  #view = $state.raw<View>({ start: 0, span: 0 });
+  /** the scope that shows the same stretch of time as this one */
+  #linked: Scope | null = null;
   /** the cursor's time, in seconds */
   cursor = $state(0);
   /** whether the view keeps the cursor in sight as it moves, until the user pans away */
@@ -54,6 +56,35 @@ export class Scope {
 
   get duration() {
     return this.layout.durationSeconds;
+  }
+
+  /** The stretch of time in sight */
+  get view() {
+    return this.#view;
+  }
+
+  set view(view: View) {
+    this.#view = view;
+    if (this.#linked) this.#linked.#mirror(view);
+  }
+
+  /** Shows `view` because the linked scope does, as near as this file's length allows */
+  #mirror(view: View) {
+    this.#stop();
+    this.#view = clamp(view, this.duration);
+  }
+
+  /** Links this scope to `other`, which moves to what this one shows */
+  link(other: Scope) {
+    this.#linked = other;
+    other.#linked = this;
+    other.#mirror(this.view);
+  }
+
+  /** Ends the link, and each scope stays where it is */
+  unlink() {
+    if (this.#linked) this.#linked.#linked = null;
+    this.#linked = null;
   }
 
   /** The analyzed window the cursor is in, -1 for a report without windows */

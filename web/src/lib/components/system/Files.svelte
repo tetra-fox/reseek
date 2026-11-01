@@ -13,13 +13,12 @@
   import { untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
-  import { type Target, targetKey } from "#lib/analysis/analysis.js";
+  import type { Target } from "#lib/analysis/analysis.js";
   import { analyzeBatch } from "#lib/analysis/batch.js";
   import { FILE_FILTERS, type MarkFilter, passes } from "#lib/analysis/marks.js";
   import { analyzable, analyzerOffered, marks } from "#lib/analysis/marks.svelte.js";
   import { api, type Schemas } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
-  import AnalysisJobs from "#lib/components/analysis/AnalysisJobs.svelte";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
   import FileTree from "#lib/components/files/FileTree.svelte";
   import LocalFileItems from "#lib/components/files/LocalFileItems.svelte";
@@ -50,7 +49,6 @@
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, folderNode, type TreeLine, treeLines } from "#lib/tree/folders.js";
   import { TICK_REM } from "#lib/tree/indent.js";
-  import { shiftHeld } from "#lib/ui/keys.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
   // the downloads or incomplete directory as a file explorer: browse, open, delete
@@ -359,12 +357,9 @@
       {#if e.kind === "file"}
         <LocalFileItems
           onopen={() => void open(e)}
-          onanalyze={analyzable(e.name)
-            ? () => {
-                shownKey = e.key;
-                inspector.analyze(targetKey({ kind: "file", root, path: e.path }), shiftHeld());
-              }
-            : undefined}
+          analysis={analyzable(e.name)
+            ? { target: { kind: "file", root, path: e.path }, name: e.name }
+            : null}
           onsave={() => void save(e)}
           path={e.path} />
         <Menu.Item
@@ -397,8 +392,6 @@
     checked={selected.has(e.key)}
     onCheckedChange={(on) => (on ? selected.add(e.key) : selected.delete(e.key))} />
 {/snippet}
-
-<AnalysisJobs />
 
 {#if error}
   <Notice kind="error">

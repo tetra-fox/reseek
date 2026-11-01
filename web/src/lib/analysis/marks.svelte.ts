@@ -1,11 +1,10 @@
 import { SvelteMap } from "svelte/reactivity";
 
-import { api } from "#lib/api/client.js";
+import { api, type Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { call } from "#lib/request.js";
 import { fields } from "#lib/stored.svelte.js";
-import type { Root } from "#lib/system/localfiles.js";
 
 import type { Report } from "./analysis";
 import { type Mark, markOf } from "./marks";
@@ -43,6 +42,8 @@ class Marks {
 
   /** Takes in a report read on its own, such as one whose judgment just changed */
   put(report: Report) {
+    // a local file is here for one look and is no file of the lists
+    if (report.root === "temporary") return;
     const mark = markOf(report);
     this.#files.set(`${report.root}:${report.relativePath}`, mark);
     if (report.transferId) this.#downloads.set(report.transferId, mark);
@@ -53,7 +54,7 @@ class Marks {
   }
 
   /** The mark of a file under a root, if it has been analyzed */
-  file(root: Root, path: string): Mark | undefined {
+  file(root: Schemas["FileRoot"], path: string): Mark | undefined {
     return this.#files.get(`${root}:${path}`);
   }
 
@@ -100,6 +101,9 @@ const extensions = $derived.by(() => {
 
 /** Whether the analyzer is offered for any kind of file */
 export const analyzerOffered = () => extensions.size > 0;
+
+/** The file types to offer when picking a file for the analyzer, as an `accept` attribute says */
+export const analyzedTypes = () => [...extensions].map((x) => `.${x}`).join(",");
 
 /** Whether the analyzer is offered for a file, by its name's extension */
 export const analyzable = (name: string) =>

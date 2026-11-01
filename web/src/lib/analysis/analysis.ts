@@ -1,6 +1,5 @@
 import { api, type Schemas } from "#lib/api/client.js";
 import { call, type Outcome } from "#lib/request.js";
-import type { Root } from "#lib/system/localfiles.js";
 import { encodePath } from "#lib/transfers/content.js";
 
 export type Report = Schemas["AudioAnalysis"];
@@ -16,7 +15,7 @@ export const DISCLAIMER =
 
 /** The file an analysis is about: one under a root, or a finished download's */
 export type Target =
-  | { kind: "file"; root: Root; path: string }
+  | { kind: "file"; root: Schemas["FileRoot"]; path: string }
   | { kind: "download"; username: string; id: string };
 
 /** The route of a target's analysis, from the daemon's root */
@@ -32,7 +31,7 @@ export const targetKey = (t: Target) =>
 /** Whether a report or a job is about the file a target names */
 export const names = (
   t: Target,
-  file: { root: Root; relativePath: string; transferId?: string | null }
+  file: { root: Schemas["FileRoot"]; relativePath: string; transferId?: string | null }
 ) =>
   t.kind === "file"
     ? file.root === t.root && file.relativePath === t.path

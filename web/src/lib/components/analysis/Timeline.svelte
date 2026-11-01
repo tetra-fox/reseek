@@ -30,9 +30,18 @@
     onseek: (t: number) => void;
     /** play or pause, from the space bar */
     ontoggle?: () => void;
+    /** the height of the spectrogram and of the waveform, in rem */
+    heights?: { plot: number; wave: number };
   };
 
-  let { scope, motion, readout, onseek, ontoggle }: Props = $props();
+  let {
+    scope,
+    motion,
+    readout,
+    onseek,
+    ontoggle,
+    heights = { plot: 22, wave: 5 }
+  }: Props = $props();
 
   let canvas = $state<HTMLCanvasElement | null>(null);
   let width = $state(0);
@@ -42,7 +51,7 @@
   let hover = $state.raw<{ x: number; y: number } | null>(null);
   const rasters = new Rasters();
 
-  const stage = $derived<Stage>(stageOf(width, dpr, rem, 22, 5));
+  const stage = $derived<Stage>(stageOf(width, dpr, rem, heights.plot, heights.wave));
   /** a plot's place in CSS pixels, written on the canvas for what drives the page from outside */
   const box = (rect: Stage["waveform"]) =>
     [rect.x, rect.y, rect.width, rect.height].map((v) => (v / dpr).toFixed(1)).join(" ");

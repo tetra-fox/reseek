@@ -3,6 +3,7 @@
   import { Command, Dialog } from "bits-ui";
 
   import { activityPrefs } from "#lib/activity/activity.svelte.js";
+  import { screenHref } from "#lib/analysis/slots.svelte.js";
   import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
@@ -50,7 +51,12 @@
     const agent = app.mode === "agent";
     const screens = agent ? [] : [...navItems, profileItem];
     const entries: PaletteEntry[] = [
-      ...screens.map((s) => ({ id: s.path, group: "Screens", label: s.title, run: go(s.path) })),
+      ...screens.map((s) => ({
+        id: s.path,
+        group: "Screens",
+        label: s.title,
+        run: () => void goto(screenHref(s.path))
+      })),
       { id: systemItem.path, group: "Screens", label: "System", run: go(systemItem.path) },
       ...(agent
         ? []

@@ -4,15 +4,14 @@
   import type { Snippet } from "svelte";
 
   import type { Target } from "#lib/analysis/analysis.js";
-  import type { Track } from "#lib/analysis/playback.svelte.js";
   import { FileReport } from "#lib/analysis/report.svelte.js";
+  import { slots } from "#lib/analysis/slots.svelte.js";
   import AnalysisSection from "#lib/components/analysis/AnalysisSection.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Username from "#lib/components/users/Username.svelte";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { type Field, inspector } from "#lib/inspector/inspector.svelte.js";
-  import { session } from "#lib/session.svelte.js";
 
   import Fields from "./Fields.svelte";
   import Section from "./Section.svelte";
@@ -30,13 +29,13 @@
     /** how far it has moved, while it moves */
     percent?: number | null;
     username?: string;
-    /** the main actions, before Analyze */
+    /** the main actions, before Open in Analysis */
     actions?: Snippet;
     /** the rest of the file's actions, a menu's content */
     menu?: Snippet;
     details?: Field[];
-    /** the file's analysis, for a file the analyzer takes */
-    analysis?: { target: Target; track: Track | null } | null;
+    /** the file as the analyzer names it, for a file the analyzer takes */
+    analysis?: Target | null;
     history?: Snippet;
     /** raw values, each with a copy button */
     technical?: Field[];
@@ -57,19 +56,13 @@
     technical = []
   }: Props = $props();
 
-  const analyzed = new FileReport(() => analysis?.target ?? null);
-  const write = $derived(session.can("ReadWrite"));
+  const analyzed = new FileReport(() => analysis);
 
   /** Keeps focus where it is at a press, so the keys go on moving through the list after one */
   const keepsFocus = (node: HTMLElement) => {
     const hold = (e: MouseEvent) => e.preventDefault();
     node.addEventListener("mousedown", hold);
     return () => node.removeEventListener("mousedown", hold);
-  };
-
-  /** Brings the analysis into view when it was asked for */
-  const revealed = (node: HTMLElement) => {
-    if (inspector.asked) node.scrollIntoView({ block: "nearest" });
   };
 </script>
 
@@ -111,9 +104,13 @@
   {#if username}<p class="min-w-0 truncate"><Username name={username} /></p>{/if}
   <div class="flex flex-wrap gap-inline empty:hidden" {@attach keepsFocus}>
     {@render actions?.()}
-    {#if analysis && analyzed.unread && !analyzed.job && write}
-      <Button variant="outline" size="sm" onclick={() => void analyzed.analyze(false)}
-        ><A.analyze.icon />{A.analyze.label}</Button>
+    {#if analysis}
+      <Button variant="outline" size="sm" onclick={() => slots.open(analysis, name)}
+        ><A.openAnalysis.icon />{A.openAnalysis.label}</Button>
+      {#if slots.occupied}
+        <Button variant="outline" size="sm" onclick={() => slots.compare(analysis, name)}
+          ><A.compare.icon />{A.compare.label}</Button>
+      {/if}
     {/if}
   </div>
 </div>
@@ -122,11 +119,9 @@
     <Section id="details" title="Details"><Fields fields={details} /></Section>
   {/if}
   {#if analysis}
-    <div class="scroll-mt-2" {@attach revealed}>
-      <Section id="analysis" title="Analysis">
-        <AnalysisSection {analyzed} target={analysis.target} track={analysis.track} {name} />
-      </Section>
-    </div>
+    <Section id="analysis" title="Analysis">
+      <AnalysisSection {analyzed} target={analysis} {name} />
+    </Section>
   {/if}
   {#if history}
     <Section id="history" title="History">{@render history()}</Section>

@@ -1,7 +1,6 @@
 <script lang="ts">
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
 
-  import { targetKey } from "#lib/analysis/analysis.js";
   import { analyzable, marks } from "#lib/analysis/marks.svelte.js";
   import AnalysisMark from "#lib/components/analysis/AnalysisMark.svelte";
   import LocalFileItems from "#lib/components/files/LocalFileItems.svelte";
@@ -9,10 +8,8 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { FILE_ACTIONS as A } from "#lib/files/actions.js";
   import { dateTime, formatBytes } from "#lib/format.js";
-  import { inspector } from "#lib/inspector/inspector.svelte.js";
   import type { Entry } from "#lib/system/explorer.js";
-  import { fileTrack, type Root } from "#lib/system/localfiles.js";
-  import { shiftHeld } from "#lib/ui/keys.js";
+  import type { Root } from "#lib/system/localfiles.js";
 
   import Inspector from "./Inspector.svelte";
 
@@ -30,12 +27,7 @@
 
   const mark = $derived(marks.file(root, entry.path));
   const analysis = $derived(
-    analyzable(entry.name)
-      ? {
-          target: { kind: "file" as const, root, path: entry.path },
-          track: fileTrack(root, entry.path)
-        }
-      : null
+    analyzable(entry.name) ? { kind: "file" as const, root, path: entry.path } : null
   );
   const folder = $derived(entry.path.split("/").slice(0, -1).join("/"));
 </script>
@@ -52,9 +44,7 @@
   <Menu.Content align="end" class="min-w-48">
     <LocalFileItems
       {onopen}
-      onanalyze={analysis
-        ? () => inspector.analyze(targetKey(analysis.target), shiftHeld())
-        : undefined}
+      analysis={analysis && { target: analysis, name: entry.name }}
       {onsave}
       path={entry.path} />
     {#if ondelete}

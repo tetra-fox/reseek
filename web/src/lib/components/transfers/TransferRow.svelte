@@ -68,7 +68,7 @@
      * Opens the inspector on the file, at its analysis with `analyze`, in the large view with
      * `large`; a screen without the inspector leaves it out
      */
-    ondetails?: (analyze?: boolean, large?: boolean) => void;
+    ondetails?: () => void;
     onremove: () => void;
     onblock: (deny: boolean) => void;
   };
@@ -314,9 +314,12 @@
             {onremove}
             {onblock}
             ondetails={ondetails ? () => ondetails() : undefined}
-            onanalyze={ondetails && can.open && analyzableDownload(t)
-              ? (large) => ondetails(true, large)
-              : undefined} />
+            analysis={ondetails && can.open && analyzableDownload(t)
+              ? {
+                  target: { kind: "download", username: t.username, id: t.id },
+                  name: getFileName(t.filename)
+                }
+              : null} />
         </Menu.LazyRoot>
       </div>
     {/if}

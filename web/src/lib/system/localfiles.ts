@@ -1,5 +1,4 @@
-import type { Track } from "#lib/analysis/playback.svelte.js";
-import { api, root as base } from "#lib/api/client.js";
+import { api, root as base, type Schemas } from "#lib/api/client.js";
 import { call, type Outcome } from "#lib/request.js";
 import { session } from "#lib/session.svelte.js";
 import { encodePath } from "#lib/transfers/content.js";
@@ -16,7 +15,7 @@ export const joinPath = (parts: string[]) => parts.filter(Boolean).join("/");
  * carries a ten-minute token for that one file
  */
 export const fileUrl = async (
-  root: Root,
+  root: Schemas["FileRoot"],
   path: string,
   disposition: "inline" | "attachment",
   as: "content" | "wav" = "content"
@@ -37,9 +36,3 @@ export const fileUrl = async (
 /** The URL of a zip of a folder under a root */
 export const archiveUrl = (root: Root, path: string) =>
   `${base()}/api/v0/files/${root}/directories/${encodePath(path)}/archive`;
-
-/** A file under a root as the analysis popup plays it */
-export const fileTrack = (root: Root, path: string): Track => ({
-  filename: path,
-  url: (as) => fileUrl(root, path, "inline", as)
-});

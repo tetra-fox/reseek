@@ -1,7 +1,7 @@
 import { untrack } from "svelte";
 
 import { toast } from "#lib/feedback/toast.svelte.js";
-import { inspector, SETTLE_MS } from "#lib/inspector/inspector.svelte.js";
+import { SETTLE_MS } from "#lib/inspector/inspector.svelte.js";
 import { session } from "#lib/session.svelte.js";
 
 import { loadReport, queue, type Report, type Target, targetKey } from "./analysis";
@@ -10,9 +10,9 @@ import { marks } from "./marks.svelte";
 import { Scope } from "./spectrogram/scope.svelte";
 
 /**
- * The analysis of the file the inspector shows: its report, what the viewer holds of it, its job
- * in the queue and whether the large view is open. `target` is the file, null for one the analyzer
- * doesn't take. Make it while a component is being set up
+ * The analysis of one file: its report, what the viewer holds of it and its job in the queue.
+ * `target` is the file, null for no file. With `starts`, a file without a report is queued the
+ * first time it is shown. Make it while a component is being set up
  */
 export class FileReport {
   /** undefined while loading, null when the file has no report */
@@ -20,18 +20,17 @@ export class FileReport {
   error = $state("");
   /** what the viewer shows of the report, kept while the report is the same */
   scope = $state.raw<Scope | null>(null);
-  /** the viewer across the whole screen */
-  large = $state(false);
 
   #target: () => Target | null;
+  #starts: boolean;
+  /** the file queued on its own last, which stays canceled if the user cancels it */
+  #started: string | null = null;
   #key = $derived.by(() => {
     const target = this.#target();
     return target ? targetKey(target) : null;
   });
   /** the last read asked for, so an answer to an earlier one is dropped */
   #asked = 0;
-  /** the file to open large as soon as its spectrogram can show */
-  #openLarge = $state<string | null>(null);
   /** whether there is a file, which holds the queue, however often the file changes */
   #any = $derived(this.#key !== null);
 
@@ -43,16 +42,20 @@ export class FileReport {
   /** whether the file has no report it can show, which an older version's is as good as */
   readonly unread = $derived(this.report === null || this.report?.stale === true);
 
-  constructor(target: () => Target | null) {
+  constructor(target: () => Target | null, starts = false) {
     this.#target = target;
+    this.#starts = starts;
 
     $effect(() => (this.#any ? jobs.retain() : undefined));
     // a new file starts over, and is read once focus has rested on it
     $effect(() => {
-      if (this.#key === null) return;
+      const key = this.#key;
       this.report = undefined;
       this.error = "";
-      this.large = false;
+      if (key === null) {
+        this.#started = null;
+        return;
+      }
       const timer = setTimeout(() => void this.load(), SETTLE_MS);
       return () => clearTimeout(timer);
     });
@@ -72,24 +75,6 @@ export class FileReport {
       if (same?.report.path === report.path && same.report.analyzedAt === report.analyzedAt) return;
       this.scope = new Scope(target, report, layout);
     });
-    // the viewer's other pictures load when it opens, and it opens when it was asked to
-    $effect(() => {
-      const scope = this.scope;
-      if (!scope) return;
-      if (this.#openLarge === this.#key) {
-        this.#openLarge = null;
-        this.large = true;
-      }
-      if (this.large) void scope.pictures.start();
-    });
-    // asked for the analysis, a file without a report it can show is queued once that is known
-    $effect(() => {
-      const asked = inspector.asked;
-      if (!asked || asked.key !== this.#key || this.report === undefined) return;
-      inspector.asked = null;
-      if (asked.large) this.#openLarge = asked.key;
-      if (this.unread && session.can("ReadWrite")) void this.analyze(false);
-    });
   }
 
   /** Reads the file's report, which the lists' chips follow */
@@ -106,6 +91,10 @@ export class FileReport {
     this.report = outcome.data;
     this.error = "";
     if (outcome.data) marks.put(outcome.data);
+    if (outcome.data === null && this.#starts && this.#started !== this.#key) {
+      this.#started = this.#key;
+      if (session.can("ReadWrite")) void this.analyze(false);
+    }
   }
 
   /** Queues the file, again with `force` when it has a report */
@@ -115,6 +104,8 @@ export class FileReport {
     const outcome = await queue(target, force);
     // a file queued already shows its job once the queue is read
     if (outcome.ok || outcome.status === 409) void jobs.refresh();
-    else toast(`Could not analyze the file: ${outcome.error}`, "error");
+    else if (outcome.status === 404 && target.kind === "file" && target.root === "temporary") {
+      this.error = "This local file is no longer held. Upload it again.";
+    } else toast(`Could not analyze the file: ${outcome.error}`, "error");
   }
 }

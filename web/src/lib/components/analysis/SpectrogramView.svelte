@@ -7,9 +7,9 @@
   import Volume2Icon from "@lucide/svelte/icons/volume-2";
   import ZoomInIcon from "@lucide/svelte/icons/zoom-in";
   import ZoomOutIcon from "@lucide/svelte/icons/zoom-out";
-  import { type Component, untrack } from "svelte";
+  import { type Component, type Snippet, untrack } from "svelte";
 
-  import { DISCLAIMER, SCALES } from "#lib/analysis/analysis.js";
+  import { SCALES } from "#lib/analysis/analysis.js";
   import { playable, Playback, type Track } from "#lib/analysis/playback.svelte.js";
   import { guideColor, guideKey } from "#lib/analysis/spectrogram/draw.js";
   import { formatHz } from "#lib/analysis/spectrogram/frequency.js";
@@ -28,16 +28,22 @@
 
   // the spectrogram, the waveform and the spectrum at the cursor as one unit on one time axis,
   // with the frequency scale, zoom and playback above it, the guide lines' legend, a strip of the
-  // whole file, what the cursor is on, and the disclaimer under it all. The spectrum goes beside
-  // the rest when there is room. This is the one place reseek plays a file: it goes when the
-  // popup closes, and the sound with it
+  // whole file and what the cursor is on. The spectrum and what the caller adds go beside the rest
+  // when there is room. This is the one place reseek plays a file: it goes when its slot is
+  // cleared or the page left, and the sound with it
   type Props = {
     scope: Scope;
     /** the file to play, null when it can't be played */
     track: Track | null;
+    /** the height of the spectrogram and of the waveform, in rem */
+    heights?: { plot: number; wave: number };
+    /** what goes under the spectrum */
+    aside?: Snippet;
   };
 
-  let { scope, track }: Props = $props();
+  let { scope, track, heights, aside }: Props = $props();
+
+  $effect(() => void scope.pictures.start());
 
   const layout = $derived(scope.layout);
   const scale = $derived(spectrogramView.scale ?? layout.scale);
@@ -89,19 +95,6 @@
   });
 
   const all = $derived(showsAll(scope.view, scope.duration));
-  /** the mouse and keyboard controls, shown under the graph */
-  const controls = $derived([
-    ["Click", "Place the cursor"],
-    ["Drag line", "Move the cursor"],
-    ["Drag", "Pan"],
-    ["Scroll", "Zoom"],
-    ["Shift+scroll", "Pan"],
-    ["+ / −", "Zoom"],
-    ["← / →", "Previous or next window"],
-    ["Shift+← / →", "Ten windows back or forward"],
-    ["Home / End", "First or last window"],
-    ...(canToggle ? [["Space", "Play or pause"]] : [])
-  ]);
   const deepest = $derived(scope.view.span <= Math.min(MIN_SPAN, scope.duration) + 1e-9);
 </script>
 
@@ -195,7 +188,7 @@
         {sentence(scope.pictures.error)}
       </p>
     {:else}
-      <Timeline {scope} {motion} {readout} onseek={seek} ontoggle={toggle} />
+      <Timeline {scope} {motion} {readout} {heights} onseek={seek} ontoggle={toggle} />
       <Minimap {scope} {motion} />
       {#if scope.pictures.lost}
         <p class="text-xs text-fg-muted" role="status">
@@ -217,28 +210,15 @@
       {/if}
     {/if}
   </div>
-  <WindowSpectrum {scope} curve={motion.curve} />
-  <div class="flex flex-col gap-2 xl:col-span-2">
-    <dl
-      class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted"
-      aria-label="Mouse and keyboard">
-      {#each controls as [keys, action] (keys)}
-        <div class="flex items-center gap-1">
-          <dt><kbd class="rounded-badge border px-1 font-sans">{keys}</kbd></dt>
-          <dd>{action}</dd>
-        </div>
-      {/each}
-    </dl>
-    {#if layout.sampled}
-      <p class="text-xs text-fg-muted">
-        Only {scope.starts.length} one-second samples across the {formatDuration(
-          layout.durationSeconds
-        )} of this file were analyzed. The hatched stretches between them were not read.
-      </p>
-    {/if}
-    <p
-      class="rounded-control border border-warning/40 bg-warning-soft p-2 text-sm text-warning-soft-fg">
-      {DISCLAIMER}
-    </p>
+  <div class="flex min-w-0 flex-col gap-3">
+    <WindowSpectrum {scope} curve={motion.curve} />
+    {@render aside?.()}
   </div>
+  {#if layout.sampled}
+    <p class="text-xs text-fg-muted xl:col-span-2">
+      Only {scope.starts.length} one-second samples across the {formatDuration(
+        layout.durationSeconds
+      )} of this file were analyzed. The hatched stretches between them were not read.
+    </p>
+  {/if}
 </div>

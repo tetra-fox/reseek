@@ -32,8 +32,8 @@
     expansion: Expansion;
     /** the selected transfers' ids, which the page acts on */
     selected: SvelteSet<string>;
-    /** opens the inspector on a transfer, at the file's analysis with `analyze` */
-    ondetails: (t: Transfer, analyze?: boolean, large?: boolean) => void;
+    /** opens the inspector on a transfer */
+    ondetails: (t: Transfer) => void;
     /** focus came to a transfer, which the inspector shows */
     inspect: (t: Transfer) => void;
     onremove: (transfers: Transfer[]) => void;
@@ -187,7 +187,7 @@
       selected={selected.has(t.id)}
       speeds={store.speeds.get(t.id) ?? []}
       onselect={tick}
-      ondetails={(analyze, large) => ondetails(t, analyze, large)}
+      ondetails={() => ondetails(t)}
       onremove={() => onremove([t])}
       onblock={(deny) => onblock(t.username, deny)} />
   {/snippet}

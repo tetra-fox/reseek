@@ -8,6 +8,7 @@
   import { toggleMode } from "mode-watcher";
   import { tick } from "svelte";
 
+  import { screenHref } from "#lib/analysis/slots.svelte.js";
   import { app } from "#lib/app.svelte.js";
   import { chat } from "#lib/chat/chat.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
@@ -39,7 +40,7 @@
       {#snippet child({ props })}
         <a
           {...props}
-          href={href(item.path)}
+          href={screenHref(item.path)}
           aria-label={sidebar.collapsed ? item.title : undefined}
           aria-current={current === item.path ? "page" : undefined}
           class="relative nav-item">
