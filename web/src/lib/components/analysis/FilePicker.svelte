@@ -90,7 +90,12 @@
       nested,
       expansion.isOpen,
       keyOf,
-      words.length ? { folder: (node) => matches(node.path), item: (f) => matches(f.path) } : null
+      words.length
+        ? {
+            folder: (node) => node.items.some((f) => matches(f.path)),
+            item: (f) => matches(f.path)
+          }
+        : null
     ),
     ...loose
       .filter((f) => matches(f.path))
