@@ -33,20 +33,24 @@ export const tickLabel = {
   style: `font-size: ${LABEL_REM}rem; font-variant-numeric: tabular-nums`
 };
 
+/** How wide a character of an axis label is taken to be, a little more than a tabular digit */
+const LABEL_CHAR = 0.62;
+
 /**
  * Room around a chart's plot for its axes, in pixels at `remPx` to the rem: on the left the
  * widest of `labels`, the value labels the axis can show, below one line of time labels, and above
- * half a line for the top label, which is centered on its tick. A figure is taken as 0.62 of the
- * text size wide, a little more than a tabular digit
+ * half a line for the top label, which is centered on its tick. A time label is centered on its
+ * tick too, so half of the widest of `times` can stand past either end of the plot
  */
-export const axisPadding = (labels: string[], remPx: number) => {
+export const axisPadding = (labels: string[], remPx: number, times: string[] = []) => {
   const font = LABEL_REM * remPx;
-  const widest = Math.max(...labels.map((l) => l.length));
+  const widest = (of: string[]) => Math.max(0, ...of.map((l) => l.length)) * font * LABEL_CHAR;
+  const overhang = Math.ceil(widest(times) / 2);
   return {
     top: Math.ceil(font),
-    right: Math.ceil(remPx / 2),
+    right: Math.max(Math.ceil(remPx / 2), overhang),
     bottom: Math.ceil(font * 1.4 + remPx / 2),
-    left: Math.ceil(widest * font * 0.62 + remPx / 2)
+    left: Math.max(Math.ceil(widest(labels) + remPx / 2), overhang)
   };
 };
 

@@ -245,6 +245,7 @@ const everyScreen = async (page: Page) => {
 };
 
 test("every screen fits a phone's width", async ({ page }) => {
+  test.slow(); // it opens every screen in turn
   await everyScreen(page);
 });
 
@@ -314,6 +315,7 @@ test.describe("at a 24 px text size", () => {
   });
 
   test("every screen fits a phone", async ({ page }) => {
+    test.slow(); // it opens every screen in turn
     await textSize(page, 24);
     await everyScreen(page);
     // the activity log's sheet stands on the status bar, however many lines that has

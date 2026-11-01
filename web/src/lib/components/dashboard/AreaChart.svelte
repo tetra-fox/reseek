@@ -33,7 +33,13 @@
   const xLabel = $derived(timeLabel(data[0]?.timestamp ?? 0, data.at(-1)?.timestamp ?? 0));
   const top = $derived(Math.max(0, ...data.flatMap((p) => shown.map((s) => p[s.key]))));
   const ticks = $derived(axisTicks(view.unit, top));
-  const padding = $derived(axisPadding(ticks.map(format), rem.px));
+  const padding = $derived(
+    axisPadding(
+      ticks.map(format),
+      rem.px,
+      [data[0], data.at(-1)].flatMap((p) => (p ? [xLabel(p.timestamp)] : []))
+    )
+  );
   const motion = chartMotion();
   const toggle = (direction: Direction) =>
     (hidden = hidden.includes(direction)
