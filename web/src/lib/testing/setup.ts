@@ -10,13 +10,13 @@ globalThis.ResizeObserver ??= class {
 };
 // and gives every box no height, so a virtual list would draw no lines: its scroll box, a grid,
 // tree, treegrid or log, reports the height of a screen
-const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight")!;
-Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+const clientHeight = Object.getOwnPropertyDescriptor(Element.prototype, "clientHeight")!;
+Object.defineProperty(Element.prototype, "clientHeight", {
   configurable: true,
-  get(this: HTMLElement) {
+  get(this: Element) {
     return ["grid", "tree", "treegrid", "log"].includes(this.getAttribute("role") ?? "")
       ? 600
-      : offsetHeight.get!.call(this);
+      : clientHeight.get!.call(this);
   }
 });
 // nor matchMedia, which reduced motion and the narrow layout are read with
