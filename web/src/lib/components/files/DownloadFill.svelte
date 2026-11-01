@@ -32,12 +32,13 @@
 </script>
 
 <!-- behind the row's cells: the row is an isolated stacking context, so this paints over its
-     own tint and under its content -->
+     own tint and under its content. Not selectable, or text copied across rows while it shows
+     would hold a blank line for it -->
 {#if fill && (fill !== "done" || flash) && (fill !== "waiting" || track)}
   <span
     aria-hidden="true"
     class={[
-      "pointer-events-none absolute inset-0 -z-10",
+      "pointer-events-none absolute inset-0 -z-10 select-none",
       (fill === "waiting" || fill === "moving") && "bg-accent/[0.06]",
       fill === "failed" && "bg-danger-soft/50",
       flash && "animate-done-flash"
