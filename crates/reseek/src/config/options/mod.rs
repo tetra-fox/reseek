@@ -7,6 +7,7 @@ mod analysis;
 mod authentication;
 mod flags;
 mod logging;
+mod notifications;
 mod paths;
 mod relay;
 mod retention;
@@ -28,6 +29,9 @@ pub use authentication::{
 };
 pub use flags::Flags;
 pub use logging::{Logger, Logging, Metrics, MetricsAuthentication};
+pub use notifications::{
+  ChatNotifications, NotificationMode, Notifications, TransferNotifications,
+};
 pub use paths::{Directories, Paths};
 pub use relay::{Relay, RelayAgent, RelayController, RelayLimits, RelayTimeouts};
 pub use retention::{
@@ -364,77 +368,6 @@ impl Default for Chat {
       max_message_length: 2000,
       accept_private_room_invitations: true,
       highlight_words: Vec::new(),
-    }
-  }
-}
-
-/// Browser notifications for chat.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
-#[serde(default)]
-pub struct ChatNotifications {
-  /// Enables chat notifications, once the browser permits them.
-  #[cascade(env = "RESEEK_CHAT_NOTIFICATIONS_ENABLED")]
-  pub enabled: bool,
-  /// Suppresses notifications while the tab is visible with the chat of the message open.
-  #[cascade(env = "RESEEK_CHAT_NOTIFICATIONS_ONLY_WHEN_HIDDEN")]
-  pub only_when_hidden: bool,
-  /// Plays a sound with each notification.
-  #[cascade(env = "RESEEK_CHAT_NOTIFICATIONS_SOUND")]
-  pub sound: bool,
-  /// Notifies of private messages.
-  #[cascade(env = "RESEEK_CHAT_NOTIFICATIONS_PRIVATE_MESSAGES")]
-  pub private_messages: bool,
-  /// Notifies of room messages that mention this account.
-  #[cascade(env = "RESEEK_CHAT_NOTIFICATIONS_MENTIONS")]
-  pub mentions: bool,
-  /// Notifies of every message in rooms set to notify of all messages.
-  #[cascade(env = "RESEEK_CHAT_NOTIFICATIONS_ROOM_MESSAGES")]
-  pub room_messages: bool,
-}
-
-impl Default for ChatNotifications {
-  fn default() -> Self {
-    Self {
-      enabled: true,
-      only_when_hidden: true,
-      sound: false,
-      private_messages: true,
-      mentions: true,
-      room_messages: false,
-    }
-  }
-}
-
-/// Notifications other than chat.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
-#[serde(default)]
-pub struct Notifications {
-  /// Transfer notifications.
-  pub transfers: TransferNotifications,
-}
-
-/// Transfer notifications, under the same browser permission and tab visibility rules as chat
-/// notifications.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
-#[serde(default)]
-pub struct TransferNotifications {
-  /// Notifies when a download finishes.
-  #[cascade(env = "RESEEK_NOTIFICATIONS_TRANSFERS_DOWNLOAD_FINISHED")]
-  pub download_finished: bool,
-  /// Notifies when every download of a batch, such as an album, has finished.
-  #[cascade(env = "RESEEK_NOTIFICATIONS_TRANSFERS_BATCH_FINISHED")]
-  pub batch_finished: bool,
-  /// Notifies when another user queues an upload.
-  #[cascade(env = "RESEEK_NOTIFICATIONS_TRANSFERS_UPLOAD_QUEUED")]
-  pub upload_queued: bool,
-}
-
-impl Default for TransferNotifications {
-  fn default() -> Self {
-    Self {
-      download_finished: true,
-      batch_finished: true,
-      upload_queued: false,
     }
   }
 }

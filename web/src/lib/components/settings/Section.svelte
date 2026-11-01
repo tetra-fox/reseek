@@ -6,6 +6,7 @@
   import { SvelteSet } from "svelte/reactivity";
 
   import { api } from "#lib/api/client.js";
+  import { type NotifyMode, showsDesktop } from "#lib/chat/modes.js";
   import AddShare from "#lib/components/system/AddShare.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Card from "#lib/components/ui/Card.svelte";
@@ -33,6 +34,7 @@
   import { call } from "#lib/request.js";
   import { UNTIL_RESTART } from "#lib/wording.js";
 
+  import DesktopPermission from "./DesktopPermission.svelte";
   import FieldRow from "./FieldRow.svelte";
   import OidcTest from "./OidcTest.svelte";
 
@@ -96,6 +98,10 @@
   });
 
   const changed = $derived(fields.filter((f) => !same(draft[f.key], running[f.key])));
+  /** a notification mode in view, saved or not, needs the browser's permission */
+  const wantsDesktop = $derived(
+    found.some((f) => controls[f.key] === "notify-mode" && showsDesktop(draft[f.key] as NotifyMode))
+  );
   // the page's bar counts every section's changes
   $effect(() => {
     changes = changed.length;
@@ -316,6 +322,7 @@
     </Button>
   {/snippet}
   {#if section.extra}<section.extra />{/if}
+  {#if wantsDesktop}<DesktopPermission />{/if}
   {#if nix}
     <div class="flex flex-col gap-1">
       <p class="text-xs text-fg-muted">

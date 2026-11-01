@@ -1,4 +1,5 @@
 import type { Schemas } from "#lib/api/client.js";
+import { NOTIFY_MODES } from "#lib/chat/modes.js";
 
 import type { Control, Field } from "./sections";
 import { columnsOf, tableDraft, tableValue } from "./tables";
@@ -15,14 +16,18 @@ export type Parsed = { set: unknown } | { unset: true } | { error: string };
 /** A secret the daemon holds, as it shows it */
 export const REDACTED = "*****";
 
+/** Whether `choices` are those of a notification mode, whichever option holds one */
+const areNotifyModes = (choices: string[]) =>
+  choices.join() === NOTIFY_MODES.map((m) => m.id).join();
+
 /**
- * The control for an option: the description's, else a select of the names the daemon gives for
- * it, else what the daemon's kind for it calls for
+ * The control for an option: the description's, else the choices of a notification mode or a
+ * select of the names the daemon gives for it, else what the daemon's kind for it calls for
  */
 export const controlOf = (field: Field, view: FieldView | undefined): Control => {
   if (field.control) return field.control;
   if (view?.secret) return "secret";
-  if (view?.choices) return "select";
+  if (view?.choices) return areNotifyModes(view.choices) ? "notify-mode" : "select";
   const kind = view?.kind;
   if (kind === undefined) return "text";
   // a list of tables or maps can't be a line each, so it is edited as a table

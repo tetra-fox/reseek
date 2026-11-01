@@ -7,32 +7,39 @@ import { chatHref, roomHref } from "#lib/nav.js";
 import { fields } from "#lib/stored.svelte.js";
 import { users } from "#lib/users/users.svelte.js";
 
+import { isNotifyMode, type NotifyMode, playsSound, showsDesktop } from "./modes";
 import notificationSound from "./notification.wav?url";
 
-/** The `chat.notifications` options */
+/** The notification options, `chat.notifications` and `notifications.transfers` together */
 export type NotifyOptions = {
-  enabled: boolean;
   onlyWhenHidden: boolean;
-  sound: boolean;
-  privateMessages: boolean;
-  mentions: boolean;
-  roomMessages: boolean;
+  privateMessages: NotifyMode;
+  mentions: NotifyMode;
+  roomMessages: NotifyMode;
+  downloadFinished: NotifyMode;
+  batchFinished: NotifyMode;
+  uploadQueued: NotifyMode;
 };
 
-/** The `chat.notifications` options in effect, their defaults where the options don't say */
+/** The notification options in effect, their defaults where the options don't say */
 export const notifyOptions = (): NotifyOptions => {
-  const n = fields(fields(fields(app.options).chat).notifications);
-  const flag = (value: unknown, otherwise: boolean) =>
-    typeof value === "boolean" ? value : otherwise;
+  const chat = fields(fields(fields(app.options).chat).notifications);
+  const transfers = fields(fields(fields(app.options).notifications).transfers);
+  const mode = (value: unknown, otherwise: NotifyMode) => (isNotifyMode(value) ? value : otherwise);
   return {
-    enabled: flag(n.enabled, true),
-    onlyWhenHidden: flag(n.only_when_hidden, true),
-    sound: flag(n.sound, false),
-    privateMessages: flag(n.private_messages, true),
-    mentions: flag(n.mentions, true),
-    roomMessages: flag(n.room_messages, false)
+    onlyWhenHidden: typeof chat.only_when_hidden === "boolean" ? chat.only_when_hidden : true,
+    privateMessages: mode(chat.private_messages, "both"),
+    mentions: mode(chat.mentions, "both"),
+    roomMessages: mode(chat.room_messages, "off"),
+    downloadFinished: mode(transfers.download_finished, "off"),
+    batchFinished: mode(transfers.batch_finished, "both"),
+    uploadQueued: mode(transfers.upload_queued, "off")
   };
 };
+
+/** Whether any type of chat notification asks for desktop notifications */
+export const chatWantsDesktop = (o: NotifyOptions) =>
+  [o.privateMessages, o.mentions, o.roomMessages].some(showsDesktop);
 
 /** One arriving message, as far as notifying about it goes */
 export type Arrival = {
@@ -42,22 +49,23 @@ export type Arrival = {
   mention: boolean;
   /** the author is muted */
   muted: boolean;
-  /** the tab is visible and the message's pane is open */
-  seen: boolean;
 };
 
-/** Whether an arriving message gets a notification */
-export const shouldNotify = (a: Arrival, o: NotifyOptions): boolean => {
-  if (!o.enabled || a.muted || a.level === "none") return false;
-  if (o.onlyWhenHidden && a.seen) return false;
+/** The mode of an arriving message's type, `off` when a mute or its level leaves it out */
+export const arrivalMode = (a: Arrival, o: NotifyOptions): NotifyMode => {
+  if (a.muted || a.level === "none") return "off";
   if (a.kind === "private") return o.privateMessages;
   if (a.mention) return o.mentions;
-  return o.roomMessages && a.level === "all";
+  return a.level === "all" ? o.roomMessages : "off";
 };
 
+/** Whether a notification in `mode` goes out, `seen` when what it tells of is already in view */
+export const shouldNotify = (mode: NotifyMode, seen: boolean, onlyWhenHidden: boolean) =>
+  mode !== "off" && !(onlyWhenHidden && seen);
+
 /**
- * Turns arriving messages into notifications: the browser's, a short sound, and for a private
- * message while its pane isn't open a toast that opens it
+ * Delivers notifications as their type's mode says: the browser's, a short sound, and for a
+ * private message while its pane isn't open a toast that opens it
  */
 class Notifier {
   /**
@@ -87,26 +95,21 @@ class Notifier {
   ) {
     if (message.direction !== "In" || message.wasReplayed) return;
     const key = `user:${username}`;
-    const seen = this.#seen(key, open);
-    // the toast is the in-page form of the same notification: the same level, mute and options
+    const { visible, paneOpen } = this.#seen(key, open);
+    const arrival: Arrival = { kind: "private", level, mention: false, muted: false };
+    const mode = () => arrivalMode(arrival, notifyOptions());
+    const seen = visible && paneOpen;
+    // the toast is the in-page form of the same notification: the same level, mute and mode
     // decide it, whether the tab is visible or not
-    const toasts = (a: Arrival) =>
-      !seen.paneOpen && shouldNotify(a, { ...notifyOptions(), onlyWhenHidden: false });
-    const arrival: Arrival = {
-      kind: "private",
-      level,
-      mention: false,
-      muted: false,
-      seen: seen.visible && seen.paneOpen
-    };
-    if (!toasts(arrival) && !shouldNotify(arrival, notifyOptions())) return;
+    const toasts = () => !paneOpen && mode() !== "off";
+    if (!toasts() && !shouldNotify(mode(), seen, notifyOptions().onlyWhenHidden)) return;
     arrival.muted = await this.#muted(username);
-    if (toasts(arrival)) {
+    if (toasts()) {
       toast(`New message from ${username}`, "info", {
         action: { label: "Open", run: () => void this.#go(chatHref(username)) }
       });
     }
-    this.#maybe(arrival, username, message.message, key, chatHref(username));
+    this.#deliver(mode(), seen, username, message.message, key, chatHref(username));
   }
 
   /** A room message arrived; `level` is the room's, `open` the pane on screen */
@@ -118,31 +121,22 @@ class Notifier {
   ) {
     if (message.self || message.hidden) return;
     const key = `room:${room}`;
-    const seen = this.#seen(key, open);
-    const arrival: Arrival = {
-      kind: "room",
-      level,
-      mention: message.isMention,
-      muted: false,
-      seen: seen.visible && seen.paneOpen
-    };
-    if (!shouldNotify(arrival, notifyOptions())) return;
+    const { visible, paneOpen } = this.#seen(key, open);
+    const arrival: Arrival = { kind: "room", level, mention: message.isMention, muted: false };
+    const mode = () => arrivalMode(arrival, notifyOptions());
+    const seen = visible && paneOpen;
+    if (!shouldNotify(mode(), seen, notifyOptions().onlyWhenHidden)) return;
     arrival.muted = await this.#muted(message.username);
-    this.#maybe(arrival, `${message.username} in ${room}`, message.message, key, roomHref(room));
+    const title = `${message.username} in ${room}`;
+    this.#deliver(mode(), seen, title, message.message, key, roomHref(room));
   }
 
   /**
-   * Notifies of something besides chat, such as a finished download, under the same switch,
+   * Notifies of something besides chat, such as a finished download, in `mode`, under the same
    * browser permission and hidden-tab rule as chat's notifications
    */
-  other(title: string, body: string, tag: string, to: string) {
-    const options = notifyOptions();
-    if (!options.enabled) return;
-    if (options.onlyWhenHidden && document.visibilityState === "visible") return;
-    if (options.sound) chime();
-    if (this.permission !== "granted") return;
-    const shown = new Notification(title, { body, tag });
-    shown.onclick = () => this.#go(to);
+  other(mode: NotifyMode, title: string, body: string, tag: string, to: string) {
+    this.#deliver(mode, document.visibilityState === "visible", title, body, tag, to);
   }
 
   /**
@@ -164,11 +158,10 @@ class Notifier {
     void goto(to);
   }
 
-  #maybe(arrival: Arrival, title: string, body: string, tag: string, to: string) {
-    const options = notifyOptions();
-    if (!shouldNotify(arrival, options)) return;
-    if (options.sound) chime();
-    if (this.permission !== "granted") return;
+  #deliver(mode: NotifyMode, seen: boolean, title: string, body: string, tag: string, to: string) {
+    if (!shouldNotify(mode, seen, notifyOptions().onlyWhenHidden)) return;
+    if (playsSound(mode)) chime();
+    if (!showsDesktop(mode) || this.permission !== "granted") return;
     const shown = new Notification(title, { body, tag });
     shown.onclick = () => this.#go(to);
   }

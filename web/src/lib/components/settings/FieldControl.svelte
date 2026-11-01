@@ -1,7 +1,9 @@
 <script lang="ts">
   import type { Schemas } from "#lib/api/client.js";
+  import { NOTIFY_MODES, type NotifyMode } from "#lib/chat/modes.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Input from "#lib/components/ui/Input.svelte";
+  import Segmented from "#lib/components/ui/Segmented.svelte";
   import Select from "#lib/components/ui/Select.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
@@ -63,6 +65,16 @@
     class="w-full"
     bind:value={draft}
     options={choices.map((c) => ({ value: c as Draft, label: c }))}
+    {disabled} />
+{:else if control === "notify-mode"}
+  <Segmented
+    id={field.key}
+    class="w-fit"
+    size="sm"
+    options={NOTIFY_MODES}
+    bind:value={draft as NotifyMode}
+    label={field.label}
+    aria-describedby={described}
     {disabled} />
 {:else if control === "secret"}
   {#if changing}

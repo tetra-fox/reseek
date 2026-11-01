@@ -62,6 +62,8 @@ macro_rules! option_enum {
   };
 }
 
+pub(crate) use option_enum;
+
 option_enum! {
   /// What a principal may do.
   pub enum Role {

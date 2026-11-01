@@ -13,6 +13,13 @@ export const BUDDY = {
   plural: "Buddies"
 } as const;
 
+/** The action that asks the browser for permission to notify */
+export const TURN_ON_NOTIFICATIONS = "Turn on notifications";
+
+/** Why a page on a plain http address gets no desktop notifications */
+export const DESKTOP_NEEDS_HTTPS =
+  "Browsers show desktop notifications only over HTTPS or on localhost.";
+
 /** The confirmation before restarting reseek, the same from Info and from Settings */
 export const RESTART = {
   title: "Restart reseek?",

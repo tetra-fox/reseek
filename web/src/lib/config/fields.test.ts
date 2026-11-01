@@ -80,6 +80,9 @@ describe("controls and drafts", () => {
     expect(controlOf(field("web.ui"), view.fields["web.ui"])).toBe("bool");
     expect(controlOf(field("rooms"), view.fields["rooms"])).toBe("list");
     expect(controlOf(field("relay.mode"), view.fields["relay.mode"])).toBe("select");
+    for (const key of ["chat.notifications.mentions", "notifications.transfers.batch_finished"]) {
+      expect(controlOf(field(key), view.fields[key])).toBe("notify-mode");
+    }
     expect(controlOf(field("soulseek.password"), view.fields["soulseek.password"])).toBe("secret");
     expect(
       controlOf({ key: "x", label: "x" }, view.fields["metrics.authentication.password"])

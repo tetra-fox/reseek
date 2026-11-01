@@ -34,15 +34,17 @@ describe("transfer notifications", () => {
     const done = { state: "Completed, Succeeded" };
     net.frame("transfers.updated", transfer({ ...done, batchId: "one" }));
     await settle();
-    expect(told.mock.calls.map((c) => c[0])).toEqual(["Download finished"]);
+    const delivered = () => told.mock.calls.map(([mode, title]) => [mode, title]);
+    expect(delivered()).toEqual([["off", "Download finished"]]);
     net.frame("transfers.updated", transfer({ ...done, batchId: "album" }));
     net.frame("transfers.updated", transfer({ ...done, batchId: "album" }));
     await settle();
-    expect(told.mock.calls.map((c) => c[0])).toEqual([
-      "Download finished",
-      "Download finished",
-      "Download finished",
-      "Folder finished: Album"
+    // by default each file is quiet and the end of the batch is what is announced
+    expect(delivered()).toEqual([
+      ["off", "Download finished"],
+      ["off", "Download finished"],
+      ["off", "Download finished"],
+      ["both", "Folder finished: Album"]
     ]);
   });
 });

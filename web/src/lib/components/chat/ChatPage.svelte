@@ -11,7 +11,7 @@
   import { paneKey } from "#lib/chat/chat.svelte.js";
   import { columns } from "#lib/chat/columns.svelte.js";
   import { chatName } from "#lib/chat/notices.js";
-  import { notifier, notifyOptions } from "#lib/chat/notify.svelte.js";
+  import { chatWantsDesktop, notifier, notifyOptions } from "#lib/chat/notify.svelte.js";
   import type { Target } from "#lib/chat/pane.svelte.js";
   import { chatLayout } from "#lib/chat/prefs.svelte.js";
   import { chatOrder } from "#lib/chat/rooms/order.js";
@@ -26,6 +26,7 @@
   import { chatHref, roomHref } from "#lib/nav.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import { layerOpen } from "#lib/ui/keys.js";
+  import { DESKTOP_NEEDS_HTTPS, TURN_ON_NOTIFICATIONS } from "#lib/wording.js";
 
   import ChatList from "./ChatList.svelte";
   import NewMessageDialog from "./NewMessageDialog.svelte";
@@ -73,8 +74,9 @@
   const current = $derived(
     target && target !== "search" ? paneKey(target.kind, target.name) : null
   );
-  const asking = $derived(notifier.permission === "default" && notifyOptions().enabled);
-  const insecure = $derived(notifier.permission === "insecure" && notifyOptions().enabled);
+  const wantsDesktop = $derived(chatWantsDesktop(notifyOptions()));
+  const asking = $derived(notifier.permission === "default" && wantsDesktop);
+  const insecure = $derived(notifier.permission === "insecure" && wantsDesktop);
 
   // the breadcrumb names the chat on show
   useCrumbs(() => {
@@ -171,13 +173,13 @@
           ><BellRingIcon class="size-3.5 shrink-0" />Desktop notifications can announce new messages
           while this tab is in the background.</span>
         <Button variant="link" class="text-xs" onclick={() => void notifier.ask()}
-          >Turn on notifications</Button>
+          >{TURN_ON_NOTIFICATIONS}</Button>
       </div>
     {/if}
     {#if insecure}
       <p class="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-fg-muted">
-        <BellOffIcon class="size-3.5 shrink-0" />Browsers show desktop notifications only over HTTPS
-        or on localhost. On this address, new messages are announced only inside the page.
+        <BellOffIcon class="size-3.5 shrink-0" />{DESKTOP_NEEDS_HTTPS} On this address, new messages are
+        announced only inside the page.
       </p>
     {/if}
     {#if target === "search"}

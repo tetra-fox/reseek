@@ -7,13 +7,14 @@ import PortMapping from "#lib/components/settings/PortMapping.svelte";
  * The control an option is edited with. Most follow from the kind the daemon reports for the key;
  * a description names one only where the kind alone can't say (a secret, a list of patterns or
  * networks); an option that is one of a fixed set of names is a select of the names the daemon
- * gives
+ * gives, and a notification mode is a row of its four choices
  */
 export type Control =
   | "text"
   | "number"
   | "bool"
   | "select"
+  | "notify-mode"
   | "list"
   | "duration"
   | "size"
@@ -409,21 +410,11 @@ export const sections: Section[] = [
     title: "Notifications",
     group: "Network",
     fields: [
+      { key: "chat.notifications.only_when_hidden", label: "Only while out of view" },
       ...under("Chat", [
-        { key: "chat.notifications.enabled", label: "Chat notifications" },
-        ...(
-          [
-            ["private_messages", "Private messages"],
-            ["mentions", "Mentions"],
-            ["room_messages", "Every message in notifying rooms"],
-            ["only_when_hidden", "Only while the chat is out of view"],
-            ["sound", "Notification sound"]
-          ] as const
-        ).map(([part, label]): Field => ({
-          key: `chat.notifications.${part}`,
-          label,
-          enabledWhen: { key: "chat.notifications.enabled", values: [true] }
-        }))
+        { key: "chat.notifications.private_messages", label: "Private messages" },
+        { key: "chat.notifications.mentions", label: "Mentions" },
+        { key: "chat.notifications.room_messages", label: "Every message in notifying rooms" }
       ]),
       ...under("Transfers", [
         { key: "notifications.transfers.download_finished", label: "A download finished" },

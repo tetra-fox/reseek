@@ -40,12 +40,10 @@
       "highlight_words": [],
       "max_message_length": 2000,
       "notifications": {
-        "enabled": true,
-        "mentions": true,
+        "mentions": "both",
         "only_when_hidden": true,
-        "private_messages": true,
-        "room_messages": false,
-        "sound": false
+        "private_messages": "both",
+        "room_messages": "off"
       }
     },
     "debug": false,
@@ -102,9 +100,9 @@
     },
     "notifications": {
       "transfers": {
-        "batch_finished": true,
-        "download_finished": true,
-        "upload_queued": false
+        "batch_finished": "both",
+        "download_finished": "off",
+        "upload_queued": "off"
       }
     },
     "paths": {
@@ -727,22 +725,6 @@
       "notApplied": null,
       "entries": []
     },
-    "chat.notifications.enabled": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_CHAT_NOTIFICATIONS_ENABLED",
-      "cliFlag": null,
-      "kind": "bool",
-      "doc": "Enables chat notifications, once the browser permits them.",
-      "choices": null,
-      "default": true,
-      "apply": "live",
-      "secret": false,
-      "notApplied": null,
-      "entries": []
-    },
     "chat.notifications.mentions": {
       "source": {
         "layer": "default"
@@ -750,10 +732,15 @@
       "file": "config.toml",
       "envVar": "RESEEK_CHAT_NOTIFICATIONS_MENTIONS",
       "cliFlag": null,
-      "kind": "bool",
-      "doc": "Notifies of room messages that mention this account.",
-      "choices": null,
-      "default": true,
+      "kind": "string",
+      "doc": "How a room message that mentions this account is announced.",
+      "choices": [
+        "off",
+        "sound",
+        "desktop",
+        "both"
+      ],
+      "default": "both",
       "apply": "live",
       "secret": false,
       "notApplied": null,
@@ -767,7 +754,7 @@
       "envVar": "RESEEK_CHAT_NOTIFICATIONS_ONLY_WHEN_HIDDEN",
       "cliFlag": null,
       "kind": "bool",
-      "doc": "Suppresses notifications while the tab is visible with the chat of the message open.",
+      "doc": "Suppresses notifications of every type while the tab is visible and, for a message, its chat is open.",
       "choices": null,
       "default": true,
       "apply": "live",
@@ -782,10 +769,15 @@
       "file": "config.toml",
       "envVar": "RESEEK_CHAT_NOTIFICATIONS_PRIVATE_MESSAGES",
       "cliFlag": null,
-      "kind": "bool",
-      "doc": "Notifies of private messages.",
-      "choices": null,
-      "default": true,
+      "kind": "string",
+      "doc": "How a private message is announced.",
+      "choices": [
+        "off",
+        "sound",
+        "desktop",
+        "both"
+      ],
+      "default": "both",
       "apply": "live",
       "secret": false,
       "notApplied": null,
@@ -798,26 +790,15 @@
       "file": "config.toml",
       "envVar": "RESEEK_CHAT_NOTIFICATIONS_ROOM_MESSAGES",
       "cliFlag": null,
-      "kind": "bool",
-      "doc": "Notifies of every message in rooms set to notify of all messages.",
-      "choices": null,
-      "default": false,
-      "apply": "live",
-      "secret": false,
-      "notApplied": null,
-      "entries": []
-    },
-    "chat.notifications.sound": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_CHAT_NOTIFICATIONS_SOUND",
-      "cliFlag": null,
-      "kind": "bool",
-      "doc": "Plays a sound with each notification.",
-      "choices": null,
-      "default": false,
+      "kind": "string",
+      "doc": "How each message in a room set to notify of all messages is announced.",
+      "choices": [
+        "off",
+        "sound",
+        "desktop",
+        "both"
+      ],
+      "default": "off",
       "apply": "live",
       "secret": false,
       "notApplied": null,
@@ -1405,10 +1386,15 @@
       "file": "config.toml",
       "envVar": "RESEEK_NOTIFICATIONS_TRANSFERS_BATCH_FINISHED",
       "cliFlag": null,
-      "kind": "bool",
-      "doc": "Notifies when every download of a batch, such as an album, has finished.",
-      "choices": null,
-      "default": true,
+      "kind": "string",
+      "doc": "How the end of a batch of downloads, such as an album, is announced.",
+      "choices": [
+        "off",
+        "sound",
+        "desktop",
+        "both"
+      ],
+      "default": "both",
       "apply": "live",
       "secret": false,
       "notApplied": null,
@@ -1421,10 +1407,15 @@
       "file": "config.toml",
       "envVar": "RESEEK_NOTIFICATIONS_TRANSFERS_DOWNLOAD_FINISHED",
       "cliFlag": null,
-      "kind": "bool",
-      "doc": "Notifies when a download finishes.",
-      "choices": null,
-      "default": true,
+      "kind": "string",
+      "doc": "How a finished download is announced.",
+      "choices": [
+        "off",
+        "sound",
+        "desktop",
+        "both"
+      ],
+      "default": "off",
       "apply": "live",
       "secret": false,
       "notApplied": null,
@@ -1437,10 +1428,15 @@
       "file": "config.toml",
       "envVar": "RESEEK_NOTIFICATIONS_TRANSFERS_UPLOAD_QUEUED",
       "cliFlag": null,
-      "kind": "bool",
-      "doc": "Notifies when another user queues an upload.",
-      "choices": null,
-      "default": false,
+      "kind": "string",
+      "doc": "How an upload queued by another user is announced.",
+      "choices": [
+        "off",
+        "sound",
+        "desktop",
+        "both"
+      ],
+      "default": "off",
       "apply": "live",
       "secret": false,
       "notApplied": null,

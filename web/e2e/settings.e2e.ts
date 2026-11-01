@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { login } from "./support/login";
+import { login, textSize } from "./support/login";
 
 test("reads an option with its source and saves a change to the file", async ({ page }) => {
   await login(page, "/system/settings");
@@ -77,4 +77,74 @@ test("says what auto stands for while the option holds it", async ({ page }) => 
   await expect(count).toBeHidden();
   await workers.fill("AUTO");
   await expect(count).toBeVisible();
+});
+
+test("sets how a notification is announced, and offers the permission Desktop needs", async ({
+  page
+}) => {
+  // a permission not decided yet, granted when the browser is asked
+  await page.addInitScript(() => {
+    Object.defineProperty(Notification, "permission", { value: "default" });
+    Notification.requestPermission = async () => "granted";
+  });
+  await login(page, "/system/settings");
+  const section = page.locator("#notifications");
+  const notice = section.getByText("Desktop notifications are not turned on in this browser.");
+  const choose = (type: string, mode: string) =>
+    section.getByRole("radiogroup", { name: type }).getByRole("radio", { name: mode }).click();
+
+  await expect(notice).toBeVisible();
+  await expect(
+    section
+      .getByRole("radiogroup", { name: "Private messages" })
+      .getByRole("radio", { name: "Both" })
+  ).toBeChecked();
+
+  // the notice follows the choices on the form, saved or not
+  await choose("Private messages", "Sound");
+  await choose("Mentions", "Off");
+  await choose("A batch of downloads finished", "Sound");
+  await expect(notice).toBeHidden();
+  await choose("An upload was queued", "Desktop");
+  await expect(notice).toBeVisible();
+
+  await section.getByRole("button", { name: "Turn on notifications" }).click();
+  await expect(notice).toBeHidden();
+
+  // only the upload's mode is saved: the daemon is shared, and the chat page reads the others
+  await choose("Private messages", "Both");
+  await choose("Mentions", "Both");
+  await choose("A batch of downloads finished", "Both");
+  await section.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Notifications: 1 setting saved")).toBeVisible();
+  await page.reload();
+  await expect(
+    section.getByRole("radiogroup", { name: "An upload was queued" }).getByRole("radio", {
+      name: "Desktop"
+    })
+  ).toBeChecked();
+});
+
+test.describe("at a 24 px text size on a 360 px phone", () => {
+  test.use({ viewport: { width: 360, height: 640 } });
+
+  test("a notification's four choices stay inside its row", async ({ page }) => {
+    await textSize(page, 24);
+    await login(page, "/system/settings");
+    const section = page.locator("#notifications");
+    const group = section.getByRole("radiogroup", { name: "Private messages" });
+    await group.scrollIntoViewIfNeeded();
+    if (process.env.SHOTS) {
+      await section.screenshot({ path: `${process.env.SHOTS}/notification-modes.png` });
+    }
+    const row = (await section.boundingBox())!;
+    const choices = await group.getByRole("radio").all();
+    expect(choices).toHaveLength(4);
+    for (const choice of choices) {
+      await expect(choice).toBeVisible();
+      const box = (await choice.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(row.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(row.x + row.width);
+    }
+  });
 });
