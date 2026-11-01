@@ -93,6 +93,9 @@ export const navCurrent = (path: string): NavItem | undefined =>
 export const fillsContent = (path: string): boolean =>
   path === "/chat" || path.startsWith("/chat/");
 
+/** Whether a screen takes the whole width of the content area, for its long time axes */
+export const widensContent = (path: string): boolean => path === "/analysis";
+
 /**
  * Whether going from one path to another changes the screen, a different destination of the
  * navigation, rather than a tab, a sub-page or a query within the same one

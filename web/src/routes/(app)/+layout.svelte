@@ -23,6 +23,7 @@
     baseCrumbs,
     changesScreen,
     fillsContent,
+    widensContent,
     href,
     redirectFor,
     route,
@@ -173,7 +174,8 @@
             <main
               class={[
                 "mx-auto flex min-h-full w-full min-w-0 flex-col",
-                fillsContent(at.path) ? "h-full" : "max-w-page gap-section p-gutter"
+                fillsContent(at.path) ? "h-full" : "gap-section p-gutter",
+                !fillsContent(at.path) && !widensContent(at.path) && "max-w-page"
               ]}>
               <svelte:boundary>
                 {@render children()}
