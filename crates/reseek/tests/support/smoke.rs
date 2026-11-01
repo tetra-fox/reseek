@@ -84,13 +84,32 @@ pub async fn logged_in(api: &Client, limit: Duration) -> State {
 }
 
 /// Starts a search for `text` and returns its responses once it completed.
-async fn search(api: &Client, text: &str, timeout: Duration) -> Vec<SearchResponse> {
-  let request: SearchRequest = serde_json::from_value(serde_json::json!({
+fn search_request(text: &str, timeout: Duration) -> SearchRequest {
+  serde_json::from_value(serde_json::json!({
     "searchText": text,
     "searchTimeout": timeout.as_millis() as u64,
   }))
-  .unwrap();
-  let search = api.start_search(&request).await.unwrap();
+  .unwrap()
+}
+
+/// What a search on the real network collected in `LIVE_SEARCH`. The search's own timeout only
+/// runs while no response arrives, and a common query can keep answering for minutes, so it is
+/// stopped here.
+async fn live_search(api: &Client, text: &str) -> Vec<SearchResponse> {
+  let search = api
+    .start_search(&search_request(text, LIVE_SEARCH))
+    .await
+    .unwrap();
+  tokio::time::sleep(LIVE_SEARCH).await;
+  api.cancel_search(search.id).await.unwrap();
+  api.search_responses(search.id).await.unwrap()
+}
+
+async fn search(api: &Client, text: &str, timeout: Duration) -> Vec<SearchResponse> {
+  let search = api
+    .start_search(&search_request(text, timeout))
+    .await
+    .unwrap();
   eventually("completed the search", timeout + STEP, || async {
     let now = api
       .search(search.id, false)
@@ -334,7 +353,7 @@ fn pick_order(responses: &[SearchResponse], max_size: u64) -> Vec<Candidate> {
 pub async fn live(api: &Client, query: &str, max_size: u64) {
   let state = logged_in(api, STEP).await;
   info!(username = ?state.user.username, "the daemon is logged in");
-  let responses = search(api, query, LIVE_SEARCH).await;
+  let responses = live_search(api, query).await;
   let candidates = pick_order(&responses, max_size);
   info!(
     responses = responses.len(),
