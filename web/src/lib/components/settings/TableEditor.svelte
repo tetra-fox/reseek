@@ -247,7 +247,8 @@
   {:else if onALine}
     <!-- the whole width, rows parted by hairlines; on a phone each row stacks, its cells under
          their labels -->
-    <table class="w-full">
+    <table
+      class="-mx-5 w-[calc(100%+2.5rem)] border-y bg-field [&_td:first-child_input]:pl-5 [&_th:first-child]:pl-5 max-md:[&_td]:px-5">
       <thead class="max-md:sr-only">
         <tr class="border-b text-left text-xs font-medium text-fg-muted">
           {#if named}<th scope="col" class="px-2 py-1 font-medium">{nameLabel}</th>{/if}
@@ -267,7 +268,7 @@
         {#each rows as row, i (row.id)}
           <tr
             data-row={row.id}
-            class="group relative border-b align-top max-md:flex max-md:flex-col max-md:gap-2 max-md:py-2">
+            class="group relative border-b align-top last:border-b-0 max-md:flex max-md:flex-col max-md:gap-2 max-md:py-2">
             {#if named}
               <td class="max-md:flex max-md:flex-col max-md:gap-1">
                 <span class="text-xs font-medium text-fg-muted md:hidden">{nameLabel}</span>
@@ -291,17 +292,17 @@
       </tbody>
     </table>
   {:else}
-    <ul class="flex flex-col divide-y border-y">
+    <ul class="-mx-5 flex flex-col divide-y border-y bg-field">
       {#each rows as row, i (row.id)}
         <li data-row={row.id}>
           <details class="group" open={added.has(row.id) || !!trouble(row)}>
             <summary
-              class="flex cursor-pointer list-none items-center gap-1.5 px-2 py-2 text-sm font-medium hover:bg-hover [&::-webkit-details-marker]:hidden">
+              class="flex cursor-pointer list-none items-center gap-1.5 px-5 py-2 text-sm font-medium hover:bg-hover [&::-webkit-details-marker]:hidden">
               <ChevronRightIcon
                 class="size-4 shrink-0 text-fg-muted transition-transform duration-(--motion-fast) group-open:rotate-90" />
               <span class="min-w-0 font-mono wrap-anywhere">{row.name.trim() || "Unnamed"}</span>
             </summary>
-            <div class="flex flex-col gap-3 px-2 pb-3">
+            <div class="flex flex-col gap-3 px-5 pb-3">
               {@render complaint(row)}
               <div class="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
                 <div class="flex flex-col gap-1">

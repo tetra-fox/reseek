@@ -42,7 +42,7 @@
     {id}
     aria-label={ariaLabel}
     class={cn(
-      "flex h-control w-full items-center justify-between gap-2 rounded-control border border-input bg-surface pr-2 pl-3 text-sm whitespace-nowrap shadow-xs transition-colors duration-(--motion-fast) hover:border-fg-subtle/50 disabled:opacity-50 data-[state=open]:border-accent",
+      "flex h-control w-full items-center justify-between gap-2 rounded-control border border-input bg-field pr-2 pl-3 text-sm whitespace-nowrap shadow-xs transition-colors duration-(--motion-fast) hover:border-fg-subtle/50 disabled:opacity-50 data-[state=open]:border-accent",
       className
     )}>
     <Select.Value class="truncate" />

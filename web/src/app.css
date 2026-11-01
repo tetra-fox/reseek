@@ -37,6 +37,7 @@
   --color-overlay: oklch(1 0 0);
   --color-border: oklch(0.918 0.005 255);
   --color-input: oklch(0.875 0.007 255);
+  --color-field: oklch(0.962 0.004 255);
   --color-fg: oklch(0.2 0.012 255);
   --color-fg-muted: oklch(0.5 0.014 255);
   --color-fg-subtle: oklch(0.63 0.012 255);
@@ -247,6 +248,7 @@
   --color-overlay: oklch(0.2 0.008 255);
   --color-border: oklch(0.25 0.009 255);
   --color-input: oklch(0.315 0.011 255);
+  --color-field: oklch(0.135 0.006 255);
   --color-fg: oklch(0.955 0.004 255);
   --color-fg-muted: oklch(0.69 0.012 255);
   --color-fg-subtle: oklch(0.54 0.012 255);

@@ -43,7 +43,7 @@
   <input
     bind:this={ref}
     class={cn(
-      "h-control w-full min-w-0 rounded-control border border-input bg-surface px-3 text-base text-fg shadow-xs transition-colors duration-(--motion-fast) placeholder:text-fg-muted placeholder-shown:text-ellipsis hover:border-fg-subtle/50 focus-visible:border-accent disabled:opacity-50 aria-invalid:border-danger md:text-sm",
+      "h-control w-full min-w-0 rounded-control border border-input bg-field px-3 text-base text-fg shadow-xs transition-colors duration-(--motion-fast) placeholder:text-fg-muted placeholder-shown:text-ellipsis hover:border-fg-subtle/50 focus-visible:border-accent disabled:opacity-50 aria-invalid:border-danger md:text-sm",
       Icon && "pl-8",
       clearable && value && "pr-8",
       className
