@@ -173,7 +173,7 @@
                 <a
                   href={href(`/system/settings?section=${section.id}`)}
                   aria-current={current === section.id ? "location" : undefined}
-                  class={["nav-tab h-control-sm gap-2 px-2.5", q && !n && "hidden"]}
+                  class={["nav-tab h-control-sm gap-2 px-2.5 lg:mx-px", q && !n && "hidden"]}
                   onclick={(e) => {
                     e.preventDefault();
                     jump(section.id);
