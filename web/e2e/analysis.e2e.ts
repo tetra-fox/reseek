@@ -750,7 +750,7 @@ test("opens a file, compares a second, and clears them, with the address followi
 
   // Compare is there now, and fills the second slot
   await page.getByRole("link", { name: "Downloads" }).click();
-  await page.getByRole("button", { name: "More for 3.flac" }).click();
+  await page.getByRole("button", { name: "More for 2.flac" }).click();
   await page.getByRole("menuitem", { name: "Compare" }).click();
   await expect(b.getByRole("slider", { name: "Cursor" })).toBeVisible();
   await expect(page).toHaveURL(/#\/analysis\?a=download.*&b=download/);
