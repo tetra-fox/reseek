@@ -138,19 +138,13 @@ impl Analysis {
     name: &str,
     body: Body,
   ) -> Result<AnalysisUpload, ApiError> {
-    let limit = self
-      .config
-      .current()
-      .values
-      .analysis
-      .upload_max_bytes
-      .as_u64();
+    let limit = self.config.current().values.analysis.upload_max_bytes;
     let too_large = || {
       ApiError::too_large(format!(
-        "The file is larger than the upload limit of {limit} bytes"
+        "The file is larger than the upload limit of {limit}"
       ))
     };
-    if body.size_hint().lower() > limit {
+    if body.size_hint().lower() > limit.as_u64() {
       return Err(too_large());
     }
     let name = file_name_safely(name, true, Os::CURRENT)
@@ -174,7 +168,7 @@ impl Analysis {
         ApiError::bad_request("The upload stopped before its end")
       })?;
       size += piece.len() as u64;
-      if size > limit {
+      if size > limit.as_u64() {
         return Err(too_large());
       }
       file.write_all(&piece).await.map_err(ApiError::internal)?;
