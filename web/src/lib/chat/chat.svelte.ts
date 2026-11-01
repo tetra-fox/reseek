@@ -50,6 +50,8 @@ class Chat {
   /** why the last read of the conversations, the rooms or both failed, empty when neither did */
   error = $state("");
   #release: (() => void)[] = [];
+  /** counts the frames about the notices, which are newer than any read already on its way */
+  #noticeFrames = 0;
 
   constructor() {
     live.on("conversations.list", (list) => {
@@ -61,6 +63,7 @@ class Chat {
     live.on("conversations.update", ({ conversation }) => this.#upsertConversation(conversation));
     live.on("conversations.message", ({ username, message }) => {
       if (username === SERVER) {
+        this.#noticeFrames += 1;
         if ((this.latestNotice?.localId ?? 0) <= message.localId) this.latestNotice = message;
         return;
       }
@@ -173,9 +176,12 @@ class Chat {
   /**
    * Reads the newest notice. This asks for the one conversation, not the list, because a history
    * cleared stays closed and the list leaves it out when a new notice comes. A read that fails
-   * leaves what is held; the next list frame reads it again
+   * leaves what is held; the next list frame reads it again. A frame that comes while it is on
+   * its way says more than it can, so it is dropped: opening a screen reads the notices just as
+   * something done there may bring one
    */
   #readNotices = async () => {
+    const frames = this.#noticeFrames;
     const outcome = await call(() =>
       api.GET("/api/v0/conversations/{username}", {
         params: {
@@ -184,6 +190,7 @@ class Chat {
         }
       })
     );
+    if (frames !== this.#noticeFrames) return;
     if (outcome.ok) this.latestNotice = outcome.data.lastMessage ?? null;
     else if (outcome.status === 404) this.latestNotice = null;
   };
@@ -292,6 +299,7 @@ class Chat {
 
   #upsertConversation(conversation: Conversation) {
     if (conversation.isServerNotice) {
+      this.#noticeFrames += 1;
       this.latestNotice = conversation.lastMessage ?? null;
       return;
     }

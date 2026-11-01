@@ -81,6 +81,36 @@ describe("the chat store", () => {
     expect(chat.latestNotice).toBeNull();
   });
 
+  it("keeps a notice that comes while a read from before it is on its way", async () => {
+    const notice = {
+      localId: 3,
+      id: 3,
+      timestamp: "2026-10-26T10:00:00Z",
+      username: "server",
+      direction: "In",
+      message: "user bob has not enabled private room add",
+      isAcknowledged: false,
+      wasReplayed: false
+    } as const;
+    // the read started before the notice was stored, so it finds no conversation
+    let answer = (_reply: undefined) => {};
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/conversations/server")
+        ? new Promise((resolve) => (answer = resolve))
+        : undefined
+    );
+    live.start();
+    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    net.frame("conversations.list", []);
+    await flush();
+    net.frame("conversations.message", { username: "server", message: notice });
+    await flush();
+    expect(chat.latestNotice?.localId).toBe(3);
+    answer(undefined);
+    await flush();
+    expect(chat.latestNotice?.localId).toBe(3);
+  });
+
   it("says why each read failed when both did", async () => {
     fakeNetwork((url) => ({
       status: 500,
