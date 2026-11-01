@@ -19,10 +19,14 @@
   let dpr = $state(1);
   let palette = $state.raw<Palette | null>(null);
   const rasters = new Rasters();
+  /** the canvas's corner radius in CSS pixels, which the outline of the view follows */
+  let radius = 0;
 
   onMount(() => {
     dpr = window.devicePixelRatio || 1;
-    if (canvas) palette = readPalette(canvas);
+    if (!canvas) return;
+    palette = readPalette(canvas);
+    radius = parseFloat(getComputedStyle(canvas).borderTopLeftRadius);
   });
 
   let frame = 0;
@@ -51,14 +55,25 @@
     );
     const from = acrossOf(all, scope.view.start) * w;
     const to = acrossOf(all, scope.view.start + scope.view.span) * w;
+    // the line is inset by half its width, so its middle takes the canvas's radius less that half
+    // and its outer edge meets the rounded corners when the whole file is in view
+    const outline = new Path2D();
+    outline.roundRect(
+      from + dpr / 2,
+      dpr / 2,
+      Math.max(dpr, to - from - dpr),
+      h - dpr,
+      Math.max(0, (radius - 0.5) * dpr)
+    );
+    const outside = new Path2D(outline);
+    outside.rect(0, 0, w, h);
     context.fillStyle = palette.plot;
     context.globalAlpha = 0.6;
-    context.fillRect(0, 0, from, h);
-    context.fillRect(to, 0, w - to, h);
+    context.fill(outside, "evenodd");
     context.globalAlpha = 1;
     context.strokeStyle = palette.fg;
     context.lineWidth = dpr;
-    context.strokeRect(from + dpr / 2, dpr / 2, Math.max(dpr, to - from - dpr), h - dpr);
+    context.stroke(outline);
     context.fillStyle = palette.cursor;
     context.fillRect(Math.round(acrossOf(all, scope.cursor) * w), 0, dpr, h);
   };
