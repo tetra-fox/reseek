@@ -7,15 +7,26 @@
   // on one. The `sm` size stands beside `sm` buttons, at their height, and the chosen one keeps the
   // weight of the others, so none of them moves
   type Props = {
-    options: readonly { id: T; label: string; icon?: Component }[];
-    value: T;
+    "options": readonly { id: T; label: string; icon?: Component }[];
+    "value": T;
     /** what is being chosen, for a screen reader */
-    label: string;
-    size?: "xs" | "sm";
-    class?: string;
+    "label": string;
+    "size"?: "xs" | "sm";
+    "id"?: string;
+    "aria-describedby"?: string;
+    "disabled"?: boolean;
+    "class"?: string;
   };
 
-  let { options, value = $bindable(), label, size = "xs", class: className }: Props = $props();
+  let {
+    options,
+    value = $bindable(),
+    label,
+    size = "xs",
+    disabled = false,
+    class: className,
+    ...rest
+  }: Props = $props();
 
   /** The arrows move to the next choice and take it, round the ends, as radio buttons do */
   const arrow = (e: KeyboardEvent & { currentTarget: HTMLElement }, at: number) => {
@@ -35,15 +46,17 @@
     className
   )}
   role="radiogroup"
-  aria-label={label}>
+  aria-label={label}
+  {...rest}>
   {#each options as option, at (option.id)}
     <button
       type="button"
       role="radio"
       aria-checked={value === option.id}
       tabindex={value === option.id ? 0 : -1}
+      {disabled}
       class={[
-        "flex items-center gap-1.5 rounded-badge px-2 transition-colors duration-(--motion-fast)",
+        "flex items-center gap-1.5 rounded-badge px-2 transition-colors duration-(--motion-fast) disabled:opacity-50",
         size === "xs" ? "text-xs" : "text-sm",
         value === option.id ? "bg-surface-muted text-fg" : "text-fg-muted hover:text-fg"
       ]}
