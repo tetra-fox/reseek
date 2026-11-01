@@ -17,6 +17,7 @@ RUN apk add --no-cache tini su-exec tzdata \
 COPY reseek-${TARGETARCH} /usr/bin/reseek
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
+# SHELL is what scripts that name no program run in
 ENV RESEEK_APP_DIR=/app \
     RESEEK_HTTP_PORT=5030 \
     RESEEK_HTTPS_PORT=5031 \
