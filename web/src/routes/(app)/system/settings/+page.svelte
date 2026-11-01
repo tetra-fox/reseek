@@ -155,7 +155,7 @@
           bind:value={typed} />
         <nav
           aria-label="Settings sections"
-          class="flex gap-1 overflow-x-auto max-lg:-mx-1 max-lg:px-1 max-lg:py-1 lg:min-h-0 lg:flex-col lg:gap-5 lg:overflow-y-auto">
+          class="flex gap-1 overflow-x-auto -mx-1 px-1 max-lg:py-1 lg:min-h-0 lg:flex-col lg:gap-5 lg:overflow-y-auto">
           {#each groups as { group, members } (group)}
             <!-- one line of tabs on a phone, where the headings have no place -->
             <div role="group" aria-label={group} class="contents lg:flex lg:flex-col lg:gap-0.5">
