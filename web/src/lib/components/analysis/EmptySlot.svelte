@@ -1,5 +1,4 @@
 <script lang="ts">
-  import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import UploadIcon from "@lucide/svelte/icons/upload";
   import { slide } from "svelte/transition";
@@ -16,12 +15,14 @@
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
   import FilePicker from "./FilePicker.svelte";
+  import RecentResults from "./RecentResults.svelte";
 
-  // a slot with nothing in it: the ways to fill it, full size or as a slim bar, with the panel of
-  // the daemon's files sliding open under them, a sheet on a phone
-  type Props = { id: SlotId; slim: boolean };
+  // a row with nothing in it: its letter in the corner and, centered, the ways to fill it, with the
+  // panel of the daemon's files sliding open under them, a sheet on a phone. The first row keeps
+  // the latest results there too, so the page is of use with nothing loaded
+  type Props = { id: SlotId };
 
-  let { id, slim }: Props = $props();
+  let { id }: Props = $props();
 
   let picking = $state(false);
   let input = $state<HTMLInputElement | null>(null);
@@ -56,19 +57,27 @@
   </div>
 {/snippet}
 
-{#if slim}
-  <div class="flex flex-wrap items-center gap-inline px-3 py-2">
-    <span class="font-medium">{id.toUpperCase()}</span>
-    <p class="min-w-0 flex-1 text-sm text-fg-muted">Add a file to compare, or drop one here.</p>
-    {@render ways()}
-  </div>
-{:else}
+<span class="absolute top-2 left-3 font-medium">{id.toUpperCase()}</span>
+
+<div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-3">
   <EmptyState
-    icon={AudioLinesIcon}
-    title="Add a file to analyze"
-    description="Choose a file from the daemon or from this device, or drop one here."
+    class="shrink-0 px-0 py-0"
+    title={id === "a" ? "Add a file to analyze" : "Add a file to compare"}
+    description={write && !viewport.phone
+      ? "You can also drop a file anywhere in this row."
+      : undefined}
     action={ways} />
-{/if}
+  {#if picking && !viewport.phone}
+    <div
+      class="w-full max-w-2xl"
+      transition:opening
+      onintroend={(e) => e.currentTarget.scrollIntoView({ block: "nearest", behavior: "smooth" })}>
+      <FilePicker onpick={pick} height="max(4rem, calc(var(--content-h) / 2 - 12rem))" />
+    </div>
+  {:else if id === "a"}
+    <RecentResults />
+  {/if}
+</div>
 
 {#if viewport.phone}
   <Dialog
@@ -77,11 +86,4 @@
     class="top-auto bottom-0 left-0 w-full max-w-none translate-x-0 translate-y-0 rounded-b-none">
     <div class="px-3 pb-3"><FilePicker onpick={pick} height="60svh" /></div>
   </Dialog>
-{:else if picking}
-  <div
-    class="border-t p-3"
-    transition:opening
-    onintroend={(e) => e.currentTarget.scrollIntoView({ block: "nearest", behavior: "smooth" })}>
-    <FilePicker onpick={pick} height="min(24rem, 50svh)" />
-  </div>
 {/if}

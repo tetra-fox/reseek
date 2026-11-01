@@ -30,28 +30,20 @@
     onseek: (t: number) => void;
     /** play or pause, from the space bar */
     ontoggle?: () => void;
-    /** the height of the spectrogram and of the waveform, in rem */
-    heights?: { plot: number; wave: number };
   };
 
-  let {
-    scope,
-    motion,
-    readout,
-    onseek,
-    ontoggle,
-    heights = { plot: 22, wave: 5 }
-  }: Props = $props();
+  let { scope, motion, readout, onseek, ontoggle }: Props = $props();
 
   let canvas = $state<HTMLCanvasElement | null>(null);
   let width = $state(0);
+  let height = $state(0);
   let rem = $state(16);
   let dpr = $state(1);
   let palette = $state.raw<Palette | null>(null);
   let hover = $state.raw<{ x: number; y: number } | null>(null);
   const rasters = new Rasters();
 
-  const stage = $derived<Stage>(stageOf(width, dpr, rem, heights.plot, heights.wave));
+  const stage = $derived<Stage>(stageOf(width, height, dpr, rem));
   /** a plot's place in CSS pixels, written on the canvas for what drives the page from outside */
   const box = (rect: Stage["waveform"]) =>
     [rect.x, rect.y, rect.width, rect.height].map((v) => (v / dpr).toFixed(1)).join(" ");
@@ -71,7 +63,7 @@
   const draw = (now: number) => {
     frame = 0;
     const context = canvas?.getContext("2d");
-    if (!context || !palette || !width) return;
+    if (!context || !palette || !width || !height) return;
     // a moving axis draws again next frame
     if (motion.moving(now)) frame = requestAnimationFrame(draw);
     drawTimeline(
@@ -269,11 +261,15 @@
   };
 </script>
 
-<div class="w-full" bind:clientWidth={width}>
+<!-- the box takes its size from the page and the canvas fills it, out of the flow so that its own
+     size never feeds back into the box's -->
+<div
+  class="relative min-h-24 w-full max-md:h-72 md:flex-1"
+  bind:clientWidth={width}
+  bind:clientHeight={height}>
   <canvas
     bind:this={canvas}
-    class="block w-full touch-pan-y rounded-control bg-plot focus-visible:outline-2 focus-visible:outline-accent"
-    style:height={`${stage.height / dpr}px`}
+    class="absolute inset-0 block size-full touch-pan-y rounded-control bg-plot focus-visible:outline-2 focus-visible:outline-accent"
     style:cursor={pointerStyle}
     width={stage.width}
     height={stage.height}

@@ -20,18 +20,11 @@
   import Reading from "./Reading.svelte";
   import SpectrogramView from "./SpectrogramView.svelte";
 
-  // one of the page's two places for a file: empty, receiving a file, or showing one with its
-  // judgment and reading beside it. All of it is a drop area, which a filled slot is too
-  type Props = {
-    id: SlotId;
-    analyzed: FileReport;
-    /** whether an empty slot is a slim bar, with the other slot in use */
-    slim: boolean;
-    /** the plots' heights in rem, smaller with two files to show */
-    heights: { plot: number; wave: number };
-  };
+  // one of the page's two rows, always there: empty, receiving a file, or showing one with its
+  // judgment and reading beside it. All of it is a drop area, which a filled row is too
+  type Props = { id: SlotId; analyzed: FileReport };
 
-  let { id, analyzed, slim, heights }: Props = $props();
+  let { id, analyzed }: Props = $props();
 
   const letter = $derived(id.toUpperCase());
   const loaded = $derived(slots[id]);
@@ -83,29 +76,32 @@
 <section
   aria-label={`Slot ${letter}`}
   class={[
-    "rounded-card border bg-surface shadow-card transition-shadow duration-(--motion-fast)",
-    over && "ring-2 ring-accent"
+    "relative flex min-w-0 flex-col max-md:min-h-72 md:min-h-0",
+    over && "outline-2 -outline-offset-2 outline-accent"
   ]}
   ondragenter={entered}
   ondragover={moved}
   ondragleave={left}
   ondrop={dropped}>
   {#if sending}
-    <div class="flex items-center gap-3 p-3 text-sm" role="status">
-      <span class="font-medium">{letter}</span>
-      <div class="flex min-w-0 flex-1 flex-col gap-1">
-        <span class="truncate">Uploading {sending.name}: {Math.round(sending.sent * 100)}%</span>
-        <div class="h-1.5 overflow-hidden rounded-full bg-surface-muted">
-          <div class="h-full bg-accent transition-[width]" style:width={`${sending.sent * 100}%`}>
+    <div class="flex flex-1 items-center justify-center p-3">
+      <div class="flex w-full max-w-2xl items-center gap-3 text-sm" role="status">
+        <span class="font-medium">{letter}</span>
+        <div class="flex min-w-0 flex-1 flex-col gap-1">
+          <span class="truncate">Uploading {sending.name}: {Math.round(sending.sent * 100)}%</span>
+          <div class="h-1.5 overflow-hidden rounded-full bg-surface-muted">
+            <div class="h-full bg-accent transition-[width]" style:width={`${sending.sent * 100}%`}>
+            </div>
           </div>
         </div>
+        <Button variant="outline" size="sm" onclick={() => slots.cancel(id)}
+          ><XIcon />Cancel</Button>
       </div>
-      <Button variant="outline" size="sm" onclick={() => slots.cancel(id)}><XIcon />Cancel</Button>
     </div>
   {:else if !loaded}
-    <EmptySlot {id} {slim} />
+    <EmptySlot {id} />
   {:else}
-    <header class="flex min-h-11 items-center gap-2 border-b px-3 py-1.5">
+    <header class="flex min-h-9 shrink-0 items-center gap-2 border-b px-3 py-0.5">
       <span class="font-medium">{letter}</span>
       {#if name || report === undefined}
         {#if name}
@@ -128,7 +124,7 @@
         aria-label={`Clear slot ${letter}`}
         onclick={() => slots.clear(id)}><XIcon />Clear</Button>
     </header>
-    <div class="flex flex-col gap-3 p-3">
+    <div class="flex flex-col gap-2 px-3 py-2 md:min-h-0 md:flex-1 md:overflow-y-auto">
       {#if job}<AnalysisProgress {job} />{/if}
       {#if analyzed.error}
         <p class="text-sm text-fg-muted">{analyzed.error}</p>
@@ -180,7 +176,7 @@
         {#if scope}
           <!-- a file or a new report starts the viewer over, and stops its sound -->
           {#key scope}
-            <SpectrogramView {scope} {track} {heights} aside={beside} />
+            <SpectrogramView {scope} {track} aside={beside} />
           {/key}
         {:else}
           <p class="text-sm">{report.summary}</p>

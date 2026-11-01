@@ -36,6 +36,9 @@ const cursorNear = async (plot: Locator, across: number, down: number, which = "
   return false;
 };
 
+/** How far across a plot guide lines are read: the exact middle of a stroke can come out blended */
+const GUIDE_AT = 0.4;
+
 /** How far down the plot a guide line at `hz` is drawn, on a 22.05 kHz file's axis */
 const guideRow = async (plot: Locator, hz: number, scale: "linear" | "mel" = "linear") => {
   const r = await rect(plot);
@@ -96,16 +99,19 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   const viewer = page.getByRole("region", { name: "Slot A" });
   const plot = viewer.getByRole("slider", { name: "Cursor" });
   await expect(plot).toBeVisible();
+  // the guide opens from the toolbar with the disclaimer
+  await page.getByRole("button", { name: "Guide" }).click();
   await expect(page.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
+  await page.keyboard.press("Escape");
   // each guide line shows and hides from its legend, drawn on the plot at its frequency
   const legend = viewer.getByRole("button", { name: "MP3 128k" });
   const guide = await guideRow(plot, 16_000);
-  await expect.poll(() => pixel(plot, 0.5, guide)).toEqual([90, 210, 255]);
+  await expect.poll(() => pixel(plot, GUIDE_AT, guide)).toEqual([90, 210, 255]);
   await legend.click();
   await expect(legend).toHaveAttribute("aria-pressed", "false");
-  await expect.poll(() => pixel(plot, 0.5, guide)).not.toEqual([90, 210, 255]);
+  await expect.poll(() => pixel(plot, GUIDE_AT, guide)).not.toEqual([90, 210, 255]);
   await legend.click();
-  await expect.poll(() => pixel(plot, 0.5, guide)).toEqual([90, 210, 255]);
+  await expect.poll(() => pixel(plot, GUIDE_AT, guide)).toEqual([90, 210, 255]);
 
   // the user's judgment, saved with its note and a tick
   await viewer.getByRole("radio", { name: "Fake" }).click();
@@ -113,9 +119,6 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   await viewer.getByRole("button", { name: "Save judgment" }).click();
   await expect(viewer.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
   await expect(viewer.getByRole("button", { name: "Save judgment" })).toBeDisabled();
-  // the file's line in the recent results now shows the user's own judgment
-  const recent = page.getByRole("region", { name: "Recent results" });
-  await expect(recent.getByText("Fake", { exact: true })).toBeVisible();
 
   // the analyzer's reading, folded away and labeled as its own
   await viewer.getByText("Analyzer reading").click();
@@ -157,7 +160,7 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   await expect(scales.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
   // the guide line moves to where 16 kHz is on a mel axis
   await expect
-    .poll(async () => pixel(plot, 0.5, await guideRow(plot, 16_000, "mel")))
+    .poll(async () => pixel(plot, GUIDE_AT, await guideRow(plot, 16_000, "mel")))
     .toEqual([90, 210, 255]);
   expect(await guideRow(plot, 16_000, "mel")).toBeLessThan(linear);
   // the cursor stays where it was
@@ -165,6 +168,11 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   // the address brings the file back after a reload, on the scale chosen
   await page.reload();
   await expect(scales.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
+
+  // the file's line in the recent results, which an empty slot A shows, has the user's judgment
+  await viewer.getByRole("button", { name: "Clear slot A" }).click();
+  const recent = page.getByRole("region", { name: "Recent results" });
+  await expect(recent.getByText("Fake", { exact: true })).toBeVisible();
 
   // and the list's row shows the judgment
   await page.goto("./#/downloads");
@@ -337,7 +345,7 @@ test("pans a zoomed five-minute file at sixty frames a second", async ({ page })
 /** The rows the MP3 128k guide line is drawn on, sampled every frame until `ms` have passed */
 const guideRows = (plot: Locator, ms: number) =>
   plot.evaluate(
-    (canvas: HTMLCanvasElement, ms) =>
+    (canvas: HTMLCanvasElement, { ms, across }) =>
       new Promise<number[]>((done) => {
         const [x, y, width, height] = canvas.dataset.plot!.split(" ").map(Number);
         const ratio = canvas.width / canvas.clientWidth;
@@ -346,7 +354,7 @@ const guideRows = (plot: Locator, ms: number) =>
         const start = performance.now();
         const tick = () => {
           const column = context.getImageData(
-            Math.floor((x + width / 2) * ratio),
+            Math.floor((x + width * across) * ratio),
             Math.round(y * ratio),
             1,
             Math.round(height * ratio)
@@ -363,7 +371,7 @@ const guideRows = (plot: Locator, ms: number) =>
         };
         requestAnimationFrame(tick);
       }),
-    ms
+    { ms, across: GUIDE_AT }
   );
 
 test("the frequency scale moves between linear and mel through the frames between", async ({
@@ -728,6 +736,8 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   await page.getByRole("menuitem", { name: "Details" }).click();
   await expect(inspector.getByText("Waiting in the analysis queue")).toBeVisible();
   await inspector.getByRole("button", { name: "Open in Analysis" }).click();
+  // the toolbar counts the queue and opens it
+  await page.getByRole("button", { name: /^Queue/ }).click();
   await expect(page.getByRole("heading", { name: "Analysis queue" })).toBeVisible();
 });
 
@@ -746,7 +756,8 @@ test("opens a file, compares a second, and clears them, with the address followi
   await expect(a.getByRole("slider", { name: "Cursor" })).toBeVisible();
   await expect(b.getByRole("button", { name: "Add from Downloads" })).toBeVisible();
   await expect(page).toHaveURL(/#\/analysis\?a=download/);
-  await expect(page.getByRole("table")).toHaveCount(0);
+  const compare = page.getByRole("button", { name: "Compare" });
+  await expect(compare).toBeDisabled();
 
   // Compare is there now, and fills the second slot
   await page.getByRole("link", { name: "Downloads" }).click();
@@ -754,16 +765,17 @@ test("opens a file, compares a second, and clears them, with the address followi
   await page.getByRole("menuitem", { name: "Compare" }).click();
   await expect(b.getByRole("slider", { name: "Cursor" })).toBeVisible();
   await expect(page).toHaveURL(/#\/analysis\?a=download.*&b=download/);
-  const table = page.getByRole("table");
-  await expect(table.getByRole("rowheader", { name: "Sample rate" })).toBeVisible();
+  await compare.click();
+  await expect(
+    page.getByRole("table").getByRole("rowheader", { name: "Sample rate" })
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
 
   // the two views move together until they are unlinked
   const view = (slot: Locator) => slot.getByRole("slider", { name: "Cursor" });
   await a.getByRole("button", { name: "Zoom in" }).click();
-  await expect(view(a)).not.toHaveAttribute("data-view", "0.000 30.500");
-  await expect
-    .poll(async () => view(b).getAttribute("data-view"))
-    .toBe(await view(a).getAttribute("data-view"));
+  await expect(view(a)).toHaveAttribute("data-view", "0.000 15.250");
+  await expect(view(b)).toHaveAttribute("data-view", "0.000 15.250");
   await page.getByText("Link zoom and scroll").click();
   await expect(page.getByRole("switch")).toHaveAttribute("aria-checked", "false");
   const held = await view(b).getAttribute("data-view");
@@ -785,8 +797,40 @@ test("opens a file, compares a second, and clears them, with the address followi
   await a.getByRole("button", { name: "Clear slot A" }).click();
   await b.getByRole("button", { name: "Clear slot B" }).click();
   await expect(a.getByText("Add a file to analyze")).toBeVisible();
-  await expect(b).toHaveCount(0);
+  await expect(b.getByText("Add a file to compare")).toBeVisible();
   await expect(page).toHaveURL(/#\/analysis$/);
+});
+
+test("two equal rows fill the content area and the plots grow with the window", async ({
+  page
+}) => {
+  await fakeDownloads(page);
+  await fakeAnalysis(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await login(page, "/analysis");
+  const a = page.getByRole("region", { name: "Slot A" });
+  const b = page.getByRole("region", { name: "Slot B" });
+  const scrolls = () =>
+    page.locator("[data-content]").evaluate((e) => e.scrollHeight - e.clientHeight);
+  const height = async (slot: Locator) => (await slot.boundingBox())!.height;
+  // with nothing loaded both rows are there, half each, and the page does not scroll
+  await expect(a.getByRole("button", { name: "Upload file" })).toBeVisible();
+  await expect(b.getByRole("button", { name: "Upload file" })).toBeVisible();
+  expect(await height(a)).toBe(await height(b));
+  expect(await scrolls()).toBe(0);
+
+  await a
+    .getByLabel("Upload a file to slot A")
+    .setInputFiles({ name: "mine.flac", mimeType: "audio/flac", buffer: Buffer.alloc(2048) });
+  const plot = a.getByRole("slider", { name: "Cursor" });
+  await expect(plot).toBeVisible();
+  expect(await height(a)).toBe(await height(b));
+  expect(await scrolls()).toBe(0);
+  const short = (await rect(plot)).height;
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await expect.poll(async () => (await rect(plot)).height).toBeGreaterThan(short + 100);
+  expect(await height(a)).toBe(await height(b));
+  expect(await scrolls()).toBe(0);
 });
 
 test("a local file goes up with progress, carries a tag and takes no judgment", async ({

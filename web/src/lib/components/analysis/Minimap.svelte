@@ -113,7 +113,7 @@
   };
 </script>
 
-<div class="h-6 w-full" bind:clientWidth={width} bind:clientHeight={height}>
+<div class="h-6 w-full shrink-0" bind:clientWidth={width} bind:clientHeight={height}>
   <canvas
     bind:this={canvas}
     class="block size-full cursor-grab touch-none rounded-control bg-plot active:cursor-grabbing"

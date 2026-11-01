@@ -144,7 +144,9 @@ const analysisHolds = async (page: Page) => {
   await slot.getByText("Analyzer reading", { exact: true }).click();
   await slot.getByRole("radio", { name: "Mel" }).click();
   await expect(slot.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("button", { name: "Guide" }).click();
   await expect(page.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
+  await page.keyboard.press("Escape");
   await layerHolds(slot, "Analysis page");
   await page.goBack();
   await expect(slot).toBeHidden();

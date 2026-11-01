@@ -6,9 +6,8 @@
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { session } from "#lib/session.svelte.js";
 
-  // the files waiting for or under analysis, with how far each is and a way to cancel it;
-  // nothing while the queue is empty
-  $effect(() => jobs.retain());
+  // the files waiting for or under analysis, with how far each is and a way to cancel it. The
+  // toolbar this opens from keeps the queue current
   const write = $derived(session.can("ReadWrite"));
   const name = (path: string) => path.split(/[/\\]/).pop() ?? path;
   const cancel = async (id: string) => {
@@ -17,9 +16,9 @@
   };
 </script>
 
-{#if jobs.list.length}
-  <section class="flex flex-col gap-1 rounded-card border bg-surface p-3 shadow-card">
-    <h3 class="text-sm font-medium">Analysis queue</h3>
+<section class="flex flex-col gap-1">
+  <h3 class="text-sm font-medium">Analysis queue</h3>
+  {#if jobs.list.length}
     <ul class="flex flex-col gap-1">
       {#each jobs.list as job (job.id)}
         <li class="flex items-center gap-2 text-sm">
@@ -41,5 +40,7 @@
         </li>
       {/each}
     </ul>
-  </section>
-{/if}
+  {:else}
+    <p class="text-sm text-fg-muted">No files are waiting or being analyzed.</p>
+  {/if}
+</section>

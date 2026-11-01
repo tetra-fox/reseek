@@ -87,14 +87,11 @@ export const navCurrent = (path: string): NavItem | undefined =>
   );
 
 /**
- * Whether a screen fills the content area edge to edge, as chat does like a desktop chat app,
- * rather than sitting in the page's padded column
+ * Whether a screen fills the content area edge to edge rather than sitting in the page's padded
+ * column: chat, like a desktop chat app, and the Analysis page, for its long time axes
  */
 export const fillsContent = (path: string): boolean =>
-  path === "/chat" || path.startsWith("/chat/");
-
-/** Whether a screen takes the whole width of the content area, for its long time axes */
-export const widensContent = (path: string): boolean => path === "/analysis";
+  path === "/analysis" || path === "/chat" || path.startsWith("/chat/");
 
 /**
  * Whether going from one path to another changes the screen, a different destination of the

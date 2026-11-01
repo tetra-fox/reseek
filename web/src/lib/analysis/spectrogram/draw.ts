@@ -38,34 +38,26 @@ export type Stage = {
   axis: Rect;
 };
 
-/** The stage for a canvas `width` CSS pixels wide, its plots `plot` and `wave` rem tall */
-export const stageOf = (
-  width: number,
-  dpr: number,
-  rem: number,
-  plot: number,
-  wave: number
-): Stage => {
+/** The share of the room for plots that goes to the waveform */
+const WAVE_SHARE = 0.2;
+
+/** The stage for a canvas `width` by `height` CSS pixels: the plots share what the axis leaves */
+export const stageOf = (width: number, height: number, dpr: number, rem: number): Stage => {
   const r = rem * dpr;
   const left = Math.round(3.25 * r);
   const right = Math.round(0.5 * r);
   const inner = Math.max(1, Math.round(width * dpr) - left - right);
-  const spectrogram = { x: left, y: 0, width: inner, height: Math.round(plot * r) };
-  const waveform = {
-    x: left,
-    y: spectrogram.height + Math.round(0.25 * r),
-    width: inner,
-    height: Math.round(wave * r)
-  };
-  const axis = {
-    x: left,
-    y: waveform.y + waveform.height,
-    width: inner,
-    height: Math.round(1.4 * r)
-  };
+  const total = Math.round(height * dpr);
+  const gap = Math.round(0.25 * r);
+  const under = Math.round(1.4 * r);
+  const room = Math.max(2, total - gap - under);
+  const waveHeight = Math.max(1, Math.round(room * WAVE_SHARE));
+  const spectrogram = { x: left, y: 0, width: inner, height: room - waveHeight };
+  const waveform = { x: left, y: spectrogram.height + gap, width: inner, height: waveHeight };
+  const axis = { x: left, y: waveform.y + waveHeight, width: inner, height: under };
   return {
     width: Math.round(width * dpr),
-    height: axis.y + axis.height,
+    height: total,
     dpr,
     rem: r,
     spectrogram,

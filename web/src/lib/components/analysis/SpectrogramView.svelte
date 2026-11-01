@@ -28,20 +28,19 @@
 
   // the spectrogram, the waveform and the spectrum at the cursor as one unit on one time axis,
   // with the frequency scale, zoom and playback above it, the guide lines' legend, a strip of the
-  // whole file and what the cursor is on. The spectrum and what the caller adds go beside the rest
-  // when there is room. This is the one place reseek plays a file: it goes when its slot is
-  // cleared or the page left, and the sound with it
+  // whole file and what the cursor is on. The plots stretch to the height given, with the spectrum
+  // and what the caller adds in a column beside them that scrolls on its own, under them on a
+  // phone. This is the one place reseek plays a file: it goes when its slot is cleared or the page
+  // left, and the sound with it
   type Props = {
     scope: Scope;
     /** the file to play, null when it can't be played */
     track: Track | null;
-    /** the height of the spectrogram and of the waveform, in rem */
-    heights?: { plot: number; wave: number };
     /** what goes under the spectrum */
     aside?: Snippet;
   };
 
-  let { scope, track, heights, aside }: Props = $props();
+  let { scope, track, aside }: Props = $props();
 
   $effect(() => void scope.pictures.start());
 
@@ -118,8 +117,9 @@
     onerror={() => void playback.failed()}></audio>
 {/if}
 
-<div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_22rem]">
-  <div class="flex min-w-0 flex-col gap-2">
+<div
+  class="grid gap-3 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_clamp(16rem,30%,22rem)] md:grid-rows-[minmax(0,1fr)]">
+  <div class="flex min-w-0 flex-col gap-2 md:min-h-0">
     <div class="flex flex-wrap items-center gap-1">
       {#if canToggle}
         <Button variant="outline" size="sm" aria-pressed={playing} onclick={toggle}>
@@ -188,7 +188,7 @@
         {sentence(scope.pictures.error)}
       </p>
     {:else}
-      <Timeline {scope} {motion} {readout} {heights} onseek={seek} ontoggle={toggle} />
+      <Timeline {scope} {motion} {readout} onseek={seek} ontoggle={toggle} />
       <Minimap {scope} {motion} />
       {#if scope.pictures.lost}
         <p class="text-xs text-fg-muted" role="status">
@@ -209,16 +209,16 @@
         <p class="text-xs text-fg-muted" role="status">{playback.problem}</p>
       {/if}
     {/if}
+    {#if layout.sampled}
+      <p class="text-xs text-fg-muted">
+        Only {scope.starts.length} one-second samples across the {formatDuration(
+          layout.durationSeconds
+        )} of this file were analyzed. The hatched stretches between them were not read.
+      </p>
+    {/if}
   </div>
-  <div class="flex min-w-0 flex-col gap-3">
+  <div class="flex min-w-0 flex-col gap-3 md:min-h-0 md:overflow-y-auto md:pr-1">
     <WindowSpectrum {scope} curve={motion.curve} />
     {@render aside?.()}
   </div>
-  {#if layout.sampled}
-    <p class="text-xs text-fg-muted xl:col-span-2">
-      Only {scope.starts.length} one-second samples across the {formatDuration(
-        layout.durationSeconds
-      )} of this file were analyzed. The hatched stretches between them were not read.
-    </p>
-  {/if}
 </div>

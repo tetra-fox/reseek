@@ -9,7 +9,7 @@ export type Job = Schemas["AnalysisJob"];
 export type Judgment = Schemas["Judgment"];
 export type Scale = Layout["scale"];
 
-/** The text shown with every spectrogram and every reading */
+/** The caution that goes with every reading, in the Analysis page's guide */
 export const DISCLAIMER =
   "This analysis is an aid to judgment, not proof. Content can end below the top of the graph for legitimate reasons, such as a test tone, speech, an old master or a vinyl rip. A careful transcode can also reach the top. Listen and compare before deciding.";
 

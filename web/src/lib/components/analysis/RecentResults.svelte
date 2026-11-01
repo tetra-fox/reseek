@@ -1,13 +1,10 @@
 <script lang="ts">
-  import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
-
   import { type Report, type Target, VERDICTS } from "#lib/analysis/analysis.js";
   import { jobs } from "#lib/analysis/jobs.svelte.js";
   import { marks } from "#lib/analysis/marks.svelte.js";
   import { slots } from "#lib/analysis/slots.svelte.js";
   import { api } from "#lib/api/client.js";
   import Button from "#lib/components/ui/Button.svelte";
-  import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Time from "#lib/components/ui/Time.svelte";
@@ -17,7 +14,8 @@
 
   import AnalysisMark from "./AnalysisMark.svelte";
 
-  // the files analyzed last, newest first, each one a click from a slot
+  // the files analyzed last, newest first, each one a click from the first slot, under its empty
+  // placeholder. The list scrolls on its own, in what room the row leaves it
   const SHOWN = 25;
 
   let reports = $state.raw<Report[] | null>(null);
@@ -40,8 +38,10 @@
   const target = (r: Report): Target => ({ kind: "file", root: r.root, path: r.relativePath });
 </script>
 
-<section class="flex flex-col gap-2" aria-label="Recent results">
-  <h2 class="text-sm font-medium">Recent results</h2>
+<section
+  class="flex min-h-0 w-full max-w-2xl flex-col gap-1 max-md:max-h-80"
+  aria-label="Recent results">
+  <h2 class="shrink-0 text-sm font-medium">Recent results</h2>
   {#if error}
     <Notice kind="error">
       {error}
@@ -52,19 +52,16 @@
   {:else if !reports}
     <Skeleton class="h-24" />
   {:else if !reports.length}
-    <EmptyState
-      icon={AudioLinesIcon}
-      title="No results yet"
-      description="Files appear here once they have been analyzed." />
+    <p class="text-sm text-fg-muted">Files appear here once they have been analyzed.</p>
   {:else}
-    <ul class="flex flex-col rounded-card border bg-surface p-1 shadow-card">
+    <ul class="flex min-h-0 flex-col overflow-y-auto">
       {#each reports as report (report.path)}
         {@const name = getFileName(report.relativePath)}
         {@const mark = marks.file(report.root, report.relativePath)}
-        <li class="flex items-center gap-1 pick-row pr-1">
+        <li class="pick-row">
           <button
             type="button"
-            class="flex min-h-9 min-w-0 flex-1 items-center gap-2 px-2 text-left text-sm"
+            class="flex min-h-9 w-full min-w-0 items-center gap-2 px-2 text-left text-sm"
             title={report.relativePath}
             aria-label={`${A.openAnalysis.label}: ${name}`}
             onclick={() => slots.open(target(report), name)}>
@@ -75,14 +72,6 @@
             <span class="shrink-0 text-xs text-fg-muted max-md:hidden"
               ><Time at={report.analyzedAt} /></span>
           </button>
-          {#if slots.occupied}
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={`${A.compare.label}: ${name}`}
-              onclick={() => slots.compare(target(report), name)}
-              ><A.compare.icon />{A.compare.label}</Button>
-          {/if}
         </li>
       {/each}
     </ul>

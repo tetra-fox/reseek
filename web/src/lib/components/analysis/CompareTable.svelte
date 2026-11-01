@@ -27,7 +27,7 @@
   ];
 </script>
 
-<div class="overflow-x-auto rounded-card border bg-surface shadow-card">
+<div class="overflow-x-auto">
   <table class="w-full text-sm tabular-nums">
     <caption class="sr-only">Figures of the files in slots A and B; differences are marked</caption>
     <thead>
