@@ -21,6 +21,9 @@ jobs:
     env:
       SOULFIND_REQUIRED: "1"
       CARGO_INCREMENTAL: "0"
+      # a debug build with symbols outgrows the runner's disk
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-nix
