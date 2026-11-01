@@ -36,6 +36,11 @@ test("Enter in the Search box always searches, only a chosen row does anything e
 }) => {
   await fakeConnected(page);
   await directory(page);
+  // this user is made up: a browse reaching the daemon the tests share would put them in its
+  // directory, where a later test finds them
+  await page.route("**/api/v0/users/aphex_fan/**", (route) =>
+    route.fulfill({ status: 404, json: { error: "No such user" } })
+  );
   const posted: string[] = [];
   await page.route("**/api/v0/searches", (route) => {
     if (route.request().method() !== "POST") return route.fallback();
