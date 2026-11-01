@@ -5,7 +5,7 @@ Soulseek client & daemon
 
 ## Features
 
-- **Search & Transfers - Standard features**. Of course you need these.
+- **Search & Transfers** - Standard features. Of course you need these.
 - **Chat: rooms, private messages, search** - A more modern take on chat, more akin to Discord or Slack.
 - **File management** - Browse, save and delete files right in the browser, instead of downloading to your server and then digging them out over a Samba share or scp.
 - **Audio analysis and spectrogram** - A feature-rich file inspector to pick out bad transcodes. e.g. a wav-converted 128k YouTube/SoundCloud rip (which I run into way too often. Shame on those who do this)
