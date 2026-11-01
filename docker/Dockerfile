@@ -1,28 +1,29 @@
 # The reseek image: the static binary for the platform being built, run by tini through an
-# entrypoint that readies /app and drops to the reseek user when PUID or PGID is given.
+# entrypoint that readies /app and drops to the ids in PUID and PGID when either is given.
 #
 # The build context holds the entrypoint and the static binaries as reseek-<arch>
 # (`just docker` puts them there):
 #   docker build -f docker/Dockerfile <context>
-FROM docker.io/library/debian:trixie-slim
+FROM docker.io/library/alpine:3.24.3
 
 ARG TARGETARCH
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends tini gosu wget ca-certificates \
-  && rm -rf /var/lib/apt/lists/* \
-  && groupadd -g 1000 reseek \
-  && useradd -u 1000 -g reseek -d /app -M -s /usr/sbin/nologin reseek
+# bash and GNU wget are for custom scripts. tzdata is for TZ, which log timestamps and the daily log file follow; the base has wget and a CA
+# bundle for scripts, the daemon carries its own TLS roots
+RUN apk add --no-cache tini su-exec tzdata bash wget \
+  && addgroup -g 1000 reseek \
+  && adduser -u 1000 -G reseek -h /app -H -D -s /sbin/nologin reseek
 
 COPY reseek-${TARGETARCH} /usr/bin/reseek
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
+# SHELL is what scripts that name no program run in
 ENV RESEEK_APP_DIR=/app \
     RESEEK_HTTP_PORT=5030 \
     RESEEK_HTTPS_PORT=5031 \
     RESEEK_SLSK_LISTEN_PORT=50300 \
     RESEEK_UMASK=0022 \
-    SHELL=/usr/bin/bash
+    SHELL=/bin/bash
 
 VOLUME /app
 EXPOSE 5030 5031 50300

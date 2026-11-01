@@ -1,9 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Starts reseek in the container with the application directory ready: as the user the container
-# was started as, as root, or, with PUID or PGID, as the reseek user moved to those ids.
-set -euo pipefail
+# was started as, as root, or, with PUID or PGID, as those numeric ids.
+set -eu
 
 app="${RESEEK_APP_DIR:-/app}"
+# every mode inherits this through exec and su-exec
 umask "${RESEEK_UMASK:-0022}"
 # the daemon reads every RESEEK_ variable as an option; this one is the container's own
 unset RESEEK_UMASK
@@ -12,6 +13,15 @@ warn_unless_mounted() {
   if ! mountpoint -q "$app"; then
     echo "WARNING: $app is not a bind mount or volume. Configuration and data will be lost if the container is removed."
   fi
+}
+
+require_id() {
+  case "$2" in
+    '' | *[!0-9]*)
+      echo "ERROR: $1 must be a non-negative integer, got '$2'."
+      exit 1
+      ;;
+  esac
 }
 
 if [ "$(id -u)" != 0 ]; then
@@ -37,23 +47,13 @@ fi
 
 puid="${PUID:-1000}"
 pgid="${PGID:-1000}"
-for pair in "PUID:$puid" "PGID:$pgid"; do
-  name="${pair%%:*}"
-  value="${pair#*:}"
-  if ! [[ "$value" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: $name must be a non-negative integer, got '$value'."
-    exit 1
-  fi
-done
-if [ "$(id -g reseek)" != "$pgid" ]; then
-  groupmod -o -g "$pgid" reseek
-fi
-if [ "$(id -u reseek)" != "$puid" ]; then
-  usermod -o -u "$puid" reseek
-fi
+require_id PUID "$puid"
+require_id PGID "$pgid"
 mkdir -p "$app"
 warn_unless_mounted
 if [ "$(stat -c '%u:%g' "$app")" != "$puid:$pgid" ]; then
   chown "$puid:$pgid" "$app"
 fi
-exec gosu reseek /usr/bin/reseek "$@"
+# the ids need no passwd entry; su-exec takes HOME from one, or / without it, so env sets it for
+# scripts
+exec su-exec "$puid:$pgid" env HOME="$app" /usr/bin/reseek "$@"
