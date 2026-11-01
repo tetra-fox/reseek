@@ -146,7 +146,7 @@
       class="grid grid-cols-[minmax(0,1fr)] gap-section lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
       <!-- the categories, the one in view marked; on a wide screen they stay beside the page -->
       <aside
-        class="flex flex-col gap-2 lg:sticky lg:top-gutter lg:max-h-[calc(var(--content-h)-2*var(--spacing-gutter))]">
+        class="flex flex-col gap-2 lg:sticky lg:top-gutter lg:max-h-[calc(var(--content-h)-2*var(--spacing-gutter))] lg:gap-4">
         <Input
           type="search"
           icon={SearchIcon}
@@ -155,14 +155,14 @@
           bind:value={typed} />
         <nav
           aria-label="Settings sections"
-          class="flex gap-1 overflow-x-auto max-lg:-mx-1 max-lg:px-1 max-lg:py-1 lg:min-h-0 lg:flex-col lg:overflow-y-auto">
+          class="flex gap-1 overflow-x-auto max-lg:-mx-1 max-lg:px-1 max-lg:py-1 lg:min-h-0 lg:flex-col lg:gap-5 lg:overflow-y-auto">
           {#each groups as { group, members } (group)}
             <!-- one line of tabs on a phone, where the headings have no place -->
-            <div role="group" aria-label={group} class="contents lg:flex lg:flex-col lg:gap-1">
+            <div role="group" aria-label={group} class="contents lg:flex lg:flex-col lg:gap-0.5">
               <p
                 aria-hidden="true"
                 class={[
-                  "px-2.5 pt-2 text-xs font-medium text-fg-subtle first:pt-0 max-lg:hidden",
+                  "px-2.5 pb-1 text-xs font-medium text-fg-subtle max-lg:hidden",
                   q && !members.some((s) => hits.get(s.id)) && "hidden"
                 ]}>
                 {group}

@@ -328,7 +328,7 @@
   <div class="-mx-5 divide-y border-y">
     {#each fields as field, i (field.key)}
       {#if opensHeading(field, i)}
-        <h4 class="bg-surface-muted/50 px-5 py-1.5 text-xs font-semibold text-fg-muted">
+        <h4 class="border-b-0! px-5 pt-5 text-xs font-semibold text-fg-muted">
           {field.heading}
         </h4>
       {/if}
