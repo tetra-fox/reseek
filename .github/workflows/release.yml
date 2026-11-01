@@ -60,8 +60,22 @@ jobs:
       - name: Keep the first release's notes short
         run: |
           git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "First release." > notes.md
+      # SHA256SUMS.minisig is checked against reseek.pub with `minisign -Vm SHA256SUMS -p reseek.pub`
+      - name: Write and sign the checksums
+        env:
+          MINISIGN_KEY: ${{ secrets.MINISIGN_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          sudo apt-get install -y minisign
+          sha256sum reseek-* > SHA256SUMS
+          printf '%s\n' "$MINISIGN_KEY" > release.key
+          trap 'rm -f release.key' EXIT
+          printf '%s\n' "$MINISIGN_PASSWORD" | minisign -S -s release.key -m SHA256SUMS
       - uses: softprops/action-gh-release@v3
         with:
           draft: true
           body_path: notes.md
-          files: reseek-*
+          files: |
+            reseek-*
+            SHA256SUMS
+            SHA256SUMS.minisig
