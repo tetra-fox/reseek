@@ -238,7 +238,7 @@ impl Shares {
       backup: storage.backup,
       in_memory: storage.in_memory,
       relay_debug: options.relay.enabled && options.relay.mode == RelayMode::Debug,
-      workers: options.shares.cache.workers,
+      workers: options.shares.cache.scan_workers(),
       case_sensitive: options.flags.case_sensitive_regex,
       quiet,
       shutdown,

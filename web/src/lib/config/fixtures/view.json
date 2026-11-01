@@ -207,7 +207,7 @@
       "cache": {
         "retention": null,
         "storage_mode": "memory",
-        "workers": 32
+        "workers": null
       },
       "directories": [],
       "filters": [],
@@ -2258,9 +2258,9 @@
       "envVar": "RESEEK_SHARE_CACHE_WORKERS",
       "cliFlag": "--share-cache-workers",
       "kind": "integer",
-      "doc": "Number of files read at once during a scan.",
+      "doc": "Number of files read at once during a scan. One per processor when not set.",
       "choices": null,
-      "default": 32,
+      "default": null,
       "apply": "restart",
       "secret": false,
       "notApplied": null,

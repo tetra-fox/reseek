@@ -29,7 +29,7 @@ pub struct Shares {
 }
 
 /// Index of shared files.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct ShareCache {
   /// Storage of the share index: `memory`, rebuilt at every start, or `disk`, kept in the
@@ -40,13 +40,13 @@ pub struct ShareCache {
     apply = "restart"
   )]
   pub storage_mode: StorageMode,
-  /// Number of files read at once during a scan.
+  /// Number of files read at once during a scan. One per processor when not set.
   #[cascade(
     env = "RESEEK_SHARE_CACHE_WORKERS",
     cli = "--share-cache-workers",
     apply = "restart"
   )]
-  pub workers: u32,
+  pub workers: Option<u32>,
   /// Interval between automatic rescans of the shares. Minimum: 1 hour. No automatic rescans
   /// when not set.
   #[cascade(env = "RESEEK_SHARE_CACHE_RETENTION", cli = "--share-cache-retention")]
@@ -57,13 +57,12 @@ pub struct ShareCache {
 /// The most scan workers there may be.
 pub const MAX_SCAN_WORKERS: u32 = 128;
 
-impl Default for ShareCache {
-  fn default() -> Self {
-    let processors = std::thread::available_parallelism().map_or(1, |n| n.get());
-    Self {
-      storage_mode: StorageMode::default(),
-      workers: u32::try_from(processors).map_or(MAX_SCAN_WORKERS, |n| n.min(MAX_SCAN_WORKERS)),
-      retention: None,
-    }
+impl ShareCache {
+  /// How many files a scan reads at once
+  pub fn scan_workers(&self) -> u32 {
+    self.workers.unwrap_or_else(|| {
+      let processors = std::thread::available_parallelism().map_or(1, |n| n.get());
+      u32::try_from(processors).map_or(MAX_SCAN_WORKERS, |n| n.min(MAX_SCAN_WORKERS))
+    })
   }
 }

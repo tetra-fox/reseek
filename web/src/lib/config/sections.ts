@@ -285,7 +285,13 @@ export const sections: Section[] = [
         key: "shares.cache.storage_mode",
         label: "Share index storage"
       },
-      { key: "shares.cache.workers", label: "Scan workers", min: 1, max: 128 }
+      {
+        key: "shares.cache.workers",
+        label: "Scan workers",
+        min: 1,
+        max: 128,
+        placeholder: "one per processor"
+      }
     ]
   },
   {

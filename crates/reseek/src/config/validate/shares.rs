@@ -122,10 +122,12 @@ pub(super) fn check(shares: &Shares, downloads: &Path, case_sensitive: bool, rep
 }
 
 fn check_cache(cache: &ShareCache, report: &mut Report) {
-  report.check(
-    "shares.cache.workers",
-    range("shares.cache.workers", cache.workers, 1, MAX_SCAN_WORKERS),
-  );
+  if let Some(workers) = cache.workers {
+    report.check(
+      "shares.cache.workers",
+      range("shares.cache.workers", workers, 1, MAX_SCAN_WORKERS),
+    );
+  }
   if let Some(retention) = cache.retention {
     report.check(
       "shares.cache.retention",
