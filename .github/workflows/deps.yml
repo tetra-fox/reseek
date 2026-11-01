@@ -35,6 +35,8 @@ jobs:
         env:
           SOULFIND_REQUIRED: "1"
           CARGO_INCREMENTAL: "0"
+          CARGO_PROFILE_DEV_DEBUG: "0"
+          CARGO_PROFILE_TEST_DEBUG: "0"
       - name: Commit the hash
         if: steps.bump.outputs.update-type != 'version-update:semver-major' && steps.bump.outputs.package-ecosystem == 'npm_and_yarn'
         run: |
@@ -44,7 +46,8 @@ jobs:
           git commit -am "chore(deps): update the web hash"
           git push
       - if: steps.bump.outputs.update-type != 'version-update:semver-major'
-        run: gh pr merge "$PR" --squash --delete-branch --subject "chore(deps): bump minor and patch versions" --body ""
+        run: |
+          gh pr merge "$PR" --squash --delete-branch --subject "chore(deps): bump minor and patch versions" --body ""
         env:
           PR: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
