@@ -60,18 +60,18 @@ const settled = async (locator: Locator) => {
   }
 };
 
-/** Opens the inspector at a download's analysis from its row */
-const analyze = async (page: Page) => {
+/** Opens the inspector on a download from its row */
+const details = async (page: Page) => {
   await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyze" }).click();
+  await page.getByRole("menuitem", { name: "Details" }).click();
   return page.getByRole("complementary", { name: "Details" });
 };
 
-/** Opens the large view of the download's analysis from its row */
-const openLarge = async (page: Page) => {
-  const inspector = await analyze(page);
-  await inspector.getByRole("button", { name: "Open large" }).click();
-  return page.getByRole("dialog", { name: "2.flac" });
+/** Opens a download on the Analysis page from its row, and gives its slot */
+const openSlot = async (page: Page) => {
+  await page.getByRole("button", { name: "More for 2.flac" }).click();
+  await page.getByRole("menuitem", { name: "Open in Analysis" }).click();
+  return page.getByRole("region", { name: "Slot A" });
 };
 
 /** Clicks a plot `across` it, from 0 to 1, half way down */
@@ -87,17 +87,16 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   const table = page.getByRole("treegrid", { name: "Downloads" });
   // the analyzed download says so in its row, muted, with the reading in its tooltip
   await expect(table.getByText("Analyzed", { exact: true })).toHaveCount(1);
-  const inspector = await analyze(page);
-  await expect(inspector.getByRole("heading", { name: "Analysis" })).toBeInViewport();
+  const inspector = await details(page);
   // the inspector gives the verdict in a line, with the spectrogram small
-  await expect(inspector.getByText("Likely a transcode")).toBeVisible();
+  await expect(inspector.getByText("Likely a transcode").first()).toBeVisible();
   await expect(inspector.getByText("An aid to judgment, not proof.")).toBeVisible();
-  await inspector.getByRole("button", { name: "Open large" }).click();
+  await inspector.getByRole("button", { name: "Open in Analysis" }).click();
 
-  const viewer = page.getByRole("dialog", { name: "2.flac" });
+  const viewer = page.getByRole("region", { name: "Slot A" });
   const plot = viewer.getByRole("slider", { name: "Cursor" });
   await expect(plot).toBeVisible();
-  await expect(viewer.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
+  await expect(page.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
   // each guide line shows and hides from its legend, drawn on the plot at its frequency
   const legend = viewer.getByRole("button", { name: "MP3 128k" });
   const guide = await guideRow(plot, 16_000);
@@ -114,8 +113,9 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   await viewer.getByRole("button", { name: "Save judgment" }).click();
   await expect(viewer.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
   await expect(viewer.getByRole("button", { name: "Save judgment" })).toBeDisabled();
-  // the row now shows the user's own judgment
-  await expect(table.getByText("Fake", { exact: true })).toBeVisible();
+  // the file's line in the recent results now shows the user's own judgment
+  const recent = page.getByRole("region", { name: "Recent results" });
+  await expect(recent.getByText("Fake", { exact: true })).toBeVisible();
 
   // the analyzer's reading, folded away and labeled as its own
   await viewer.getByText("Analyzer reading").click();
@@ -162,20 +162,13 @@ test("analyzes a finished download from its row and keeps a judgment", async ({ 
   expect(await guideRow(plot, 16_000, "mel")).toBeLessThan(linear);
   // the cursor stays where it was
   await expect(viewer.getByText("Spectrum at 0:10")).toBeVisible();
+  // the address brings the file back after a reload, on the scale chosen
   await page.reload();
-  await openLarge(page);
   await expect(scales.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
 
-  // closed and opened again, the view is where it was left
-  await viewer.getByRole("slider", { name: "Cursor" }).focus();
-  await page.keyboard.press("Shift+ArrowRight");
-  await page.keyboard.press("Escape");
-  await expect(viewer).toBeHidden();
-  await inspector.getByRole("button", { name: "Open large" }).click();
-  await expect(viewer.getByRole("slider", { name: "Cursor" })).toHaveAttribute(
-    "aria-valuenow",
-    "10"
-  );
+  // and the list's row shows the judgment
+  await page.goto("./#/downloads");
+  await expect(table.getByText("Fake", { exact: true })).toBeVisible();
 });
 
 test("dragging the cursor on the waveform moves it on the spectrogram and the spectrum", async ({
@@ -184,7 +177,7 @@ test("dragging the cursor on the waveform moves it on the spectrogram and the sp
   await fakeDownloads(page);
   await fakeAnalysis(page);
   await login(page, "/downloads");
-  const viewer = await openLarge(page);
+  const viewer = await openSlot(page);
   const plot = viewer.getByRole("slider", { name: "Cursor" });
   const spectrum = viewer
     .getByRole("img", { name: /^The spectrum of the window at/ })
@@ -220,7 +213,7 @@ test("zooms around the pointer, pans, and loads the detail in view", async ({ pa
     if (tile !== null && r.url().includes("/analysis/spectrogram")) tiles.add(tile);
   });
   await login(page, "/downloads");
-  const viewer = await openLarge(page);
+  const viewer = await openSlot(page);
   const plot = viewer.getByRole("slider", { name: "Cursor" });
   await expect(plot).toHaveAttribute("data-view", "0.000 300.000");
   // the wheel zooms at the pointer
@@ -283,10 +276,13 @@ test("pans a zoomed five-minute file at sixty frames a second", async ({ page })
   await fakeDownloads(page);
   await fakeAnalysis(page, { duration: 300 });
   await login(page, "/downloads");
-  const plot = (await openLarge(page)).getByRole("slider", { name: "Cursor" });
+  const plot = (await openSlot(page)).getByRole("slider", { name: "Cursor" });
   const detail = page.waitForResponse((r) => r.url().includes("/analysis/spectrogram?tile="));
   for (let i = 0; i < 4; i++) {
-    await page.getByRole("dialog").getByRole("button", { name: "Zoom in" }).click();
+    await page
+      .getByRole("region", { name: "Slot A" })
+      .getByRole("button", { name: "Zoom in" })
+      .click();
   }
   // the detail for the first stretch arrives before the clock starts
   await detail;
@@ -376,7 +372,7 @@ test("the frequency scale moves between linear and mel through the frames betwee
   await fakeDownloads(page);
   await fakeAnalysis(page);
   await login(page, "/downloads");
-  const viewer = await openLarge(page);
+  const viewer = await openSlot(page);
   const plot = viewer.getByRole("slider", { name: "Cursor" });
   const scales = viewer.getByRole("radiogroup", { name: "Frequency scale" });
   await expect(scales.getByRole("radio", { name: "Linear" })).toHaveAttribute(
@@ -408,7 +404,7 @@ test("moves between scales at sixty frames a second on a five-minute file", asyn
   await fakeDownloads(page);
   await fakeAnalysis(page, { duration: 300 });
   await login(page, "/downloads");
-  const dialog = await openLarge(page);
+  const dialog = await openSlot(page);
   const detail = page.waitForResponse((r) => r.url().includes("/analysis/spectrogram?tile="));
   for (let i = 0; i < 4; i++) await dialog.getByRole("button", { name: "Zoom in" }).click();
   await detail;
@@ -463,7 +459,7 @@ test("the cursor follows playback and a click seeks it", async ({ page }) => {
     route.fulfill({ body: wav(6), contentType: "audio/wav" })
   );
   await login(page, "/downloads");
-  const viewer = await openLarge(page);
+  const viewer = await openSlot(page);
   const plot = viewer.getByRole("slider", { name: "Cursor" });
   await plot.focus();
   await page.keyboard.press("ArrowRight");
@@ -482,9 +478,9 @@ test("the cursor follows playback and a click seeks it", async ({ page }) => {
   await page.waitForTimeout(300);
   expect(await now()).toBe(paused);
   await viewer.getByRole("button", { name: "Play", exact: true }).click();
-  // the sound belongs to the popup and goes with it
-  await page.keyboard.press("Escape");
-  await expect(viewer).toBeHidden();
+  // the sound belongs to the slot and goes with it
+  await viewer.getByRole("button", { name: "Clear slot A" }).click();
+  await expect(viewer.getByText("Add a file to analyze")).toBeVisible();
   await expect(audio).toHaveCount(0);
 });
 
@@ -496,21 +492,19 @@ test("a report an older version made asks to be analyzed again", async ({ page }
     if (r.method() === "POST" && r.url().includes("/analysis")) queued.push(r.url());
   });
   await login(page, "/downloads");
-  const inspector = await analyze(page);
+  const slot = await openSlot(page);
   await expect(
-    inspector.getByText(
+    slot.getByText(
       "This file was analyzed by an older version of reseek. Analyze it again to view the results."
     )
   ).toBeVisible();
-  // asked to analyze, it is queued as a file with no report would be
+  // it offers, and does not start by itself
+  expect(queued).toHaveLength(0);
+  await slot.getByRole("button", { name: "Analyze again" }).click();
   await expect.poll(() => queued.length).toBe(1);
-  await inspector.getByRole("button", { name: "Analyze", exact: true }).click();
-  await expect.poll(() => queued.length).toBe(2);
   // the judgment is the user's and outlives the report; there is no spectrogram to show with it
-  await inspector.getByRole("button", { name: "Open large" }).click();
-  const large = page.getByRole("dialog", { name: "2.flac" });
-  await expect(large.getByRole("radiogroup", { name: "Your judgment" })).toBeVisible();
-  await expect(large.getByRole("slider", { name: "Cursor" })).toHaveCount(0);
+  await expect(slot.getByRole("radiogroup", { name: "Your judgment" })).toBeVisible();
+  await expect(slot.getByRole("slider", { name: "Cursor" })).toHaveCount(0);
 });
 
 test("filters downloads by their analysis, by chip and by word", async ({ page }) => {
@@ -691,7 +685,7 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   await login(page, "/system/files");
   await expect(page.getByRole("button", { name: "More for notes.txt" })).toBeVisible();
   await page.getByRole("button", { name: "More for notes.txt" }).click();
-  await expect(page.getByRole("menuitem", { name: "Analyze" })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Open in Analysis" })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
   // the analyzed file says so, and the filter by the analyzer's reading finds it
@@ -708,11 +702,11 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   await page.getByRole("option", { name: "All files" }).click();
 
   await page.getByRole("button", { name: "More for track.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyze" }).click();
+  await page.getByRole("menuitem", { name: "Details" }).click();
   const inspector = page.getByRole("complementary", { name: "Details" });
   // queued by another browser, it shows its place in the queue
   await expect(inspector.getByText("Waiting in the analysis queue")).toBeVisible();
-  await expect(inspector.getByText("Likely a transcode")).toBeVisible();
+  await expect(inspector.getByText("Likely a transcode").first()).toBeVisible();
   // the file's own actions sit under its name, the rest in its menu
   await expect(inspector.getByRole("button", { name: "Open", exact: true })).toBeVisible();
   await inspector.getByRole("button", { name: "More actions" }).click();
@@ -731,8 +725,118 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   await page.getByRole("button", { name: "More for Album" }).click();
   await page.getByRole("menuitem", { name: "Open" }).click();
   await page.getByRole("button", { name: "More for 01.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyze" }).click();
+  await page.getByRole("menuitem", { name: "Details" }).click();
   await expect(inspector.getByText("Waiting in the analysis queue")).toBeVisible();
-  await expect(inspector.getByRole("button", { name: "Analyze", exact: true })).toHaveCount(0);
+  await inspector.getByRole("button", { name: "Open in Analysis" }).click();
   await expect(page.getByRole("heading", { name: "Analysis queue" })).toBeVisible();
+});
+
+test("opens a file, compares a second, and clears them, with the address following", async ({
+  page
+}) => {
+  await fakeDownloads(page);
+  await fakeAnalysis(page);
+  await login(page, "/downloads");
+  await page.getByRole("button", { name: "More for 2.flac" }).click();
+  // with nothing to compare to, a list offers only to open
+  await expect(page.getByRole("menuitem", { name: "Compare" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  const a = await openSlot(page);
+  const b = page.getByRole("region", { name: "Slot B" });
+  await expect(a.getByRole("slider", { name: "Cursor" })).toBeVisible();
+  await expect(b.getByRole("button", { name: "Add from Downloads" })).toBeVisible();
+  await expect(page).toHaveURL(/#\/analysis\?a=download/);
+  await expect(page.getByRole("table")).toHaveCount(0);
+
+  // Compare is there now, and fills the second slot
+  await page.getByRole("link", { name: "Downloads" }).click();
+  await page.getByRole("button", { name: "More for 3.flac" }).click();
+  await page.getByRole("menuitem", { name: "Compare" }).click();
+  await expect(b.getByRole("slider", { name: "Cursor" })).toBeVisible();
+  await expect(page).toHaveURL(/#\/analysis\?a=download.*&b=download/);
+  const table = page.getByRole("table");
+  await expect(table.getByRole("rowheader", { name: "Sample rate" })).toBeVisible();
+
+  // the two views move together until they are unlinked
+  const view = (slot: Locator) => slot.getByRole("slider", { name: "Cursor" });
+  await a.getByRole("button", { name: "Zoom in" }).click();
+  await expect(view(a)).not.toHaveAttribute("data-view", "0.000 30.500");
+  await expect
+    .poll(async () => view(b).getAttribute("data-view"))
+    .toBe(await view(a).getAttribute("data-view"));
+  await page.getByText("Link zoom and scroll").click();
+  await expect(page.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+  const held = await view(b).getAttribute("data-view");
+  await a.getByRole("button", { name: "Zoom in" }).click();
+  await expect(view(a)).not.toHaveAttribute("data-view", held!);
+  await expect(view(b)).toHaveAttribute("data-view", held!);
+
+  // a reload restores both, from the address
+  await page.reload();
+  await expect(view(a)).toBeVisible();
+  await expect(view(b)).toBeVisible();
+
+  // a slot cleared goes from the address too, and Back brings it back
+  await b.getByRole("button", { name: "Clear slot B" }).click();
+  await expect(b.getByRole("button", { name: "Add from Downloads" })).toBeVisible();
+  await expect(page).not.toHaveURL(/&b=/);
+  await page.goBack();
+  await expect(view(b)).toBeVisible();
+  await a.getByRole("button", { name: "Clear slot A" }).click();
+  await b.getByRole("button", { name: "Clear slot B" }).click();
+  await expect(a.getByText("Add a file to analyze")).toBeVisible();
+  await expect(b).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/analysis$/);
+});
+
+test("a local file goes up with progress, carries a tag and takes no judgment", async ({
+  page
+}) => {
+  await fakeAnalysis(page);
+  await login(page, "/analysis");
+  const a = page.getByRole("region", { name: "Slot A" });
+  await a
+    .getByLabel("Upload a file to slot A")
+    .setInputFiles({ name: "mine.flac", mimeType: "audio/flac", buffer: Buffer.alloc(2048) });
+  await expect(a.getByText("Local file")).toBeVisible();
+  await expect(a.getByRole("slider", { name: "Cursor" })).toBeVisible();
+  await expect(a.getByRole("radiogroup", { name: "Your judgment" })).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/analysis$/);
+});
+
+test("picks a file from the panel of the daemon's files", async ({ page }) => {
+  await fakeAnalysis(page);
+  const at = "2026-10-27T18:00:00Z";
+  const file = (fullName: string) => ({
+    attributes: "Normal",
+    createdAt: at,
+    modifiedAt: at,
+    fullName,
+    name: fullName.split("/").pop(),
+    length: 30_000_000
+  });
+  await page.route("**/api/v0/files/downloads/directories?recursive=true", (route) =>
+    route.fulfill({
+      json: {
+        attributes: "Directory",
+        createdAt: at,
+        modifiedAt: at,
+        fullName: "",
+        name: "downloads",
+        directories: [],
+        files: [file("track.flac"), file("Album/01.flac"), file("Album/cover.jpg")]
+      }
+    })
+  );
+  await login(page, "/analysis");
+  const a = page.getByRole("region", { name: "Slot A" });
+  await a.getByRole("button", { name: "Add from Downloads" }).click();
+  const tree = a.getByRole("treegrid");
+  await expect(tree.getByText("track.flac")).toBeVisible();
+  await a.getByRole("textbox", { name: "Filter files" }).fill("01");
+  await expect(tree.getByText("01.flac")).toBeVisible();
+  await expect(tree.getByText("track.flac")).toHaveCount(0);
+  await tree.getByText("01.flac").click();
+  await expect(tree).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/analysis\?a=downloads%3AAlbum%2F01\.flac$/);
 });

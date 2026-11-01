@@ -1,6 +1,6 @@
 /**
  * The spectrogram, waveform and window spectra a fake report serves, made up as the daemon frames
- * them, and a short WAV for the analysis popup to play
+ * them, and a short WAV for the Analysis page to play
  */
 
 const BINS = 512;

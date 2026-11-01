@@ -129,27 +129,25 @@ const layerHolds = async (layer: Locator, name: string) => {
 
 /**
  * From a finished download's row, checks the inspector holds the file and its analysis, then the
- * large view with the analyzer's reading open, and closes both
+ * Analysis page with the analyzer's reading open, and comes back
  */
 const analysisHolds = async (page: Page) => {
   await page.getByRole("button", { name: "More for 2.flac" }).click();
-  await page.getByRole("menuitem", { name: "Analyze" }).click();
+  await page.getByRole("menuitem", { name: "Details" }).click();
   const inspector = page.locator("[data-inspector]");
   const open = inspector.getByRole("button", { name: "Technical" });
-  await expect(inspector.getByText("Likely a transcode")).toBeVisible();
+  await expect(inspector.getByText("Likely a transcode").first()).toBeVisible();
   if ((await open.getAttribute("aria-expanded")) === "false") await open.click();
   await layerHolds(inspector, "inspector");
-  await inspector.getByRole("button", { name: "Open large" }).click();
-  const large = page.getByRole("dialog", { name: "2.flac" });
-  await large.getByText("Analyzer reading", { exact: true }).click();
-  await large.getByRole("radio", { name: "Mel" }).click();
-  await expect(large.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
-  await expect(large.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
-  await layerHolds(large, "large view");
-  await page.keyboard.press("Escape");
-  await expect(large).toBeHidden();
-  await inspector.getByRole("button", { name: "Close details" }).click();
-  await expect(inspector).toBeHidden();
+  await inspector.getByRole("button", { name: "Open in Analysis" }).click();
+  const slot = page.getByRole("region", { name: "Slot A" });
+  await slot.getByText("Analyzer reading", { exact: true }).click();
+  await slot.getByRole("radio", { name: "Mel" }).click();
+  await expect(slot.getByRole("radio", { name: "Mel" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByText(/This analysis is an aid to judgment, not proof/)).toBeVisible();
+  await layerHolds(slot, "Analysis page");
+  await page.goBack();
+  await expect(slot).toBeHidden();
 };
 
 /** Opens `path` and checks it fits */

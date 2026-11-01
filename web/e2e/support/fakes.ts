@@ -615,7 +615,8 @@ const report = (
     stereoCorrelation: 0.6,
     sideEnergyDb: -6,
     dcOffset: 0,
-    clippedSamplesPct: 0
+    clippedSamplesPct: 0,
+    peakDbfs: -0.4
   },
   windows: Array.from({ length: Math.floor(duration) }, (_, t) => ({
     t,
@@ -644,6 +645,12 @@ export const fakeAnalysis = async (page: Page, { stale = false, duration = 30.5 
       const { pathname } = new URL(route.request().url());
       const method = route.request().method();
       if (pathname.endsWith("/analysis/jobs")) return route.fulfill({ json: [] });
+      if (pathname.endsWith("/analysis/uploads")) {
+        return route.fulfill({
+          status: 201,
+          json: { root: "temporary", path: "1f2e3d4c/mine.flac", size: 2048 }
+        });
+      }
       // the list the chips and filters read: the download's report, and one of a file in Files
       if (pathname.endsWith("/api/v0/analysis")) {
         return route.fulfill({
