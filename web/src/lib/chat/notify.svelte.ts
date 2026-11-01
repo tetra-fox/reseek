@@ -7,6 +7,8 @@ import { chatHref, roomHref } from "#lib/nav.js";
 import { fields } from "#lib/stored.svelte.js";
 import { users } from "#lib/users/users.svelte.js";
 
+import notificationSound from "./notification.wav?url";
+
 /** The `chat.notifications` options */
 export type NotifyOptions = {
   enabled: boolean;
@@ -174,16 +176,7 @@ class Notifier {
 
 export const notifier = new Notifier();
 
-/** A short tone, made here rather than shipped as a file */
+/** Plays the notification sound; a browser that refuses until the page is used stays silent */
 const chime = () => {
-  const audio = new AudioContext();
-  const tone = audio.createOscillator();
-  const level = audio.createGain();
-  tone.frequency.value = 880;
-  level.gain.setValueAtTime(0.15, audio.currentTime);
-  level.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.25);
-  tone.connect(level).connect(audio.destination);
-  tone.start();
-  tone.stop(audio.currentTime + 0.25);
-  tone.onended = () => void audio.close();
+  new Audio(notificationSound).play().catch(() => {});
 };
