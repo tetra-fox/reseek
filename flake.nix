@@ -158,7 +158,7 @@
                 fish
                 zsh
 
-                nodejs_24
+                nodejs_26
                 pnpm
 
                 nixfmt

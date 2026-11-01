@@ -3,7 +3,7 @@
 {
   lib,
   stdenvNoCC,
-  nodejs_24,
+  nodejs_26,
   pnpm,
   fetchPnpmDeps,
   pnpmConfigHook,
@@ -52,7 +52,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   };
 
   nativeBuildInputs = [
-    nodejs_24
+    nodejs_26
     pnpm
     pnpmConfigHook
   ];
