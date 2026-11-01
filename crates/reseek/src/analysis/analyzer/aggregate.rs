@@ -42,6 +42,7 @@ pub(in crate::analysis) fn measures(
     side_energy_db: measured.totals.side_energy_db(),
     dc_offset: measured.totals.dc_offset(),
     clipped_samples_pct: measured.totals.clipped_pct(),
+    peak_dbfs: measured.totals.peak_dbfs(),
   }
 }
 

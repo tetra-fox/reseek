@@ -46,6 +46,17 @@ pub(super) fn root(name: &str) -> Result<FileRoot, ApiError> {
   name.parse().map_err(ApiError::not_found)
 }
 
+/// The root a route that lists or removes files names: temporary files are reached one by one by
+/// whoever uploaded them, so that root is no route here.
+fn listed(name: &str) -> Result<FileRoot, ApiError> {
+  match root(name)? {
+    FileRoot::Temporary => Err(ApiError::not_found(format!(
+      "No directory root named {name}"
+    ))),
+    root => Ok(root),
+  }
+}
+
 /// How a request asks for a file's bytes, from its method, headers, principal and query.
 pub(super) fn content_request(
   method: &Method,
@@ -99,7 +110,7 @@ async fn list_root(
   Path(name): Path<String>,
   Query(query): Query<DirectoryListingQuery>,
 ) -> Result<Json<FilesystemDirectory>, ApiError> {
-  let root = root(&name)?;
+  let root = listed(&name)?;
   app
     .services
     .files
@@ -128,7 +139,7 @@ async fn list_directory(
   Path((name, path)): Path<(String, String)>,
   Query(query): Query<DirectoryListingQuery>,
 ) -> Result<Json<FilesystemDirectory>, ApiError> {
-  let root = root(&name)?;
+  let root = listed(&name)?;
   let path = validate::files_path(&path, false)?;
   app
     .services
@@ -156,7 +167,7 @@ async fn delete_directory(
   caller: Authorized<ReadWrite>,
   Path((name, path)): Path<(String, String)>,
 ) -> Result<StatusCode, ApiError> {
-  let root = root(&name)?;
+  let root = listed(&name)?;
   let path = validate::files_path(&path, true)?;
   deleting(&app, &caller.principal, &path)?;
   app.services.files.delete_directory(root, &path).await?;
@@ -187,7 +198,7 @@ async fn delete_file(
   caller: Authorized<ReadWrite>,
   Path((name, path)): Path<(String, String)>,
 ) -> Result<StatusCode, ApiError> {
-  let root = root(&name)?;
+  let root = listed(&name)?;
   let path = validate::files_path(&path, true)?;
   deleting(&app, &caller.principal, &path)?;
   app.services.files.delete_file(root, &path).await?;
@@ -480,7 +491,7 @@ async fn archive(
   Path((name, path)): Path<(String, String)>,
   Query(query): Query<ArchiveQuery>,
 ) -> Result<Response, ApiError> {
-  let root = root(&name)?;
+  let root = listed(&name)?;
   let path = validate::files_path(&path, false)?;
   serving(&app)?;
   app

@@ -1,7 +1,8 @@
 //! The analysis calls against the in-memory daemon: a downloaded file analyzed by its path and
 //! by its download, its report, its spectrogram and its waveform, the event and the frame raised
 //! once, files outside the roots refused, unreadable files reported rather than failed, the
-//! user's judgment kept across a restart, and a batch larger than the queue run whole.
+//! user's judgment kept across a restart, a batch larger than the queue run whole, and a file
+//! uploaded for one analysis leaving nothing behind.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -9,13 +10,14 @@ use std::time::Duration;
 
 use api_types::events::EventType;
 use api_types::transfers::TransferStates;
+use axum::body::Body;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde_json::{Value, json};
 
 use super::analyzer::fixtures::{music, pink, write_flac};
 use super::jobs::QUEUE_LIMIT;
-use crate::testing::{TRUSTED, TestApp, app, request};
+use crate::testing::{TRUSTED, TestApp, app, request, with};
 use crate::transfers::{Record, store as transfers};
 
 /// One analysis at a time, so a test knows which files wait.
@@ -547,4 +549,209 @@ async fn a_batch_past_the_queue_limit_joins_the_queue_as_it_drains() {
     let (status, report) = app.call("GET", &route(name), None).await;
     assert_eq!(status, 200, "{name} was not analyzed: {report}");
   }
+}
+
+/// Uploads `body` for analysis as a file named `name`.
+async fn upload(app: &TestApp, name: &str, body: Body) -> (u16, Value) {
+  let mut sent = request(
+    "POST",
+    &format!("/api/v0/analysis/uploads?name={name}"),
+    None,
+  );
+  *sent.body_mut() = body;
+  let answer = app.send(sent).await;
+  let json = serde_json::from_slice(&answer.body).unwrap_or(Value::Null);
+  (answer.status.as_u16(), json)
+}
+
+/// The analysis route of an upload the daemon answered with.
+fn uploaded(answer: &Value) -> String {
+  temporary(answer["path"].as_str().unwrap())
+}
+
+fn temporary(relative: &str) -> String {
+  format!(
+    "/api/v0/files/temporary/files/{}/analysis",
+    URL_SAFE_NO_PAD.encode(relative)
+  )
+}
+
+/// How many uploads the cache holds.
+fn uploads_held(app: &TestApp) -> usize {
+  let dir = crate::analysis::uploads_dir(&app.state.paths.data);
+  std::fs::read_dir(dir).map_or(0, Iterator::count)
+}
+
+/// Waits until the cache holds `count` uploads.
+async fn uploads_settle(app: &TestApp, count: usize) {
+  for _ in 0..200 {
+    if uploads_held(app) == count {
+      return;
+    }
+    tokio::time::sleep(Duration::from_millis(10)).await;
+  }
+  assert_eq!(uploads_held(app), count);
+}
+
+/// A body whose length is not known until it ends, as a chunked upload's is not.
+fn chunked(bytes: Vec<u8>) -> Body {
+  Body::from_stream(futures_util::stream::iter(
+    bytes
+      .chunks(256)
+      .map(|chunk| Ok::<_, std::io::Error>(chunk.to_vec()))
+      .collect::<Vec<_>>(),
+  ))
+}
+
+#[tokio::test]
+async fn an_upload_stops_at_its_limit_and_leaves_nothing() {
+  let config = format!("{TRUSTED}[analysis]\nupload_max_bytes = \"1KB\"\n");
+  let app = app(&config, &[]).await;
+  // refused from its length, before any of it is read
+  let (status, body) = upload(&app, "a.flac", Body::from(vec![0; 1001])).await;
+  assert_eq!(status, 413, "{body}");
+  // and at the byte that passes the limit when the length is not given
+  let (status, body) = upload(&app, "a.flac", chunked(vec![0; 2000])).await;
+  assert_eq!(status, 413, "{body}");
+  uploads_settle(&app, 0).await;
+  let (status, body) = upload(&app, "a.flac", chunked(vec![0; 1000])).await;
+  assert_eq!(status, 201, "{body}");
+  assert_eq!(body["size"], 1000);
+  assert_eq!(body["root"], "temporary");
+  uploads_settle(&app, 1).await;
+
+  let (status, body) = upload(&app, "", Body::from(vec![0; 10])).await;
+  assert_eq!(status, 400, "{body}");
+}
+
+#[tokio::test]
+async fn an_upload_is_not_held_to_the_size_of_a_json_body() {
+  let app = app(TRUSTED, &[]).await;
+  let (status, body) = upload(&app, "a.flac", Body::from(vec![0; 3 << 20])).await;
+  assert_eq!(status, 201, "{body}");
+}
+
+#[tokio::test]
+async fn an_upload_takes_the_read_write_role() {
+  let keys = "[web.authentication.api_keys.viewer]\nkey = \"viewer-key-0123456789\"\n\
+              role = \"readonly\"\n[web.authentication.api_keys.editor]\n\
+              key = \"editor-key-0123456789\"\nrole = \"readwrite\"\n";
+  let app = app(keys, &[]).await;
+  let sent = |key: &str| {
+    let mut sent = request("POST", "/api/v0/analysis/uploads?name=a.flac", None);
+    *sent.body_mut() = Body::from(vec![0; 10]);
+    with(sent, "x-api-key", key)
+  };
+  assert_eq!(
+    app
+      .send(request(
+        "POST",
+        "/api/v0/analysis/uploads?name=a.flac",
+        None
+      ))
+      .await
+      .status,
+    401
+  );
+  assert_eq!(app.send(sent("viewer-key-0123456789")).await.status, 403);
+  uploads_settle(&app, 0).await;
+  assert_eq!(app.send(sent("editor-key-0123456789")).await.status, 201);
+}
+
+#[tokio::test]
+async fn an_upload_works_like_a_file_and_stays_out_of_every_record() {
+  let app = app(TRUSTED, &[]).await;
+  let events = count_events(&app);
+  lossless(&app, "real.flac");
+  app.call("POST", &route("real.flac"), None).await;
+  settled(&app).await;
+  let before = events.load(Ordering::SeqCst);
+
+  let file = std::fs::read(app.state.paths.downloads.join("real.flac")).unwrap();
+  let (status, answer) = upload(&app, "My%20Song.flac", Body::from(file)).await;
+  assert_eq!(status, 201, "{answer}");
+  assert!(answer["path"].as_str().unwrap().ends_with("/My Song.flac"));
+  let analysis = uploaded(&answer);
+  assert_eq!(app.call("POST", &analysis, None).await.0, 202);
+  settled(&app).await;
+
+  // analyzed, drawn and played like any file under a root
+  let (status, report) = app.call("GET", &analysis, None).await;
+  assert_eq!(status, 200, "{report}");
+  assert_eq!(report["root"], "temporary");
+  assert_eq!(report["verdict"], "consistent");
+  assert_eq!(report["transferId"], Value::Null);
+  assert!(report["measures"]["peakDbfs"].as_f64().unwrap() <= 0.0);
+  let spectrogram = app
+    .send(request("GET", &format!("{analysis}/spectrogram"), None))
+    .await;
+  assert_eq!(spectrogram.status, 200);
+  let content = analysis.replace("/analysis", "/content");
+  assert_eq!(app.send(request("GET", &content, None)).await.status, 200);
+
+  // and in no list, no judgment and no event
+  let (_, listed) = app.call("GET", "/api/v0/analysis", None).await;
+  assert_eq!(listed.as_array().unwrap().len(), 1, "only the real file");
+  assert_eq!(listed[0]["root"], "downloads");
+  let (status, _) = app
+    .call(
+      "PUT",
+      &format!("{analysis}/override"),
+      Some(json!({ "verdict": "fake" })),
+    )
+    .await;
+  assert_eq!(status, 400);
+  assert_eq!(events.load(Ordering::SeqCst), before);
+  let listing = "/api/v0/files/temporary/directories";
+  assert_eq!(app.call("GET", listing, None).await.0, 404);
+
+  // a restart removes it with its report
+  let app = app.restarted(&[]).await;
+  assert_eq!(uploads_held(&app), 0);
+  assert_eq!(app.call("GET", &analysis, None).await.0, 404);
+  assert_eq!(app.call("POST", &analysis, None).await.0, 404);
+}
+
+#[tokio::test]
+async fn an_aiff_upload_plays_through_the_wav_route() {
+  let app = app(TRUSTED, &[]).await;
+  let samples: Vec<u8> = (0..24).collect();
+  let file = crate::files::aiff_file(2, 16, &samples);
+  let (status, answer) = upload(&app, "a.aiff", Body::from(file)).await;
+  assert_eq!(status, 201, "{answer}");
+  let wav = uploaded(&answer).replace("/analysis", "/wav");
+  let served = app.send(request("GET", &wav, None)).await;
+  assert_eq!(served.status, 200);
+  assert_eq!(served.headers["content-type"], "audio/wav");
+}
+
+#[tokio::test]
+async fn uploads_past_the_cache_limit_go_oldest_first_with_their_reports() {
+  let config = format!("{TRUSTED}{ONE_WORKER}cache_max_bytes = \"1B\"\n");
+  let app = app(&config, &[]).await;
+  lossless(&app, "real.flac");
+  let file = std::fs::read(app.state.paths.downloads.join("real.flac")).unwrap();
+  let mut routes = Vec::new();
+  for name in ["a.flac", "b.flac"] {
+    let (status, answer) = upload(&app, name, Body::from(file.clone())).await;
+    assert_eq!(status, 201, "{answer}");
+    let analysis = uploaded(&answer);
+    assert_eq!(app.call("POST", &analysis, None).await.0, 202);
+    settled(&app).await;
+    routes.push(analysis);
+  }
+  uploads_settle(&app, 2).await;
+  let (status, report) = app.call("GET", &routes[0], None).await;
+  assert_eq!(status, 200, "the two newest stay over the limit: {report}");
+
+  let (_, answer) = upload(&app, "c.flac", Body::from(file)).await;
+  uploads_settle(&app, 2).await;
+  assert_eq!(app.call("GET", &routes[0], None).await.0, 404);
+  assert_eq!(app.call("POST", &routes[0], None).await.0, 404);
+  assert_eq!(app.call("GET", &routes[1], None).await.0, 200);
+  assert_eq!(
+    app.call("POST", &uploaded(&answer), None).await.0,
+    202,
+    "the newest is held"
+  );
 }

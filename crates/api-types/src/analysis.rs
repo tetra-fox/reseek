@@ -162,6 +162,9 @@ pub struct AnalysisMeasures {
   pub dc_offset: Option<f64>,
   /// the percentage of samples at full scale
   pub clipped_samples_pct: Option<f64>,
+  /// the loudest sample in dBFS; null in a report made before it was measured and for silence
+  #[serde(default)]
+  pub peak_dbfs: Option<f64>,
 }
 
 /// The measures of one analyzed window.
@@ -357,6 +360,28 @@ pub struct AnalysisReportQuery {
   /// include the per-window measures, true when left out
   #[serde(default = "yes")]
   pub windows: bool,
+}
+
+/// The query of `POST /analysis/uploads`, which uploads a file for analysis.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct AnalysisUploadQuery {
+  /// the file's name on the uploader's machine, which keeps its extension
+  pub name: String,
+}
+
+/// A file uploaded for analysis. It works as any file under its root does until the analysis
+/// cache needs the room or the daemon restarts, and leaves no report, mark or judgment behind.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisUpload {
+  /// the root the file is under, always `temporary`
+  pub root: FileRoot,
+  /// the file's path under the root
+  pub path: String,
+  /// the file's size in bytes
+  pub size: u64,
 }
 
 /// The query of the spectrogram and waveform routes.

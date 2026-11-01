@@ -342,6 +342,103 @@
         }
       }
     },
+    "/api/v0/analysis/uploads": {
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Takes a file from the caller's machine into the analysis cache, to analyze and play under the\n`temporary` root. It leaves no report, mark or judgment and goes when the cache needs the room\nor the daemon restarts.",
+        "operationId": "upload_for_analysis",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "description": "the file's name on the uploader's machine, which keeps its extension",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisUpload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/application": {
       "get": {
         "tags": [
@@ -16068,6 +16165,14 @@
             "format": "double",
             "description": "the estimated noise floor in dBFS"
           },
+          "peakDbfs": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "the loudest sample in dBFS; null in a report made before it was measured and for silence"
+          },
           "sfb21Holes": {
             "type": [
               "number",
@@ -16200,6 +16305,31 @@
           }
         ],
         "description": "A file a batch analysis names: one under a root, or a succeeded download's."
+      },
+      "AnalysisUpload": {
+        "type": "object",
+        "description": "A file uploaded for analysis. It works as any file under its root does until the analysis\ncache needs the room or the daemon restarts, and leaves no report, mark or judgment behind.",
+        "required": [
+          "root",
+          "path",
+          "size"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "the file's path under the root"
+          },
+          "root": {
+            "$ref": "#/components/schemas/FileRoot",
+            "description": "the root the file is under, always `temporary`"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the file's size in bytes",
+            "minimum": 0
+          }
+        }
       },
       "AnalysisVerdict": {
         "type": "string",
@@ -19042,7 +19172,8 @@
         "description": "A directory the files endpoints can reach, named in their path.",
         "enum": [
           "downloads",
-          "incomplete"
+          "incomplete",
+          "temporary"
         ]
       },
       "FileToken": {

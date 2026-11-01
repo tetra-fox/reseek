@@ -1,8 +1,9 @@
 //! The analysis queue: files wait in the order they were asked for, by the API, by a batch's
 //! backlog as the queue drains, or by a download that finished while `analysis.on_download` is
 //! on, and as many run as `analysis.workers` allows, each on a blocking thread of its own. A
-//! finished analysis is stored with its spectrogram and waveform, pushed to the event stream and
-//! raised as an event; one canceled by shutdown leaves nothing behind.
+//! finished analysis is stored with its spectrogram and waveform, pushed to the event stream and,
+//! unless its file was uploaded for it, raised as an event; one canceled by shutdown leaves
+//! nothing behind.
 
 use std::collections::VecDeque;
 use std::path::Path;
@@ -12,6 +13,7 @@ use std::time::Instant;
 
 use api_types::analysis::{AnalysisCompleted, AnalysisJob, AnalysisJobState};
 use api_types::events::{Event, FileAnalysisComplete};
+use api_types::files::FileRoot;
 use api_types::live::LiveFrame;
 use chrono::{DateTime, Utc};
 use tokio::sync::broadcast::error::RecvError;
@@ -22,7 +24,7 @@ use uuid::Uuid;
 use super::analyzer::engine::{self, Settings};
 use super::analyzer::reading;
 use super::report::{assemble, kept_name, layout, modified_text};
-use super::{Analysis, current, kept, store};
+use super::{Analysis, current, kept, store, uploads};
 use crate::api::error::ApiError;
 use crate::config::Options;
 use crate::files::LocalFile;
@@ -204,10 +206,10 @@ pub(super) async fn dispatch(analysis: Arc<Analysis>) {
         Ok(change) => {
           let limit = |options: &Options| options.analysis.cache_max_bytes;
           if limit(&change.current.values) < limit(&change.previous.values) {
-            evict(&analysis).await;
+            analysis.evict().await;
           }
         }
-        Err(RecvError::Lagged(_)) => evict(&analysis).await,
+        Err(RecvError::Lagged(_)) => analysis.evict().await,
         Err(RecvError::Closed) => return,
       },
     }
@@ -267,7 +269,13 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
   let file = job.file.clone();
   let dir = analysis.dir.clone();
   let modified = modified_text(file.modified);
-  let name = kept_name(&file.path.to_string_lossy(), file.size, &modified);
+  let temporary = file.root == FileRoot::Temporary;
+  let hash = kept_name(&file.path.to_string_lossy(), file.size, &modified);
+  let name = if temporary {
+    uploads::kept_name(&file.relative, &hash)
+  } else {
+    hash
+  };
   let kept_as = name.clone();
   let span = tracing::Span::current();
   let worked = tokio::task::spawn_blocking(move || {
@@ -326,8 +334,13 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
     error!(error = %e, "analysis report not stored");
     return;
   }
-  if let Some(bytes) = bytes {
-    keep(analysis, &name, bytes).await;
+  match bytes {
+    Some(bytes) if temporary => {
+      lock(&analysis.held).drawn(&job.file.relative, bytes);
+      analysis.evict().await;
+    }
+    Some(bytes) => keep(analysis, &name, bytes).await,
+    None => {}
   }
   info!(
     verdict = ?report.verdict,
@@ -344,6 +357,10 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
       confidence: report.confidence,
       flags: report.flags.clone(),
     }));
+  // the event log is history, which a file uploaded for one look stays out of
+  if temporary {
+    return;
+  }
   let judged = store::find(&analysis.db, &report.path).await;
   let judgment = match judged {
     Ok(found) => found.and_then(|stored| stored.report.judgment),
@@ -371,47 +388,57 @@ async fn keep(analysis: &Analysis, name: &str, bytes: u64) {
     error!(error = %e, "spectrogram not recorded");
     return;
   }
-  evict(analysis).await;
+  analysis.evict().await;
 }
 
-/// Removes the least recently viewed spectrogram and waveform files beyond
-/// `analysis.cache_max_bytes`.
-async fn evict(analysis: &Analysis) {
-  let limit = analysis
-    .config
-    .current()
-    .values
-    .analysis
-    .cache_max_bytes
-    .as_u64();
-  let gone = match store::evict(&analysis.db, limit).await {
-    Ok(gone) => gone,
-    Err(e) => {
-      error!(error = %e, "spectrograms over the limit not removed");
+impl Analysis {
+  /// Removes what the cache holds beyond `analysis.cache_max_bytes`: uploads first, then the
+  /// least recently viewed spectrogram and waveform files.
+  pub(super) async fn evict(&self) {
+    let limit = self
+      .config
+      .current()
+      .values
+      .analysis
+      .cache_max_bytes
+      .as_u64();
+    let pictures = match store::kept_bytes(&self.db).await {
+      Ok(bytes) => bytes,
+      Err(e) => {
+        error!(error = %e, "the size of the analysis cache not read");
+        return;
+      }
+    };
+    let uploads = self.evict_uploads(limit, pictures).await;
+    let gone = match store::evict(&self.db, limit.saturating_sub(uploads)).await {
+      Ok(gone) => gone,
+      Err(e) => {
+        error!(error = %e, "spectrograms over the limit not removed");
+        return;
+      }
+    };
+    if gone.is_empty() {
       return;
     }
-  };
-  if gone.is_empty() {
-    return;
-  }
-  debug!(
-    files = gone.len(),
-    limit, "spectrograms over the limit removed"
-  );
-  let dir = analysis.dir.clone();
-  let removed = tokio::task::spawn_blocking(move || {
-    for name in gone {
-      let path = kept::path(&dir, &name);
-      if let Err(e) = std::fs::remove_file(&path)
-        && e.kind() != std::io::ErrorKind::NotFound
-      {
-        warn!(path = %path.display(), error = %e, "spectrogram not removed");
+    debug!(
+      files = gone.len(),
+      limit, "spectrograms over the limit removed"
+    );
+    let dir = self.dir.clone();
+    let removed = tokio::task::spawn_blocking(move || {
+      for name in gone {
+        let path = kept::path(&dir, &name);
+        if let Err(e) = std::fs::remove_file(&path)
+          && e.kind() != std::io::ErrorKind::NotFound
+        {
+          warn!(path = %path.display(), error = %e, "spectrogram not removed");
+        }
       }
+    })
+    .await;
+    if let Err(e) = removed {
+      error!(error = %e, "removing spectrograms failed");
     }
-  })
-  .await;
-  if let Err(e) = removed {
-    error!(error = %e, "removing spectrograms failed");
   }
 }
 

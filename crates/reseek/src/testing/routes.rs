@@ -141,6 +141,7 @@ fn query(route: &str) -> Option<&'static str> {
     | "/api/v0/telemetry/reports/transfers/exceptions/pareto" => Some("direction=Download"),
     "/api/v0/messages/search" => Some("q=hello"),
     route if route.ends_with("/export") => Some("format=json"),
+    "/api/v0/analysis/uploads" => Some("name=a.flac"),
     _ => None,
   }
 }

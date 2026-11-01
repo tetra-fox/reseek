@@ -1,5 +1,5 @@
-//! The figures kept over every analyzed sample rather than per window: the mean, how many
-//! samples are at full scale, the sums the correlation of two channels and their side energy
+//! The figures kept over every analyzed sample rather than per window: the mean, the loudest, how
+//! many samples are at full scale, the sums the correlation of two channels and their side energy
 //! need, and a histogram of short blocks' loudness for the quietest level.
 
 /// The length of the blocks the quietest level is measured in, in samples.
@@ -13,6 +13,8 @@ pub(in crate::analysis) struct Totals {
   samples: u64,
   sum: f64,
   clipped: u64,
+  /// the largest sample magnitude
+  peak: f64,
   /// frames of two channels, with the sums correlation and the side energy need
   pairs: u64,
   left: f64,
@@ -33,6 +35,11 @@ impl Totals {
   /// The percentage of samples at full scale.
   pub fn clipped_pct(&self) -> Option<f64> {
     (self.samples > 0).then(|| 100.0 * self.clipped as f64 / self.samples as f64)
+  }
+
+  /// The loudest sample in dBFS; `None` when every sample is silent.
+  pub fn peak_dbfs(&self) -> Option<f64> {
+    (self.peak > 0.0).then(|| 20.0 * self.peak.log10())
   }
 
   /// The correlation between the two channels, from -1 to 1; `None` for mono or when either
@@ -87,6 +94,7 @@ impl Totals {
         let value = f64::from(*sample);
         self.samples += 1;
         self.sum += value;
+        self.peak = self.peak.max(value.abs());
         if value.abs() >= 0.9999 {
           self.clipped += 1;
         }

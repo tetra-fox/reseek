@@ -3,8 +3,8 @@
 //! measured a second at a time; the main output is a spectrogram and a waveform, which the
 //! viewer draws with guide lines where common encoders cut off, and the analyzer's own reading
 //! comes with them as evidence. The user's judgment, once recorded, is what counts. The
-//! analyzer reads files under the downloads and incomplete directories only and never changes
-//! one.
+//! analyzer reads files under the downloads and incomplete directories and files uploaded for it,
+//! and never changes one.
 
 mod analyzer;
 mod backlog;
@@ -13,6 +13,7 @@ mod kept;
 mod report;
 mod store;
 mod tiles;
+mod uploads;
 
 #[cfg(test)]
 mod service_tests;
@@ -25,10 +26,12 @@ use std::time::SystemTime;
 
 use api_types::analysis::{
   AnalysisBatchQueued, AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery,
-  AudioAnalysis, SetAnalysisOverride, WindowSpectrum,
+  AnalysisUpload, AudioAnalysis, SetAnalysisOverride, WindowSpectrum,
 };
 use api_types::auth::Principal;
+use api_types::files::FileRoot;
 use async_trait::async_trait;
+use axum::body::Body;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use cascade::Watcher;
@@ -51,6 +54,7 @@ use analyzer::{engine, picture, reading};
 use jobs::{Job, QUEUE_LIMIT, Queue, Queued};
 use report::modified_text;
 pub use store::SCHEMA;
+pub use uploads::uploads_dir;
 
 /// The analysis service: the queue, the reports and judgments in `analysis.db`, and the
 /// spectrogram and waveform files in the data directory.
@@ -62,6 +66,10 @@ pub struct Analysis {
   events: EventBus,
   /// where the spectrogram and waveform files are kept
   dir: PathBuf,
+  /// where files uploaded for analysis are held
+  uploads: PathBuf,
+  /// the uploads held, which go with a restart
+  held: Mutex<uploads::Uploads>,
   queue: Mutex<Queue>,
   /// the files of batches waiting for room in the queue
   backlog: Mutex<backlog::Backlog>,
@@ -76,8 +84,8 @@ pub struct Analysis {
 
 impl Analysis {
   /// Opens `analysis.db` at `location`, keeps spectrogram and waveform files under
-  /// `data`/analysis, removing what an older version kept there, and starts the queue, which
-  /// runs until `shutdown`.
+  /// `data`/analysis, removing what an older version kept there and every upload of the last run,
+  /// and starts the queue, which runs until `shutdown`.
   pub async fn open(
     location: &Location,
     data: &std::path::Path,
@@ -99,6 +107,8 @@ impl Analysis {
       config,
       live,
       events,
+      uploads: uploads_dir(data),
+      held: Mutex::default(),
       dir,
       queue: Mutex::new(Queue::default()),
       backlog: Mutex::default(),
@@ -107,6 +117,7 @@ impl Analysis {
       full: AtomicBool::new(false),
       shutdown,
     });
+    analysis.clear_uploads().await?;
     tokio::spawn(jobs::dispatch(analysis.clone()));
     Ok(analysis)
   }
@@ -185,6 +196,10 @@ impl AnalysisService for Analysis {
     }
   }
 
+  async fn upload(&self, by: &str, name: &str, body: Body) -> Result<AnalysisUpload, ApiError> {
+    self.receive(by, name, body).await
+  }
+
   async fn run_batch(
     &self,
     files: Vec<(u32, FileTarget)>,
@@ -250,10 +265,12 @@ impl AnalysisService for Analysis {
         ApiError::not_found("The file is shorter than that. The layout gives the number of tiles.")
       })?)
     };
-    if piece == Piece::Spectrogram(None)
-      && let Err(e) = store::used(&self.db, &stored.kept, None, Utc::now()).await
-    {
-      warn!(error = %e, "spectrogram view not recorded");
+    if piece == Piece::Spectrogram(None) {
+      if file.root == FileRoot::Temporary {
+        lock(&self.held).touch(&file.relative);
+      } else if let Err(e) = store::used(&self.db, &stored.kept, None, Utc::now()).await {
+        warn!(error = %e, "spectrogram view not recorded");
+      }
     }
     let mut response = match bytes {
       Some(bytes) => (StatusCode::OK, bytes).into_response(),
@@ -285,6 +302,11 @@ impl AnalysisService for Analysis {
     verdict: SetAnalysisOverride,
   ) -> Result<(), ApiError> {
     let file = self.files.local_path(&target).await?;
+    if file.root == FileRoot::Temporary {
+      return Err(ApiError::bad_request(
+        "A file uploaded for analysis cannot be judged",
+      ));
+    }
     let stored = self.stored(&file.path).await?;
     let note = verdict.note.filter(|note| !note.trim().is_empty());
     store::judge(

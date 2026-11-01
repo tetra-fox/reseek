@@ -153,6 +153,7 @@ fn stale(row: &rusqlite::Row<'_>) -> rusqlite::Result<AudioAnalysis> {
       side_energy_db: None,
       dc_offset: None,
       clipped_samples_pct: None,
+      peak_dbfs: None,
     },
     windows: None,
     spectrogram: None,
@@ -232,17 +233,26 @@ pub(super) async fn find(db: &Database, path: &str) -> Result<Option<Stored>, Db
   .await
 }
 
-/// The reports `query` asks for, newest first, without their windows.
+/// The reports `query` asks for, newest first, without their windows. A file uploaded for one
+/// analysis is never listed.
 pub(super) async fn list(db: &Database, query: &AnalysisListQuery) -> Result<Vec<Listed>, DbError> {
   let verdict = query.verdict.as_ref().map(spelled);
   let since = query.since.map(db::timestamp);
   let (offset, limit) = (query.offset, query.limit);
   db.read(move |conn| {
     let mut statement = conn.prepare(&format!(
-      "{JUDGED} WHERE (?1 IS NULL OR r.verdict = ?1) AND (?2 IS NULL OR r.analyzed_at > ?2) \
+      "{JUDGED} WHERE r.root != ?5 AND (?1 IS NULL OR r.verdict = ?1) \
+       AND (?2 IS NULL OR r.analyzed_at > ?2) \
        ORDER BY r.analyzed_at DESC LIMIT ?3 OFFSET ?4"
     ))?;
-    let rows = statement.query_map(params![verdict, since, limit, offset], |row| {
+    let params = params![
+      verdict,
+      since,
+      limit,
+      offset,
+      FileRoot::Temporary.to_string()
+    ];
+    let rows = statement.query_map(params, |row| {
       let (mut report, unreadable) = judged_report(row)?;
       report.windows = None;
       Ok(Listed { report, unreadable })
@@ -306,6 +316,31 @@ pub(super) async fn used(
         params![name, at],
       )?,
     };
+    Ok(())
+  })
+  .await
+}
+
+/// What the spectrogram and waveform files recorded take.
+pub(super) async fn kept_bytes(db: &Database) -> Result<u64, DbError> {
+  db.read(|conn| {
+    let bytes: i64 = conn.query_row("SELECT COALESCE(SUM(bytes), 0) FROM spectra", [], |row| {
+      row.get(0)
+    })?;
+    // written from u64s, so never negative
+    Ok(u64::try_from(bytes).unwrap_or_default())
+  })
+  .await
+}
+
+/// Removes the report of the upload at `relative`, or every upload's.
+pub(super) async fn forget_temporary(db: &Database, relative: Option<&str>) -> Result<(), DbError> {
+  let relative = relative.map(str::to_string);
+  db.write(move |conn| {
+    conn.execute(
+      "DELETE FROM reports WHERE root = ?1 AND (?2 IS NULL OR relative = ?2)",
+      params![FileRoot::Temporary.to_string(), relative],
+    )?;
     Ok(())
   })
   .await

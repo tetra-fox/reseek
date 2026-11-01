@@ -19,6 +19,7 @@
         "scale": "log"
       },
       "timeout": "2m",
+      "upload_max_bytes": "1.9 GiB",
       "workers": "auto"
     },
     "blacklist": {
@@ -469,7 +470,7 @@
       "envVar": null,
       "cliFlag": null,
       "kind": "size",
-      "doc": "Disk space for the spectrograms and waveforms of analyzed files. The least recently viewed are removed first.",
+      "doc": "Disk space for the spectrograms and waveforms of analyzed files and for files uploaded for analysis. Uploads are removed first, oldest first, except the two newest; then the least recently viewed spectrograms and waveforms.",
       "choices": null,
       "default": "476.8 MiB",
       "apply": "live",
@@ -583,6 +584,22 @@
       "doc": "Maximum analysis time per file. An analysis that runs longer stops and reports its partial results.",
       "choices": null,
       "default": "2m",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "analysis.upload_max_bytes": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": null,
+      "cliFlag": null,
+      "kind": "size",
+      "doc": "Largest file that can be uploaded from a browser for analysis.",
+      "choices": null,
+      "default": "1.9 GiB",
       "apply": "live",
       "secret": false,
       "notApplied": null,

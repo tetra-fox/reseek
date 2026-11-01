@@ -3,10 +3,11 @@
 
 use api_types::analysis::{
   AnalysisBatchQueued, AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery,
-  AudioAnalysis, SetAnalysisOverride, WindowSpectrum,
+  AnalysisUpload, AudioAnalysis, SetAnalysisOverride, WindowSpectrum,
 };
 use api_types::auth::Principal;
 use async_trait::async_trait;
+use axum::body::Body;
 use axum::http::HeaderMap;
 use axum::response::Response;
 use uuid::Uuid;
@@ -35,6 +36,12 @@ pub trait AnalysisService: Send + Sync {
   /// Queues an analysis of a file, again with `force` when it has one. One queued or running
   /// for the file already is a conflict.
   async fn run(&self, target: FileTarget, force: bool) -> Result<AnalysisJobCreated, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// Takes a file a browser uploads for analysis, named `name`, into the analysis cache; 413 past
+  /// the upload limit.
+  async fn upload(&self, by: &str, name: &str, body: Body) -> Result<AnalysisUpload, ApiError> {
     Err(not_yet(DOMAIN))
   }
 

@@ -4,10 +4,11 @@
 
 use api_types::analysis::{
   AnalysisBatch, AnalysisBatchQueued, AnalysisBatchRefusal, AnalysisJob, AnalysisJobCreated,
-  AnalysisListQuery, AnalysisReportQuery, AnalysisTarget, AudioAnalysis, RunAnalysisQuery,
-  SetAnalysisOverride, TileQuery, WindowSpectrum,
+  AnalysisListQuery, AnalysisReportQuery, AnalysisTarget, AnalysisUpload, AnalysisUploadQuery,
+  AudioAnalysis, RunAnalysisQuery, SetAnalysisOverride, TileQuery, WindowSpectrum,
 };
 use api_types::files::FileRoot;
+use axum::body::Body;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -40,6 +41,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(window_file))
     .routes(routes!(window_download))
     .routes(routes!(list))
+    .routes(routes!(upload))
     .routes(routes!(run_batch))
     .routes(routes!(jobs))
     .routes(routes!(cancel_job))
@@ -466,6 +468,30 @@ async fn list(
 ) -> Result<Json<Vec<AudioAnalysis>>, ApiError> {
   validate::positive("limit", query.limit)?;
   app.services.analysis.list(query).await.map(Json)
+}
+
+/// Takes a file from the caller's machine into the analysis cache, to analyze and play under the
+/// `temporary` root. It leaves no report, mark or judgment and goes when the cache needs the room
+/// or the daemon restarts.
+#[utoipa::path(
+  operation_id = "upload_for_analysis",
+  post, path = "/analysis/uploads", tag = "analysis", params(AnalysisUploadQuery),
+  request_body(content_type = "application/octet-stream", content = Vec<u8>),
+  responses(
+    (status = 201, body = AnalysisUpload), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 413, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn upload(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+  Query(query): Query<AnalysisUploadQuery>,
+  body: Body,
+) -> Result<Response, ApiError> {
+  let by = &caller.principal.subject;
+  let upload = app.services.analysis.upload(by, &query.name, body).await?;
+  Ok((StatusCode::CREATED, Json(upload)).into_response())
 }
 
 /// Queues many files for analysis in their order, each left alone when its report is current.

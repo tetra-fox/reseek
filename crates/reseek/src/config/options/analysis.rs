@@ -28,10 +28,14 @@ pub struct Analysis {
   pub max_full_minutes: u32,
   /// Number of evenly spaced one-second windows analyzed in a sampled file.
   pub sampled_windows: u32,
-  /// Disk space for the spectrograms and waveforms of analyzed files. The least recently
-  /// viewed are removed first.
+  /// Disk space for the spectrograms and waveforms of analyzed files and for files uploaded for
+  /// analysis. Uploads are removed first, oldest first, except the two newest; then the least
+  /// recently viewed spectrograms and waveforms.
   #[cascade(kind = "size")]
   pub cache_max_bytes: bytesize::ByteSize,
+  /// Largest file that can be uploaded from a browser for analysis.
+  #[cascade(kind = "size")]
+  pub upload_max_bytes: bytesize::ByteSize,
   /// Spectrogram display.
   pub spectrogram: Spectrogram,
 }
@@ -48,6 +52,7 @@ impl Default for Analysis {
       max_full_minutes: 15,
       sampled_windows: 240,
       cache_max_bytes: bytesize::ByteSize::mb(500),
+      upload_max_bytes: bytesize::ByteSize::gb(2),
       spectrogram: Spectrogram::default(),
     }
   }

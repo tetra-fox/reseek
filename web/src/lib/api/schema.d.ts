@@ -96,6 +96,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/analysis/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Takes a file from the caller's machine into the analysis cache, to analyze and play under the
+         *     `temporary` root. It leaves no report, mark or judgment and goes when the cache needs the room
+         *     or the daemon restarts.
+         */
+        post: operations["upload_for_analysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/application": {
         parameters: {
             query?: never;
@@ -3195,6 +3216,11 @@ export interface components {
             noiseFloorDbfs?: number | null;
             /**
              * Format: double
+             * @description the loudest sample in dBFS; null in a report made before it was measured and for silence
+             */
+            peakDbfs?: number | null;
+            /**
+             * Format: double
              * @description the ratio of near-zero to populated bins between 16 and 20 kHz
              */
             sfb21Holes?: number | null;
@@ -3264,6 +3290,21 @@ export interface components {
              * @example alice
              */
             username: string;
+        };
+        /**
+         * @description A file uploaded for analysis. It works as any file under its root does until the analysis
+         *     cache needs the room or the daemon restarts, and leaves no report, mark or judgment behind.
+         */
+        AnalysisUpload: {
+            /** @description the file's path under the root */
+            path: string;
+            /** @description the root the file is under, always `temporary` */
+            root: components["schemas"]["FileRoot"];
+            /**
+             * Format: int64
+             * @description the file's size in bytes
+             */
+            size: number;
         };
         /**
          * @description The analyzer's reading of whether the audio matches the format the file claims.
@@ -4574,7 +4615,7 @@ export interface components {
          * @description A directory the files endpoints can reach, named in their path.
          * @enum {string}
          */
-        FileRoot: "downloads" | "incomplete";
+        FileRoot: "downloads" | "incomplete" | "temporary";
         /** @description A short-lived token that lets one link load one file without a session. */
         FileToken: {
             /**
@@ -8149,6 +8190,72 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    upload_for_analysis: {
+        parameters: {
+            query: {
+                /** @description the file's name on the uploader's machine, which keeps its extension */
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": number[];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisUpload"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

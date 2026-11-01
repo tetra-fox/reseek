@@ -241,6 +241,7 @@ fn blank_analysis(d: &str, now: DateTime<Utc>) -> AudioAnalysis {
       side_energy_db: Some(0.0),
       dc_offset: Some(0.0),
       clipped_samples_pct: Some(0.0),
+      peak_dbfs: Some(0.0),
     },
     windows: None,
     spectrogram_url: text("spectrogramUrl"),

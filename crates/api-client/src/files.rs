@@ -31,11 +31,7 @@ pub enum LocalFile<'a> {
 
 /// The route of a root's `kind`, `directories` or `files`, at `path` when it is not the root.
 fn under(root: FileRoot, kind: &str, path: &str) -> Route {
-  let root = match root {
-    FileRoot::Downloads => "downloads",
-    FileRoot::Incomplete => "incomplete",
-  };
-  let route = Route::new("files").then(root).then(kind);
+  let route = Route::new("files").then(&root.to_string()).then(kind);
   if path.is_empty() {
     return route;
   }

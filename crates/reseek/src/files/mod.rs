@@ -1,5 +1,5 @@
-//! The files service: the only part of the daemon that touches the downloads, incomplete and
-//! log directories for an API caller. It lists and deletes there, serves a file or a zipped
+//! The files service: the only part of the daemon that touches the downloads, incomplete,
+//! temporary and log directories for an API caller. It lists and deletes there, serves a file or a zipped
 //! directory to the browser, makes the tokens that let a link load one file, and prunes files
 //! kept past their retention.
 //!
@@ -92,6 +92,8 @@ pub struct Files {
   transfers: Database,
   downloads: PathBuf,
   incomplete: PathBuf,
+  /// where files uploaded for one analysis are held
+  temporary: PathBuf,
   logs: PathBuf,
   auth: Arc<Auth>,
   writing: Writing,
@@ -128,6 +130,7 @@ impl Files {
       transfers,
       downloads: paths.downloads.clone(),
       incomplete: paths.incomplete.clone(),
+      temporary: crate::analysis::uploads_dir(&paths.data),
       logs: paths.logs.clone(),
       auth,
       writing: Writing::default(),
@@ -241,6 +244,7 @@ impl Files {
     match root {
       FileRoot::Downloads => &self.downloads,
       FileRoot::Incomplete => &self.incomplete,
+      FileRoot::Temporary => &self.temporary,
     }
   }
 }

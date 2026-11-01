@@ -1,5 +1,5 @@
-//! Local files under the downloads, incomplete and log directories: listings, serving them to
-//! the browser and the short-lived tokens that let a link load one.
+//! Local files under the downloads, incomplete, temporary and log directories: listings, serving
+//! them to the browser and the short-lived tokens that let a link load one.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -18,6 +18,8 @@ pub enum FileRoot {
   Downloads,
   /// where downloads are written while they run
   Incomplete,
+  /// files uploaded for one analysis, held in the analysis cache and never listed
+  Temporary,
 }
 
 /// The root's name as a path writes it, such as `downloads`.
