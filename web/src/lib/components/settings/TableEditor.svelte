@@ -142,11 +142,15 @@
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean);
+
+  /** A cell's control: plain text in its row, a tint under the pointer and a border in focus */
+  const INLINE =
+    "h-control-sm rounded-none border-transparent bg-transparent px-2 shadow-none hover:border-transparent hover:bg-hover focus-visible:bg-surface";
 </script>
 
 {#snippet nameCell(row: Row, i: number)}
   <Input
-    class="h-control-sm font-mono"
+    class={[INLINE, "font-mono"].join(" ")}
     aria-label={`${nameLabel} of row ${i + 1}`}
     aria-invalid={trouble(row) ? true : undefined}
     value={row.name}
@@ -159,14 +163,14 @@
   {@const label = `${column.label} of ${nameOf(row, i)}`}
   {#if column.kind === "bool"}
     <Switch
-      class="mt-1"
+      class="mx-2 mt-2"
       aria-label={label}
       checked={(held ?? column.default) === true}
       onCheckedChange={(v) => setCell(row, column.key, v)}
       {disabled} />
   {:else if column.kind === "select"}
     <Select
-      class="h-control-sm"
+      class={INLINE}
       aria-label={label}
       bind:value={() => String(held ?? ""), (v) => setCell(row, column.key, v)}
       options={[
@@ -176,7 +180,10 @@
       {disabled} />
   {:else if column.kind === "list"}
     <Textarea
-      class="field-sizing-content max-h-40 min-h-control-sm py-1 font-mono text-xs leading-5"
+      class={[
+        INLINE,
+        "field-sizing-content h-auto max-h-40 py-1.5 font-mono text-xs leading-5"
+      ].join(" ")}
       spellcheck="false"
       aria-label={label}
       placeholder={defaultText(column) || "One per line"}
@@ -185,7 +192,7 @@
       {disabled} />
   {:else if column.kind === "secret"}
     <Input
-      class="h-control-sm"
+      class={INLINE}
       type="password"
       autocomplete="new-password"
       aria-label={label}
@@ -195,7 +202,7 @@
       {disabled} />
   {:else}
     <Input
-      class={["h-control-sm", column.kind === "number" ? "tabular-nums" : "font-mono"].join(" ")}
+      class={[INLINE, column.kind === "number" ? "tabular-nums" : "font-mono"].join(" ")}
       inputmode={column.kind === "number" ? "decimal" : undefined}
       aria-label={label}
       placeholder={defaultText(column)}
@@ -212,6 +219,7 @@
   <Button
     variant="ghost"
     size="icon-sm"
+    class="row-menu"
     aria-label={`Remove ${nameOf(row, i)}`}
     onclick={() => remove(row)}>
     <Trash2Icon />
@@ -237,27 +245,29 @@
   {#if !rows.length}
     <p class="text-sm text-fg-muted">None yet.</p>
   {:else if onALine}
-    <!-- a table beside its help; on a phone each row stacks, its cells under their labels -->
-    <table class="w-full border-separate border-spacing-x-2 border-spacing-y-1 md:-mx-2">
+    <!-- the whole width, rows parted by hairlines; on a phone each row stacks, its cells under
+         their labels -->
+    <table class="w-full">
       <thead class="max-md:sr-only">
-        <tr class="text-left text-xs font-medium text-fg-muted">
-          {#if named}<th scope="col" class="font-medium">{nameLabel}</th>{/if}
+        <tr class="border-b text-left text-xs font-medium text-fg-muted">
+          {#if named}<th scope="col" class="px-2 py-1 font-medium">{nameLabel}</th>{/if}
           {#each columns as column (column.key)}
             <th
               scope="col"
-              class="font-medium"
+              class="px-2 py-1 font-medium"
               title={helpParts(column.doc)
                 .map((part) => part.text)
                 .join("")}>{column.label}</th>
           {/each}
-          {#if !disabled}<th scope="col"><span class="sr-only">Remove</span></th>{/if}
+          {#if !disabled}<th scope="col" class="w-0 p-0"><span class="sr-only">Remove</span></th
+            >{/if}
         </tr>
       </thead>
       <tbody>
         {#each rows as row, i (row.id)}
           <tr
             data-row={row.id}
-            class="align-top max-md:mb-2 max-md:flex max-md:flex-col max-md:gap-2 max-md:rounded-control max-md:border max-md:p-2">
+            class="group relative border-b align-top max-md:flex max-md:flex-col max-md:gap-2 max-md:py-2">
             {#if named}
               <td class="max-md:flex max-md:flex-col max-md:gap-1">
                 <span class="text-xs font-medium text-fg-muted md:hidden">{nameLabel}</span>
@@ -271,7 +281,7 @@
               </td>
             {/each}
             {#if !disabled}
-              <td class="w-control-sm max-md:self-end">{@render removeButton(row, i)}</td>
+              <td class="w-0 p-0 max-md:self-end">{@render removeButton(row, i)}</td>
             {/if}
           </tr>
           {#if trouble(row)}
@@ -281,17 +291,17 @@
       </tbody>
     </table>
   {:else}
-    <ul class="flex flex-col gap-2">
+    <ul class="flex flex-col divide-y border-y">
       {#each rows as row, i (row.id)}
         <li data-row={row.id}>
-          <details class="group rounded-control border" open={added.has(row.id) || !!trouble(row)}>
+          <details class="group" open={added.has(row.id) || !!trouble(row)}>
             <summary
-              class="flex cursor-pointer list-none items-center gap-1.5 rounded-control px-3 py-2 text-sm font-medium hover:bg-hover [&::-webkit-details-marker]:hidden">
+              class="flex cursor-pointer list-none items-center gap-1.5 px-2 py-2 text-sm font-medium hover:bg-hover [&::-webkit-details-marker]:hidden">
               <ChevronRightIcon
                 class="size-4 shrink-0 text-fg-muted transition-transform duration-(--motion-fast) group-open:rotate-90" />
               <span class="min-w-0 font-mono wrap-anywhere">{row.name.trim() || "Unnamed"}</span>
             </summary>
-            <div class="flex flex-col gap-3 border-t p-3">
+            <div class="flex flex-col gap-3 px-2 pb-3">
               {@render complaint(row)}
               <div class="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
                 <div class="flex flex-col gap-1">
