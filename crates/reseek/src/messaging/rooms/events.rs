@@ -122,9 +122,7 @@ impl Messaging {
       }
       Event::PrivateRoomMembershipRemoved(room) => {
         info!(room, "Removed from private room");
-        self.rooms.tracker().drop_private(&room);
-        self.rooms_changed();
-        self.push_rooms().await;
+        self.dropped(&room).await;
       }
       Event::PrivateRoomModerationAdded(room) => {
         info!(room, "Promoted to moderator in private room");
@@ -377,5 +375,25 @@ mod tests {
       .unwrap();
     let mentions: Vec<_> = stored.iter().map(|m| m.is_mention).collect();
     assert_eq!(mentions, [true, false]);
+  }
+
+  #[tokio::test]
+  async fn a_private_room_we_were_dropped_from_is_not_joined_again() {
+    let app = app("", &[]).await;
+    let messaging = &app.state.messaging;
+    messaging
+      .database()
+      .write(|conn| history::joined(conn, "club", chrono::Utc::now(), true))
+      .await
+      .unwrap();
+    messaging
+      .handle(Event::PrivateRoomMembershipRemoved("club".into()))
+      .await;
+    let remembered = messaging
+      .database()
+      .read(history::remembered)
+      .await
+      .unwrap();
+    assert!(remembered.is_empty(), "{remembered:?}");
   }
 }
