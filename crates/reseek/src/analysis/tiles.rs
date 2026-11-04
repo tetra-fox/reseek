@@ -141,6 +141,30 @@ pub(super) fn tile(kind: Kind, seconds: &[Second<'_>], duration: f64, tile: usiz
   })
 }
 
+/// The cells at full detail from `first` up to `end` that a window covers, with the indices
+/// they are at. Only the windows' own cells are visited, so the work is what was read, however
+/// long a stretch the range spans.
+fn covered<'a>(
+  kind: Kind,
+  seconds: &[Second<'a>],
+  first: usize,
+  end: usize,
+) -> impl Iterator<Item = (usize, &'a [u8])> {
+  let per = kind.per_second();
+  let width = kind.width();
+  // the windows are in time order; skip those that end before the range starts
+  let start = seconds.partition_point(|s| (s.at as usize + 1) * per <= first);
+  seconds[start..]
+    .iter()
+    .take_while(move |s| (s.at as usize) * per < end)
+    .flat_map(move |s| {
+      let base = s.at as usize * per;
+      let cells = kind.cells(s);
+      (base.max(first)..(base + (cells.len() / width).min(per)).min(end))
+        .map(move |at| (at, &cells[(at - base) * width..(at - base + 1) * width]))
+    })
+}
+
 /// The whole file's length in at most [`Kind::overview`] cells of `kind`, each made of the cells
 /// at full detail it overlaps, so a file short enough has its overview at full detail:
 /// spectrogram columns by their power mean, weighted by how much of each falls in it, and
@@ -158,13 +182,15 @@ pub(super) fn overview(kind: Kind, seconds: &[Second<'_>], duration: f64) -> Cut
   let mut read = Vec::with_capacity(count);
   for index in 0..count {
     let (from, to) = (index as f64 * span, (index + 1) as f64 * span);
-    let overlapping = (from.floor() as usize..(to.ceil() as usize).min(detail))
-      .filter_map(|at| {
-        let weight = (at as f64 + 1.0).min(to) - (at as f64).max(from);
-        cell(kind, seconds, at).map(|cell| (cell, weight))
-      })
-      .filter(|(_, weight)| *weight > 0.0)
-      .collect::<Vec<_>>();
+    let overlapping = covered(
+      kind,
+      seconds,
+      from.floor() as usize,
+      (to.ceil() as usize).min(detail),
+    )
+    .map(|(at, cell)| (cell, (at as f64 + 1.0).min(to) - (at as f64).max(from)))
+    .filter(|(_, weight)| *weight > 0.0)
+    .collect::<Vec<_>>();
     read.push(!overlapping.is_empty());
     match kind {
       _ if overlapping.is_empty() => bytes.extend(std::iter::repeat_n(0, width)),
@@ -321,5 +347,20 @@ mod tests {
     // a short file has as many overview cells as it has at full detail
     let short = super::overview(Kind::Spectrogram, &read[..10], 9.5);
     assert_eq!(short.count, 152);
+  }
+
+  #[test]
+  fn an_overview_takes_only_what_was_read_however_long_the_file_states() {
+    // three seconds read of a file that states a length of tens of thousands of years
+    let kept = vec![
+      second(0, 16, 200, 50),
+      second(1, 16, 200, 50),
+      second(2, 16, 200, 50),
+    ];
+    let read = seconds(&kept);
+    let peaks = overview(Kind::Waveform, &read, 1e12);
+    assert_eq!((peaks.count, peaks.to), (OVERVIEW_PEAKS, 1e12));
+    assert_eq!(peaks.unread, vec![[1, OVERVIEW_PEAKS as u32]]);
+    assert_eq!(&peaks.bytes[..2], &[(-50i8) as u8, 50]);
   }
 }
