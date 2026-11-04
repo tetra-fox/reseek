@@ -12,8 +12,6 @@
   import { folderCaption } from "#lib/files/summary.js";
   import type { FolderNode } from "#lib/tree/folders.js";
 
-  import { LOCKED_HINT } from "./locked";
-
   type Props = {
     node: FolderNode<T>;
     open: boolean;
@@ -29,6 +27,10 @@
   };
 
   let { node, open, depth, tick, ondownload, actions, menu }: Props = $props();
+
+  /** why a locked folder is dimmed */
+  const LOCKED_HINT =
+    "These files cannot be downloaded. The user shares them only with buddies or privileged users.";
 </script>
 
 <!-- a folder's line after its toggle: its tick, icon, name and what it holds, then its actions -->
