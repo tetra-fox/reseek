@@ -10,7 +10,7 @@
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
   import { type Expansion, withSiblings } from "#lib/tree/expansion.svelte.js";
   import { type FolderNode, itemsUnder, type TreeLine } from "#lib/tree/folders.js";
-  import { GAP_REM, lineStart, TOGGLE_REM } from "#lib/tree/indent.js";
+  import { GAP_REM, itemStart, lineStart } from "#lib/tree/indent.js";
   import { nesting, pins } from "#lib/tree/pins.js";
   import { inControl } from "#lib/ui/keys.js";
   import { rem, viewport } from "#lib/ui/viewport.svelte.js";
@@ -139,12 +139,9 @@
   const arrivals = new Arrivals();
   $effect(() => arrivals.see(lines.map((line) => line.key)));
 
-  /**
-   * How far a line at `depth` is set in. An item also passes the toggle and the gap after it that
-   * start a folder line, so an item's cells line up under the content of a folder line at its depth
-   */
+  /** How far a line at `depth` is set in */
   const inset = (depth: number, kind: "folder" | "item") =>
-    framed ? `${lineStart(depth) + (kind === "item" ? TOGGLE_REM + GAP_REM : 0)}rem` : undefined;
+    framed ? `${kind === "item" ? itemStart(depth) : lineStart(depth)}rem` : undefined;
 
   /** Opens or closes a folder from the keys, as its toggle would */
   const show = (node: FolderNode<T>, open: boolean) => {
