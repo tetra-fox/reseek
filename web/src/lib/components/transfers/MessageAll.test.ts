@@ -12,7 +12,7 @@ describe("messaging everyone downloading from us", () => {
     document.body.innerHTML = "";
   });
 
-  it("sends to nobody more once canceled", async () => {
+  it("sends to nobody more once canceled, keeping the message", async () => {
     let release!: () => void;
     const held = new Promise<void>((done) => (release = done));
     const net = fakeNetwork(async () => {
@@ -37,6 +37,8 @@ describe("messaging everyone downloading from us", () => {
     await flush();
     const sent = net.requests.filter((r) => r.method === "POST");
     expect(sent.map((r) => r.url.pathname.split("/").at(-1))).toEqual(["alice"]);
+    // the message and the dialog stay, to send it again
+    expect(document.querySelector("textarea")!.value).toBe("thanks");
     unmount(component);
   });
 });
