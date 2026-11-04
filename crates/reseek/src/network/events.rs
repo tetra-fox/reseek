@@ -15,8 +15,8 @@ use api_types::transfers::TransferStates;
 use api_types::users::{UserPresence, UserStatus, UserStatusChanged};
 use chrono::Utc;
 use soulseek_client::{
-  ClientError, ClientState, DistributedNetworkInfo, Event, LogLimiter, PrivateMessage, Transfer,
-  TransferState,
+  ClientError, ClientState, DistributedNetworkInfo, Event, LogLimiter, PrivateMessage, SessionEnd,
+  SessionStatus, Transfer, TransferState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio_util::sync::CancellationToken;
@@ -27,16 +27,121 @@ use crate::app::AppState;
 
 static LAGGED: LogLimiter = LogLimiter::new();
 
-/// Where the session the events are about stands, as far as the events handled so far tell.
-#[derive(Default)]
+/// How far a server session got, in the order its edges come.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Phase {
+  /// begun, not yet at the server
+  Attempting,
+  /// its TCP connection is up
+  Connected,
+  /// the server accepted its login
+  LoggedIn,
+  /// it ended
+  Ended,
+}
+
+/// The server session the handled events are about and how far it got. Sessions are numbered
+/// by the client, so each edge of each session is handled once, whether its event came or it
+/// was taken for missed first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct Session {
-  /// the session that ends next reached the server, so a failed attempt is not reported as a
-  /// lost connection
-  reached: bool,
-  /// its login was handled, and a disconnect has not followed
-  logged_in: bool,
-  /// its login was taken for missed and handled before its event came, which may still come
-  recovered: bool,
+  number: u64,
+  phase: Phase,
+}
+
+impl Default for Session {
+  /// before the first session: nothing to end
+  fn default() -> Self {
+    Self {
+      number: 0,
+      phase: Phase::Ended,
+    }
+  }
+}
+
+/// An edge of a session that was missed, to be handled as if its event had come.
+#[derive(Debug)]
+enum Missed {
+  /// the session ended as `end` says; `reached` when it had reached the server
+  Ended { end: SessionEnd, reached: bool },
+  /// the handled session ended and a newer one is under way; `end` is the latest end before
+  /// the newer session, the handled one's or one after it
+  Superseded(SessionEnd),
+  /// the newest session's TCP connection came up
+  Connected,
+  /// the newest session logged in as `username`
+  LoggedIn { username: String },
+}
+
+impl Session {
+  /// Moves on to `phase` of session `number`, returning the phase left (`Attempting` for a new
+  /// session), or `None` when that edge was handled already.
+  fn advance(&mut self, number: u64, phase: Phase) -> Option<Phase> {
+    let next = Self { number, phase };
+    if next <= *self {
+      return None;
+    }
+    let left = if number == self.number {
+      self.phase
+    } else {
+      Phase::Attempting
+    };
+    *self = next;
+    Some(left)
+  }
+
+  /// Moves on to where the client's session stands in `status`, returning the edges skipped on
+  /// the way, in order. Several sessions that came and went unseen count as one end.
+  fn catch_up(&mut self, status: &SessionStatus) -> Vec<Missed> {
+    // the current session's own end, once it has one
+    let ended = status
+      .last_end
+      .as_ref()
+      .filter(|end| end.session == status.number);
+    let phase = if ended.is_some() {
+      Phase::Ended
+    } else if status.state.contains(ClientState::LOGGED_IN) {
+      Phase::LoggedIn
+    } else if status.reached {
+      Phase::Connected
+    } else {
+      Phase::Attempting
+    };
+    let handled = *self;
+    let mut missed = Vec::new();
+    if self.advance(status.number, phase).is_none() {
+      return missed;
+    }
+    if let Some(end) = ended {
+      missed.push(Missed::Ended {
+        end: end.clone(),
+        reached: status.reached,
+      });
+      return missed;
+    }
+    // a newer session began, so the handled one ended and an end is kept
+    if handled.phase != Phase::Ended
+      && handled.number < status.number
+      && let Some(end) = &status.last_end
+    {
+      missed.push(Missed::Superseded(end.clone()));
+    }
+    let from = if handled.number == status.number {
+      handled.phase
+    } else {
+      Phase::Attempting
+    };
+    if from < Phase::Connected && phase >= Phase::Connected {
+      missed.push(Missed::Connected);
+    }
+    if from < Phase::LoggedIn
+      && phase >= Phase::LoggedIn
+      && let Some(username) = status.username.clone()
+    {
+      missed.push(Missed::LoggedIn { username });
+    }
+    missed
+  }
 }
 
 /// Handles the client's events in order until `drained` is canceled and every event raised
@@ -61,8 +166,9 @@ pub(super) async fn follow(
   }
 }
 
-/// Events were missed: the client's state is read again, and a login among them that nothing
-/// handled is handled now, so what follows a login is not skipped.
+/// Events were missed: the client's state is read again, and each edge of its session that
+/// nothing handled is handled now, so a lost connection is reconnected and what follows a
+/// login is not skipped.
 async fn caught_up(app: &AppState, missed: u64, session: &mut Session) {
   if let Some(suppressed) = LAGGED.allow() {
     warn!(
@@ -71,58 +177,119 @@ async fn caught_up(app: &AppState, missed: u64, session: &mut Session) {
     );
   }
   let client = app.network.client();
-  let state = client.state();
-  // a missed StateChanged may have been the one that reached the server
-  session.reached |= state.contains(ClientState::CONNECTED);
-  server_state(app, state);
+  let status = client.session();
+  server_state(app, status.state);
   distributed_network(app, &client.distributed_network());
-  if !state.contains(ClientState::LOGGED_IN) {
-    // the login handled last is over, so the next one is handled when it comes
-    session.logged_in = false;
-    session.recovered = false;
-  } else if !session.logged_in
-    && let Some(username) = client.username()
-  {
-    info!(username, "a missed login is handled now");
-    handle(app, Event::LoggedIn { username }, session).await;
-    session.recovered = true;
+  let number = status.number;
+  for edge in session.catch_up(&status) {
+    match edge {
+      Missed::Ended { end, reached } => {
+        info!(session = number, "a missed disconnect is handled now");
+        ended(app, end, reached).await;
+      }
+      Missed::Superseded(end) => {
+        info!(
+          session = end.session,
+          "a missed disconnect is handled now; a newer session is under way"
+        );
+        raise_disconnected(app, &end.message, end.error.as_ref());
+        logged_out(app, end).await;
+      }
+      Missed::Connected => {
+        info!(session = number, "a missed connect is handled now");
+        connected(app).await;
+      }
+      Missed::LoggedIn { username } => {
+        info!(session = number, username, "a missed login is handled now");
+        login(app, number, username).await;
+      }
+    }
   }
+}
+
+/// The login of session `number` as `username`: what follows a login runs, and the messaging
+/// engine opens its session.
+async fn login(app: &AppState, number: u64, username: String) {
+  logged_in(app, &username);
+  app.network.mapper.logged_in(true);
+  app.network.reachability.logged_in();
+  app
+    .messaging
+    .take(Event::LoggedIn {
+      session: number,
+      username,
+    })
+    .await;
+}
+
+/// A session ended as `end` says, after reaching the server when `reached`.
+async fn ended(app: &AppState, end: SessionEnd, reached: bool) {
+  disconnected(app, &end.message, end.error.as_ref(), reached);
+  logged_out(app, end).await;
+}
+
+/// What a session's end ends besides the connection: the port mapping and reachability stop
+/// counting on a login, and the messaging engine closes its session when it ended.
+async fn logged_out(app: &AppState, end: SessionEnd) {
+  app.network.mapper.logged_in(false);
+  app.network.reachability.logged_out();
+  app
+    .messaging
+    .take(Event::Disconnected {
+      session: end.session,
+      message: end.message,
+      error: end.error,
+      at: end.at,
+    })
+    .await;
 }
 
 async fn handle(app: &AppState, event: Event, session: &mut Session) {
   match event {
-    Event::StateChanged { state, .. } => {
-      if state.contains(ClientState::CONNECTED) {
-        session.reached = true;
-      }
-      server_state(app, state);
-    }
-    Event::Connected => connected(app).await,
-    Event::LoggedIn { username } => {
-      if std::mem::take(&mut session.recovered) {
-        return debug!(
-          username,
-          "login handled already when it was taken for missed"
+    Event::StateChanged { state, .. } => server_state(app, state),
+    Event::Connected { session: number } => {
+      if session.advance(number, Phase::Connected).is_some() {
+        connected(app).await;
+      } else {
+        debug!(
+          session = number,
+          "connect handled already when it was taken for missed"
         );
       }
-      session.logged_in = true;
-      logged_in(app, &username);
-      app.network.mapper.logged_in(true);
-      app.network.reachability.logged_in();
-      app.messaging.take(Event::LoggedIn { username }).await;
     }
-    Event::Disconnected { message, error } => {
-      disconnected(app, &message, error.as_ref(), session.reached);
-      app.network.mapper.logged_in(false);
-      app.network.reachability.logged_out();
-      session.reached = false;
-      session.logged_in = false;
-      session.recovered = false;
-      app
-        .messaging
-        .take(Event::Disconnected { message, error })
-        .await;
+    Event::LoggedIn {
+      session: number,
+      username,
+    } => {
+      if session.advance(number, Phase::LoggedIn).is_some() {
+        login(app, number, username).await;
+      } else {
+        debug!(
+          session = number,
+          username, "login handled already when it was taken for missed"
+        );
+      }
     }
+    Event::Disconnected {
+      session: number,
+      message,
+      error,
+      at,
+    } => match session.advance(number, Phase::Ended) {
+      Some(left) => {
+        let end = SessionEnd {
+          session: number,
+          message,
+          error,
+          at,
+        };
+        ended(app, end, left >= Phase::Connected).await;
+      }
+      None => debug!(
+        session = number,
+        "disconnect handled already when it was taken for missed"
+      ),
+    },
     Event::KickedFromServer => debug!("kicked from the server; the disconnect follows"),
     Event::DistributedNetworkStateChanged(info) => distributed_network(app, &info),
     Event::ExcludedSearchPhrasesReceived(phrases) => {
@@ -410,6 +577,11 @@ fn disconnected(app: &AppState, message: &str, error: Option<&ClientError>, reac
       app.network.watchdog().start();
     }
   }
+  raise_disconnected(app, message, error);
+}
+
+/// Raises the disconnect on the event bus.
+fn raise_disconnected(app: &AppState, message: &str, error: Option<&ClientError>) {
   app.events.raise(BusEvent::SoulseekClientDisconnected(
     SoulseekClientDisconnected {
       version: 0,
@@ -631,4 +803,100 @@ pub fn observe_transfers(app: &AppState) {
   family.uploads.pace(&uploads);
   family.downloads.count(&downloads);
   family.downloads.pace(&downloads);
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn end(session: u64) -> SessionEnd {
+    SessionEnd {
+      session,
+      message: "Connection reset".into(),
+      error: None,
+      at: std::time::SystemTime::now(),
+    }
+  }
+
+  fn status(number: u64, state: ClientState, reached: bool) -> SessionStatus {
+    SessionStatus {
+      number,
+      state,
+      reached,
+      username: state.contains(ClientState::LOGGED_IN).then(|| "me".into()),
+      last_end: if state.contains(ClientState::DISCONNECTED) {
+        Some(end(number))
+      } else {
+        number.checked_sub(1).filter(|n| *n > 0).map(end)
+      },
+    }
+  }
+
+  fn logged_in(number: u64) -> Session {
+    Session {
+      number,
+      phase: Phase::LoggedIn,
+    }
+  }
+
+  #[test]
+  fn caught_up_disconnect_lost_in_a_lag() {
+    let mut session = logged_in(1);
+    let missed = session.catch_up(&status(1, ClientState::DISCONNECTED, true));
+    assert!(
+      matches!(missed.as_slice(), [Missed::Ended { reached: true, .. }]),
+      "{missed:?}"
+    );
+    // the event itself, still queued behind the lag, is not handled twice
+    assert_eq!(session.advance(1, Phase::Ended), None);
+  }
+
+  #[test]
+  fn caught_up_reconnect_and_login_inside_one_lag() {
+    let mut session = logged_in(1);
+    let missed = session.catch_up(&status(2, ClientState::READY, true));
+    assert!(
+      matches!(
+        missed.as_slice(),
+        [
+          Missed::Superseded(SessionEnd { session: 1, .. }),
+          Missed::Connected,
+          Missed::LoggedIn { .. }
+        ]
+      ),
+      "{missed:?}"
+    );
+    // the old session's queued disconnect and the new one's queued login are handled already
+    assert_eq!(session.advance(1, Phase::Ended), None);
+    assert_eq!(session.advance(2, Phase::LoggedIn), None);
+  }
+
+  #[test]
+  fn caught_up_session_that_came_and_went() {
+    let mut session = Session::default();
+    session.advance(1, Phase::Ended);
+    let missed = session.catch_up(&status(2, ClientState::DISCONNECTED, true));
+    assert!(
+      matches!(missed.as_slice(), [Missed::Ended { reached: true, .. }]),
+      "{missed:?}"
+    );
+  }
+
+  #[test]
+  fn caught_up_nothing_missed() {
+    let mut session = logged_in(3);
+    assert!(
+      session
+        .catch_up(&status(3, ClientState::READY, true))
+        .is_empty()
+    );
+    // a disconnect under way is not taken for over, and its reach is known when it ends
+    let mut session = logged_in(3);
+    assert!(
+      session
+        .catch_up(&status(3, ClientState::DISCONNECTING, true))
+        .is_empty()
+    );
+    assert_eq!(session.advance(3, Phase::Ended), Some(Phase::LoggedIn));
+  }
 }

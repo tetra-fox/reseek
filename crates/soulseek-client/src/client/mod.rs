@@ -36,7 +36,7 @@ use crate::options::ClientOptions;
 use crate::peers::PeerConnections;
 use crate::responder::SearchResponder;
 use crate::search::Searches;
-use crate::state::{ClientState, ServerInfo};
+use crate::state::{ClientState, ServerInfo, SessionEnd, SessionStatus};
 use crate::token::TokenGenerator;
 use crate::transfers::Transfers;
 use crate::waiter::Waiter;
@@ -88,9 +88,15 @@ struct Inner {
   lifetime: CancellationToken,
 }
 
-/// What exists only while a server session does
+/// What exists only while a server session does, and which session that is
 #[derive(Default)]
 struct Session {
+  /// counts the sessions begun; the current or last one's number
+  number: u64,
+  /// the current or last session reached the server
+  reached: bool,
+  /// how the latest session to end ended, kept across the next one
+  last_end: Option<SessionEnd>,
   /// the `connect` in progress, canceled by an explicit disconnect
   attempt: Option<CancellationToken>,
   listener: Option<Listener>,
@@ -151,6 +157,18 @@ impl Client {
   /// included, shows that other users can reach the listener.
   pub fn inbound_connections(&self) -> watch::Receiver<u64> {
     self.inner.inbound.subscribe()
+  }
+
+  /// The server session's number, state, username and the latest end, read together.
+  pub fn session(&self) -> SessionStatus {
+    let session = self.inner.session();
+    SessionStatus {
+      number: session.number,
+      state: *self.inner.state.borrow(),
+      reached: session.reached,
+      username: session.username.clone(),
+      last_end: session.last_end.clone(),
+    }
   }
 
   /// the server address as given to `connect`, while connected
@@ -379,16 +397,37 @@ impl Inner {
       message: message.clone(),
       error: error.clone(),
     });
-    if next == ClientState::CONNECTED {
-      self.emit(Event::Connected);
+    if next == ClientState::CONNECTING {
+      session.number += 1;
+      session.reached = false;
+    } else if next == ClientState::CONNECTED {
+      session.reached = true;
+      self.emit(Event::Connected {
+        session: session.number,
+      });
     } else if next == ClientState::READY {
       let username = session
         .username
         .clone()
         .expect("a login names the session before it is ready");
-      self.emit(Event::LoggedIn { username });
+      self.emit(Event::LoggedIn {
+        session: session.number,
+        username,
+      });
     } else if next == ClientState::DISCONNECTED {
-      self.emit(Event::Disconnected { message, error });
+      let at = std::time::SystemTime::now();
+      session.last_end = Some(SessionEnd {
+        session: session.number,
+        message: message.clone(),
+        error: error.clone(),
+        at,
+      });
+      self.emit(Event::Disconnected {
+        session: session.number,
+        message,
+        error,
+        at,
+      });
     }
   }
 

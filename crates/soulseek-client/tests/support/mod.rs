@@ -437,7 +437,7 @@ pub fn transitions(events: &[Event]) -> Vec<(ClientState, ClientState, String)> 
 /// the message and cause of the one `Disconnected` among `events`
 pub fn disconnected(events: &[Event]) -> (String, Option<ClientError>) {
   let mut disconnects = events.iter().filter_map(|event| match event {
-    Event::Disconnected { message, error } => Some((message.clone(), error.clone())),
+    Event::Disconnected { message, error, .. } => Some((message.clone(), error.clone())),
     _ => None,
   });
   let disconnect = disconnects.next().expect("Disconnected is raised");

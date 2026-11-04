@@ -60,7 +60,7 @@ pub use search::{
   FileFilter, ResponseFilter, Search, SearchOptions, SearchResponseReceived, SearchScope,
   SearchState, SearchStateChanged,
 };
-pub use state::{ClientState, DistributedNetworkInfo, ServerInfo};
+pub use state::{ClientState, DistributedNetworkInfo, ServerInfo, SessionEnd, SessionStatus};
 pub use token::MAX_TOKEN;
 pub use transfers::{
   DownloadOutput, DownloadRequest, DownloadSink, Governor, InputFactory, OutputFactory,

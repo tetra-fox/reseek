@@ -314,6 +314,7 @@ mod tests {
     *lock(&messaging.session_user) = Some("old".into());
     messaging
       .handle(Event::LoggedIn {
+        session: 1,
         username: "me".into(),
       })
       .await;
@@ -351,6 +352,7 @@ mod tests {
     let messaging = &app.state.messaging;
     messaging
       .handle(Event::LoggedIn {
+        session: 1,
         username: "me".into(),
       })
       .await;

@@ -83,6 +83,37 @@ pub(crate) fn parse_flags<F: bitflags::Flags + Copy>(text: &str, names: &[(F, &s
   })
 }
 
+/// The server session read at one moment: which session it is, where it stands, and how the
+/// latest session to end ended. A subscriber that missed events compares it with the last
+/// session it handled to tell which edges it missed.
+#[derive(Clone, Debug)]
+pub struct SessionStatus {
+  /// the session's number: sessions are counted from 1 as each connect begins, and 0 means
+  /// none has begun
+  pub number: u64,
+  /// where the session stands
+  pub state: ClientState,
+  /// its TCP connection to the server came up
+  pub reached: bool,
+  /// our username, while logged in
+  pub username: Option<String>,
+  /// the end of the latest session that ended: this one once it has, else one before it
+  pub last_end: Option<SessionEnd>,
+}
+
+/// How a server session ended, as its `Disconnected` event said
+#[derive(Clone, Debug)]
+pub struct SessionEnd {
+  /// the session's number
+  pub session: u64,
+  /// what ended it
+  pub message: String,
+  /// the error that ended it, when one did
+  pub error: Option<crate::error::ClientError>,
+  /// when it ended
+  pub at: std::time::SystemTime,
+}
+
 /// Tuning values the server sends after login, each `None` until its message arrives. The last
 /// four come only from older servers; they are kept for diagnostics and never acted on.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
