@@ -1,6 +1,7 @@
 //! A local file as a response: its type from its extension, one byte range when asked, an
 //! `ETag` from its size and time so an unchanged file is answered 304, and the headers that
-//! keep a browser from running what it downloads on this site.
+//! keep a browser from running what it downloads on this site: only sound, raster pictures and
+//! plain text are shown, and every file is sandboxed.
 
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -38,8 +39,23 @@ const ATTR_CHAR: &AsciiSet = &NON_ALPHANUMERIC
   .remove(b'|')
   .remove(b'~');
 
-/// Types a browser would run as part of this site, so they are always saved instead.
-const ACTIVE: &[&str] = &["text/html", "image/svg+xml", "application/xhtml+xml"];
+/// Picture types a browser draws from pixels, which hold nothing it would run.
+const RASTER: &[&str] = &[
+  "image/apng",
+  "image/avif",
+  "image/bmp",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
+
+/// Whether a file of type `essence` may be shown on this site rather than saved: sound, a raster
+/// picture or plain text. Anything else, markup above all, could carry script that runs as this
+/// site.
+fn shown_inline(essence: &str) -> bool {
+  essence == "text/plain" || essence.starts_with("audio/") || RASTER.contains(&essence)
+}
 
 /// A file to serve.
 pub(super) struct Served {
@@ -173,14 +189,14 @@ fn not_modified(headers: &HeaderMap, etag: &str) -> bool {
     .any(|tag| tag == "*" || tag == etag)
 }
 
-/// The `Content-Disposition` for a file named `name`: the asked disposition, or attachment for
-/// a type a browser would run, with the name made safe and percent-encoded.
+/// The `Content-Disposition` for a file named `name`: the asked disposition for a type that may
+/// be shown, attachment for any other, with the name made safe and percent-encoded.
 fn disposition(request: &ContentRequest, own_name: &str, content_type: &str) -> String {
   let essence = crate::api::extract::essence(content_type);
-  let kind = if ACTIVE.contains(&essence.as_str()) {
-    ContentDisposition::Attachment
-  } else {
+  let kind = if shown_inline(&essence) {
     request.disposition
+  } else {
+    ContentDisposition::Attachment
   };
   let kind = match kind {
     ContentDisposition::Inline => "inline",
@@ -274,6 +290,8 @@ pub(super) fn ranged(entity: &Entity, request: &ContentRequest) -> Ranged {
   put(&mut headers, header::ETAG, &entity.etag);
   put(&mut headers, header::CACHE_CONTROL, "private, no-cache");
   put(&mut headers, header::X_CONTENT_TYPE_OPTIONS, "nosniff");
+  // a file opened in a tab is a page of an origin of its own, which can run nothing here
+  put(&mut headers, header::CONTENT_SECURITY_POLICY, "sandbox");
   if not_modified(&request.headers, &entity.etag) {
     return Ranged::Answered((StatusCode::NOT_MODIFIED, headers).into_response());
   }
@@ -405,7 +423,7 @@ mod tests {
   }
 
   #[test]
-  fn types_a_browser_would_run_are_saved() {
+  fn only_sound_pictures_and_plain_text_are_shown_inline() {
     let request = |disposition, name: Option<&str>| ContentRequest {
       headers: HeaderMap::new(),
       head: false,
@@ -423,7 +441,27 @@ mod tests {
       disposition(&inline, "page.html", "text/html; charset=utf-8"),
       "attachment; filename*=UTF-8''page.html"
     );
-    assert!(disposition(&inline, "x.svg", "image/svg+xml").starts_with("attachment"));
+    for (name, kind) in [
+      ("x.svg", "image/svg+xml"),
+      ("feed.xml", "text/xml; charset=utf-8"),
+      ("style.xsl", "application/xslt+xml"),
+      ("doc.pdf", "application/pdf"),
+    ] {
+      assert!(
+        disposition(&inline, name, kind).starts_with("attachment"),
+        "{name} is shown inline"
+      );
+    }
+    for (name, kind) in [
+      ("cover.jpg", "image/jpeg"),
+      ("notes.txt", "text/plain; charset=utf-8"),
+      ("01.wav", "audio/wav"),
+    ] {
+      assert!(
+        disposition(&inline, name, kind).starts_with("inline"),
+        "{name} is saved"
+      );
+    }
     let renamed = request(ContentDisposition::Attachment, Some("../caf\u{e9}.flac"));
     assert_eq!(
       disposition(&renamed, "x.flac", "audio/flac"),

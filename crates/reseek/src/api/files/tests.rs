@@ -48,6 +48,7 @@ async fn a_file_is_served_whole_in_a_range_or_not_at_all_when_unchanged() {
   assert_eq!(headers["accept-ranges"], "bytes");
   assert_eq!(headers["content-length"], "10");
   assert_eq!(headers["x-content-type-options"], "nosniff");
+  assert_eq!(headers["content-security-policy"], "sandbox");
   assert_eq!(headers["cache-control"], "private, no-cache");
   assert_eq!(
     headers["content-disposition"],
@@ -83,15 +84,27 @@ async fn a_file_is_served_whole_in_a_range_or_not_at_all_when_unchanged() {
   assert_eq!(head.headers["content-length"], "10");
   assert!(head.body.is_empty());
 
-  let page = format!("/api/v0/files/downloads/files/{}/content", b64("page.html"));
-  let saved = app.send(request("GET", &page, None)).await;
-  assert!(
-    saved.headers["content-disposition"]
-      .to_str()
-      .unwrap()
-      .starts_with("attachment;"),
-    "HTML is never shown inline"
-  );
+  // markup can run script on this site, whatever its type says; it is saved, never shown
+  std::fs::write(
+    downloads(&app).join("feed.xml"),
+    br#"<html xmlns="http://www.w3.org/1999/xhtml"><script>alert(1)</script></html>"#,
+  )
+  .unwrap();
+  for name in ["page.html", "feed.xml"] {
+    let page = format!(
+      "/api/v0/files/downloads/files/{}/content?disposition=inline",
+      b64(name)
+    );
+    let saved = app.send(request("GET", &page, None)).await;
+    assert!(
+      saved.headers["content-disposition"]
+        .to_str()
+        .unwrap()
+        .starts_with("attachment;"),
+      "{name} is shown inline"
+    );
+    assert_eq!(saved.headers["content-security-policy"], "sandbox");
+  }
   let missing = format!("/api/v0/files/downloads/files/{}/content", b64("nothing"));
   assert_eq!(app.send(request("GET", &missing, None)).await.status, 404);
 }
