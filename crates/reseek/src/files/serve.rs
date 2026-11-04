@@ -189,6 +189,14 @@ fn not_modified(headers: &HeaderMap, etag: &str) -> bool {
     .any(|tag| tag == "*" || tag == etag)
 }
 
+/// Whether a range may be sent under `If-Range`: when there is none, or it names `etag`. A weak
+/// tag or a date never matches, since only a strong tag says the bytes are the same.
+fn range_applies(headers: &HeaderMap, etag: &str) -> bool {
+  headers
+    .get(header::IF_RANGE)
+    .is_none_or(|value| value.to_str().is_ok_and(|tag| tag.trim() == etag))
+}
+
 /// The `Content-Disposition` for a file named `name`: the asked disposition for a type that may
 /// be shown, attachment for any other, with the name made safe and percent-encoded.
 fn disposition(request: &ContentRequest, own_name: &str, content_type: &str) -> String {
@@ -299,7 +307,8 @@ pub(super) fn ranged(entity: &Entity, request: &ContentRequest) -> Ranged {
   let range = request
     .headers
     .get(header::RANGE)
-    .and_then(|v| v.to_str().ok());
+    .and_then(|v| v.to_str().ok())
+    .filter(|_| range_applies(&request.headers, &entity.etag));
   let size = entity.size;
   let (status, start, length) = match wanted(range, size) {
     Wanted::Whole => (StatusCode::OK, 0, size),

@@ -74,6 +74,18 @@ async fn a_file_is_served_whole_in_a_range_or_not_at_all_when_unchanged() {
     assert_eq!(refused.status, 416, "{range}");
     assert_eq!(refused.headers["content-range"], "bytes */10");
   }
+  // a range is of the file the caller holds part of; for any other, the whole is sent
+  let if_range = |tag: &str| {
+    let ranged = with(request("GET", &uri, None), "range", "bytes=2-4");
+    with(ranged, "if-range", tag)
+  };
+  assert_eq!(app.send(if_range(&etag)).await.status, 206);
+  let weak = format!("W/{etag}");
+  for other in ["\"other\"", &weak, "Wed, 21 Oct 2015 07:28:00 GMT"] {
+    let whole = app.send(if_range(other)).await;
+    assert_eq!(whole.status, 200, "{other}");
+    assert_eq!(&whole.body[..], b"0123456789", "{other}");
+  }
   let unchanged = app
     .send(with(request("GET", &uri, None), "if-none-match", &etag))
     .await;
