@@ -125,6 +125,7 @@ impl Messaging {
     let client = self.client();
     // the session's name marks us among the members; taken before the join is sent
     let us = client.own_username(&format!("join chat room {name}"))?;
+    let leaves = self.rooms.tracker().leaves(name);
     let data = match client.join_room(name, room_type).await {
       Err(ClientError::NoResponse(_)) => {
         debug!(
@@ -140,8 +141,21 @@ impl Messaging {
     };
     let room = {
       let mut tracker = self.rooms.tracker();
-      tracker.joined(&data, &us);
-      tracker.room(name).expect("the room was just tracked")
+      // a leave while the join was under way wins: the room stays left
+      (tracker.leaves(name) == leaves).then(|| {
+        tracker.joined(&data, &us);
+        tracker.room(name).expect("the room was just tracked")
+      })
+    };
+    let Some(room) = room else {
+      debug!(
+        room = name,
+        "the room was left while it was being joined; left again"
+      );
+      if let Err(e) = client.leave_room(name).await {
+        debug!(room = name, error = %e, "room joined after it was left not left again");
+      }
+      return Err(ClientError::Canceled);
     };
     self.rooms_changed();
     let countries = data
@@ -207,12 +221,14 @@ impl Messaging {
       for room in configured {
         match this.join_now(&room, false, false).await {
           Ok(_) => info!(room, "room joined"),
+          Err(ClientError::Canceled) => debug!(room, "room left while it was being joined"),
           Err(e) => warn!(room, error = %e, "room not joined"),
         }
       }
       for room in ours {
         match this.join_now(&room, false, false).await {
           Ok(_) => info!(room, "room joined"),
+          Err(ClientError::Canceled) => debug!(room, "room left while it was being joined"),
           Err(e) if gone(&e) => {
             warn!(room, error = %e, "room we were in can no longer be joined; forgotten");
             this.forgotten(&room).await;
@@ -247,6 +263,7 @@ impl Messaging {
       for room in added {
         match this.join_now(&room, false, false).await {
           Ok(_) => info!(room, "room joined"),
+          Err(ClientError::Canceled) => debug!(room, "room left while it was being joined"),
           Err(e) => warn!(room, error = %e, "room not joined"),
         }
       }
