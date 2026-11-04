@@ -93,7 +93,8 @@ pub struct UploadFileComplete {
   pub transfer: Transfer,
 }
 
-/// The data of `PrivateMessageReceived`.
+/// The data of `PrivateMessageReceived`, raised again at each login until the message is read;
+/// a repeat carries the first one's `localId`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PrivateMessageReceived {

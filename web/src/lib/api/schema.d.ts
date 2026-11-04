@@ -5795,7 +5795,10 @@ export interface components {
              */
             wasReplayed: boolean;
         };
-        /** @description The data of `PrivateMessageReceived`. */
+        /**
+         * @description The data of `PrivateMessageReceived`, raised again at each login until the message is read;
+         *     a repeat carries the first one's `localId`.
+         */
         PrivateMessageReceived: {
             /** @description the message as stored */
             message: components["schemas"]["PrivateMessage"];
