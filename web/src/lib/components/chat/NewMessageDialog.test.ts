@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { flushFaked } from "#lib/testing/flush.js";
 import { press } from "#lib/testing/keys.js";
-import { fakeNetwork } from "#lib/testing/network.js";
+import { type Answer, fakeNetwork } from "#lib/testing/network.js";
 
 import NewMessageDialog from "./NewMessageDialog.svelte";
 
@@ -31,10 +31,14 @@ describe("the new message dialog", () => {
   });
 
   /** The dialog with `text` typed in its name box, the directory answering with `known` */
-  const typed = async (text: string, known: string[] = []) => {
+  const typed = async (
+    text: string,
+    known: string[] = [],
+    post: () => Answer | Promise<Answer> = () => ({})
+  ) => {
     vi.useFakeTimers();
     const net = fakeNetwork((url, method) => {
-      if (method === "POST") return {};
+      if (method === "POST") return post();
       if (url.pathname.endsWith("/api/v0/users")) {
         return { users: known.map((username) => summary(username)), total: known.length };
       }
@@ -99,6 +103,23 @@ describe("the new message dialog", () => {
     const posted = net.requests.find((r) => r.method === "POST");
     expect(posted?.url.pathname).toMatch(/\/conversations\/ali$/);
     expect(posted?.body).toBe("hello");
+    expect(goto).toHaveBeenCalledWith("#/chat/ali");
+  });
+
+  it("stays open until the message is sent, then opens the conversation", async () => {
+    let answer!: () => void;
+    await typed("ali", [], () => new Promise((resolve) => (answer = () => resolve({}))));
+    writeMessage();
+    send().click();
+    await flushFaked();
+    // the first Escape closes the name's suggestions, the second would close the dialog
+    press(messageBox(), "Escape");
+    press(messageBox(), "Escape");
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushFaked();
+    expect(document.querySelector("[role=dialog]")).not.toBeNull();
+    answer();
+    await flushFaked();
     expect(goto).toHaveBeenCalledWith("#/chat/ali");
   });
 

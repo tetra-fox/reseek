@@ -66,7 +66,7 @@
   };
 </script>
 
-<Dialog bind:open title="New message">
+<Dialog bind:open title="New message" busy={sending}>
   <Form id="new-message" layout="stacked" class="flex flex-col gap-group" onsubmit={send}>
     <Field label="Username" for="new-message-user">
       <Suggest.Box
@@ -105,7 +105,7 @@
     {#if problem}<Notice kind="error">{problem}</Notice>{/if}
   </Form>
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+    <Button variant="ghost" disabled={sending} onclick={() => (open = false)}>Cancel</Button>
     <Button
       type="submit"
       form="new-message"
