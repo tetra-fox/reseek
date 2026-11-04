@@ -286,6 +286,31 @@ async fn a_restart_loads_the_backup_and_scans_once() {
 }
 
 #[tokio::test]
+async fn a_scan_holding_the_slot_at_startup_is_not_overwritten_by_a_load() {
+  let (files, app) = shared_app().await;
+  let paths = app.state.paths.clone();
+  let again = Shares::open(
+    app.state.config.clone(),
+    &paths,
+    app.state.state.clone(),
+    CancellationToken::new(),
+  )
+  .await
+  .unwrap();
+  // a scan asked for over the API before the startup load ran
+  let held = again.take_slot().unwrap();
+  again.initialized().await;
+  let status = lock(&again.status).clone();
+  assert!(
+    !status.ready && !status.loaded,
+    "the index is left to the scan that holds the slot"
+  );
+  drop(held);
+  *lock(&again.running) = None;
+  drop(files);
+}
+
+#[tokio::test]
 async fn watched_changes_are_applied_by_what_is_on_disk() {
   let (files, app) = shared_app().await;
   let shutdown = CancellationToken::new();

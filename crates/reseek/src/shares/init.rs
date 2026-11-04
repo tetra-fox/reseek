@@ -39,7 +39,8 @@ impl Shares {
   /// Loads the index, or scans when it cannot be trusted. A loaded index is served at once:
   /// the shares are watched, the engine is marked initialized, and one scan reusing the loaded
   /// rows runs in the background to find what changed while reseek was not running. Otherwise
-  /// the engine is marked initialized once the scan is done.
+  /// the engine is marked initialized once the scan is done. The load holds the scan slot, and
+  /// a scan that holds it first is left to fill the index.
   async fn initialize(self: &Arc<Self>, force: bool, mode: StorageMode) {
     info!("Initializing shares");
     self.publish(|status| status.ready = false);
@@ -54,23 +55,28 @@ impl Shares {
       if !self.scan_at_startup(false).await {
         error!("Failed to initialize shares. Sharing is disabled");
       }
-    } else {
+    } else if let Some(cancel) = self.take_slot() {
+      // the load holds the scan slot, so no scan writes the index or the state under it
       match self.load(mode).await {
         Ok(settings) => {
           self.watch_shares(settings).await;
-          // a conflict means a scan asked for over the API already runs and covers the same
-          // ground
-          if self.scan(false).is_err() {
-            debug!("a share scan already runs; the startup scan is left to it");
-          }
           self.initialized.send_replace(true);
+          let shares = self.clone();
+          tokio::spawn(
+            async move { shares.run_scan(false, cancel).await }
+              .instrument(info_span!("scan", force = false)),
+          );
           return;
         }
         Err(e) => {
           warn!(error = e, "Error initializing shares");
           info!("Re-attempting initialization");
           // the index that failed to load is not trusted, so no row of it is reused
-          if !self.scan_at_startup(true).await {
+          let repaired = self
+            .run_scan(true, cancel)
+            .instrument(info_span!("scan", force = true))
+            .await;
+          if !repaired {
             error!(
               "Failed to initialize shares, and an attempt to force a full scan to repair failed. \
                Sharing is disabled"
@@ -78,6 +84,8 @@ impl Shares {
           }
         }
       }
+    } else {
+      debug!("a share scan already runs; loading the index is left to it");
     }
     self.initialized.send_replace(true);
   }
