@@ -59,6 +59,11 @@ export class MessagePane {
   #self: () => string;
   /** the message the pane opens at, null for the newest */
   #at: number | null;
+  /**
+   * counts the times the messages held were let go for others, by going to the newest or
+   * emptying the view; a page read before that belongs to what was let go and is dropped
+   */
+  #view = 0;
 
   /** the messages in order: the stored ones by id, then those still being sent */
   readonly ordered = $derived(
@@ -108,7 +113,9 @@ export class MessagePane {
     if (!this.loaded && this.target.kind === "room") await chat.ready();
     if (this.hasNewer) return;
     if (!this.loaded && this.#at !== null) return this.#readAround(this.#at);
+    const view = this.#view;
     const page = await this.#page({});
+    if (view !== this.#view) return;
     if (!page.ok) {
       this.error = page.error;
       this.loaded = true;
@@ -129,7 +136,9 @@ export class MessagePane {
   older = async () => {
     const oldest = this.ordered.find((m) => m.localId > 0)?.localId;
     if (oldest === undefined || !this.hasMore) return;
+    const view = this.#view;
     const page = await this.#page({ before: oldest });
+    if (view !== this.#view) return;
     if (!page.ok) return void (this.error = page.error);
     for (const m of page.data.messages) this.#store(m);
     this.#gapsFrom(page.data.gaps);
@@ -140,7 +149,9 @@ export class MessagePane {
   newer = async () => {
     const newest = this.ordered.findLast((m) => m.localId > 0)?.localId;
     if (newest === undefined || !this.hasNewer) return;
+    const view = this.#view;
     const page = await this.#page({ after: newest });
+    if (view !== this.#view) return;
     if (!page.ok) return void (this.error = page.error);
     for (const m of page.data.messages) this.#store(m);
     this.#gapsFrom(page.data.gaps);
@@ -152,7 +163,9 @@ export class MessagePane {
   /** Leaves the older messages for the newest page */
   latest = async () => {
     if (!this.hasNewer) return;
+    const view = ++this.#view;
     const page = await this.#page({});
+    if (view !== this.#view) return;
     if (!page.ok) return void (this.error = page.error);
     for (const m of this.messages.rows.filter((m) => m.localId > 0)) {
       this.messages.remove(String(m.localId));
@@ -170,6 +183,7 @@ export class MessagePane {
    * that arrive meanwhile show as usual
    */
   clearView = () => {
+    this.#view += 1;
     for (const m of this.messages.rows.filter((m) => m.localId > 0)) {
       this.messages.remove(String(m.localId));
     }

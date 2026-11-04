@@ -140,6 +140,26 @@ describe("a pane opened at a message", () => {
     expect(ids(pane).slice(0, -1)).toEqual(Array.from({ length: 100 }, (_, n) => n + 351));
   });
 
+  it("drops a page of the older stretch that lands after going to the newest", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((done) => (release = done));
+    stored(450);
+    const pane = new MessagePane(room, () => "me", 150);
+    await pane.load();
+    // the next page down is slow to come, and the user jumps to the newest meanwhile
+    const network = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: Request) => {
+      if (new URL(input.url).searchParams.has("after")) await held;
+      return network(input);
+    });
+    const down = pane.newer();
+    await pane.latest();
+    release();
+    await down;
+    expect(ids(pane)).toEqual(Array.from({ length: 100 }, (_, n) => n + 351));
+    expect(pane.hasNewer).toBe(false);
+  });
+
   it("opens empty on a room known by name with nothing stored", async () => {
     fakeNetwork((url) => (url.pathname.endsWith("/rooms/joined") ? [] : undefined));
     const pane = new MessagePane({ kind: "room", name: "new" }, () => "me");
