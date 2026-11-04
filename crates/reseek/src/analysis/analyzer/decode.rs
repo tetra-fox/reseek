@@ -79,6 +79,8 @@ pub(crate) struct Decoder {
   densest: Option<(u64, u64)>,
   /// packets the decoder could not read and skipped
   pub skipped: u32,
+  /// why the last packet skipped could not be read
+  pub last_skipped: Option<String>,
   /// why decoding stopped before the end of the file, when it did
   pub stopped: Option<String>,
 }
@@ -176,6 +178,7 @@ impl Decoder {
       file_bytes,
       densest: None,
       skipped: 0,
+      last_skipped: None,
       stopped: None,
     })
   }
@@ -347,14 +350,14 @@ impl Decoder {
         Ok(decoded) => decoded,
         Err(Error::DecodeError(reason)) => {
           trace!(reason, "audio packet skipped");
-          if self.skip() {
+          if self.skip(reason.to_string()) {
             return None;
           }
           continue;
         }
         Err(Error::IoError(e)) => {
           trace!(error = %e, "audio packet skipped");
-          if self.skip() {
+          if self.skip(e.to_string()) {
             return None;
           }
           continue;
@@ -380,10 +383,11 @@ impl Decoder {
     }
   }
 
-  /// Counts a packet skipped; true, with the reason in `stopped`, once so many were skipped
-  /// that reading on is not worth it.
-  fn skip(&mut self) -> bool {
+  /// Counts a packet skipped because of `reason`; true, with the reason in `stopped`, once so
+  /// many were skipped that reading on is not worth it.
+  fn skip(&mut self, reason: String) -> bool {
     self.skipped += 1;
+    self.last_skipped = Some(reason);
     if self.skipped < MAX_SKIPPED {
       return false;
     }
