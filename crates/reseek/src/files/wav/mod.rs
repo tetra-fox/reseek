@@ -22,7 +22,7 @@ use super::serve::{self, Entity, Ranged, Served};
 use crate::analysis::Decoder;
 use crate::api::error::ApiError;
 use crate::services::ContentRequest;
-use pcm::{Pcm, Source};
+use pcm::{Pcm, Reopen, Source};
 
 /// The bytes of the WAV header.
 const HEADER: u64 = 44;
@@ -122,9 +122,10 @@ enum Refused {
 }
 
 /// Reads what the file `file` holds, of `size` bytes and named with `extension` when it has one,
-/// or why it cannot be served.
+/// or why it cannot be served. `reopen` opens the file again.
 fn open(
   mut file: Box<dyn MediaSource>,
+  reopen: Reopen,
   size: u64,
   extension: Option<&str>,
 ) -> Result<Opened, Refused> {
@@ -150,13 +151,17 @@ fn open(
     Header::Refused(reason) => Err(Refused::Format(reason)),
     Header::Other => {
       file.seek(SeekFrom::Start(0)).map_err(Refused::Read)?;
-      alac(file, extension)
+      alac(file, reopen, extension)
     }
   }
 }
 
-/// `file` opened for decoding, when it is ALAC of a stated length.
-fn alac(file: Box<dyn MediaSource>, extension: Option<&str>) -> Result<Opened, Refused> {
+/// `file` opened for decoding, when it is ALAC of a stated length; `reopen` opens it again.
+fn alac(
+  file: Box<dyn MediaSource>,
+  reopen: Reopen,
+  extension: Option<&str>,
+) -> Result<Opened, Refused> {
   let plain = || Refused::Format("only AIFF and ALAC are served as WAV".to_string());
   let mut hint = Hint::new();
   if let Some(extension) = extension {
@@ -202,7 +207,11 @@ fn alac(file: Box<dyn MediaSource>, extension: Option<&str>) -> Result<Opened, R
   }
   Ok(Opened {
     wav,
-    source: Source::Alac(Box::new(decoder)),
+    source: Source::Alac {
+      decoder: Box::new(decoder),
+      hint,
+      reopen,
+    },
   })
 }
 
@@ -238,7 +247,9 @@ fn body(opened: Opened, shown: String, start: u64, length: u64, speed: ServeSpee
   } = parts(start, length);
   let head = Bytes::copy_from_slice(&opened.wav.header()[header]);
   let pcm = (pcm_length > 0).then(|| Pcm::new(opened, pcm_from, pcm_length));
-  // each piece is read on the blocking pool, so a body nobody reads any more holds no thread
+  // each piece is read on the blocking pool, so a body nobody reads any more holds a thread
+  // only until the piece in hand is read, which for a range that cannot be sought is the walk
+  // from the start
   let pieces = stream::unfold((pcm, speed, shown), |(pcm, speed, shown)| async move {
     let mut pcm = pcm?;
     let stepped = tokio::task::spawn_blocking(move || {
@@ -281,7 +292,9 @@ fn body(opened: Opened, shown: String, start: u64, length: u64, speed: ServeSpee
 /// A file's `bytes` opened as they are served as WAV, or why they are not.
 fn opened_bytes(bytes: &[u8]) -> Result<Opened, String> {
   let file = Box::new(Cursor::new(bytes.to_vec()));
-  match open(file, bytes.len() as u64, None) {
+  let copy = bytes.to_vec();
+  let reopen: Reopen = Box::new(move || Ok(Box::new(Cursor::new(copy.clone()))));
+  match open(file, reopen, bytes.len() as u64, None) {
     Ok(opened) => Ok(opened),
     Err(Refused::Format(reason)) => Err(reason),
     Err(Refused::Read(e)) => Err(e.to_string()),
@@ -325,8 +338,12 @@ pub(super) async fn respond(
   let size = file.size;
   let opened = tokio::task::spawn_blocking(move || {
     let opened = File::open(&path)?;
-    let extension = path.extension().and_then(|e| e.to_str());
-    Ok::<_, io::Error>(open(Box::new(opened), size, extension))
+    let extension = path
+      .extension()
+      .and_then(|e| e.to_str())
+      .map(str::to_string);
+    let reopen: Reopen = Box::new(move || Ok(Box::new(File::open(&path)?)));
+    Ok::<_, io::Error>(open(Box::new(opened), reopen, size, extension.as_deref()))
   })
   .await
   .map_err(ApiError::internal)?

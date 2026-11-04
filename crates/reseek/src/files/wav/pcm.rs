@@ -5,6 +5,7 @@
 use std::io::{self, Read, Seek, SeekFrom};
 
 use axum::body::Bytes;
+use symphonia::core::formats::probe::Hint;
 use symphonia::core::io::MediaSource;
 
 use super::super::aiff::{self, Aiff};
@@ -17,25 +18,52 @@ const PIECE: usize = 256 * 1024;
 /// The bytes a piece of silence is cut from.
 static SILENCE: [u8; PIECE] = [0; PIECE];
 
+/// Opens the file again, from its start.
+pub(super) type Reopen = Box<dyn Fn() -> io::Result<Box<dyn MediaSource>> + Send>;
+
 /// Where the PCM comes from.
 pub(super) enum Source {
   /// samples read from an AIFF file and turned around
   Aiff(Aiff, Box<dyn MediaSource>),
-  /// samples decoded from ALAC, each kept to its top `width` bytes
-  Alac(Box<Decoder>),
+  /// samples decoded from ALAC, each kept to its top `width` bytes; `reopen` and `hint` open the
+  /// file's container anew
+  Alac {
+    decoder: Box<Decoder>,
+    hint: Hint,
+    reopen: Reopen,
+  },
 }
 
 impl Source {
-  /// Moves to sample frame `frame` of `format`, or for ALAC to the packet that holds it; false
-  /// when the audio ends before that frame.
+  /// Moves to sample frame `frame` of `format`, or for ALAC to the packet that holds it. False
+  /// when the container cannot place the frame: the audio is then at its start instead.
   fn seek(&mut self, format: &Format, frame: u64) -> Result<bool, String> {
     match self {
-      // reading past the end of the file finds its end
+      // the frames an AIFF states are clipped to the samples it holds, so every frame is there
       Self::Aiff(aiff, file) => file
         .seek(SeekFrom::Start(aiff.data_at + frame * format.block()))
         .map(|_| true)
         .map_err(|e| format!("seeking failed: {e}")),
-      Self::Alac(decoder) => decoder.seek_frame(frame),
+      Self::Alac {
+        decoder,
+        hint,
+        reopen,
+      } => {
+        if decoder.seek_frame(frame)? {
+          return Ok(true);
+        }
+        // symphonia 0.6.1's MP4 reader, when a seek finds no sample, may walk the file for more
+        // fragments and drop the media data atom it was reading, so every later packet fails
+        // with "no atom pending read"; the container is opened anew. TODO: seek to 0 in place
+        // once the reader survives a failed seek
+        let file = reopen().map_err(|e| format!("the file could not be opened again: {e}"))?;
+        let reopened = Decoder::from_source(file, hint)?;
+        if reopened.claimed != decoder.claimed {
+          return Err("the file changed while it was read".to_string());
+        }
+        **decoder = reopened;
+        Ok(false)
+      }
     }
   }
 
@@ -60,7 +88,7 @@ impl Source {
         aiff::to_wav(aiff.stored, usize::from(aiff.width), out);
         Ok(None)
       }
-      Self::Alac(decoder) => {
+      Self::Alac { decoder, .. } => {
         let mut samples = Vec::new();
         let Some(start) = decoder.next_interleaved(&mut samples) else {
           return match decoder.stopped.take() {
@@ -115,7 +143,8 @@ impl Pcm {
   }
 
   /// The next piece, `None` once every byte was given or after a piece that failed. Reads the
-  /// source at most once, which blocks.
+  /// source until it has a piece, which blocks; when the range was not sought, that is every
+  /// packet before it.
   pub(super) fn step(&mut self) -> Option<Result<Bytes, String>> {
     while self.at < self.end {
       if let Some((from, stretch)) = self.held.take() {
@@ -167,11 +196,14 @@ impl Pcm {
       Some(next) => next,
       None => {
         let first = self.at / block;
-        if !self.source.seek(&self.format, first)? {
-          self.end_source();
-          return Ok(());
+        // when the frame could not be sought, the packets are read from the start and those
+        // before the range dropped, so a frame past the last packet is silence and one past
+        // where another track ends is still audio
+        if self.source.seek(&self.format, first)? {
+          first * block
+        } else {
+          0
         }
-        first * block
       }
     };
     let mut pcm = Vec::new();

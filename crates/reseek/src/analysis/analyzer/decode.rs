@@ -255,8 +255,9 @@ impl Decoder {
     Ok(())
   }
 
-  /// Moves to the packet holding sample frame `frame`; false, without moving, when no packet
-  /// holds it because the packets end before it.
+  /// Moves to the packet holding sample frame `frame`; false when the container cannot place the
+  /// frame among the packets it indexes, which is also so when another track of the file ends
+  /// before it, since every track is moved. The container may then not read on.
   pub fn seek_frame(&mut self, frame: u64) -> Result<bool, String> {
     let (numer, denom) = self.ticks();
     let rate = u128::from(self.claimed.sample_rate);
