@@ -56,6 +56,12 @@
   let importing = $state(false);
   let text = $state("");
   let importError = $state("");
+  let sending = $state(false);
+
+  // each opening of the import starts without the last one's error
+  $effect(() => {
+    if (importing) importError = "";
+  });
 
   const unblockChosen = async () => {
     await unblockMany(chosen.map((b) => b.username));
@@ -64,6 +70,8 @@
   };
 
   const runImport = async () => {
+    if (sending) return;
+    sending = true;
     const outcome = await call(() =>
       api.POST("/api/v0/users/blocked/import", {
         body: text,
@@ -71,6 +79,7 @@
         bodySerializer: (body) => body
       })
     );
+    sending = false;
     if (!outcome.ok) return void (importError = outcome.error);
     importing = false;
     text = "";
@@ -213,16 +222,18 @@
 
 <Dialog
   bind:open={importing}
+  busy={sending}
   title="Import blocks"
   description="One username per line. Lines starting with # are ignored. A JSON export is also accepted.">
   <Textarea
     class="min-h-40 font-mono text-xs"
     aria-label="Blocks to import"
     spellcheck="false"
+    disabled={sending}
     bind:value={text} />
   {#if importError}<Notice kind="error">{importError}</Notice>{/if}
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (importing = false)}>Cancel</Button>
-    <Button disabled={!text.trim()} onclick={() => void runImport()}>Import</Button>
+    <Button variant="ghost" disabled={sending} onclick={() => (importing = false)}>Cancel</Button>
+    <Button disabled={!text.trim() || sending} onclick={() => void runImport()}>Import</Button>
   {/snippet}
 </Dialog>
