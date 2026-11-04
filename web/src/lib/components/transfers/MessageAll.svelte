@@ -44,11 +44,16 @@
     }
     sending = false;
     const of = `Sent to ${sent} of ${plural(to.length, "user", "users")}`;
+    // a send that failed or was canceled part way keeps the text and the dialog, to send again
     if (failed.length) {
       toast(`${of}. Could not send to ${failed.join("; ")}`, "error");
       return;
     }
-    toast(canceled ? `${of} before canceling` : `Sent to ${plural(sent, "user", "users")}`);
+    if (canceled) {
+      toast(`${of} before canceling`);
+      return;
+    }
+    toast(`Sent to ${plural(sent, "user", "users")}`);
     text = "";
     open = false;
   };
