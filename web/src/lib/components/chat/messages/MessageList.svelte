@@ -12,6 +12,7 @@
   import type { MessagePane } from "#lib/chat/pane.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatDay, plural } from "#lib/format.js";
   import { freezesWhileUsed, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListWindow } from "#lib/lists/virtual.svelte.js";
@@ -22,8 +23,6 @@
 
   type Props = {
     pane: MessagePane;
-    /** a message to scroll to and mark, from a link */
-    at: number | null;
     /** the words marked in the messages: our name and the watched words */
     watch: string[];
     /** quotes a message in the composer, when one can be sent */
@@ -32,7 +31,7 @@
     onread: () => void;
   };
 
-  let { pane, at, watch, onreply, onread }: Props = $props();
+  let { pane, watch, onreply, onread }: Props = $props();
 
   const notices = $derived(isNotices(pane.target));
 
@@ -198,14 +197,21 @@
     if (atBottom && !pane.hasNewer && document.visibilityState === "visible") onread();
   };
 
-  // the first page shows at the bottom, or at the message a link names
+  // the first page shows at the bottom, or at the message a link names; one no longer stored
+  // shows where it was, at the first message after it
   $effect(() => {
     if (!pane.loaded || placed) return;
     placed = true;
     seenNewest = untrack(() => newest);
     untrack(async () => {
       await tick();
-      const index = at === null ? -1 : lines.findIndex((l) => l.key === `m:${at}`);
+      const at = pane.at;
+      const index =
+        at === null ? -1 : lines.findIndex((l) => l.kind === "message" && l.message.localId >= at);
+      const line = lines[index];
+      if (at !== null && (line?.kind !== "message" || line.message.localId !== at)) {
+        toast("That message is no longer stored.");
+      }
       if (index === -1) toBottom();
       else shown.scrollTo(index, "center");
       await tick();
@@ -327,7 +333,7 @@
             <MessageRow
               message={line.message}
               head={line.head && !notices}
-              highlight={line.message.localId === at}
+              highlight={line.message.localId === pane.at}
               {watch}
               room={pane.target.kind === "room"}
               notice={notices}
