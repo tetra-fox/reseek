@@ -27,4 +27,28 @@ describe("the notes on a user", () => {
     await flush();
     expect(net.requests.map((r) => r.body)).toEqual([{ notes: "owes me a rip" }]);
   });
+
+  it("are sent in a request that outlives the page when the tab closes before typing pauses", async () => {
+    const sent: { keepalive: boolean; body: string }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (request: Request) => {
+        sent.push({ keepalive: request.keepalive, body: await request.text() });
+        return new Response(null, { status: 204 });
+      })
+    );
+    const component = mount(NotesEditor, {
+      target: document.body,
+      props: { username: "alice", notes: "", disabled: false }
+    });
+    flushSync();
+    const box = document.querySelector("textarea")!;
+    box.value = "owes me a rip";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    await flush();
+    expect(sent).toEqual([{ keepalive: true, body: JSON.stringify({ notes: "owes me a rip" }) }]);
+    unmount(component);
+  });
 });

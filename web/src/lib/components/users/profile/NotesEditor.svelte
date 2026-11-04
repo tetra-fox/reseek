@@ -25,11 +25,12 @@
   /** how long the tick shows after a save */
   const TICK_MS = 2_000;
 
-  const saving = new Autosave<string>(async (value) => {
+  const saving = new Autosave<string>(async (value, keepalive) => {
     const outcome = await call(() =>
       api.PUT("/api/v0/users/{username}/notes", {
         params: byUser(username),
-        body: { notes: value }
+        body: { notes: value },
+        keepalive
       })
     );
     if (outcome.ok) saved = value;
