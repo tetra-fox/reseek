@@ -32,10 +32,14 @@
   let loadError = $state("");
   let validation = $state.raw<Schemas["Validation"] | null>(null);
   let validating = $state(false);
-  let saving = $state(false);
-  let saveError = $state("");
-  let stale = $state(false);
-  let saved = $state.raw<Schemas["FileWritten"] | null>(null);
+  /** what the last save came to; a refusal is `stale` when the file changed on disk */
+  type Saving =
+    | { kind: "idle" }
+    | { kind: "running" }
+    | { kind: "written"; written: Schemas["FileWritten"] }
+    | { kind: "failed"; error: string; stale: boolean };
+  let saving = $state.raw<Saving>({ kind: "idle" });
+  const running = $derived(saving.kind === "running");
   let debugText = $state<string | null>(null);
 
   const remote = $derived(valueAt(view.values, "remote_configuration") === true);
@@ -53,7 +57,7 @@
     file = outcome.data;
     text = outcome.data.text ?? "";
     validation = null;
-    stale = false;
+    saving = { kind: "idle" };
   };
   $effect(() => {
     void name;
@@ -89,27 +93,26 @@
     return () => clearTimeout(timer);
   });
 
+  /** Saves the text as it is now; what is typed while it runs stays a change to save */
   const save = async () => {
-    saving = true;
-    saveError = "";
-    const checked = await validate(text);
+    const sent = text;
+    const at = name;
+    const revision = file?.revision ?? null;
+    saving = { kind: "running" };
+    const checked = await validate(sent);
     if (!checked?.valid) {
-      saving = false;
+      saving = { kind: "idle" };
       return;
     }
     const outcome = await call(() =>
-      api.PUT("/api/v0/options/file", {
-        body: { text, revision: file?.revision ?? null, file: name }
-      })
+      api.PUT("/api/v0/options/file", { body: { text: sent, revision, file: at } })
     );
-    saving = false;
     if (!outcome.ok) {
-      if (outcome.status === 409) stale = true;
-      saveError = outcome.error;
+      saving = { kind: "failed", error: outcome.error, stale: outcome.status === 409 };
       return;
     }
-    saved = outcome.data;
-    file = file && { ...file, text, revision: outcome.data.revision };
+    saving = { kind: "written", written: outcome.data };
+    file = file && { ...file, text: sent, revision: outcome.data.revision };
   };
 
   const discard = () =>
@@ -136,7 +139,7 @@
   const openDebug = async () => {
     const outcome = await call(() => api.GET("/api/v0/options/debug"));
     if (outcome.ok) debugText = outcome.data;
-    else saveError = outcome.error;
+    else saving = { kind: "failed", error: outcome.error, stale: false };
   };
 </script>
 
@@ -190,9 +193,9 @@
     {/if}
     {#if writable}
       <div class="ml-auto flex gap-inline">
-        <Button variant="ghost" disabled={!dirty || saving} onclick={discard}>Discard</Button>
+        <Button variant="ghost" disabled={!dirty || running} onclick={discard}>Discard</Button>
         <Button
-          disabled={!dirty || saving || validating || validation?.valid === false}
+          disabled={!dirty || running || validating || validation?.valid === false}
           onclick={() => void save()}>Save</Button>
       </div>
     {/if}
@@ -216,17 +219,21 @@
       </ul>
     </Notice>
   {/if}
-  {#if saveError}
+  {#if saving.kind === "failed"}
+    {@const failed = saving}
     <Notice kind="error">
-      {stale ? `${name} changed on disk. Reload it, then make the changes again.` : saveError}
+      {failed.stale
+        ? `${name} changed on disk. Reload it, then make the changes again.`
+        : failed.error}
       {#snippet action()}
-        {#if stale}<Button variant="outline" size="sm" onclick={() => void load()}>Reload</Button
+        {#if failed.stale}<Button variant="outline" size="sm" onclick={() => void load()}
+            >Reload</Button
           >{/if}
       {/snippet}
     </Notice>
   {/if}
-  {#if saved}
-    {@const s = saved}
+  {#if saving.kind === "written"}
+    {@const s = saving.written}
     <Notice kind="info">
       Saved.
       {#if s.applied.length}{plural(s.applied.length, "setting", "settings")} applied live.{/if}
@@ -241,7 +248,8 @@
         )}.
       {/if}
       {#snippet action()}
-        <Button variant="ghost" size="sm" onclick={() => (saved = null)}>Dismiss</Button>
+        <Button variant="ghost" size="sm" onclick={() => (saving = { kind: "idle" })}
+          >Dismiss</Button>
       {/snippet}
     </Notice>
   {/if}

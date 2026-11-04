@@ -19,6 +19,9 @@ describe("the raw configuration file", () => {
     document.body.innerHTML = "";
   });
 
+  const button = (text: string) =>
+    [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === text);
+
   const start = async (put: () => unknown) => {
     const view = structuredClone(fixture) as typeof fixture;
     (view.values as Record<string, unknown>).remote_configuration = true;
@@ -72,5 +75,39 @@ describe("the raw configuration file", () => {
     expect(
       [...document.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Reload")
     ).toBe(true);
+  });
+
+  it("clears the refusal once the file is read again", async () => {
+    await start(() => ({ status: 409, body: { error: "config file changed on disk" } }));
+    button("Reload")!.click();
+    await flush();
+    expect(document.body.textContent).not.toContain("changed on disk");
+    expect(button("Reload")).toBeUndefined();
+  });
+
+  it("keeps what is typed while a save runs as a change still to save", async () => {
+    let answer!: () => void;
+    const net = await start(
+      () =>
+        new Promise(
+          (resolve) =>
+            (answer = () =>
+              resolve({
+                revision: "sha256:two",
+                applied: [],
+                reconnectRequired: [],
+                restartRequired: []
+              }))
+        )
+    );
+    const editor = EditorView.findFromDOM(document.querySelector<HTMLElement>(".cm-editor")!)!;
+    editor.dispatch({ changes: { from: editor.state.doc.length, insert: "c = 3\n" } });
+    flushSync();
+    answer();
+    await flush();
+    expect(net.requests.find((r) => r.method === "PUT")?.body).toMatchObject({
+      text: "a = 1\nb = 2\n"
+    });
+    expect(button("Discard")!.disabled).toBe(false);
   });
 });
