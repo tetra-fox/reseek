@@ -6,6 +6,7 @@ import { href, route } from "#lib/nav.js";
 
 import { analysisHref, parseTarget, type SlotId } from "./address";
 import { type Target, targetKey } from "./analysis";
+import { analyzable } from "./marks.svelte";
 import { type Sending, sendFile } from "./upload";
 
 /** A file in a slot; its name is null until something says it, as for a file named by a link */
@@ -102,6 +103,10 @@ class Slots {
 
   /** Sends a local file to the daemon, into the slot once it is there */
   upload(id: SlotId, file: File) {
+    if (!analyzable(file.name)) {
+      const text = `${file.name} cannot be analyzed, as it is not a type the analyzer reads.`;
+      return void toast(text, "error");
+    }
     this.#stopSending(id);
     if (this[id]) this.clear(id);
     const mark = (sent: number) => {
