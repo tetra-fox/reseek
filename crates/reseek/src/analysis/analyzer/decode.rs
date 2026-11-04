@@ -282,8 +282,16 @@ impl Decoder {
     let pts = self.step()?;
     self.decoder.last_decoded().copy_to_vec_interleaved(samples);
     let (numer, denom) = self.ticks();
-    let frame = u128::try_from(pts).unwrap_or(0) * numer * u128::from(self.claimed.sample_rate);
-    Some(u64::try_from(frame / denom).unwrap_or(u64::MAX))
+    let rate = u128::from(self.claimed.sample_rate);
+    // a timestamp is below 2^63 and the other two below 2^32, so the product fits
+    let frame = u128::try_from(pts)
+      .ok()
+      .and_then(|pts| u64::try_from(pts * numer * rate / denom).ok());
+    if frame.is_none() {
+      debug!(pts, "a packet's timestamp is out of range");
+      self.stopped = Some("the file's timing is out of range".to_string());
+    }
+    frame
   }
 
   /// A timestamp tick as a fraction of a second; one sample frame when the container gives none.

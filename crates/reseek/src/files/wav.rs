@@ -293,10 +293,9 @@ struct Pcm {
   at: u64,
   /// the byte of the PCM where giving stops
   end: u64,
-  /// whether the source was moved to where the PCM starts
-  sought: bool,
-  /// where the next stretch starts in the PCM, when the source does not say
-  next: u64,
+  /// where the stretch read last ends in the PCM, `None` until the source was moved to where the
+  /// PCM starts and read
+  next: Option<u64>,
   /// a stretch read and not given yet, with where it starts in the PCM
   held: Option<(u64, Bytes)>,
 }
@@ -309,8 +308,7 @@ impl Pcm {
       format: opened.wav.format,
       at: start,
       end: start + length,
-      sought: false,
-      next: 0,
+      next: None,
       held: None,
     }
   }
@@ -341,19 +339,33 @@ impl Pcm {
   /// Reads the next stretch of the source into `held`.
   fn read(&mut self) -> Result<(), String> {
     let block = self.format.block();
-    if !self.sought {
-      let first = self.at / block;
-      self.source.seek(&self.format, first)?;
-      self.next = first * block;
-      self.sought = true;
-    }
+    let out_of_range = || "the file's timing is out of range".to_string();
+    let next = match self.next {
+      Some(next) => next,
+      None => {
+        let first = self.at / block;
+        self.source.seek(&self.format, first)?;
+        first * block
+      }
+    };
     let mut pcm = Vec::new();
     let frame = self.source.read(&self.format, &mut pcm)?;
     if pcm.is_empty() {
       return Err("the audio ends before its stated length".to_string());
     }
-    let from = frame.map_or(self.next, |frame| frame * block);
-    self.next = from + pcm.len() as u64;
+    let from = match frame {
+      Some(frame) => frame.checked_mul(block).ok_or_else(out_of_range)?,
+      None => next,
+    };
+    // the packet a seek lands on can start before the range, a later one only where the last
+    // one ends or after
+    if self.next.is_some() && from < next {
+      return Err("the file's packets overlap in time".to_string());
+    }
+    let to = from
+      .checked_add(pcm.len() as u64)
+      .ok_or_else(out_of_range)?;
+    self.next = Some(to);
     self.held = Some((from, Bytes::from(pcm)));
     Ok(())
   }
@@ -629,5 +641,66 @@ mod tests {
       refused.starts_with("no packet of the audio could be decoded: "),
       "{refused}"
     );
+  }
+
+  /// The whole WAV of `bytes`.
+  fn whole(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    wav_bytes(bytes, 0, wav_length(bytes)?)
+  }
+
+  #[test]
+  fn a_packet_timed_past_what_a_position_holds_fails_the_stream() {
+    // the tone made fragmented by a movie extends box at the end of its movie box, the file's
+    // last, and stating 30000 frames
+    let mut bytes = TONE.to_vec();
+    let mdhd = box_at(&bytes, b"mdhd");
+    put(&mut bytes, mdhd + 24, 30_000);
+    let trex = boxed(b"trex", &[0, 1, 1, 0, 0, 0], &[]);
+    let mvex = boxed(b"mvex", &[], &trex);
+    let moov = box_at(&bytes, b"moov");
+    let grown = get(&bytes, moov) + u32::try_from(mvex.len()).unwrap();
+    put(&mut bytes, moov, grown);
+    bytes.extend_from_slice(&mvex);
+    // the reader reads a packet only while it is at a media data box, so one follows the movie box
+    bytes.extend_from_slice(&boxed(b"mdat", &[], &[]));
+    // two fragments of the first packet again, each with its media data after it; the first also
+    // holds a run of 2^30 + 1 samples lasting 2^32 - 1 frames each, none of them read, which the
+    // reader counts toward where the second fragment starts
+    let first_at = get(&bytes, box_at(&bytes, b"stco") + 16) as usize;
+    let first_size = get(&bytes, box_at(&bytes, b"stsz") + 20);
+    let packet = bytes[first_at..][..first_size as usize].to_vec();
+    let unread = [
+      boxed(b"tfhd", &[8, 1, 0xffff_ffff], &[]),
+      boxed(b"trun", &[0, 0x4000_0001], &[]),
+    ]
+    .concat();
+    for (sequence, unread) in [(1, Some(&unread)), (2, None)] {
+      let fragment = |base: usize| {
+        let tfhd = boxed(b"tfhd", &[1, 1, 0, u32::try_from(base).unwrap()], &[]);
+        let trun = boxed(b"trun", &[0x301, 1, 0, 4096, first_size], &[]);
+        let mut trafs: Vec<u8> = unread
+          .map(|unread| boxed(b"traf", &[], unread))
+          .unwrap_or_default();
+        trafs.extend(boxed(b"traf", &[], &[tfhd, trun].concat()));
+        let mfhd = boxed(b"mfhd", &[0, sequence], &[]);
+        boxed(b"moof", &[], &[mfhd, trafs].concat())
+      };
+      let base = bytes.len() + fragment(0).len() + 8;
+      bytes.extend_from_slice(&fragment(base));
+      bytes.extend_from_slice(&boxed(b"mdat", &[], &packet));
+    }
+    assert_eq!(wav_length(&bytes), Ok(HEADER + 30_000 * 4));
+    assert_eq!(
+      whole(&bytes),
+      Err("the file's timing is out of range".to_string())
+    );
+  }
+
+  #[test]
+  fn a_packet_that_starts_inside_the_one_before_fails_the_stream() {
+    // every packet holds 4096 frames, but the table says the first three last 2048
+    let bytes = timed(&[(3, 2048), (1, 3712)]);
+    let failed = whole(&bytes).unwrap_err();
+    assert_eq!(failed, "the file's packets overlap in time");
   }
 }

@@ -90,6 +90,10 @@ opt-level = 3
 [profile.dev.package.symphonia-core]
 opt-level = 3
 
+# a WAV test builds a fragment of 2^30 samples, which the demuxer walks one by one
+[profile.dev.package.symphonia-format-isomp4]
+opt-level = 3
+
 # the encoders the analyzer's tests make audio with
 [profile.dev.package.flacenc]
 opt-level = 3
