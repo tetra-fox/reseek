@@ -13,7 +13,7 @@ export type Message = {
   mention: boolean;
   /** from a user blocked for rooms, shown collapsed */
   hidden: boolean;
-  /** delivered again by the server because it was not acknowledged before */
+  /** first delivered from the server's offline store, so it was sent while we were not logged in */
   replayed: boolean;
   /** an inbound private message not acknowledged yet; a notice from the server never is unread */
   unread: boolean;

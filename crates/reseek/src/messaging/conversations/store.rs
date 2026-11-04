@@ -72,7 +72,7 @@ pub struct Inbound {
   pub username: String,
   /// the text
   pub message: String,
-  /// the server delivered it again because it was not acknowledged
+  /// the server delivered it from its offline store at a login, not live
   pub replayed: bool,
 }
 
@@ -98,6 +98,8 @@ fn message_from(row: &Row, at: usize) -> rusqlite::Result<PrivateMessage> {
     direction: direction(row, at + 4)?,
     message: row.get(at + 5)?,
     is_acknowledged: row.get(at + 6)?,
+    // written once, at the first delivery: it came from the server's offline store, so it was
+    // sent while we were not logged in
     was_replayed: row.get(at + 7)?,
   })
 }
@@ -132,9 +134,10 @@ pub fn ensure(conn: &Connection, username: &str, now: DateTime<Utc>) -> rusqlite
   Ok(())
 }
 
-/// Stores an inbound message. A message the server delivers again is the one stored already: it
-/// is marked unacknowledged and replayed as the server now says, its text left as it is.
-pub fn receive(conn: &Connection, inbound: &Inbound) -> rusqlite::Result<PrivateMessage> {
+/// Stores an inbound message, giving it as stored and whether this delivery stored it. A message
+/// the server delivers again is the one stored already: it is marked unacknowledged, its text
+/// and whether it came from the offline store left as the first delivery set them.
+pub fn receive(conn: &Connection, inbound: &Inbound) -> rusqlite::Result<(PrivateMessage, bool)> {
   let stored: Option<(i64, String)> = conn
     .prepare_cached(
       "SELECT local_id, message FROM private_messages WHERE username = ?1 AND remote_id = ?2",
@@ -143,7 +146,7 @@ pub fn receive(conn: &Connection, inbound: &Inbound) -> rusqlite::Result<Private
       Ok((row.get(0)?, row.get(1)?))
     })
     .optional()?;
-  let local_id = match stored {
+  let (local_id, new) = match stored {
     Some((local_id, text)) => {
       if text != inbound.message {
         // a server that started its ids over; one id holds one message here
@@ -154,10 +157,10 @@ pub fn receive(conn: &Connection, inbound: &Inbound) -> rusqlite::Result<Private
         );
       }
       conn.execute(
-        "UPDATE private_messages SET is_acknowledged = 0, was_replayed = ?2 WHERE local_id = ?1",
-        params![local_id, inbound.replayed],
+        "UPDATE private_messages SET is_acknowledged = 0 WHERE local_id = ?1",
+        [local_id],
       )?;
-      local_id
+      (local_id, false)
     }
     None => {
       conn.execute(
@@ -171,10 +174,10 @@ pub fn receive(conn: &Connection, inbound: &Inbound) -> rusqlite::Result<Private
           inbound.replayed
         ],
       )?;
-      conn.last_insert_rowid()
+      (conn.last_insert_rowid(), true)
     }
   };
-  message_at(conn, local_id)
+  Ok((message_at(conn, local_id)?, new))
 }
 
 /// Stores a message we sent to `username` at `now`.
@@ -510,6 +513,30 @@ mod tests {
     assert_eq!(listed.len(), 1, "left out unless asked for");
     assert_eq!(listed[0].un_acknowledged_message_count, 1);
     assert_eq!(open, ["alice"]);
+  }
+
+  #[tokio::test]
+  async fn a_message_received_live_stays_live_when_delivered_again() {
+    let db = Database::memory(&crate::messaging::SCHEMA).await;
+    let now: DateTime<Utc> = "2026-10-26T14:00:00Z".parse().unwrap();
+    let delivery = move |replayed| Inbound {
+      id: 7,
+      timestamp: now,
+      username: "alice".into(),
+      message: "hello".into(),
+      replayed,
+    };
+    let (live, again) = db
+      .write(move |conn| {
+        activate(conn, "alice", now)?;
+        // left unread, so the server delivers it again at the next login
+        let (live, _) = receive(conn, &delivery(false))?;
+        Ok((live, receive(conn, &delivery(true))?.0))
+      })
+      .await
+      .unwrap();
+    assert_eq!(again.local_id, live.local_id);
+    assert!(!again.was_replayed, "it arrived while we were logged in");
   }
 
   #[tokio::test]

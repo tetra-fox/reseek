@@ -36,8 +36,8 @@ pub struct PrivateMessage {
   pub message: String,
   /// inbound: the server was told we read it; outbound: always true
   pub is_acknowledged: bool,
-  /// inbound: the server delivered it again because it was not acknowledged before; outbound:
-  /// always false
+  /// inbound: first delivered from the server's offline store, so it was sent while we were not
+  /// logged in; outbound: always false
   pub was_replayed: bool,
 }
 

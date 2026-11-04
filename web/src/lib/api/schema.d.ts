@@ -5790,8 +5790,8 @@ export interface components {
              */
             username: string;
             /**
-             * @description inbound: the server delivered it again because it was not acknowledged before; outbound:
-             *     always false
+             * @description inbound: first delivered from the server's offline store, so it was sent while we were not
+             *     logged in; outbound: always false
              */
             wasReplayed: boolean;
         };

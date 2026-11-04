@@ -22015,7 +22015,7 @@
           },
           "wasReplayed": {
             "type": "boolean",
-            "description": "inbound: the server delivered it again because it was not acknowledged before; outbound:\nalways false"
+            "description": "inbound: first delivered from the server's offline store, so it was sent while we were not\nlogged in; outbound: always false"
           }
         }
       },
