@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use tracing::{debug, warn};
 
 use super::roots::{Refused, locate};
-use super::unreadable;
+use super::{named, unreadable};
 use crate::api::error::ApiError;
 use crate::entries;
 
@@ -31,12 +31,7 @@ pub(super) fn list(
   recursive: bool,
 ) -> Result<FilesystemDirectory, ApiError> {
   let shown = root.join(relative);
-  let missing = || {
-    ApiError::not_found(format!(
-      "The directory '{}' does not exist",
-      shown.display()
-    ))
-  };
+  let missing = || ApiError::not_found(format!("The directory {} does not exist", named(relative)));
   let located = match locate(root, relative) {
     Ok(located) => located,
     Err(Refused::RootMissing) => return Err(missing()),
@@ -46,13 +41,15 @@ pub(super) fn list(
         ApiError::forbidden("Only application-controlled directories can be listed").logged(),
       );
     }
-    Err(Refused::Denied(e) | Refused::Io(e)) => return Err(unreadable("directory", &shown, e)),
+    Err(Refused::Denied(e) | Refused::Io(e)) => {
+      return Err(unreadable("directory", relative, &shown, e));
+    }
   };
   if !located.exists {
     return Err(missing());
   }
-  let metadata =
-    std::fs::metadata(&located.resolved).map_err(|e| unreadable("directory", &shown, e))?;
+  let metadata = std::fs::metadata(&located.resolved)
+    .map_err(|e| unreadable("directory", relative, &shown, e))?;
   if !metadata.is_dir() {
     return Err(missing());
   }
@@ -61,7 +58,8 @@ pub(super) fn list(
   let mut top = directory(&name, String::new(), link, &metadata);
   let mut files = Vec::new();
   let mut directories = Vec::new();
-  let entries = read(&located.resolved).map_err(|e| unreadable("directory", &shown, e))?;
+  let entries =
+    read(&located.resolved).map_err(|e| unreadable("directory", relative, &shown, e))?;
   collect(
     &located.resolved,
     "",
