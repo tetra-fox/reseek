@@ -24,9 +24,8 @@ mod serve;
 mod wav;
 mod writing;
 
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use api_types::auth::Principal;
 use api_types::files::{FileRoot, FileToken, FilesystemDirectory, FilesystemFile};
@@ -51,7 +50,7 @@ use crate::db::Database;
 use crate::paths::Paths;
 use crate::safety::{self, Os};
 use crate::services::{ContentRequest, FileService, FileTarget};
-use crate::sync::lock;
+use crate::sync::Slots;
 use delete::Kind;
 pub use local::{LocalFile, LocalPath};
 pub use placing::{create_file, move_file};
@@ -98,7 +97,7 @@ pub struct Files {
   auth: Arc<Auth>,
   writing: Writing,
   /// the principals an archive is being sent to now
-  archives: Arc<Mutex<HashSet<String>>>,
+  archives: Slots,
   /// the speed files are served at
   speed: ServeSpeed,
 }
@@ -134,7 +133,7 @@ impl Files {
       logs: paths.logs.clone(),
       auth,
       writing: Writing::default(),
-      archives: Arc::default(),
+      archives: Slots::default(),
       speed,
     });
     prune::spawn(files.clone(), shutdown);
@@ -310,18 +309,6 @@ fn archive_name(name: &str) -> String {
     .collect()
 }
 
-/// Lets one archive at a time go to a principal: the slot is free again when dropped.
-struct ArchiveSlot {
-  archives: Arc<Mutex<HashSet<String>>>,
-  subject: String,
-}
-
-impl Drop for ArchiveSlot {
-  fn drop(&mut self) {
-    lock(&self.archives).remove(&self.subject);
-  }
-}
-
 #[async_trait]
 impl FileService for Files {
   async fn list(
@@ -428,16 +415,10 @@ impl FileService for Files {
         "The folder holds {total} bytes, more than web.files.archive_max_bytes ({limit})"
       )));
     }
-    let slot = {
-      let mut archives = lock(&self.archives);
-      if !archives.insert(principal.subject.clone()) {
-        return Err(ApiError::too_many("An archive is already being sent"));
-      }
-      ArchiveSlot {
-        archives: self.archives.clone(),
-        subject: principal.subject.clone(),
-      }
-    };
+    let slot = self
+      .archives
+      .take(&principal.subject)
+      .ok_or_else(|| ApiError::too_many("An archive is already being sent"))?;
     debug!(files = members.len(), bytes = total, "sending an archive");
     let (sender, receiver) = mpsc::channel(ARCHIVE_BACKLOG);
     let speed = self.speed.clone();

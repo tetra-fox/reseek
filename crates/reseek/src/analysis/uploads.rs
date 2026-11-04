@@ -7,6 +7,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use api_types::analysis::AnalysisUpload;
 use api_types::files::FileRoot;
@@ -27,6 +28,8 @@ const FOLDER: &str = "uploads";
 const PARTIAL: &str = "upload.part";
 /// How many of the newest uploads stay whatever they take, one for each slot of the page.
 const ALWAYS_KEPT: usize = 2;
+/// How long an upload waits for its next bytes before it is given up.
+const IDLE: Duration = Duration::from_secs(60);
 
 /// Where uploads are held under the data directory.
 pub fn uploads_dir(data: &Path) -> PathBuf {
@@ -131,7 +134,8 @@ fn remove_folder(dir: &Path) {
 
 impl Analysis {
   /// Takes `body`, a file named `name`, into the cache, no more of it than
-  /// `analysis.upload_max_bytes`.
+  /// `analysis.upload_max_bytes`. A principal uploads one file at a time, and a body that stops
+  /// coming for a while is given up.
   pub(super) async fn receive(
     &self,
     by: &str,
@@ -152,6 +156,10 @@ impl Analysis {
       .filter(|name| !name.is_empty())
       .map(|name| creatable(&name, Os::CURRENT))
       .ok_or_else(|| ApiError::bad_request("The file has no name"))?;
+    let _slot = self
+      .uploading
+      .take(by)
+      .ok_or_else(|| ApiError::too_many("A file is already being uploaded"))?;
     let id = Uuid::new_v4();
     let dir = self.uploads.join(id.to_string());
     tokio::fs::create_dir_all(&dir)
@@ -164,7 +172,14 @@ impl Analysis {
       .map_err(ApiError::internal)?;
     let mut size = 0;
     let mut stream = body.into_data_stream();
-    while let Some(piece) = stream.next().await {
+    loop {
+      let Ok(next) = tokio::time::timeout(IDLE, stream.next()).await else {
+        debug!(waited = ?IDLE, "an upload stopped sending");
+        return Err(ApiError::request_timeout("The upload stopped sending"));
+      };
+      let Some(piece) = next else {
+        break;
+      };
       let piece = piece.map_err(|e| {
         debug!(error = %e, "an upload stopped before its end");
         ApiError::bad_request("The upload stopped before its end")

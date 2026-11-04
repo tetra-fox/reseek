@@ -472,7 +472,8 @@ async fn list(
 
 /// Takes a file from the caller's machine into the analysis cache, to analyze and play under the
 /// `temporary` root. It leaves no report, mark or judgment and goes when the cache needs the room
-/// or the daemon restarts.
+/// or the daemon restarts. A principal uploads one file at a time, and a body that stops coming
+/// for a minute is given up.
 #[utoipa::path(
   operation_id = "upload_for_analysis",
   post, path = "/analysis/uploads", tag = "analysis", params(AnalysisUploadQuery),
@@ -480,7 +481,8 @@ async fn list(
   responses(
     (status = 201, body = AnalysisUpload), (status = 400, body = api_types::ErrorBody),
     (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
-    (status = 413, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+    (status = 408, body = api_types::ErrorBody), (status = 413, body = api_types::ErrorBody),
+    (status = 429, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
 )]
 async fn upload(
