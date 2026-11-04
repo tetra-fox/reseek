@@ -52,11 +52,14 @@ impl Format {
   /// The WAV of this PCM, or why a WAV cannot hold it: its length and frame size have to fit
   /// the header's fields.
   fn fits(self) -> Result<Wav, String> {
+    if self.block() > u64::from(u16::MAX) {
+      return Err("it has too many channels for a WAV".to_string());
+    }
     let size = self
       .frames
       .checked_mul(self.block())
       .and_then(|pcm| pcm.checked_add(HEADER))
-      .filter(|size| *size <= MAX_RIFF && self.block() <= u64::from(u16::MAX))
+      .filter(|size| *size <= MAX_RIFF)
       .ok_or("it is too long for a WAV")?;
     Ok(Wav { format: self, size })
   }
