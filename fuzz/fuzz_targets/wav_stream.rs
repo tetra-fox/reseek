@@ -9,7 +9,7 @@ const WHOLE: u64 = 1 << 20;
 const RANGE: u64 = 5000;
 
 // a file is whatever a peer sent; the WAV made of it is refused with a reason, or reads the same
-// whole as in ranges
+// whole as in ranges, and a range of a WAV read whole cannot fail
 fuzz_target!(|data: &[u8]| {
   let Ok(size) = wav_length(data) else {
     return;
@@ -24,12 +24,17 @@ fuzz_target!(|data: &[u8]| {
   for start in [0, 40, size / 3, size / 2 + 1, size.saturating_sub(RANGE)] {
     let start = start.min(size - 1);
     let length = RANGE.min(size - start);
-    let Ok(part) = wav_bytes(data, start, length) else {
-      continue;
-    };
-    assert_eq!(part.len() as u64, length);
-    if let Some(whole) = &whole {
-      assert_eq!(part, whole[start as usize..(start + length) as usize]);
+    let part = wav_bytes(data, start, length);
+    match &whole {
+      Some(whole) => assert_eq!(
+        part.as_deref(),
+        Ok(&whole[start as usize..(start + length) as usize])
+      ),
+      None => {
+        if let Ok(part) = part {
+          assert_eq!(part.len() as u64, length);
+        }
+      }
     }
   }
 });

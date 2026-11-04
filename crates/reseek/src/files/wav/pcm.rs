@@ -26,12 +26,14 @@ pub(super) enum Source {
 }
 
 impl Source {
-  /// Moves to sample frame `frame` of `format`, or for ALAC to the packet that holds it.
-  fn seek(&mut self, format: &Format, frame: u64) -> Result<(), String> {
+  /// Moves to sample frame `frame` of `format`, or for ALAC to the packet that holds it; false
+  /// when the audio ends before that frame.
+  fn seek(&mut self, format: &Format, frame: u64) -> Result<bool, String> {
     match self {
+      // reading past the end of the file finds its end
       Self::Aiff(aiff, file) => file
         .seek(SeekFrom::Start(aiff.data_at + frame * format.block()))
-        .map(|_| ())
+        .map(|_| true)
         .map_err(|e| format!("seeking failed: {e}")),
       Self::Alac(decoder) => decoder.seek_frame(frame),
     }
@@ -151,6 +153,12 @@ impl Pcm {
     Bytes::from_static(&SILENCE[..given as usize])
   }
 
+  /// Notes that the source ended before the PCM, so the rest is silence.
+  fn end_source(&mut self) {
+    self.ended = true;
+    self.short = Some(self.end - self.at);
+  }
+
   /// Reads the next stretch of the source into `held`, or notes that the source ended.
   fn read(&mut self) -> Result<(), String> {
     let block = self.format.block();
@@ -159,15 +167,17 @@ impl Pcm {
       Some(next) => next,
       None => {
         let first = self.at / block;
-        self.source.seek(&self.format, first)?;
+        if !self.source.seek(&self.format, first)? {
+          self.end_source();
+          return Ok(());
+        }
         first * block
       }
     };
     let mut pcm = Vec::new();
     let frame = self.source.read(&self.format, &mut pcm)?;
     if pcm.is_empty() {
-      self.ended = true;
-      self.short = Some(self.end - self.at);
+      self.end_source();
       return Ok(());
     }
     let from = match frame {
