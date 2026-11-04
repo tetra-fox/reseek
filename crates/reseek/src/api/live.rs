@@ -441,7 +441,8 @@ mod tests {
     assert!(!check().await, "a revoked token ends the stream");
   }
 
-  #[tokio::test]
+  // the clock's ticks run on paused time, which moves on whenever every task waits
+  #[tokio::test(start_paused = true)]
   async fn transfer_figures_go_out_each_second_they_changed_while_a_stream_follows_them() {
     use std::time::Duration;
     let app = app(TRUSTED, &[]).await;
@@ -493,7 +494,7 @@ mod tests {
       "figures that did not change are not sent again"
     );
     succeeded(&app);
-    let started = std::time::Instant::now();
+    let started = tokio::time::Instant::now();
     let again = figures.next().await.unwrap();
     assert_eq!(again.event, "metrics.update");
     assert_eq!(again.data["downloads"]["completed"]["succeeded"], 2);
