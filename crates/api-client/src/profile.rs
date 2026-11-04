@@ -1,6 +1,6 @@
 //! The calls on our own profile: the text and picture other users are sent.
 
-use api_types::profile::{Interests, OwnProfile, ProfileText};
+use api_types::profile::{Interests, OwnProfile, PasswordChange, ProfileText};
 use bytes::Bytes;
 
 use super::{Client, Result, Route, bytes, done, json};
@@ -27,6 +27,15 @@ impl Client {
   /// `PUT /interests`: replaces what we like and hate.
   pub async fn set_interests(&self, interests: &Interests) -> Result<Interests> {
     json(self.put(Route::new("interests")).json(interests)).await
+  }
+
+  /// `PUT /application/password`: changes our Soulseek account's password, at the server first
+  /// and then where the option is kept.
+  pub async fn change_password(&self, password: &str) -> Result<()> {
+    let change = PasswordChange {
+      password: password.to_string(),
+    };
+    done(self.put(Route::new("application/password")).json(&change)).await
   }
 
   /// `GET /profile/picture`: the picture other users are sent.

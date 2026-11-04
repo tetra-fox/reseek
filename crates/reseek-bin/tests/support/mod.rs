@@ -351,24 +351,29 @@ pub async fn scripted(dir: &Path) -> (Daemon, Client, client::ServerSide) {
 /// The daemon in `dir` connected to the client harness's scripted server as its user, with the
 /// server's end of the connection, whose login is the test's to answer.
 pub async fn scripted_login(dir: &Path) -> (Daemon, client::ServerSide) {
+  scripted_login_with(dir, &["--slsk-password", client::PASSWORD]).await
+}
+
+/// [`scripted_login`] with `extra` arguments, which give the password unless the test's
+/// configuration file does.
+pub async fn scripted_login_with(dir: &Path, extra: &[&str]) -> (Daemon, client::ServerSide) {
   let fake = client::FakeServer::start().await;
   let port = fake.address().port().to_string();
   let listen = free_port().to_string();
-  let args = [
+  let mut args = vec![
     "--slsk-address",
     "127.0.0.1",
     "--slsk-port",
     &port,
     "--slsk-username",
     client::USERNAME,
-    "--slsk-password",
-    client::PASSWORD,
     "--slsk-listen-ip-address",
     "127.0.0.1",
     "--slsk-listen-port",
     &listen,
     "--slsk-no-port-mapping",
   ];
+  args.extend_from_slice(extra);
   let running = Daemon::start(dir, &args, &ACCOUNT);
   let server = fake.accept().await;
   (running, server)

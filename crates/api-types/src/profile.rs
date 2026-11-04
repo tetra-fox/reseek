@@ -57,7 +57,7 @@ pub struct Interests {
 }
 
 /// A new password for our Soulseek account, the body of `PUT /application/password`.
-#[derive(Clone, PartialEq, Eq, Deserialize, ToSchema)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PasswordChange {
   /// the new password
