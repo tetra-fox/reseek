@@ -64,9 +64,9 @@ impl Ended {
 }
 
 /// The wait before try `attempt`, the second or a later one: `delay`, doubled for every try
-/// between the first and this one, at most `max`, plus the shared jitter.
+/// between the first and this one, plus the shared jitter, at most `max` in all.
 fn retry_wait(attempt: u32, delay: Duration, max: Duration) -> Duration {
-  backoff::wait(attempt - 1, backoff::doubling(delay), max)
+  backoff::wait(attempt - 1, backoff::doubling(delay), max).min(max)
 }
 
 impl Downloads {
@@ -316,5 +316,12 @@ mod tests {
       [5, 10, 20, 40, 60, 60, 60, 60],
       "under a second of jitter"
     );
+  }
+
+  #[test]
+  fn the_jitter_never_takes_a_wait_past_the_most() {
+    for _ in 0..100 {
+      assert_eq!(retry_wait(9, 5 * SECOND, 60 * SECOND), 60 * SECOND);
+    }
   }
 }
