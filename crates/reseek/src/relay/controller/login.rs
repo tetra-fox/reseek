@@ -1,7 +1,8 @@
 //! Checking an agent's login: the name it gives must be a configured agent's, it must connect
-//! from one of that agent's networks, the challenge of its socket must still be valid, and its
-//! credential must be the one for that challenge. The checks run in that order and the first
-//! that fails is the reason the login is refused.
+//! from one of that agent's networks, the challenge of its socket must still be valid, its
+//! credential must be the one for that challenge, and its version must be on the controller's
+//! release line. The checks run in that order and the first that fails is the reason the login
+//! is refused, so only an agent that proved its secret learns that its version is refused.
 
 use std::net::IpAddr;
 use std::time::Duration;
@@ -12,6 +13,7 @@ use tokio::time::Instant;
 use super::Controller;
 use crate::config::RelayAgent;
 use reseek_relay_proto::credential::{Key, Purpose};
+use reseek_relay_proto::version;
 
 /// The challenge a socket was sent.
 pub(super) struct Challenge {
@@ -21,18 +23,29 @@ pub(super) struct Challenge {
   pub issued: Instant,
 }
 
-/// Checks the login of `name` with `credential` from `address` against the configured
-/// `agent` with that name, if any, and the `challenge` of the socket, if it still has one, at
-/// `now`; `key` derives the agent's key from its secret.
+/// What an agent's login says of it.
+pub(super) struct Login<'a> {
+  /// the address it connects from
+  pub address: IpAddr,
+  /// the credential for the challenge
+  pub credential: &'a str,
+  /// the version it says it is
+  pub version: &'a str,
+}
+
+/// Checks `login` against the configured `agent` with its name, if any, and the `challenge` of
+/// the socket, if it still has one, at `now`, for a controller of version `ours`; `key`
+/// derives the agent's key from its secret.
 pub(super) fn check(
   agent: Option<&RelayAgent>,
-  address: IpAddr,
+  login: &Login,
   challenge: Option<&Challenge>,
   lifetime: Duration,
   now: Instant,
-  credential: &str,
+  ours: &str,
   key: impl FnOnce(&str) -> Key,
 ) -> Result<(), LoginFailure> {
+  let (address, credential) = (login.address, login.credential);
   let agent = agent.ok_or(LoginFailure::UnknownAgent)?;
   if !Controller::address_allowed(agent, address) {
     return Err(LoginFailure::AddressNotAllowed);
@@ -45,6 +58,9 @@ pub(super) fn check(
   if !key(secret).verifies(Purpose::Login, &challenge.token, credential) {
     return Err(LoginFailure::BadCredential);
   }
+  if !version::compatible(ours, login.version) {
+    return Err(LoginFailure::IncompatibleVersion);
+  }
   Ok(())
 }
 
@@ -54,6 +70,7 @@ mod tests {
 
   const SECRET: &str = "0123456789abcdef";
   const LIFETIME: Duration = Duration::from_secs(10);
+  const OURS: &str = "0.4.2";
 
   fn agent(cidr: &str) -> RelayAgent {
     RelayAgent {
@@ -79,7 +96,12 @@ mod tests {
     let lan = agent("192.168.1.0/24, 10.0.0.0/8");
     let login =
       |agent: Option<&RelayAgent>, challenge: Option<&Challenge>, now, credential: &str| {
-        check(agent, home, challenge, LIFETIME, now, credential, key)
+        let login = Login {
+          address: home,
+          credential,
+          version: OURS,
+        };
+        check(agent, &login, challenge, LIFETIME, now, OURS, key)
       };
     assert_eq!(login(Some(&lan), Some(&challenge), issued, &right), Ok(()));
     assert_eq!(
@@ -114,6 +136,32 @@ mod tests {
     assert_eq!(
       login(Some(&lan), Some(&challenge), issued, &wrong),
       Err(LoginFailure::BadCredential)
+    );
+    let versioned = |version: &str, credential: &str| {
+      let login = Login {
+        address: home,
+        credential,
+        version,
+      };
+      check(
+        Some(&lan),
+        &login,
+        Some(&challenge),
+        LIFETIME,
+        issued,
+        OURS,
+        key,
+      )
+    };
+    assert_eq!(versioned("0.4.0", &right), Ok(()), "a patch apart");
+    assert_eq!(
+      versioned("0.5.0", &right),
+      Err(LoginFailure::IncompatibleVersion)
+    );
+    assert_eq!(
+      versioned("test", &wrong),
+      Err(LoginFailure::BadCredential),
+      "the version is checked once the agent proved its secret"
     );
   }
 }
