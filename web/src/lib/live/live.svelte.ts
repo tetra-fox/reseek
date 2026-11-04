@@ -204,6 +204,14 @@ export class Live {
     if (stream !== this.#stream) return;
     this.#stream = null;
     if (end.kind === "unauthorized") return this.#unauthorized();
+    // the stream for the new topics replays from the last frame too, so it is the one being
+    // opened now, and a retry is only waited for while no stream is open or opening
+    if (this.#replacing) {
+      this.#stream = this.#replacing;
+      this.#replacing = null;
+      this.status = "connecting";
+      return;
+    }
     this.#lost(end);
   }
 

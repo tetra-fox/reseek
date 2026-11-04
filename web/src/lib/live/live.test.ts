@@ -196,6 +196,33 @@ describe("Live", () => {
     expect(server.opened).toHaveLength(2);
   });
 
+  it("lets a new-topics stream take over when the old one drops before it greets", async () => {
+    const server = fakeServer();
+    const live = make(server.fetcher);
+    live.retain("application");
+    const removed: string[] = [];
+    live.on("users.removed", (data) => removed.push(data.username));
+    live.start();
+    server.opened[0].send(hello(1));
+    await settle();
+    live.retain("users");
+    await vi.advanceTimersByTimeAsync(250);
+    expect(server.opened).toHaveLength(2);
+
+    server.opened[0].end();
+    await settle();
+    server.opened[1].send(hello(1, true));
+    await settle();
+    expect(live.status).toBe("connected");
+
+    // nothing else is opened, and every frame is handed over once
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(server.opened).toHaveLength(2);
+    server.opened[1].send(frame(2, "users.removed", { username: "once" }));
+    await settle();
+    expect(removed).toEqual(["once"]);
+  });
+
   it("takes a silent stream for dead", async () => {
     const server = fakeServer();
     const live = make(server.fetcher);
