@@ -10,6 +10,8 @@ mod downloads;
 mod files;
 mod session;
 mod sync;
+#[cfg(test)]
+mod tests;
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -118,13 +120,18 @@ impl AgentClient {
     }
   }
 
-  /// Closes the connection to the controller and stops dialing.
+  /// Closes the connection to the controller and stops dialing. A socket a dial opens after
+  /// this is closed before it is served.
   pub fn stop(&self) {
-    self.started.send_replace(false);
-    if let Some(link) = self.current() {
+    let link = {
+      let mut current = lock(&self.link);
+      self.started.send_replace(false);
+      self.set_state(RelayConnectionState::Disconnected);
+      current.take()
+    };
+    if let Some(link) = link {
       link.close(close::NORMAL);
     }
-    self.set_state(RelayConnectionState::Disconnected);
   }
 
   /// Uploads the shares again now; false when the agent is not logged in.
@@ -145,6 +152,17 @@ impl AgentClient {
     self
       .state
       .update(|current| current.relay.controller.state = state);
+  }
+
+  /// Publishes `state` while the agent is meant to be connected, and, for the phase of a
+  /// socket, while `link` is the socket open. A stop holds the same lock, so nothing published
+  /// here follows its `Disconnected`.
+  fn publish(&self, link: Option<&Arc<Link>>, state: RelayConnectionState) {
+    let current = lock(&self.link);
+    let open = link.is_none_or(|link| current.as_ref().is_some_and(|c| Arc::ptr_eq(c, link)));
+    if *self.started.borrow() && open {
+      self.set_state(state);
+    }
   }
 
   /// Waits until the agent is meant to be connected; false when the daemon stops first.
@@ -188,11 +206,14 @@ impl AgentClient {
           continue;
         }
       }
-      self.set_state(if failures == 0 {
-        RelayConnectionState::Connecting
-      } else {
-        RelayConnectionState::Reconnecting
-      });
+      self.publish(
+        None,
+        if failures == 0 {
+          RelayConnectionState::Connecting
+        } else {
+          RelayConnectionState::Reconnecting
+        },
+      );
       let attempt = failures + 1;
       failures += 1;
       let settings = match Settings::new(&self.config.current().values) {
@@ -220,7 +241,6 @@ impl AgentClient {
         }
       };
       info!(address = %settings.address, "connected to the relay controller");
-      self.set_state(RelayConnectionState::Authenticating);
       let ended = self.serve(socket, settings).await;
       if ended.ready {
         failures = 1;
@@ -231,11 +251,11 @@ impl AgentClient {
         Some(reason) => self.warn_once(reason, "the relay controller refused this agent"),
         None => info!(code = ended.code, "relay controller connection lost"),
       }
-      self.set_state(if *self.started.borrow() && !self.shutdown.is_cancelled() {
-        RelayConnectionState::Reconnecting
+      if self.shutdown.is_cancelled() {
+        self.set_state(RelayConnectionState::Disconnected);
       } else {
-        RelayConnectionState::Disconnected
-      });
+        self.publish(None, RelayConnectionState::Reconnecting);
+      }
     }
   }
 

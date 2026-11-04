@@ -130,7 +130,21 @@ impl AgentClient {
       share_answer: std::sync::Mutex::new(None),
       refusal: std::sync::Mutex::new(None),
     });
-    *lock(&self.link) = Some(link.clone());
+    {
+      let mut current = lock(&self.link);
+      if !*self.started.borrow() {
+        drop(current);
+        debug!("the agent was stopped while dialing; the socket is closed unserved");
+        send_close(&mut socket, close::NORMAL).await;
+        return Ended {
+          ready: false,
+          code: None,
+          refusal: None,
+        };
+      }
+      *current = Some(link.clone());
+      self.set_state(RelayConnectionState::Authenticating);
+    }
     let opened = Instant::now();
     let mut heard = opened;
     let mut ping = tokio::time::interval_at(opened + PING_EVERY, PING_EVERY);
@@ -250,7 +264,7 @@ impl AgentClient {
       RelayMessage::LoginOk { server_version, .. } => {
         info!(controller_version = server_version, "Login succeeded.");
         link.logged_in.store(true, Ordering::Release);
-        self.set_state(RelayConnectionState::Connected);
+        self.publish(Some(link), RelayConnectionState::Connected);
         self.request_sync();
       }
       RelayMessage::LoginFailed { reason } => {

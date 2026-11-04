@@ -104,7 +104,7 @@ impl AgentClient {
     match self.upload_shares(link).await {
       Ok(()) => {
         link.set_ready();
-        self.set_state(RelayConnectionState::Ready);
+        self.publish(Some(link), RelayConnectionState::Ready);
         info!("Shares uploaded. Ready to relay files.");
       }
       Err(e) => {
