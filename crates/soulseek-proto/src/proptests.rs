@@ -14,7 +14,9 @@ use crate::frame::{self, FrameKind};
 use crate::init::InitMessage;
 use crate::limits::Limits;
 use crate::model::{FileAttributeType, TransferDirection};
-use crate::peer::{self, PeerMessage, TransferRequest, peek_search_response};
+use crate::peer::{
+  self, PeerMessage, TransferRequest, peek_folder_contents_token, peek_search_response,
+};
 use crate::server::{ServerRequest, ServerResponse};
 use crate::testing::zlib as compress;
 use crate::wire::{RemoteFilename, Secret, Writer};
@@ -210,6 +212,7 @@ proptest! {
     assert_canonical!(DistributedMessage, &bytes);
     // any result is fine, this only checks it does not panic
     let _ = peek_search_response(&bytes, &Limits::DEFAULT);
+    let _ = peek_folder_contents_token(&bytes, &Limits::DEFAULT);
   }
 
   #[test]
@@ -221,8 +224,35 @@ proptest! {
   #[test]
   fn peer_frames_decode_or_fail(bytes in prop_oneof![peer_frames(), compressed_peer_frames()]) {
     assert_canonical!(PeerMessage, &bytes);
-    // any result is fine, this only checks it does not panic
-    let _ = peek_search_response(&bytes, &Limits::DEFAULT);
+    // a peek reads what the whole decode reads, or fails
+    let decoded = PeerMessage::decode(&bytes);
+    if let (Ok(peeked), Ok(PeerMessage::SearchResponse(r))) = (peek_search_response(&bytes, &Limits::DEFAULT), &decoded) {
+      prop_assert_eq!(peeked, (r.username.clone(), r.token));
+    }
+    if let (Ok(token), Ok(PeerMessage::FolderContentsResponse(r))) = (peek_folder_contents_token(&bytes, &Limits::DEFAULT), &decoded) {
+      prop_assert_eq!(token, r.token);
+    }
+  }
+
+  #[test]
+  fn each_compressed_message_inflates_to_its_own_limit(
+    code in proptest::sample::select(vec![PeerCode::BrowseResponse, PeerCode::FolderContentsResponse, PeerCode::SearchResponse]),
+    len in 0usize..400,
+  ) {
+    let limits = Limits {
+      inflated_browse_bytes: 300,
+      inflated_folder_bytes: 200,
+      inflated_search_bytes: 100,
+      ..Limits::DEFAULT
+    };
+    let limit = limits.inflated_bytes(code).unwrap();
+    let mut w = Writer::frame(FrameKind::Peer, code.code());
+    w.bytes(&compress(&vec![0; len]));
+    let too_large = matches!(
+      PeerMessage::decode_with(&w.finish(), &limits),
+      Err(crate::DecodeError::Field { error: FieldError::InflatedTooLarge { limit: refused }, .. }) if refused == limit
+    );
+    prop_assert_eq!(too_large, len > limit);
   }
 
   #[test]
@@ -279,7 +309,13 @@ proptest! {
     let mut w = Writer::frame(FrameKind::Peer, code);
     w.bytes(&compress(&body.into_body()));
     let frame = w.finish();
-    let limits = Limits { files_per_response: 4, inflated_bytes: 4096, ..Limits::DEFAULT };
+    let limits = Limits {
+      files_per_response: 4,
+      inflated_browse_bytes: 4096,
+      inflated_folder_bytes: 4096,
+      inflated_search_bytes: 4096,
+      ..Limits::DEFAULT
+    };
     if let Ok(message) = PeerMessage::decode_with(&frame, &limits) {
       let files = match &message {
         PeerMessage::SearchResponse(r) => r.files.len() + r.locked_files.len(),

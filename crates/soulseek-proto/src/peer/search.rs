@@ -1,17 +1,12 @@
 //! Search requests between peers and the compressed search response.
 
-use std::io::Read;
-
-use flate2::bufread::ZlibDecoder;
-
 use super::browse::{File, read_files};
-use super::{read_compressed, write_compressed, zlib_error};
+use super::{peek, read_compressed, write_compressed};
 use crate::codec::{Wire, wire_struct};
 use crate::codes::PeerCode;
-use crate::error::{DecodeError, FieldError};
-use crate::frame::{self, FrameKind};
+use crate::error::DecodeError;
 use crate::limits::{LIMIT_STRING_BYTES, Limits};
-use crate::log::{self, KeyFields};
+use crate::log::KeyFields;
 use crate::wire::{Reader, Writer};
 
 wire_struct! {
@@ -44,29 +39,33 @@ impl Wire for SearchResponse {
   const MIN_BYTES: usize = 0;
 
   fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
-    read_compressed(r, |r| {
-      let username = r.string("username")?;
-      let token = r.u32("token")?;
-      let files = read_files(r, "files")?;
-      let has_free_upload_slot = r.bool("has_free_upload_slot")?;
-      let upload_speed = r.u32("upload_speed")?;
-      let queue_length = r.u32("queue_length")?;
-      let mut locked_files = Vec::new();
-      // read only when they fit, so a stray trailing byte is not an error; the unknown u32 is
-      // always 0 and discarded
-      if r.optional_fixed::<u32>("unknown")?.is_some() && r.fits::<Vec<File>>() {
-        locked_files = read_files(r, "locked_files")?;
-      }
-      Ok(Self {
-        username,
-        token,
-        files,
-        has_free_upload_slot,
-        upload_speed,
-        queue_length,
-        locked_files,
-      })
-    })
+    read_compressed(
+      r,
+      |limits| limits.inflated_search_bytes,
+      |r| {
+        let username = r.string("username")?;
+        let token = r.u32("token")?;
+        let files = read_files(r, "files")?;
+        let has_free_upload_slot = r.bool("has_free_upload_slot")?;
+        let upload_speed = r.u32("upload_speed")?;
+        let queue_length = r.u32("queue_length")?;
+        let mut locked_files = Vec::new();
+        // read only when they fit, so a stray trailing byte is not an error; the unknown u32 is
+        // always 0 and discarded
+        if r.optional_fixed::<u32>("unknown")?.is_some() && r.fits::<Vec<File>>() {
+          locked_files = read_files(r, "locked_files")?;
+        }
+        Ok(Self {
+          username,
+          token,
+          files,
+          has_free_upload_slot,
+          upload_speed,
+          queue_length,
+          locked_files,
+        })
+      },
+    )
   }
 
   fn write(&self, w: &mut Writer) {
@@ -92,54 +91,24 @@ impl Wire for SearchResponse {
 /// Inflates only the `username` and `token` that start a `SearchResponse` frame, so a response
 /// whose token is not a live search can be dropped before the rest is inflated
 pub fn peek_search_response(bytes: &[u8], limits: &Limits) -> Result<(String, u32), DecodeError> {
-  let frame = frame::exact(FrameKind::Peer, bytes, limits)?;
-  if frame.code != PeerCode::SearchResponse.code() {
-    // the caller handed over a frame of another message, not malformed remote input
-    tracing::debug!(
-      code = frame.code,
-      "search response peek given another message"
-    );
-    return Err(DecodeError::Field {
-      message: PeerCode::SearchResponse.name(),
-      field: "code",
-      error: FieldError::InvalidValue { value: frame.code },
-    });
-  }
-  peek_prefix(frame.payload, limits).inspect_err(|error| {
-    log::rejected(
-      "peer",
-      frame.code,
-      Some(PeerCode::SearchResponse.name()),
+  peek(bytes, limits, PeerCode::SearchResponse, |prefix, limits| {
+    let message = PeerCode::SearchResponse.name();
+    let body = |error| DecodeError::Field {
+      message,
+      field: "body",
       error,
-    )
+    };
+    let start = prefix.inflate(4).map_err(body)?;
+    let len = Reader::new(start, limits, message).string_len(LIMIT_STRING_BYTES, "username")?;
+    let mut r = Reader::new(prefix.inflate(len + 4).map_err(body)?, limits, message);
+    Ok((r.string("username")?, r.u32("token")?))
   })
-}
-
-fn peek_prefix(compressed: &[u8], limits: &Limits) -> Result<(String, u32), DecodeError> {
-  let message = PeerCode::SearchResponse.name();
-  let body_error = |error| DecodeError::Field {
-    message,
-    field: "body",
-    error: zlib_error(error),
-  };
-  let mut decoder = ZlibDecoder::new(compressed);
-  let mut prefix = Vec::new();
-  (&mut decoder)
-    .take(4)
-    .read_to_end(&mut prefix)
-    .map_err(body_error)?;
-  let len = Reader::new(&prefix, limits, message).string_len(LIMIT_STRING_BYTES, "username")?;
-  decoder
-    .take(len as u64 + 4)
-    .read_to_end(&mut prefix)
-    .map_err(body_error)?;
-  let mut r = Reader::new(&prefix, limits, message);
-  Ok((r.string("username")?, r.u32("token")?))
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
   use super::*;
+  use crate::error::FieldError;
   use crate::peer::PeerMessage;
   use crate::peer::browse::tests::{flac, flac_bytes, mp3, mp3_bytes};
   use crate::testing::{decodes, field, p, vectors};
@@ -216,6 +185,20 @@ pub(crate) mod tests {
   }
 
   #[test]
+  fn search_response_inflates_to_far_less_than_a_browse_response() {
+    // every peer that saw the search can answer it, so its body is held to a small cap
+    let frame = p().s("bob").u32(1).raw(&vec![0; 16 << 20]).zframe(9);
+    assert_eq!(
+      PeerMessage::decode(&frame),
+      Err(field(
+        "SearchResponse",
+        "body",
+        FieldError::InflatedTooLarge { limit: 16 << 20 }
+      ))
+    );
+  }
+
+  #[test]
   fn search_response_honors_configured_limits() {
     let response = PeerMessage::SearchResponse(SearchResponse {
       username: "bob".into(),
@@ -240,7 +223,7 @@ pub(crate) mod tests {
       ))
     );
     let inflated = Limits {
-      inflated_bytes: 16,
+      inflated_search_bytes: 16,
       ..Limits::DEFAULT
     };
     assert_eq!(

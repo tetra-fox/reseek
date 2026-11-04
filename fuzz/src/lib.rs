@@ -10,7 +10,9 @@ use soulseek_proto::{DecodeError, Limits, PeerMessage};
 
 /// keeps a fuzz run's memory bounded while still exercising the inflate limit
 pub const LIMITS: Limits = Limits {
-  inflated_bytes: 16 << 20,
+  inflated_browse_bytes: 16 << 20,
+  inflated_folder_bytes: 16 << 20,
+  inflated_search_bytes: 16 << 20,
   ..Limits::DEFAULT
 };
 

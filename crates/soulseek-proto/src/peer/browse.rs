@@ -1,10 +1,11 @@
 //! Browsing a peer's shares and one of its folders, and the `File` and `Directory` layouts every
 //! compressed response shares.
 
-use super::{read_compressed, write_compressed};
+use super::{peek, read_compressed, write_compressed};
 use crate::codec::{Wire, wire_struct};
+use crate::codes::PeerCode;
 use crate::error::{DecodeError, FieldError};
-use crate::limits::LIMIT_ATTRIBUTES_PER_FILE;
+use crate::limits::{LIMIT_ATTRIBUTES_PER_FILE, Limits};
 use crate::log::KeyFields;
 use crate::model::FileAttributeType;
 use crate::wire::{Reader, RemoteFilename, Writer};
@@ -209,18 +210,22 @@ impl Wire for BrowseResponse {
   const MIN_BYTES: usize = 0;
 
   fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
-    read_compressed(r, |r| {
-      let directories = read_directories(r, "directories")?;
-      let mut locked_directories = Vec::new();
-      // the unknown u32 is always 0 and discarded
-      if r.optional::<u32>("unknown")?.is_some() && r.has_more() {
-        locked_directories = read_directories(r, "locked_directories")?;
-      }
-      Ok(Self {
-        directories,
-        locked_directories,
-      })
-    })
+    read_compressed(
+      r,
+      |limits| limits.inflated_browse_bytes,
+      |r| {
+        let directories = read_directories(r, "directories")?;
+        let mut locked_directories = Vec::new();
+        // the unknown u32 is always 0 and discarded
+        if r.optional::<u32>("unknown")?.is_some() && r.has_more() {
+          locked_directories = read_directories(r, "locked_directories")?;
+        }
+        Ok(Self {
+          directories,
+          locked_directories,
+        })
+      },
+    )
   }
 
   fn write(&self, w: &mut Writer) {
@@ -264,13 +269,17 @@ impl Wire for FolderContentsResponse {
   const MIN_BYTES: usize = 0;
 
   fn read(r: &mut Reader, _field: &'static str) -> Result<Self, DecodeError> {
-    read_compressed(r, |r| {
-      Ok(Self {
-        token: r.u32("token")?,
-        directory_name: r.filename("directory_name")?,
-        directories: read_directories(r, "directories")?,
-      })
-    })
+    read_compressed(
+      r,
+      |limits| limits.inflated_folder_bytes,
+      |r| {
+        Ok(Self {
+          token: r.u32("token")?,
+          directory_name: r.filename("directory_name")?,
+          directories: read_directories(r, "directories")?,
+        })
+      },
+    )
   }
 
   fn write(&self, w: &mut Writer) {
@@ -286,6 +295,25 @@ impl Wire for FolderContentsResponse {
     fields.token = Some(self.token);
     fields.count = Some(self.directories.len());
   }
+}
+
+/// Inflates only the `token` that starts a `FolderContentsResponse` frame, so a response nobody
+/// asked for can be dropped before the rest is inflated
+pub fn peek_folder_contents_token(bytes: &[u8], limits: &Limits) -> Result<u32, DecodeError> {
+  peek(
+    bytes,
+    limits,
+    PeerCode::FolderContentsResponse,
+    |prefix, limits| {
+      let message = PeerCode::FolderContentsResponse.name();
+      let start = prefix.inflate(4).map_err(|error| DecodeError::Field {
+        message,
+        field: "body",
+        error,
+      })?;
+      Reader::new(start, limits, message).u32("token")
+    },
+  )
 }
 
 #[cfg(test)]

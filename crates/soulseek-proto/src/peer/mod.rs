@@ -20,7 +20,9 @@ use flate2::bufread::{ZlibDecoder, ZlibEncoder};
 use crate::codec::family;
 use crate::codes::PeerCode;
 use crate::error::{DecodeError, FieldError};
+use crate::frame::{self, FrameKind};
 use crate::limits::Limits;
+use crate::log;
 use crate::wire::{Reader, Writer};
 
 family! {
@@ -96,15 +98,67 @@ fn zlib_error(error: std::io::Error) -> FieldError {
   }
 }
 
-/// inflates the rest of the payload and reads the body from it, with a fresh file and directory
-/// allowance
+/// inflates the rest of the payload, up to the limit `limit` picks, and reads the body from it,
+/// with a fresh file and directory allowance
 fn read_compressed<T>(
   r: &mut Reader,
+  limit: impl FnOnce(&Limits) -> usize,
   read: impl FnOnce(&mut Reader) -> Result<T, DecodeError>,
 ) -> Result<T, DecodeError> {
   let limits = r.limits();
-  let body = inflate(r.rest(), limits.inflated_bytes).map_err(|error| r.fail("body", error))?;
+  let body = inflate(r.rest(), limit(limits)).map_err(|error| r.fail("body", error))?;
   read(&mut Reader::new(&body, limits, r.message()))
+}
+
+/// The start of a compressed body, inflated only as far as it is read, so a message can be
+/// routed by its first fields before the rest is inflated
+pub(crate) struct Prefix<'a> {
+  decoder: ZlibDecoder<&'a [u8]>,
+  inflated: Vec<u8>,
+}
+
+impl<'a> Prefix<'a> {
+  pub(crate) fn new(compressed: &'a [u8]) -> Self {
+    Self {
+      decoder: ZlibDecoder::new(compressed),
+      inflated: Vec::new(),
+    }
+  }
+
+  /// inflates `more` bytes past those inflated so far, and returns all of them
+  pub(crate) fn inflate(&mut self, more: usize) -> Result<&[u8], FieldError> {
+    (&mut self.decoder)
+      .take(more as u64)
+      .read_to_end(&mut self.inflated)
+      .map_err(zlib_error)?;
+    Ok(&self.inflated)
+  }
+}
+
+/// Reads the first fields of a compressed peer frame of `code` with `read`, inflating no more
+/// than it asks for. A frame of another code is an error.
+pub(crate) fn peek<T>(
+  bytes: &[u8],
+  limits: &Limits,
+  code: PeerCode,
+  read: impl FnOnce(&mut Prefix, &Limits) -> Result<T, DecodeError>,
+) -> Result<T, DecodeError> {
+  let frame = frame::exact(FrameKind::Peer, bytes, limits)?;
+  if frame.code != code.code() {
+    // the caller handed over a frame of another message, not malformed remote input
+    tracing::debug!(
+      code = frame.code,
+      expected = code.code(),
+      "peek given another message"
+    );
+    return Err(DecodeError::Field {
+      message: code.name(),
+      field: "code",
+      error: FieldError::InvalidValue { value: frame.code },
+    });
+  }
+  read(&mut Prefix::new(frame.payload), limits)
+    .inspect_err(|error| log::rejected("peer", frame.code, Some(code.name()), error))
 }
 
 fn write_compressed(w: &mut Writer, write: impl FnOnce(&mut Writer)) {

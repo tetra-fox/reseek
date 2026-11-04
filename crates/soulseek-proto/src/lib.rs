@@ -38,6 +38,6 @@ pub use model::*;
 pub use names::{
   LoginUsernameError, RoomNameError, SERVER_USERNAME, validate_login_username, validate_room_name,
 };
-pub use peer::{PeerMessage, peek_search_response};
+pub use peer::{PeerMessage, peek_folder_contents_token, peek_search_response};
 pub use server::{PROTOCOL_MAJOR_VERSION, PROTOCOL_MINOR_VERSION, ServerRequest, ServerResponse};
 pub use wire::{RemoteFilename, Secret};
