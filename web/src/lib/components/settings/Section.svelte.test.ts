@@ -328,4 +328,65 @@ describe("a settings section", () => {
     );
     vi.unstubAllGlobals();
   });
+
+  it("saves after an apply that is still running, rather than skipping the save", async () => {
+    const asked: { path: string; body: unknown }[] = [];
+    let answerApply!: () => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (request: Request) => {
+        const path = new URL(request.url).pathname;
+        asked.push({ path, body: await request.json() });
+        if (path.endsWith("/options")) await new Promise<void>((done) => (answerApply = done));
+        return Response.json({
+          revision: "sha256:2",
+          applied: [],
+          reconnectRequired: [],
+          restartRequired: []
+        });
+      })
+    );
+    // the time limit lives in a file that can't be written, so it is applied at runtime
+    const v = structuredClone(view);
+    v.files.push({ ...v.files[0], name: "ro.toml", writable: false, readOnlyReason: "mounted" });
+    v.fields["analysis.timeout"].file = "ro.toml";
+    const target = document.createElement("div");
+    document.body.append(target);
+    const component = mount(Section, {
+      target,
+      props: {
+        section: sections.find((s) => s.id === "analysis")!,
+        view: v,
+        onchanged: async () => {}
+      }
+    });
+    mounted.push(component);
+    flushSync();
+    const type = (key: string, text: string) => {
+      const input = target.querySelector<HTMLInputElement>(`[id="${key}"]`)!;
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      flushSync();
+    };
+    type("analysis.timeout", "5m");
+    type("analysis.max_full_minutes", "20");
+    const trigger = [...target.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Apply at runtime")
+    )!;
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+    await flush();
+    [...document.querySelectorAll<HTMLElement>("[role=menuitem]")]
+      .find((i) => i.textContent?.trim() === "Until removed")!
+      .click();
+    await flush();
+    expect(asked.map((a) => a.path)).toEqual(["/api/v0/options"]);
+
+    // the page's Save all, while the apply runs
+    const saved = (component as unknown as { save: () => Promise<unknown> }).save();
+    answerApply();
+    await saved;
+    expect(asked.map((a) => a.path)).toEqual(["/api/v0/options", "/api/v0/options/file"]);
+    expect(asked[1].body).toMatchObject({ set: { "analysis.max_full_minutes": 20 } });
+    vi.unstubAllGlobals();
+  });
 });
