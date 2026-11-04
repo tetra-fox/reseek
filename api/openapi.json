@@ -5351,7 +5351,7 @@
         "tags": [
           "relay"
         ],
-        "summary": "The relay's state: the mode, the controller connection and the agents.",
+        "summary": "The relay's state: whether it is on, and the agents connected to this controller.",
         "operationId": "state",
         "responses": {
           "200": {
@@ -5375,146 +5375,6 @@
             }
           },
           "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v0/relay/agent": {
-      "put": {
-        "tags": [
-          "relay"
-        ],
-        "summary": "Starts this agent's connection to its controller. Needs someone at the UI.",
-        "operationId": "start_agent",
-        "responses": {
-          "200": {
-            "description": "connecting"
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "relay"
-        ],
-        "summary": "Closes this agent's connection to its controller. Needs someone at the UI.",
-        "operationId": "stop_agent",
-        "responses": {
-          "204": {
-            "description": "disconnected"
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v0/relay/agent/sync": {
-      "post": {
-        "tags": [
-          "relay"
-        ],
-        "summary": "Sends this agent's shares to its controller again. Needs someone at the UI.",
-        "operationId": "sync",
-        "responses": {
-          "202": {
-            "description": "sending"
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "503": {
             "description": "",
             "content": {
               "application/json": {
@@ -22501,38 +22361,6 @@
           }
         }
       },
-      "RelayConnectionState": {
-        "type": "string",
-        "description": "The state of an agent's connection to its controller.",
-        "enum": [
-          "Disconnected",
-          "Connecting",
-          "Connected",
-          "Reconnecting",
-          "Authenticating",
-          "Ready"
-        ]
-      },
-      "RelayControllerState": {
-        "type": "object",
-        "description": "An agent's view of its controller.",
-        "required": [
-          "state"
-        ],
-        "properties": {
-          "address": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "the configured controller address in agent and debug mode, without credentials"
-          },
-          "state": {
-            "$ref": "#/components/schemas/RelayConnectionState",
-            "description": "the connection's state, `Disconnected` when the relay is off or this is a controller"
-          }
-        }
-      },
       "RelayFileUploadResult": {
         "type": "object",
         "description": "The answer to `POST /relay/controller/files/{token}`, sent once the transfer to the peer\nended.",
@@ -22553,21 +22381,11 @@
           }
         }
       },
-      "RelayMode": {
-        "type": "string",
-        "description": "Which side of a relay this instance is.",
-        "enum": [
-          "Controller",
-          "Agent",
-          "Debug"
-        ]
-      },
       "RelayState": {
         "type": "object",
-        "description": "Relay mode, the controller connection and the connected agents, as part of the application\nstate.",
+        "description": "Relay mode and the agents connected to this controller, as part of the application state.",
         "required": [
-          "mode",
-          "controller",
+          "enabled",
           "agents"
         ],
         "properties": {
@@ -22576,15 +22394,11 @@
             "items": {
               "$ref": "#/components/schemas/RelayAgentState"
             },
-            "description": "the agents connected to this controller, empty unless this is a controller"
+            "description": "the agents connected to this controller, empty while relay mode is off"
           },
-          "controller": {
-            "$ref": "#/components/schemas/RelayControllerState",
-            "description": "an agent's view of its controller"
-          },
-          "mode": {
-            "$ref": "#/components/schemas/RelayMode",
-            "description": "the configured mode, reported even when the relay is off"
+          "enabled": {
+            "type": "boolean",
+            "description": "whether relay mode is on, which makes this daemon a controller its agents connect to"
           }
         }
       },

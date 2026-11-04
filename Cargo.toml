@@ -8,6 +8,7 @@ members = [
   "crates/soulseek-proto",
   "crates/soulseek-client",
   "crates/reseek",
+  "crates/reseek-agent",
   "crates/reseek-bin",
   "crates/reseek-relay-proto",
   "crates/reseek-shares",
@@ -27,6 +28,7 @@ api-types = { path = "crates/api-types" }
 cascade = { path = "crates/cascade" }
 cascade-derive = { path = "crates/cascade-derive" }
 reseek = { path = "crates/reseek" }
+reseek-agent = { path = "crates/reseek-agent" }
 reseek-relay-proto = { path = "crates/reseek-relay-proto" }
 reseek-shares = { path = "crates/reseek-shares" }
 reseek-ui-assets = { path = "crates/reseek-ui-assets" }
@@ -37,6 +39,7 @@ base64 = "0.22"
 bitflags = "2"
 bytesize = { version = "2", features = ["serde"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+directories = "6"
 flate2 = "1"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 glob = "0.3"

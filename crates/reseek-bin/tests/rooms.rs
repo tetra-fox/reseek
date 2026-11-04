@@ -105,7 +105,7 @@ async fn a_configured_room_keeps_its_history_and_its_gaps_across_a_restart() {
 
   api.shut_down().await.unwrap();
   let mut stopped = running;
-  stopped.child.wait().unwrap();
+  stopped.process.child.wait().unwrap();
   // a gap of under a second is not one
   tokio::time::sleep(Duration::from_millis(1500)).await;
   let running = daemon(dir.path(), &server, &name, &[]);
@@ -182,7 +182,7 @@ async fn the_rooms_we_were_in_are_joined_again_after_a_restart_until_left() {
   api.leave_room(&left).await.unwrap();
   api.shut_down().await.unwrap();
   let mut stopped = running;
-  stopped.child.wait().unwrap();
+  stopped.process.child.wait().unwrap();
   // with us gone the room is empty and its name free, and a private room takes it
   let owner = server.login("owner", quiet()).await;
   owner
@@ -198,12 +198,13 @@ async fn the_rooms_we_were_in_are_joined_again_after_a_restart_until_left() {
   })
   .await;
   running
+    .process
     .printed_line(&["can no longer be joined; forgotten", &taken])
     .await;
   api.join_room(&last, false).await.unwrap().expect("joined");
   api.shut_down().await.unwrap();
   let mut stopped = running;
-  stopped.child.wait().unwrap();
+  stopped.process.child.wait().unwrap();
 
   // the rooms are joined again in the order they were joined, so the last one comes after
   // any attempt at the forgotten one
@@ -215,7 +216,7 @@ async fn the_rooms_we_were_in_are_joined_again_after_a_restart_until_left() {
   .await;
   assert_eq!(state.rooms, [kept, last], "the left room stays left");
   assert!(
-    !running.printed().contains(&taken),
+    !running.process.printed().contains(&taken),
     "the forgotten room is not tried again"
   );
 }
@@ -241,7 +242,7 @@ async fn a_room_taken_out_of_the_configuration_is_not_joined_after_a_restart() {
   }
   api.shut_down().await.unwrap();
   let mut stopped = running;
-  stopped.child.wait().unwrap();
+  stopped.process.child.wait().unwrap();
 
   // the room joined by hand is listed too, and stays ours once the list drops it
   std::fs::write(&config, format!("rooms = [\"{both}\"]\n")).unwrap();
@@ -253,7 +254,7 @@ async fn a_room_taken_out_of_the_configuration_is_not_joined_after_a_restart() {
   .await;
   api.shut_down().await.unwrap();
   let mut stopped = running;
-  stopped.child.wait().unwrap();
+  stopped.process.child.wait().unwrap();
 
   std::fs::write(&config, "").unwrap();
   let running = daemon(dir.path(), &server, &name, &[]);

@@ -32,7 +32,7 @@ pub use notifications::{
   ChatNotifications, NotificationMode, Notifications, TransferNotifications,
 };
 pub use paths::{Directories, Paths};
-pub use relay::{Relay, RelayAgent, RelayController, RelayLimits, RelayTimeouts};
+pub use relay::{Relay, RelayAgent, RelayLimits, RelayTimeouts};
 pub use reseek_shares::options::{MAX_SCAN_WORKERS, ShareCache, Shares};
 pub use retention::{
   FileRetention, MessageRetention, RETENTION_SWEEP, Retention, TransferRetention,
@@ -69,7 +69,7 @@ pub struct Options {
     cli = "--remote-file-management"
   )]
   pub remote_file_management: bool,
-  /// Name of this instance in logs and to a relay controller.
+  /// Name of this instance in logs.
   #[cascade(
     env = "RESEEK_INSTANCE_NAME",
     cli = "-i|--instance-name",

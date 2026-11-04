@@ -4,7 +4,7 @@ import { editability } from "./editability";
 import { type ConfigView, controlOf, errorsByKey, fromDraft, toDraft } from "./fields";
 import fixture from "./fixtures/view.json";
 import { asNixSettings } from "./nix";
-import { sections, valueAt } from "./sections";
+import { sections, unlisted, valueAt } from "./sections";
 
 /**
  * The daemon's options view of the default configuration with an empty config.toml, written by
@@ -49,8 +49,18 @@ describe("the settings forms", () => {
   it("give every option of the daemon a section and a name of its own", () => {
     const fields = sections.flatMap((s) => s.fields);
     const named = new Set(fields.map((f) => f.key));
-    expect(Object.keys(view.fields).filter((key) => !named.has(key))).toEqual([]);
+    expect(Object.keys(view.fields).filter((key) => !named.has(key) && !unlisted.has(key))).toEqual(
+      []
+    );
     expect(fields.filter((f) => f.label === f.key)).toEqual([]);
+  });
+
+  it("leave out only options with a single choice, which there is nothing to set", () => {
+    const named = new Set(sections.flatMap((s) => s.fields.map((f) => f.key)));
+    for (const key of unlisted) {
+      expect([key, view.fields[key].choices?.length]).toEqual([key, 1]);
+      expect([key, named.has(key)]).toEqual([key, false]);
+    }
   });
 
   it("label every field of every table", () => {
@@ -79,7 +89,9 @@ describe("controls and drafts", () => {
     expect(controlOf(field("web.port"), view.fields["web.port"])).toBe("number");
     expect(controlOf(field("web.ui"), view.fields["web.ui"])).toBe("bool");
     expect(controlOf(field("rooms"), view.fields["rooms"])).toBe("list");
-    expect(controlOf(field("relay.mode"), view.fields["relay.mode"])).toBe("select");
+    expect(
+      controlOf(field("shares.cache.storage_mode"), view.fields["shares.cache.storage_mode"])
+    ).toBe("select");
     for (const key of ["chat.notifications.mentions", "notifications.transfers.batch_finished"]) {
       expect(controlOf(field(key), view.fields[key])).toBe("notify-mode");
     }
@@ -128,11 +140,12 @@ describe("controls and drafts", () => {
     });
     expect(fromDraft(field("relay.agents"), "map", "[]")).toEqual({ set: {} });
     expect(fromDraft(field("soulseek.password"), "secret", "")).toEqual({ set: "" });
-    expect(fromDraft(field("relay.mode"), "select", "sideways", view.fields["relay.mode"])).toEqual(
-      { error: "must be one of controller, agent, debug" }
-    );
-    expect(fromDraft(field("relay.mode"), "select", "agent", view.fields["relay.mode"])).toEqual({
-      set: "agent"
+    const storage = view.fields["shares.cache.storage_mode"];
+    expect(fromDraft(field("shares.cache.storage_mode"), "select", "sideways", storage)).toEqual({
+      error: "must be one of memory, disk"
+    });
+    expect(fromDraft(field("shares.cache.storage_mode"), "select", "disk", storage)).toEqual({
+      set: "disk"
     });
   });
 

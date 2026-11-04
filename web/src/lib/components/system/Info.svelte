@@ -254,15 +254,8 @@
     <Card title="Relay">
       <dl class="info">
         <dt>Mode</dt>
-        <dd>{s.relay.mode}</dd>
-        {#if s.relay.mode !== "Controller"}
-          <dt>Controller</dt>
-          <dd>
-            <span class="font-mono">{s.relay.controller.address ?? "?"}</span>,
-            {s.relay.controller.state}
-          </dd>
-        {/if}
-        {#if s.relay.mode !== "Agent"}
+        <dd>{s.relay.enabled ? "Controller" : "Off"}</dd>
+        {#if s.relay.enabled}
           <dt>Agents</dt>
           <dd>
             {#each s.relay.agents as agent (agent.name)}

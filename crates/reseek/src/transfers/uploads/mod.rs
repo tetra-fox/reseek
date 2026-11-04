@@ -81,7 +81,7 @@ pub struct Uploads {
   events: EventBus,
   live: Live,
   telemetry: Arc<Telemetry>,
-  /// the relay controller, which serves the files of its agents, in controller and debug mode
+  /// the relay controller, which serves the files of its agents, when relay mode is on
   relay: Option<Arc<Controller>>,
   /// an agent's file is taken as its index has it, without asking the agent
   trusts_agents: bool,

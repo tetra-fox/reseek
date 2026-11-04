@@ -87,7 +87,7 @@
   });
 
   const keydown = (e: KeyboardEvent) => {
-    if (!togglesActivity(e) || app.phase !== "app" || app.mode === "agent") return;
+    if (!togglesActivity(e) || app.phase !== "app") return;
     e.preventDefault();
     activityPrefs.open = !activityPrefs.open;
   };
@@ -99,10 +99,10 @@
     void goto(href(`/login?to=${encodeURIComponent(here)}`), { replace: true });
   });
 
-  // routes that don't render: the root, and everything but System on a relay agent
+  // the root renders nothing of its own
   $effect(() => {
     if (app.phase !== "app") return;
-    const target = redirectFor(at.path, app.mode === "agent");
+    const target = redirectFor(at.path);
     if (target) void goto(href(target), { replace: true });
   });
 
@@ -114,17 +114,16 @@
   });
   $effect(() => () => untrack(() => app.close()));
 
-  // conversations and rooms are followed on every screen, for the unread badge and notifications;
-  // a relay agent has no chat
+  // conversations and rooms are followed on every screen, for the unread badge and notifications
   $effect(() => {
-    if (app.phase !== "app" || app.mode === "agent") return;
+    if (app.phase !== "app") return;
     untrack(() => chat.start());
     return () => untrack(() => chat.stop());
   });
 
   // transfers are followed on every screen, for the navigation's badges and their notifications
   $effect(() => {
-    if (app.phase !== "app" || app.mode === "agent") return;
+    if (app.phase !== "app") return;
     return untrack(() => live.retain("transfers"));
   });
 
@@ -191,7 +190,7 @@
           <InspectorPane />
         </div>
         <div bind:clientHeight={dockHeight}>
-          {#if activityPrefs.open && app.mode !== "agent"}<ActivityDock />{/if}
+          {#if activityPrefs.open}<ActivityDock />{/if}
         </div>
       </div>
     </div>

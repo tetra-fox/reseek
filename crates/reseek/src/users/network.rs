@@ -42,8 +42,6 @@ pub struct Users {
   messaging: Arc<Messaging>,
   config: Watcher<Options>,
   browses: Arc<Browses>,
-  /// this instance is a relay agent, which never asks the network
-  agent: bool,
 }
 
 /// The answer to asking the network about `username` that failed with `error`.
@@ -101,14 +99,13 @@ fn listing(response: soulseek_proto::peer::BrowseResponse) -> BrowseResponse {
 impl Users {
   /// The service over `directory`, asking the network through `network`, closing the
   /// conversations of users forgotten through `messaging`, and pushing browse progress to
-  /// `live`; an `agent` never asks the network.
+  /// `live`.
   pub fn new(
     directory: Arc<Directory>,
     network: Arc<Network>,
     messaging: Arc<Messaging>,
     config: Watcher<Options>,
     live: Live,
-    agent: bool,
   ) -> Self {
     Self {
       directory,
@@ -116,7 +113,6 @@ impl Users {
       messaging,
       config,
       browses: Arc::new(Browses::new(live)),
-      agent,
     }
   }
 
@@ -159,29 +155,25 @@ impl Users {
   /// store a row for a user who does not exist.
   async fn refreshed_profile(&self, username: &str) -> Result<UserProfile, ApiError> {
     let mut profile = self.directory.profile(username).await?;
-    if !profile.user.known && !self.agent && !self.exists(username).await {
+    if !profile.user.known && !self.exists(username).await {
       return Err(ApiError::not_found(format!(
         "User {username} does not exist"
       )));
     }
     let client = self.network.client();
-    let (status, statistics, fetched) = if self.agent {
-      (None, None, None)
-    } else {
-      let (status, statistics, fetched) = tokio::join!(
-        tokio::time::timeout(REFRESH_TIMEOUT, self.directory.status_of(client, username)),
-        tokio::time::timeout(
-          REFRESH_TIMEOUT,
-          self.directory.statistics_of(client, username)
-        ),
-        tokio::time::timeout(REFRESH_TIMEOUT, self.fetch_info(username)),
-      );
-      (
-        refreshed("status", username, status),
-        refreshed("statistics", username, statistics),
-        refreshed("info", username, fetched),
-      )
-    };
+    let (status, statistics, fetched) = tokio::join!(
+      tokio::time::timeout(REFRESH_TIMEOUT, self.directory.status_of(client, username)),
+      tokio::time::timeout(
+        REFRESH_TIMEOUT,
+        self.directory.statistics_of(client, username)
+      ),
+      tokio::time::timeout(REFRESH_TIMEOUT, self.fetch_info(username)),
+    );
+    let (status, statistics, fetched) = (
+      refreshed("status", username, status),
+      refreshed("statistics", username, statistics),
+      refreshed("info", username, fetched),
+    );
     let now = chrono::Utc::now();
     if let Some(status) = status {
       profile.user.presence = Some(status.presence);

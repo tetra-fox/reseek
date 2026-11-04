@@ -448,7 +448,7 @@ mod tests {
   #[tokio::test]
   async fn the_view_names_sources_and_hides_secrets() {
     let app = app(
-      &format!("{TRUSTED}[relay.controller]\naddress = \"https://a:b@controller.lan/\"\n"),
+      &format!("{TRUSTED}[logger]\nloki = \"https://a:b@loki.lan/\"\n"),
       &[("RESEEK_HTTP_PORT", "6000")],
     )
     .await;
@@ -457,10 +457,7 @@ mod tests {
     let view = answer.json();
     assert_eq!(view["values"]["web"]["authentication"]["password"], "*****");
     assert_eq!(view["values"]["web"]["port"], 6000);
-    assert_eq!(
-      view["values"]["relay"]["controller"]["address"],
-      "https://*****@controller.lan/"
-    );
+    assert_eq!(view["values"]["logger"]["loki"], "https://*****@loki.lan/");
     assert_eq!(
       view["fields"]["web.port"]["source"],
       json!({ "layer": "env", "var": "RESEEK_HTTP_PORT" })
@@ -477,7 +474,7 @@ mod tests {
     );
     assert_eq!(level["default"], "info");
     let mode = &view["fields"]["relay.mode"];
-    assert_eq!(mode["choices"], json!(["controller", "agent", "debug"]));
+    assert_eq!(mode["choices"], json!(["controller"]));
     let retry = &view["fields"]["transfers.download.retry.delay"];
     assert_eq!(retry["choices"], json!(null), "a duration is no choice");
     assert_eq!(retry["default"], "5s");
@@ -750,7 +747,7 @@ mod tests {
   #[tokio::test]
   async fn the_debug_view_names_sources_hides_secrets_and_needs_debug() {
     let debugging = app(
-      &format!("debug = true\n{TRUSTED}[relay.controller]\naddress = \"https://a:b@c.lan/\"\n"),
+      &format!("debug = true\n{TRUSTED}[logger]\nloki = \"https://a:b@c.lan/\"\n"),
       &[("RESEEK_HTTP_PORT", "6000")],
     )
     .await;
@@ -766,7 +763,7 @@ mod tests {
     );
     assert!(text.contains("debug=true (file config.toml)\n"), "{text}");
     assert!(text.contains("web.authentication.password=\"*****\" (file config.toml)\n"));
-    assert!(text.contains("relay.controller.address=\"https://*****@c.lan/\""));
+    assert!(text.contains("logger.loki=\"https://*****@c.lan/\""));
     assert!(
       !text.contains("hunter2") && !text.contains("robot-key"),
       "{text}"

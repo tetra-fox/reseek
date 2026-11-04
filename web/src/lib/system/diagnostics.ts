@@ -21,7 +21,7 @@ export const diagnostics = (
     `shares: ${s.shares.files} files in ${s.shares.directories} folders${s.shares.scanning ? ", scanning" : ""}${s.shares.scanPending ? ", rescan pending" : ""}${s.shares.faulted ? ", last scan failed" : ""}`,
     `distributed: ${d.hasParent ? "parent" : "no parent"}, level ${d.branchLevel}, ${d.children.length}/${d.childLimit} children`,
     `searches from others: ${s.health.search.incoming.queueDepth} waiting, ${Math.round(s.health.search.incoming.latency)} ms`,
-    `relay: ${s.relay.mode}`,
+    `relay: ${s.relay.enabled ? `controller, ${s.relay.agents.length} agents` : "off"}`,
     `pending: ${[s.pendingRestart && "restart", s.pendingReconnect && "reconnect"].filter(Boolean).join(", ") || "nothing"}`
   ];
   if (s.configuration.lastReloadError) {

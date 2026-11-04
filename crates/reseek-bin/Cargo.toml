@@ -1,6 +1,6 @@
 [package]
 name = "reseek-bin"
-description = "The reseek program: the daemon with the web UI built in, and the tests that run it"
+description = "The reseek programs: the daemon with the web UI built in, the relay agent, and the tests that run them"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
@@ -10,8 +10,13 @@ license = "AGPL-3.0-only"
 name = "reseek"
 path = "src/main.rs"
 
+[[bin]]
+name = "reseek-agent"
+path = "src/agent.rs"
+
 [dependencies]
 reseek.workspace = true
+reseek-agent.workspace = true
 reseek-ui-assets.workspace = true
 
 # the tests start the program and drive it through its API, against a local soulfind

@@ -1,5 +1,4 @@
-//! Relay mode: the controller's agents and their uploads, and an agent's connection to its
-//! controller.
+//! Relay mode: the controller's agents and their uploads.
 
 use api_types::relay::{RelayAgentState, RelayFileUploadResult};
 use async_trait::async_trait;
@@ -24,9 +23,8 @@ pub struct AgentCredential {
   pub address: std::net::IpAddr,
 }
 
-/// The agents connected to this controller with what they send it, and this agent's own
-/// connection to its controller. An unknown or unregistered agent, and a credential that does
-/// not check out, is a 401.
+/// The agents connected to this controller with what they send it. An unknown or unregistered
+/// agent, and a credential that does not check out, is a 401.
 #[async_trait]
 // the default bodies answer 503 without looking at their arguments
 #[allow(unused_variables)]
@@ -38,21 +36,6 @@ pub trait RelayService: Send + Sync {
 
   /// Closes an agent's connection and unloads its shares; 404 when it is not connected.
   async fn kick(&self, name: &str) -> Result<(), ApiError> {
-    Err(not_yet(DOMAIN))
-  }
-
-  /// Starts this agent's connection to its controller, nothing when it is started already.
-  async fn start_agent(&self) -> Result<(), ApiError> {
-    Err(not_yet(DOMAIN))
-  }
-
-  /// Closes this agent's connection to its controller.
-  async fn stop_agent(&self) -> Result<(), ApiError> {
-    Err(not_yet(DOMAIN))
-  }
-
-  /// Sends this agent's shares to its controller again; a conflict while not connected.
-  async fn sync(&self) -> Result<(), ApiError> {
     Err(not_yet(DOMAIN))
   }
 

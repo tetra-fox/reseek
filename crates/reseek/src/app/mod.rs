@@ -326,7 +326,6 @@ impl AppState {
       messaging.clone(),
       config.clone(),
       live.clone(),
-      crate::api::agent::is_agent(&startup.values),
     ));
     services.blocking = users.clone();
     services.relay = relay.clone();

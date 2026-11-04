@@ -153,6 +153,13 @@ const transferRetention = (direction: "upload" | "download"): Field[] =>
     placeholder: "kept"
   }));
 
+/**
+ * Options Settings does not show: `relay.mode` takes only `controller` and is kept so that a
+ * configuration still naming the daemon's old roles fails with a pointer to `reseek-agent`;
+ * whether the daemon is a controller is `relay.enabled`
+ */
+export const unlisted = new Set(["relay.mode"]);
+
 /** The forms of the settings page, one per part of the configuration, in this order */
 export const sections: Section[] = [
   {
@@ -743,10 +750,9 @@ export const sections: Section[] = [
     title: "Relay",
     group: "Server",
     fields: [
-      { key: "relay.enabled", label: "Relay mode" },
-      { key: "relay.mode", label: "Relay role" },
+      { key: "relay.enabled", label: "Relay controller" },
       { key: "instance_name", label: "Instance name" },
-      ...under("As a controller", [
+      ...under("Agents", [
         {
           key: "relay.agents",
           label: "Agents",
@@ -760,30 +766,8 @@ export const sections: Section[] = [
             ["controller_timeouts.sync_deferral", "Share sync deferral"],
             ["limits.share_database_max", "Largest share database"]
           ] as const
-        ).map(([part, label]): Field => ({
-          key: `relay.${part}`,
-          label,
-          enabledWhen: { key: "relay.mode", values: ["controller", "debug"] }
-        }))
-      ]),
-      ...under(
-        "As an agent",
-        (
-          [
-            ["address", "Controller URL"],
-            ["api_key", "Controller API key"],
-            ["secret", "Controller secret"],
-            ["ignore_certificate_errors", "Accept any certificate"],
-            ["downloads", "Fetch finished downloads"],
-            ["downloads_filter", "Download filter"]
-          ] as const
-        ).map(([part, label]): Field => ({
-          key: `relay.controller.${part}`,
-          label,
-          ...(part === "api_key" || part === "secret" ? { control: "secret" as const } : {}),
-          enabledWhen: { key: "relay.mode", values: ["agent", "debug"] }
-        }))
-      )
+        ).map(([part, label]): Field => ({ key: `relay.${part}`, label }))
+      ])
     ]
   },
   {

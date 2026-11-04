@@ -1,38 +1,18 @@
-//! Relay mode: an agent's controller and its own name, a controller's agents, and the timeouts
-//! and limits it holds them to. A debug instance is both, so both halves are checked for it.
+//! Relay mode: a controller's agents, and the timeouts and limits it holds them to.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use super::Report;
-use super::fields::{http_url, length, required};
-use crate::config::cidr::parse_trimmed_list;
-use crate::config::enums::RelayMode;
-use crate::config::{Options, Relay};
+use reseek_relay_proto::check_instance_name;
 
-/// The characters an instance name may not hold, besides control characters and anything
-/// outside printable ASCII: a controller names a file after each agent, on any system.
-const NOT_IN_A_NAME: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+use super::Report;
+use super::fields::{length, required};
+use crate::config::cidr::parse_trimmed_list;
+use crate::config::{Options, Relay};
 
 pub(super) fn check(options: &Options, report: &mut Report) {
   let relay = &options.relay;
-  let agent = matches!(relay.mode, RelayMode::Agent | RelayMode::Debug);
-  let controller = matches!(relay.mode, RelayMode::Controller | RelayMode::Debug);
-  if relay.mode == RelayMode::Agent && options.instance_name == "local" {
-    report.add(
-      "instance_name",
-      "The field instance_name must not be 'local' in relay agent mode.",
-    );
-  }
-  if agent {
-    if let Err(message) = file_name("instance_name", &options.instance_name) {
-      report.add("instance_name", message);
-    }
-    check_controller(relay, report);
-  }
-  if controller {
-    check_agents(relay, report);
-  }
+  check_agents(relay, report);
   let timeouts = &relay.controller_timeouts;
   for (key, value) in [
     ("relay.controller_timeouts.file_info", timeouts.file_info),
@@ -50,42 +30,6 @@ pub(super) fn check(options: &Options, report: &mut Report) {
       report.add(key, format!("The field {key} must not be empty."));
     }
   }
-  let key = "relay.controller.downloads_filter";
-  for pattern in &relay.controller.downloads_filter {
-    if let Err(e) = glob::Pattern::new(pattern) {
-      report.add(key, format!("The pattern {pattern} is invalid: {e}."));
-    }
-  }
-}
-
-/// Whether `name` can name a file on any system: printable ASCII without separators or the
-/// characters Windows refuses, and not `.` or `..`.
-fn file_name(key: &str, name: &str) -> Result<(), String> {
-  let unfit = name
-    .chars()
-    .any(|c| !(' '..='~').contains(&c) || NOT_IN_A_NAME.contains(&c));
-  if unfit || name == "." || name == ".." {
-    return Err(format!(
-      "The field {key} must be printable ASCII without / \\ : * ? \" < > | and must not be '.' or '..'."
-    ));
-  }
-  Ok(())
-}
-
-fn check_controller(relay: &Relay, report: &mut Report) {
-  let controller = &relay.controller;
-  let key = "relay.controller.address";
-  match controller.address.as_deref() {
-    Some(address) if !address.trim().is_empty() => report.check(key, http_url(key, address)),
-    address => report.check(key, required(key, address)),
-  }
-  for (key, value) in [
-    ("relay.controller.api_key", &controller.api_key),
-    ("relay.controller.secret", &controller.secret),
-  ] {
-    report.check(key, required(key, value.as_deref()));
-    report.check(key, length(key, value.as_deref(), 16, 255));
-  }
 }
 
 fn check_agents(relay: &Relay, report: &mut Report) {
@@ -97,7 +41,7 @@ fn check_agents(relay: &Relay, report: &mut Report) {
     report.check(key, required(&field("instance_name"), instance));
     report.check(key, length(&field("instance_name"), instance, 1, 255));
     if let Some(instance) = instance.filter(|i| !i.is_empty()) {
-      report.check(key, file_name(&field("instance_name"), instance));
+      report.check(key, check_instance_name(&field("instance_name"), instance));
     }
     report.check(key, required(&field("secret"), agent.secret.as_deref()));
     report.check(
@@ -134,44 +78,6 @@ mod tests {
   }
 
   #[test]
-  fn an_agent_needs_its_controller_and_a_real_name() {
-    let mut options = Options::default();
-    options.relay.mode = RelayMode::Agent;
-    options.instance_name = "local".into();
-    options.relay.controller.address = Some("ftp://controller".into());
-    options.relay.controller.secret = Some("short".into());
-    let keys: Vec<String> = problems(&options).into_iter().map(|(k, _)| k).collect();
-    assert_eq!(
-      keys,
-      [
-        "instance_name",
-        "relay.controller.address",
-        "relay.controller.api_key",
-        "relay.controller.secret",
-      ]
-    );
-  }
-
-  #[test]
-  fn a_debug_instance_is_checked_as_both_halves() {
-    let mut options = Options::default();
-    options.relay.mode = RelayMode::Debug;
-    options
-      .relay
-      .agents
-      .insert("a".into(), RelayAgent::default());
-    let keys: Vec<String> = problems(&options).into_iter().map(|(k, _)| k).collect();
-    assert!(
-      keys.contains(&"relay.controller.address".to_string()),
-      "{keys:?}"
-    );
-    assert!(keys.contains(&"relay.agents".to_string()), "{keys:?}");
-    options.relay.mode = RelayMode::Controller;
-    let keys: Vec<String> = problems(&options).into_iter().map(|(k, _)| k).collect();
-    assert!(!keys.contains(&"relay.controller.address".to_string()));
-  }
-
-  #[test]
   fn agents_need_unique_names_and_secrets() {
     let mut options = Options::default();
     let agent = |name: &str| RelayAgent {
@@ -198,25 +104,5 @@ mod tests {
         "One or more agent instance names are duplicated. Instance names must be unique.",
       ]
     );
-  }
-
-  #[test]
-  fn an_instance_name_must_be_able_to_name_a_file() {
-    for name in ["nas", "the agent", "a.b-c_d"] {
-      assert!(file_name("n", name).is_ok(), "{name}");
-    }
-    for name in [
-      ".",
-      "..",
-      "a/b",
-      "a\\b",
-      "c:",
-      "nul\0",
-      "tab\there",
-      "naïve",
-      "a|b",
-    ] {
-      assert!(file_name("n", name).is_err(), "{name:?}");
-    }
   }
 }

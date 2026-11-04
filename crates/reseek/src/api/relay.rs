@@ -1,10 +1,9 @@
-//! The relay routes: the relay's state, a controller's agents, an agent's connection to its
-//! controller, and the calls agents make to their controller: sending their shares, the files
-//! peers download through the controller, fetching finished downloads, and the agent socket.
+//! The relay routes: the relay's state, a controller's agents, and the calls agents make to
+//! their controller: sending their shares, the files peers download through the controller,
+//! fetching finished downloads, and the agent socket.
 //!
-//! Each route is for the relay mode it names, as the daemon started: anything else is answered
-//! 403 `relay_disabled` or `wrong_relay_mode`. An agent's calls take an API key or token, never
-//! a session.
+//! Each route answers only when the daemon started with relay mode on, and 403
+//! `relay_disabled` otherwise. An agent's calls take an API key or token, never a session.
 
 use api_types::auth::{Principal, Via};
 use api_types::relay::{RelayAgentState, RelayFileUploadResult, RelayState};
@@ -22,9 +21,8 @@ use uuid::Uuid;
 use super::error::ApiError;
 use super::extract::{Json, Path};
 use crate::app::AppState;
-use crate::auth::{Administrator, AnyRole, Authorized, Client, ReadWrite, require_interactive};
+use crate::auth::{Administrator, AnyRole, Authorized, Client, ReadWrite};
 use crate::config::Options;
-use crate::config::enums::RelayMode;
 use crate::safety::traverses;
 use crate::services::AgentCredential;
 
@@ -34,8 +32,6 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(state))
     .routes(routes!(agents))
     .routes(routes!(kick))
-    .routes(routes!(start_agent, stop_agent))
-    .routes(routes!(sync))
     .routes(routes!(receive_shares))
     .routes(routes!(receive_file))
     .routes(routes!(serve_download))
@@ -45,35 +41,14 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .layer(DefaultBodyLimit::disable())
 }
 
-/// The side of a relay a route is for.
-#[derive(Clone, Copy)]
-enum Side {
-  /// a controller, or a debug instance that is both
-  Controller,
-  /// an agent, or a debug instance that is both
-  Agent,
-}
-
-/// Refuses a route whose relay mode this instance did not start in.
-fn mode(options: &Options, side: Option<Side>) -> Result<(), ApiError> {
-  let relay = &options.relay;
-  if !relay.enabled {
-    return Err(ApiError::disabled(
-      "relay_disabled",
-      "Relay mode is disabled on this instance",
-    ));
-  }
-  let fits = match (side, relay.mode) {
-    (None, _) | (_, RelayMode::Debug) => true,
-    (Some(Side::Controller), mode) => mode == RelayMode::Controller,
-    (Some(Side::Agent), mode) => mode == RelayMode::Agent,
-  };
-  if fits {
+/// Refuses every relay route when the daemon did not start with relay mode on.
+fn enabled(options: &Options) -> Result<(), ApiError> {
+  if options.relay.enabled {
     return Ok(());
   }
   Err(ApiError::disabled(
-    "wrong_relay_mode",
-    format!("This instance runs in relay mode {:?}", relay.mode),
+    "relay_disabled",
+    "Relay mode is disabled on this instance",
   ))
 }
 
@@ -108,7 +83,7 @@ fn agent_credential(headers: &HeaderMap, client: &Client) -> Result<AgentCredent
   }
 }
 
-/// The relay's state: the mode, the controller connection and the agents.
+/// The relay's state: whether it is on, and the agents connected to this controller.
 #[utoipa::path(
   get, path = "/relay", tag = "relay",
   responses(
@@ -120,7 +95,7 @@ async fn state(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
 ) -> Result<Json<RelayState>, ApiError> {
-  mode(&app.startup.values, None)?;
+  enabled(&app.startup.values)?;
   Ok(Json(app.state.current().relay.clone()))
 }
 
@@ -136,7 +111,7 @@ async fn agents(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
 ) -> Result<Json<Vec<RelayAgentState>>, ApiError> {
-  mode(&app.startup.values, Some(Side::Controller))?;
+  enabled(&app.startup.values)?;
   app.services.relay.agents().await.map(Json)
 }
 
@@ -156,7 +131,7 @@ async fn kick(
   admin: Authorized<Administrator>,
   Path(name): Path<String>,
 ) -> Result<StatusCode, ApiError> {
-  mode(&app.startup.values, Some(Side::Controller))?;
+  enabled(&app.startup.values)?;
   app.services.relay.kick(&name).await?;
   info!(
     by = admin.principal.subject,
@@ -164,70 +139,6 @@ async fn kick(
     "relay agent disconnected"
   );
   Ok(StatusCode::NO_CONTENT)
-}
-
-/// Starts this agent's connection to its controller. Needs someone at the UI.
-#[utoipa::path(
-  put, path = "/relay/agent", tag = "relay",
-  responses(
-    (status = 200, description = "connecting"), (status = 401, body = api_types::ErrorBody),
-    (status = 403, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
-  )
-)]
-async fn start_agent(
-  State(app): State<AppState>,
-  admin: Authorized<Administrator>,
-) -> Result<StatusCode, ApiError> {
-  mode(&app.startup.values, Some(Side::Agent))?;
-  require_interactive(&admin.principal)?;
-  app.services.relay.start_agent().await?;
-  info!(
-    by = admin.principal.subject,
-    "relay agent connection started"
-  );
-  Ok(StatusCode::OK)
-}
-
-/// Closes this agent's connection to its controller. Needs someone at the UI.
-#[utoipa::path(
-  delete, path = "/relay/agent", tag = "relay",
-  responses(
-    (status = 204, description = "disconnected"), (status = 401, body = api_types::ErrorBody),
-    (status = 403, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
-  )
-)]
-async fn stop_agent(
-  State(app): State<AppState>,
-  admin: Authorized<Administrator>,
-) -> Result<StatusCode, ApiError> {
-  mode(&app.startup.values, Some(Side::Agent))?;
-  require_interactive(&admin.principal)?;
-  app.services.relay.stop_agent().await?;
-  info!(
-    by = admin.principal.subject,
-    "relay agent connection stopped"
-  );
-  Ok(StatusCode::NO_CONTENT)
-}
-
-/// Sends this agent's shares to its controller again. Needs someone at the UI.
-#[utoipa::path(
-  post, path = "/relay/agent/sync", tag = "relay",
-  responses(
-    (status = 202, description = "sending"), (status = 401, body = api_types::ErrorBody),
-    (status = 403, body = api_types::ErrorBody), (status = 409, body = api_types::ErrorBody),
-    (status = 503, body = api_types::ErrorBody)
-  )
-)]
-async fn sync(
-  State(app): State<AppState>,
-  admin: Authorized<Administrator>,
-) -> Result<StatusCode, ApiError> {
-  mode(&app.startup.values, Some(Side::Agent))?;
-  require_interactive(&admin.principal)?;
-  app.services.relay.sync().await?;
-  info!(by = admin.principal.subject, "relay share sync asked for");
-  Ok(StatusCode::ACCEPTED)
 }
 
 /// The token of an agent's upload, refused with `message` when it is no UUID.
@@ -266,7 +177,7 @@ async fn receive_shares(
   upload: Result<Multipart, MultipartRejection>,
 ) -> Result<StatusCode, ApiError> {
   let options = &app.startup.values;
-  mode(options, Some(Side::Controller))?;
+  enabled(options)?;
   stored_credential(&caller.principal, options)?;
   let token = token(&text, "Token is not a valid Guid")?;
   let upload = form(upload)?;
@@ -306,7 +217,7 @@ async fn receive_file(
   upload: Result<Multipart, MultipartRejection>,
 ) -> Result<Json<RelayFileUploadResult>, ApiError> {
   let options = &app.startup.values;
-  mode(options, Some(Side::Controller))?;
+  enabled(options)?;
   stored_credential(&caller.principal, options)?;
   let token = token(&text, "Token is not a valid Guid")?;
   let upload = form(upload)?;
@@ -344,7 +255,7 @@ async fn serve_download(
   headers: HeaderMap,
 ) -> Result<Response, ApiError> {
   let options = &app.startup.values;
-  mode(options, Some(Side::Controller))?;
+  enabled(options)?;
   stored_credential(&caller.principal, options)?;
   let token = token(&text, "Token is not in a valid format")?;
   let agent = agent_credential(&headers, &client)?;
@@ -392,7 +303,7 @@ async fn socket(
   request: Request,
 ) -> Result<Response, ApiError> {
   let options = &app.startup.values;
-  mode(options, Some(Side::Controller))?;
+  enabled(options)?;
   stored_credential(&caller.principal, options)?;
   app.services.relay.socket(request).await
 }
@@ -400,38 +311,6 @@ async fn socket(
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  fn options(enabled: bool, relay_mode: RelayMode) -> Options {
-    let mut options = Options::default();
-    options.relay.enabled = enabled;
-    options.relay.mode = relay_mode;
-    options
-  }
-
-  #[test]
-  fn routes_answer_only_in_their_relay_mode() {
-    let refusal = |options: &Options, side| mode(options, side).map_err(|e| format!("{e:?}"));
-    let off = options(false, RelayMode::Controller);
-    assert!(refusal(&off, None).unwrap_err().contains("relay_disabled"));
-    let controller = options(true, RelayMode::Controller);
-    assert!(refusal(&controller, Some(Side::Controller)).is_ok());
-    assert!(
-      refusal(&controller, Some(Side::Agent))
-        .unwrap_err()
-        .contains("wrong_relay_mode")
-    );
-    let agent = options(true, RelayMode::Agent);
-    assert!(refusal(&agent, Some(Side::Agent)).is_ok());
-    assert!(
-      refusal(&agent, Some(Side::Controller))
-        .unwrap_err()
-        .contains("wrong_relay_mode")
-    );
-    let debug = options(true, RelayMode::Debug);
-    assert!(
-      refusal(&debug, Some(Side::Agent)).is_ok() && refusal(&debug, Some(Side::Controller)).is_ok()
-    );
-  }
 
   #[test]
   fn an_agent_names_its_download_in_standard_base64() {

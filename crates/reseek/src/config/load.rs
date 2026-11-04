@@ -236,6 +236,44 @@ mod tests {
   }
 
   #[test]
+  fn the_relay_agent_mode_is_refused_with_a_pointer_to_the_agent_program() {
+    let dir = tempfile::tempdir().unwrap();
+    for mode in ["agent", "Debug"] {
+      std::fs::write(
+        dir.path().join("config.toml"),
+        format!("[relay]\nenabled = true\nmode = \"{mode}\"\n"),
+      )
+      .unwrap();
+      let sources = Sources {
+        env: Vec::new(),
+        files: ConfigFiles::new(&[], dir.path()),
+        cli: Vec::new(),
+      };
+      let defaults = Defaults::new(Some(dir.path()));
+      let Err(refused) = cascade::Watcher::new(layers(&sources, &defaults, None)) else {
+        panic!("relay.mode = {mode} loaded");
+      };
+      let refused = refused.to_string();
+      assert!(
+        refused.contains("relay.mode") && refused.contains("reseek-agent"),
+        "{refused}"
+      );
+    }
+    let sources = Sources {
+      env: vec![("RESEEK_RELAY_MODE".into(), "agent".into())],
+      files: ConfigFiles::new(&[], dir.path()),
+      cli: Vec::new(),
+    };
+    std::fs::write(dir.path().join("config.toml"), "").unwrap();
+    let defaults = Defaults::new(Some(dir.path()));
+    let refused = cascade::Watcher::new(layers(&sources, &defaults, None)).err();
+    assert!(
+      refused.is_some_and(|e| e.to_string().contains("reseek-agent")),
+      "set by the environment"
+    );
+  }
+
+  #[test]
   fn unknown_variables_skip_the_ones_read_elsewhere() {
     let env: Vec<(OsString, OsString)> = [
       "RESEEK_HTTP_PORT",

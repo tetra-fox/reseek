@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  browseTarget,
-  changesScreen,
-  redirectFor,
-  route,
-  safeReturn,
-  unknownTarget,
-  userHref
-} from "./nav";
+import { browseTarget, changesScreen, route, safeReturn, unknownTarget, userHref } from "./nav";
 
 describe("routes after the hash", () => {
   it("read the path and the query from the hash", () => {
@@ -33,14 +25,6 @@ describe("redirects", () => {
     expect(target("user=bob")).toBe("#/users/bob/shares");
     expect(target("")).toBe("#/searches");
     expect(target("user=%20")).toBe("#/searches");
-  });
-
-  it("send the root to the dashboard and an agent to System", () => {
-    expect(redirectFor("/", false)).toBe("/dashboard");
-    expect(redirectFor("/searches/42", false)).toBeNull();
-    expect(redirectFor("/searches/42", true)).toBe("/system");
-    expect(redirectFor("/system/logs", true)).toBeNull();
-    expect(redirectFor("/profile", false)).toBeNull();
   });
 
   it("send a path no screen renders to the screen it belongs to, else the dashboard", () => {

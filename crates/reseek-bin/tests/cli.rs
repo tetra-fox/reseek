@@ -218,11 +218,11 @@ fn the_daemon_serves_health_and_stops_on_sigterm() {
     "{unauthenticated}"
   );
   Command::new("kill")
-    .args(["-TERM", &daemon.child.id().to_string()])
+    .args(["-TERM", &daemon.process.child.id().to_string()])
     .status()
     .unwrap();
-  let status = daemon.child.wait().unwrap();
-  let log = daemon.output();
+  let status = daemon.process.child.wait().unwrap();
+  let log = daemon.process.output();
   assert_eq!(status.code(), Some(0), "{log}");
   assert!(log.contains("Listening for HTTP requests"), "{log}");
   assert!(
@@ -238,8 +238,8 @@ fn a_restart_exits_75_for_the_supervisor() {
   let mut daemon = Daemon::start(dir.path(), &["--supervised"], &trusted);
   let answer = send(daemon.port, "PUT", "/api/v0/application").unwrap();
   assert!(answer.starts_with("HTTP/1.1 204"), "{answer}");
-  let status = daemon.child.wait().unwrap();
-  let log = daemon.output();
+  let status = daemon.process.child.wait().unwrap();
+  let log = daemon.process.output();
   assert_eq!(status.code(), Some(75), "{log}");
   assert!(log.contains("restart asked for"), "{log}");
 }

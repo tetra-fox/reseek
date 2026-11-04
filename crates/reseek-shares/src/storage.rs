@@ -199,11 +199,21 @@ pub fn schema_version() -> u32 {
     .expect("the share index has migrations")
 }
 
-/// Writes a consistent copy of `db` to `path`, a file that does not exist yet, and returns its
+/// Removes a file at `path`, since `VACUUM INTO` refuses a file that is there already.
+fn clear_for_vacuum(path: &Path) -> rusqlite::Result<()> {
+  match std::fs::remove_file(path) {
+    Ok(()) => Ok(()),
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+    Err(e) => Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
+  }
+}
+
+/// Writes a consistent copy of `db` to `path`, in place of a file left there, and returns its
 /// size.
 pub async fn dump(db: &Database, path: &Path) -> Result<u64, DbError> {
   let target = path.to_path_buf();
   db.write(move |conn| {
+    clear_for_vacuum(&target)?;
     conn.execute("VACUUM INTO ?1", [target.to_string_lossy()])?;
     std::fs::metadata(&target)
       .map(|m| m.len())
@@ -219,11 +229,7 @@ pub async fn back_up(db: &Database, backup: &Path) -> Result<(), DbError> {
   let temporary = backup.with_extension("db.tmp");
   let target = backup.to_path_buf();
   db.write(move |conn| {
-    match std::fs::remove_file(&temporary) {
-      Ok(()) => {}
-      Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-      Err(e) => return Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
-    }
+    clear_for_vacuum(&temporary)?;
     conn.execute("VACUUM INTO ?1", [temporary.to_string_lossy()])?;
     std::fs::rename(&temporary, &target)
       .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))
@@ -287,6 +293,26 @@ mod tests {
     assert_eq!(latest.map(|s| s.started_at), Some(7));
     std::fs::write(&backup, b"not a database").unwrap();
     assert!(valid(&backup).is_err());
+  }
+
+  #[tokio::test]
+  async fn a_dump_replaces_a_copy_left_at_its_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = open(StorageMode::Memory, dir.path(), dir.path(), false)
+      .await
+      .unwrap();
+    let uploads = dir.path().join("uploads");
+    std::fs::create_dir_all(&uploads).unwrap();
+    let copy = uploads.join("share_index.db");
+    std::fs::write(&copy, b"what an interrupted upload left").unwrap();
+    let bytes = dump(&storage.db, &copy).await.unwrap();
+    assert_eq!(valid(&copy), Ok(()));
+    assert_eq!(std::fs::metadata(&copy).unwrap().len(), bytes);
+    assert_eq!(
+      std::fs::read_dir(&uploads).unwrap().count(),
+      1,
+      "replaced, not added beside"
+    );
   }
 
   #[tokio::test]

@@ -1047,45 +1047,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The relay's state: the mode, the controller connection and the agents. */
+        /** The relay's state: whether it is on, and the agents connected to this controller. */
         get: operations["state"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/relay/agent": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Starts this agent's connection to its controller. Needs someone at the UI. */
-        put: operations["start_agent"];
-        post?: never;
-        /** Closes this agent's connection to its controller. Needs someone at the UI. */
-        delete: operations["stop_agent"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/relay/agent/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Sends this agent's shares to its controller again. Needs someone at the UI. */
-        post: operations["sync"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6063,18 +6028,6 @@ export interface components {
             version: string;
         };
         /**
-         * @description The state of an agent's connection to its controller.
-         * @enum {string}
-         */
-        RelayConnectionState: "Disconnected" | "Connecting" | "Connected" | "Reconnecting" | "Authenticating" | "Ready";
-        /** @description An agent's view of its controller. */
-        RelayControllerState: {
-            /** @description the configured controller address in agent and debug mode, without credentials */
-            address?: string | null;
-            /** @description the connection's state, `Disconnected` when the relay is off or this is a controller */
-            state: components["schemas"]["RelayConnectionState"];
-        };
-        /**
          * @description The answer to `POST /relay/controller/files/{token}`, sent once the transfer to the peer
          *     ended.
          */
@@ -6087,22 +6040,12 @@ export interface components {
             /** @description how the upload ended */
             outcome: components["schemas"]["RelayUploadOutcome"];
         };
-        /**
-         * @description Which side of a relay this instance is.
-         * @enum {string}
-         */
-        RelayMode: "Controller" | "Agent" | "Debug";
-        /**
-         * @description Relay mode, the controller connection and the connected agents, as part of the application
-         *     state.
-         */
+        /** @description Relay mode and the agents connected to this controller, as part of the application state. */
         RelayState: {
-            /** @description the agents connected to this controller, empty unless this is a controller */
+            /** @description the agents connected to this controller, empty while relay mode is off */
             agents: components["schemas"]["RelayAgentState"][];
-            /** @description an agent's view of its controller */
-            controller: components["schemas"]["RelayControllerState"];
-            /** @description the configured mode, reported even when the relay is off */
-            mode: components["schemas"]["RelayMode"];
+            /** @description whether relay mode is on, which makes this daemon a controller its agents connect to */
+            enabled: boolean;
         };
         /**
          * @description How a relayed upload ended.
@@ -11997,140 +11940,6 @@ export interface operations {
                 };
             };
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    start_agent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description connecting */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    stop_agent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description disconnected */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    sync: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description sending */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            503: {
                 headers: {
                     [name: string]: unknown;
                 };

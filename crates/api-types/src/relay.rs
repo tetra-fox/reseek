@@ -9,55 +9,14 @@ use uuid::Uuid;
 
 use crate::shares::Share;
 
-/// Which side of a relay this instance is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub enum RelayMode {
-  /// takes connections from agents
-  Controller,
-  /// connects to a controller and serves its shares through it
-  Agent,
-  /// a controller that also connects to itself as an agent, for development
-  Debug,
-}
-
-/// The state of an agent's connection to its controller.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub enum RelayConnectionState {
-  /// not connected
-  Disconnected,
-  /// the connection is being made
-  Connecting,
-  /// the transport is up, before authentication
-  Connected,
-  /// the connection dropped and is being made again
-  Reconnecting,
-  /// the controller is checking our credential
-  Authenticating,
-  /// authenticated and serving
-  Ready,
-}
-
-/// Relay mode, the controller connection and the connected agents, as part of the application
-/// state.
+/// Relay mode and the agents connected to this controller, as part of the application state.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RelayState {
-  /// the configured mode, reported even when the relay is off
-  pub mode: RelayMode,
-  /// an agent's view of its controller
-  pub controller: RelayControllerState,
-  /// the agents connected to this controller, empty unless this is a controller
+  /// whether relay mode is on, which makes this daemon a controller its agents connect to
+  pub enabled: bool,
+  /// the agents connected to this controller, empty while relay mode is off
   pub agents: Vec<RelayAgentState>,
-}
-
-/// An agent's view of its controller.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct RelayControllerState {
-  /// the configured controller address in agent and debug mode, without credentials
-  pub address: Option<String>,
-  /// the connection's state, `Disconnected` when the relay is off or this is a controller
-  pub state: RelayConnectionState,
 }
 
 /// An agent connected to this controller, listed once it has logged in.

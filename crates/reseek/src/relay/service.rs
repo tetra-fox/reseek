@@ -1,5 +1,5 @@
-//! The relay API's calls, each answered by the half it is for. The routes check the relay mode
-//! the daemon started in first, so a call only reaches a half this daemon runs.
+//! The relay API's calls, answered by the controller. The routes check that the daemon started
+//! with relay mode on first, so a call only reaches a controller that runs.
 
 use api_types::relay::{RELAY_SUBPROTOCOL, RelayAgentState, RelayFileUploadResult};
 use async_trait::async_trait;
@@ -10,7 +10,7 @@ use axum::response::Response;
 use tracing::debug;
 use uuid::Uuid;
 
-use super::{AgentClient, Controller, Relay};
+use super::{Controller, Relay};
 use crate::api::error::ApiError;
 use crate::auth::Client;
 use crate::services::{AgentCredential, RelayService};
@@ -21,14 +21,7 @@ impl Relay {
     self
       .controller
       .as_ref()
-      .expect("the controller's routes answer only in controller and debug mode")
-  }
-
-  fn agent(&self) -> &std::sync::Arc<AgentClient> {
-    self
-      .agent
-      .as_ref()
-      .expect("the agent's routes answer only in agent and debug mode")
+      .expect("the relay routes answer only with relay mode on")
   }
 }
 
@@ -45,27 +38,6 @@ impl RelayService for Relay {
       Err(ApiError::not_found(format!(
         "Agent {name} is not connected"
       )))
-    }
-  }
-
-  async fn start_agent(&self) -> Result<(), ApiError> {
-    self.agent().start();
-    Ok(())
-  }
-
-  async fn stop_agent(&self) -> Result<(), ApiError> {
-    self.agent().stop();
-    Ok(())
-  }
-
-  async fn sync(&self) -> Result<(), ApiError> {
-    if self.agent().sync_now() {
-      Ok(())
-    } else {
-      Err(ApiError::conflict(
-        "not_connected",
-        Some("The agent is not logged in to its controller".to_string()),
-      ))
     }
   }
 

@@ -47,11 +47,6 @@ class App {
     session.onEnded(() => this.signedOut());
   }
 
-  /** "agent" when this daemon is a relay agent of another, which shows only the System area */
-  get mode(): "normal" | "agent" {
-    return this.state?.relay.mode === "Agent" ? "agent" : "normal";
-  }
-
   get isServerConnected(): boolean {
     return this.state?.server.isConnected ?? false;
   }

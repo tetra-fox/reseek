@@ -14,10 +14,11 @@ use tokio::io::AsyncWriteExt;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use super::AgentClient;
-use crate::safety::traverses;
 use reseek_relay_proto::backoff;
 use reseek_relay_proto::credential::Purpose;
+use reseek_shares::traverses;
+
+use super::AgentClient;
 
 /// How many times a download is fetched before it is given up.
 const ATTEMPTS: u32 = 3;
@@ -82,15 +83,9 @@ impl AgentClient {
         )
       }
       Some(parts) => {
-        let mut destination = parts
+        let destination = parts
           .iter()
           .fold(self.downloads.clone(), |path, part| path.join(part));
-        if self.debug {
-          // the controller is this daemon, whose downloads directory this is
-          let mut named = destination.into_os_string();
-          named.push(".relayed");
-          destination = PathBuf::from(named);
-        }
         self.fetch_attempts(&filename, token, &destination).await
       }
     };

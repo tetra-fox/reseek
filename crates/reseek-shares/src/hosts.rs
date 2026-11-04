@@ -125,7 +125,8 @@ impl Shares {
     storage::schema_version()
   }
 
-  /// Writes a consistent copy of the local index to `path` and returns its size.
+  /// Writes a consistent copy of the local index to `path`, in place of a file left there, and
+  /// returns its size.
   pub async fn dump(&self, path: &Path) -> Result<u64, DbError> {
     storage::dump(&self.db, path).await
   }

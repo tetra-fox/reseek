@@ -18,21 +18,9 @@
 
   const busy = new Busy();
 
-  /** What the button shows and does, from the server connection or, on an agent, the controller's */
+  /** What the button shows and does, from the server connection */
   const view = $derived.by(() => {
     const state = app.state;
-    if (app.mode === "agent") {
-      // serving only once its shares reached the controller; on the way there it is started
-      const controller = state?.relay.controller.state ?? "Disconnected";
-      const ready = controller === "Ready";
-      const started = controller !== "Disconnected";
-      return {
-        label: `Controller ${controller.toLowerCase()}`,
-        plug: ready ? "text-success" : started ? "text-warning" : "text-fg-subtle",
-        badge: ready ? null : ("closed" as const),
-        connected: started
-      };
-    }
     const server = state?.server;
     const watchdog = state?.connectionWatchdog;
     if (server?.isConnected) {
@@ -62,25 +50,18 @@
   });
 
   const toggle = () =>
-    busy.run(() => {
-      if (app.mode === "agent") {
-        return view.connected
-          ? call(() => api.DELETE("/api/v0/relay/agent"))
-          : call(() => api.PUT("/api/v0/relay/agent"));
-      }
-      return view.connected
+    busy.run(() =>
+      view.connected
         ? call(() => api.DELETE("/api/v0/server", { body: "client disconnected from web UI" }))
-        : call(() => api.PUT("/api/v0/server"));
-    });
+        : call(() => api.PUT("/api/v0/server"))
+    );
 
   // connecting and disconnecting need ReadWrite; a ReadOnly user sees the state only
   const allowed = $derived(session.can("ReadWrite"));
   const hint = $derived(
     [
       view.badge === "unreachable" ? UNREACHABLE_HINT : null,
-      allowed
-        ? `${view.connected ? "Disconnect from" : "Connect to"} ${app.mode === "agent" ? "the controller" : "the Soulseek server"}`
-        : null
+      allowed ? `${view.connected ? "Disconnect from" : "Connect to"} the Soulseek server` : null
     ]
       .filter(Boolean)
       .join(" ") || undefined

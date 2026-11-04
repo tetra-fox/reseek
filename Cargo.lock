@@ -3432,6 +3432,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "reseek-agent"
+version = "0.1.0"
+dependencies = [
+ "api-types",
+ "base64 0.22.1",
+ "cascade",
+ "directories",
+ "futures-util",
+ "glob",
+ "reqwest",
+ "reseek-relay-proto",
+ "reseek-shares",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+ "webpki-roots",
+]
+
+[[package]]
 name = "reseek-bin"
 version = "0.1.0"
 dependencies = [
@@ -3442,6 +3470,7 @@ dependencies = [
  "image",
  "reqwest",
  "reseek",
+ "reseek-agent",
  "reseek-relay-proto",
  "reseek-ui-assets",
  "serde_json",

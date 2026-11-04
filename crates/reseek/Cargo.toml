@@ -23,7 +23,7 @@ bytes = "1"
 bytesize.workspace = true
 chrono.workspace = true
 crc32fast = "1"
-directories = "6"
+directories.workspace = true
 flate2.workspace = true
 form_urlencoded = "1"
 futures-util = { workspace = true, features = ["sink"] }

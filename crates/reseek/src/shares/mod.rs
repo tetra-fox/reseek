@@ -8,7 +8,6 @@ pub use reseek_shares::{
 };
 
 use crate::config::Options;
-use crate::config::enums::RelayMode;
 use crate::paths::Paths;
 use crate::state::StateOwner;
 
@@ -24,7 +23,6 @@ pub fn setup(options: &Options, paths: &Paths, state: &StateOwner) -> reseek_sha
     force_scan: options.flags.force_share_scan,
     volatile: options.flags.volatile,
     case_sensitive: options.flags.case_sensitive_regex,
-    relay_debug: options.relay.enabled && options.relay.mode == RelayMode::Debug,
     publish: Box::new(move |shares| state.update(|current| current.shares = shares)),
   }
 }

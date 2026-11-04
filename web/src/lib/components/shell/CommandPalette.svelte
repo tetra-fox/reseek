@@ -48,8 +48,7 @@
   const search = (text: string) => () => openSearch(text);
 
   const fixed = $derived.by((): PaletteEntry[] => {
-    const agent = app.mode === "agent";
-    const screens = agent ? [] : [...navItems, profileItem];
+    const screens = [...navItems, profileItem];
     const entries: PaletteEntry[] = [
       ...screens.map((s) => ({
         id: s.path,
@@ -58,18 +57,14 @@
         run: () => void goto(screenHref(s.path))
       })),
       { id: systemItem.path, group: "Screens", label: "System", run: go(systemItem.path) },
-      ...(agent
-        ? []
-        : [
-            {
-              id: "activity",
-              group: "Screens",
-              label: activityPrefs.open ? "Close the activity log" : "Activity log",
-              hint: shortcutText("J"),
-              keywords: "browsing searches queued uploads log network",
-              run: () => (activityPrefs.open = !activityPrefs.open)
-            }
-          ]),
+      {
+        id: "activity",
+        group: "Screens",
+        label: activityPrefs.open ? "Close the activity log" : "Activity log",
+        hint: shortcutText("J"),
+        keywords: "browsing searches queued uploads log network",
+        run: () => (activityPrefs.open = !activityPrefs.open)
+      },
       ...systemTabs.map((t) => ({
         id: `/system/${t.tab}`,
         group: "System",
@@ -90,7 +85,6 @@
         });
       }
     }
-    if (agent) return entries;
     for (const text of [...recent.pinned, ...recent.texts]) {
       entries.push({
         id: `search:${text}`,
@@ -124,7 +118,7 @@
   /** What the typed text can be: a search, or a user to reach */
   const typed = $derived.by((): PaletteEntry[] => {
     const text = query.trim();
-    if (!text || app.mode === "agent") return [];
+    if (!text) return [];
     const write = session.can("ReadWrite");
     return [
       ...(write && app.isServerConnected
@@ -153,7 +147,7 @@
   // users the directory knows by what was typed, a moment after typing stops
   $effect(() => {
     const text = query.trim();
-    if (!palette.open || text.length < 2 || app.mode === "agent") {
+    if (!palette.open || text.length < 2) {
       known = [];
       return;
     }
