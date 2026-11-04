@@ -30,11 +30,17 @@ let
     if aliased == null then bare else builtins.head aliased;
   isExclusion = entry: lib.hasPrefix "!" entry;
 
-  # the options of one daemon; `name` is its unit, user and directory name
+  # the options of one daemon; `name` is its unit, user and directory name, `enabled` whether
+  # it runs unless `enable` says otherwise
   instanceOptions =
-    { name }:
     {
-      enable = mkEnableOption "the reseek Soulseek daemon";
+      name,
+      enabled ? false,
+    }:
+    {
+      enable = mkEnableOption "the reseek Soulseek daemon" // {
+        default = enabled;
+      };
 
       package = mkOption {
         type = types.package;
@@ -468,8 +474,10 @@ in
         types.submodule (
           { name, ... }:
           {
-            options = instanceOptions { name = "reseek-${name}"; };
-            config.enable = lib.mkDefault true;
+            options = instanceOptions {
+              name = "reseek-${name}";
+              enabled = true;
+            };
           }
         )
       );
