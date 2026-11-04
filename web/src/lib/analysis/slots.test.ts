@@ -43,4 +43,44 @@ describe("the Analysis page's slots", () => {
     expect(slots.a?.target).toEqual({ kind: "file", root: "temporary", path: "upload/mine.flac" });
     expect(goto).not.toHaveBeenCalled();
   });
+
+  it("moves the address only when a change gives it a new one", () => {
+    slots.clear("a");
+    expect(goto).not.toHaveBeenCalled();
+
+    // from another screen a list opens the page as a new screen
+    show("#/downloads");
+    slots.open(file("one.flac"), "one.flac");
+    expect(goto).toHaveBeenLastCalledWith("#/analysis?a=downloads%3Aone.flac", {
+      reset: true,
+      replace: false
+    });
+
+    // on the page the same file again is no move at all, another one keeps scroll and focus
+    show("#/analysis?a=downloads%3Aone.flac");
+    vi.mocked(goto).mockClear();
+    slots.fill("a", file("one.flac"), "one.flac");
+    expect(goto).not.toHaveBeenCalled();
+    slots.fill("b", file("two.flac"), "two.flac");
+    expect(goto).toHaveBeenLastCalledWith(
+      "#/analysis?a=downloads%3Aone.flac&b=downloads%3Atwo.flac",
+      { reset: false, replace: false }
+    );
+  });
+
+  it("goes by the address a move still on its way is headed to", () => {
+    show("#/analysis?a=downloads%3Aone.flac&b=downloads%3Atwo.flac");
+    slots.a = { target: file("one.flac"), name: null };
+    slots.b = { target: file("two.flac"), name: null };
+    slots.swap();
+    expect(goto).toHaveBeenCalledTimes(1);
+    at.navigating.to = { url: new URL(`http://localhost/${vi.mocked(goto).mock.calls[0][0]}`) };
+
+    // a second swap before the first lands returns to the address shown, in place of the move
+    slots.swap();
+    expect(goto).toHaveBeenLastCalledWith(
+      "#/analysis?a=downloads%3Aone.flac&b=downloads%3Atwo.flac",
+      { reset: false, replace: true }
+    );
+  });
 });
