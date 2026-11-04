@@ -243,7 +243,6 @@
       {:else}
         <MessageList
           {pane}
-          {at}
           {watch}
           onreply={disabled || notices ? undefined : reply}
           onread={() => write && void pane.markRead()} />
