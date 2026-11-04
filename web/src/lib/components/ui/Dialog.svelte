@@ -13,6 +13,11 @@
     description?: string;
     /** under the body, for the dialog's buttons */
     footer?: Snippet;
+    /**
+     * a request the dialog made is running: Esc, the overlay and the close button leave it open
+     * until it ends, so what the request does next happens in the dialog that asked for it
+     */
+    busy?: boolean;
     class?: string;
     children: Snippet;
   };
@@ -22,16 +27,19 @@
     title,
     description,
     footer,
+    busy = false,
     class: className,
     children
   }: Props = $props();
 </script>
 
-<!-- a centered box over the page, closed by Esc, the overlay or its close button -->
+<!-- a centered box over the page, closed by Esc, the overlay or its close button unless busy -->
 <Dialog.Root bind:open>
   <Dialog.Portal>
     <Scrim />
     <Dialog.Content
+      escapeKeydownBehavior={busy ? "ignore" : "close"}
+      interactOutsideBehavior={busy ? "ignore" : "close"}
       class={cn(
         "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100svh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-card border bg-surface shadow-raised outline-none data-[state=closed]:animate-popover-out data-[state=open]:animate-popover-in",
         className
@@ -57,6 +65,7 @@
             variant="ghost"
             size="icon-sm"
             class="absolute top-3.5 right-3.5"
+            disabled={busy}
             aria-label="Close">
             <XIcon />
           </Button>
