@@ -17,9 +17,9 @@ use rusqlite::{Connection, OpenFlags};
 use tokio::sync::Semaphore;
 use tracing::{debug, info, trace, warn};
 
-use crate::sync::lock;
+use crate::lock;
 
-pub(crate) use migrate::schema;
+pub use crate::schema;
 pub use migrate::{Migration, Schema};
 
 /// How long a connection waits for a lock another one holds.
@@ -73,7 +73,7 @@ pub struct Location {
   pub log_sql: bool,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 impl Location {
   /// Databases kept in memory, for tests.
   pub fn memory() -> Self {
@@ -115,7 +115,7 @@ impl Database {
   }
 
   /// An empty database of `schema` in memory, for tests.
-  #[cfg(test)]
+  #[cfg(any(test, feature = "testing"))]
   pub async fn memory(schema: &'static Schema) -> Self {
     Self::open(schema, &Location::memory()).await.unwrap()
   }
@@ -488,7 +488,7 @@ mod tests {
       volatile: false,
       log_sql: false,
     };
-    let db = Database::open(&crate::auth::store::SCHEMA, &location)
+    let db = Database::open(&migrate::tests::PRIVATE, &location)
       .await
       .unwrap();
     db.write(|conn| {

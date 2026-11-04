@@ -9,8 +9,8 @@ use tracing::{debug, warn};
 use uuid::Uuid;
 
 use super::Controller;
-use crate::relay::frames;
 use crate::sync::lock;
+use reseek_relay_proto::frames;
 
 /// A file info request waiting for its answer.
 pub(super) struct FileInfoWait {

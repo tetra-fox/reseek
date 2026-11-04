@@ -194,8 +194,7 @@ impl Shares {
   /// Whether `settings` share what a scan started now would: the same entries, filters and
   /// link following.
   fn covers_current(&self, settings: &Settings) -> bool {
-    let options = self.config.current();
-    let content = scanner::content_of(&self.listed(), &options.values, self.case_sensitive);
+    let content = scanner::content_of(&self.listed(), &(self.options)(), self.case_sensitive);
     settings.snapshot.get("content") == Some(&content)
   }
 

@@ -260,7 +260,7 @@ pub(super) async fn read_from_disk(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::shares::scanner::tests::settings;
+  use crate::scanner::tests::settings;
 
   #[cfg(unix)]
   #[test]

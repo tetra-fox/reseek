@@ -108,7 +108,7 @@ fn run(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::shares::repository::tests::{index, write};
+  use crate::repository::tests::{index, write};
 
   fn query(terms: &[&str], exclusions: &[&str]) -> SearchQuery {
     SearchQuery {

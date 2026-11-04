@@ -29,8 +29,6 @@ use tokio_util::task::TaskTracker;
 use tracing::{Instrument, debug, info, info_span, warn};
 use uuid::Uuid;
 
-use super::credential::{Key, Purpose};
-use super::frames::close;
 use crate::api::error::ApiError;
 use crate::config::cidr::parse_trimmed_list;
 use crate::config::{Options, RelayAgent};
@@ -44,6 +42,8 @@ use crate::telemetry::catalog::RelayMetrics;
 pub use files::RelayStream;
 use files::StreamWait;
 use info::FileInfoWait;
+use reseek_relay_proto::credential::{Key, Purpose};
+use reseek_relay_proto::frames::close;
 
 /// How many frames wait to be written to one agent's socket.
 const OUTBOUND: usize = 64;

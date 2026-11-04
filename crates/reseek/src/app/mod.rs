@@ -232,9 +232,14 @@ impl AppState {
     .map_err(StartError::Open)?;
     let event_log_db = event_log.database();
     let telemetry = Telemetry::new(transfers.clone(), shutdown.clone());
-    let shares = Shares::open(config.clone(), &paths, state.clone(), shutdown.clone())
-      .await
-      .map_err(|e| StartError::Open(format!("shares.local.db: {e}")))?;
+    let shares = Shares::open(
+      &config,
+      |options: &Options| &options.shares,
+      crate::shares::setup(&config.current().values, &paths, &state),
+      shutdown.clone(),
+    )
+    .await
+    .map_err(|e| StartError::Open(format!("shares.local.db: {e}")))?;
     let relay = Relay::new(
       &config, &shares, &events, &state, &telemetry, &paths, &shutdown,
     );

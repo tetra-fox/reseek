@@ -9,8 +9,6 @@
 
 mod agent;
 mod controller;
-pub mod credential;
-mod frames;
 mod service;
 
 use std::sync::Arc;

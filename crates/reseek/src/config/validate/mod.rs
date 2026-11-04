@@ -9,7 +9,6 @@ mod general;
 mod paths;
 mod relay;
 mod scripts;
-mod shares;
 mod soulseek;
 mod transfers;
 mod web;
@@ -44,7 +43,11 @@ pub fn validate(options: &Options, context: &Context) -> Result<(), Vec<Invalid>
     .clone()
     .unwrap_or_else(|| context.default_downloads.clone());
   let case_sensitive = context.started_case_sensitive;
-  shares::check(&options.shares, &downloads, case_sensitive, &mut report);
+  report.0.extend(reseek_shares::validate::check(
+    &options.shares,
+    &downloads,
+    case_sensitive,
+  ));
   transfers::check(&options.transfers, case_sensitive, &mut report);
   web::check(&options.web, context, &mut report);
   soulseek::check(&options.soulseek, &mut report);

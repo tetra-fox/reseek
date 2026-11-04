@@ -18,6 +18,7 @@ reseek-ui-assets.workspace = true
 [dev-dependencies]
 api-client.workspace = true
 api-types.workspace = true
+reseek-relay-proto.workspace = true
 chrono.workspace = true
 futures-util.workspace = true
 image = { version = "0.25", default-features = false, features = ["png"] }

@@ -10,11 +10,11 @@ use axum::response::Response;
 use tracing::debug;
 use uuid::Uuid;
 
-use super::frames::MAX_FRAME;
 use super::{AgentClient, Controller, Relay};
 use crate::api::error::ApiError;
 use crate::auth::Client;
 use crate::services::{AgentCredential, RelayService};
+use reseek_relay_proto::frames::MAX_FRAME;
 
 impl Relay {
   fn controller(&self) -> &std::sync::Arc<Controller> {

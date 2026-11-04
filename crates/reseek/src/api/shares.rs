@@ -264,6 +264,48 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn the_shares_are_listed_by_host_with_what_they_hold() {
+    let dir = tree();
+    let music = dir.path().join("Music");
+    let config = format!(
+      "[shares]\ndirectories = [\"[Music]{}\"]\n[web.authentication]\n\
+       trusted_networks = [\"127.0.0.0/8\"]\n",
+      music.display()
+    );
+    let app = app(&config, &[]).await;
+    let listed = app.send(request("GET", "/api/v0/shares", None)).await;
+    assert_eq!(listed.status, 200);
+    let local = listed.json()["local"].clone();
+    assert_eq!(local[0]["alias"], "Music");
+    assert_eq!(
+      local[0]["directories"], 2,
+      "the share's own directory counts"
+    );
+    let id = local[0]["id"].as_str().unwrap().to_string();
+    let contents = app
+      .send(request(
+        "GET",
+        &format!("/api/v0/shares/{id}/contents"),
+        None,
+      ))
+      .await
+      .json();
+    assert_eq!(contents[0]["name"], "Music");
+    assert_eq!(contents[0]["files"][0]["filename"], "track.flac");
+    let unknown = app
+      .send(request("GET", "/api/v0/shares/ABC/contents", None))
+      .await;
+    assert_eq!(unknown.status, 404);
+    let none = app.send(request("DELETE", "/api/v0/shares", None)).await;
+    assert_eq!(none.status, 409);
+    assert_eq!(none.json()["error"], "No share scan is in progress");
+    let forced = app
+      .send(request("PUT", "/api/v0/shares?force=true", None))
+      .await;
+    assert_eq!(forced.status, 204);
+  }
+
+  #[tokio::test]
   async fn listing_folders_needs_remote_configuration() {
     let dir = tree();
     let off = app(&config(dir.path(), false, false), &[]).await;

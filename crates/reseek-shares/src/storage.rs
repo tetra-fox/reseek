@@ -9,8 +9,8 @@ use rusqlite::{Connection, OpenFlags};
 use tracing::{info, warn};
 
 use super::repository::SCHEMA;
-use crate::config::enums::StorageMode;
 use crate::db::{Database, DbError, Location, remove_database};
+use crate::options::StorageMode;
 
 /// The local host's share index and where its backup is.
 pub struct Storage {

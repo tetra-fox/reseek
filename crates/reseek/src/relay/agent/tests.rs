@@ -7,8 +7,8 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::Role;
 
 use super::dial::{Io, Settings, Socket};
-use crate::relay::frames;
 use crate::testing::app;
+use reseek_relay_proto::frames;
 
 const CONFIG: &str = "[relay]\nenabled = true\nmode = \"agent\"\n\
   [relay.controller]\naddress = \"http://127.0.0.1:9\"\n\

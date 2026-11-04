@@ -145,7 +145,7 @@ pub async fn refresh(dbs: &[Arc<Index>], file: &Path) {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::shares::repository::tests::{index, write};
+  use crate::repository::tests::{index, write};
   use soulseek_proto::RemoteFilename;
 
   #[tokio::test]

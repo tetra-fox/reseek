@@ -17,8 +17,9 @@ use tracing::{Instrument, debug, info, warn};
 use super::repository;
 use super::share::Share;
 use super::walk::{Read, directories, read_from_disk};
-use crate::config::{Options, patterns};
 use crate::db::{Database, DbError};
+use crate::options;
+use crate::patterns;
 
 /// How many directories wait for a worker at most.
 const QUEUE: usize = 1000;
@@ -47,11 +48,10 @@ pub(super) fn filter_set(filters: &[String]) -> BTreeSet<&str> {
 }
 
 impl Settings {
-  /// The settings of `options` for the share list `shares`, the filters matching case when
-  /// `case_sensitive`.
-  pub fn new(shares: Vec<Share>, options: &Options, case_sensitive: bool) -> Self {
+  /// The settings of the share options `options` for the share list `shares`, the filters
+  /// matching case when `case_sensitive`.
+  pub fn new(shares: Vec<Share>, options: &options::Shares, case_sensitive: bool) -> Self {
     let filters = options
-      .shares
       .filters
       .iter()
       .filter_map(|f| {
@@ -62,12 +62,12 @@ impl Settings {
       .collect();
     let snapshot = json!({
       "content": content_of(&shares, options, case_sensitive),
-      "shares": options.shares,
+      "shares": options,
     });
     Self {
       shares,
       filters,
-      follow_symlinks: options.shares.follow_symlinks,
+      follow_symlinks: options.follow_symlinks,
       snapshot,
     }
   }
@@ -79,11 +79,11 @@ impl Settings {
   }
 }
 
-/// What decides what a scan of `shares` with `options` shares: the entries, the filters as a
-/// set, whether they match case and whether links are followed.
+/// What decides what a scan of `shares` with the share options `options` shares: the entries,
+/// the filters as a set, whether they match case and whether links are followed.
 pub(super) fn content_of(
   shares: &[Share],
-  options: &Options,
+  options: &options::Shares,
   case_sensitive: bool,
 ) -> serde_json::Value {
   let mut directories: Vec<&str> = shares.iter().map(|s| s.raw.as_str()).collect();
@@ -91,9 +91,9 @@ pub(super) fn content_of(
   directories.dedup();
   json!({
     "directories": directories,
-    "filters": filter_set(&options.shares.filters),
+    "filters": filter_set(&options.filters),
     "caseSensitive": case_sensitive,
-    "followSymlinks": options.shares.follow_symlinks,
+    "followSymlinks": options.follow_symlinks,
   })
 }
 
@@ -327,8 +327,8 @@ pub async fn scan(
 #[cfg(test)]
 pub(super) mod tests {
   use super::*;
-  use crate::shares::repository::tests::index;
-  use crate::shares::share;
+  use crate::repository::tests::index;
+  use crate::share;
 
   /// A share tree in a temporary directory: `music` with an album, a hidden directory, a
   /// hidden file, a filtered file and a private subdirectory.
@@ -361,16 +361,18 @@ pub(super) mod tests {
   }
 
   pub fn settings(dir: &Path, extra: &[&str], filters: &[&str], follow: bool) -> Arc<Settings> {
-    let mut options = Options::default();
-    options.shares.directories = vec![format!("[Music]{}", dir.join("music").display())];
-    options.shares.directories.extend(
+    let mut options = options::Shares {
+      directories: vec![format!("[Music]{}", dir.join("music").display())],
+      ..options::Shares::default()
+    };
+    options.directories.extend(
       extra
         .iter()
         .map(|e| e.replace("{}", &dir.display().to_string())),
     );
-    options.shares.filters = filters.iter().map(|f| f.to_string()).collect();
-    options.shares.follow_symlinks = follow;
-    let shares = share::configure(&options.shares, Path::new("/nowhere"));
+    options.filters = filters.iter().map(|f| f.to_string()).collect();
+    options.follow_symlinks = follow;
+    let shares = share::configure(&options, Path::new("/nowhere"));
     Arc::new(Settings::new(shares, &options, false))
   }
 

@@ -12,7 +12,6 @@ mod paths;
 mod relay;
 mod retention;
 mod search;
-mod shares;
 mod soulseek;
 mod transfers;
 mod web;
@@ -34,12 +33,12 @@ pub use notifications::{
 };
 pub use paths::{Directories, Paths};
 pub use relay::{Relay, RelayAgent, RelayController, RelayLimits, RelayTimeouts};
+pub use reseek_shares::options::{MAX_SCAN_WORKERS, ShareCache, Shares};
 pub use retention::{
   FileRetention, MessageRetention, RETENTION_SWEEP, Retention, TransferRetention,
   TransfersRetention,
 };
 pub use search::{FilterPreset, Search};
-pub use shares::{MAX_SCAN_WORKERS, ShareCache, Shares};
 pub use soulseek::{
   ConnectionBuffers, ConnectionTimeouts, DistributedNetwork, ServerKeepalive, Soulseek,
   SoulseekConnection, SoulseekLimits, SoulseekProxy,

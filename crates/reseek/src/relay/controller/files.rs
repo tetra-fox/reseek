@@ -19,11 +19,11 @@ use uuid::Uuid;
 
 use super::Controller;
 use crate::api::error::ApiError;
-use crate::relay::credential::Purpose;
-use crate::relay::frames;
 use crate::safety::traverses;
 use crate::services::AgentCredential;
 use crate::sync::lock;
+use reseek_relay_proto::credential::Purpose;
+use reseek_relay_proto::frames;
 
 /// How many chunks of an agent's file wait to be read by the upload.
 const CHUNKS: usize = 8;

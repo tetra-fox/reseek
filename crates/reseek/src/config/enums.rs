@@ -1,68 +1,7 @@
 //! Options whose value is one of a fixed set of names, read in any case and written in lower
 //! case.
 
-/// Declares an option enum: each variant with the name it is written as. Reading ignores case;
-/// a name not in the set is refused with the list of names.
-macro_rules! option_enum {
-  (
-    $(#[$meta:meta])*
-    pub enum $name:ident {
-      $($(#[$vmeta:meta])* $variant:ident = $text:literal,)+
-    }
-  ) => {
-    $(#[$meta])*
-    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    pub enum $name {
-      $($(#[$vmeta])* $variant,)+
-    }
-
-    impl $name {
-      /// Every name, in declaration order.
-      pub const NAMES: &[&str] = &[$($text),+];
-
-      /// The name the value is written as.
-      pub fn as_str(self) -> &'static str {
-        match self {
-          $(Self::$variant => $text,)+
-        }
-      }
-
-      /// The value named `text`, in any case.
-      pub fn parse(text: &str) -> Option<Self> {
-        $(if text.eq_ignore_ascii_case($text) {
-          return Some(Self::$variant);
-        })+
-        None
-      }
-    }
-
-    impl serde::Serialize for $name {
-      fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.as_str())
-      }
-    }
-
-    impl<'de> serde::Deserialize<'de> for $name {
-      fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let text = String::deserialize(deserializer)?;
-        Self::parse(&text).ok_or_else(|| {
-          serde::de::Error::custom(format!(
-            "`{text}` is not one of: {}",
-            Self::NAMES.join(", ")
-          ))
-        })
-      }
-    }
-
-    impl cascade::Cascade for $name {
-      fn shape() -> cascade::Shape {
-        cascade::Shape::choice(Self::NAMES)
-      }
-    }
-  };
-}
-
-pub(crate) use option_enum;
+pub(crate) use cascade::option_enum;
 
 option_enum! {
   /// What a principal may do.
@@ -116,17 +55,7 @@ option_enum! {
   }
 }
 
-option_enum! {
-  /// Where the share index is kept.
-  pub enum StorageMode {
-    /// in memory, restored at each start from the backup of the last scan, or rebuilt by a
-    /// scan when there is no backup
-    #[default]
-    Memory = "memory",
-    /// in a database file in the cache directory
-    Disk = "disk",
-  }
-}
+pub use reseek_shares::options::StorageMode;
 
 option_enum! {
   /// What a retried download does with the part already on disk.
@@ -214,27 +143,5 @@ option_enum! {
     Linear = "linear",
     /// equal steps of pitch as heard take the same height
     Mel = "mel",
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn option_enums_read_any_case_and_write_lower_case() {
-    let role: Role = serde_json::from_str("\"ReadWrite\"").unwrap();
-    assert_eq!(role, Role::ReadWrite);
-    assert_eq!(serde_json::to_string(&role).unwrap(), "\"readwrite\"");
-    let e = serde_json::from_str::<Role>("\"guest\"").unwrap_err();
-    assert!(
-      e.to_string()
-        .starts_with("`guest` is not one of: readonly, readwrite, administrator"),
-      "{e}"
-    );
-    assert!(
-      serde_json::from_str::<RelayMode>("\"1\"").is_err(),
-      "no numbers"
-    );
   }
 }

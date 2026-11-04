@@ -7,7 +7,7 @@ use api_types::shares::{Share, ShareFolders, SharesByHost};
 use api_types::users::Directory;
 use async_trait::async_trait;
 
-use super::{LOCAL_HOST, Shares};
+use super::{FolderError, LOCAL_HOST, Shares};
 use crate::api::error::ApiError;
 use crate::db::DbError;
 use crate::services::ShareService;
@@ -49,17 +49,16 @@ impl ShareService for Shares {
 
   async fn share_contents(&self, id: &str) -> Result<Vec<Directory>, ApiError> {
     let alias = self.share(id).await?.alias;
-    let listed = super::browse::listing(&self.databases(), Some(alias))
-      .await
-      .map_err(failed)?;
+    let listed = Shares::share_contents(self, alias).await.map_err(failed)?;
     Ok(listed.into_iter().map(Directory::from).collect())
   }
 
   async fn folders(&self, path: Option<String>) -> Result<ShareFolders, ApiError> {
-    let settings = self.scan_settings();
-    tokio::task::spawn_blocking(move || super::folders::list(&settings, path.as_deref()))
-      .await
-      .map_err(ApiError::internal)?
+    Shares::folders(self, path).await.map_err(|e| match e {
+      FolderError::NotListed => ApiError::not_found(e.to_string()),
+      FolderError::Relative | FolderError::Traverses => ApiError::bad_request(e.to_string()),
+      FolderError::Failed(detail) => ApiError::internal(detail),
+    })
   }
 
   async fn scan(&self, force: bool) -> Result<(), ApiError> {

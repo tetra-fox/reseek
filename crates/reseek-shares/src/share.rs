@@ -10,7 +10,7 @@ use std::path::{Component, Path, PathBuf};
 
 use sha1::{Digest, Sha1};
 
-use crate::config::Shares;
+use crate::options::Shares;
 
 /// The option that adds the downloads directory as a share of its own.
 pub const DERIVED_FROM_DOWNLOADS: &str = "shares.share_downloads";

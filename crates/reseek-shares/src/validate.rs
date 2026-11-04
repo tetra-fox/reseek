@@ -1,5 +1,5 @@
-//! The shared directories: each entry's grammar, unique aliases and paths, and the share
-//! filters.
+//! What the share options must satisfy: each shared directory's grammar, unique aliases and
+//! paths, filters that compile, and the index's workers and rescan interval in range.
 //!
 //! An entry is an optional `!` or `-` that excludes it, an optional `[alias]`, and an absolute
 //! path. Without an alias the alias is the path's last segment. The first `]` ends the alias,
@@ -8,12 +8,13 @@
 use std::path::Path;
 use std::sync::LazyLock;
 
+use cascade::Invalid;
+use cascade::checks::{duration_at_least, range};
 use regex::Regex;
 
-use super::Report;
-use super::fields::{duration_at_least, is_regex, range};
-use crate::config::{MAX_SCAN_WORKERS, ShareCache, Shares};
-use crate::shares::share::{self, DERIVED_FROM_DOWNLOADS, Share, trimmed};
+use crate::options::{MAX_SCAN_WORKERS, ShareCache, Shares};
+use crate::patterns;
+use crate::share::{self, DERIVED_FROM_DOWNLOADS, Share, trimmed};
 
 const KEY: &str = "shares.directories";
 
@@ -48,13 +49,16 @@ impl Entry<'_> {
   }
 }
 
-/// Checks the shared directories, with the share of the downloads directory `downloads` when
-/// `shares.share_downloads` adds it, and the filters and cache options.
-pub(super) fn check(shares: &Shares, downloads: &Path, case_sensitive: bool, report: &mut Report) {
+/// Every problem with the share options `shares`, under the keys of a `[shares]` section: the
+/// shared directories with the share of the downloads directory `downloads` when
+/// `shares.share_downloads` adds it, the filters compiled matching case when `case_sensitive`,
+/// and the cache options.
+pub fn check(shares: &Shares, downloads: &Path, case_sensitive: bool) -> Vec<Invalid> {
+  let mut report = Vec::new();
   let mut invalid: Vec<&str> = Vec::new();
   for written in &shares.directories {
     if let Err(message) = valid(written) {
-      report.add(KEY, message);
+      report.push(Invalid::new(KEY, message));
       invalid.push(trimmed(written));
     }
   }
@@ -91,7 +95,7 @@ pub(super) fn check(shares: &Shares, downloads: &Path, case_sensitive: bool, rep
             b.named()
           )
         };
-        report.add(KEY, message);
+        report.push(Invalid::new(KEY, message));
       } else if share::same_path(&a.share.local_path, &b.share.local_path) {
         let message = if first.derived() {
           format!(
@@ -106,37 +110,34 @@ pub(super) fn check(shares: &Shares, downloads: &Path, case_sensitive: bool, rep
             b.named()
           )
         };
-        report.add(KEY, message);
+        report.push(Invalid::new(KEY, message));
       }
     }
   }
   for filter in &shares.filters {
-    if !is_regex(filter, case_sensitive) {
-      report.add(
+    if patterns::compile(filter, case_sensitive).is_err() {
+      report.push(Invalid::new(
         "shares.filters",
         format!("Share filter '{filter}' is not a valid regular expression."),
-      );
+      ));
     }
   }
-  check_cache(&shares.cache, report);
+  check_cache(&shares.cache, &mut report);
+  report
 }
 
-fn check_cache(cache: &ShareCache, report: &mut Report) {
-  if let Some(workers) = cache.workers {
-    report.check(
-      "shares.cache.workers",
-      range("shares.cache.workers", workers, 1, MAX_SCAN_WORKERS),
-    );
+fn check_cache(cache: &ShareCache, report: &mut Vec<Invalid>) {
+  let key = "shares.cache.workers";
+  if let Some(workers) = cache.workers
+    && let Err(message) = range(key, workers, 1, MAX_SCAN_WORKERS)
+  {
+    report.push(Invalid::new(key, message));
   }
-  if let Some(retention) = cache.retention {
-    report.check(
-      "shares.cache.retention",
-      duration_at_least(
-        "shares.cache.retention",
-        retention,
-        std::time::Duration::from_secs(3600),
-      ),
-    );
+  let key = "shares.cache.retention";
+  if let Some(retention) = cache.retention
+    && let Err(message) = duration_at_least(key, retention, std::time::Duration::from_secs(3600))
+  {
+    report.push(Invalid::new(key, message));
   }
 }
 
@@ -197,9 +198,10 @@ mod tests {
       share_downloads,
       ..Shares::default()
     };
-    let mut report = Report::default();
-    check(&shares, Path::new("/srv/downloads"), false, &mut report);
-    report.messages()
+    check(&shares, Path::new("/srv/downloads"), false)
+      .into_iter()
+      .map(|invalid| invalid.message)
+      .collect()
   }
 
   fn problems(directories: &[&str]) -> Vec<String> {

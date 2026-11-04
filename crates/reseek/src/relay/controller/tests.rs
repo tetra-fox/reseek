@@ -10,9 +10,9 @@ use axum::extract::ws::Message;
 use futures_util::{Sink, Stream};
 use tokio::sync::mpsc;
 
-use crate::relay::credential::{Key, Purpose};
-use crate::relay::frames;
 use crate::testing::app;
+use reseek_relay_proto::credential::{Key, Purpose};
+use reseek_relay_proto::frames;
 
 const SECRET: &str = "nas-secret-0123456789";
 

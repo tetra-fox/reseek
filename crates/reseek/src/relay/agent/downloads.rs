@@ -15,9 +15,9 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use super::AgentClient;
-use crate::backoff;
-use crate::relay::credential::Purpose;
 use crate::safety::traverses;
+use reseek_relay_proto::backoff;
+use reseek_relay_proto::credential::Purpose;
 
 /// How many times a download is fetched before it is given up.
 const ATTEMPTS: u32 = 3;

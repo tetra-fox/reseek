@@ -25,13 +25,13 @@ use tokio::sync::{Notify, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 
-use super::frames::close;
-use crate::backoff;
 use crate::config::{Options, RelayController};
 use crate::shares::Shares;
 use crate::state::StateOwner;
 use crate::sync::lock;
 use dial::Settings;
+use reseek_relay_proto::backoff;
+use reseek_relay_proto::frames::close;
 use session::Link;
 
 /// The longest wait between two attempts to reach the controller.

@@ -10,6 +10,8 @@ mod local;
 mod names;
 
 pub use local::{SEGMENT_BYTES, creatable, creatable_path, path_limit, too_long};
+pub use reseek_shares::traverses;
+
 pub use names::{
   directory_name_safely, file_name_safely, sanitize_filename, sanitize_path, sanitize_path_segment,
   strip_path_root,
@@ -71,11 +73,6 @@ pub fn is_absolute(path: &str, os: Os) -> bool {
           && matches!(bytes[2], b'\\' | b'/'))
     }
   }
-}
-
-/// Whether a segment of `path`, split on `/` and `\`, is `.` or `..`.
-pub fn traverses(path: &str) -> bool {
-  path.split(['/', '\\']).any(|s| s == "." || s == "..")
 }
 
 /// `path` with every `/` and `\` replaced by `os`'s separator.
@@ -191,16 +188,6 @@ mod tests {
     assert!(relative_everywhere("x", "${SOURCE_DIRECTORY}").is_ok());
     assert!(relative_everywhere("x", "/x").is_err());
     assert!(relative_everywhere("x", "C:\\x").is_err());
-  }
-
-  #[test]
-  fn traversal_is_a_whole_dot_segment() {
-    for path in ["foo/../bar", "..", "./x", "/..", ".\\b", "a/."] {
-      assert!(traverses(path), "{path}");
-    }
-    for path in ["foo..bar", ".hidden", "a/..b/c.", "/a/b"] {
-      assert!(!traverses(path), "{path}");
-    }
   }
 
   #[test]

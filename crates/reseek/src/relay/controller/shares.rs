@@ -21,11 +21,11 @@ use uuid::Uuid;
 use super::{Controller, Token};
 use crate::api::error::ApiError;
 use crate::db::remove_database;
-use crate::relay::credential::Purpose;
-use crate::relay::frames::{self, SHARE_TOKEN_LIFETIME, millis};
 use crate::services::AgentCredential;
 use crate::shares::{HostError, Shares};
 use crate::sync::lock;
+use reseek_relay_proto::credential::Purpose;
+use reseek_relay_proto::frames::{self, SHARE_TOKEN_LIFETIME, millis};
 
 /// The largest share list an agent may send.
 const SHARE_LIST_MAX: usize = 16 << 20;

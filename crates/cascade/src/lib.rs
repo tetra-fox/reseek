@@ -70,13 +70,19 @@
 //!
 //! A field's key is its name, or its `#[serde(rename = "...")]`; `#[serde(skip)]` fields are
 //! not part of the configuration.
+//!
+//! [`option_enum!`] declares an option whose value is one of a set of names, [`duration`] reads
+//! and writes a duration option, and [`checks`] has the checks many options share.
 
 #![warn(missing_docs)]
 
 // the derive's generated code names `::cascade`, which this makes work inside the crate too
 extern crate self as cascade;
 
+pub mod checks;
+mod choice;
 mod describe;
+pub mod duration;
 mod edit;
 mod error;
 mod files;

@@ -19,10 +19,10 @@ use uuid::Uuid;
 
 use super::AgentClient;
 use super::session::Link;
-use crate::backoff;
-use crate::relay::credential::Purpose;
-use crate::relay::frames;
 use crate::shares::Shares;
+use reseek_relay_proto::backoff;
+use reseek_relay_proto::credential::Purpose;
+use reseek_relay_proto::frames;
 
 /// How many times the agent asks for an upload token.
 const TOKEN_ATTEMPTS: u32 = 3;
