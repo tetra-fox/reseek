@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tokio::sync::Notify;
@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use crate::files::Entry;
+use crate::lock;
 
 /// How long the files must be quiet after a change before they are read: a save is often
 /// several events.
@@ -33,6 +34,9 @@ pub(super) struct FileEvents {
   /// every directory a file or a pattern's matches live in
   dirs: Vec<PathBuf>,
   watched: BTreeSet<PathBuf>,
+  /// directories an event was about itself, such as one removed, renamed or made again, whose
+  /// watch may have ended with it
+  touched: Arc<Mutex<BTreeSet<PathBuf>>>,
 }
 
 impl FileEvents {
@@ -53,13 +57,22 @@ impl FileEvents {
     dirs.sort();
     dirs.dedup();
     let relevant_dirs = dirs.clone();
+    let touched = Arc::new(Mutex::new(BTreeSet::new()));
+    let touched_dirs = touched.clone();
     let handler = move |result: notify::Result<notify::Event>| match result {
       Ok(event) => {
-        let relevant = !matches!(event.kind, notify::EventKind::Access(_))
-          && event
-            .paths
-            .iter()
-            .any(|path| relevant_dirs.contains(path) || named(&entries, path));
+        if matches!(event.kind, notify::EventKind::Access(_)) {
+          return;
+        }
+        let mut relevant = false;
+        for path in &event.paths {
+          if relevant_dirs.contains(path) {
+            lock(&touched_dirs).insert(path.clone());
+            relevant = true;
+          } else if named(&entries, path) {
+            relevant = true;
+          }
+        }
         if relevant {
           events.notify_one();
         }
@@ -81,14 +94,18 @@ impl FileEvents {
       watcher,
       dirs,
       watched: BTreeSet::new(),
+      touched,
     };
     files.watch_new_dirs();
     Ok(files)
   }
 
   /// Watches each directory the files live in that exists and is not watched yet, or the
-  /// parent of one that does not exist, to see it made.
+  /// parent of one that does not exist, to see it made. A directory an event was about is
+  /// watched anew, since removing it ends its watch even when it is made again, and one no
+  /// longer wanted is let go.
   pub(super) fn watch_new_dirs(&mut self) {
+    let touched = std::mem::take(&mut *lock(&self.touched));
     let wanted: BTreeSet<PathBuf> = self
       .dirs
       .iter()
@@ -97,6 +114,19 @@ impl FileEvents {
         _ => dir.clone(),
       })
       .collect();
+    let stale: Vec<PathBuf> = self
+      .watched
+      .iter()
+      .filter(|dir| touched.contains(*dir) || !wanted.contains(*dir))
+      .cloned()
+      .collect();
+    for dir in stale {
+      self.watched.remove(&dir);
+      // a removed directory's watch ended with it, which the system reports as not watched
+      if let Err(e) = self.watcher.unwatch(&dir) {
+        debug!(dir = %dir.display(), error = %e, "configuration directory watch already gone");
+      }
+    }
     for dir in wanted {
       if self.watched.contains(&dir) {
         continue;
@@ -192,6 +222,28 @@ mod tests {
       Source::File {
         file: "config.d/10-a.toml".into()
       }
+    );
+    cancel.cancel();
+  }
+
+  #[tokio::test]
+  async fn a_drop_in_directory_made_again_is_watched_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let drop_ins = dir.path().join("config.d");
+    fs::create_dir(&drop_ins).unwrap();
+    let watcher = watched(dir.path());
+    let mut changes = watcher.changes();
+    let cancel = CancellationToken::new();
+    watcher.start(Watch::Events, cancel.clone());
+
+    // removed and made again in one burst, which ends the old directory's watch
+    fs::remove_dir_all(&drop_ins).unwrap();
+    fs::create_dir(&drop_ins).unwrap();
+    tokio::time::sleep(DEBOUNCE * 2).await;
+    fs::write(drop_ins.join("10-a.toml"), "[server]\nport = 2001\n").unwrap();
+    assert_eq!(
+      next_change(&mut changes).await.current.values.server.port,
+      2001
     );
     cancel.cancel();
   }
