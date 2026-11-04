@@ -189,7 +189,7 @@ async fn the_server_closing_the_connection_ends_the_session() {
   let address = session.fake.address();
   drop(session.server.stream);
   let (message, cause) = next_event(&mut session.events, |event| match event {
-    Event::Disconnected { message, error } => Some((message, error)),
+    Event::Disconnected { message, error, .. } => Some((message, error)),
     _ => None,
   })
   .await;

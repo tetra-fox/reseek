@@ -108,12 +108,11 @@ impl Messaging {
     self.watch_conversations();
   }
 
-  /// The session ended, with the daemon stopping or with the connection.
-  pub(super) async fn session_ended(&self) {
+  /// The session ended at `now`, with the daemon stopping or with the connection.
+  pub(super) async fn session_ended(&self, now: DateTime<Utc>) {
     let Some(id) = lock(&self.session).take() else {
       return;
     };
-    let now = Utc::now();
     if let Err(e) = self
       .db
       .write(move |conn| {

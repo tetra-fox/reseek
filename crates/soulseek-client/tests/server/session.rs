@@ -43,7 +43,7 @@ async fn login_raises_its_transitions_before_anything_the_server_sends_after_it(
     .iter()
     .map(|event| match event {
       Event::StateChanged { .. } => "StateChanged",
-      Event::Connected => "Connected",
+      Event::Connected { .. } => "Connected",
       Event::LoggedIn { .. } => "LoggedIn",
       Event::ServerInfoReceived(_) => "ServerInfoReceived",
       Event::RoomListReceived(_) => "RoomListReceived",
@@ -175,7 +175,7 @@ async fn a_second_login_with_our_name_kicks_us() {
     .await;
   let (message, cause) = first
     .event(|event| match event {
-      Event::Disconnected { message, error } => Some((message, error)),
+      Event::Disconnected { message, error, .. } => Some((message, error)),
       _ => None,
     })
     .await;

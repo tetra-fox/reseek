@@ -31,14 +31,17 @@ pub enum Event {
     message: String,
     error: Option<ClientError>,
   },
-  /// the TCP connection to the server is up
-  Connected,
-  /// the server accepted our login as `username`
-  LoggedIn { username: String },
-  /// the server session ended; raised once per session, after the last `StateChanged`
+  /// the TCP connection of server session `session` is up
+  Connected { session: u64 },
+  /// the server accepted the login of server session `session` as `username`
+  LoggedIn { session: u64, username: String },
+  /// server session `session` ended at `at`; raised once per session, after its last
+  /// `StateChanged`
   Disconnected {
+    session: u64,
     message: String,
     error: Option<ClientError>,
+    at: SystemTime,
   },
   /// another session logged in with our credentials and the server dropped us
   KickedFromServer,

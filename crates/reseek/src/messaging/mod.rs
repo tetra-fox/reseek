@@ -25,6 +25,7 @@ use std::time::Duration;
 
 use api_types::messaging::NotifyLevel;
 use cascade::Watcher;
+use chrono::Utc;
 use soulseek_client::{Client, ClientState, Event};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -252,9 +253,9 @@ impl Messaging {
   async fn handle(&self, event: Event) {
     match event {
       Event::PrivateMessageReceived(message) => self.received(message).await,
-      Event::LoggedIn { username } => self.session_started(username).await,
-      Event::Disconnected { .. } => {
-        self.session_ended().await;
+      Event::LoggedIn { username, .. } => self.session_started(username).await,
+      Event::Disconnected { at, .. } => {
+        self.session_ended(at.into()).await;
         self.rooms_disconnected();
       }
       other => {
@@ -274,7 +275,7 @@ impl Messaging {
     {
       warn!(error = %e, "the messaging task ended badly");
     }
-    self.session_ended().await;
+    self.session_ended(Utc::now()).await;
     self.tasks.close();
     if tokio::time::timeout(STOPPING, self.tasks.wait())
       .await
