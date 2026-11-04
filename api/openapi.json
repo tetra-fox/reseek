@@ -22021,7 +22021,7 @@
       },
       "PrivateMessageReceived": {
         "type": "object",
-        "description": "The data of `PrivateMessageReceived`.",
+        "description": "The data of `PrivateMessageReceived`, raised again at each login until the message is read;\na repeat carries the first one's `localId`.",
         "required": [
           "version",
           "message"
