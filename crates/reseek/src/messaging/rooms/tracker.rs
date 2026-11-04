@@ -39,6 +39,8 @@ pub struct PrivateRoom {
 pub struct Tracker {
   rooms: Vec<Tracked>,
   private: BTreeMap<String, PrivateRoom>,
+  /// how many times each room was left in this run, so a join under way meanwhile is undone
+  leaves: BTreeMap<String, u64>,
 }
 
 /// A member's country as the server gave it, none when it sent a blank, as it does for a user
@@ -133,8 +135,15 @@ impl Tracker {
     }
   }
 
+  /// How many times `name` was left so far in this run. A join reads it as it starts and again
+  /// as it ends, and a leave in between undoes the join.
+  pub fn leaves(&self, name: &str) -> u64 {
+    self.leaves.get(name).copied().unwrap_or(0)
+  }
+
   /// We left `name`; false when it was not tracked.
   pub fn left(&mut self, name: &str) -> bool {
+    *self.leaves.entry(name.to_string()).or_default() += 1;
     let before = self.rooms.len();
     self.rooms.retain(|room| room.name != name);
     self.rooms.len() != before
