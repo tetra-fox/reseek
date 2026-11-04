@@ -61,7 +61,7 @@ pub(super) struct Uploads {
 }
 
 impl Uploads {
-  fn add(&mut self, relative: String, bytes: u64) {
+  pub fn add(&mut self, relative: String, bytes: u64) {
     self.held.push(Held {
       relative,
       bytes,
@@ -197,9 +197,8 @@ impl Analysis {
       .map_err(ApiError::internal)?;
     partial.keep();
     let path = format!("{id}/{name}");
-    lock(&self.held).add(path.clone(), size);
     info!(by, bytes = size, "a file uploaded for analysis");
-    self.evict().await;
+    self.evict_admitting(Some((path.clone(), size))).await;
     Ok(AnalysisUpload {
       root: FileRoot::Temporary,
       path,
@@ -208,10 +207,18 @@ impl Analysis {
   }
 
   /// Takes the oldest uploads out of the cache until it fits `limit` with `others` bytes of other
-  /// files, and gives what the uploads left take.
-  pub(super) async fn evict_uploads(&self, limit: u64, others: u64) -> u64 {
+  /// files, `admitted` held first as the newest, and gives what the uploads left take.
+  pub(super) async fn evict_uploads(
+    &self,
+    limit: u64,
+    others: u64,
+    admitted: Option<(String, u64)>,
+  ) -> u64 {
     let (gone, left) = {
       let mut held = lock(&self.held);
+      if let Some((relative, bytes)) = admitted {
+        held.add(relative, bytes);
+      }
       let gone = held.over(limit, others);
       (gone, held.bytes())
     };
