@@ -217,6 +217,25 @@ describe("a chat pane", () => {
     expect(document.querySelectorAll("[role=note]")).toHaveLength(2);
   });
 
+  it("adds no gap from a login to the history of a room we left", async () => {
+    const net = fakeNetwork((url) =>
+      url.pathname.endsWith("/rooms/history/indie/messages")
+        ? { messages: [roomMessage(1)], hasMore: false, gaps: [] }
+        : undefined
+    );
+    live.start();
+    component = mount(Pane, {
+      target: document.body,
+      props: { target: { kind: "room", name: "indie" } }
+    });
+    await flush();
+    expect(ids()).toEqual(["1"]);
+
+    net.frame("rooms.gap", { from: "2026-10-26T10:13:00Z", to: null });
+    await flush();
+    expect(document.querySelectorAll("[role=note]")).toHaveLength(0);
+  });
+
   it("keeps joins and leaves out of the messages and folds them in the room's activity", async () => {
     const net = indie(() => ({ messages: [roomMessage(1)], hasMore: false, gaps: [] }), {
       lastReadId: 1
