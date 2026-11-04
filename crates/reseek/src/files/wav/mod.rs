@@ -324,12 +324,13 @@ pub(super) async fn respond(
   let path = file.path.clone();
   let size = file.size;
   let opened = tokio::task::spawn_blocking(move || {
-    let opened = File::open(&path).map_err(Refused::Read)?;
+    let opened = File::open(&path)?;
     let extension = path.extension().and_then(|e| e.to_str());
-    open(Box::new(opened), size, extension)
+    Ok::<_, io::Error>(open(Box::new(opened), size, extension))
   })
   .await
-  .map_err(ApiError::internal)?;
+  .map_err(ApiError::internal)?
+  .map_err(|e| serve::not_opened(&file.path, e))?;
   let opened = match opened {
     Ok(opened) => opened,
     Err(Refused::Format(reason)) => {
