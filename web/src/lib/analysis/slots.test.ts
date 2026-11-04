@@ -2,6 +2,7 @@ import { goto } from "$app/navigation";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "#lib/app.svelte.js";
+import { toasts } from "#lib/feedback/toast.svelte.js";
 
 import type { Target } from "./analysis";
 import { slots } from "./slots.svelte";
@@ -29,6 +30,7 @@ describe("the Analysis page's slots", () => {
     slots.a = slots.b = null;
     vi.mocked(goto).mockClear();
     vi.mocked(sendFile).mockClear();
+    toasts.splice(0);
   });
   afterEach(() => {
     app.options = null;
@@ -81,6 +83,14 @@ describe("the Analysis page's slots", () => {
     expect(goto).toHaveBeenLastCalledWith(
       "#/analysis?a=downloads%3Aone.flac&b=downloads%3Atwo.flac",
       { reset: false, replace: true }
+    );
+  });
+
+  it("sends only a file the analyzer reads", () => {
+    slots.upload("a", new File(["x"], "cover.jpg"));
+    expect(sendFile).not.toHaveBeenCalled();
+    expect(toasts[0]?.text).toBe(
+      "cover.jpg cannot be analyzed, as it is not a type the analyzer reads."
     );
   });
 });
