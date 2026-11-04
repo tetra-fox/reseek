@@ -6,23 +6,31 @@ export type SaveState = "idle" | "waiting" | "saving" | "saved" | "failed";
 /**
  * Saves a value as it is edited, once the edits pause for `ms`. One save runs at a time and the
  * newest edit goes last, so an older save can't land after a newer one. An edit still waiting
- * when the component goes is saved at once, so leaving the view doesn't lose it. Make it while
- * a component is being set up
+ * when the component goes is saved at once, so leaving the view doesn't lose it, and when the
+ * page goes it is saved with `keepalive`, which `save` puts on its request so the request
+ * outlives the page. Make it while a component is being set up
  */
 export class Autosave<T> {
   state = $state<SaveState>("idle");
   /** why the last save failed, empty when it didn't */
   error = $state("");
-  #save: (value: T) => Promise<Outcome<unknown>>;
+  #save: (value: T, keepalive: boolean) => Promise<Outcome<unknown>>;
   #ms: number;
   #waiting: { value: T } | null = null;
   #timer: ReturnType<typeof setTimeout> | undefined;
   #running: Promise<void> | null = null;
 
-  constructor(save: (value: T) => Promise<Outcome<unknown>>, ms: number) {
+  constructor(save: (value: T, keepalive: boolean) => Promise<Outcome<unknown>>, ms: number) {
     this.#save = save;
     this.#ms = ms;
-    $effect(() => () => void this.flush());
+    $effect(() => {
+      const leave = () => this.#leave();
+      window.addEventListener("pagehide", leave);
+      return () => {
+        window.removeEventListener("pagehide", leave);
+        void this.flush();
+      };
+    });
   }
 
   /** `value` is the newest edit, saved once the edits pause */
@@ -48,13 +56,25 @@ export class Autosave<T> {
     const next = this.#waiting;
     if (!next) return;
     this.#waiting = null;
-    this.#running = this.#run(next.value).finally(() => (this.#running = null));
+    this.#running = this.#run(next.value, false).finally(() => (this.#running = null));
     await this.#running;
   }
 
-  async #run(value: T) {
+  /**
+   * The page goes: the edit waiting is sent now, without waiting for a save that runs, since the
+   * page may be gone before that one answers
+   */
+  #leave() {
+    clearTimeout(this.#timer);
+    const next = this.#waiting;
+    if (!next) return;
+    this.#waiting = null;
+    void this.#run(next.value, true);
+  }
+
+  async #run(value: T, keepalive: boolean) {
     this.state = "saving";
-    const outcome = await this.#save(value);
+    const outcome = await this.#save(value, keepalive);
     this.error = outcome.ok ? "" : outcome.error;
     if (!outcome.ok) this.state = "failed";
     else this.state = this.#waiting ? "waiting" : "saved";

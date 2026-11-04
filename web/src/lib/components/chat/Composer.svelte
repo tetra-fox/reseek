@@ -83,11 +83,12 @@
   // a conversation's draft goes to the daemon; a failed save says nothing: the text stays in the
   // box and its next change saves it again
   const drafts = new Autosave<{ username: string; draft: string }>(
-    ({ username, draft }) =>
+    ({ username, draft }, keepalive) =>
       call(() =>
         api.PUT("/api/v0/conversations/{username}/draft", {
           params: byUser(username),
-          body: { draft }
+          body: { draft },
+          keepalive
         })
       ),
     DRAFT_MS
