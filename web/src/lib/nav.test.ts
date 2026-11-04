@@ -45,7 +45,6 @@ describe("redirects", () => {
 
   it("send a path no screen renders to the screen it belongs to, else the dashboard", () => {
     expect(unknownTarget("/nowhere")).toBe("/dashboard");
-    expect(unknownTarget("/browse/carol")).toBe("/searches");
     expect(unknownTarget("/downloads/x/y")).toBe("/downloads");
     expect(unknownTarget("/system/nothing")).toBe("/system");
     expect(unknownTarget("/rooms")).toBe("/chat");

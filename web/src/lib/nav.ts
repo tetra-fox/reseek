@@ -137,13 +137,11 @@ export const redirectFor = (path: string, agent: boolean): string | null => {
 };
 
 /**
- * Where a path that no screen renders goes: the chat page for the old rooms paths, Search for
- * what is under the old browse path, the screen whose path it starts with, such as System for
- * /system/nowhere, else the dashboard
+ * Where a path that no screen renders goes: the chat page for the old rooms paths, the screen
+ * whose path it starts with, such as System for /system/nowhere, else the dashboard
  */
 export const unknownTarget = (path: string): string => {
   if (path === "/rooms" || path.startsWith("/rooms/")) return "/chat";
-  if (path.startsWith("/browse/")) return "/searches";
   return navCurrent(path)?.path ?? "/dashboard";
 };
 
