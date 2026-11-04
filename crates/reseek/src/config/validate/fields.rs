@@ -47,7 +47,7 @@ pub(crate) fn duration_at_least(name: &str, value: Duration, min: Duration) -> R
   if value < min {
     return Err(format!(
       "The field {name} must be at least {}.",
-      humantime::format_duration(min)
+      crate::config::duration::written(min)
     ));
   }
   Ok(())
@@ -62,7 +62,7 @@ pub(crate) fn duration_off_or_at_least(
   if !value.is_zero() && value < min {
     return Err(format!(
       "The field {name} must be 0 (disabled) or at least {}.",
-      humantime::format_duration(min)
+      crate::config::duration::written(min)
     ));
   }
   Ok(())

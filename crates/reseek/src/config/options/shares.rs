@@ -50,7 +50,7 @@ pub struct ShareCache {
   /// Interval between automatic rescans of the shares. Minimum: 1 hour. No automatic rescans
   /// when not set.
   #[cascade(env = "RESEEK_SHARE_CACHE_RETENTION", cli = "--share-cache-retention")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub retention: Option<Duration>,
 }
 

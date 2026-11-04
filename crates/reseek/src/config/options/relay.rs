@@ -36,20 +36,20 @@ pub struct Relay {
 pub struct RelayTimeouts {
   /// Time an agent has to report whether a requested file exists and its size.
   #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_INFO")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub file_info: Duration,
   /// Time an agent has to acknowledge that it is sending a file a peer downloads.
   #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_ACK")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub file_ack: Duration,
   /// Time after the acknowledgment for the file data to start arriving.
   #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_FILE_STREAM")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub file_stream: Duration,
   /// Total time after login that an agent may defer sending its shares while it scans them.
   /// Past it, the agent is disconnected and reconnects.
   #[cascade(env = "RESEEK_RELAY_CONTROLLER_TIMEOUTS_SYNC_DEFERRAL")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub sync_deferral: Duration,
 }
 

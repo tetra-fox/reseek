@@ -101,10 +101,10 @@ pub struct Retry {
   /// Number of attempts per download, including the first. `1` disables retries.
   pub attempts: u32,
   /// Wait before the first retry. Each later wait doubles. Minimum: 1 second.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub delay: Duration,
   /// Longest wait between retries. Minimum: 30 seconds.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub max_delay: Duration,
   /// Handling of the partially downloaded data on a retry: `resume` or `overwrite`.
   pub partial: RetryPartial,
@@ -265,7 +265,7 @@ pub struct TransfersUi {
   /// Interval at which the page requests the queue position of visible remotely queued
   /// downloads. Minimum: 30 seconds.
   #[cascade(env = "RESEEK_TRANSFERS_UI_QUEUE_REFRESH")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub queue_refresh: Duration,
 }
 

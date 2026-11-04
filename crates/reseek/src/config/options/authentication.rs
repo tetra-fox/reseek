@@ -50,11 +50,11 @@ pub struct Authentication {
   pub trusted_role: Role,
   /// Lifetime of a session from a password login.
   #[cascade(env = "RESEEK_SESSION_TTL", cli = "--session-ttl")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub session_ttl: Duration,
   /// Time after which an unused session expires.
   #[cascade(env = "RESEEK_SESSION_IDLE", cli = "--session-idle")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub session_idle: Duration,
   /// Password login.
   pub local: Local,
@@ -173,7 +173,7 @@ pub struct Oidc {
   /// Redirects the login page to this provider when it is the only one.
   pub auto_login: bool,
   /// Lifetime of a session from this provider.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub session_ttl: Duration,
   /// Logout at the provider.
   pub logout: OidcLogout,

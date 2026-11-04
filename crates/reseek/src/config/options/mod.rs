@@ -79,7 +79,7 @@ pub struct Options {
   pub instance_name: String,
   /// Maximum time a shutdown waits for work in progress before the process exits.
   #[cascade(env = "RESEEK_SHUTDOWN_TIMEOUT", cli = "--shutdown-timeout")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub shutdown_timeout: Duration,
   /// Operational and development switches.
   #[cascade(apply = "restart")]
@@ -292,7 +292,7 @@ pub struct Script {
   /// Command the script runs.
   pub run: ScriptRun,
   /// Maximum run time before the script is stopped. `0` for no limit.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub timeout: Duration,
 }
 
