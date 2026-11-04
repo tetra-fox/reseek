@@ -89,6 +89,17 @@ fn a_192_kbps_transcode_reads_as_a_transcode_of_its_bitrate() {
   reads_as_a_transcode_of(Bitrate::Kbps192, "mp3 ~192 kbps");
 }
 
+/// LAME 3.100 cuts 224 kbps where it cuts 256, at 19.53 kHz, so the two take one name.
+#[test]
+fn a_224_kbps_transcode_reads_as_the_256_kbps_cut_it_shares() {
+  reads_as_a_transcode_of(Bitrate::Kbps224, "mp3 ~256 kbps");
+}
+
+#[test]
+fn a_256_kbps_transcode_reads_as_a_transcode_of_its_bitrate() {
+  reads_as_a_transcode_of(Bitrate::Kbps256, "mp3 ~256 kbps");
+}
+
 #[test]
 fn a_320_kbps_transcode_is_not_read_as_consistent() {
   let dir = tempfile::tempdir().unwrap();

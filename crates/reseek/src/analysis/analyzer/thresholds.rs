@@ -142,7 +142,7 @@ pub(in crate::analysis) const PROFILES: &[Profile] = &[
     kbps: 224,
   },
   Profile {
-    hz: 19_700.0,
+    hz: 19_530.0,
     name: "mp3 ~256 kbps",
     kbps: 256,
   },
