@@ -280,23 +280,16 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     );
     return reading;
   };
-  // a lossy encoder's cutoff is a ceiling that moves from frame to frame, and windows under it
-  // only lack high content, so a lossy file is judged at the top of its cutoffs
-  let cutoffs: Vec<f64> = heard.windows.iter().filter_map(|w| w.cutoff_hz).collect();
-  let edge = if lossless {
-    median
-  } else {
-    percentile(&cutoffs, CEILING).unwrap_or(median)
-  };
-  let clustered = heard.share(|w| w.cutoff_hz.is_some_and(|c| (c - edge).abs() <= CLUSTER_HZ));
+  let near = |hz: f64| heard.share(|w| w.cutoff_hz.is_some_and(|c| (c - hz).abs() <= CLUSTER_HZ));
+  let clustered = near(median);
   let sharp_share = heard
-    .share(|w| w.sharp && w.cutoff_hz.is_some_and(|c| (c - edge).abs() <= CLUSTER_HZ))
+    .share(|w| w.sharp && w.cutoff_hz.is_some_and(|c| (c - median).abs() <= CLUSTER_HZ))
     / clustered.max(f64::EPSILON);
   // a lossy file's own encoder cuts off too: only a cutoff well below its bitrate's counts
   let below_claim =
     |profile: &Profile| lossless || bitrate.is_some_and(|kbps| profile.kbps * 3 / 2 <= kbps);
 
-  if let Some(profile) = lower_profile_at(edge).filter(|p| below_claim(p))
+  if let Some(profile) = lower_profile_at(median).filter(|p| below_claim(p))
     && clustered >= TRANSCODE_SHARE
     && sharp_share >= 0.5
   {
@@ -312,11 +305,11 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
       profile: profile.name.to_string(),
       confidence: (clustered * (0.5 + 0.5 * sharp_share)).min(CONFIDENCE_CAP),
     });
-    reading.cutoff_hz = Some(edge);
+    reading.cutoff_hz = Some(median);
     reading.summary = format!(
       "{} of the time stops at {} with a sharp shelf, where an encoder at {} cuts off.",
       percent(clustered),
-      khz(edge),
+      khz(median),
       profile.name
     );
     return reading;
@@ -479,29 +472,35 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     return reading;
   }
   // nothing above says otherwise: a lossy file that reaches past every cutoff too low for its
-  // bitrate stops where its own encoder does
-  let too_low = PROFILES
-    .iter()
-    .rev()
-    .find(|p| below_claim(p))
-    .map_or(0.0, |p| p.hz);
-  if !lossless && bitrate.is_some() && edge > too_low + CLUSTER_HZ {
-    reading.verdict = AnalysisVerdict::Consistent;
-    reading.confidence = 0.7 + 0.1 * clustered;
-    reading.cutoff_hz = Some(edge);
-    reading.summary = match profile_at(edge) {
-      Some(profile) => format!(
-        "The content stops at about {}, where an encoder at {} cuts off, as a file of its \
-         bitrate does.",
-        khz(edge),
-        profile.name
-      ),
-      None => format!(
-        "The content reaches about {}, the top of what a file of its bitrate keeps.",
-        khz(edge)
-      ),
-    };
-    return reading;
+  // bitrate stops where its own encoder does. Its encoder's cutoff is a ceiling that moves from
+  // frame to frame, and windows under it only lack high content, so it is judged at the top of
+  // its cutoffs
+  if !lossless && bitrate.is_some() {
+    let cutoffs: Vec<f64> = heard.windows.iter().filter_map(|w| w.cutoff_hz).collect();
+    let edge = percentile(&cutoffs, CEILING).unwrap_or(median);
+    let too_low = PROFILES
+      .iter()
+      .rev()
+      .find(|p| below_claim(p))
+      .map_or(0.0, |p| p.hz);
+    if edge > too_low + CLUSTER_HZ {
+      reading.cutoff_hz = Some(edge);
+      reading.verdict = AnalysisVerdict::Consistent;
+      reading.confidence = 0.7 + 0.1 * near(edge);
+      reading.summary = match profile_at(edge) {
+        Some(profile) => format!(
+          "The content stops at about {}, where an encoder at {} cuts off, as a file of its \
+           bitrate does.",
+          khz(edge),
+          profile.name
+        ),
+        None => format!(
+          "The content reaches about {}, the top of what a file of its bitrate keeps.",
+          khz(edge)
+        ),
+      };
+      return reading;
+    }
   }
   reading.summary = if sharp_share >= 0.5 && clustered >= TRANSCODE_SHARE {
     format!(
@@ -579,6 +578,19 @@ mod tests {
     assert_ne!(
       found.verdict,
       AnalysisVerdict::Consistent,
+      "{}",
+      found.summary
+    );
+  }
+
+  #[test]
+  fn a_full_band_minority_too_small_to_mix_does_not_hide_a_transcode() {
+    // a 128 kbps source in a 320 kbps MP3 with a full-band intro under the mixed-sources share
+    let cuts = spread(&[(16_000.0, 88), (20_000.0, 12)]);
+    let found = verdict(&heard(&cuts), Some(16_000.0), false, Some(320));
+    assert_eq!(
+      found.verdict,
+      AnalysisVerdict::LikelyTranscode,
       "{}",
       found.summary
     );
