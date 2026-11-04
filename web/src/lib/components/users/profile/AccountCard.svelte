@@ -80,6 +80,7 @@
 
 <Dialog
   bind:open
+  busy={changing}
   title="Change password"
   description="The server changes it at once. Any other client on this account needs the new one at its next login.">
   <form id="change-password" class="flex flex-col gap-group" onsubmit={change}>
@@ -102,7 +103,7 @@
     {#if error}<Notice kind="error">{error}</Notice>{/if}
   </form>
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+    <Button variant="ghost" disabled={changing} onclick={() => (open = false)}>Cancel</Button>
     <Button type="submit" form="change-password" disabled={!ready || changing}>
       Change password
     </Button>
