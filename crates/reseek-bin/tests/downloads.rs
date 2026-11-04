@@ -1,8 +1,9 @@
 //! Downloads by the daemon over soulfind from a client that queues every request and uploads
 //! when the test says: a file lands at its destination with its path recorded and its events
 //! raised, a move that fails keeps the download, a cancel and a block end queued downloads,
-//! a download a stop interrupted is resumed after the next start and finishes, and a finished
-//! download is analyzed when the options ask for it.
+//! a download a stop interrupted is resumed after the next start and finishes, one whose every
+//! byte arrived before the stop is moved without asking the peer again, and a finished download
+//! is analyzed when the options ask for it.
 
 mod support;
 
@@ -269,21 +270,19 @@ async fn a_batch_is_made_whole_or_not_at_all() {
   assert_eq!(api.batch(id, true).await.unwrap().file_count, 1);
 }
 
-#[tokio::test]
-async fn a_download_a_stop_interrupted_resumes_after_the_next_start() {
-  let Some(server) = soulfind::server() else {
-    return;
-  };
-  let (uploader, mut requests) = uploader(&server).await;
-  let dir = tempfile::tempdir().unwrap();
-  let name = soulfind::username("daemon");
-  let (mut daemon, api) = started(dir.path(), &server, &name).await;
-  let peer = uploader.username.clone();
+/// Enqueues [`ALBUM`] from `peer` in a batch of its own, waits for the peer to queue it and
+/// stops the daemon. Returns the batch and the download.
+async fn stopped_while_queued(
+  mut daemon: Daemon,
+  api: &Client,
+  requests: &mut Asked,
+  peer: &str,
+) -> (Uuid, Uuid) {
   let batch = Uuid::new_v4();
   let request = EnqueueDownloadBatchRequest {
     id: Some(batch),
     search_id: None,
-    username: peer.clone(),
+    username: peer.to_string(),
     files: vec![EnqueueDownloadBatchItem {
       filename: ALBUM.to_string(),
       size: SIZE as u64,
@@ -295,8 +294,8 @@ async fn a_download_a_stop_interrupted_resumes_after_the_next_start() {
     },
   };
   let first = api.enqueue_batch(&request).await.unwrap().batch.transfers[0].id;
-  asked(&mut requests).await;
-  download_when(&api, &peer, first, "queued", |t| {
+  asked(requests).await;
+  download_when(api, peer, first, "queued", |t| {
     t.state == TransferStates::Queued | TransferStates::Remotely
   })
   .await;
@@ -306,16 +305,13 @@ async fn a_download_a_stop_interrupted_resumes_after_the_next_start() {
     assert!(stopping.elapsed() < PATIENCE, "the daemon stops");
     tokio::time::sleep(Duration::from_millis(50)).await;
   }
+  (batch, first)
+}
 
-  let (_daemon, api) = started(dir.path(), &server, &name).await;
-  let source = file(&scratch(), "one.flac", SIZE);
-  serve(&uploader, &mut requests, ALBUM, &source).await;
-  let ended = api
-    .transfer(TransferDirection::Download, &peer, first, false)
-    .await
-    .unwrap();
-  assert_eq!(ended.state, completed(TransferStates::Errored));
-  assert_eq!(ended.exception.as_deref(), Some("Application shut down"));
+/// Waits for the download that takes over `first` in `batch` after a start to succeed, checks
+/// that its file landed under the daemon in `dir` as the batch asked, and that `first` ended
+/// with the stop and is superseded.
+async fn resumed(api: &Client, dir: &Path, peer: &str, batch: Uuid, first: Uuid) {
   let started_at = Instant::now();
   let resumed = loop {
     let batch = api.batch(batch, true).await.unwrap();
@@ -332,7 +328,6 @@ async fn a_download_a_stop_interrupted_resumes_after_the_next_start() {
   assert_eq!(resumed.state, completed(TransferStates::Succeeded));
   assert_eq!(resumed.batch_id, Some(batch), "resumed in its batch");
   let landed = dir
-    .path()
     .join("data")
     .join("downloads")
     .join("Kept")
@@ -342,11 +337,61 @@ async fn a_download_a_stop_interrupted_resumes_after_the_next_start() {
     resumed.local_path.as_deref(),
     Some(landed.to_str().unwrap())
   );
+  assert_eq!(std::fs::read(&landed).unwrap(), content(SIZE));
   let superseded = api
-    .transfer(TransferDirection::Download, &peer, first, false)
+    .transfer(TransferDirection::Download, peer, first, false)
     .await
     .unwrap();
+  assert_eq!(superseded.state, completed(TransferStates::Errored));
+  assert_eq!(
+    superseded.exception.as_deref(),
+    Some("Application shut down")
+  );
   assert!(superseded.removed, "the old record is superseded");
+}
+
+#[tokio::test]
+async fn a_download_a_stop_interrupted_resumes_after_the_next_start() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let (uploader, mut requests) = uploader(&server).await;
+  let dir = tempfile::tempdir().unwrap();
+  let name = soulfind::username("daemon");
+  let (daemon, api) = started(dir.path(), &server, &name).await;
+  let peer = uploader.username.clone();
+  let (batch, first) = stopped_while_queued(daemon, &api, &mut requests, &peer).await;
+
+  let (_daemon, api) = started(dir.path(), &server, &name).await;
+  let source = file(&scratch(), "one.flac", SIZE);
+  serve(&uploader, &mut requests, ALBUM, &source).await;
+  resumed(&api, dir.path(), &peer, batch, first).await;
+}
+
+#[tokio::test]
+async fn a_download_whole_at_a_stop_is_moved_at_the_next_start_without_asking_again() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let (uploader, mut requests) = uploader(&server).await;
+  let dir = tempfile::tempdir().unwrap();
+  let name = soulfind::username("daemon");
+  let (daemon, api) = started(dir.path(), &server, &name).await;
+  let peer = uploader.username.clone();
+  let (batch, first) = stopped_while_queued(daemon, &api, &mut requests, &peer).await;
+  // every byte arrived and the stop came before the move
+  let incomplete = dir
+    .path()
+    .join("data")
+    .join("incomplete")
+    .join(&peer)
+    .join("album");
+  std::fs::create_dir_all(&incomplete).unwrap();
+  file(&incomplete, "01 song.flac", SIZE);
+
+  let (_daemon, api) = started(dir.path(), &server, &name).await;
+  resumed(&api, dir.path(), &peer, batch, first).await;
+  assert!(requests.try_recv().is_err(), "the peer is not asked again");
 }
 
 /// The analysis report of the download `id` from `username`, `None` before there is one.

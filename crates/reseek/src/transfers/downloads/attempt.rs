@@ -44,7 +44,7 @@ static PROGRESS_UNWRITTEN: LogLimiter = LogLimiter::new();
 
 /// How a try ended.
 pub(super) enum Attempted {
-  /// the file arrived; the record is written
+  /// the file arrived; the record is filled in as succeeded, to be written once the file is moved
   Succeeded,
   /// the try failed
   Failed(Failure),
@@ -150,9 +150,19 @@ fn peers_size() -> SizeMismatchResolver {
   })
 }
 
+/// Where a try starts in the incomplete file.
+#[derive(Debug, PartialEq)]
+enum Start {
+  /// this many bytes in
+  At(u64),
+  /// nowhere: the file is whole, every byte having arrived before a stop that came ahead of
+  /// its move
+  Whole,
+}
+
 /// Where a try starts: at the length of a partial file with `partial` set to resume, else at
-/// 0. A partial as long as the file or longer, from a file that changed, is deleted.
-async fn start_offset(incomplete: &Path, size: u64, partial: RetryPartial) -> io::Result<u64> {
+/// 0. A file as long as `size` is whole; one longer, from a file that changed, is deleted.
+async fn start_offset(incomplete: &Path, size: u64, partial: RetryPartial) -> io::Result<Start> {
   let length = match tokio::fs::metadata(incomplete).await {
     Ok(metadata) => metadata.len(),
     Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -163,29 +173,33 @@ async fn start_offset(incomplete: &Path, size: u64, partial: RetryPartial) -> io
           "the incomplete file is a link to nothing",
         ));
       }
-      return Ok(0);
+      return Ok(Start::At(0));
     }
     Err(e) => return Err(e),
   };
   if length == 0 {
-    return Ok(0);
+    return Ok(Start::At(0));
   }
-  if length >= size {
+  if length == size {
+    info!(size, "incomplete file already whole");
+    return Ok(Start::Whole);
+  }
+  if length > size {
     warn!(
       length,
-      size, "partial download as long as the file or longer; starting again"
+      size, "partial download longer than the file; starting again"
     );
     tokio::fs::remove_file(incomplete).await?;
-    return Ok(0);
+    return Ok(Start::At(0));
   }
   match partial {
     RetryPartial::Resume => {
       info!(offset = length, "Resuming download");
-      Ok(length)
+      Ok(Start::At(length))
     }
     RetryPartial::Overwrite => {
       info!(length, "Overwriting partial download");
-      Ok(0)
+      Ok(Start::At(0))
     }
   }
 }
@@ -216,7 +230,15 @@ impl Downloads {
     let options = self.config.current().values.clone();
     let download = &options.transfers.download;
     let start = match start_offset(incomplete, record.size, download.retry.partial).await {
-      Ok(start) => start,
+      Ok(Start::At(start)) => start,
+      Ok(Start::Whole) => {
+        record.state = TransferStates::Completed | TransferStates::Succeeded;
+        record.bytes_transferred = record.size;
+        record.ended_at = Some(Utc::now());
+        record.exception = None;
+        record.place_in_queue = None;
+        return Attempted::Succeeded;
+      }
       Err(e) => {
         return Attempted::Failed(Failure {
           state: TransferStates::Errored,
@@ -580,27 +602,20 @@ mod tests {
   async fn a_partial_resumes_or_starts_over_and_one_too_long_is_deleted() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("a.flac");
-    assert_eq!(
-      start_offset(&path, 10, RetryPartial::Resume).await.unwrap(),
-      0
-    );
+    let start = |partial| start_offset(&path, 10, partial);
+    assert_eq!(start(RetryPartial::Resume).await.unwrap(), Start::At(0));
     std::fs::write(&path, b"1234").unwrap();
-    assert_eq!(
-      start_offset(&path, 10, RetryPartial::Resume).await.unwrap(),
-      4
-    );
-    assert_eq!(
-      start_offset(&path, 10, RetryPartial::Overwrite)
-        .await
-        .unwrap(),
-      0
-    );
+    assert_eq!(start(RetryPartial::Resume).await.unwrap(), Start::At(4));
+    assert_eq!(start(RetryPartial::Overwrite).await.unwrap(), Start::At(0));
     std::fs::write(&path, b"0123456789").unwrap();
-    assert_eq!(
-      start_offset(&path, 10, RetryPartial::Resume).await.unwrap(),
-      0
+    assert_eq!(start(RetryPartial::Overwrite).await.unwrap(), Start::Whole);
+    assert!(path.exists(), "a whole file is kept");
+    std::fs::write(&path, b"0123456789a").unwrap();
+    assert_eq!(start(RetryPartial::Resume).await.unwrap(), Start::At(0));
+    assert!(
+      !path.exists(),
+      "a file longer than the download is not trusted"
     );
-    assert!(!path.exists(), "a whole-file partial is not trusted");
     #[cfg(unix)]
     {
       let link = dir.path().join("link.flac");

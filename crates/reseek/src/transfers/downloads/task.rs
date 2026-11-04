@@ -38,7 +38,8 @@ pub(super) struct Gate {
 
 /// How a download task ended.
 enum Ended {
-  /// the file arrived and is in the incomplete file; the record is written
+  /// the file arrived and is in the incomplete file; the record is filled in, to be written
+  /// once the file is moved
   Succeeded(Record, PathBuf),
   /// the download failed for good
   Failed(Failed),
