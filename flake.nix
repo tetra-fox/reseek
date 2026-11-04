@@ -164,8 +164,11 @@
                 nixfmt
                 git
               ]
-              # the browser `just web-smoke` drives
-              ++ lib.optional stdenv.hostPlatform.isLinux chromium;
+              # the browser `just web-smoke` drives, and the linker .cargo/config.toml names
+              ++ lib.optionals stdenv.hostPlatform.isLinux [
+                chromium
+                mold
+              ];
 
             env.RUST_BACKTRACE = "1";
           };
@@ -175,7 +178,9 @@
               nightly
               pkgs.cargo-fuzz
               pkgs.just
-            ];
+            ]
+            # the linker .cargo/config.toml names, which `just fuzz-seed` links with
+            ++ lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.mold;
           };
         }
       );
