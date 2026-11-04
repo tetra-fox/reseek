@@ -25,6 +25,7 @@
   import Avatar from "#lib/components/users/Avatar.svelte";
   import GroupBadge from "#lib/components/users/GroupBadge.svelte";
   import Presence from "#lib/components/users/Presence.svelte";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, formatBytes, formatSpeed, plural } from "#lib/format.js";
@@ -57,6 +58,7 @@
 
   let deleting = $state(false);
   let purge = $state(false);
+  const forgetting = new Busy();
 
   /** Runs a write and reads the profile again after it, or says why it failed */
   const run = async (write: () => Promise<{ ok: boolean; error?: string }>) => {
@@ -71,14 +73,17 @@
         : api.DELETE("/api/v0/users/{username}/mute", { params: byUser(name) })
     );
   const remove = async () => {
-    const outcome = await call(() =>
-      api.DELETE("/api/v0/users/{username}", {
-        params: { path: { username: name }, query: { ...byUser(name).query, purge } }
-      })
+    const outcome = await forgetting.run(
+      () =>
+        call(() =>
+          api.DELETE("/api/v0/users/{username}", {
+            params: { path: { username: name }, query: { ...byUser(name).query, purge } }
+          })
+        ),
+      `Removed ${name} from the user list`
     );
-    if (!outcome.ok) return void toast(outcome.error, "error");
+    if (!outcome?.ok) return;
     deleting = false;
-    toast(`Removed ${name} from the user list`);
     void goto(href("/users"));
   };
 </script>
@@ -229,6 +234,7 @@
 
 <Dialog
   bind:open={deleting}
+  busy={forgetting.running}
   title={`Forget ${name}?`}
   description="Removes the user from the user list, with their notes, tags and block. The user is listed again after any new interaction.">
   <label class="flex items-center gap-2 text-sm">
@@ -236,7 +242,9 @@
     Also remove the transfers and messages with this user
   </label>
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (deleting = false)}>Cancel</Button>
-    <Button variant="danger" onclick={() => void remove()}>Forget</Button>
+    <Button variant="ghost" disabled={forgetting.running} onclick={() => (deleting = false)}
+      >Cancel</Button>
+    <Button variant="danger" disabled={forgetting.running} onclick={() => void remove()}
+      >Forget</Button>
   {/snippet}
 </Dialog>

@@ -59,16 +59,18 @@
     e.preventDefault();
     if (!valid || sending) return;
     sending = true;
+    const who = names;
+    const blocked = title;
+    const request = {
+      reason: reason.trim(),
+      scopes,
+      expiresIn: expiresIn || null,
+      cancelTransfers: true
+    };
     const failed: string[] = [];
-    for (const name of names) {
-      const outcome = await block(name, {
-        reason: reason.trim(),
-        scopes,
-        expiresIn: expiresIn || null,
-        cancelTransfers: true
-      });
-      if (!outcome.ok)
-        failed.push(names.length === 1 ? outcome.error : `${name}: ${outcome.error}`);
+    for (const name of who) {
+      const outcome = await block(name, request);
+      if (!outcome.ok) failed.push(who.length === 1 ? outcome.error : `${name}: ${outcome.error}`);
     }
     sending = false;
     if (failed.length) {
@@ -76,7 +78,7 @@
       return;
     }
     blocking.open = false;
-    toast(`${title} ${names.length === 1 ? "is" : "are"} blocked`);
+    toast(`${blocked} ${who.length === 1 ? "is" : "are"} blocked`);
   };
 </script>
 
@@ -87,7 +89,7 @@
   </label>
 {/snippet}
 
-<Dialog bind:open={blocking.open} title={`Block ${title}`}>
+<Dialog bind:open={blocking.open} title={`Block ${title}`} busy={sending}>
   <Form id="block-form" layout="stacked" class="flex flex-col gap-group" onsubmit={submit}>
     <Field label="Reason" for="block-reason" hint="Not shown to the user">
       <Input id="block-reason" maxlength={500} bind:value={reason} autocomplete="off" />
@@ -118,7 +120,8 @@
     {#if error}<Notice kind="error">{error}</Notice>{/if}
   </Form>
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (blocking.open = false)}>Cancel</Button>
+    <Button variant="ghost" disabled={sending} onclick={() => (blocking.open = false)}
+      >Cancel</Button>
     <Button type="submit" form="block-form" variant="danger" disabled={!valid || sending}>
       Block {title}
     </Button>

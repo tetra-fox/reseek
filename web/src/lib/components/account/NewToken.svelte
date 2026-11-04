@@ -63,7 +63,7 @@
   };
 </script>
 
-<Dialog bind:open={() => open, close} title="New API token">
+<Dialog bind:open={() => open, close} title="New API token" busy={busy.running}>
   {#if created}
     <p class="text-sm">Copy the secret now. It is not shown again.</p>
     <div class="flex items-center gap-inline">
