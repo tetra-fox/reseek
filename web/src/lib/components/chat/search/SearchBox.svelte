@@ -11,8 +11,7 @@
     type HardResult,
     hitTarget,
     MAX_TEXT,
-    type MessageHit,
-    type SearchKind
+    type MessageHit
   } from "#lib/chat/search/match.js";
   import { ChatSearch } from "#lib/chat/search/search.svelte.js";
   import Marked from "#lib/components/ui/Marked.svelte";
@@ -29,13 +28,11 @@
   type Props = {
     /** the search the address holds, which the box shows */
     q: string;
-    /** the messages the address searches */
-    kind: SearchKind;
     onjoin: (name: string) => void;
     onnew: (username: string) => void;
   };
 
-  let { q, kind, onjoin, onnew }: Props = $props();
+  let { q, onjoin, onnew }: Props = $props();
 
   /** how many messages are read for each text, the best of them are listed */
   const HITS_READ = 20;
@@ -83,7 +80,8 @@
   const choose = (value: string) => {
     const hit = listed.hits.find((h) => hitValue(h) === value);
     if (hit) void goto(foundHref(hitTarget(hit), text, "all", hit.localId));
-    else if (value === ALL) void goto(resultsHref(text, kind));
+    // every message, as the dropdown showed; which of them the results show is the viewer's filter
+    else if (value === ALL) void goto(resultsHref(text));
     else if (value === NEW) onnew(text);
     else if (value === JOIN) onjoin(text);
     else if (value.startsWith("room:")) openChat(roomHref(value.slice(5)));
