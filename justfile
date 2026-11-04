@@ -8,7 +8,7 @@ dev: web-install
     #!/usr/bin/env bash
     set -euo pipefail
     trap 'kill 0' EXIT
-    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek -- --web-ui=false --http-ip-address 127.0.0.1,::1 &
+    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek-bin -- --web-ui=false --http-ip-address 127.0.0.1,::1 &
     pnpm --dir web dev
 
 # pnpm build, then cargo build --release (cargo never runs pnpm)
@@ -32,7 +32,7 @@ release-macos: web-build
     mkdir -p dist
     for target in x86_64-apple-darwin aarch64-apple-darwin; do
       rustup target add "$target"
-      cargo build --release -p reseek --target "$target"
+      cargo build --release -p reseek-bin --target "$target"
     done
     lipo -create -output dist/reseek-macos-universal \
       target/x86_64-apple-darwin/release/reseek target/aarch64-apple-darwin/release/reseek
@@ -142,7 +142,7 @@ web-smoke:
       exit 0
     fi
     {{ just_executable() }} --justfile {{ justfile() }} web-build
-    cargo build -p reseek
+    cargo build -p reseek-bin
     CHROMIUM_BIN="$chromium" pnpm --dir web smoke
 
 # the web UI's packages as the lockfile pins them
@@ -164,7 +164,7 @@ e2e:
     export SOULFIND_BIN="$soulfind" SOULSEEK_RS_BIN="$soulseek_rs"
     # the same packages and features as `just test`, so nothing is built again after it
     cargo nextest run --workspace --all-features --run-ignored only -E "binary_id(soulseek-client::interop)"
-    cargo nextest run --workspace --all-features --run-ignored only -E "binary_id(reseek::smoke) & test(soulseek_rs)"
+    cargo nextest run --workspace --all-features --run-ignored only -E "binary_id(reseek-bin::smoke) & test(soulseek_rs)"
 
 # run by hand only, never from ci or by an agent: the daemon logs in to the real Soulseek server
 # with the throwaway account in RESEEK_TEST_USERNAME and RESEEK_TEST_PASSWORD, searches, browses
@@ -172,7 +172,7 @@ e2e:
 # what it looks for and where
 [doc("the daemon's smoke run against the real Soulseek server, run by hand only")]
 live-smoke:
-    cargo nextest run --workspace --all-features --run-ignored only --no-capture -E "binary_id(reseek::smoke) & test(real_network)"
+    cargo nextest run --workspace --all-features --run-ignored only --no-capture -E "binary_id(reseek-bin::smoke) & test(real_network)"
 
 # prints the soulfind to test against: SOULFIND_BIN, else soulfind on PATH, else nothing, which
 # the callers take as a skip; with SOULFIND_REQUIRED=1 a missing soulfind fails instead

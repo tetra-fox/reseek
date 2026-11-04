@@ -6,10 +6,6 @@ edition.workspace = true
 publish.workspace = true
 license = "AGPL-3.0-only"
 
-[[bin]]
-name = "reseek"
-path = "src/bin/reseek.rs"
-
 [dependencies]
 api-types.workspace = true
 cascade.workspace = true
@@ -55,8 +51,6 @@ regex = "1"
 reqwest = { workspace = true, features = ["multipart", "stream"] }
 rpassword = "7"
 rusqlite = { version = "0.39", features = ["backup", "bundled", "trace"] }
-# embeds the UI build at `WEBUI_DIR`, and nothing when it was not built
-rust-embed = { version = "8", features = ["interpolate-folder-path", "mime-guess"] }
 rustls.workspace = true
 serde.workspace = true
 serde_html_form = "0.2"
@@ -100,7 +94,6 @@ rustix = { version = "1", features = ["fs", "process"] }
 win32job = "2"
 
 [dev-dependencies]
-api-client.workspace = true
 # make the lossless and lossy audio the analyzer is tested on
 flacenc = { version = "0.5", default-features = false }
 # builds the LAME source it carries with autotools (`configure`, `make`, a C compiler), for

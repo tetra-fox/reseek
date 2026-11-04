@@ -1,0 +1,36 @@
+[package]
+name = "reseek-bin"
+description = "The reseek program: the daemon with the web UI built in, and the tests that run it"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license = "AGPL-3.0-only"
+
+[[bin]]
+name = "reseek"
+path = "src/main.rs"
+
+[dependencies]
+reseek.workspace = true
+reseek-ui-assets.workspace = true
+
+# the tests start the program and drive it through its API, against a local soulfind
+[dev-dependencies]
+api-client.workspace = true
+api-types.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+image = { version = "0.25", default-features = false, features = ["png"] }
+reqwest.workspace = true
+serde_json.workspace = true
+soulseek-client.workspace = true
+soulseek-proto.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+uuid.workspace = true
+
+[lints]
+workspace = true

@@ -50,7 +50,7 @@ use crate::telemetry::Telemetry;
 use crate::transfers::downloads::Downloads;
 use crate::transfers::service::Transfers;
 use crate::transfers::uploads::Uploads;
-use crate::ui::Ui;
+use crate::ui::{Assets, Ui};
 use crate::users::{Directory, Users};
 use crate::version::{self, RELEASE_FEED, Releases};
 use service::Application;
@@ -407,8 +407,8 @@ impl AppState {
   }
 }
 
-/// Runs the program and returns its exit code.
-pub fn main() -> ExitCode {
+/// Runs the program and returns its exit code. `assets` is the UI build the program carries.
+pub fn main(assets: Assets) -> ExitCode {
   let schema = Schema::of::<Options>();
   let command = match cli::parse(
     std::env::args_os().skip(1),
@@ -461,7 +461,7 @@ pub fn main() -> ExitCode {
       let supervised = invocation
         .supervised
         .unwrap_or_else(restart::supervised_by_default);
-      let code = run(invocation);
+      let code = run(invocation, assets);
       if code == EXIT_RESTART && !supervised {
         return ExitCode::from(restart::start_again());
       }
@@ -489,7 +489,7 @@ fn one_shot(text: &str) -> ExitCode {
 }
 
 /// Starts the daemon and serves until it is told to stop.
-fn run(invocation: Invocation) -> u8 {
+fn run(invocation: Invocation, assets: Assets) -> u8 {
   let env: Vec<(OsString, OsString)> = std::env::vars_os().collect();
   let defaults = Defaults::new(invocation.app_dir.as_deref());
   let mut sources = Sources {
@@ -590,14 +590,20 @@ fn run(invocation: Invocation) -> u8 {
       return EXIT_FATAL;
     }
   };
-  runtime.block_on(serve(sources, defaults, paths, logging).instrument(process.clone()))
+  runtime.block_on(serve(sources, defaults, paths, logging, assets).instrument(process.clone()))
 }
 
 /// Forwards the logs to Grafana Loki when it is configured, and serves until a signal; the last
 /// lines are pushed to Loki before it returns.
-async fn serve(sources: Sources, defaults: Defaults, paths: Paths, logging: Logging) -> u8 {
+async fn serve(
+  sources: Sources,
+  defaults: Defaults,
+  paths: Paths,
+  logging: Logging,
+  assets: Assets,
+) -> u8 {
   let loki = logging.start_loki();
-  let code = host(sources, defaults, paths, logging).await;
+  let code = host(sources, defaults, paths, logging, assets).await;
   if let Some(loki) = loki {
     loki.finish().await;
   }
@@ -605,7 +611,13 @@ async fn serve(sources: Sources, defaults: Defaults, paths: Paths, logging: Logg
 }
 
 /// Loads the configuration for good, binds the listeners and serves until a signal.
-async fn host(sources: Sources, defaults: Defaults, paths: Paths, logging: Logging) -> u8 {
+async fn host(
+  sources: Sources,
+  defaults: Defaults,
+  paths: Paths,
+  logging: Logging,
+  assets: Assets,
+) -> u8 {
   let overrides = match Overrides::load(paths.overrides()) {
     Ok(overrides) => overrides,
     Err(e) => {
@@ -666,7 +678,7 @@ async fn host(sources: Sources, defaults: Defaults, paths: Paths, logging: Loggi
       return EXIT_FATAL;
     }
   };
-  let ui = Ui::new(options, &load::program_dir());
+  let ui = Ui::new(options, &load::program_dir(), assets);
   let listeners = match http::bind(&options.web).await {
     Ok(listeners) => listeners,
     Err(e) => {

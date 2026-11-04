@@ -40,7 +40,7 @@ rustPlatform.buildRustPackage {
   cargoLock.lockFile = ../Cargo.lock;
   cargoBuildFlags = [
     "--package"
-    "reseek"
+    "reseek-bin"
   ];
 
   env = {

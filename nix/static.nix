@@ -40,7 +40,7 @@ rustPlatform.buildRustPackage {
     runHook preBuild
     # zig keeps its cache under the home directory
     export HOME=$TMPDIR
-    cargo zigbuild --offline --release --package reseek --target ${target}
+    cargo zigbuild --offline --release --package reseek-bin --target ${target}
     runHook postBuild
   '';
 

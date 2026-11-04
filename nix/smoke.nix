@@ -15,7 +15,7 @@ rustPlatform.buildRustPackage {
   buildType = "debug";
   cargoBuildFlags = [
     "--package"
-    "reseek"
+    "reseek-bin"
     "--example"
     "smoke"
   ];

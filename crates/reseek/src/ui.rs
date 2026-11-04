@@ -7,6 +7,7 @@
 //! file extension, such as a bookmark of `/searches/x`, is sent to the app's own address for
 //! it, `{base}/#/searches/x`.
 
+use std::borrow::Cow;
 use std::path::{Component, Path, PathBuf};
 
 use axum::body::Body;
@@ -23,25 +24,26 @@ const NOT_BUILT: &str = "<!doctype html><title>reseek</title><p>UI not built, ru
 /// Hashed assets never change under their name.
 const IMMUTABLE: &str = "public, max-age=31536000, immutable";
 
+/// The UI build the program carries: the file at a path in it, `None` when it has none or the
+/// UI was not built. The program hands it to [`crate::app::main`], so this library does not
+/// change when the UI is built again.
+pub type Assets = fn(&str) -> Option<Cow<'static, [u8]>>;
+
 /// Where the UI is served from.
 #[derive(Clone, Debug)]
 pub enum Ui {
   /// not served: headless or turned off
   Off,
   /// the bundle built into the program, or a page saying it was not built
-  Embedded,
+  Embedded(Assets),
   /// a directory of the user's
   Directory(PathBuf),
 }
 
-#[derive(rust_embed::RustEmbed)]
-#[folder = "$WEBUI_DIR"]
-#[allow_missing = true]
-struct Assets;
-
 impl Ui {
-  /// The UI `options` ask for. `program_dir` is where `web.content_path` is relative to.
-  pub fn new(options: &Options, program_dir: &Path) -> Self {
+  /// The UI `options` ask for, `assets` the bundle built into the program. `program_dir` is
+  /// where `web.content_path` is relative to.
+  pub fn new(options: &Options, program_dir: &Path, assets: Assets) -> Self {
     if options.headless || !options.web.ui {
       warn!("Running in headless mode; web UI is DISABLED");
       return Self::Off;
@@ -51,12 +53,12 @@ impl Ui {
       info!(path = %dir.display(), "Serving static content from directory");
       return Self::Directory(dir);
     }
-    if Assets::get("index.html").is_none() {
+    if assets("index.html").is_none() {
       warn!("the web UI was not built into this program; it serves a page saying so");
     } else {
       info!("Serving the built-in web UI");
     }
-    Self::Embedded
+    Self::Embedded(assets)
   }
 
   /// Whether a request for `path`, with the URL base taken off, is answered with the app's
@@ -129,7 +131,7 @@ impl Ui {
     };
     match self {
       Self::Off => None,
-      Self::Embedded => Assets::get(relative).map(|file| (file.data.into_owned(), mime())),
+      Self::Embedded(assets) => assets(relative).map(|data| (data.into_owned(), mime())),
       Self::Directory(dir) => {
         let path = inside(dir, relative)?;
         match tokio::fs::read(&path).await {
@@ -242,9 +244,10 @@ mod tests {
       answer(&Ui::Off, Method::GET, "/searches").await.status(),
       StatusCode::NOT_FOUND
     );
-    let embedded = answer(&Ui::Embedded, Method::GET, "/browse?user=a").await;
+    let not_built = Ui::Embedded(|_| None);
+    let embedded = answer(&not_built, Method::GET, "/browse?user=a").await;
     assert_eq!(location(&embedded), "/reseek/#/browse?user=a");
-    let page = answer(&Ui::Embedded, Method::GET, "/").await;
+    let page = answer(&not_built, Method::GET, "/").await;
     assert_eq!(page.status(), StatusCode::OK);
   }
 }

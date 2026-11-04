@@ -8,6 +8,8 @@ members = [
   "crates/soulseek-proto",
   "crates/soulseek-client",
   "crates/reseek",
+  "crates/reseek-bin",
+  "crates/reseek-ui-assets",
 ]
 # cargo-fuzz needs nightly and its own lockfile, so the fuzz crate is a separate workspace
 exclude = ["fuzz"]
@@ -22,6 +24,8 @@ api-client = { path = "crates/api-client" }
 api-types = { path = "crates/api-types" }
 cascade = { path = "crates/cascade" }
 cascade-derive = { path = "crates/cascade-derive" }
+reseek = { path = "crates/reseek" }
+reseek-ui-assets = { path = "crates/reseek-ui-assets" }
 soulseek-client = { path = "crates/soulseek-client" }
 soulseek-proto = { path = "crates/soulseek-proto" }
 
