@@ -320,6 +320,16 @@ let
 
   configFileOf = instance: settingsFormat.generate "${instance.unit}.toml" (settingsOf instance);
 
+  # the name a drop-in file is laid in config.d under: its own, without the hash of a file in the
+  # store. An attribute name cannot hold the path's store reference, which `source` keeps
+  dropInName =
+    file:
+    let
+      path = toString file;
+      base = builtins.unsafeDiscardStringContext (baseNameOf path);
+    in
+    if lib.isStorePath path then builtins.substring 33 (builtins.stringLength base) base else base;
+
   # the directories the daemon writes outside its data directory
   writablePaths =
     instance:
@@ -496,11 +506,9 @@ in
         ]
         ++ lib.imap1 (
           index: file:
-          lib.nameValuePair
-            "${instance.unit}/config.d/${lib.fixedWidthNumber 2 index}-${baseNameOf (toString file)}"
-            {
-              source = file;
-            }
+          lib.nameValuePair "${instance.unit}/config.d/${lib.fixedWidthNumber 2 index}-${dropInName file}" {
+            source = file;
+          }
         ) instance.extraConfigFiles
       ) instances
     );
