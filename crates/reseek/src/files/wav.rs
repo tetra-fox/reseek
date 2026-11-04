@@ -166,7 +166,7 @@ fn alac(file: Box<dyn MediaSource>, extension: Option<&str>) -> Result<Opened, R
   if let Some(extension) = extension {
     hint.with_extension(extension);
   }
-  let decoder = Decoder::from_source(file, &hint).map_err(|reason| {
+  let mut decoder = Decoder::from_source(file, &hint).map_err(|reason| {
     debug!(reason, "a file was not opened for WAV");
     plain()
   })?;
@@ -193,8 +193,19 @@ fn alac(file: Box<dyn MediaSource>, extension: Option<&str>) -> Result<Opened, R
     width,
     frames,
   };
+  let wav = format.fits().map_err(Refused::Format)?;
+  // a file nothing can be decoded from is refused before the response starts; reading seeks to
+  // where it starts, so the packet decoded here is decoded again
+  if decoder.next_interleaved(&mut Vec::new()).is_none() {
+    let reason = match (decoder.stopped.take(), decoder.last_skipped.take()) {
+      (Some(stopped), _) => stopped,
+      (None, Some(skipped)) => format!("no packet of the audio could be decoded: {skipped}"),
+      (None, None) => "the file holds no audio".to_string(),
+    };
+    return Err(Refused::Format(reason));
+  }
   Ok(Opened {
-    wav: format.fits().map_err(Refused::Format)?,
+    wav,
     source: Source::Alac(Box::new(decoder)),
   })
 }
@@ -601,5 +612,22 @@ mod tests {
     let bytes = timed(&[(0x4000_0001, 0xffff_ffff), (1, 3712)]);
     let refused = wav_length(&bytes).unwrap_err();
     assert!(refused.contains("too long"), "{refused}");
+  }
+
+  #[test]
+  fn alac_whose_first_packet_cannot_be_decoded_is_refused() {
+    // the magic cookie, after the 12 bytes that start the inner `alac` box, opens with the
+    // frames a packet holds
+    let mut bytes = TONE.to_vec();
+    let inner = bytes
+      .windows(8)
+      .position(|w| w == [0, 0, 0, 0x24, b'a', b'l', b'a', b'c'])
+      .unwrap();
+    put(&mut bytes, inner + 12, 0);
+    let refused = wav_length(&bytes).unwrap_err();
+    assert!(
+      refused.starts_with("no packet of the audio could be decoded: "),
+      "{refused}"
+    );
   }
 }
