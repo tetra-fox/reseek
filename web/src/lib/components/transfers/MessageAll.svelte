@@ -17,16 +17,25 @@
 
   let text = $state("");
   let sent = $state(0);
+  /** how many users the message is being sent to */
+  let total = $state(0);
   let sending = $state(false);
+  /** Cancel was pressed while sending: nobody after the one being sent to is sent the message */
+  let canceled = false;
 
   /** One private message to each user, one after another, then what came of it */
   const send = async () => {
     const message = text.trim();
     if (!message) return;
+    // the list as it was when Send was pressed, though it changes as uploads come and go
+    const to = usernames;
     sending = true;
+    canceled = false;
     sent = 0;
+    total = to.length;
     const failed: string[] = [];
-    for (const username of usernames) {
+    for (const username of to) {
+      if (canceled) break;
       const outcome = await call(() =>
         api.POST("/api/v0/conversations/{username}", { params: byUser(username), body: message })
       );
@@ -34,21 +43,25 @@
       else failed.push(`${username}: ${outcome.error}`);
     }
     sending = false;
+    const of = `Sent to ${sent} of ${plural(to.length, "user", "users")}`;
     if (failed.length) {
-      toast(
-        `Sent to ${sent} of ${plural(usernames.length, "user", "users")}. Could not send to ${failed.join("; ")}`,
-        "error"
-      );
+      toast(`${of}. Could not send to ${failed.join("; ")}`, "error");
       return;
     }
-    toast(`Sent to ${plural(sent, "user", "users")}`);
+    toast(canceled ? `${of} before canceling` : `Sent to ${plural(sent, "user", "users")}`);
     text = "";
     open = false;
+  };
+
+  const cancel = () => {
+    if (sending) canceled = true;
+    else open = false;
   };
 </script>
 
 <Dialog
   bind:open
+  busy={sending}
   title="Message everyone downloading from you"
   description={`A private message to each of the ${plural(usernames.length, "user", "users")} in the filtered list.`}>
   <form
@@ -60,10 +73,10 @@
     <Textarea bind:value={text} rows={4} aria-label="Message" required />
   </form>
   {#if sending}
-    <p class="text-sm text-fg-muted" role="status">Sent {sent} of {usernames.length}...</p>
+    <p class="text-sm text-fg-muted" role="status">Sent {sent} of {total}...</p>
   {/if}
   {#snippet footer()}
-    <Button variant="outline" onclick={() => (open = false)}>Cancel</Button>
+    <Button variant="outline" onclick={cancel}>Cancel</Button>
     <Button
       type="submit"
       form="message-all"
