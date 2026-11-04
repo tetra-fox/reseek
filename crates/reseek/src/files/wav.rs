@@ -25,8 +25,11 @@ use crate::services::ContentRequest;
 const HEADER: u64 = 44;
 /// The most a RIFF file can say it holds.
 const MAX_RIFF: u64 = u32::MAX as u64;
-/// How much PCM one piece of the response holds, at least.
+/// How much PCM one piece of the response read from an AIFF file holds, at least, and how
+/// much silence one piece holds at most.
 const PIECE: usize = 256 * 1024;
+/// The bytes a piece of silence is cut from.
+static SILENCE: [u8; PIECE] = [0; PIECE];
 /// The WAV format tags of integer and floating point samples.
 const INTEGER: u16 = 1;
 const FLOAT: u16 = 3;
@@ -298,6 +301,10 @@ struct Pcm {
   next: Option<u64>,
   /// a stretch read and not given yet, with where it starts in the PCM
   held: Option<(u64, Bytes)>,
+  /// whether the source ended before the PCM did, so the rest is silence
+  ended: bool,
+  /// the bytes of silence the end of the source left, until it is logged
+  short: Option<u64>,
 }
 
 impl Pcm {
@@ -310,6 +317,8 @@ impl Pcm {
       end: start + length,
       next: None,
       held: None,
+      ended: false,
+      short: None,
     }
   }
 
@@ -318,8 +327,14 @@ impl Pcm {
   fn step(&mut self) -> Option<Result<Bytes, String>> {
     while self.at < self.end {
       if let Some((from, stretch)) = self.held.take() {
+        // packets dropped as undecodable, or holding fewer frames than they last, leave silence
+        if from > self.at {
+          let gap = from - self.at;
+          self.held = Some((from, stretch));
+          return Some(Ok(self.silence(gap)));
+        }
         // a sought packet can start before the range, and a range can start inside a sample
-        let skip = self.at.saturating_sub(from);
+        let skip = self.at - from;
         let length = stretch.len() as u64;
         if skip < length {
           let given = (length - skip).min(self.end - self.at);
@@ -327,6 +342,9 @@ impl Pcm {
           return Some(Ok(stretch.slice(skip as usize..(skip + given) as usize)));
         }
         continue;
+      }
+      if self.ended {
+        return Some(Ok(self.silence(self.end - self.at)));
       }
       if let Err(reason) = self.read() {
         self.at = self.end;
@@ -336,7 +354,14 @@ impl Pcm {
     None
   }
 
-  /// Reads the next stretch of the source into `held`.
+  /// Up to `length` bytes of silence, as much as one piece holds and the range still wants.
+  fn silence(&mut self, length: u64) -> Bytes {
+    let given = length.min(self.end - self.at).min(PIECE as u64);
+    self.at += given;
+    Bytes::from_static(&SILENCE[..given as usize])
+  }
+
+  /// Reads the next stretch of the source into `held`, or notes that the source ended.
   fn read(&mut self) -> Result<(), String> {
     let block = self.format.block();
     let out_of_range = || "the file's timing is out of range".to_string();
@@ -351,7 +376,9 @@ impl Pcm {
     let mut pcm = Vec::new();
     let frame = self.source.read(&self.format, &mut pcm)?;
     if pcm.is_empty() {
-      return Err("the audio ends before its stated length".to_string());
+      self.ended = true;
+      self.short = Some(self.end - self.at);
+      return Ok(());
     }
     let from = match frame {
       Some(frame) => frame.checked_mul(block).ok_or_else(out_of_range)?,
@@ -391,7 +418,13 @@ fn body(opened: Opened, shown: String, start: u64, length: u64, speed: ServeSpee
     .await;
     let (piece, pcm) = match stepped {
       Ok((_, None)) => return None,
-      Ok((pcm, Some(Ok(bytes)))) => {
+      Ok((mut pcm, Some(Ok(bytes)))) => {
+        if let Some(missing) = pcm.short.take() {
+          warn!(
+            path = shown,
+            missing, "a file served as WAV ends before its stated length; the rest is silence"
+          );
+        }
         let mut left = bytes.len();
         while left > 0 {
           left -= speed.allowed(left).await;
@@ -702,5 +735,38 @@ mod tests {
     let bytes = timed(&[(3, 2048), (1, 3712)]);
     let failed = whole(&bytes).unwrap_err();
     assert_eq!(failed, "the file's packets overlap in time");
+  }
+
+  #[test]
+  fn packets_shorter_than_their_time_leave_silence_and_ranges_match_the_whole() {
+    // the first three packets last 8192 frames and hold 4096, the last lasts 5000 and holds 3712
+    let bytes = timed(&[(3, 8192), (1, 5000)]);
+    let frames = 3 * 8192 + 5000;
+    let gapped = whole(&bytes).unwrap();
+    assert_eq!(gapped.len(), 44 + frames * 4);
+    let tone = whole(TONE).unwrap();
+    let pcm = |wav: &[u8], from: usize, to: usize| wav[44 + from * 4..44 + to * 4].to_vec();
+    for packet in 0..3 {
+      let at = packet * 8192;
+      assert_eq!(
+        pcm(&gapped, at, at + 4096),
+        pcm(&tone, packet * 4096, (packet + 1) * 4096),
+        "packet {packet}"
+      );
+      assert!(pcm(&gapped, at + 4096, at + 8192).iter().all(|b| *b == 0));
+    }
+    assert_eq!(pcm(&gapped, 24_576, 28_288), pcm(&tone, 12_288, 16_000));
+    assert!(pcm(&gapped, 28_288, frames).iter().all(|b| *b == 0));
+    for (start, length) in [
+      (44 + 4096 * 4 + 2, 9),
+      (44 + 8000 * 4, 2000),
+      (44 + 28_000 * 4, 3000),
+    ] {
+      assert_eq!(
+        wav_bytes(&bytes, start, length).unwrap(),
+        gapped[start as usize..(start + length) as usize],
+        "{start}+{length}"
+      );
+    }
   }
 }
