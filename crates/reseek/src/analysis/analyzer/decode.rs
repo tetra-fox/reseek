@@ -93,12 +93,8 @@ pub(in crate::analysis) enum Filled {
 }
 
 impl Decoder {
-  /// Opens the file at `path`, finding its container from its contents and its extension.
-  pub fn open(path: &Path) -> Result<Self, String> {
-    Self::open_through(path, |file| Box::new(file))
-  }
-
-  /// [`Decoder::open`], reading the file's bytes through the source `through` makes of it.
+  /// Opens the file at `path`, finding its container from its contents and its extension, and
+  /// reads its bytes through the source `through` makes of it.
   pub fn open_through(
     path: &Path,
     through: impl FnOnce(File) -> Box<dyn MediaSource>,

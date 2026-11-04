@@ -56,6 +56,7 @@ pub use local::{LocalFile, LocalPath};
 pub use placing::{create_file, move_file};
 use roots::{Refused, locate};
 use serve::Served;
+pub use wav::{wav_bytes, wav_length};
 pub use writing::{WriteGuard, Writing};
 
 #[cfg(test)]

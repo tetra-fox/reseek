@@ -3,15 +3,16 @@
 //! length is known from the start, and a range maps to a place in the PCM, so seeking works.
 
 use std::fs::File;
-use std::io::{self, Read, Seek, SeekFrom};
+use std::io::{self, Cursor, Read, Seek, SeekFrom};
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use axum::body::{Body, Bytes};
 use axum::response::Response;
 use futures_util::{StreamExt, stream};
-use tokio::sync::mpsc;
-use tracing::{debug, warn};
+use symphonia::core::formats::probe::Hint;
+use symphonia::core::io::MediaSource;
+use tracing::{debug, error, warn};
 
 use super::ServeSpeed;
 use super::aiff::{self, Aiff, Header};
@@ -26,8 +27,6 @@ const HEADER: u64 = 44;
 const MAX_RIFF: u64 = u32::MAX as u64;
 /// How much PCM one piece of the response holds, at least.
 const PIECE: usize = 256 * 1024;
-/// How many pieces wait to be sent before the reader waits.
-const BACKLOG: usize = 4;
 /// The WAV format tags of integer and floating point samples.
 const INTEGER: u16 = 1;
 const FLOAT: u16 = 3;
@@ -93,7 +92,7 @@ impl Format {
 /// Where the PCM comes from.
 enum Source {
   /// samples read from an AIFF file and turned around
-  Aiff(Aiff, File),
+  Aiff(Aiff, Box<dyn MediaSource>),
   /// samples decoded from ALAC, each kept to its top `width` bytes
   Alac(Box<Decoder>),
 }
@@ -112,9 +111,13 @@ enum Refused {
   Read(io::Error),
 }
 
-/// Reads what `path` is, or why it cannot be served.
-fn open(path: &Path, size: u64) -> Result<Opened, Refused> {
-  let mut file = File::open(path).map_err(Refused::Read)?;
+/// Reads what the file `file` holds, of `size` bytes and named with `extension` when it has one,
+/// or why it cannot be served.
+fn open(
+  mut file: Box<dyn MediaSource>,
+  size: u64,
+  extension: Option<&str>,
+) -> Result<Opened, Refused> {
   match aiff::read(&mut file, size).map_err(Refused::Read)? {
     Header::Pcm(aiff) => {
       let tag = if aiff.stored == aiff::Stored::Float {
@@ -135,15 +138,22 @@ fn open(path: &Path, size: u64) -> Result<Opened, Refused> {
       })
     }
     Header::Refused(reason) => Err(Refused::Format(reason)),
-    Header::Other => alac(path),
+    Header::Other => {
+      file.seek(SeekFrom::Start(0)).map_err(Refused::Read)?;
+      alac(file, extension)
+    }
   }
 }
 
-/// `path` opened for decoding, when it is ALAC of a stated length.
-fn alac(path: &Path) -> Result<Opened, Refused> {
+/// `file` opened for decoding, when it is ALAC of a stated length.
+fn alac(file: Box<dyn MediaSource>, extension: Option<&str>) -> Result<Opened, Refused> {
   let plain = || Refused::Format("only AIFF and ALAC are served as WAV".to_string());
-  let decoder = Decoder::open(path).map_err(|reason| {
-    debug!(path = %path.display(), reason, "a file was not opened for WAV");
+  let mut hint = Hint::new();
+  if let Some(extension) = extension {
+    hint.with_extension(extension);
+  }
+  let decoder = Decoder::from_source(file, &hint).map_err(|reason| {
+    debug!(reason, "a file was not opened for WAV");
     plain()
   })?;
   let claimed = &decoder.claimed;
@@ -250,88 +260,159 @@ fn parts(start: u64, length: u64) -> Parts {
   }
 }
 
-/// `length` bytes of PCM from byte `start`, into `pieces`, until they are read, the file fails or
-/// nobody is reading any more. Runs on a thread of its own, since decoding takes a while.
-fn read_pcm(
-  mut source: Source,
+/// The PCM of a WAV from one byte to another, read a stretch of the source at a time.
+struct Pcm {
+  source: Source,
   format: Format,
-  start: u64,
-  length: u64,
-  shown: &str,
-  pieces: &mpsc::Sender<io::Result<Bytes>>,
-) {
-  let block = format.block();
-  let first = start / block;
-  let failed = |reason: String| {
-    warn!(
-      path = shown,
-      reason, "a file served as WAV could not be read"
-    );
-    if pieces.blocking_send(Err(io::Error::other(reason))).is_err() {
-      debug!(path = shown, "nobody is reading the WAV any more");
+  /// the next byte of the PCM to give
+  at: u64,
+  /// the byte of the PCM where giving stops
+  end: u64,
+  /// whether the source was moved to where the PCM starts
+  sought: bool,
+  /// where the next stretch starts in the PCM, when the source does not say
+  next: u64,
+  /// a stretch read and not given yet, with where it starts in the PCM
+  held: Option<(u64, Bytes)>,
+}
+
+impl Pcm {
+  /// `length` bytes of the PCM of `opened` from byte `start`.
+  fn new(opened: Opened, start: u64, length: u64) -> Self {
+    Self {
+      source: opened.source,
+      format: opened.format,
+      at: start,
+      end: start + length,
+      sought: false,
+      next: 0,
+      held: None,
     }
-  };
-  if let Err(reason) = source.seek(&format, first) {
-    return failed(reason);
   }
-  let mut left = length;
-  // where the next stretch starts in the PCM, when the source does not say
-  let mut position = first * block;
-  let mut pcm = Vec::new();
-  while left > 0 {
-    let at = match source.read(&format, &mut pcm) {
-      Ok(frame) => frame.map_or(position, |frame| frame * block),
-      Err(reason) => return failed(reason),
-    };
+
+  /// The next piece, `None` once every byte was given or after a piece that failed. Reads the
+  /// source at most once, which blocks.
+  fn step(&mut self) -> Option<Result<Bytes, String>> {
+    while self.at < self.end {
+      if let Some((from, stretch)) = self.held.take() {
+        // a sought packet can start before the range, and a range can start inside a sample
+        let skip = self.at.saturating_sub(from);
+        let length = stretch.len() as u64;
+        if skip < length {
+          let given = (length - skip).min(self.end - self.at);
+          self.at += given;
+          return Some(Ok(stretch.slice(skip as usize..(skip + given) as usize)));
+        }
+        continue;
+      }
+      if let Err(reason) = self.read() {
+        self.at = self.end;
+        return Some(Err(reason));
+      }
+    }
+    None
+  }
+
+  /// Reads the next stretch of the source into `held`.
+  fn read(&mut self) -> Result<(), String> {
+    let block = self.format.block();
+    if !self.sought {
+      let first = self.at / block;
+      self.source.seek(&self.format, first)?;
+      self.next = first * block;
+      self.sought = true;
+    }
+    let mut pcm = Vec::new();
+    let frame = self.source.read(&self.format, &mut pcm)?;
     if pcm.is_empty() {
-      return failed("the audio ends before its stated length".to_string());
+      return Err("the audio ends before its stated length".to_string());
     }
-    let end = at + pcm.len() as u64;
-    position = end;
-    // a sought packet can start before the range, and a range can start inside a sample
-    if end <= start {
-      continue;
-    }
-    let skip = start.saturating_sub(at) as usize;
-    let piece = &pcm[skip..];
-    let piece = &piece[..piece.len().min(left as usize)];
-    left -= piece.len() as u64;
-    if pieces
-      .blocking_send(Ok(Bytes::copy_from_slice(piece)))
-      .is_err()
-    {
-      return;
-    }
+    let from = frame.map_or(self.next, |frame| frame * block);
+    self.next = from + pcm.len() as u64;
+    self.held = Some((from, Bytes::from(pcm)));
+    Ok(())
   }
 }
 
-/// The WAV's `length` bytes from `start`, read as they are sent and no faster than `speed` allows.
-fn body(opened: Opened, path: PathBuf, start: u64, length: u64, speed: ServeSpeed) -> Body {
-  let Opened { format, source } = opened;
+/// The WAV's `length` bytes from `start`, read as they are sent and no faster than `speed`
+/// allows. The file is named `shown` in the log.
+fn body(opened: Opened, shown: String, start: u64, length: u64, speed: ServeSpeed) -> Body {
   let Parts {
     header,
     pcm_from,
     pcm_length,
   } = parts(start, length);
-  let head = Bytes::copy_from_slice(&format.header()[header]);
-  let (sender, receiver) = mpsc::channel(BACKLOG);
-  if pcm_length > 0 {
-    tokio::task::spawn_blocking(move || {
-      let shown = path.display().to_string();
-      read_pcm(source, format, pcm_from, pcm_length, &shown, &sender);
-    });
-  }
-  let pcm = stream::unfold((receiver, speed), |(mut receiver, speed)| async move {
-    let piece = receiver.recv().await?;
-    if let Ok(bytes) = &piece {
-      let mut left = bytes.len();
-      while left > 0 {
-        left -= speed.allowed(left).await;
+  let head = Bytes::copy_from_slice(&opened.format.header()[header]);
+  let pcm = (pcm_length > 0).then(|| Pcm::new(opened, pcm_from, pcm_length));
+  // each piece is read on the blocking pool, so a body nobody reads any more holds no thread
+  let pieces = stream::unfold((pcm, speed, shown), |(pcm, speed, shown)| async move {
+    let mut pcm = pcm?;
+    let stepped = tokio::task::spawn_blocking(move || {
+      let piece = pcm.step();
+      (pcm, piece)
+    })
+    .await;
+    let (piece, pcm) = match stepped {
+      Ok((_, None)) => return None,
+      Ok((pcm, Some(Ok(bytes)))) => {
+        let mut left = bytes.len();
+        while left > 0 {
+          left -= speed.allowed(left).await;
+        }
+        (Ok(bytes), Some(pcm))
       }
-    }
-    Some((piece, (receiver, speed)))
+      Ok((_, Some(Err(reason)))) => {
+        warn!(
+          path = shown,
+          reason, "a file served as WAV could not be read"
+        );
+        (Err(io::Error::other(reason)), None)
+      }
+      Err(e) => {
+        error!(path = shown, error = %e, "reading a file served as WAV failed");
+        (Err(io::Error::other(e)), None)
+      }
+    };
+    Some((piece, (pcm, speed, shown)))
   });
-  Body::from_stream(stream::iter((!head.is_empty()).then_some(Ok(head))).chain(pcm))
+  Body::from_stream(stream::iter((!head.is_empty()).then_some(Ok(head))).chain(pieces))
+}
+
+/// A file's `bytes` opened as they are served as WAV, or why they are not.
+fn opened_bytes(bytes: &[u8]) -> Result<Opened, String> {
+  let file = Box::new(Cursor::new(bytes.to_vec()));
+  match open(file, bytes.len() as u64, None) {
+    Ok(opened) if opened.format.fits() => Ok(opened),
+    Ok(_) => Err("it is too long for a WAV".to_string()),
+    Err(Refused::Format(reason)) => Err(reason),
+    Err(Refused::Read(e)) => Err(e.to_string()),
+  }
+}
+
+/// The length of the WAV a file of `bytes` is served as, or why it is not served as one.
+pub fn wav_length(bytes: &[u8]) -> Result<u64, String> {
+  Ok(HEADER + opened_bytes(bytes)?.format.pcm())
+}
+
+/// `length` bytes from `start` of the WAV a file of `bytes` is served as, read as a response
+/// reads them, or why they could not be.
+pub fn wav_bytes(bytes: &[u8], start: u64, length: u64) -> Result<Vec<u8>, String> {
+  let opened = opened_bytes(bytes)?;
+  let size = HEADER + opened.format.pcm();
+  if start.checked_add(length).is_none_or(|end| end > size) {
+    return Err(format!("the WAV has only {size} bytes"));
+  }
+  let Parts {
+    header,
+    pcm_from,
+    pcm_length,
+  } = parts(start, length);
+  let mut out = opened.format.header()[header].to_vec();
+  let mut pcm = Pcm::new(opened, pcm_from, pcm_length);
+  while let Some(piece) = pcm.step() {
+    out.extend_from_slice(&piece?);
+  }
+  Ok(out)
 }
 
 /// `file` as a WAV, as the response `request` asks for, sent no faster than `speed` allows. What
@@ -343,9 +424,13 @@ pub(super) async fn respond(
 ) -> Result<Response, ApiError> {
   let path = file.path.clone();
   let size = file.size;
-  let opened = tokio::task::spawn_blocking(move || open(&path, size))
-    .await
-    .map_err(ApiError::internal)?;
+  let opened = tokio::task::spawn_blocking(move || {
+    let opened = File::open(&path).map_err(Refused::Read)?;
+    let extension = path.extension().and_then(|e| e.to_str());
+    open(Box::new(opened), size, extension)
+  })
+  .await
+  .map_err(ApiError::internal)?;
   let opened = match opened {
     Ok(opened) => opened,
     Err(Refused::Format(reason)) => {
@@ -379,7 +464,8 @@ pub(super) async fn respond(
     Ranged::Answered(response) => Ok(response),
     Ranged::Bytes(part) => {
       let (start, length) = (part.start, part.length);
-      Ok(part.with(body(opened, file.path, start, length, speed.clone())))
+      let shown = file.path.display().to_string();
+      Ok(part.with(body(opened, shown, start, length, speed.clone())))
     }
   }
 }
