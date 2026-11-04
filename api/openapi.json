@@ -20369,6 +20369,26 @@
           },
           {
             "type": "object",
+            "description": "a file was queued for audio analysis, by anyone",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AnalysisJob",
+                "description": "a file was queued for audio analysis, by anyone"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "files.analysis_queued"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "a file's audio analysis finished",
             "required": [
               "data",

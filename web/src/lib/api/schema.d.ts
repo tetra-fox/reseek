@@ -5101,6 +5101,11 @@ export interface components {
             /** @enum {string} */
             type: "transfers.removed";
         } | {
+            /** @description a file was queued for audio analysis, by anyone */
+            data: components["schemas"]["AnalysisJob"];
+            /** @enum {string} */
+            type: "files.analysis_queued";
+        } | {
             /** @description a file's audio analysis finished */
             data: components["schemas"]["AnalysisCompleted"];
             /** @enum {string} */

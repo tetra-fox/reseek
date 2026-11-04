@@ -4,13 +4,13 @@ import { call } from "#lib/request.js";
 
 import { type Job, names, type Target } from "./analysis";
 
-/** How often the queue is read while something runs in it, and while it is idle */
+/** How often the queue is read while files wait or run in it */
 const BUSY_MS = 1000;
-const IDLE_MS = 5000;
 
 /**
- * The analysis queue, read while a screen that shows analyses is open: often while files wait or
- * run, seldom otherwise, and at once when an analysis finishes
+ * The analysis queue, kept while a screen that shows analyses is open: read every second while
+ * files wait or run, and at once when an analysis finishes. While nothing does, it is read again
+ * when the event stream says a file was queued, or on the stream's polling timer while it is down
  */
 class Jobs {
   list = $state.raw<Job[]>([]);
@@ -20,6 +20,7 @@ class Jobs {
   finished = $state(0);
   #holders = 0;
   #timer: ReturnType<typeof setTimeout> | undefined;
+  #reading = false;
   #stops: (() => void)[] = [];
 
   /** Keeps the queue current while the returned function has not been called */
@@ -30,6 +31,20 @@ class Jobs {
         live.on("files.analysis", () => {
           this.finished++;
           void this.refresh();
+        }),
+        live.on("files.analysis_queued", (job) => {
+          if (!this.list.some((j) => j.id === job.id)) this.list = [...this.list, job];
+          // a batch queues many at once: one read after a while covers them all
+          this.#timer ??= setTimeout(() => void this.refresh(), BUSY_MS);
+        }),
+        live.on("lagged", () => void this.refresh()),
+        // the stream went down while nothing waited: polling starts, as no frame will come
+        $effect.root(() => {
+          $effect(() => {
+            if (live.pollMs !== null && !this.#reading && this.#timer === undefined) {
+              void this.refresh();
+            }
+          });
         })
       ];
       void this.refresh();
@@ -37,6 +52,7 @@ class Jobs {
     return () => {
       if (--this.#holders > 0) return;
       clearTimeout(this.#timer);
+      this.#timer = undefined;
       for (const stop of this.#stops) stop();
       this.#stops = [];
     };
@@ -45,13 +61,20 @@ class Jobs {
   /** Reads the queue now, and again after a while */
   async refresh() {
     clearTimeout(this.#timer);
+    this.#timer = undefined;
+    this.#reading = true;
     const outcome = await call(() => api.GET("/api/v0/analysis/jobs"));
+    this.#reading = false;
     if (outcome.ok) {
       this.list = outcome.data.jobs;
       this.backlog = outcome.data.backlog;
     }
-    if (this.#holders > 0) {
-      this.#timer = setTimeout(() => void this.refresh(), this.count ? BUSY_MS : IDLE_MS);
+    // a queued frame that arrived during the read set a timer, which this one replaces
+    clearTimeout(this.#timer);
+    this.#timer = undefined;
+    const wait = this.count ? BUSY_MS : live.pollMs;
+    if (this.#holders > 0 && wait !== null) {
+      this.#timer = setTimeout(() => void this.refresh(), wait);
     }
   }
 
