@@ -23,6 +23,7 @@
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
+  import { Loader } from "#lib/loader.svelte.js";
   import { href } from "#lib/nav.js";
   import { reason, UNREACHABLE } from "#lib/request.js";
   import { EVENT_TYPES } from "#lib/system/events.js";
@@ -35,55 +36,50 @@
   const SIZES = [10, 25, 50, 100];
 
   const rows = new Keyed<Record>((e) => e.id);
-  let order = $state<string[]>([]);
-  let total = $state(0);
-  let loaded = $state(false);
-  let error = $state("");
   let shown = $state<Record | null>(null);
 
-  const load = async () => {
-    const query = {
-      offset: (page - 1) * perPage,
-      limit: perPage,
-      type: types.length ? types.join(",") : undefined
-    };
-    let reply;
-    try {
-      reply = await api.GET("/api/v0/events", { params: { query } });
-    } catch {
-      error = UNREACHABLE;
-      loaded = true;
-      return;
-    }
-    loaded = true;
-    if (!reply.response.ok || !reply.data) {
-      error = reason(reply.response.status, reply.error);
-      return;
-    }
-    error = "";
-    rows.reconcile(reply.data);
-    order = reply.data.map((e) => e.id);
-    total = Number(reply.response.headers.get("X-Total-Count")) || 0;
-  };
+  /** the page the props ask for, with how many events match in all */
+  const listed = new Loader<{ events: Record[]; total: number }>(
+    async () => {
+      const query = {
+        offset: (page - 1) * perPage,
+        limit: perPage,
+        type: types.length ? types.join(",") : undefined
+      };
+      let reply;
+      try {
+        reply = await api.GET("/api/v0/events", { params: { query } });
+      } catch {
+        return { ok: false, error: UNREACHABLE, status: 0 };
+      }
+      const status = reply.response.status;
+      if (!reply.response.ok || !reply.data) {
+        return { ok: false, error: reason(status, reply.error), status };
+      }
+      const total = Number(reply.response.headers.get("X-Total-Count")) || 0;
+      return { ok: true, data: { events: reply.data, total } };
+    },
+    (data) => rows.reconcile(data.events)
+  );
   keepCurrent(
-    () => void load(),
+    () => void listed.load(),
     () => "events"
   );
   $effect(() => {
     void page;
     void perPage;
     void types;
-    untrack(() => void load());
+    untrack(() => void listed.load());
   });
   // the first page follows new events as they are raised
   $effect(() =>
     live.on("events.raised", () => {
-      if (page === 1) void load();
+      if (page === 1) void listed.load();
     })
   );
 
-  const events = $derived(order.flatMap((id) => rows.get(id) ?? []));
-  const pages = $derived(Math.max(1, Math.ceil(total / perPage)));
+  const events = $derived((listed.data?.events ?? []).flatMap((e) => rows.get(e.id) ?? []));
+  const pages = $derived(Math.max(1, Math.ceil((listed.data?.total ?? 0) / perPage)));
   const list = new ListControl<Record>({
     lines: () => events,
     key: (e) => e.id,
@@ -142,9 +138,9 @@
   </div>
 </div>
 
-{#if error && !events.length}
-  <ErrorSegment caption={error} retry={() => void load()} retryLabel="Retry" />
-{:else if !loaded}
+{#if listed.error && !events.length}
+  <ErrorSegment caption={listed.error} retry={() => void listed.load()} retryLabel="Retry" />
+{:else if listed.loading}
   <Skeleton class="h-64" />
 {:else if !events.length}
   <EmptyState icon={CalendarCheckIcon} title="No events" />
