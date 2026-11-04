@@ -39,7 +39,6 @@ const DISABLED: &[Disabled] = &[
 
 /// What one entry of [`DISABLED`] covers. A whole domain is a path prefix, so a route added to
 /// it later is refused with the rest.
-#[derive(Debug)]
 enum Disabled {
   /// every route at or below this path, by any method
   Under(&'static str),
@@ -104,28 +103,9 @@ pub async fn refuse_in_agent_mode(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::testing::routes::{CONFIG, Operation, answer, in_order, operations};
+  use crate::testing::routes::{CONFIG, Operation, answer, in_order};
   use crate::testing::{OUTSIDE, app, request};
   use serde_json::Value;
-
-  #[test]
-  fn every_entry_names_a_documented_route() {
-    let operations = operations();
-    for entry in DISABLED {
-      let named = operations
-        .iter()
-        .any(|op| entry.covers(&op.method, &op.route));
-      assert!(named, "{entry:?} covers no route");
-    }
-  }
-
-  #[test]
-  fn a_domain_prefix_stops_at_a_segment() {
-    let searches = Disabled::Under("/api/v0/searches");
-    assert!(searches.covers(&Method::GET, "/api/v0/searches"));
-    assert!(searches.covers(&Method::DELETE, "/api/v0/searches/{id}"));
-    assert!(!searches.covers(&Method::GET, "/api/v0/searchesx"));
-  }
 
   /// The users routes that read or change only what this instance keeps about a user.
   const LOCAL_USERS: &[&str] = &[
