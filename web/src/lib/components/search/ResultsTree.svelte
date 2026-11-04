@@ -43,6 +43,7 @@
     folderNode,
     folderTree,
     itemsUnder,
+    scopedKey,
     tickedCounts,
     treeLines
   } from "#lib/tree/folders.js";
@@ -77,7 +78,7 @@
 
   followDownloads();
 
-  const idOf = (f: Item) => `${f.result}\u0000${f.filename}`;
+  const idOf = (f: Item) => scopedKey(f.result, f.filename);
   /** each response as a line for its user with its files' folders under it */
   const roots = $derived(
     view.map((r) => {
@@ -99,7 +100,7 @@
   const byId = $derived(new Map(all.map((f) => [idOf(f), f])));
   const chosen = $derived([...selected].flatMap((id) => byId.get(id) ?? []));
   /** ticked files under each folder, by its key, and under each user, by their result */
-  const ticked = $derived(tickedCounts(selected, (id) => id));
+  const ticked = $derived(tickedCounts(selected));
   const tickedOf = $derived.by(() => {
     const counts = new Map<string, number>();
     for (const id of selected) {

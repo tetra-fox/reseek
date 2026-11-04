@@ -142,8 +142,16 @@ describe("browse listings", () => {
 
 describe("ticked counts", () => {
   it("count each ticked file once in every folder above it", () => {
-    const counts = tickedCounts(["a\\b\\1", "a\\b\\2", "a\\c\\3", "x/4"], (id) => id);
+    const counts = tickedCounts(["a\\b\\1", "a\\b\\2", "a\\c\\3", "x/4"]);
     expect(Object.fromEntries(counts)).toEqual({ "a": 3, "a\\b": 2, "a\\c": 1, "x": 1 });
+  });
+
+  it("count under the scoped keys when the scope holds a slash", () => {
+    const counts = tickedCounts(["0:ac/dc\u0000@@abc\\Music\\x.mp3"]);
+    expect(Object.fromEntries(counts)).toEqual({
+      "0:ac/dc\u0000@@abc": 1,
+      "0:ac/dc\u0000@@abc\\Music": 1
+    });
   });
 });
 

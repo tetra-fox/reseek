@@ -74,6 +74,9 @@ export const folderNode = <T>(
   };
 };
 
+/** A path's key in a list that holds several trees, unique to the tree `scope` names */
+export const scopedKey = (scope: string, path: string) => `${scope}\u0000${path}`;
+
 type Trie<T> = { path: string; segment: string; items: T[]; children: Map<string, Trie<T>> };
 
 /**
@@ -116,7 +119,7 @@ export const folderTree = <T>(
       return build(only, label + separatorOf(only.path) + only.segment);
     }
     const children = [...trie.children.values()].map((child) => build(child, child.segment));
-    const key = scope === undefined ? trie.path : `${scope}\u0000${trie.path}`;
+    const key = scope === undefined ? trie.path : scopedKey(scope, trie.path);
     return folderNode({ key, path: trie.path, label }, trie.items, children, sizeOf, lockedOf);
   };
   return [...root.children.values()].map((top) => build(top, top.segment));
@@ -208,17 +211,20 @@ export const ancestors = (path: string, listing: Listing, separator: Separator):
 };
 
 /**
- * How many of the selected items are under each folder, by the folder's path: each selected id
- * counts once for every folder its path is in. Costs the selection's size times its depth, so a
- * folder line's tick reads its count rather than walking the items below it
+ * How many of the selected items are under each folder, by the folder's key: each selected id, a
+ * path or a `scopedKey`, counts once for every folder its path is in. Costs the selection's size
+ * times its depth, so a folder line's tick reads its count rather than walking the items below it
  */
-export const tickedCounts = (selected: Iterable<string>, pathOf: (id: string) => string) => {
+export const tickedCounts = (selected: Iterable<string>) => {
   const counts = new Map<string, number>();
   for (const id of selected) {
-    const path = pathOf(id);
+    // the scope may hold either separator, so the walk stays inside the path
+    const cut = id.indexOf("\u0000") + 1;
+    const scope = id.slice(0, cut);
+    const path = id.slice(cut);
     const separator = separatorOf(path);
     for (let at = parentOf(path, separator); at; at = parentOf(at, separator)) {
-      counts.set(at, (counts.get(at) ?? 0) + 1);
+      counts.set(scope + at, (counts.get(scope + at) ?? 0) + 1);
     }
   }
   return counts;
