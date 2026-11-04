@@ -8,7 +8,7 @@ dev: web-install
     #!/usr/bin/env bash
     set -euo pipefail
     trap 'kill 0' EXIT
-    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek -- --web-ui=false &
+    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek -- --web-ui=false --http-ip-address 127.0.0.1,::1 &
     pnpm --dir web dev
 
 # pnpm build, then cargo build --release (cargo never runs pnpm)

@@ -55,7 +55,7 @@ use crate::users::{Directory, Users};
 use crate::version::{self, RELEASE_FEED, Releases};
 use service::Application;
 use signals::spawn_signals;
-use startup::{config_error, log_startup, warn_about, write_template};
+use startup::{check_default_login, config_error, log_startup, warn_about, write_template};
 
 /// The command line could not be understood.
 pub const EXIT_USAGE: u8 = 2;
@@ -633,6 +633,10 @@ async fn host(sources: Sources, defaults: Defaults, paths: Paths, logging: Loggi
     );
   }
   warn_about(options, &logging);
+  if let Err(e) = check_default_login(options) {
+    error!(error = e, "reseek could not start");
+    return EXIT_CONFIG;
+  }
   debug!(options = %redact::values(&current), "effective options");
 
   let cancel = CancellationToken::new();

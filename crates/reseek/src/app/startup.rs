@@ -1,5 +1,6 @@
 //! What a start prints and writes before serving: the startup log lines, the warnings the
-//! options call for, the configuration template, and configuration errors as they are printed.
+//! options call for, the refusal of a default login others can reach, the configuration
+//! template, and configuration errors as they are printed.
 
 use cascade::Schema;
 use tracing::{error, info, warn};
@@ -67,15 +68,6 @@ pub(super) fn warn_about(options: &Options, logging: &Logging) {
     warn!("force_migrations has no effect: migrations apply by version and none runs twice");
   }
   let authentication = &options.web.authentication;
-  if authentication.local.enabled
-    && authentication.password_hash.is_none()
-    && authentication.password == crate::config::Authentication::default().password
-  {
-    warn!(
-      username = authentication.username,
-      "the built-in account still has the default password; set web.authentication.password_hash"
-    );
-  }
   for (name, user) in &authentication.local.users {
     if user.password_hash.is_none() && user.password.is_some() {
       warn!(
@@ -85,6 +77,57 @@ pub(super) fn warn_about(options: &Options, logging: &Logging) {
     }
   }
   warn_about_metrics(&options.metrics);
+}
+
+/// Refuses a start whose built-in account still has the default password while other machines
+/// can reach the web server; on this machine alone it is warned about. The error says how to
+/// set a password.
+pub(super) fn check_default_login(options: &Options) -> Result<(), String> {
+  let auth = &options.web.authentication;
+  let default_login = !auth.disabled
+    && auth.local.enabled
+    && auth.password_hash.is_none()
+    && auth.password == crate::config::Authentication::default().password;
+  if !default_login {
+    return Ok(());
+  }
+  let Some(reached) = reached_from_elsewhere(&options.web) else {
+    warn!(
+      username = auth.username,
+      "the built-in account still has the default password; set web.authentication.password_hash"
+    );
+    return Ok(());
+  };
+  Err(format!(
+    "The built-in account {} still has the default password, and {reached}. Set a password \
+     with RESEEK_PASSWORD or web.authentication.password, or web.authentication.password_hash \
+     from `reseek hash-password`; or keep the web server on this machine with \
+     web.ip_address = \"127.0.0.1\" and no reverse proxy.",
+    auth.username
+  ))
+}
+
+/// How other machines reach the web server, if they do: an HTTP or HTTPS address that is not
+/// this machine's loopback, or a reverse proxy that forwards their requests
+fn reached_from_elsewhere(web: &crate::config::Web) -> Option<String> {
+  let https = (!web.https.disabled).then_some(&web.https.ip_address);
+  let address = [Some(&web.ip_address), https]
+    .into_iter()
+    .flatten()
+    // the addresses were checked with the rest of the configuration
+    .flat_map(|list| crate::config::addresses::list(list.as_deref()).unwrap_or_default())
+    .find(|ip| !ip.to_canonical().is_loopback());
+  if let Some(ip) = address {
+    return Some(format!(
+      "the web server listens on {ip}, which other machines can reach"
+    ));
+  }
+  if let Some(url) = &web.external_url {
+    return Some(format!("the web server is served at {url}"));
+  }
+  (!web.trusted_proxies.is_empty()).then(|| {
+    "web.trusted_proxies names a reverse proxy that forwards other machines' requests".into()
+  })
 }
 
 /// The warnings an enabled metrics endpoint calls for: no authentication, or the default
@@ -137,6 +180,33 @@ mod tests {
   use super::*;
   use crate::config::Metrics;
   use crate::testing::logged;
+
+  #[test]
+  fn a_default_login_is_refused_only_where_other_machines_reach_it() {
+    let mut options = Options::default();
+    let refused = check_default_login(&options).unwrap_err();
+    assert!(refused.contains("listens on ::"), "{refused}");
+    options.web.ip_address = Some("127.0.0.1, ::1".into());
+    assert!(
+      check_default_login(&options).is_err(),
+      "HTTPS listens everywhere"
+    );
+    options.web.https.ip_address = Some("[::ffff:127.0.0.1]".into());
+    let ((), text) = logged(|| check_default_login(&options).unwrap());
+    assert!(text.contains("default password"), "{text}");
+    // a reverse proxy on this machine forwards requests from anywhere
+    options.web.trusted_proxies = vec!["127.0.0.1/32".into()];
+    assert!(check_default_login(&options).is_err());
+    options.web.trusted_proxies.clear();
+    options.web.external_url = Some("https://reseek.example.net".into());
+    assert!(check_default_login(&options).is_err());
+    options.web.ip_address = Some("192.168.1.2".into());
+    options.web.authentication.password = "something else".into();
+    assert_eq!(check_default_login(&options), Ok(()));
+    options.web.authentication.password = "reseek".into();
+    options.web.authentication.local.enabled = false;
+    assert_eq!(check_default_login(&options), Ok(()));
+  }
 
   #[test]
   fn an_open_or_default_metrics_endpoint_is_warned_about() {

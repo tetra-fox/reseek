@@ -137,7 +137,17 @@ fn an_invalid_configuration_exits_three_and_a_held_lock_five() {
   assert!(text(&blank.stderr).contains("web.ip_address"));
 
   let start = run(
-    &["--app-dir", app_dir, "-n", "--no-start", "--no-https"],
+    &[
+      "--app-dir",
+      app_dir,
+      "-n",
+      "--no-start",
+      "--no-https",
+      "--http-ip-address",
+      "127.0.0.1",
+      "--http-port",
+      "0",
+    ],
     &[],
   );
   assert_eq!(start.status.code(), Some(0), "{}", text(&start.stdout));
@@ -148,10 +158,46 @@ fn an_invalid_configuration_exits_three_and_a_held_lock_five() {
   let lock = std::fs::File::open(dir.path().join("data/reseek.lock")).unwrap();
   lock.try_lock().unwrap();
   let locked = run(
-    &["--app-dir", app_dir, "-n", "--no-start", "--no-https"],
+    &[
+      "--app-dir",
+      app_dir,
+      "-n",
+      "--no-start",
+      "--no-https",
+      "--http-ip-address",
+      "127.0.0.1",
+    ],
     &[],
   );
   assert_eq!(locked.status.code(), Some(5), "{}", text(&locked.stdout));
+}
+
+#[test]
+fn the_default_login_is_refused_where_other_machines_can_reach_it() {
+  let dir = tempfile::tempdir().unwrap();
+  let app_dir = dir.path().to_str().unwrap();
+  let start = ["--app-dir", app_dir, "-n", "--no-start", "--no-https"];
+  let open = run(&start, &[]);
+  let printed = format!("{}{}", text(&open.stdout), text(&open.stderr));
+  assert_eq!(open.status.code(), Some(3), "{printed}");
+  assert!(
+    printed.contains("default password") && printed.contains("RESEEK_PASSWORD"),
+    "{printed}"
+  );
+  let on_this_machine = run(
+    &[
+      &start[..],
+      &["--http-ip-address", "127.0.0.1", "--http-port", "0"],
+    ]
+    .concat(),
+    &[],
+  );
+  assert_eq!(on_this_machine.status.code(), Some(0));
+  let with_password = run(
+    &[&start[..], &["--http-port", "0"]].concat(),
+    &[("RESEEK_PASSWORD", "a password of my own")],
+  );
+  assert_eq!(with_password.status.code(), Some(0));
 }
 
 fn get(port: u16, path: &str) -> Option<String> {
