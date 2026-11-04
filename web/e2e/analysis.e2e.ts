@@ -779,6 +779,12 @@ test("opens a file, compares a second, and clears them, with the address followi
   await a.getByRole("button", { name: "Zoom in" }).click();
   await expect(view(a)).toHaveAttribute("data-view", "0.000 15.250");
   await expect(view(b)).toHaveAttribute("data-view", "0.000 15.250");
+  // a file shown again beside the other takes that one's view, and leaves it as it was
+  await a.getByRole("button", { name: "Clear slot A" }).click();
+  await expect(page).not.toHaveURL(/\?a=/);
+  await page.goBack();
+  await expect(view(a)).toHaveAttribute("data-view", "0.000 15.250");
+  await expect(view(b)).toHaveAttribute("data-view", "0.000 15.250");
   await page.getByText("Link zoom and scroll").click();
   await expect(page.getByRole("switch")).toHaveAttribute("aria-checked", "false");
   const held = await view(b).getAttribute("data-view");

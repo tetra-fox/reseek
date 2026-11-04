@@ -3,6 +3,7 @@
 
   import { FileReport } from "#lib/analysis/report.svelte.js";
   import { slots } from "#lib/analysis/slots.svelte.js";
+  import type { Scope } from "#lib/analysis/spectrogram/scope.svelte.js";
   import { spectrogramView } from "#lib/analysis/spectrogram/view.svelte.js";
 
   import AnalysisSlot from "./AnalysisSlot.svelte";
@@ -18,12 +19,16 @@
   const b = $derived(second.report);
   const compared = $derived(a && b && !a.stale && !b.stale ? { a, b } : null);
 
-  // the two viewers show the same stretch of time until they are unlinked
+  // the two viewers show the same stretch of time until they are unlinked. When one of them is
+  // replaced, as by Analyze again, the new one takes the view of the one that stayed
+  let pair: { a: Scope; b: Scope } | null = null;
   $effect(() => {
     const [scopeA, scopeB] = [first.scope, second.scope];
     if (!scopeA || !scopeB || !spectrogramView.linked) return;
-    untrack(() => scopeA.link(scopeB));
-    return () => scopeA.unlink();
+    const lead = pair?.b === scopeB && pair.a !== scopeA ? scopeB : scopeA;
+    pair = { a: scopeA, b: scopeB };
+    untrack(() => lead.link(lead === scopeA ? scopeB : scopeA));
+    return () => lead.unlink();
   });
 
   /** A file dropped beside a slot would replace the page with the file */
