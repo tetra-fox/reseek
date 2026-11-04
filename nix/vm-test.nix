@@ -3,7 +3,8 @@
 # the shares scanned, the configuration read-only and managed by NixOS, a drop-in file read as
 # one of its sources, a configuration switch reloaded with SIGHUP, runtime overrides with an
 # expiry), then runs the daemon's smoke program: the daemon shares, searches, browses, downloads
-# and uploads through its API with the soulseek-rs CLI as the other user.
+# and uploads through its API with the soulseek-rs CLI as the other user. Last, the relay agent's
+# service logs in to the daemon as its controller and its share is served beside the daemon's.
 {
   self,
   testers,
@@ -14,6 +15,9 @@
 }:
 let
   password = "vm-password";
+  # test secrets; real ones never go in the store
+  agentKey = "vm-agent-key-0123456789";
+  agentSecret = "vm-agent-secret-0123456789";
 in
 testers.runNixOSTest {
   name = "reseek";
@@ -36,11 +40,13 @@ testers.runNixOSTest {
         };
       };
 
-      # two files to share before the daemon's first scan
+      # two files to share before the daemon's first scan, and the relay agent's one
       systemd.tmpfiles.rules = [
         "d /srv/share 0755 root root -"
         "f+ /srv/share/one.flac 0644 root root - one"
         "f+ /srv/share/two.flac 0644 root root - two"
+        "d /srv/agent 0755 root root -"
+        "f+ /srv/agent/three.flac 0644 root root - three"
       ];
 
       services.reseek = {
@@ -70,8 +76,35 @@ testers.runNixOSTest {
           shares.directories = [ "/srv/share" ];
           flags.no_version_check = true;
           transfers.upload.slots = 2;
+          relay = {
+            enabled = true;
+            agents.nas = {
+              instance_name = "nas";
+              secret = agentSecret;
+            };
+          };
+          web.authentication.api_keys.agents = {
+            key = agentKey;
+            role = "readwrite";
+          };
         };
       };
+
+      services.reseek-agent = {
+        enable = true;
+        package = reseek;
+        environmentFile = pkgs.writeText "reseek-agent.env" ''
+          RESEEK_CONTROLLER_API_KEY=${agentKey}
+          RESEEK_CONTROLLER_SECRET=${agentSecret}
+        '';
+        settings = {
+          instance_name = "nas";
+          relay.controller.address = "http://127.0.0.1:5030";
+          shares.directories = [ "/srv/agent" ];
+        };
+      };
+      # started by the test once the daemon's own checks are done, so its share counts alone
+      systemd.services.reseek-agent.wantedBy = lib.mkForce [ ];
 
       specialisation.changed.configuration = {
         services.reseek.settings.transfers.upload.slots = lib.mkForce 3;
@@ -159,5 +192,17 @@ testers.runNixOSTest {
             "--share /srv/share --server 127.0.0.1:2242 "
             "--peer ${soulseek-rs}/bin/soulseek-rs --peer-dir /tmp/peer >&2"
         )
+
+    with subtest("the relay agent's service logs in and its share is served by the daemon"):
+        before = files()
+        machine.succeed("systemctl start reseek-agent.service")
+
+        def serving():
+            _, agents = api("GET", "/relay/agents")
+            return any(a["name"] == "nas" and a["ready"] for a in agents) or agents
+
+        eventually("serving the agent", serving)
+        eventually("counting its file", lambda: files() == before + 1 or files())
+        machine.succeed("journalctl -u reseek-agent.service | grep -q 'Shares uploaded'")
   '';
 }
