@@ -12,7 +12,7 @@ use api_types::users::blocking::BlockScope;
 use rusqlite::params;
 use soulseek_client::ClientError;
 use tokio::sync::Semaphore;
-use tracing::{debug, info, warn};
+use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
 use super::batches::{self, BatchRow, InsertError};
@@ -129,6 +129,28 @@ impl Downloads {
   ) -> Result<Enqueued, ApiError> {
     check(username, &files)?;
     self.reachable(username).await?;
+    // the records and their tasks are made on a task of their own, so a caller that stops
+    // waiting, such as a request whose connection drops, leaves no record without its task
+    let this = self.this();
+    let username = username.to_string();
+    let made = self
+      .tasks
+      .spawn(async move { this.make(&username, files, batching).await }.in_current_span());
+    match made.await {
+      Ok(made) => made,
+      Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+      Err(e) => Err(ApiError::internal(e)),
+    }
+  }
+
+  /// In `username`'s turn, writes a record for every file of `files` not downloading already
+  /// into `batching`, and starts a task for each.
+  async fn make(
+    &self,
+    username: &str,
+    files: Vec<FileRequest>,
+    batching: Batching,
+  ) -> Result<Enqueued, ApiError> {
     let _turn = self.turn(username).await;
     let batch_id = match &batching {
       Batching::Single => None,
