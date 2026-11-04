@@ -69,11 +69,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The analyses queued and running. */
+        /** The analyses queued and running, and how many files of batches wait for room in the queue. */
         get: operations["jobs"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Takes every waiting analysis off the queue, with the files of batches waiting for room in
+         *     it. The analyses running go on; each is stopped on its own.
+         */
+        delete: operations["clear_jobs"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3265,6 +3269,16 @@ export interface components {
             note?: string | null;
             /** @description the judgment */
             verdict: components["schemas"]["Judgment"];
+        };
+        /** @description The analysis queue, as `GET /analysis/jobs` answers it. */
+        AnalysisQueue: {
+            /**
+             * Format: int32
+             * @description the files of batches past the queue's limit, which join it in their order as it drains
+             */
+            backlog: number;
+            /** @description the files being analyzed, then those waiting, in the order they run */
+            jobs: components["schemas"]["AnalysisJob"][];
         };
         /** @description A file a batch analysis names: one under a root, or a succeeded download's. */
         AnalysisTarget: {
@@ -8125,10 +8139,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AnalysisJob"][];
+                    "application/json": components["schemas"]["AnalysisQueue"];
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    clear_jobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

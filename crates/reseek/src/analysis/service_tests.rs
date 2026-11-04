@@ -55,9 +55,9 @@ fn kept(app: &TestApp) -> usize {
 /// Waits until no analysis is queued or running.
 async fn settled(app: &TestApp) {
   for _ in 0..1200 {
-    let (status, jobs) = app.call("GET", "/api/v0/analysis/jobs", None).await;
+    let (status, queue) = app.call("GET", "/api/v0/analysis/jobs", None).await;
     assert_eq!(status, 200);
-    if jobs.as_array().unwrap().is_empty() {
+    if queue["jobs"].as_array().unwrap().is_empty() && queue["backlog"] == 0 {
       return;
     }
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -420,7 +420,8 @@ async fn a_queued_analysis_can_be_canceled_and_a_window_read() {
     .call("DELETE", &format!("/api/v0/analysis/jobs/{}", ids[2]), None)
     .await;
   assert_eq!(status, 204);
-  let (_, jobs) = app.call("GET", "/api/v0/analysis/jobs", None).await;
+  let (_, queue) = app.call("GET", "/api/v0/analysis/jobs", None).await;
+  let jobs = &queue["jobs"];
   let listed: Vec<&str> = jobs
     .as_array()
     .unwrap()
@@ -549,6 +550,45 @@ async fn a_batch_past_the_queue_limit_joins_the_queue_as_it_drains() {
     let (status, report) = app.call("GET", &route(name), None).await;
     assert_eq!(status, 200, "{name} was not analyzed: {report}");
   }
+}
+
+#[tokio::test]
+async fn a_batchs_backlog_shows_in_the_queue_and_goes_when_it_is_cleared() {
+  let app = app(&format!("{TRUSTED}{ONE_WORKER}"), &[]).await;
+  let names: Vec<String> = (0..QUEUE_LIMIT + 20)
+    .map(|n| format!("batch/{n:02}.flac"))
+    .collect();
+  for name in &names {
+    lossless(&app, name);
+  }
+  let files: Vec<Value> = names
+    .iter()
+    .map(|path| json!({ "kind": "file", "root": "downloads", "path": path }))
+    .collect();
+  let (status, answer) = app
+    .call(
+      "POST",
+      "/api/v0/analysis/batch",
+      Some(json!({ "files": files })),
+    )
+    .await;
+  assert_eq!(status, 202, "{answer}");
+  let (_, queue) = app.call("GET", "/api/v0/analysis/jobs", None).await;
+  // the worker may have finished a file or two since, each making room for one
+  assert!(queue["backlog"].as_u64().unwrap() > 10, "{queue}");
+
+  let (status, _) = app.call("DELETE", "/api/v0/analysis/jobs", None).await;
+  assert_eq!(status, 204);
+  let (_, queue) = app.call("GET", "/api/v0/analysis/jobs", None).await;
+  assert_eq!(queue["backlog"], 0, "{queue}");
+  let jobs = queue["jobs"].as_array().unwrap();
+  assert!(
+    jobs.iter().all(|job| job["state"] == "running"),
+    "only the running analysis goes on: {queue}"
+  );
+  settled(&app).await;
+  let (status, _) = app.call("GET", &route(names.last().unwrap()), None).await;
+  assert_eq!(status, 404, "a file of the backlog was not analyzed");
 }
 
 /// Uploads `body` for analysis as a file named `name`.

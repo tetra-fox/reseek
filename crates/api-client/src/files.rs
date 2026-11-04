@@ -2,7 +2,7 @@
 //! directory's bytes, the link token, and audio analysis.
 
 use api_types::analysis::{
-  AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery, AudioAnalysis,
+  AnalysisJobCreated, AnalysisListQuery, AnalysisQueue, AnalysisReportQuery, AudioAnalysis,
   RunAnalysisQuery, SetAnalysisOverride, SpectrogramTile, TileQuery, WaveformTile, WindowSpectra,
   WindowSpectrum,
 };
@@ -169,9 +169,14 @@ impl Client {
     json(self.get(Route::new("analysis").query(query)?)).await
   }
 
-  /// `GET /analysis/jobs`: the analyses queued and running.
-  pub async fn analysis_jobs(&self) -> Result<Vec<AnalysisJob>> {
+  /// `GET /analysis/jobs`: the analyses queued and running, and the backlog of batches.
+  pub async fn analysis_jobs(&self) -> Result<AnalysisQueue> {
     json(self.get(Route::new("analysis/jobs"))).await
+  }
+
+  /// `DELETE /analysis/jobs`: takes every waiting analysis off the queue and drops the backlog.
+  pub async fn clear_analysis_jobs(&self) -> Result<()> {
+    done(self.delete(Route::new("analysis/jobs"))).await
   }
 
   /// `DELETE /analysis/jobs/{id}`: takes a queued analysis off the queue or stops a running one.

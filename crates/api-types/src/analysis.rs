@@ -489,6 +489,16 @@ pub enum AnalysisJobState {
   Running,
 }
 
+/// The analysis queue, as `GET /analysis/jobs` answers it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisQueue {
+  /// the files being analyzed, then those waiting, in the order they run
+  pub jobs: Vec<AnalysisJob>,
+  /// the files of batches past the queue's limit, which join it in their order as it drains
+  pub backlog: u32,
+}
+
 /// A file waiting for or under analysis, an entry of `GET /analysis/jobs`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

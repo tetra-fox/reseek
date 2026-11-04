@@ -3,8 +3,8 @@
 //! queue. A file is named as the files routes name it, or as a succeeded download.
 
 use api_types::analysis::{
-  AnalysisBatch, AnalysisBatchQueued, AnalysisBatchRefusal, AnalysisJob, AnalysisJobCreated,
-  AnalysisListQuery, AnalysisReportQuery, AnalysisTarget, AnalysisUpload, AnalysisUploadQuery,
+  AnalysisBatch, AnalysisBatchQueued, AnalysisBatchRefusal, AnalysisJobCreated, AnalysisListQuery,
+  AnalysisQueue, AnalysisReportQuery, AnalysisTarget, AnalysisUpload, AnalysisUploadQuery,
   AudioAnalysis, RunAnalysisQuery, SetAnalysisOverride, TileQuery, WindowSpectrum,
 };
 use api_types::files::FileRoot;
@@ -43,7 +43,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(list))
     .routes(routes!(upload))
     .routes(routes!(run_batch))
-    .routes(routes!(jobs))
+    .routes(routes!(jobs, clear_jobs))
     .routes(routes!(cancel_job))
 }
 
@@ -541,19 +541,37 @@ async fn run_batch(
   Ok((StatusCode::ACCEPTED, Json(queued)).into_response())
 }
 
-/// The analyses queued and running.
+/// The analyses queued and running, and how many files of batches wait for room in the queue.
 #[utoipa::path(
   get, path = "/analysis/jobs", tag = "analysis",
   responses(
-    (status = 200, body = Vec<AnalysisJob>), (status = 401, body = api_types::ErrorBody),
+    (status = 200, body = AnalysisQueue), (status = 401, body = api_types::ErrorBody),
     (status = 503, body = api_types::ErrorBody)
   )
 )]
 async fn jobs(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-) -> Result<Json<Vec<AnalysisJob>>, ApiError> {
+) -> Result<Json<AnalysisQueue>, ApiError> {
   app.services.analysis.jobs().await.map(Json)
+}
+
+/// Takes every waiting analysis off the queue, with the files of batches waiting for room in
+/// it. The analyses running go on; each is stopped on its own.
+#[utoipa::path(
+  delete, path = "/analysis/jobs", tag = "analysis",
+  responses(
+    (status = 204, description = "cleared"), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn clear_jobs(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+) -> Result<StatusCode, ApiError> {
+  app.services.analysis.clear_jobs().await?;
+  info!(by = caller.principal.subject, "analysis queue cleared");
+  Ok(StatusCode::NO_CONTENT)
 }
 
 /// Takes a queued analysis off the queue, or stops a running one.

@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use api_types::analysis::{
-  AnalysisBatchQueued, AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery,
+  AnalysisBatchQueued, AnalysisJobCreated, AnalysisListQuery, AnalysisQueue, AnalysisReportQuery,
   AnalysisUpload, AudioAnalysis, SetAnalysisOverride, WindowSpectrum,
 };
 use api_types::auth::Principal;
@@ -71,8 +71,8 @@ pub struct Analysis {
   /// the uploads held, which go with a restart
   held: Mutex<uploads::Uploads>,
   queue: Mutex<Queue>,
-  /// the files of batches waiting for room in the queue
-  backlog: Mutex<backlog::Backlog>,
+  /// the files of batches waiting for room in the queue, locked while they feed it
+  backlog: tokio::sync::Mutex<backlog::Backlog>,
   /// paths of reports and spectrogram files that did not read, so each is warned about once
   unreadable: Mutex<HashSet<String>>,
   /// woken when a job is queued or one ends
@@ -111,7 +111,7 @@ impl Analysis {
       held: Mutex::default(),
       dir,
       queue: Mutex::new(Queue::default()),
-      backlog: Mutex::default(),
+      backlog: tokio::sync::Mutex::default(),
       unreadable: Mutex::default(),
       wake: Notify::new(),
       full: AtomicBool::new(false),
@@ -350,16 +350,27 @@ impl AnalysisService for Analysis {
     )
   }
 
-  async fn jobs(&self) -> Result<Vec<AnalysisJob>, ApiError> {
-    let queue = lock(&self.queue);
-    Ok(
+  async fn jobs(&self) -> Result<AnalysisQueue, ApiError> {
+    let jobs = {
+      let queue = lock(&self.queue);
       queue
         .running
         .iter()
         .chain(&queue.waiting)
         .map(Job::listed)
-        .collect(),
-    )
+        .collect()
+    };
+    Ok(AnalysisQueue {
+      jobs,
+      // at most the backlog's limit
+      backlog: self.backlog_len().await as u32,
+    })
+  }
+
+  async fn clear_jobs(&self) -> Result<(), ApiError> {
+    let (waiting, backlog) = self.clear_waiting().await;
+    debug!(waiting, backlog, "waiting analyses and the backlog cleared");
+    Ok(())
   }
 
   async fn cancel_job(&self, id: Uuid) -> Result<(), ApiError> {
@@ -367,6 +378,8 @@ impl AnalysisService for Analysis {
     if let Some(at) = queue.waiting.iter().position(|job| job.id == id) {
       queue.waiting.remove(at);
       debug!(job = %id, "queued analysis taken off the queue");
+      // the room it leaves can take a file of the backlog
+      self.wake.notify_one();
       return Ok(());
     }
     match queue.running.iter().find(|job| job.id == id) {

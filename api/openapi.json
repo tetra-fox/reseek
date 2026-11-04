@@ -227,7 +227,7 @@
         "tags": [
           "analysis"
         ],
-        "summary": "The analyses queued and running.",
+        "summary": "The analyses queued and running, and how many files of batches wait for room in the queue.",
         "operationId": "jobs",
         "responses": {
           "200": {
@@ -235,15 +235,54 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AnalysisJob"
-                  }
+                  "$ref": "#/components/schemas/AnalysisQueue"
                 }
               }
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Takes every waiting analysis off the queue, with the files of batches waiting for room in\nit. The analyses running go on; each is stopped on its own.",
+        "operationId": "clear_jobs",
+        "responses": {
+          "204": {
+            "description": "cleared"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -16245,6 +16284,29 @@
           "verdict": {
             "$ref": "#/components/schemas/Judgment",
             "description": "the judgment"
+          }
+        }
+      },
+      "AnalysisQueue": {
+        "type": "object",
+        "description": "The analysis queue, as `GET /analysis/jobs` answers it.",
+        "required": [
+          "jobs",
+          "backlog"
+        ],
+        "properties": {
+          "backlog": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the files of batches past the queue's limit, which join it in their order as it drains",
+            "minimum": 0
+          },
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalysisJob"
+            },
+            "description": "the files being analyzed, then those waiting, in the order they run"
           }
         }
       },

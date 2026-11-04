@@ -14,6 +14,8 @@ const IDLE_MS = 5000;
  */
 class Jobs {
   list = $state.raw<Job[]>([]);
+  /** how many files of batches wait for room in the queue, which they join as it drains */
+  backlog = $state(0);
   /** bumped whenever an analysis finishes, for views to read their report again */
   finished = $state(0);
   #holders = 0;
@@ -44,9 +46,12 @@ class Jobs {
   async refresh() {
     clearTimeout(this.#timer);
     const outcome = await call(() => api.GET("/api/v0/analysis/jobs"));
-    if (outcome.ok) this.list = outcome.data;
+    if (outcome.ok) {
+      this.list = outcome.data.jobs;
+      this.backlog = outcome.data.backlog;
+    }
     if (this.#holders > 0) {
-      this.#timer = setTimeout(() => void this.refresh(), this.list.length ? BUSY_MS : IDLE_MS);
+      this.#timer = setTimeout(() => void this.refresh(), this.count ? BUSY_MS : IDLE_MS);
     }
   }
 
@@ -61,6 +66,18 @@ class Jobs {
     );
     void this.refresh();
     return outcome;
+  }
+
+  /** Takes every waiting file off the queue, with the backlog; the running ones go on */
+  async cancelWaiting() {
+    const outcome = await call(() => api.DELETE("/api/v0/analysis/jobs"));
+    void this.refresh();
+    return outcome;
+  }
+
+  /** How many files wait or run, the backlog with them */
+  get count() {
+    return this.list.length + this.backlog;
   }
 }
 

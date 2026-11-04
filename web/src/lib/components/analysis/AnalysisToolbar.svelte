@@ -70,7 +70,7 @@
   </label>
   {@render panel(A.compare.label, A.compare.icon, comparison, !compared)}
   <span class="ml-auto flex items-center gap-1">
-    {@render panel("Queue", ListChecksIcon, queue, false, jobs.list.length)}
+    {@render panel("Queue", ListChecksIcon, queue, false, jobs.count)}
     {@render panel("Guide", CircleHelpIcon, guide)}
   </span>
 </div>

@@ -156,6 +156,7 @@ async fn each_route_takes_its_least_role() {
       "/api/v0/files/{root}/files/{path}/analysis",
       write,
     ),
+    (Method::DELETE, "/api/v0/analysis/jobs", write),
     (Method::GET, "/api/v0/events", read),
     (Method::GET, "/api/v0/activity", read),
     (Method::POST, "/api/v0/events/{type}", admin),

@@ -644,7 +644,8 @@ export const fakeAnalysis = async (page: Page, { stale = false, duration = 30.5 
     (route) => {
       const { pathname } = new URL(route.request().url());
       const method = route.request().method();
-      if (pathname.endsWith("/analysis/jobs")) return route.fulfill({ json: [] });
+      if (pathname.endsWith("/analysis/jobs"))
+        return route.fulfill({ json: { jobs: [], backlog: 0 } });
       if (pathname.endsWith("/analysis/uploads")) {
         return route.fulfill({
           status: 201,

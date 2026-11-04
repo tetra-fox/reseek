@@ -2,7 +2,7 @@
 //! judgment.
 
 use api_types::analysis::{
-  AnalysisBatchQueued, AnalysisJob, AnalysisJobCreated, AnalysisListQuery, AnalysisReportQuery,
+  AnalysisBatchQueued, AnalysisJobCreated, AnalysisListQuery, AnalysisQueue, AnalysisReportQuery,
   AnalysisUpload, AudioAnalysis, SetAnalysisOverride, WindowSpectrum,
 };
 use api_types::auth::Principal;
@@ -95,8 +95,14 @@ pub trait AnalysisService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// The analyses queued and running.
-  async fn jobs(&self) -> Result<Vec<AnalysisJob>, ApiError> {
+  /// The analyses queued and running, and how many files of batches wait for room.
+  async fn jobs(&self) -> Result<AnalysisQueue, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// Takes every waiting analysis off the queue and drops the files of batches waiting for
+  /// room; the running ones go on.
+  async fn clear_jobs(&self) -> Result<(), ApiError> {
     Err(not_yet(DOMAIN))
   }
 

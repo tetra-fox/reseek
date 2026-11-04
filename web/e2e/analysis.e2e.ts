@@ -687,7 +687,10 @@ test("analyzes a file and queues a folder from the Files screen", async ({ page 
   });
   await page.route("**/api/v0/analysis/jobs", (route) =>
     route.fulfill({
-      json: [job(newId(), "track.flac"), ...queued.map((q) => job(q.id, q.path))]
+      json: {
+        jobs: [job(newId(), "track.flac"), ...queued.map((q) => job(q.id, q.path))],
+        backlog: 0
+      }
     })
   );
   await login(page, "/system/files");
