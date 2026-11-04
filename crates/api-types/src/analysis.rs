@@ -162,7 +162,9 @@ pub struct AnalysisMeasures {
   pub dc_offset: Option<f64>,
   /// the percentage of samples at full scale
   pub clipped_samples_pct: Option<f64>,
-  /// the loudest sample in dBFS; null in a report made before it was measured and for silence
+  /// the loudest sample of the analyzed audio in dBFS, on either channel; for a sampled read,
+  /// the loudest in the windows read. Null for silence and in a report made before it was
+  /// measured
   #[serde(default)]
   pub peak_dbfs: Option<f64>,
 }
