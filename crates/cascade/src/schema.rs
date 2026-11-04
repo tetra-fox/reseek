@@ -75,6 +75,12 @@ impl Field {
     }
   }
 
+  /// Whether `value`, sent for this field, stands for the value the field holds rather than
+  /// replacing it: `*****`, what a secret is shown as, sent back for a secret.
+  pub(crate) fn keeps(&self, value: &Value) -> bool {
+    self.secret && value.as_str() == Some(REDACTED)
+  }
+
   /// Whether the field, or anything in its entries, is secret.
   fn may_hold_secret(&self) -> bool {
     self.secret || self.entries.iter().any(Field::may_hold_secret)
@@ -290,7 +296,7 @@ fn kept_in(
   current: Option<&Value>,
 ) -> Result<(), String> {
   if field.secret {
-    if value.as_str() != Some(REDACTED) {
+    if !field.keeps(value) {
       return Ok(());
     }
     *value = current

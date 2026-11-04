@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 use toml_edit::{ArrayOfTables, DocumentMut, Item, Table};
 
-use crate::schema::{REDACTED, Schema};
+use crate::schema::Schema;
 use crate::{Error, Key, tree};
 
 /// Edits configuration files as text, keeping their comments and formatting.
@@ -49,8 +49,7 @@ impl<'a> FileEditor<'a> {
         .schema
         .field(key)
         .ok_or_else(|| Error::UnknownKey(key.clone()))?;
-      let secret_kept = field.secret && value.as_str() == Some(REDACTED);
-      if secret_kept {
+      if field.keeps(value) {
         continue;
       }
       if value.is_null() || (field.secret && value.as_str() == Some("")) {
@@ -352,6 +351,7 @@ fn to_value(key: &str, value: &Value) -> Result<toml_edit::Value, Error> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::schema::REDACTED;
   use crate::testing::example_schema;
   use serde_json::json;
 

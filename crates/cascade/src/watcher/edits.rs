@@ -12,7 +12,7 @@ use crate::describe::Apply;
 use crate::edit::FileEditor;
 use crate::files::{read_optional_text, revision_of};
 use crate::overrides::{Lasts, Override};
-use crate::schema::{REDACTED, Schema};
+use crate::schema::Schema;
 use crate::source::Source;
 use crate::write::writability;
 use crate::{Error, Key, Root, tree};
@@ -43,7 +43,7 @@ impl<T: Root> State<T> {
       let field = schema
         .field(&key)
         .ok_or_else(|| Error::UnknownKey(key.clone()))?;
-      if field.secret && value.as_str() == Some(REDACTED) {
+      if field.keeps(&value) {
         continue;
       }
       if field.apply == Apply::Restart {
@@ -178,6 +178,7 @@ fn changed_in_file(schema: &Schema, old: &str, new: &str) -> Vec<Key> {
 mod tests {
   use super::*;
   use crate::overrides::Overrides;
+  use crate::schema::REDACTED;
   use crate::testing::{next_change, values, watched, watched_layers};
   use crate::{Watch, Watcher};
   use serde_json::json;
