@@ -32,15 +32,20 @@
   let loadError = $state("");
   let validation = $state.raw<Schemas["Validation"] | null>(null);
   let validating = $state(false);
-  /** what the last save came to; a refusal is `stale` when the file changed on disk */
-  type Saving =
+  /**
+   * the last save: running, or what it came to, `idle` when there is nothing to say; a refusal is
+   * `stale` when the file changed on disk
+   */
+  type LastSave =
     | { kind: "idle" }
     | { kind: "running" }
     | { kind: "written"; written: Schemas["FileWritten"] }
     | { kind: "failed"; error: string; stale: boolean };
-  let saving = $state.raw<Saving>({ kind: "idle" });
-  const running = $derived(saving.kind === "running");
+  let lastSave = $state.raw<LastSave>({ kind: "idle" });
+  const running = $derived(lastSave.kind === "running");
   let debugText = $state<string | null>(null);
+  /** why the debug view could not be read */
+  let debugError = $state("");
 
   const remote = $derived(valueAt(view.values, "remote_configuration") === true);
   const debug = $derived(valueAt(view.values, "debug") === true);
@@ -57,7 +62,7 @@
     file = outcome.data;
     text = outcome.data.text ?? "";
     validation = null;
-    saving = { kind: "idle" };
+    lastSave = { kind: "idle" };
   };
   $effect(() => {
     void name;
@@ -98,20 +103,23 @@
     const sent = text;
     const at = name;
     const revision = file?.revision ?? null;
-    saving = { kind: "running" };
+    lastSave = { kind: "running" };
     const checked = await validate(sent);
+    // another file was opened meanwhile, which starts its own state
+    if (at !== name) return;
     if (!checked?.valid) {
-      saving = { kind: "idle" };
+      lastSave = { kind: "idle" };
       return;
     }
     const outcome = await call(() =>
       api.PUT("/api/v0/options/file", { body: { text: sent, revision, file: at } })
     );
+    if (at !== name) return;
     if (!outcome.ok) {
-      saving = { kind: "failed", error: outcome.error, stale: outcome.status === 409 };
+      lastSave = { kind: "failed", error: outcome.error, stale: outcome.status === 409 };
       return;
     }
-    saving = { kind: "written", written: outcome.data };
+    lastSave = { kind: "written", written: outcome.data };
     file = file && { ...file, text: sent, revision: outcome.data.revision };
   };
 
@@ -138,8 +146,8 @@
 
   const openDebug = async () => {
     const outcome = await call(() => api.GET("/api/v0/options/debug"));
+    debugError = outcome.ok ? "" : outcome.error;
     if (outcome.ok) debugText = outcome.data;
-    else saving = { kind: "failed", error: outcome.error, stale: false };
   };
 </script>
 
@@ -160,6 +168,8 @@
     {/if}
   </div>
 </div>
+
+{#if debugError}<Notice kind="error">Could not read the debug view: {debugError}</Notice>{/if}
 
 {#if !remote}
   <Notice kind="info">
@@ -219,8 +229,8 @@
       </ul>
     </Notice>
   {/if}
-  {#if saving.kind === "failed"}
-    {@const failed = saving}
+  {#if lastSave.kind === "failed"}
+    {@const failed = lastSave}
     <Notice kind="error">
       {failed.stale
         ? `${name} changed on disk. Reload it, then make the changes again.`
@@ -232,8 +242,8 @@
       {/snippet}
     </Notice>
   {/if}
-  {#if saving.kind === "written"}
-    {@const s = saving.written}
+  {#if lastSave.kind === "written"}
+    {@const s = lastSave.written}
     <Notice kind="info">
       Saved.
       {#if s.applied.length}{plural(s.applied.length, "setting", "settings")} applied live.{/if}
@@ -248,7 +258,7 @@
         )}.
       {/if}
       {#snippet action()}
-        <Button variant="ghost" size="sm" onclick={() => (saving = { kind: "idle" })}
+        <Button variant="ghost" size="sm" onclick={() => (lastSave = { kind: "idle" })}
           >Dismiss</Button>
       {/snippet}
     </Notice>
