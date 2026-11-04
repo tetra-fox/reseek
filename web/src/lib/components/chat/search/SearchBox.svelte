@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { page } from "$app/state";
   import MessageSquarePlusIcon from "@lucide/svelte/icons/message-square-plus";
   import SearchIcon from "@lucide/svelte/icons/search";
   import UsersRoundIcon from "@lucide/svelte/icons/users-round";
@@ -83,8 +84,11 @@
     const hit = listed.hits.find((h) => hitValue(h) === value);
     if (hit) void goto(foundHref(hitTarget(hit), text, "all", hit.localId));
     // every message, as the dropdown showed; which of them the results show is the viewer's filter
-    else if (value === ALL) void goto(resultsHref(text));
-    else if (value === NEW) onnew(text);
+    else if (value === ALL) {
+      const to = resultsHref(text);
+      // the results already on screen take no second step in the history
+      void goto(to, { replaceState: to === page.url.hash });
+    } else if (value === NEW) onnew(text);
     else if (value === JOIN) onjoin(text);
     else if (value.startsWith("room:")) openChat(roomHref(value.slice(5)));
     else if (value.startsWith("user:")) openChat(chatHref(value.slice(5)));
