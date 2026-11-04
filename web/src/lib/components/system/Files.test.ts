@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "#lib/app.svelte.js";
 import { confirmation } from "#lib/feedback/confirm.svelte.js";
 import { session } from "#lib/session.svelte.js";
+import type { Root } from "#lib/system/localfiles.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { box } from "#lib/testing/state.svelte.js";
 
 import Files from "./Files.svelte";
 
@@ -139,5 +141,38 @@ describe("the file explorer", () => {
     const rows = [...document.querySelectorAll("[role=row][data-line]")];
     expect(rows.map((r) => r.getAttribute("data-line"))).toEqual([".."]);
     expect(document.body.textContent).toContain("This folder is empty");
+  });
+
+  it("shows the root it was moved to when the last one answers late", async () => {
+    let answerDownloads!: () => void;
+    fakeNetwork(
+      withoutAnalyses((url) => {
+        const listing = (file: string) => ({
+          name: "",
+          fullName: "",
+          directories: [],
+          files: [{ name: file, fullName: file, length: 3, modifiedAt: "2026-10-26T10:00:00Z" }]
+        });
+        if (url.pathname.includes("/files/incomplete/")) return listing("partial.flac");
+        return new Promise((resolve) => (answerDownloads = () => resolve(listing("done.flac"))));
+      })
+    );
+    const shown = box<Root>("downloads");
+    component = mount(Files, {
+      target: document.body,
+      props: {
+        get root() {
+          return shown.value;
+        },
+        path: ""
+      }
+    });
+    await flush();
+    shown.value = "incomplete";
+    await flush();
+    answerDownloads();
+    await flush();
+    const rows = [...document.querySelectorAll("[role=row][data-line]")];
+    expect(rows.map((r) => r.getAttribute("data-line"))).toEqual(["f:partial.flac"]);
   });
 });

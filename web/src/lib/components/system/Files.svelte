@@ -64,16 +64,23 @@
   let sort = $state<{ by: SortBy; dir: "asc" | "desc" }>({ by: "name", dir: "asc" });
   const listing = $derived(listings.get(path) ?? null);
 
-  /** Reads one folder; the one shown says when it can't be read, one below it toasts */
+  /**
+   * Reads one folder; the one shown says when it can't be read, one below it toasts. A listing of
+   * the root shown before is dropped
+   */
   const read = async (at: string) => {
+    const from = root;
     if (at === path) loading = true;
     const outcome = await call(() =>
       at
         ? api.GET("/api/v0/files/{root}/directories/{path}", {
-            params: { path: { root, path: encodePath(at) }, query: {} }
+            params: { path: { root: from, path: encodePath(at) }, query: {} }
           })
-        : api.GET("/api/v0/files/{root}/directories", { params: { path: { root }, query: {} } })
+        : api.GET("/api/v0/files/{root}/directories", {
+            params: { path: { root: from }, query: {} }
+          })
     );
+    if (from !== root) return;
     if (at === path) loading = false;
     if (outcome.ok) {
       listings.set(at, outcome.data);
