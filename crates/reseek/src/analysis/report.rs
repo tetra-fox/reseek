@@ -100,7 +100,8 @@ pub(super) fn layout(
     columns_per_second: COLUMNS_PER_SECOND as u32,
     peaks_per_second: PEAKS_PER_SECOND as u32,
     tile_seconds: TILE_SECONDS as u32,
-    tiles: tile_count(duration) as u32,
+    // a tile is asked for by a u32, so a length past the last one numbered has no more
+    tiles: u32::try_from(tile_count(duration)).unwrap_or(u32::MAX),
   }
 }
 

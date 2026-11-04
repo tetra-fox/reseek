@@ -205,17 +205,8 @@ export const wantsDetail = (
   (overview.count * view.span) / (overview.to - overview.from) < width;
 
 /** The tiles of `kind` that overlap `view`, those that have arrived */
-const tilesIn = (pictures: Pictures, kind: "spectrogram" | "waveform", view: View): Cells[] => {
-  const seconds = pictures.layout.tileSeconds;
-  const first = Math.floor(view.start / seconds);
-  const last = Math.min(pictures.layout.tiles - 1, Math.floor((view.start + view.span) / seconds));
-  const found: Cells[] = [];
-  for (let tile = first; tile <= last; tile++) {
-    const cells = pictures.tile(kind, tile);
-    if (cells) found.push(cells);
-  }
-  return found;
-};
+const tilesIn = (pictures: Pictures, kind: "spectrogram" | "waveform", view: View): Cells[] =>
+  pictures.tilesOver(kind, view.start, view.start + view.span);
 
 /** The hatch each canvas fills unread stretches with, made once for its colors and size */
 const hatches = new WeakMap<

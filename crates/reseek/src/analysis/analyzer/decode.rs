@@ -72,6 +72,11 @@ pub(crate) struct Decoder {
   bits: Option<(u32, u32)>,
   /// the bytes and the sample frames of the packets decoded, for the stream's bitrate
   decoded: (u64, u64),
+  /// how many bytes the file holds, when its source says
+  file_bytes: Option<u64>,
+  /// the bytes and the sample frames of the packet decoded so far that carried the most frames
+  /// per byte
+  densest: Option<(u64, u64)>,
   /// packets the decoder could not read and skipped
   pub skipped: u32,
   /// why decoding stopped before the end of the file, when it did
@@ -108,6 +113,7 @@ impl Decoder {
 
   /// Opens audio from any source of bytes, with `hint` naming what it might be.
   pub fn from_source(source: Box<dyn MediaSource>, hint: &Hint) -> Result<Self, String> {
+    let file_bytes = source.byte_len();
     let stream = MediaSourceStream::new(source, Default::default());
     let format = symphonia::default::get_probe()
       .probe(
@@ -171,6 +177,8 @@ impl Decoder {
       scratch: Vec::new(),
       bits: None,
       decoded: (0, 0),
+      file_bytes,
+      densest: None,
       skipped: 0,
       stopped: None,
     })
@@ -192,6 +200,17 @@ impl Decoder {
       let seconds = frames as f64 / f64::from(self.claimed.sample_rate);
       (bytes as f64 * 8.0 / seconds / 1000.0).round() as u32
     })
+  }
+
+  /// The most seconds of audio the file's bytes can hold at the density of the packets decoded
+  /// so far: the most sample frames per byte any of them carried. A file states its length in
+  /// tables that can point many packets at the same bytes, and cannot hold more audio than its
+  /// bytes at its densest packet, so the bound is as good as the packets read. `None` before a
+  /// packet is decoded, or when the source does not say how long it is.
+  pub fn most_seconds(&self) -> Option<f64> {
+    let (bytes, frames) = self.densest?;
+    let held = self.file_bytes? as f64 * frames as f64 / bytes as f64;
+    Some(held / f64::from(self.claimed.sample_rate))
   }
 
   /// Fills `window`, one vector per analyzed channel, with the next `frames` sample frames.
@@ -354,8 +373,13 @@ impl Decoder {
         continue;
       }
       note_bits(&mut self.bits, &decoded);
-      self.decoded.0 += packet.data.len() as u64;
-      self.decoded.1 += decoded.frames() as u64;
+      let (bytes, frames) = (packet.data.len() as u64, decoded.frames() as u64);
+      self.decoded.0 += bytes;
+      self.decoded.1 += frames;
+      // a packet of no bytes says nothing of how much audio a byte can carry
+      if bytes > 0 && self.densest.is_none_or(|(b, f)| frames * b > f * bytes) {
+        self.densest = Some((bytes, frames));
+      }
       return Some(packet.pts.get());
     }
   }

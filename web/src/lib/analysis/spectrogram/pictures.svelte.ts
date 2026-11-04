@@ -147,17 +147,27 @@ export class Pictures {
     this.version++;
   }
 
-  /** The tile of `kind` numbered `tile`, when it has arrived */
-  tile(kind: "spectrogram" | "waveform", tile: number): Cells | undefined {
-    return this.#tiles.get(`${kind}:${tile}`);
+  /** The tiles of `kind` that have arrived and overlap `from` to `to` seconds */
+  tilesOver(kind: "spectrogram" | "waveform", from: number, to: number): Cells[] {
+    const found: Cells[] = [];
+    for (const [key, cells] of this.#tiles) {
+      if (key.startsWith(`${kind}:`) && cells.from <= to && from < cells.to) found.push(cells);
+    }
+    return found;
   }
 
-  /** Asks for the tiles of both kinds from `from` to `to` seconds, the nearest first */
+  /**
+   * Asks for the tiles of both kinds from `from` to `to` seconds, at most as many as are kept:
+   * more would push each other out, so a longer stretch gets those around its middle
+   */
   want(from: number, to: number) {
     const seconds = this.layout.tileSeconds;
     const first = Math.max(0, Math.floor(from / seconds));
     const last = Math.min(this.layout.tiles - 1, Math.floor(to / seconds));
-    for (let tile = first; tile <= last; tile++) {
+    const count = Math.min(KEPT_TILES, last - first + 1);
+    const middle = Math.floor((from + to) / 2 / seconds);
+    const start = Math.max(first, Math.min(last - count + 1, middle - Math.floor(count / 2)));
+    for (let tile = start; tile < start + count; tile++) {
       for (const kind of ["spectrogram", "waveform"] as const) {
         const key = `${kind}:${tile}`;
         const kept = this.#tiles.get(key);

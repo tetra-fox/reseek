@@ -662,6 +662,45 @@ fn a_file_stating_a_huge_length_reports_only_what_was_read() {
     reading
       .limitations
       .iter()
+      .any(|l| l.contains("than its bytes can hold")),
+    "{reading:#?}"
+  );
+}
+
+#[test]
+fn a_seek_past_what_a_file_holds_ends_the_length_where_reading_stopped() {
+  let dir = tempfile::tempdir().unwrap();
+  let path = dir.path().join("short.flac");
+  // digital silence takes a few bytes a frame; read first, it says these bytes could hold far
+  // more than 2000 s, so the picks go on until a seek past the end fails
+  let audio = music_for(4, 1, 44_100, pink);
+  let silence = Audio {
+    rate: audio.rate,
+    channels: vec![vec![0.0; 8 * 44_100]; 2],
+  };
+  let padded = Audio {
+    rate: audio.rate,
+    channels: audio
+      .channels
+      .iter()
+      .zip(&silence.channels)
+      .map(|(music, quiet)| quiet.iter().chain(music).copied().collect())
+      .collect(),
+  };
+  fixtures::write_flac(&padded, 16, false, &path);
+  let frames: u64 = 2000 * 44_100;
+  let mut bytes = std::fs::read(&path).unwrap();
+  bytes[21] = (bytes[21] & 0xf0) | ((frames >> 32) as u8 & 0x0f);
+  bytes[22..26].copy_from_slice(&(frames as u32).to_be_bytes());
+  std::fs::write(&path, &bytes).unwrap();
+  let measured = engine::run(&path, &settings(), &CancellationToken::new()).unwrap();
+  assert!(measured.sampled);
+  assert!(measured.duration <= 12.0, "{}", measured.duration);
+  let reading = reading::read(&measured);
+  assert!(
+    reading
+      .limitations
+      .iter()
       .any(|l| l.contains("seeking failed")),
     "{reading:#?}"
   );
@@ -830,6 +869,43 @@ fn a_reading_needs_thirty_whole_seconds_of_audio() {
   assert_eq!(
     reading.verdict,
     AnalysisVerdict::Inconclusive,
+    "{reading:#?}"
+  );
+}
+
+#[test]
+fn a_file_stating_more_than_its_bytes_hold_is_as_long_as_they_hold() {
+  let dir = tempfile::tempdir().unwrap();
+  let path = dir.path().join("repeating.m4a");
+  // every chunk points at the same second, and each sample lasts 2^32 - 1 ticks
+  fixtures::write_repeating_mp4(&music(1, 44_100, pink), 20, u32::MAX, &path);
+  let bytes = std::fs::metadata(&path).unwrap().len();
+  let settings = Settings {
+    max_full_seconds: 10.0,
+    sampled_windows: 20,
+    ..settings()
+  };
+  let measured = engine::run(&path, &settings, &CancellationToken::new()).unwrap();
+  let stated = measured.claimed.as_ref().unwrap().frames.unwrap() as f64 / 44_100.0;
+  assert!(stated > 1e10, "the file states {stated} s");
+  // two bytes a sample frame
+  let held = bytes as f64 / 2.0 / 44_100.0;
+  assert!(
+    measured.duration <= held,
+    "{} s from {bytes} bytes",
+    measured.duration
+  );
+  assert!(!measured.windows.is_empty());
+  assert!(
+    measured.windows.iter().all(|w| w.t < measured.duration),
+    "every window is inside the length"
+  );
+  let reading = reading::read(&measured);
+  assert!(
+    reading
+      .limitations
+      .iter()
+      .any(|l| l.contains("than its bytes can hold")),
     "{reading:#?}"
   );
 }
