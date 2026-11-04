@@ -116,15 +116,21 @@ impl Running {
     }
   }
 
-  /// ends the search with `reason` unless it ended already
-  fn complete(&self, reason: SearchState) {
-    self.outcome.send_if_modified(|outcome| {
-      if outcome.is_some() {
-        return false;
+  /// Ends the search with `reason` unless it ended already, and returns the reason it ended
+  /// with.
+  fn complete(&self, reason: SearchState) -> SearchState {
+    let mut ended = reason;
+    self.outcome.send_if_modified(|outcome| match outcome {
+      Some(already) => {
+        ended = *already;
+        false
       }
-      *outcome = Some(reason);
-      true
+      None => {
+        *outcome = Some(reason);
+        true
+      }
     });
+    ended
   }
 }
 
@@ -337,6 +343,9 @@ impl Client {
         }
       }
     };
+    let reason = search.complete(reason);
+    // a response taken before the end is handed over before the search returns
+    drop(lock(&search.handler));
     drop(slot);
     if reason == SearchState::CANCELLED {
       return Err(self.end_search(search, reason, ClientError::Canceled));
@@ -407,30 +416,34 @@ impl Client {
       );
       return;
     };
-    let Accepted { snapshot, response } = match responses::accept(&search, response) {
-      Ok(accepted) => accepted,
+    let response = match responses::filter(&search.options, response) {
+      Ok(response) => response,
       Err(reason) => {
         return tracing::trace!(token = search.token, reason, "search response dropped");
       }
+    };
+    // taking a response and handing it over are one step, so a search that ends waits for the
+    // responses it took
+    let mut handler = lock(&search.handler);
+    let Some(Accepted { snapshot, response }) = responses::accept(&search, response) else {
+      return tracing::trace!(
+        token = search.token,
+        "search response dropped: the search is not taking responses"
+      );
     };
     tracing::trace!(
       username = response.username,
       files = response.files.len(),
       "search response taken"
     );
-    (lock(&search.handler))(response.as_ref().clone());
+    handler(response.as_ref().clone());
     if let Some(received) = &search.options.response_received {
       received(&snapshot, &response);
     }
     self.emit(Event::SearchResponseReceived {
-      search: snapshot.clone(),
+      search: snapshot,
       response,
     });
-    if snapshot.response_count >= u64::from(search.options.response_limit) {
-      search.complete(SearchState::RESPONSE_LIMIT_REACHED);
-    } else if snapshot.file_count >= u64::from(search.options.file_limit) {
-      search.complete(SearchState::FILE_LIMIT_REACHED);
-    }
   }
 }
 

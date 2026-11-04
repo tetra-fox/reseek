@@ -1,5 +1,6 @@
 //! Taking a response into a search: only while the search runs, only what its filters let
-//! through, files filtered out of both lists, and the counts and the idle deadline moved on.
+//! through, files filtered out of both lists, the counts and the idle deadline moved on, and the
+//! search ended once it reaches a limit.
 //! Locked files are counted apart and do not count toward the file limit, since they cannot be
 //! downloaded.
 
@@ -39,26 +40,31 @@ pub(super) struct Accepted {
   pub(super) response: Arc<SearchResponse>,
 }
 
-/// Takes `response` into `search` if the search runs and its filters let it through, or says
-/// why not
-pub(super) fn accept(search: &Running, response: SearchResponse) -> Result<Accepted, &'static str> {
-  let response = filter(&search.options, response)?;
+/// Takes `response`, which the options let through, into `search` if the search runs, and ends
+/// the search when it reaches a limit with it; `None` when the search is not taking responses.
+/// The limit is decided with the counts, so no response is taken past it.
+pub(super) fn accept(search: &Running, response: SearchResponse) -> Option<Accepted> {
   let mut counts = lock(&search.counts);
   if counts.state != SearchState::IN_PROGRESS || search.outcome.borrow().is_some() {
-    return Err("the search is not taking responses");
+    return None;
   }
   counts.responses += 1;
   counts.files += response.files.len() as u64;
   counts.locked_files += response.locked_files.len() as u64;
   counts.deadline = Instant::now() + search.options.search_timeout;
-  Ok(Accepted {
+  if counts.responses >= u64::from(search.options.response_limit) {
+    search.complete(SearchState::RESPONSE_LIMIT_REACHED);
+  } else if counts.files >= u64::from(search.options.file_limit) {
+    search.complete(SearchState::FILE_LIMIT_REACHED);
+  }
+  Some(Accepted {
     snapshot: search.snapshot(&counts),
     response: Arc::new(response),
   })
 }
 
 /// the response as the options let it through, or why they do not
-fn filter(
+pub(super) fn filter(
   options: &SearchOptions,
   mut response: SearchResponse,
 ) -> Result<SearchResponse, &'static str> {
@@ -121,6 +127,38 @@ mod tests {
       queue_length: 3,
       locked_files: locked.iter().map(|name| file(name)).collect(),
     }
+  }
+
+  fn running(response_limit: u32) -> Running {
+    let counts = Counts {
+      state: SearchState::IN_PROGRESS,
+      ..Counts::default()
+    };
+    Running {
+      token: 1,
+      query: soulseek_proto::SearchQuery::parse("daft punk"),
+      scope: super::super::SearchScope::Network,
+      options: SearchOptions {
+        response_limit,
+        ..SearchOptions::default()
+      },
+      counts: std::sync::Mutex::new(counts),
+      handler: std::sync::Mutex::new(Box::new(|_| {})),
+      outcome: tokio::sync::watch::channel(None).0,
+    }
+  }
+
+  #[test]
+  fn search_response_past_the_limit_is_not_taken() {
+    let search = running(1);
+    let first = accept(&search, response(&["a.mp3"], &[])).unwrap();
+    assert_eq!(first.snapshot.response_count, 1);
+    assert_eq!(
+      *search.outcome.borrow(),
+      Some(SearchState::RESPONSE_LIMIT_REACHED)
+    );
+    assert!(accept(&search, response(&["b.mp3"], &[])).is_none());
+    assert_eq!(lock(&search.counts).responses, 1);
   }
 
   #[test]
