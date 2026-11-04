@@ -14,3 +14,9 @@ export const TICK_REM = 1 + GAP_REM;
  * margin, the step shorter on a phone so a deep name keeps its room
  */
 export const lineStart = (depth: number) => 0.5 + depth * (viewport.phone ? 0.75 : 1.25);
+
+/**
+ * Where an item at `depth` starts in, in rem: past the toggle and the gap that start a folder line
+ * at its depth, so its cells line up under the folder line's content
+ */
+export const itemStart = (depth: number) => lineStart(depth) + TOGGLE_REM + GAP_REM;

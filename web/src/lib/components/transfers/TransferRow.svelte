@@ -45,7 +45,7 @@
   import { type ColumnId, SELECT_REM } from "#lib/transfers/grid/columns.js";
   import { type Direction, rowActions, stateChip, type Transfer } from "#lib/transfers/states.js";
   import { placeText, waits, whyText } from "#lib/transfers/why.svelte.js";
-  import { GAP_REM, lineStart, TICK_REM, TOGGLE_REM } from "#lib/tree/indent.js";
+  import { itemStart, lineStart, TICK_REM } from "#lib/tree/indent.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
 
@@ -100,7 +100,7 @@
   // tick or toggle to pass, so it starts under the header's tick and keeps its width for the name
   const fileInset = $derived(
     depth
-      ? `${viewport.phone ? lineStart(depth) : lineStart(depth) + TICK_REM + TOGGLE_REM + GAP_REM - SELECT_REM}rem`
+      ? `${viewport.phone ? lineStart(depth) : itemStart(depth) + TICK_REM - SELECT_REM}rem`
       : undefined
   );
 </script>
