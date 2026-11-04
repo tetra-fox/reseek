@@ -106,8 +106,9 @@ pub struct Messaging {
   worker: Mutex<Option<JoinHandle<()>>>,
   /// tells that task to end once it handled every event taken so far
   drained: CancellationToken,
-  /// the peers of the open conversations
-  active: Mutex<HashSet<String>>,
+  /// the peers of the open conversations, changed only in the database write that opens or
+  /// closes one, so the two never disagree
+  active: Arc<Mutex<HashSet<String>>>,
   /// the rooms we are in and the private rooms we belong to
   rooms: Rooms,
   /// asks for the unread counts to be pushed
@@ -158,7 +159,7 @@ impl Messaging {
       intake,
       worker: Mutex::new(None),
       drained: CancellationToken::new(),
-      active: Mutex::new(active.into_iter().collect()),
+      active: Arc::new(Mutex::new(active.into_iter().collect())),
       rooms: Rooms::default(),
       unread: unread::Unread::default(),
       session: Mutex::new(None),
