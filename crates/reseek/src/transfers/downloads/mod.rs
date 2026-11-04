@@ -66,6 +66,9 @@ const ENQUEUE_CALLS: usize = 2;
 /// Why a download canceled at block time ended.
 const BLOCKED: &str = "Blocked";
 
+/// Why a download canceled without a running task ended.
+const CANCELED: &str = "The operation was canceled.";
+
 /// What is kept for a download whose task runs.
 struct InFlight {
   /// stops the download wherever it is
@@ -228,12 +231,32 @@ impl Downloads {
       return Ok(());
     }
     if !record.is_completed() {
-      // a record no task runs any more, left behind by a failure
-      record.state = TransferStates::Completed | TransferStates::Cancelled;
-      record.ended_at = Some(Utc::now());
-      record.exception = Some("The operation was canceled.".to_string());
-      info!(%id, username, "download without a running task ended as canceled");
-      self.save(&record, true).await;
+      // a record no task runs any more, left behind by a failure; a task that ended it since
+      // it was read keeps how it ended
+      let canceled = TransferStates::Completed | TransferStates::Cancelled;
+      let at = Utc::now();
+      let ended = self
+        .db
+        .write(move |conn| {
+          let tx = conn.transaction()?;
+          let ended = store::end_unless_ended(&tx, id, canceled, at, CANCELED)?;
+          if ended {
+            store::entered(&tx, id, canceled, at)?;
+          }
+          tx.commit()?;
+          Ok(ended)
+        })
+        .await
+        .map_err(ApiError::internal)?;
+      if ended {
+        info!(%id, username, "download without a running task ended as canceled");
+        record.state = canceled;
+        record.ended_at = Some(at);
+        record.exception = Some(CANCELED.to_string());
+        record.next_attempt_at = None;
+        record.place_in_queue = None;
+        self.push(&record);
+      }
     }
     if remove {
       removal::remove(&self.db, &self.live, TransferDirection::Download, id)

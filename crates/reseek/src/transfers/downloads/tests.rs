@@ -101,6 +101,45 @@ async fn canceling_a_download_no_task_runs_ends_it_and_can_remove_it() {
 }
 
 #[tokio::test]
+async fn canceling_a_download_no_task_runs_ends_its_wait_and_spares_one_that_ended() {
+  let app = app(TRUSTED, &[]).await;
+  let mut waiting = Record::download("alice", "a.flac", 10, None);
+  waiting.next_attempt_at = Some(chrono::Utc::now());
+  waiting.place_in_queue = Some(4);
+  insert(&app, &waiting).await;
+  let uri = format!("/api/v0/transfers/downloads/alice/{}", waiting.id);
+  let (status, _) = app.call("DELETE", &uri, None).await;
+  assert_eq!(status, 204);
+  let ended = read(&app, waiting.id).await;
+  assert_eq!(
+    ended.state,
+    TransferStates::Completed | TransferStates::Cancelled
+  );
+  assert_eq!((ended.next_attempt_at, ended.place_in_queue), (None, None));
+
+  // a task that ended the download after the cancel read it keeps how it ended
+  let mut finished = done("alice", "b.flac");
+  finished.local_path = Some("/music/b.flac".into());
+  insert(&app, &finished).await;
+  let id = finished.id;
+  let canceled = TransferStates::Completed | TransferStates::Cancelled;
+  let at = chrono::Utc::now();
+  let ended = app
+    .state
+    .transfers
+    .write(move |conn| store::end_unless_ended(conn, id, canceled, at, "canceled"))
+    .await
+    .unwrap();
+  assert!(!ended);
+  let kept = read(&app, id).await;
+  assert_eq!(
+    kept.state,
+    TransferStates::Completed | TransferStates::Succeeded
+  );
+  assert_eq!(kept.local_path.as_deref(), Some("/music/b.flac"));
+}
+
+#[tokio::test]
 async fn removing_completed_downloads_leaves_running_ones() {
   let app = app(TRUSTED, &[]).await;
   let finished = done("alice", "a.flac");
