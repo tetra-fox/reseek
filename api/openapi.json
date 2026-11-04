@@ -386,7 +386,7 @@
         "tags": [
           "analysis"
         ],
-        "summary": "Takes a file from the caller's machine into the analysis cache, to analyze and play under the\n`temporary` root. It leaves no report, mark or judgment and goes when the cache needs the room\nor the daemon restarts.",
+        "summary": "Takes a file from the caller's machine into the analysis cache, to analyze and play under the\n`temporary` root. It leaves no report, mark or judgment and goes when the cache needs the room\nor the daemon restarts. A principal uploads one file at a time, and a body that stops coming\nfor a minute is given up.",
         "operationId": "upload_for_analysis",
         "parameters": [
           {
@@ -455,7 +455,27 @@
               }
             }
           },
+          "408": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
             "description": "",
             "content": {
               "application/json": {

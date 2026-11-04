@@ -684,6 +684,43 @@ async fn an_upload_too_long_to_name_is_named_as_it_can_be_created() {
 }
 
 #[tokio::test]
+async fn a_principal_uploads_one_file_at_a_time() {
+  let app = app(TRUSTED, &[]).await;
+  // a body that ends when its sender is dropped
+  let (sender, receiver) = tokio::sync::mpsc::channel::<Result<Vec<u8>, std::io::Error>>(1);
+  let body = futures_util::stream::unfold(receiver, |mut receiver| async move {
+    receiver.recv().await.map(|piece| (piece, receiver))
+  });
+  let first = upload(&app, "a.flac", Body::from_stream(body));
+  let second = async {
+    // the first upload's folder is made once it holds the slot
+    uploads_settle(&app, 1).await;
+    let answer = upload(&app, "b.flac", Body::from(vec![0; 10])).await;
+    drop(sender);
+    answer
+  };
+  let ((status, first), (refused, second)) = tokio::join!(first, second);
+  assert_eq!(refused, 429, "{second}");
+  assert_eq!(status, 201, "{first}");
+  let (status, answer) = upload(&app, "c.flac", Body::from(vec![0; 10])).await;
+  assert_eq!(
+    status, 201,
+    "the slot is free once the first ends: {answer}"
+  );
+}
+
+// paused time moves on to the end of the wait whenever every task waits
+#[tokio::test(start_paused = true)]
+async fn an_upload_that_stops_sending_ends_and_frees_its_slot() {
+  let app = app(TRUSTED, &[]).await;
+  let stalled = futures_util::stream::pending::<Result<Vec<u8>, std::io::Error>>();
+  let (status, answer) = upload(&app, "a.flac", Body::from_stream(stalled)).await;
+  assert_eq!(status, 408, "{answer}");
+  let (status, answer) = upload(&app, "b.flac", Body::from(vec![0; 10])).await;
+  assert_eq!(status, 201, "{answer}");
+}
+
+#[tokio::test]
 async fn an_upload_is_not_held_to_the_size_of_a_json_body() {
   let app = app(TRUSTED, &[]).await;
   let (status, body) = upload(&app, "a.flac", Body::from(vec![0; 3 << 20])).await;

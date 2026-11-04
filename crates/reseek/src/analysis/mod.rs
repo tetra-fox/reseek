@@ -48,7 +48,7 @@ use crate::events::EventBus;
 use crate::files::Files;
 use crate::live::Live;
 use crate::services::{AnalysisService, FileTarget, Piece};
-use crate::sync::lock;
+use crate::sync::{Slots, lock};
 pub(crate) use analyzer::decode::Decoder;
 use analyzer::{engine, picture, reading};
 use jobs::{Job, QUEUE_LIMIT, Queue, Queued};
@@ -70,6 +70,8 @@ pub struct Analysis {
   uploads: PathBuf,
   /// the uploads held, which go with a restart
   held: Mutex<uploads::Uploads>,
+  /// the principals uploading a file now
+  uploading: Slots,
   queue: Mutex<Queue>,
   /// the files of batches waiting for room in the queue
   backlog: tokio::sync::Mutex<backlog::Backlog>,
@@ -111,6 +113,7 @@ impl Analysis {
       events,
       uploads: uploads_dir(data),
       held: Mutex::default(),
+      uploading: Slots::default(),
       dir,
       queue: Mutex::new(Queue::default()),
       backlog: tokio::sync::Mutex::default(),

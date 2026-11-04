@@ -112,7 +112,8 @@ export interface paths {
         /**
          * Takes a file from the caller's machine into the analysis cache, to analyze and play under the
          *     `temporary` root. It leaves no report, mark or judgment and goes when the cache needs the room
-         *     or the daemon restarts.
+         *     or the daemon restarts. A principal uploads one file at a time, and a body that stops coming
+         *     for a minute is given up.
          */
         post: operations["upload_for_analysis"];
         delete?: never;
@@ -8318,7 +8319,23 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

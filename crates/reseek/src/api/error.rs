@@ -78,6 +78,11 @@ impl ApiError {
     e
   }
 
+  /// A 408: the client stopped sending the request's body.
+  pub fn request_timeout(error: impl Into<String>) -> Self {
+    Self::new(StatusCode::REQUEST_TIMEOUT, error, None)
+  }
+
   /// A 429: the principal holds as many of something as it may.
   pub fn too_many(error: impl Into<String>) -> Self {
     Self::new(StatusCode::TOO_MANY_REQUESTS, error, None)
