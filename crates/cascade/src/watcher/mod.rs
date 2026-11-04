@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 use tokio::sync::{Notify, broadcast, watch};
 use tokio_util::sync::CancellationToken;
@@ -18,11 +18,12 @@ use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::files::{Entry, LoadedFile};
 use crate::layers::{Checked, Failure, Layers};
-use crate::loaded::Loaded;
+use crate::loaded::{Loaded, NotApplied};
 use crate::overrides::Lasts;
 use crate::schema::keep_secrets;
 use crate::{Error, Key, Root, lock, tree};
 use events::{DEBOUNCE, FileEvents, quiet};
+use reload::Read;
 
 /// How long to wait before reading the files again after a reload failed, since an editor that
 /// truncates and then writes leaves a broken file for a moment.
@@ -108,6 +109,29 @@ struct State<T> {
   reconnected: Value,
   /// the files as the last reload read them, to skip events that changed nothing
   attempted: Vec<LoadedFile>,
+  /// why the last reading of the files failed, kept until one succeeds, so a change that does
+  /// not read them, such as an override, still shows it
+  failed: Option<Failed>,
+}
+
+/// A reading of the files that failed, as the configuration in effect shows it.
+#[derive(Clone)]
+struct Failed {
+  error: String,
+  at: DateTime<Utc>,
+  not_applied: BTreeMap<Key, NotApplied>,
+  /// the files as the failed reading found them, so a fix can be written against them
+  files: Vec<LoadedFile>,
+}
+
+impl Failed {
+  /// Shows the failure on `loaded`, whose values are the ones from before it.
+  fn show<T>(&self, loaded: &mut Loaded<T>) {
+    loaded.load_error = Some(self.error.clone());
+    loaded.load_error_at = Some(self.at);
+    loaded.not_applied = self.not_applied.clone();
+    loaded.files = self.files.clone();
+  }
 }
 
 /// What one reading of the files came to.
@@ -146,6 +170,7 @@ impl<T: Root> Watcher<T> {
       startup: loaded.tree.clone(),
       reconnected: loaded.tree.clone(),
       attempted: loaded.files.clone(),
+      failed: None,
       layers,
     };
     Ok(Self {
@@ -366,9 +391,9 @@ impl<T: Root> Watcher<T> {
     tokio::time::sleep(RETRY).await;
     self
       .blocking(move |state, shared| match state.attempt(shared, true) {
-        Attempt::Unchanged => Err(state.report(shared, failure)),
+        Attempt::Unchanged => Err(state.report(shared, failure, Read::Files)),
         Attempt::Done(change) => Ok(change),
-        Attempt::Failed(again) => Err(state.report(shared, again)),
+        Attempt::Failed(again) => Err(state.report(shared, again, Read::Files)),
       })
       .await?
   }

@@ -8,7 +8,7 @@ use chrono::Utc;
 use serde_json::Value;
 use tracing::{debug, error, info};
 
-use super::{Attempt, ByApply, Change, Shared, State};
+use super::{Attempt, ByApply, Change, Failed, Shared, State};
 use crate::describe::Apply;
 use crate::layers::{Declared, Failure, error_keys};
 use crate::loaded::{Loaded, NotApplied};
@@ -39,6 +39,7 @@ impl<T: Root> State<T> {
       self.attempted = files;
     }
     let loaded = self.layers.load_at(Utc::now())?;
+    self.failed = None;
     Ok(self.publish(shared, loaded))
   }
 
@@ -48,7 +49,7 @@ impl<T: Root> State<T> {
     let declared = self.declared();
     match self.layers.apply(&declared, Utc::now()) {
       Ok(loaded) => Ok(self.publish(shared, loaded)),
-      Err(failure) => Err(self.report(shared, failure)),
+      Err(failure) => Err(self.report(shared, failure, Read::Overrides)),
     }
   }
 
@@ -67,6 +68,9 @@ impl<T: Root> State<T> {
     shared: &Shared<T>,
     mut loaded: Loaded<T>,
   ) -> Option<Arc<Change<T>>> {
+    if let Some(failed) = &self.failed {
+      failed.show(&mut loaded);
+    }
     let previous = shared.current.borrow().clone();
     let schema = loaded.schema.clone();
     loaded.pending_restart = pending(&schema, &self.startup, &loaded.tree, Apply::Restart);
@@ -94,7 +98,9 @@ impl<T: Root> State<T> {
     if changed.is_empty() {
       debug!("configuration unchanged");
       // nothing a reader sees is different, so readers are not woken
-      let same = previous.load_error.is_none()
+      let same = previous.load_error == loaded.load_error
+        && previous.load_error_at == loaded.load_error_at
+        && previous.not_applied == loaded.not_applied
         && previous.sources == loaded.sources
         && previous.file_of == loaded.file_of
         && previous.warnings == loaded.warnings
@@ -126,8 +132,9 @@ impl<T: Root> State<T> {
   }
 
   /// Keeps the values in effect after a failed load, and records why it failed and which of the
-  /// files' values are held back.
-  pub(super) fn report(&mut self, shared: &Shared<T>, failure: Failure) -> Error {
+  /// files' values are held back. A failure to read the files stays shown until they load; one
+  /// of the overrides on the last files that loaded lasts until the next change.
+  pub(super) fn report(&mut self, shared: &Shared<T>, failure: Failure, read: Read) -> Error {
     let message = failure.error.to_string();
     let files: Vec<String> = self
       .attempted
@@ -140,8 +147,7 @@ impl<T: Root> State<T> {
       "configuration not loaded, the values in effect stay"
     );
     let previous = shared.current.borrow().clone();
-    let mut loaded = (*previous).clone();
-    loaded.not_applied = match &failure.tree {
+    let not_applied = match &failure.tree {
       Some(tree) => {
         let keys = error_keys(&failure.error);
         previous
@@ -161,16 +167,32 @@ impl<T: Root> State<T> {
       }
       None => BTreeMap::new(),
     };
-    loaded.load_error = Some(message);
-    loaded.load_error_at = Some(Utc::now());
+    let failed = Failed {
+      error: message,
+      at: Utc::now(),
+      not_applied,
+      files: self.attempted.clone(),
+    };
+    let mut loaded = (*previous).clone();
+    failed.show(&mut loaded);
+    if read == Read::Files {
+      self.failed = Some(failed);
+    }
     // the overrides the failed load dropped, an expired one included, are gone from the store;
     // the values they set stay in effect with the rest
     loaded.overrides = self.layers.overrides.items().clone();
-    // the files as they are, so a fix can be written against their revisions
-    loaded.files = self.attempted.clone();
     shared.current.send_replace(Arc::new(loaded));
     failure.error
   }
+}
+
+/// What a failed load read.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Read {
+  /// the files
+  Files,
+  /// only the runtime overrides, on the files as they last loaded
+  Overrides,
 }
 
 /// What an error says about one of its keys.
@@ -260,6 +282,42 @@ mod tests {
     assert_eq!(current.values.server.port, 3000);
     assert_eq!(current.load_error, None);
     assert!(current.not_applied.is_empty());
+  }
+
+  #[tokio::test]
+  async fn a_bad_reload_stays_reported_across_an_override_change() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    fs::write(&path, "[server]\nport = 2000\n").unwrap();
+    let layers = example_layers(dir.path())
+      .overrides(Overrides::load(dir.path().join("overrides.toml")).unwrap());
+    let watcher = Watcher::new(layers).unwrap();
+    fs::write(&path, "[server\nport = ").unwrap();
+    assert!(watcher.reload().await.is_err());
+    let failed = watcher.current();
+
+    watcher
+      .set_overrides(
+        values(&[("server.port", json!(5000))]),
+        vec![],
+        "a",
+        Lasts::UntilRemoved,
+      )
+      .await
+      .unwrap();
+    let current = watcher.current();
+    assert_eq!(current.values.server.port, 5000);
+    assert_eq!(current.load_error, failed.load_error);
+    assert_eq!(current.load_error_at, failed.load_error_at);
+    assert_eq!(
+      current.files[0].revision,
+      Some(revision_of(b"[server\nport = ")),
+      "the revision on disk, so a fix can be written against it"
+    );
+
+    fs::write(&path, "[server]\nport = 3000\n").unwrap();
+    watcher.reload().await.unwrap();
+    assert_eq!(watcher.current().load_error, None);
   }
 
   #[tokio::test]
