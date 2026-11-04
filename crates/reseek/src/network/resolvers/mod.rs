@@ -204,7 +204,7 @@ pub fn forecast(edges: &Edges, username: &str) -> Forecast {
 /// A peer asks for our user info: a blocked user is shown no free slot and the longest queue.
 pub async fn user_info(edges: &Edges, username: &str, endpoint: SocketAddr) -> UserInfo {
   if blocked(edges, username, Some(endpoint), BlockScope::Uploads) {
-    let local = edges.shares.user_info().await;
+    let local = crate::profile::local_info(&edges.config.current().values).await;
     return UserInfo {
       description: local.description,
       picture: local.picture,
@@ -222,7 +222,7 @@ pub async fn user_info(edges: &Edges, username: &str, endpoint: SocketAddr) -> U
 /// queued in and the place they would take. Their group is asked of the server when nothing is
 /// known of them, so a leecher is known as one.
 async fn profile(edges: &Edges, username: &str) -> UserInfo {
-  let local = edges.shares.user_info().await;
+  let local = crate::profile::local_info(&edges.config.current().values).await;
   if let Some(network) = edges.network.upgrade() {
     let group = edges
       .users

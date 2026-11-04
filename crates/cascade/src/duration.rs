@@ -64,7 +64,7 @@ impl Written for Option<Duration> {
   }
 }
 
-/// Writes a duration option, for `#[serde(with = "crate::config::duration")]`.
+/// Writes a duration option, for `#[serde(with = "cascade::duration")]`.
 pub fn serialize<T: Written, S: Serializer>(value: &T, serializer: S) -> Result<S::Ok, S::Error> {
   match value.text() {
     Some(text) => serializer.serialize_some(&text),
@@ -85,8 +85,17 @@ where
 mod tests {
   use std::time::Duration;
 
+  use serde::{Deserialize, Serialize};
+
   use super::written;
-  use crate::config::Retention;
+
+  #[derive(Debug, PartialEq, Serialize, Deserialize)]
+  struct Retention {
+    #[serde(with = "super")]
+    search: Option<Duration>,
+    #[serde(with = "super", default)]
+    users: Option<Duration>,
+  }
 
   #[test]
   fn an_option_reads_back_in_the_unit_it_was_set_in() {

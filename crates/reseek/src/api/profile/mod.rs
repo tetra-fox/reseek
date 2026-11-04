@@ -66,9 +66,9 @@ async fn get_profile(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
 ) -> Json<OwnProfile> {
-  let has_picture = app.shares.has_picture().await;
-  let forecast = app.uploads.default_forecast();
   let current = app.config.current();
+  let has_picture = crate::profile::has_picture(&current.values).await;
+  let forecast = app.uploads.default_forecast();
   Json(OwnProfile {
     description: current.values.soulseek.description.clone(),
     has_picture,
@@ -128,9 +128,7 @@ async fn get_profile_picture(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
 ) -> Result<Response, ApiError> {
-  let picture = app
-    .shares
-    .user_info()
+  let picture = crate::profile::local_info(&app.config.current().values)
     .await
     .picture
     .ok_or_else(|| ApiError::not_found("No profile picture is set"))?;

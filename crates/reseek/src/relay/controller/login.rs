@@ -9,9 +9,9 @@ use std::time::Duration;
 use api_types::relay::LoginFailure;
 use tokio::time::Instant;
 
-use super::super::credential::{Key, Purpose};
 use super::Controller;
 use crate::config::RelayAgent;
+use reseek_relay_proto::credential::{Key, Purpose};
 
 /// The challenge a socket was sent.
 pub(super) struct Challenge {

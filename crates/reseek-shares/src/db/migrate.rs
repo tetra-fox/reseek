@@ -58,6 +58,7 @@ impl Migration {
 /// A database's [`Schema`], its migration files read from `migrations/<name>/` at build time:
 /// `schema!("events", ["0001_initial"])`, or `schema!("auth", ["0001_initial"], private)` for
 /// a database only its owner may read.
+#[macro_export]
 macro_rules! schema {
   ($name:literal, [$($file:literal),* $(,)?]) => {
     $crate::db::schema!(@build $name, [$($file),*], false)
@@ -78,7 +79,6 @@ macro_rules! schema {
     }
   };
 }
-pub(crate) use schema;
 
 const RECORD: &str = "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT \
                       NOT NULL, applied_at TEXT NOT NULL, checksum TEXT NOT NULL)";
@@ -211,10 +211,14 @@ fn backup(conn: &Connection, name: &str, version: u32, backups: &Path) -> Result
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
   use super::*;
-  use crate::auth::store::SCHEMA as TEST;
   use crate::db::{Database, Location};
+
+  /// A database only its owner may read, made with the migrations of `auth.db`.
+  pub static PRIVATE: Schema = crate::schema!("auth", ["0001_initial"], private);
+
+  use PRIVATE as TEST;
 
   fn location(dir: &Path) -> Location {
     Location {

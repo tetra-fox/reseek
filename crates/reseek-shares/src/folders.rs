@@ -13,14 +13,26 @@ use tracing::debug;
 
 use super::scanner::Settings;
 use super::share;
-use crate::api::error::ApiError;
 use crate::entries;
 
 /// The most folders listed from one folder.
 const MAX_FOLDERS: usize = 5000;
 
-fn not_listed() -> ApiError {
-  ApiError::not_found("No folder that can be shared is there")
+/// Why no folders were listed.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum FolderError {
+  /// the path names no folder a share could be made of, or one that cannot be read
+  #[error("No folder that can be shared is there")]
+  NotListed,
+  /// the path is relative
+  #[error("The path must be absolute")]
+  Relative,
+  /// the path holds `.` or `..`
+  #[error("The path may not hold . or ..")]
+  Traverses,
+  /// the listing did not finish
+  #[error("the folders were not listed: {0}")]
+  Failed(String),
 }
 
 /// Whether a scan leaves out the folder at `path`, named `name`.
@@ -32,7 +44,7 @@ fn left_out(settings: &Settings, path: &Path, name: &OsStr, metadata: &Metadata)
 
 /// Whether every step down to `path` is one a scan takes. The steps are looked at one by one:
 /// a share's walk reaches a folder only through the folders above it.
-fn reachable(settings: &Settings, path: &Path) -> Result<(), ApiError> {
+fn reachable(settings: &Settings, path: &Path) -> Result<(), FolderError> {
   let mut at = PathBuf::new();
   for part in path.components() {
     at.push(part);
@@ -40,18 +52,18 @@ fn reachable(settings: &Settings, path: &Path) -> Result<(), ApiError> {
       Component::Prefix(_) | Component::RootDir => continue,
       Component::Normal(name) => name,
       Component::CurDir | Component::ParentDir => {
-        return Err(ApiError::bad_request("The path may not hold . or .."));
+        return Err(FolderError::Traverses);
       }
     };
     let unseen = |e: std::io::Error| {
       debug!(path = %at.display(), error = %e, "folder not listed");
-      not_listed()
+      FolderError::NotListed
     };
     let link = fs::symlink_metadata(&at).map_err(unseen)?.is_symlink();
     let metadata = fs::metadata(&at).map_err(unseen)?;
     let followed = !link || settings.follow_symlinks;
     if !metadata.is_dir() || !followed || left_out(settings, &at, name, &metadata) {
-      return Err(not_listed());
+      return Err(FolderError::NotListed);
     }
   }
   Ok(())
@@ -78,11 +90,11 @@ fn choice(settings: &Settings, entry: &DirEntry) -> Option<ShareFolder> {
 }
 
 /// The folders directly in `path`, which is absolute.
-fn under(settings: &Settings, path: &str) -> Result<ShareFolders, ApiError> {
+fn under(settings: &Settings, path: &str) -> Result<ShareFolders, FolderError> {
   reachable(settings, Path::new(path))?;
   let entries = fs::read_dir(path).map_err(|e| {
     debug!(path, error = %e, "folder not listed");
-    not_listed()
+    FolderError::NotListed
   })?;
   let mut folders = Vec::new();
   let mut truncated = false;
@@ -113,7 +125,7 @@ fn under(settings: &Settings, path: &str) -> Result<ShareFolders, ApiError> {
 
 /// The top of the machine: every drive.
 #[cfg(windows)]
-fn top(_settings: &Settings) -> Result<ShareFolders, ApiError> {
+fn top(_settings: &Settings) -> Result<ShareFolders, FolderError> {
   let folders = ('A'..='Z')
     .map(|letter| ShareFolder {
       name: format!("{letter}:"),
@@ -130,15 +142,15 @@ fn top(_settings: &Settings) -> Result<ShareFolders, ApiError> {
 
 /// The top of the machine: what is in `/`.
 #[cfg(not(windows))]
-fn top(settings: &Settings) -> Result<ShareFolders, ApiError> {
+fn top(settings: &Settings) -> Result<ShareFolders, FolderError> {
   under(settings, "/")
 }
 
 /// The folders in `path`, or at the top of the machine without one.
-pub(super) fn list(settings: &Settings, path: Option<&str>) -> Result<ShareFolders, ApiError> {
+pub(super) fn list(settings: &Settings, path: Option<&str>) -> Result<ShareFolders, FolderError> {
   match path {
     None => top(settings),
     Some(path) if Path::new(path).is_absolute() => under(settings, path),
-    Some(_) => Err(ApiError::bad_request("The path must be absolute")),
+    Some(_) => Err(FolderError::Relative),
   }
 }

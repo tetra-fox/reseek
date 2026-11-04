@@ -15,11 +15,11 @@ use uuid::Uuid;
 
 use super::{Controller, Token};
 use crate::api::error::ApiError;
-use crate::relay::credential::Purpose;
-use crate::relay::frames::{self, DOWNLOAD_TOKEN_LIFETIME, millis};
 use crate::safety::{Os, is_absolute};
 use crate::services::AgentCredential;
 use crate::sync::lock;
+use reseek_relay_proto::credential::Purpose;
+use reseek_relay_proto::frames::{self, DOWNLOAD_TOKEN_LIFETIME, millis};
 
 /// `path` relative to `downloads` with this system's separators, `None` when it is not under
 /// it.

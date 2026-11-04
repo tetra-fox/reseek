@@ -16,8 +16,8 @@ use uuid::Uuid;
 
 use super::AgentClient;
 use super::session::Link;
-use crate::relay::credential::Purpose;
 use crate::safety::traverses;
+use reseek_relay_proto::credential::Purpose;
 
 /// Why a file cannot be sent, as the controller is told.
 struct Refusal {

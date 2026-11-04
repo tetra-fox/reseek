@@ -17,7 +17,7 @@ use tracing::{debug, info, warn};
 
 use super::{LOCAL_HOST, SharedCounts, Shares, browse, repository, storage};
 use crate::db::{Database, DbError, Location, remove_database};
-use crate::sync::lock;
+use crate::lock;
 
 /// How long the browse cache waits after an agent's host changed before it is rebuilt, so an
 /// agent that comes and goes rebuilds it once.

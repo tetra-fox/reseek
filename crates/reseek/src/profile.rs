@@ -1,6 +1,7 @@
-//! Our own profile picture as it is kept: an upload re-encoded to one small JPEG in the data
-//! directory, which `soulseek.picture` points at. Every client can show a JPEG, and the older
-//! ones cannot show a PNG.
+//! Our own profile: the text and picture a peer asking for our user info is sent, and the
+//! picture as it is kept, an upload re-encoded to one small JPEG in the data directory, which
+//! `soulseek.picture` points at. Every client can show a JPEG, and the older ones cannot show a
+//! PNG.
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -8,6 +9,59 @@ use std::path::{Path, PathBuf};
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::{DynamicImage, ImageFormat, ImageReader, Limits, Rgb, RgbImage};
+use soulseek_client::LogLimiter;
+use tracing::warn;
+
+use crate::config::Options;
+
+/// Profile pictures not read, which a peer's every user info request would repeat.
+static PICTURE_UNREAD: LogLimiter = LogLimiter::new();
+
+/// What our user info says that comes from this host rather than the upload queue.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalInfo {
+  /// the profile text
+  pub description: String,
+  /// the profile picture's bytes, `None` without one or when it could not be read
+  pub picture: Option<Vec<u8>>,
+}
+
+/// The profile text and picture of `options`; the picture is read each time.
+pub async fn local_info(options: &Options) -> LocalInfo {
+  let soulseek = &options.soulseek;
+  let picture = match &soulseek.picture {
+    Some(path) => match tokio::fs::read(path).await {
+      Ok(bytes) => Some(bytes),
+      Err(e) => {
+        if let Some(suppressed) = PICTURE_UNREAD.allow() {
+          warn!(path = %path.display(), error = %e, suppressed, "profile picture not read");
+        }
+        None
+      }
+    },
+    None => None,
+  };
+  LocalInfo {
+    description: soulseek.description.clone(),
+    picture,
+  }
+}
+
+/// Whether `soulseek.picture` of `options` names a file, found without reading it.
+pub async fn has_picture(options: &Options) -> bool {
+  let Some(path) = &options.soulseek.picture else {
+    return false;
+  };
+  match tokio::fs::metadata(path).await {
+    Ok(metadata) => metadata.is_file(),
+    Err(e) => {
+      if let Some(suppressed) = PICTURE_UNREAD.allow() {
+        warn!(path = %path.display(), error = %e, suppressed, "profile picture not found");
+      }
+      false
+    }
+  }
+}
 
 /// The longest side of a kept picture, in pixels.
 pub const LONGEST_SIDE: u32 = 512;

@@ -1,11 +1,22 @@
-//! What we share.
+//! The share options: the `[shares]` section of the daemon's and the relay agent's
+//! configuration.
 
 use std::time::Duration;
 
 use cascade::Cascade;
 use serde::{Deserialize, Serialize};
 
-use crate::config::enums::StorageMode;
+cascade::option_enum! {
+  /// Where the share index is kept.
+  pub enum StorageMode {
+    /// in memory, restored at each start from the backup of the last scan, or rebuilt by a
+    /// scan when there is no backup
+    #[default]
+    Memory = "memory",
+    /// in a database file in the cache directory
+    Disk = "disk",
+  }
+}
 
 /// Shared directories.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
@@ -50,7 +61,7 @@ pub struct ShareCache {
   /// Interval between automatic rescans of the shares. Minimum: 1 hour. No automatic rescans
   /// when not set.
   #[cascade(env = "RESEEK_SHARE_CACHE_RETENTION", cli = "--share-cache-retention")]
-  #[serde(with = "crate::config::duration")]
+  #[serde(with = "cascade::duration")]
   pub retention: Option<Duration>,
 }
 

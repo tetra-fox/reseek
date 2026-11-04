@@ -2,13 +2,9 @@
 //! principal.
 
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 
-/// Takes `mutex`, also after a thread panicked while holding it. Every lock of the daemon is
-/// changed whole before it is let go, so what a panic leaves behind is a value as sound as any.
-pub fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-  mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
+pub use reseek_shares::lock;
 
 /// The principals each holding the one slot they may, such as for an archive being sent.
 #[derive(Clone, Debug, Default)]

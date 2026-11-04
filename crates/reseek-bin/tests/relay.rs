@@ -17,7 +17,7 @@ use api_types::relay::{
 };
 use api_types::state::State;
 use api_types::transfers::{QueueDownloadRequest, TransferDirection, TransferStates};
-use reseek::relay::credential::{Key, Purpose};
+use reseek_relay_proto::credential::{Key, Purpose};
 use soulseek_client::{ClientOptions, DownloadOutput, DownloadRequest, UploadInput, UploadRequest};
 use support::soulfind::{self, Soulfind};
 use support::transfers::{self, asked, content, file, scratch};

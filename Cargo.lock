@@ -507,6 +507,7 @@ dependencies = [
  "bytesize",
  "cascade-derive",
  "chrono",
+ "humantime",
  "humantime-serde",
  "notify",
  "serde",
@@ -521,6 +522,7 @@ dependencies = [
  "toml_edit",
  "tracing",
  "trybuild",
+ "url",
  "utoipa",
 ]
 
@@ -3385,6 +3387,8 @@ dependencies = [
  "realfft",
  "regex",
  "reqwest",
+ "reseek-relay-proto",
+ "reseek-shares",
  "rpassword",
  "rsa",
  "rusqlite",
@@ -3438,6 +3442,7 @@ dependencies = [
  "image",
  "reqwest",
  "reseek",
+ "reseek-relay-proto",
  "reseek-ui-assets",
  "serde_json",
  "soulseek-client",
@@ -3448,6 +3453,48 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "reseek-relay-proto"
+version = "0.1.0"
+dependencies = [
+ "api-types",
+ "hmac 0.12.1",
+ "rand 0.9.5",
+ "serde_json",
+ "sha2 0.10.9",
+ "subtle",
+ "uuid",
+]
+
+[[package]]
+name = "reseek-shares"
+version = "0.1.0"
+dependencies = [
+ "api-types",
+ "cascade",
+ "chrono",
+ "lofty",
+ "notify",
+ "rand 0.9.5",
+ "regex",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha1 0.10.7",
+ "sha2 0.10.9",
+ "soulseek-client",
+ "soulseek-proto",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+ "walkdir",
 ]
 
 [[package]]

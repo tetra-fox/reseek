@@ -5,25 +5,32 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use cascade::{Change, Watcher};
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
 use super::scanner::{self, Settings};
 use super::{Shares, repository, share, storage};
-use crate::config::Options;
-use crate::config::enums::StorageMode;
-use crate::sync::lock;
+use crate::lock;
+use crate::options::{self, StorageMode};
 
 /// How often the scheduled rescan checks whether one is due, and how soon after startup it
 /// first does.
 const RETENTION_CHECK: Duration = Duration::from_secs(3600);
 const RETENTION_FIRST: Duration = Duration::from_secs(60);
 
-/// Starts the shares' background work for the options the daemon started with.
-pub(super) fn start(shares: &Arc<Shares>, options: &Options) {
-  if !options.flags.no_share_scan {
-    let force = options.flags.force_share_scan;
-    let mode = options.shares.cache.storage_mode;
+/// Starts the shares' background work: the startup load or scan when `scan` asks for it, a
+/// full one with `force`, and following the share options `select` finds in `config`.
+pub(super) fn start<O: cascade::Root>(
+  shares: &Arc<Shares>,
+  config: &Watcher<O>,
+  select: fn(&O) -> &options::Shares,
+  scan: bool,
+  force: bool,
+) {
+  if scan {
+    let mode = select(&config.current().values).cache.storage_mode;
     let engine = shares.clone();
     tokio::spawn(
       async move { engine.initialize(force, mode).await }.instrument(info_span!("shares")),
@@ -32,7 +39,10 @@ pub(super) fn start(shares: &Arc<Shares>, options: &Options) {
   let engine = shares.clone();
   tokio::spawn(async move { engine.retention().await }.instrument(info_span!("shares")));
   let engine = shares.clone();
-  tokio::spawn(async move { engine.follow_options().await }.instrument(info_span!("shares")));
+  let changes = config.changes();
+  tokio::spawn(
+    async move { engine.follow_options(changes, select).await }.instrument(info_span!("shares")),
+  );
 }
 
 impl Shares {
@@ -190,7 +200,7 @@ impl Shares {
     if lock(&self.status).scanning {
       return false;
     }
-    let Some(retention) = self.config.current().values.shares.cache.retention else {
+    let Some(retention) = (self.options)().cache.retention else {
       return false;
     };
     // a retention too long for the clock's milliseconds reaches back past every scan
@@ -224,27 +234,30 @@ impl Shares {
 
   /// Marks a rescan pending when the shared directories, the filters or link following
   /// change; a removed share stops being watched at once.
-  async fn follow_options(self: &Arc<Self>) {
-    let mut changes = self.config.changes();
+  async fn follow_options<O: cascade::Root>(
+    self: &Arc<Self>,
+    mut changes: broadcast::Receiver<Arc<Change<O>>>,
+    select: fn(&O) -> &options::Shares,
+  ) {
     loop {
       let change = tokio::select! {
         () = self.shutdown.cancelled() => return,
         change = changes.recv() => change,
       };
       let current = match change {
-        Ok(change) => change.current.values.clone(),
+        Ok(change) => select(&change.current.values).clone(),
         // the options now are compared with those last applied, so a missed change is caught
-        Err(RecvError::Lagged(_)) => self.config.current().values.clone(),
+        Err(RecvError::Lagged(_)) => (self.options)(),
         Err(RecvError::Closed) => return,
       };
       self.apply_options(&current);
     }
   }
 
-  /// Applies the share options of `current` where they differ from those last applied.
-  pub(super) fn apply_options(&self, current: &Options) {
-    let previous = std::mem::replace(&mut *lock(&self.applied), current.shares.clone());
-    let list = share::configure(&current.shares, &self.downloads);
+  /// Applies the share options `current` where they differ from those last applied.
+  pub(super) fn apply_options(&self, current: &options::Shares) {
+    let previous = std::mem::replace(&mut *lock(&self.applied), current.clone());
+    let list = share::configure(current, &self.downloads);
     let changed_list = {
       let mut shares = lock(&self.shares);
       let changed = share::fingerprint(&shares) != share::fingerprint(&list);
@@ -263,13 +276,13 @@ impl Shares {
         watching.keep_only(&list);
       }
     }
-    if scanner::filter_set(&previous.filters) != scanner::filter_set(&current.shares.filters) {
+    if scanner::filter_set(&previous.filters) != scanner::filter_set(&current.filters) {
       info!(
         "File filter configuration changed.  Shares must be re-scanned for changes to take effect."
       );
       pending = true;
     }
-    if previous.follow_symlinks != current.shares.follow_symlinks {
+    if previous.follow_symlinks != current.follow_symlinks {
       info!(
         "Link following configuration changed.  Shares must be re-scanned for changes to take effect."
       );

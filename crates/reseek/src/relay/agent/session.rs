@@ -19,10 +19,10 @@ use tracing::{Instrument, debug, info, trace, warn};
 
 use super::AgentClient;
 use super::dial::{Settings, Socket};
-use crate::relay::frames::{
+use crate::sync::lock;
+use reseek_relay_proto::frames::{
   self, DEFER_EVERY, LOGIN_WITHIN, MAX_FRAME, PING_EVERY, SILENCE, close,
 };
-use crate::sync::lock;
 
 /// How many frames wait to be written to the socket.
 const OUTBOUND: usize = 64;
@@ -250,7 +250,7 @@ impl AgentClient {
         let credential = link
           .settings
           .key
-          .credential(crate::relay::credential::Purpose::Login, &token);
+          .credential(reseek_relay_proto::credential::Purpose::Login, &token);
         link.send(
           None,
           RelayMessage::Login {

@@ -21,7 +21,7 @@ use tracing::{Instrument, debug, info, info_span, trace, warn};
 use super::login::{self, Challenge};
 use super::{Controller, OUTBOUND, Outbound};
 use crate::crypto::{base62, random_bytes};
-use crate::relay::frames::{
+use reseek_relay_proto::frames::{
   self, LOGIN_WITHIN, MAX_FRAME, PING_EVERY, SILENCE, SYNC_WITHIN, close, millis,
 };
 

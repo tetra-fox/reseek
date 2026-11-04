@@ -163,6 +163,8 @@ impl Node {
 pub mod private {
   use super::{Apply, Cascade, Inner, Kind, Node, Shape};
 
+  pub use serde;
+
   /// The attributes of one field, as the derive read them.
   pub struct Attrs {
     pub name: &'static str,

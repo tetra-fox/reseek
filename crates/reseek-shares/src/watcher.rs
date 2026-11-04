@@ -25,7 +25,7 @@ use super::share::{self, Share};
 use super::walk;
 use crate::db::DbError;
 use crate::entries;
-use crate::sync::lock;
+use crate::lock;
 
 /// How many notifications wait to be sorted at most; past it the notifying thread waits.
 const BACKLOG: usize = 4096;
