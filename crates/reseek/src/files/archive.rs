@@ -390,7 +390,7 @@ mod tests {
         assert_eq!(entry.compression(), zip::CompressionMethod::Stored);
         let mut data = Vec::new();
         entry.read_to_end(&mut data).unwrap();
-        (entry.name().to_string(), data)
+        (entry.name().unwrap().into_owned(), data)
       })
       .collect()
   }

@@ -48,7 +48,7 @@ rand = "0.9"
 realfft = "3"
 rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs", "pem"] }
 regex = "1"
-reqwest = { workspace = true, features = ["multipart", "stream"] }
+reqwest = { workspace = true, features = ["cookies", "json", "multipart", "stream"] }
 rpassword = "7"
 rusqlite = { version = "0.39", features = ["backup", "bundled", "trace"] }
 rustls.workspace = true
@@ -104,7 +104,7 @@ proptest.workspace = true
 rsa = "0.9"
 tempfile.workspace = true
 # reads back the archives the files service writes
-zip = { version = "6", default-features = false }
+zip = { version = "9", default-features = false }
 tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
