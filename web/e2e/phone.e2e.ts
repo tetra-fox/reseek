@@ -273,16 +273,12 @@ test.describe("on a wide screen", () => {
     }, Object.values(WIDEST));
     expect(over).toEqual([]);
   });
-});
 
-// at a fixed width a layout only overflows more as the text grows, so the largest root size the
-// sweep takes covers the sizes between it and the default
-test.describe("at a 24 px text size", () => {
-  test.describe("on a wide screen", () => {
-    test.use({ viewport: { width: 1280, height: 800 } });
-
-    test("the figure columns grow with the text", async ({ page }) => {
-      await textSize(page, 24);
+  // the breakpoints are in rem, so at this width the root size picks the layout: 16 px lands on
+  // `xl`, 20 px on `lg` and 24 px on `md`
+  for (const root of [16, 20, 24]) {
+    test(`the figure columns grow with the text at ${root} px`, async ({ page }) => {
+      await textSize(page, root);
       await fakeReports(page);
       await fakeSearch(page);
       await fakeDownloads(page);
@@ -291,14 +287,18 @@ test.describe("at a 24 px text size", () => {
       await fits(page, "/dashboard", shows("a_rather_long_username_from_somewhere"));
       await fits(page, `/searches/${SEARCH_ID}`, shows("01 One.flac"));
       await page.getByRole("radio", { name: "Dense" }).click();
-      await holds(page, "the dense results", shows("02 Two.flac"));
+      await holds(page, `the dense results at ${root} px`, shows("02 Two.flac"));
       await page.getByRole("radio", { name: "Tree" }).click();
       await fits(page, "/downloads", shows("3.flac"));
       await analysisHolds(page);
       await fits(page, "/system/info", shows("Process ID"));
     });
-  });
+  }
+});
 
+// a phone is narrower than the smallest breakpoint at every root size, so there a layout only
+// overflows more as the text grows and the largest size covers those between it and the default
+test.describe("at a 24 px text size", () => {
   test("the Search button leaves the box its room on a 360 px phone", async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 640 });
     await textSize(page, 24);
