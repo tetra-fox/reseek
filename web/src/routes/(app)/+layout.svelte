@@ -112,7 +112,7 @@
     if (app.phase !== "app") return;
     untrack(() => live.start());
   });
-  $effect(() => () => untrack(() => live.stop()));
+  $effect(() => () => untrack(() => app.close()));
 
   // conversations and rooms are followed on every screen, for the unread badge and notifications;
   // a relay agent has no chat
