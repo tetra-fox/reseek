@@ -15,6 +15,7 @@
 
   import { api, byUser } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
+  import { Autosave } from "#lib/autosave.svelte.js";
   import { chat, paneKey } from "#lib/chat/chat.svelte.js";
   import { COMMANDS, commandsFor, parseCommand } from "#lib/chat/commands.js";
   import { emojiFor } from "#lib/chat/emoji.js";
@@ -79,28 +80,27 @@
       if (!text) text = draft;
     });
   });
+  // a conversation's draft goes to the daemon; a failed save says nothing: the text stays in the
+  // box and its next change saves it again
+  const drafts = new Autosave<{ username: string; draft: string }>(
+    ({ username, draft }) =>
+      call(() =>
+        api.PUT("/api/v0/conversations/{username}/draft", {
+          params: byUser(username),
+          body: { draft }
+        })
+      ),
+    DRAFT_MS
+  );
   $effect(() => {
     const value = text;
     if (!restored) return;
-    if (target.kind === "room") {
-      untrack(() => {
-        if (value) roomDrafts[target.name] = value;
-        else delete roomDrafts[target.name];
-      });
-      return;
-    }
-    // a failed save says nothing: the text stays in the box and its next change saves it again
-    const timer = setTimeout(
-      () =>
-        void call(() =>
-          api.PUT("/api/v0/conversations/{username}/draft", {
-            params: byUser(target.name),
-            body: { draft: value.slice(0, 4096) }
-          })
-        ),
-      DRAFT_MS
-    );
-    return () => clearTimeout(timer);
+    untrack(() => {
+      if (target.kind === "user") {
+        drafts.change({ username: target.name, draft: value.slice(0, 4096) });
+      } else if (value) roomDrafts[target.name] = value;
+      else delete roomDrafts[target.name];
+    });
   });
 
   type Suggestion = { key: string; label: string; detail?: string; insert: string };
