@@ -1,0 +1,236 @@
+//! The WAV header and the range mapping, and ALAC files made hostile by editing a tone's boxes:
+//! the length and timing they state, and the packets they hold.
+
+use super::*;
+
+#[test]
+fn a_range_maps_to_the_header_and_the_pcm() {
+  assert_eq!(
+    parts(0, 144),
+    Parts {
+      header: 0..44,
+      pcm_from: 0,
+      pcm_length: 100
+    }
+  );
+  assert_eq!(
+    parts(10, 4),
+    Parts {
+      header: 10..14,
+      pcm_from: 0,
+      pcm_length: 0
+    },
+    "only the header"
+  );
+  assert_eq!(
+    parts(40, 10),
+    Parts {
+      header: 40..44,
+      pcm_from: 0,
+      pcm_length: 6
+    },
+    "across the two"
+  );
+  assert_eq!(
+    parts(50, 10),
+    Parts {
+      header: 44..44,
+      pcm_from: 6,
+      pcm_length: 10
+    },
+    "only the PCM"
+  );
+}
+
+#[test]
+fn the_header_says_what_the_pcm_is() {
+  let format = Format {
+    tag: INTEGER,
+    channels: 2,
+    sample_rate: 44100,
+    width: 3,
+    frames: 10,
+  };
+  let header = format.fits().unwrap().header();
+  let u32_at = |at: usize| u32::from_le_bytes(header[at..at + 4].try_into().unwrap());
+  let u16_at = |at: usize| u16::from_le_bytes(header[at..at + 2].try_into().unwrap());
+  assert_eq!(&header[..4], b"RIFF");
+  assert_eq!(u32_at(4), 36 + 60);
+  assert_eq!(&header[8..16], b"WAVEfmt ");
+  assert_eq!(u32_at(16), 16);
+  assert_eq!(u16_at(20), 1);
+  assert_eq!(u16_at(22), 2);
+  assert_eq!(u32_at(24), 44100);
+  assert_eq!(u32_at(28), 44100 * 6);
+  assert_eq!(u16_at(32), 6);
+  assert_eq!(u16_at(34), 24);
+  assert_eq!(&header[36..40], b"data");
+  assert_eq!(u32_at(40), 60);
+}
+
+/// A 16-bit stereo ALAC tone at 8000 Hz in an MP4 container: four packets of 4096, 4096, 4096
+/// and 3712 frames, one after the other in its media data.
+const TONE: &[u8] = include_bytes!("../fixtures/tone.m4a");
+
+/// Where the box `kind` starts; each kind the tests change is in the tone once.
+fn box_at(bytes: &[u8], kind: &[u8; 4]) -> usize {
+  bytes.windows(4).position(|w| w == kind).unwrap() - 4
+}
+
+fn get(bytes: &[u8], at: usize) -> u32 {
+  u32::from_be_bytes(bytes[at..at + 4].try_into().unwrap())
+}
+
+fn put(bytes: &mut [u8], at: usize, value: u32) {
+  bytes[at..at + 4].copy_from_slice(&value.to_be_bytes());
+}
+
+/// A box of `kind` holding the big-endian `words` and then `inner`.
+fn boxed(kind: &[u8; 4], words: &[u32], inner: &[u8]) -> Vec<u8> {
+  let length = 8 + 4 * words.len() + inner.len();
+  let mut out = u32::try_from(length).unwrap().to_be_bytes().to_vec();
+  out.extend_from_slice(kind);
+  for word in words {
+    out.extend_from_slice(&word.to_be_bytes());
+  }
+  out.extend_from_slice(inner);
+  out
+}
+
+/// The tone with `entries` as its time-to-sample table, as sample counts and the frames each
+/// sample lasts.
+fn timed(entries: &[(u32, u32)]) -> Vec<u8> {
+  let mut bytes = TONE.to_vec();
+  let mut words = vec![0, u32::try_from(entries.len()).unwrap()];
+  words.extend(entries.iter().flat_map(|&(count, delta)| [count, delta]));
+  let table = boxed(b"stts", &words, &[]);
+  let at = box_at(&bytes, b"stts");
+  let old = get(&bytes, at) as usize;
+  bytes.splice(at..at + old, table.iter().copied());
+  // the boxes holding the table come before it, and the media data before them all
+  for kind in [b"moov", b"trak", b"mdia", b"minf", b"stbl"] {
+    let holder = box_at(&bytes, kind);
+    let grown = get(&bytes, holder) as usize + table.len() - old;
+    put(&mut bytes, holder, u32::try_from(grown).unwrap());
+  }
+  bytes
+}
+
+#[test]
+fn a_length_past_what_a_wav_holds_is_refused_however_far() {
+  // the first entry sums to about 2^62 frames
+  let bytes = timed(&[(0x4000_0001, 0xffff_ffff), (1, 3712)]);
+  let refused = wav_length(&bytes).unwrap_err();
+  assert!(refused.contains("too long"), "{refused}");
+}
+
+#[test]
+fn alac_whose_first_packet_cannot_be_decoded_is_refused() {
+  // the magic cookie, after the 12 bytes that start the inner `alac` box, opens with the
+  // frames a packet holds
+  let mut bytes = TONE.to_vec();
+  let inner = bytes
+    .windows(8)
+    .position(|w| w == [0, 0, 0, 0x24, b'a', b'l', b'a', b'c'])
+    .unwrap();
+  put(&mut bytes, inner + 12, 0);
+  let refused = wav_length(&bytes).unwrap_err();
+  assert!(
+    refused.starts_with("no packet of the audio could be decoded: "),
+    "{refused}"
+  );
+}
+
+/// The whole WAV of `bytes`.
+fn whole(bytes: &[u8]) -> Result<Vec<u8>, String> {
+  wav_bytes(bytes, 0, wav_length(bytes)?)
+}
+
+#[test]
+fn a_packet_timed_past_what_a_position_holds_fails_the_stream() {
+  // the tone made fragmented by a movie extends box at the end of its movie box, the file's
+  // last, and stating 30000 frames
+  let mut bytes = TONE.to_vec();
+  let mdhd = box_at(&bytes, b"mdhd");
+  put(&mut bytes, mdhd + 24, 30_000);
+  let trex = boxed(b"trex", &[0, 1, 1, 0, 0, 0], &[]);
+  let mvex = boxed(b"mvex", &[], &trex);
+  let moov = box_at(&bytes, b"moov");
+  let grown = get(&bytes, moov) + u32::try_from(mvex.len()).unwrap();
+  put(&mut bytes, moov, grown);
+  bytes.extend_from_slice(&mvex);
+  // the reader reads a packet only while it is at a media data box, so one follows the movie box
+  bytes.extend_from_slice(&boxed(b"mdat", &[], &[]));
+  // two fragments of the first packet again, each with its media data after it; the first also
+  // holds a run of 2^30 + 1 samples lasting 2^32 - 1 frames each, none of them read, which the
+  // reader counts toward where the second fragment starts
+  let first_at = get(&bytes, box_at(&bytes, b"stco") + 16) as usize;
+  let first_size = get(&bytes, box_at(&bytes, b"stsz") + 20);
+  let packet = bytes[first_at..][..first_size as usize].to_vec();
+  let unread = [
+    boxed(b"tfhd", &[8, 1, 0xffff_ffff], &[]),
+    boxed(b"trun", &[0, 0x4000_0001], &[]),
+  ]
+  .concat();
+  for (sequence, unread) in [(1, Some(&unread)), (2, None)] {
+    let fragment = |base: usize| {
+      let tfhd = boxed(b"tfhd", &[1, 1, 0, u32::try_from(base).unwrap()], &[]);
+      let trun = boxed(b"trun", &[0x301, 1, 0, 4096, first_size], &[]);
+      let mut trafs: Vec<u8> = unread
+        .map(|unread| boxed(b"traf", &[], unread))
+        .unwrap_or_default();
+      trafs.extend(boxed(b"traf", &[], &[tfhd, trun].concat()));
+      let mfhd = boxed(b"mfhd", &[0, sequence], &[]);
+      boxed(b"moof", &[], &[mfhd, trafs].concat())
+    };
+    let base = bytes.len() + fragment(0).len() + 8;
+    bytes.extend_from_slice(&fragment(base));
+    bytes.extend_from_slice(&boxed(b"mdat", &[], &packet));
+  }
+  assert_eq!(wav_length(&bytes), Ok(HEADER + 30_000 * 4));
+  assert_eq!(
+    whole(&bytes),
+    Err("the file's timing is out of range".to_string())
+  );
+}
+
+#[test]
+fn a_packet_that_starts_inside_the_one_before_fails_the_stream() {
+  // every packet holds 4096 frames, but the table says the first three last 2048
+  let bytes = timed(&[(3, 2048), (1, 3712)]);
+  let failed = whole(&bytes).unwrap_err();
+  assert_eq!(failed, "the file's packets overlap in time");
+}
+
+#[test]
+fn packets_shorter_than_their_time_leave_silence_and_ranges_match_the_whole() {
+  // the first three packets last 8192 frames and hold 4096, the last lasts 5000 and holds 3712
+  let bytes = timed(&[(3, 8192), (1, 5000)]);
+  let frames = 3 * 8192 + 5000;
+  let gapped = whole(&bytes).unwrap();
+  assert_eq!(gapped.len(), 44 + frames * 4);
+  let tone = whole(TONE).unwrap();
+  let pcm = |wav: &[u8], from: usize, to: usize| wav[44 + from * 4..44 + to * 4].to_vec();
+  for packet in 0..3 {
+    let at = packet * 8192;
+    assert_eq!(
+      pcm(&gapped, at, at + 4096),
+      pcm(&tone, packet * 4096, (packet + 1) * 4096),
+      "packet {packet}"
+    );
+    assert!(pcm(&gapped, at + 4096, at + 8192).iter().all(|b| *b == 0));
+  }
+  assert_eq!(pcm(&gapped, 24_576, 28_288), pcm(&tone, 12_288, 16_000));
+  assert!(pcm(&gapped, 28_288, frames).iter().all(|b| *b == 0));
+  for (start, length) in [
+    (44 + 4096 * 4 + 2, 9),
+    (44 + 8000 * 4, 2000),
+    (44 + 28_000 * 4, 3000),
+  ] {
+    assert_eq!(
+      wav_bytes(&bytes, start, length).unwrap(),
+      gapped[start as usize..(start + length) as usize],
+      "{start}+{length}"
+    );
+  }
+}
