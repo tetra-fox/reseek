@@ -199,6 +199,7 @@ impl Downloads {
           record.started_at = None;
           record.ended_at = None;
           record.place_in_queue = None;
+          record.average_speed = 0.0;
           record.exception = Some(failure.message);
           let wait = retry_wait(attempt, retry.delay, retry.max_delay);
           record.next_attempt_at =

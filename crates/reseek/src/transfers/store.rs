@@ -100,6 +100,31 @@ pub fn save_state(conn: &Connection, record: &Record) -> rusqlite::Result<bool> 
   Ok(changed > 0)
 }
 
+/// Ends the transfer `id` in `state` at `at` with `exception`, unless it ended already; the
+/// retry time and the queue place go with the wait they belonged to. Returns whether it was
+/// ended here.
+pub fn end_unless_ended(
+  conn: &Connection,
+  id: Uuid,
+  state: TransferStates,
+  at: DateTime<Utc>,
+  exception: &str,
+) -> rusqlite::Result<bool> {
+  let changed = conn.execute(
+    "UPDATE Transfers SET State = ?2, StateDescription = ?3, EndedAt = ?4, Exception = ?5, \
+     NextAttemptAt = NULL, PlaceInQueue = NULL WHERE Id = ?1 AND (State & ?6) = 0",
+    params![
+      id.to_string(),
+      state.bits(),
+      state.to_string(),
+      time_text(Some(at)),
+      exception,
+      TransferStates::Completed.bits(),
+    ],
+  )?;
+  Ok(changed > 0)
+}
+
 /// Records the bytes moved and the speed of a transfer in progress; a transfer in any other
 /// state is left alone, so a late sample never touches a finished one. Returns whether it was
 /// written.

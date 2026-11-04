@@ -43,7 +43,8 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
       tx.execute(
         &format!(
           "UPDATE Transfers SET State = ?1, StateDescription = ?2, EndedAt = ?3, \
-           Exception = ?4, Resumable = (Direction = ?5 OR Resumable) WHERE {UNFINISHED}"
+           Exception = ?4, Resumable = (Direction = ?5 OR Resumable), NextAttemptAt = NULL, \
+           PlaceInQueue = NULL WHERE {UNFINISHED}"
         ),
         params![
           errored.bits(),
