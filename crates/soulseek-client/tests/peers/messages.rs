@@ -8,7 +8,9 @@ use std::time::Duration;
 
 use crate::support::peer::PeerSide;
 use crate::support::{Logs, PATIENCE, Session, listening_options};
-use soulseek_client::{ClientError, ClientOptions, MessageErrorKind, Resolvers, WaitKey};
+use soulseek_client::{
+  ClientError, ClientOptions, IncomingBrowse, MessageErrorKind, Resolvers, WaitKey,
+};
 use soulseek_proto::peer::*;
 use soulseek_proto::{PeerCode, PeerMessage, RemoteFilename, TransferDirection};
 use tokio_util::sync::CancellationToken;
@@ -177,6 +179,14 @@ async fn an_upload_offer_for_a_file_we_do_not_download_is_refused() {
 async fn an_invalid_browse_response_fails_the_browse() {
   let session = session().await;
   let mut bob = bob(&session).await;
+  // a browse follows its response from the header on, and waits for the whole of it
+  let _header = session.client.waiter().wait::<IncomingBrowse>(
+    WaitKey::BrowseResponseConnection {
+      username: "bob".into(),
+    },
+    None,
+    CancellationToken::new(),
+  );
   let response = session.client.waiter().wait::<Arc<BrowseResponse>>(
     WaitKey::Peer {
       code: PeerCode::BrowseResponse,
@@ -192,6 +202,50 @@ async fn an_invalid_browse_response_fails_the_browse() {
   assert!(
     matches!(&error, ClientError::Message { kind: MessageErrorKind::Read, message, .. } if message == "The peer returned an invalid browse response"),
     "{error:?}"
+  );
+}
+
+/// `message` encoded, its zlib stream cut short before its checksum
+fn cut_short(message: PeerMessage) -> Vec<u8> {
+  let mut frame = message.encode();
+  frame.truncate(frame.len() - 4);
+  let len = frame.len() as u32 - 4;
+  frame[..4].copy_from_slice(&len.to_le_bytes());
+  frame
+}
+
+#[tokio::test]
+async fn responses_nobody_asked_for_are_dropped_before_inflating() {
+  let logs = Logs::capture();
+  let session = session().await;
+  // anyone can connect and give any name; nothing was asked of this one
+  let mut mallory = session.peer("mallory").await;
+  let mut frames = cut_short(PeerMessage::BrowseResponse(BrowseResponse {
+    directories: Vec::new(),
+    locked_directories: Vec::new(),
+  }));
+  frames.extend(cut_short(PeerMessage::FolderContentsResponse(
+    FolderContentsResponse {
+      token: 1,
+      directory_name: "@@share\\music".into(),
+      directories: Vec::new(),
+    },
+  )));
+  mallory.send(&frames).await;
+  logs
+    .wait_for(&["browse response nobody follows", "dropped before inflating"])
+    .await;
+  logs
+    .wait_for(&[
+      "folder contents response nobody waits for",
+      "dropped before inflating",
+    ])
+    .await;
+  // inflating either would have found it cut short
+  assert!(
+    logs.lines_with(&["malformed message rejected"]).is_empty(),
+    "{}",
+    logs.text()
   );
 }
 
