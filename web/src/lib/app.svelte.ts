@@ -29,6 +29,11 @@ class App {
   /** why the last bootstrap ended in `lost` */
   lostReason = $state("");
   #release: (() => void)[] = [];
+  /**
+   * counts the bootstraps started and the times the phase was taken from one, by a sign-out or
+   * the shell closing; a bootstrap that is no longer the last one leaves the phase alone
+   */
+  #boot = 0;
 
   constructor() {
     live.on("application.state", (data) => (this.state = data));
@@ -59,15 +64,19 @@ class App {
 
   /** Checks the session, then opens the stream and waits for the first state before the app shows */
   bootstrap = async () => {
+    const boot = ++this.#boot;
     this.phase = "initializing";
     const found = await session.check();
+    if (boot !== this.#boot) return;
     if (found === "out") {
       this.phase = "login";
       return;
     }
     if (found === "unreachable") return this.#lost("Lost connection to reseek");
     this.#follow();
-    if (!(await this.#firstState())) return this.#lost("Lost connection to reseek");
+    const first = await this.#firstState();
+    if (boot !== this.#boot) return;
+    if (!first) return this.#lost("Lost connection to reseek");
     this.phase = "app";
   };
 
@@ -80,6 +89,7 @@ class App {
 
   /** The session is gone: everything kept for it goes, and the login shows */
   signedOut() {
+    this.#boot += 1;
     for (const release of this.#release.splice(0)) release();
     live.stop();
     session.clear();
@@ -92,6 +102,16 @@ class App {
     this.options = null;
     this.metrics = null;
     this.phase = "login";
+  }
+
+  /**
+   * The shell is gone: a bootstrap still running is abandoned and the stream closes, so the next
+   * shell starts from checking the session, whatever phase this one ended in
+   */
+  close() {
+    this.#boot += 1;
+    live.stop();
+    this.phase = "initializing";
   }
 
   #follow() {
