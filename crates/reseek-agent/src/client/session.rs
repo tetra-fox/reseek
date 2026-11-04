@@ -257,6 +257,7 @@ impl AgentClient {
           LoginFailure::UnknownAgent
             | LoginFailure::AddressNotAllowed
             | LoginFailure::BadCredential
+            | LoginFailure::IncompatibleVersion
         );
         warn!(
           ?reason,

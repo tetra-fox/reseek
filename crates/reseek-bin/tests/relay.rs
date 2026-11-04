@@ -3,7 +3,7 @@
 //! files from the controller with the bytes intact; a kicked agent's shares go with it and it
 //! comes back on its own, as it does after its controller restarts; an agent that stops takes
 //! its shares with it. The controller refuses a wrong secret, an unknown name, a replayed
-//! credential and an address outside the agent's networks. A
+//! credential, an address outside the agent's networks and a version off its release line. A
 //! controller's finished download is copied to an agent that asks for them, and a controller
 //! that stops closes its agents' sockets as shutting down.
 
@@ -392,6 +392,8 @@ async fn a_login_is_refused_for_each_wrong_part() {
   assert_eq!(unknown, LoginFailure::UnknownAgent);
   let outside = refused(&api, "fenced", "fenced-secret-0123456", None, ours).await;
   assert_eq!(outside, LoginFailure::AddressNotAllowed);
+  let older = refused(&api, "nas", SECRET, None, "0.0.1").await;
+  assert_eq!(older, LoginFailure::IncompatibleVersion);
 
   let (_logged_in, answer, used) = log_in(&api, "nas", SECRET, None, ours).await;
   assert!(matches!(answer, RelayMessage::LoginOk { .. }), "{answer:?}");

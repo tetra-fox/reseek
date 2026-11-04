@@ -107,7 +107,7 @@ async fn a_scanning_agent_is_waited_for_until_its_deferral_runs_out() {
   let login = RelayMessage::Login {
     agent: "nas".into(),
     credential,
-    version: "test".into(),
+    version: crate::version::info().current,
     capabilities: Vec::new(),
   };
   to_socket.send(text(login)).await.unwrap();

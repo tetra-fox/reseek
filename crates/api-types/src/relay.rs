@@ -246,6 +246,8 @@ pub enum LoginFailure {
   ChallengeExpired,
   /// the credential does not match
   BadCredential,
+  /// the agent's version is outside the controller's release line
+  IncompatibleVersion,
 }
 
 /// Why an agent cannot serve a file request.

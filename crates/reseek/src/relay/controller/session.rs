@@ -280,13 +280,19 @@ impl Session {
     let challenge = challenge.take();
     let options = self.controller.config.current();
     let configured = Controller::configured(&options.values, &name);
+    let ours = crate::version::info().current;
+    let login = login::Login {
+      address: self.address,
+      credential,
+      version: &version,
+    };
     let checked = login::check(
       configured.as_ref(),
-      self.address,
+      &login,
       challenge.as_ref(),
       LOGIN_WITHIN,
       Instant::now(),
-      credential,
+      &ours,
       |secret| self.controller.key(&name, secret),
     );
     let counted = match checked {
@@ -295,10 +301,11 @@ impl Session {
       Err(LoginFailure::AddressNotAllowed) => "address_not_allowed",
       Err(LoginFailure::ChallengeExpired) => "challenge_expired",
       Err(LoginFailure::BadCredential) => "bad_credential",
+      Err(LoginFailure::IncompatibleVersion) => "incompatible_version",
     };
     self.controller.count("login", counted);
     if let Err(reason) = checked {
-      log_refusal(&name, self.address, reason, configured.map(|a| a.cidr));
+      log_refusal(&name, &login, reason, configured.map(|a| a.cidr), &ours);
       let refusal = frames::encode(None, RelayMessage::LoginFailed { reason });
       if socket.send(Message::Text(refusal.into())).await.is_err() {
         return Some(Ended {
@@ -313,7 +320,7 @@ impl Session {
       None,
       RelayMessage::LoginOk {
         agent: name.clone(),
-        server_version: crate::version::info().current,
+        server_version: ours,
         protocol: RELAY_PROTOCOL,
         timeouts: RelayTimeouts {
           file_info: millis(timeouts.file_info),
@@ -358,9 +365,15 @@ impl Session {
   }
 }
 
-/// Logs a refused login: an unknown agent, one outside its networks and a bad credential are
-/// warnings, never with the credential.
-fn log_refusal(name: &str, address: IpAddr, reason: LoginFailure, cidr: Option<String>) {
+/// Logs a refused login: an unknown agent, one outside its networks, a bad credential and a
+/// version outside ours (`ours`) are warnings, never with the credential.
+fn log_refusal(
+  name: &str,
+  login: &login::Login,
+  reason: LoginFailure,
+  cidr: Option<String>,
+  ours: &str,
+) {
   match reason {
     LoginFailure::UnknownAgent => warn!(
       agent = name,
@@ -368,7 +381,7 @@ fn log_refusal(name: &str, address: IpAddr, reason: LoginFailure, cidr: Option<S
     ),
     LoginFailure::AddressNotAllowed => warn!(
       agent = name,
-      address = %address,
+      address = %login.address,
       cidr,
       "Unauthorized login attempt: the remote IP address is not within the configured range"
     ),
@@ -384,6 +397,12 @@ fn log_refusal(name: &str, address: IpAddr, reason: LoginFailure, cidr: Option<S
         "Unauthorized login attempt: credential mismatch"
       )
     }
+    LoginFailure::IncompatibleVersion => warn!(
+      agent = name,
+      version = login.version,
+      controller_version = ours,
+      "Agent login refused: its version is not on this controller's release line"
+    ),
   }
 }
 
