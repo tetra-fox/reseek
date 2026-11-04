@@ -42,4 +42,21 @@ describe("Pictures", () => {
     await vi.waitFor(() => expect(asked).toHaveLength(6));
     expect(asked.filter((url) => url.endsWith("tile=0"))).toHaveLength(2);
   });
+
+  it("asks for no more tiles than it keeps, however many the file has", async () => {
+    const asked: string[] = [];
+    vi.stubGlobal("fetch", (url: string) => {
+      asked.push(url);
+      return Promise.resolve(new Response(null, { status: 404 }));
+    });
+    const tiles = 2 ** 32 - 1;
+    const huge = { ...layout, durationSeconds: tiles * 16, tiles };
+    const pictures = new Pictures({ kind: "download", username: "alice", id: "x" }, huge);
+    pictures.want(0, huge.durationSeconds);
+    await vi.waitFor(() => expect(asked).toHaveLength(96));
+    // the tiles kept are those around the middle of what was asked for
+    const middle = Math.floor(tiles / 2);
+    expect(asked.some((url) => url.endsWith(`tile=${middle}`))).toBe(true);
+    expect(asked.some((url) => url.endsWith("tile=0"))).toBe(false);
+  });
 });

@@ -234,7 +234,12 @@ pub(in crate::analysis) fn measure(
   match reached {
     Reached::End(seconds) => measured.duration = seconds,
     Reached::Short(seconds) if stated.is_none() => measured.duration = seconds,
-    Reached::Short(_) | Reached::Sampled => {}
+    Reached::Short(_) | Reached::Sampled => {
+      let read = measured.windows.last().map_or(0.0, |w| w.t + 1.0);
+      if let Some(held) = past_bytes(&decoder, measured.duration, read, &mut measured) {
+        measured.duration = held;
+      }
+    }
   }
   settings.report(1.0);
   measured.bits_used = decoder.bits_used();
@@ -313,6 +318,23 @@ enum Reached {
   Short(f64),
   /// windows spread over the stated length, which says nothing against it
   Sampled,
+}
+
+/// What a file states of its length beyond what its bytes can hold.
+const PAST_BYTES: &str =
+  "the file states a longer length than its bytes can hold, so it is taken as what they hold";
+
+/// The length the file's bytes can hold, when audio up to `seconds` needs more bytes than the
+/// file has: the length taken in place of the one stated, never short of `read`, the furthest
+/// the analysis read, and noted in `measured`.
+fn past_bytes(decoder: &Decoder, seconds: f64, read: f64, measured: &mut Measured) -> Option<f64> {
+  let most = decoder.most_seconds().filter(|most| seconds > *most)?;
+  debug!(
+    seconds,
+    most, "the stated length is past what the file's bytes hold"
+  );
+  measured.problems.push(PAST_BYTES.to_string());
+  Some(most.max(read))
 }
 
 /// `seconds` in words, as minutes when they are whole minutes.
@@ -432,6 +454,11 @@ fn sampled(
     settings.report(index as f64 / picks.len() as f64);
     if stop(settings, cancel, measured)? {
       return Ok(Reached::Sampled);
+    }
+    // the picks are spread over the stated length, which tables pointing many packets at the
+    // same bytes can make longer than the file holds
+    if let Some(held) = past_bytes(decoder, (second + 1) as f64, furthest, measured) {
+      return Ok(Reached::End(held));
     }
     if let Err(problem) = decoder.seek(second as f64) {
       if stopped_by_us(decoder, settings, cancel, measured)? {

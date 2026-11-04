@@ -434,3 +434,93 @@ pub fn through_mp3(audio: &Audio, bitrate: Bitrate, dir: &Path) -> Audio {
   write_mp3(audio, bitrate, &mp3);
   decoded(&mp3)
 }
+
+/// One ISO media box: its size, its type, then `body`.
+fn mp4_box(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
+  let mut out = ((8 + body.len()) as u32).to_be_bytes().to_vec();
+  out.extend_from_slice(kind);
+  out.extend_from_slice(body);
+  out
+}
+
+/// A box with a version and flags of zero before `body`.
+fn mp4_full_box(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
+  mp4_box(kind, &[&[0u8; 4][..], body].concat())
+}
+
+/// Writes an MP4 of 16-bit mono PCM at `path` holding the first second of `audio` once, whose
+/// sample tables list `chunks` seconds that all point at it and give every sample `delta` ticks
+/// of the sample rate, so the file states `chunks` times `delta` seconds and every seek into
+/// that length succeeds.
+pub fn write_repeating_mp4(audio: &Audio, chunks: u32, delta: u32, path: &Path) {
+  let rate = audio.rate;
+  let pcm: Vec<u8> = audio.channels[0][..rate as usize]
+    .iter()
+    .flat_map(|s| ((s.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes())
+    .collect();
+  let samples = chunks * rate;
+  let words = |values: &[u32]| -> Vec<u8> { values.iter().flat_map(|v| v.to_be_bytes()).collect() };
+  let ftyp = mp4_box(b"ftyp", b"M4A \0\0\0\0M4A isom");
+  let matrix = words(&[0x1_0000, 0, 0, 0, 0x1_0000, 0, 0, 0, 0x4000_0000]);
+  let moov = |offset: u32| {
+    let mvhd = mp4_full_box(
+      b"mvhd",
+      &[
+        words(&[0, 0, 1000, 0, 0x1_0000]),
+        vec![1, 0, 0, 0],
+        vec![0; 8],
+        matrix.clone(),
+        vec![0; 24],
+        words(&[2]),
+      ]
+      .concat(),
+    );
+    let tkhd = mp4_box(
+      b"tkhd",
+      &[
+        words(&[7, 0, 0, 1, 0, 0, 0, 0]),
+        vec![0, 0, 0, 0, 1, 0, 0, 0],
+        matrix.clone(),
+        words(&[0, 0]),
+      ]
+      .concat(),
+    );
+    let mdhd = mp4_full_box(
+      b"mdhd",
+      &[words(&[0, 0, rate, 0]), vec![0x55, 0xc4, 0, 0]].concat(),
+    );
+    let hdlr = mp4_full_box(
+      b"hdlr",
+      &[words(&[0]), b"soun".to_vec(), vec![0; 13]].concat(),
+    );
+    let sowt = mp4_box(
+      b"sowt",
+      &[
+        vec![0; 6],
+        vec![0, 1, 0, 0, 0, 0],
+        vec![0; 4],
+        vec![0, 1, 0, 16, 0, 0, 0, 0],
+        words(&[rate << 16]),
+      ]
+      .concat(),
+    );
+    let stsd = mp4_full_box(b"stsd", &[words(&[1]), sowt].concat());
+    let stts = mp4_full_box(b"stts", &words(&[1, samples, delta]));
+    let stsc = mp4_full_box(b"stsc", &words(&[1, 1, rate, 1]));
+    let stsz = mp4_full_box(b"stsz", &words(&[2, samples]));
+    let offsets: Vec<u32> = std::iter::once(chunks)
+      .chain(std::iter::repeat_n(offset, chunks as usize))
+      .collect();
+    let stco = mp4_full_box(b"stco", &words(&offsets));
+    let stbl = mp4_box(b"stbl", &[stsd, stts, stsc, stsz, stco].concat());
+    let smhd = mp4_full_box(b"smhd", &[0; 4]);
+    let minf = mp4_box(b"minf", &[smhd, stbl].concat());
+    let mdia = mp4_box(b"mdia", &[mdhd, hdlr, minf].concat());
+    let trak = mp4_box(b"trak", &[tkhd, mdia].concat());
+    mp4_box(b"moov", &[mvhd, trak].concat())
+  };
+  // the audio follows the header boxes, whose size does not depend on where it starts
+  let offset = (ftyp.len() + moov(0).len() + 8) as u32;
+  let file = [ftyp, moov(offset), mp4_box(b"mdat", &pcm)].concat();
+  std::fs::write(path, file).unwrap();
+}
