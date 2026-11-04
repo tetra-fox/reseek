@@ -47,7 +47,10 @@ export class MessagePane {
   gaps = $state.raw<Gap[]>([]);
   /** older messages are stored than the pane holds */
   hasMore = $state(false);
-  /** newer messages are stored than the pane holds, which it opened at an older message for */
+  /**
+   * newer messages are stored than the pane holds: it opened at an older message, so this is
+   * true from the start until the pages read show otherwise
+   */
   hasNewer = $state(false);
   /** counts the times the pane went back to the newest messages, which the list goes down to */
   returned = $state(0);
@@ -59,9 +62,9 @@ export class MessagePane {
   unreadFrom = $state<number | null>(null);
   /** the conversation as stored, for its draft; null for a room or a conversation not started */
   conversation = $state.raw<Schemas["Conversation"] | null>(null);
+  /** the message the pane opened at, null when it opened at the newest or went to them since */
+  at = $state<number | null>(null);
   #self: () => string;
-  /** the message the pane opens at, null for the newest */
-  #at: number | null;
   /**
    * counts the times the messages held were let go for others, by going to the newest or
    * emptying the view; a page read before that belongs to what was let go and is dropped
@@ -78,7 +81,8 @@ export class MessagePane {
   constructor(target: Target, self: () => string, at: number | null = null) {
     this.target = target;
     this.#self = self;
-    this.#at = at;
+    this.at = at;
+    this.hasNewer = at !== null;
   }
 
   /** Follows the pane's frames; call from a component's setup, it stops with the component */
@@ -116,9 +120,9 @@ export class MessagePane {
     // a room's read marker comes with the joined rooms, which a pane opened by a link or a
     // reload can be quicker than; its first unread message is placed from that marker
     if (!this.loaded && this.target.kind === "room") await chat.ready();
-    if (this.hasNewer) return;
+    if (this.loaded && this.hasNewer) return;
     const view = this.#view;
-    const at = this.loaded ? null : this.#at;
+    const at = this.loaded ? null : this.at;
     const page: Outcome<Page & { hasNewer?: boolean }> =
       at === null ? await this.#page({}) : await this.#around(at);
     if (view !== this.#view) return;
@@ -169,22 +173,28 @@ export class MessagePane {
     if (!this.hasNewer) await this.load();
   };
 
-  /** Leaves the older messages for the newest page */
+  /**
+   * Leaves the older messages for the newest page; before the pages around the message the pane
+   * opened at are here, the newest page is the first page instead
+   */
   latest = async () => {
     if (!this.hasNewer) return;
     const view = ++this.#view;
     const page = await this.#page({});
     if (view !== this.#view) return;
     if (!page.ok) return void (this.error = page.error);
+    this.error = "";
     for (const m of this.messages.rows.filter((m) => m.localId > 0)) {
       this.messages.remove(String(m.localId));
     }
     this.gaps = [];
+    this.at = null;
     this.hasNewer = false;
     for (const m of page.data.messages) this.#store(m);
     this.#gapsFrom(page.data.gaps);
     this.hasMore = page.data.hasMore;
-    this.returned += 1;
+    if (this.loaded) this.returned += 1;
+    else this.#opened();
   };
 
   /**
@@ -198,6 +208,7 @@ export class MessagePane {
     }
     this.gaps = [];
     this.unreadFrom = null;
+    this.at = null;
     this.hasMore = false;
     this.hasNewer = false;
     this.loaded = true;
