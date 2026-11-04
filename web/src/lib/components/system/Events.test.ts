@@ -5,6 +5,7 @@ import { live } from "#lib/live/live.svelte.js";
 import { flush } from "#lib/testing/flush.js";
 import { active, press, ticked } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
+import { box } from "#lib/testing/state.svelte.js";
 
 import Events from "./Events.svelte";
 
@@ -75,5 +76,38 @@ describe("the event log", () => {
       .click();
     await flush();
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("a at");
+  });
+
+  it("keeps the page moved to when a reload of the first page answers late", async () => {
+    let hold: Promise<void> | null = null;
+    const net = fakeNetwork(async (url) => {
+      const offset = Number(url.searchParams.get("offset"));
+      if (offset === 0 && hold) await hold;
+      return offset === 0 ? [event("new", 3)] : [event("old", 1)];
+    });
+    live.start();
+    const shown = box(1);
+    component = mount(Events, {
+      target: document.body,
+      props: {
+        get page() {
+          return shown.value;
+        },
+        perPage: 1,
+        types: []
+      }
+    });
+    await flush();
+    let release!: () => void;
+    hold = new Promise((done) => (release = done));
+    net.frame("events.raised", event("new", 3) as never);
+    await flush();
+    shown.value = 2;
+    await flush();
+    release();
+    await flush();
+    expect(
+      [...document.querySelectorAll("[data-line]")].map((l) => l.getAttribute("data-line"))
+    ).toEqual(["old"]);
   });
 });
