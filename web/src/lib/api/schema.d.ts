@@ -3220,7 +3220,9 @@ export interface components {
             noiseFloorDbfs?: number | null;
             /**
              * Format: double
-             * @description the loudest sample in dBFS; null in a report made before it was measured and for silence
+             * @description the loudest sample of the analyzed audio in dBFS, on either channel; for a sampled read,
+             *     the loudest in the windows read. Null for silence and in a report made before it was
+             *     measured
              */
             peakDbfs?: number | null;
             /**
