@@ -24,13 +24,12 @@
   import { fieldMatches } from "#lib/config/find.js";
   import { asNixSettings } from "#lib/config/nix.js";
   import { type Field, type Section, valueAt } from "#lib/config/sections.js";
-  import { Busy } from "#lib/feedback/busy.svelte.js";
   import { CopyButton } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { plural } from "#lib/format.js";
   import { same } from "#lib/lists/keyed.svelte.js";
   import { href } from "#lib/nav.js";
-  import { call } from "#lib/request.js";
+  import { call, type Outcome } from "#lib/request.js";
   import { UNTIL_RESTART } from "#lib/wording.js";
 
   import DesktopPermission from "./DesktopPermission.svelte";
@@ -184,11 +183,31 @@
     moved = moved.filter((key) => !keys.includes(key));
   };
 
-  /** one write at a time, to the files or to what runs, so their errors and drafts don't cross */
-  const writing = new Busy();
+  /** writes asked for and not yet done */
+  let writing = $state(0);
+  let last: Promise<unknown> = Promise.resolve();
+  /**
+   * Runs writes one at a time, to the files or to what runs, so their errors and drafts don't
+   * cross; one asked for while another runs, such as Save all during an apply, goes once it is
+   * done. A failure is toasted
+   */
+  const write = <T>(action: () => Promise<Outcome<T>>): Promise<Outcome<T>> => {
+    writing += 1;
+    const run = last
+      .then(action)
+      .then((outcome) => {
+        if (!outcome.ok) toast(outcome.error, "error");
+        return outcome;
+      })
+      .finally(() => (writing -= 1));
+    // a write that threw still lets the next one go; its own caller gets the rejection
+    last = run.catch(() => undefined);
+    return run;
+  };
+
   /** Saves the changed options to their files; the page's bar saves every section with it */
   export const save = () =>
-    writing.run(async () => {
+    write(async () => {
       const writes = collect("save");
       if (!writes) return { ok: true as const, data: null };
       const byFile = new Map<string, Write[]>();
@@ -259,7 +278,7 @@
     { label: "Until removed", value: null, words: "until removed" }
   ];
   const apply = (expiry: (typeof EXPIRIES)[number]) =>
-    writing.run(async () => {
+    write(async () => {
       const writes = collect("runtime");
       if (!writes) return { ok: true as const, data: null };
       const outcome = await call(() =>
@@ -405,7 +424,7 @@
         {/if}
         {#if runtimeable}
           <Menu.Root>
-            <Menu.Trigger disabled={!changed.length || writing.running}>
+            <Menu.Trigger disabled={!changed.length || writing > 0}>
               {#snippet child({ props })}
                 <Button {...props} variant="outline">
                   Apply at runtime <ChevronDownIcon />
@@ -420,7 +439,7 @@
           </Menu.Root>
         {/if}
         {#if saveable}
-          <Button disabled={!changed.length || writing.running} onclick={save}>Save</Button>
+          <Button disabled={!changed.length || writing > 0} onclick={save}>Save</Button>
         {/if}
       </div>
     </div>
