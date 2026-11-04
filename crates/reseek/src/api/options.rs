@@ -5,6 +5,8 @@
 //! needs `remote_configuration`; touching the files, or the authentication options, also needs
 //! someone at the UI rather than a stored API key.
 
+use std::collections::BTreeMap;
+
 use super::extract::Json;
 use api_types::options::{
   ConfigFile, ConfigView, FilePatch, FileQuery, FileReplace, FileValidate, FileWritten,
@@ -15,6 +17,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use cascade::{Lasts, Loaded};
 use chrono::Utc;
+use serde_json::Value;
 use tracing::{info, warn};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -146,9 +149,10 @@ async fn patch_options(
     }
     None => Lasts::UntilRemoved,
   };
+  let set = with_urls(&current, patch.set)?;
   let change = app
     .config
-    .set_overrides(patch.set, patch.unset, &admin.principal.subject, lasts)
+    .set_overrides(set, patch.unset, &admin.principal.subject, lasts)
     .await
     .map_err(|e| match e {
       cascade::Error::Invalid(_) | cascade::Error::Value { .. } => {
@@ -282,9 +286,10 @@ async fn patch_file(
   )?;
   require_interactive(&admin.principal)?;
   let name = file(&current, patch.file.as_deref())?.name.clone();
+  let set = with_urls(&current, patch.set)?;
   let written = app
     .config
-    .patch_file(&name, patch.revision.as_deref(), patch.set, patch.unset)
+    .patch_file(&name, patch.revision.as_deref(), set, patch.unset)
     .await?;
   info!(
     by = admin.principal.subject,
@@ -372,6 +377,19 @@ pub(super) fn remote(current: &Loaded<Options>, blocked: &str) -> Result<(), Api
   }
   warn!("{blocked}");
   Err(ApiError::forbidden("Remote configuration is disabled").logged())
+}
+
+/// `set` with the credentials of the URLs it shows hidden put back from the values in effect.
+fn with_urls(
+  current: &Loaded<Options>,
+  mut set: BTreeMap<String, Value>,
+) -> Result<BTreeMap<String, Value>, ApiError> {
+  redact::restore_urls(&mut set, current.tree()).map_err(|invalid| {
+    let e = cascade::Error::Invalid(vec![invalid]);
+    warn!(error = %e, "hidden URL credentials not restored");
+    ApiError::from(e).logged()
+  })?;
+  Ok(set)
 }
 
 fn is_authentication(key: &str) -> bool {
@@ -677,6 +695,56 @@ mod tests {
     assert_ne!(written["revision"], revision);
     let text = std::fs::read_to_string(app.dir.path().join("config.toml")).unwrap();
     assert!(text.contains("debug = true") && text.contains("[web.authentication]"));
+  }
+
+  #[tokio::test]
+  async fn a_url_sent_back_without_its_credentials_keeps_them() {
+    let hook = "[integrations.scripts.hook]\non = [\"DownloadFileComplete\"]\n\
+                run.executable = \"/bin/true\"\n\
+                run.arglist = [\"https://u:p@hooks.lan/x\", \"plain\"]\n";
+    let app = app(&format!("{TRUSTED}{hook}"), &[]).await;
+    let view = app
+      .send(request("GET", "/api/v0/options/view", None))
+      .await
+      .json();
+    let mut scripts = view["values"]["integrations"]["scripts"].clone();
+    assert_eq!(
+      scripts["hook"]["run"]["arglist"],
+      json!(["https://*****@hooks.lan/x", "plain"])
+    );
+    // a second entry made from the first, as a client copies a row
+    scripts["copy"] = scripts["hook"].clone();
+    let revision = view["files"][0]["revision"].clone();
+    let patch = |scripts: &serde_json::Value| {
+      request(
+        "PATCH",
+        "/api/v0/options/file",
+        Some(json!({ "set": { "integrations.scripts": scripts }, "revision": revision })),
+      )
+    };
+    let written = app.send(patch(&scripts)).await;
+    assert_eq!(written.status, 200, "{:?}", written.body);
+    let text = std::fs::read_to_string(app.dir.path().join("config.toml")).unwrap();
+    assert_eq!(text.matches("https://u:p@hooks.lan/x").count(), 2, "{text}");
+    assert!(!text.contains("*****"), "{text}");
+
+    scripts["hook"]["run"]["arglist"][0] = json!("https://*****@elsewhere.lan/");
+    let refused = app.send(patch(&scripts)).await;
+    assert_eq!(refused.status, 400);
+    let detail = refused.json()["detail"].as_str().unwrap().to_string();
+    assert!(
+      detail.contains("integrations.scripts.hook.run.arglist[0]"),
+      "{detail}"
+    );
+    let override_refused = app
+      .send(request(
+        "PATCH",
+        "/api/v0/options",
+        Some(json!({ "set": { "integrations.scripts": scripts } })),
+      ))
+      .await;
+    assert_eq!(override_refused.status, 400);
+    assert_eq!(override_refused.json()["detail"], refused.json()["detail"]);
   }
 
   #[tokio::test]

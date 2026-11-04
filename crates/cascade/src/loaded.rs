@@ -61,6 +61,11 @@ impl<T> Loaded<T> {
     &self.schema
   }
 
+  /// The values in effect as a tree, secrets and all.
+  pub fn tree(&self) -> &Value {
+    &self.tree
+  }
+
   /// The values with every secret shown as `*****`; null and empty secrets stay as they are.
   pub fn redacted(&self) -> Value {
     self.schema.redact(&self.tree)
