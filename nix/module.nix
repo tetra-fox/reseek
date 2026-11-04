@@ -2,7 +2,8 @@
 # services.reseek.instances.<name> runs more of them, each with its own user, state directory,
 # ports and Soulseek account. The configuration is rendered to TOML in the store and marked
 # managed by NixOS, so the daemon shows it read-only; a change to it reloads the running
-# daemon with SIGHUP, or restarts it with restartOnChange.
+# daemon with SIGHUP, or restarts it with restartOnChange. services.reseek-agent, the relay
+# agent, is in agent-module.nix.
 { self }:
 {
   config,
@@ -19,16 +20,11 @@ let
     ;
   cfg = config.services.reseek;
   settingsFormat = pkgs.formats.toml { };
-
-  # a shared directory as the options write it, `[alias]` and an excluding `!` taken off
-  sharePath =
-    entry:
-    let
-      bare = lib.removePrefix "!" entry;
-      aliased = builtins.match "\\[[^]]*](.*)" bare;
-    in
-    if aliased == null then bare else builtins.head aliased;
-  isExclusion = entry: lib.hasPrefix "!" entry;
+  inherit (import ./module-lib.nix { inherit lib; })
+    sharePath
+    readOnlyShares
+    etcFiles
+    ;
 
   # the options of one daemon; `name` is its unit, user and directory name, `enabled` whether
   # it runs unless `enable` says otherwise
@@ -320,16 +316,6 @@ let
 
   configFileOf = instance: settingsFormat.generate "${instance.unit}.toml" (settingsOf instance);
 
-  # the name a drop-in file is laid in config.d under: its own, without the hash of a file in the
-  # store. An attribute name cannot hold the path's store reference, which `source` keeps
-  dropInName =
-    file:
-    let
-      path = toString file;
-      base = builtins.unsafeDiscardStringContext (baseNameOf path);
-    in
-    if lib.isStorePath path then builtins.substring 33 (builtins.stringLength base) base else base;
-
   # the directories the daemon writes outside its data directory
   writablePaths =
     instance:
@@ -339,20 +325,12 @@ let
       instance.settings.directories.incomplete
     ];
 
-  sharePaths =
-    instance:
-    map sharePath (lib.filter (entry: !isExclusion entry) instance.settings.shares.directories);
-
-  inside = parent: path: path == parent || lib.hasPrefix "${lib.removeSuffix "/" parent}/" path;
-
   serviceOf =
     instance:
     let
       configFile = configFileOf instance;
       writable = writablePaths instance;
-      readOnly = lib.filter (share: !(lib.any (parent: inside parent share) writable)) (
-        sharePaths instance
-      );
+      readOnly = readOnlyShares writable instance.settings.shares.directories;
       stateName = lib.removePrefix "/var/lib/" instance.dataDir;
       inStateDirectory = lib.hasPrefix "/var/lib/" instance.dataDir;
     in
@@ -473,6 +451,8 @@ let
   upstream = instance: "http://127.0.0.1:${toString instance.settings.web.port}";
 in
 {
+  imports = [ (import ./agent-module.nix { inherit self; }) ];
+
   options.services.reseek = instanceOptions { name = "reseek"; } // {
     instances = mkOption {
       default = { };
@@ -500,16 +480,7 @@ in
 
     environment.etc = lib.listToAttrs (
       lib.concatMap (
-        instance:
-        [
-          (lib.nameValuePair "${instance.unit}/config.toml" { source = configFileOf instance; })
-        ]
-        ++ lib.imap1 (
-          index: file:
-          lib.nameValuePair "${instance.unit}/config.d/${lib.fixedWidthNumber 2 index}-${dropInName file}" {
-            source = file;
-          }
-        ) instance.extraConfigFiles
+        instance: etcFiles instance.unit (configFileOf instance) instance.extraConfigFiles
       ) instances
     );
 
