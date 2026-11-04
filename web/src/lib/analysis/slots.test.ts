@@ -34,6 +34,7 @@ describe("the Analysis page's slots", () => {
   });
   afterEach(() => {
     app.options = null;
+    app.state = null;
     at.navigating.to = null;
   });
 
@@ -91,6 +92,24 @@ describe("the Analysis page's slots", () => {
     expect(sendFile).not.toHaveBeenCalled();
     expect(toasts[0]?.text).toBe(
       "cover.jpg cannot be analyzed, as it is not a type the analyzer reads."
+    );
+  });
+
+  it("refuses a file over the daemon's limit before sending it", () => {
+    // the options carry the operator's own text, the state the number the daemon goes by
+    app.options = { analysis: { extensions: ["flac"], upload_max_bytes: "3 GB" } } as never;
+    app.state = { process: { uploadMaxBytes: 3_000_000_000 } } as never;
+    const sent = (bytes: number) => {
+      vi.mocked(sendFile).mockClear();
+      const file = new File(["x"], "mine.flac");
+      Object.defineProperty(file, "size", { value: bytes });
+      slots.upload("a", file);
+      return vi.mocked(sendFile).mock.calls.length === 1;
+    };
+    expect(sent(3_000_000_000)).toBe(true);
+    expect(sent(3_000_000_001)).toBe(false);
+    expect(toasts[0]?.text).toBe(
+      "mine.flac is too large to upload. The largest upload is 2.79 GB."
     );
   });
 });

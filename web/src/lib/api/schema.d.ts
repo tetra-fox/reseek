@@ -5857,6 +5857,13 @@ export interface components {
              * @description the process id
              */
             pid: number;
+            /**
+             * Format: int64
+             * @description the largest file, in bytes, taken from a browser upload for analysis, as the options in
+             *     effect set it
+             * @example 2000000000
+             */
+            uploadMaxBytes: number;
         };
         /** @description Where the text and the picture of our profile come from. */
         ProfileSources: {
