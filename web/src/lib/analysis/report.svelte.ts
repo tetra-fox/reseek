@@ -47,9 +47,11 @@ export class FileReport {
     this.#starts = starts;
 
     $effect(() => (this.#any ? jobs.retain() : undefined));
-    // a new file starts over, and is read once focus has rested on it
+    // a new file starts over, drops an answer still on its way for the last one, and is read
+    // once focus has rested on it
     $effect(() => {
       const key = this.#key;
+      this.#asked++;
       this.report = undefined;
       this.error = "";
       if (key === null) {
