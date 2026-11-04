@@ -1,3 +1,5 @@
+import { isHidden } from "./tables";
+
 /** The characters a Nix string writes as a letter escape */
 const NIX_ESCAPES: Record<string, string> = { "\n": "\\n", "\r": "\\r", "\t": "\\t" };
 
@@ -41,6 +43,25 @@ export const nest = (entries: [string, unknown][]) => {
   return root;
 };
 
-/** The module setting that carries `entries`, ready to paste */
+/** `value` without the secrets the daemon shows as `*****`, at any depth */
+const withoutHidden = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.filter((v) => !isHidden(v)).map(withoutHidden);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, v]) => !isHidden(v))
+        .map(([k, v]) => [k, withoutHidden(v)])
+    );
+  }
+  return value;
+};
+
+/**
+ * The module setting that carries `entries`, ready to paste. Every secret the daemon hides is left
+ * out, a table's too, since `*****` in its place would be taken as the secret; secrets go in a
+ * file of their own rather than the Nix store
+ */
 export const asNixSettings = (entries: [string, unknown][]) =>
-  `services.reseek.settings = ${toNix(nest(entries))};\n`;
+  `services.reseek.settings = ${toNix(
+    nest(entries.filter(([, v]) => !isHidden(v)).map(([k, v]) => [k, withoutHidden(v)]))
+  )};\n`;

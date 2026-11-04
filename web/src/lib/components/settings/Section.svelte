@@ -19,7 +19,6 @@
     type Draft,
     errorsByKey,
     fromDraft,
-    REDACTED,
     toDraft
   } from "#lib/config/fields.js";
   import { fieldMatches } from "#lib/config/find.js";
@@ -295,13 +294,19 @@
   /** Whether every change can be saved to a file, which the page's Save all needs */
   export const allSaveable = () => changed.every((f) => edits[f.key].mode === "save");
 
+  /** whether the section holds a secret, which Copy as Nix leaves out */
+  const holdsSecret = $derived(
+    fields.some(
+      (f) => view.fields[f.key].secret || view.fields[f.key].entries.some((e) => e.secret)
+    )
+  );
   const copying = new CopyButton();
   // shown to copy by hand when the browser won't copy it, as over plain http
   let nix = $state<string | null>(null);
   const copyNix = async () => {
     const entries = fields.flatMap((f): [string, unknown][] => {
       const parsed = fromDraft(f, controls[f.key], draft[f.key], view.fields[f.key]);
-      if (!("set" in parsed) || parsed.set === REDACTED || parsed.set === null) return [];
+      if (!("set" in parsed) || parsed.set === null) return [];
       return [[f.key, parsed.set]];
     });
     const text = asNixSettings(entries);
@@ -316,10 +321,13 @@
   class="scroll-mt-gutter"
   hidden={!found.length}>
   {#snippet action()}
-    <Button variant="ghost" size="sm" class="text-fg-muted" onclick={copyNix}>
-      {#if copying.copied}<CheckIcon />{:else}<CopyIcon />{/if}
-      {copying.copied ? "Copied" : "Copy as Nix"}
-    </Button>
+    <div class="flex items-center gap-2">
+      {#if holdsSecret}<span class="text-xs text-fg-muted">Secrets are left out</span>{/if}
+      <Button variant="ghost" size="sm" class="text-fg-muted" onclick={copyNix}>
+        {#if copying.copied}<CheckIcon />{:else}<CopyIcon />{/if}
+        {copying.copied ? "Copied" : "Copy as Nix"}
+      </Button>
+    </div>
   {/snippet}
   {#if section.extra}<section.extra />{/if}
   {#if wantsDesktop}<DesktopPermission />{/if}

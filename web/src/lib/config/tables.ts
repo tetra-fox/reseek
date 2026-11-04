@@ -29,7 +29,7 @@ export type Row = { id: number; name: string; value: Fields };
 type Parsed = { set: unknown } | { error: string };
 
 /** What a secret the daemon holds is shown as */
-const REDACTED = "*****";
+export const REDACTED = "*****";
 
 const kindOf = (entry: Schemas["EntryView"]): CellKind => {
   if (entry.secret) return "secret";

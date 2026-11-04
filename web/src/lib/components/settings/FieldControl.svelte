@@ -7,8 +7,9 @@
   import Select from "#lib/components/ui/Select.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
-  import { type Draft, REDACTED } from "#lib/config/fields.js";
+  import type { Draft } from "#lib/config/fields.js";
   import type { Control, Field } from "#lib/config/sections.js";
+  import { REDACTED } from "#lib/config/tables.js";
   import { plural } from "#lib/format.js";
 
   import TableEditor from "./TableEditor.svelte";

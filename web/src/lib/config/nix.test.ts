@@ -15,4 +15,16 @@ describe("Copy as Nix", () => {
       `services.reseek.settings = {\n  rooms = {\n    "my room" = true;\n  };\n};\n`
     );
   });
+
+  it("leaves out every secret the daemon hides, in a table's rows too", () => {
+    const text = asNixSettings([
+      ["web.authentication.password", "*****"],
+      ["web.authentication.api_keys", { robot: { key: "*****", role: "administrator" } }],
+      ["web.authentication.oidc", { home: { client_secret: "*****", issuer: "https://id.test" } }]
+    ]);
+    expect(text).not.toContain("*****");
+    expect(text).not.toContain("password");
+    expect(text).toContain('role = "administrator";');
+    expect(text).toContain('issuer = "https://id.test";');
+  });
 });

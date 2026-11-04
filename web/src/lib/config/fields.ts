@@ -13,9 +13,6 @@ export type Draft = string | boolean;
 /** What saving a draft asks for: a value to write, the key taken out, or why it can't */
 export type Parsed = { set: unknown } | { unset: true } | { error: string };
 
-/** A secret the daemon holds, as it shows it */
-export const REDACTED = "*****";
-
 /** Whether `choices` are those of a notification mode, whichever option holds one */
 const areNotifyModes = (choices: string[]) =>
   choices.join() === NOTIFY_MODES.map((m) => m.id).join();
