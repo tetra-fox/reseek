@@ -3,7 +3,7 @@
   import FolderIcon from "@lucide/svelte/icons/folder";
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
   import { untrack } from "svelte";
-  import { SvelteMap, SvelteSet } from "svelte/reactivity";
+  import { SvelteMap } from "svelte/reactivity";
 
   import { api, type Schemas } from "#lib/api/client.js";
   import FileTree from "#lib/components/files/FileTree.svelte";
@@ -64,8 +64,6 @@
   /** what each folder read so far holds, by its path, the top of the machine under "" */
   const folders = new SvelteMap<string, Schemas["ShareFolders"]>();
   const expansion = new Expansion(false);
-  /** the tree picks a folder by its name, not by ticks, so nothing is ever selected here */
-  const selected = new SvelteSet<string>();
   let topError = $state("");
   let chosen = $state<string | null>(null);
   let alias = $state("");
@@ -180,7 +178,6 @@
         {expansion}
         label="Folders"
         columns="minmax(0,1fr)"
-        {selected}
         idOf={() => ""}
         height="18rem"
         onopenfolder={(node) => (chosen = node.path)}
