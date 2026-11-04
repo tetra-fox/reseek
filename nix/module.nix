@@ -432,7 +432,11 @@ let
         ++
           lib.optional
             (settings.remote_configuration && settings.web.authentication.password_hash == null && noSecrets)
-            "services.${unit}: remote_configuration is on and the administrator still has the default password; set web.authentication.password_hash or RESEEK_PASSWORD in environmentFile.";
+            "services.${unit}: remote_configuration is on and the administrator still has the default password; set web.authentication.password_hash or RESEEK_PASSWORD in environmentFile."
+        ++
+          lib.optional
+            (instance.reverseProxy != null && settings.web.authentication.password_hash == null && noSecrets)
+            "services.${unit}: reverseProxy serves the daemon to other machines and the administrator still has the default password, which the daemon refuses to start with; set web.authentication.password_hash or RESEEK_PASSWORD in environmentFile.";
     };
 
   ports =

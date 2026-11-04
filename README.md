@@ -17,9 +17,9 @@ Soulseek client & daemon
 
 ## Quick start
 
-Grab the [compose file](#docker-compose) below, fill in your Soulseek login, `docker compose up -d`, open <http://localhost:5030>.
+Grab the [compose file](#docker-compose) below, fill in your Soulseek login and a password for the web UI, `docker compose up -d`, open <http://localhost:5030>.
 
-Default credentials are `reseek` / `reseek`, so set credentials before considering exposing this to the internet.
+The web UI login is `reseek` / `reseek` until you set `RESEEK_PASSWORD`. reseek refuses to start with that default anywhere other machines can reach it, which in a container is always; on a plain binary, keep it on `--http-ip-address 127.0.0.1` or set a password.
 
 ## Deployment
 
@@ -57,12 +57,12 @@ services:
       RESEEK_USERNAME: admin
       RESEEK_PASSWORD: password
       RESEEK_SHARED_DIR: /music
-      PUID: 1000
-      PGID: 1000
     volumes:
       - ./reseek:/app
       - /path/to/music:/music:ro
 ```
+
+The container runs as 1000:1000; `PUID` and `PGID` change that.
 
 ### Nix
 
@@ -93,7 +93,7 @@ Download the one for your system from [Releases](https://github.com/tetra-fox/re
 
 ```sh
 chmod +x reseek-linux-amd64
-./reseek-linux-amd64 --slsk-username name --slsk-password password -s /path/to/music
+RESEEK_PASSWORD=password ./reseek-linux-amd64 --slsk-username name --slsk-password password -s /path/to/music
 ```
 
 Then open <http://localhost:5030>.

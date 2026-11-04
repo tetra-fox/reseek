@@ -51,20 +51,33 @@ docker: release
     if [ "$(basename "$runtime")" = podman ]; then format=(--format docker); fi
     "$runtime" build "${format[@]}" -f docker/Dockerfile -t reseek "$context"
 
-# the image booted with a volume for /app: it answers on its web port, then is removed
+# the image booted with a volume for /app: without a password it refuses to start, with one it
+# answers on its web port as user 1000, then is removed
 docker-smoke: docker
     #!/usr/bin/env bash
     set -euo pipefail
     runtime="$(command -v podman || command -v docker)"
     name="reseek-smoke-$$"
     "$runtime" volume create "$name" > /dev/null
-    trap '"$runtime" rm -f "$name" > /dev/null; "$runtime" volume rm "$name" > /dev/null' EXIT
-    "$runtime" run -d --name "$name" -v "$name:/app" -p 127.0.0.1::5030 \
-      -e RESEEK_NO_CONNECT=true -e RESEEK_NO_VERSION_CHECK=true reseek > /dev/null
+    trap '"$runtime" rm -f "$name" "$name-open" > /dev/null; "$runtime" volume rm "$name" > /dev/null' EXIT
+    flags=(-v "$name:/app" -e RESEEK_NO_CONNECT=true -e RESEEK_NO_VERSION_CHECK=true)
+    if "$runtime" run --name "$name-open" "${flags[@]}" reseek > /dev/null 2>&1; then
+      echo "the image started with the default password" >&2
+      exit 1
+    fi
+    "$runtime" logs "$name-open" 2>&1 | grep -q "default password" \
+      || { "$runtime" logs "$name-open"; echo "the image refused to start without saying why" >&2; exit 1; }
+    "$runtime" run -d --name "$name" "${flags[@]}" -e RESEEK_PASSWORD=smoke-password \
+      -p 127.0.0.1::5030 reseek > /dev/null
     port="$("$runtime" port "$name" 5030 | head -1 | cut -d: -f2)"
     for _ in $(seq 60); do
       if curl -sf "http://127.0.0.1:$port/health" > /dev/null; then
-        echo "the image answers on its web port"
+        owner="$("$runtime" exec "$name" stat -c %u /app/data)"
+        if [ "$owner" != 1000 ]; then
+          echo "the daemon wrote its data as user $owner, not 1000" >&2
+          exit 1
+        fi
+        echo "the image refuses the default password and answers on its web port as user 1000"
         exit 0
       fi
       sleep 1

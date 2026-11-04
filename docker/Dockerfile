@@ -1,5 +1,5 @@
 # The reseek image: the static binary for the platform being built, run by tini through an
-# entrypoint that readies /app and drops to the ids in PUID and PGID when either is given.
+# entrypoint that readies /app and drops to the ids in PUID and PGID, 1000 unless given.
 #
 # The build context holds the entrypoint and the static binaries as reseek-<arch>
 # (`just docker` puts them there):

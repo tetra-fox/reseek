@@ -1,6 +1,7 @@
 #!/bin/sh
 # Starts reseek in the container with the application directory ready: as the user the container
-# was started as, as root, or, with PUID or PGID, as those numeric ids.
+# was started as when that is not root, else as the numeric ids in PUID and PGID, 1000 unless
+# given. PUID=0 and PGID=0 keep it running as root.
 set -eu
 
 app="${RESEEK_APP_DIR:-/app}"
@@ -39,12 +40,6 @@ if [ "$(id -u)" != 0 ]; then
   exec /usr/bin/reseek "$@"
 fi
 
-if [ -z "${PUID:-}" ] && [ -z "${PGID:-}" ]; then
-  mkdir -p "$app"
-  warn_unless_mounted
-  exec /usr/bin/reseek "$@"
-fi
-
 puid="${PUID:-1000}"
 pgid="${PGID:-1000}"
 require_id PUID "$puid"
@@ -53,6 +48,11 @@ mkdir -p "$app"
 warn_unless_mounted
 if [ "$(stat -c '%u:%g' "$app")" != "$puid:$pgid" ]; then
   chown "$puid:$pgid" "$app"
+fi
+# an application directory a root container wrote is not the new user's
+foreign="$(find "$app" -mindepth 1 -maxdepth 2 ! -user "$puid" -print -quit)"
+if [ -n "$foreign" ]; then
+  echo "WARNING: $foreign is not owned by $puid. If reseek cannot write there, run chown -R $puid:$pgid on the mounted application directory, or set PUID=0 and PGID=0 to run as root."
 fi
 # the ids need no passwd entry; su-exec takes HOME from one, or / without it, so env sets it for
 # scripts
