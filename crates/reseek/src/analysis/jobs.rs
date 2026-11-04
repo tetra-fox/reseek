@@ -117,6 +117,7 @@ impl Analysis {
       }
     }
     let id = Uuid::new_v4();
+    let listed;
     {
       let mut queue = lock(&self.queue);
       if queue.holds(&file.path) {
@@ -126,15 +127,19 @@ impl Analysis {
         return Ok(Queued::Full);
       }
       debug!(job = %id, path = %file.path.display(), waiting = queue.waiting.len(), "analysis queued");
-      queue.waiting.push_back(Job {
+      let job = Job {
         id,
         file,
         queued_at: Utc::now(),
         started_at: None,
         cancel: self.shutdown.child_token(),
         progress: Arc::default(),
-      });
+      };
+      listed = job.listed();
+      queue.waiting.push_back(job);
     }
+    // a client that sees nothing waiting or running stops reading the queue until this says
+    self.live.publish(LiveFrame::FilesAnalysisQueued(listed));
     self.wake.notify_one();
     Ok(Queued::Job(id))
   }

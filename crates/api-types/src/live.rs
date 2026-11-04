@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use crate::activity::ActivityEntry;
-use crate::analysis::AnalysisCompleted;
+use crate::analysis::{AnalysisCompleted, AnalysisJob};
 use crate::auth::PrincipalSummary;
 use crate::events::EventRecord;
 use crate::logs::LogRecord;
@@ -79,6 +79,9 @@ pub enum LiveFrame {
   /// a transfer was removed
   #[serde(rename = "transfers.removed")]
   TransfersRemoved(TransferRemoved),
+  /// a file was queued for audio analysis, by anyone
+  #[serde(rename = "files.analysis_queued")]
+  FilesAnalysisQueued(AnalysisJob),
   /// a file's audio analysis finished
   #[serde(rename = "files.analysis")]
   FilesAnalysis(AnalysisCompleted),
@@ -220,6 +223,7 @@ mod tests {
     "transfers.added",
     "transfers.updated",
     "transfers.removed",
+    "files.analysis_queued",
     "files.analysis",
     "conversations.list",
     "conversations.message",

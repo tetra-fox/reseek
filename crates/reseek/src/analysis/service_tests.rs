@@ -111,6 +111,12 @@ async fn a_download_is_analyzed_reported_drawn_and_announced_once() {
   let (status, _) = app.call("POST", &route("Album/01.flac"), None).await;
   assert_eq!(status, 409, "queued, running or analyzed already");
   let frames = stream.until("files.analysis").await;
+  let queued = frames
+    .iter()
+    .find(|frame| frame.event == "files.analysis_queued")
+    .unwrap_or_else(|| panic!("no frame said the file was queued: {frames:?}"));
+  assert_eq!(queued.data["id"], created["jobId"]);
+  assert_eq!(queued.data["relativePath"], "Album/01.flac");
   let frame = &frames.last().unwrap().data;
   assert_eq!(frame["transferId"], json!(id));
   assert_eq!(frame["verdict"], "consistent");
