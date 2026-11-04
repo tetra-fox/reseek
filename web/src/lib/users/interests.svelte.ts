@@ -19,13 +19,16 @@ export const withInterest = (lists: Interests, side: Side, interest: string): In
 
 /**
  * What we like and dislike. A change shows at once and is saved as it is made; each save replaces
- * both lists, so they go out one at a time, in the order they were made
+ * both lists, so they go out one at a time, in the order they were made, and the last one decides
+ * what the daemon holds. Once none is left to go out, the lists are the daemon's again
  */
 export class OwnInterests {
   readonly loader = new Loader(() => call(() => api.GET("/api/v0/interests")));
   /** the lists since a change, ahead of what the daemon has answered */
   #changed = $state.raw<Interests | null>(null);
   #saves: Promise<void> = Promise.resolve();
+  /** saves made and not yet answered */
+  #pending = 0;
 
   get lists(): Interests {
     return this.#changed ?? this.loader.data ?? { liked: [], hated: [] };
@@ -43,12 +46,17 @@ export class OwnInterests {
 
   #save(lists: Interests) {
     this.#changed = lists;
+    this.#pending += 1;
     this.#saves = this.#saves.then(async () => {
       const outcome = await call(() => api.PUT("/api/v0/interests", { body: lists }));
-      if (outcome.ok) return;
-      toast(outcome.error, "error");
-      await this.loader.load();
-      this.#changed = null;
+      this.#pending -= 1;
+      if (outcome.ok) this.loader.data = outcome.data;
+      else toast(outcome.error, "error");
+      if (this.#pending > 0) return;
+      // a failed last save leaves the daemon with what an earlier one saved, or what it had
+      if (!outcome.ok) await this.loader.load();
+      // a change made during that read is still on its way
+      if (this.#pending === 0) this.#changed = null;
     });
   }
 }
