@@ -1,7 +1,8 @@
 import { goto } from "$app/navigation";
+import { navigating, page } from "$app/state";
 
 import { toast } from "#lib/feedback/toast.svelte.js";
-import { href } from "#lib/nav.js";
+import { href, route } from "#lib/nav.js";
 
 import { analysisHref, parseTarget, type SlotId } from "./address";
 import { type Target, targetKey } from "./analysis";
@@ -9,6 +10,12 @@ import { type Sending, sendFile } from "./upload";
 
 /** A file in a slot; its name is null until something says it, as for a file named by a link */
 export type Loaded = { target: Target; name: string | null };
+
+/** A screen's address with its query written one way, so two spellings of it compare equal */
+const addressOf = (url: { hash: string }) => {
+  const { path, query } = route(url);
+  return `${path}?${query}`;
+};
 
 /** Whether a target is a local file, uploaded for this one look */
 export const isLocal = (t: Target) => t.kind === "file" && t.root === "temporary";
@@ -57,7 +64,7 @@ class Slots {
   fill(id: SlotId, target: Target, name: string | null) {
     this.#stopSending(id);
     this[id] = { target, name };
-    void goto(this.href);
+    this.#go();
   }
 
   /** Fills the first slot from a list */
@@ -69,12 +76,28 @@ class Slots {
   clear(id: SlotId) {
     this.#stopSending(id);
     this[id] = null;
-    void goto(this.href);
+    this.#go();
   }
 
   swap() {
     [this.a, this.b] = [this.b, this.a];
-    void goto(this.href);
+    this.#go();
+  }
+
+  /**
+   * Shows the page as the slots stand, moving the address only when it changes so Back leaves in
+   * one press. A move still on its way counts as the address, and returning to the address shown
+   * takes that move's place
+   */
+  #go() {
+    const next = addressOf({ hash: this.href });
+    const shown = addressOf(page.url);
+    if (next === addressOf(navigating.to?.url ?? page.url)) return;
+    void goto(this.href, {
+      // on the page itself scroll and focus stay where they are
+      reset: route(page.url).path !== "/analysis",
+      replace: next === shown
+    });
   }
 
   /** Sends a local file to the daemon, into the slot once it is there */
