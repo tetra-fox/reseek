@@ -133,7 +133,7 @@
 <svelte:window onkeydown={keydown} />
 
 {#snippet list()}
-  <ChatList {current} {q} {kind} {onjoin} {onnew} />
+  <ChatList {current} {q} {onjoin} {onnew} />
 {/snippet}
 
 {#snippet lead()}
