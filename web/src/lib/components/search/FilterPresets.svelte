@@ -52,13 +52,14 @@
 
   const save = async () => {
     busy = true;
+    const preset = { name: name.trim(), filter: text.trim() };
     const kept = presets.filter((p) => !removed.has(p.name));
-    const outcome = await savePresets(withPreset(kept, { name: name.trim(), filter: text.trim() }));
-    if (outcome.ok) removed.delete(name.trim());
+    const outcome = await savePresets(withPreset(kept, preset));
+    if (outcome.ok) removed.delete(preset.name);
     busy = false;
     if (!outcome.ok) return void toast(outcome.error, "error");
     saving = false;
-    toast(`Saved preset ${name.trim()}`);
+    toast(`Saved preset ${preset.name}`);
   };
 
   /**
@@ -122,7 +123,7 @@
   </Button>
 </div>
 
-<Dialog bind:open={saving} title="Save a filter preset">
+<Dialog bind:open={saving} title="Save a filter preset" {busy}>
   <form
     id="save-preset"
     class="flex flex-col gap-3"
@@ -143,7 +144,7 @@
     {/if}
   </form>
   {#snippet footer()}
-    <Button variant="outline" onclick={() => (saving = false)}>Cancel</Button>
+    <Button variant="outline" disabled={busy} onclick={() => (saving = false)}>Cancel</Button>
     <Button type="submit" form="save-preset" disabled={busy || !name.trim() || !text.trim()}>
       {replaces ? "Replace" : "Save"}
     </Button>
