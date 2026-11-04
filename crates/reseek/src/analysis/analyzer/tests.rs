@@ -578,15 +578,22 @@ fn a_17_khz_cut_at_48_khz_reads_as_a_transcode() {
   a_17_khz_cut_reads_as_a_transcode(48_000);
 }
 
+/// Writes a FLAC of `seconds` of music at `path` that states it holds `frames` sample frames.
+fn stating(path: &Path, seconds: usize, frames: u64) {
+  fixtures::write_flac(&music_for(seconds, 1, 44_100, pink), 16, false, path);
+  // the stream information's total sample count is the low 36 bits of bytes 21 to 25
+  let mut bytes = std::fs::read(path).unwrap();
+  bytes[21] = (bytes[21] & 0xf0) | ((frames >> 32) as u8 & 0x0f);
+  bytes[22..26].copy_from_slice(&(frames as u32).to_be_bytes());
+  std::fs::write(path, &bytes).unwrap();
+}
+
 #[test]
 fn a_file_without_a_stated_length_is_read_only_so_far() {
   let dir = tempfile::tempdir().unwrap();
-  let path = flac(dir.path(), "a.flac", &music(1, 44_100, pink), 16);
-  // the stream information's total sample count is the low 36 bits of bytes 21 to 25
-  let mut bytes = std::fs::read(&path).unwrap();
-  bytes[21] &= 0xf0;
-  bytes[22..26].fill(0);
-  std::fs::write(&path, &bytes).unwrap();
+  let path = dir.path().join("a.flac");
+  // a total sample count of 0 is none stated
+  stating(&path, fixtures::SECONDS, 0);
   let settings = Settings {
     max_full_seconds: 10.0,
     ..settings()
@@ -602,6 +609,40 @@ fn a_file_without_a_stated_length_is_read_only_so_far() {
       .limitations
       .iter()
       .any(|l| l.contains("does not state its length") && l.contains("after 10 seconds")),
+    "{reading:#?}"
+  );
+}
+
+#[test]
+fn a_file_shorter_than_it_states_reports_the_length_read() {
+  let dir = tempfile::tempdir().unwrap();
+  let path = dir.path().join("short.flac");
+  stating(&path, fixtures::SECONDS, 600 * 44_100);
+  let measured = engine::run(&path, &settings(), &CancellationToken::new()).unwrap();
+  assert!(!measured.sampled);
+  assert_eq!(measured.windows.len(), fixtures::SECONDS);
+  assert!(
+    (measured.duration - fixtures::SECONDS as f64).abs() < 0.1,
+    "{}",
+    measured.duration
+  );
+}
+
+#[test]
+fn a_file_stating_a_huge_length_reports_only_what_was_read() {
+  let dir = tempfile::tempdir().unwrap();
+  let path = dir.path().join("huge.flac");
+  stating(&path, 4, (1 << 36) - 1);
+  let measured = engine::run(&path, &settings(), &CancellationToken::new()).unwrap();
+  assert!(measured.sampled);
+  assert!(measured.duration <= 4.0, "{}", measured.duration);
+  assert!(!measured.windows.is_empty());
+  let reading = reading::read(&measured);
+  assert!(
+    reading
+      .limitations
+      .iter()
+      .any(|l| l.contains("seeking failed")),
     "{reading:#?}"
   );
 }

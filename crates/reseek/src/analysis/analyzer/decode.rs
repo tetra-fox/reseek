@@ -90,12 +90,20 @@ pub(in crate::analysis) enum Filled {
 impl Decoder {
   /// Opens the file at `path`, finding its container from its contents and its extension.
   pub fn open(path: &Path) -> Result<Self, String> {
+    Self::open_through(path, |file| Box::new(file))
+  }
+
+  /// [`Decoder::open`], reading the file's bytes through the source `through` makes of it.
+  pub fn open_through(
+    path: &Path,
+    through: impl FnOnce(File) -> Box<dyn MediaSource>,
+  ) -> Result<Self, String> {
     let file = File::open(path).map_err(|e| format!("the file could not be opened: {e}"))?;
     let mut hint = Hint::new();
     if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
       hint.with_extension(extension);
     }
-    Self::from_source(Box::new(file), &hint)
+    Self::from_source(through(file), &hint)
   }
 
   /// Opens audio from any source of bytes, with `hint` naming what it might be.

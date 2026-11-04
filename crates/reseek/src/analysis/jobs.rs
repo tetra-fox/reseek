@@ -281,6 +281,10 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
   let worked = tokio::task::spawn_blocking(move || {
     let _entered = span.enter();
     let measured = engine::run(&file.resolved, &settings, &cancel)?;
+    // a job canceled since its last window leaves nothing behind
+    if cancel.is_cancelled() {
+      return Err(engine::Canceled);
+    }
     let read = reading::read(&measured);
     let mut problem = None;
     let drawn = measured.claimed.as_ref().and_then(|claimed| {
