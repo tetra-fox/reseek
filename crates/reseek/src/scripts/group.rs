@@ -2,7 +2,7 @@
 //! everything it left running: its process group on Unix, a job object on Windows.
 
 use tokio::process::{Child, Command};
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// Makes the run lead a process group of its own, which its children join.
 pub(super) fn prepare(command: &mut Command) {
@@ -39,7 +39,7 @@ impl Group {
     {
       match rustix::process::kill_process_group(group, rustix::process::Signal::KILL) {
         Ok(()) => return,
-        Err(e) => debug!(error = %e, "a script's process group was not killed; only the script is"),
+        Err(e) => warn!(error = %e, "a script's process group was not killed; only the script is"),
       }
     }
     // the job ends every process in it once its last handle closes, which this one is
@@ -80,7 +80,7 @@ fn job_of(child: &Child) -> Option<win32job::Job> {
   match joined {
     Ok(job) => Some(job),
     Err(e) => {
-      debug!(error = %e, "a script was not put in a job; only the script can be killed");
+      warn!(error = %e, "a script was not put in a job; only the script can be killed");
       None
     }
   }
