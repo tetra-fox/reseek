@@ -1,9 +1,9 @@
 # The NixOS VM test: a machine runs the module's service against a soulfind of its own, with no
 # network beyond the VM. It checks the service as a NixOS user meets it (health, login, version,
-# the shares scanned, the configuration read-only and managed by NixOS, a configuration switch
-# reloaded with SIGHUP, runtime overrides with an expiry), then runs the daemon's smoke program:
-# the daemon shares, searches, browses, downloads and uploads through its API with the
-# soulseek-rs CLI as the other user.
+# the shares scanned, the configuration read-only and managed by NixOS, a drop-in file read as
+# one of its sources, a configuration switch reloaded with SIGHUP, runtime overrides with an
+# expiry), then runs the daemon's smoke program: the daemon shares, searches, browses, downloads
+# and uploads through its API with the soulseek-rs CLI as the other user.
 {
   self,
   testers,
@@ -51,6 +51,12 @@ testers.runNixOSTest {
           RESEEK_PASSWORD=${password}
           RESEEK_SLSK_PASSWORD=vm-soulseek
         '';
+        # a drop-in laid over the settings, as a secret rendered by agenix would be
+        extraConfigFiles = [
+          (pkgs.writeText "rooms.toml" ''
+            rooms = [ "nixos" ]
+          '')
+        ];
         settings = {
           remote_configuration = true;
           soulseek = {
@@ -127,6 +133,14 @@ testers.runNixOSTest {
         status, refused = api("PATCH", "/options/file", {"set": {"debug": True}, "revision": revision})
         assert status == 409, status
         assert refused["detail"] == "managed by nixos", refused
+
+    with subtest("a drop-in file is read as a config.d source"):
+        _, view = api("GET", "/options/view")
+        source = view["fields"]["rooms"]["source"]
+        assert source["layer"] == "file", source
+        assert source["file"] == "config.d/01-rooms.toml", source
+        assert view["values"]["rooms"] == ["nixos"], view["values"]["rooms"]
+        assert any(file["name"] == source["file"] for file in view["files"]), view["files"]
 
     with subtest("a configuration switch reloads the daemon with SIGHUP"):
         assert slots() == 2
