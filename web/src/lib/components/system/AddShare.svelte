@@ -72,8 +72,8 @@
   let kind = $state<"share" | "exclude">("share");
   let error = $state("");
   let saving = $state(false);
-  /** the folder just added, which the dialog offers a scan for */
-  let added = $state<string | null>(null);
+  /** the folder just added, and whether as an exclusion, which the dialog offers a scan for */
+  let added = $state.raw<{ path: string; exclude: boolean } | null>(null);
 
   const read = async (at: string) => {
     const outcome = await call(() =>
@@ -113,7 +113,9 @@
   const add = async () => {
     if (!data || !chosen || taken) return;
     const file = fileOf(data, KEY);
-    const entry = shareEntry(chosen, alias, kind === "exclude");
+    const path = chosen;
+    const exclude = kind === "exclude";
+    const entry = shareEntry(path, alias, exclude);
     saving = true;
     const outcome = await call(() =>
       api.PATCH("/api/v0/options/file", {
@@ -133,7 +135,7 @@
       void view.load();
       return;
     }
-    added = chosen;
+    added = { path, exclude };
     onadded?.();
   };
 
@@ -157,13 +159,14 @@
 
   <Dialog
     bind:open
+    busy={saving || scanning.running}
     title={added ? "Share added" : "Add share"}
     description={added ? undefined : "Folders on the machine reseek runs on."}
     class="w-[min(36rem,calc(100vw-2rem))]">
     {#if added}
       <p class="text-sm">
-        <code class="font-mono wrap-anywhere">{added}</code>
-        {kind === "exclude"
+        <code class="font-mono wrap-anywhere">{added.path}</code>
+        {added.exclude
           ? "is excluded. A rescan takes its files off the network."
           : "is shared. A rescan puts its files on the network."}
       </p>
@@ -238,10 +241,11 @@
     {/if}
     {#snippet footer()}
       {#if added}
-        <Button variant="ghost" onclick={() => (open = false)}>Not now</Button>
+        <Button variant="ghost" disabled={scanning.running} onclick={() => (open = false)}
+          >Not now</Button>
         <Button disabled={scanning.running} onclick={() => void rescan()}>Rescan now</Button>
       {:else}
-        <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+        <Button variant="ghost" disabled={saving} onclick={() => (open = false)}>Cancel</Button>
         <Button disabled={!chosen || taken || saving} onclick={() => void add()}>
           {kind === "exclude" ? "Exclude folder" : "Add share"}
         </Button>

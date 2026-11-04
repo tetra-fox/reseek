@@ -46,6 +46,7 @@
 
 <Dialog
   bind:open
+  {busy}
   title="Add downloads"
   description="Enter a username and the remote path of a shared file, or paste slsk:// links or search results in JSON.">
   <form
@@ -69,7 +70,7 @@
     </label>
   </form>
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+    <Button variant="ghost" disabled={busy} onclick={() => (open = false)}>Cancel</Button>
     <Button type="submit" form="add-download" disabled={busy || !count}>
       Download {count || ""}
     </Button>

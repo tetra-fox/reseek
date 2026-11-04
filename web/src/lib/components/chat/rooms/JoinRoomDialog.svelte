@@ -156,7 +156,7 @@
   };
 </script>
 
-<Dialog bind:open title="Join a room" class="w-[min(36rem,calc(100vw-2rem))]">
+<Dialog bind:open title="Join a room" busy={creating} class="w-[min(36rem,calc(100vw-2rem))]">
   <h3 class="text-sm font-semibold">Public rooms</h3>
   <div class="flex gap-2">
     <Input
@@ -290,6 +290,6 @@
     </p>
   </Form>
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (open = false)}>Close</Button>
+    <Button variant="ghost" disabled={creating} onclick={() => (open = false)}>Close</Button>
   {/snippet}
 </Dialog>
