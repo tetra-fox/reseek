@@ -4,6 +4,7 @@
 pub mod addresses;
 pub mod api_key;
 pub mod cidr;
+pub(crate) mod duration;
 pub mod enums;
 pub mod load;
 mod options;

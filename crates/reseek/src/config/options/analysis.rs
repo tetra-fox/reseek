@@ -22,7 +22,7 @@ pub struct Analysis {
   pub workers: Workers,
   /// Maximum analysis time per file. An analysis that runs longer stops and reports its
   /// partial results.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub timeout: Duration,
   /// Maximum length, in minutes, of a file analyzed in full. Longer files are sampled.
   pub max_full_minutes: u32,

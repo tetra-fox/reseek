@@ -14,7 +14,7 @@ pub const RETENTION_SWEEP: Duration = Duration::from_secs(300);
 #[serde(default)]
 pub struct Retention {
   /// Age after which finished searches are deleted. Minimum: 5 minutes.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub search: Option<Duration>,
   /// Finished transfers.
   pub transfers: TransfersRetention,
@@ -22,18 +22,18 @@ pub struct Retention {
   pub files: FileRetention,
   /// Age after which daily log files are deleted. Minimum: 2 days.
   #[cascade(apply = "restart")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub logs: Duration,
   /// Chat history.
   pub messages: MessageRetention,
   /// Time without being seen after which a user is removed from the users directory. Pinned,
   /// noted, tagged, blocked and grouped users are kept.
   #[cascade(env = "RESEEK_RETENTION_USERS")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub users: Option<Duration>,
   /// Age after which logged events are deleted. `0` keeps them.
   #[cascade(env = "RESEEK_RETENTION_EVENTS")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub events: Duration,
   /// Maximum number of logged events kept. The oldest beyond it are deleted. `0` keeps all of
   /// them.
@@ -66,7 +66,7 @@ pub struct TransfersRetention {
   pub download: TransferRetention,
   /// Time after removal from the transfer lists at which a transfer is deleted permanently.
   /// Minimum: 5 minutes. Removed transfers are kept for the history when not set.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub purge_removed_after: Option<Duration>,
 }
 
@@ -75,17 +75,17 @@ pub struct TransfersRetention {
 #[serde(default)]
 pub struct TransferRetention {
   /// Age after which succeeded transfers are removed. Minimum: 5 minutes.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub succeeded: Option<Duration>,
   /// Age after which transfers that ended in an error, a timeout, a rejection or a size
   /// mismatch are removed. Minimum: 5 minutes.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub errored: Option<Duration>,
   /// Age after which canceled transfers are removed. Minimum: 5 minutes.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub canceled: Option<Duration>,
   /// Age after which errored or canceled transfers are removed. Minimum: 5 minutes.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub failed: Option<Duration>,
 }
 
@@ -96,11 +96,11 @@ pub struct TransferRetention {
 pub struct FileRetention {
   /// Age after which files in the downloads directory are deleted, by last write time.
   /// Minimum: 30 minutes.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub complete: Option<Duration>,
   /// Age after which files in the incomplete directory are deleted, by last write time.
   /// Minimum: 30 minutes.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub incomplete: Option<Duration>,
 }
 
@@ -111,7 +111,7 @@ pub struct FileRetention {
 pub struct MessageRetention {
   /// Age after which read private messages are deleted. `0` for no limit.
   #[cascade(env = "RESEEK_RETENTION_MESSAGES_PRIVATE")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub private: Duration,
   /// Maximum number of read private messages kept per conversation. Minimum: 250, or `0` for
   /// no limit.
@@ -120,11 +120,11 @@ pub struct MessageRetention {
   /// Age after which room messages are deleted, except those that mention this account.
   /// Minimum: 1 hour, or `0` for no limit.
   #[cascade(env = "RESEEK_RETENTION_MESSAGES_ROOMS")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub rooms: Duration,
   /// Age after which room messages that mention this account are deleted. `0` for no limit.
   #[cascade(env = "RESEEK_RETENTION_MESSAGES_MENTIONS")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub mentions: Duration,
   /// Maximum number of messages kept per room. Minimum: 250, or `0` for no limit.
   #[cascade(env = "RESEEK_RETENTION_MESSAGES_MAX_PER_ROOM")]

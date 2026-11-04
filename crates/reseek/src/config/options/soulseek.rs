@@ -163,22 +163,22 @@ pub struct ConnectionTimeouts {
     env = "RESEEK_SLSK_CONNECTION_TIMEOUT",
     cli = "--slsk-connection-timeout"
   )]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub connect: Duration,
   /// Idle time after which a peer connection is closed. Minimum: 1 second.
   #[cascade(
     env = "RESEEK_SLSK_INACTIVITY_TIMEOUT",
     cli = "--slsk-inactivity-timeout"
   )]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub inactivity: Duration,
   /// Time a transfer may stall before it fails. Minimum: 30 seconds.
   #[cascade(env = "RESEEK_SLSK_TRANSFER_TIMEOUT", cli = "--slsk-transfer-timeout")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub transfer: Duration,
   /// Maximum wait for a peer to answer a transfer request, for uploads and for downloads that
   /// use the transfer request style. Minimum: 1 second.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub transfer_response: Duration,
 }
 
@@ -257,11 +257,11 @@ pub struct ServerKeepalive {
   pub enabled: bool,
   /// Idle time before the first probe. Minimum: 1 second.
   #[cascade(env = "RESEEK_SLSK_SERVER_KEEPALIVE_IDLE", apply = "reconnect")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub idle: Duration,
   /// Interval between probes. Minimum: 1 second.
   #[cascade(env = "RESEEK_SLSK_SERVER_KEEPALIVE_INTERVAL", apply = "reconnect")]
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub interval: Duration,
   /// Number of unanswered probes after which the connection is dropped. Minimum: 1.
   #[cascade(env = "RESEEK_SLSK_SERVER_KEEPALIVE_PROBES", apply = "reconnect")]
@@ -297,7 +297,7 @@ pub struct SoulseekLimits {
   pub user_endpoint_cache_size: u32,
   /// Time a prospective distributed parent has to send its branch level, branch root and a
   /// search.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub distributed_parent_negotiation_timeout: Duration,
 }
 
@@ -335,7 +335,7 @@ impl Default for SoulseekSearch {
 pub struct SoulseekBrowse {
   /// Time a user has to start sending a share listing. Large shares take longer to prepare.
   /// Minimum: 1 second.
-  #[serde(with = "humantime_serde")]
+  #[serde(with = "crate::config::duration")]
   pub response_timeout: Duration,
 }
 
