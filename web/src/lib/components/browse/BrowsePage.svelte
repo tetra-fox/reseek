@@ -50,6 +50,7 @@
     tickedCounts,
     treeLines
   } from "#lib/tree/folders.js";
+  import { TYPING_PAUSE } from "#lib/ui/keys.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
   type Props = {
@@ -132,7 +133,7 @@
   // the tree filter applies a moment after typing stops
   $effect(() => {
     const text = typed;
-    const timer = setTimeout(() => (query = text), 200);
+    const timer = setTimeout(() => (query = text), TYPING_PAUSE);
     return () => clearTimeout(timer);
   });
 
