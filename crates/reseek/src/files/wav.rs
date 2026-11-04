@@ -48,20 +48,34 @@ impl Format {
     u64::from(self.channels) * u64::from(self.width)
   }
 
-  /// The bytes of PCM.
-  fn pcm(&self) -> u64 {
-    self.frames * self.block()
+  /// The WAV of this PCM, or why a WAV cannot hold it: its length and frame size have to fit
+  /// the header's fields.
+  fn fits(self) -> Result<Wav, String> {
+    let size = self
+      .frames
+      .checked_mul(self.block())
+      .and_then(|pcm| pcm.checked_add(HEADER))
+      .filter(|size| *size <= MAX_RIFF && self.block() <= u64::from(u16::MAX))
+      .ok_or("it is too long for a WAV")?;
+    Ok(Wav { format: self, size })
   }
+}
 
-  /// Whether a WAV can hold this PCM: its length and frame size have to fit the header's fields.
-  fn fits(&self) -> bool {
-    HEADER + self.pcm() <= MAX_RIFF && self.block() <= u64::from(u16::MAX)
-  }
+/// PCM a WAV can hold.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Wav {
+  format: Format,
+  /// the bytes of the whole WAV, header and PCM
+  size: u64,
+}
 
-  /// The WAV header of this PCM, which [`Self::fits`] one.
+impl Wav {
+  /// The WAV header.
   fn header(&self) -> [u8; HEADER as usize] {
-    let pcm = self.pcm() as u32;
-    let block = self.block() as u16;
+    let format = &self.format;
+    // both fit their fields, which `Format::fits` checked
+    let pcm = (self.size - HEADER) as u32;
+    let block = format.block() as u16;
     let mut header = [0; HEADER as usize];
     let mut at = 0;
     let mut put = |bytes: &[u8]| {
@@ -72,17 +86,17 @@ impl Format {
     put(&(pcm + HEADER as u32 - 8).to_le_bytes());
     put(b"WAVEfmt ");
     put(&16u32.to_le_bytes());
-    put(&self.tag.to_le_bytes());
-    put(&self.channels.to_le_bytes());
-    put(&self.sample_rate.to_le_bytes());
+    put(&format.tag.to_le_bytes());
+    put(&format.channels.to_le_bytes());
+    put(&format.sample_rate.to_le_bytes());
     put(
-      &self
+      &format
         .sample_rate
         .saturating_mul(u32::from(block))
         .to_le_bytes(),
     );
     put(&block.to_le_bytes());
-    put(&(self.width * 8).to_le_bytes());
+    put(&(format.width * 8).to_le_bytes());
     put(b"data");
     put(&pcm.to_le_bytes());
     header
@@ -99,7 +113,7 @@ enum Source {
 
 /// A file found to be servable, ready to read.
 struct Opened {
-  format: Format,
+  wav: Wav,
   source: Source,
 }
 
@@ -133,7 +147,7 @@ fn open(
         frames: aiff.frames,
       };
       Ok(Opened {
-        format,
+        wav: format.fits().map_err(Refused::Format)?,
         source: Source::Aiff(aiff, file),
       })
     }
@@ -180,7 +194,7 @@ fn alac(file: Box<dyn MediaSource>, extension: Option<&str>) -> Result<Opened, R
     frames,
   };
   Ok(Opened {
-    format,
+    wav: format.fits().map_err(Refused::Format)?,
     source: Source::Alac(Box::new(decoder)),
   })
 }
@@ -281,7 +295,7 @@ impl Pcm {
   fn new(opened: Opened, start: u64, length: u64) -> Self {
     Self {
       source: opened.source,
-      format: opened.format,
+      format: opened.wav.format,
       at: start,
       end: start + length,
       sought: false,
@@ -342,7 +356,7 @@ fn body(opened: Opened, shown: String, start: u64, length: u64, speed: ServeSpee
     pcm_from,
     pcm_length,
   } = parts(start, length);
-  let head = Bytes::copy_from_slice(&opened.format.header()[header]);
+  let head = Bytes::copy_from_slice(&opened.wav.header()[header]);
   let pcm = (pcm_length > 0).then(|| Pcm::new(opened, pcm_from, pcm_length));
   // each piece is read on the blocking pool, so a body nobody reads any more holds no thread
   let pieces = stream::unfold((pcm, speed, shown), |(pcm, speed, shown)| async move {
@@ -382,8 +396,7 @@ fn body(opened: Opened, shown: String, start: u64, length: u64, speed: ServeSpee
 fn opened_bytes(bytes: &[u8]) -> Result<Opened, String> {
   let file = Box::new(Cursor::new(bytes.to_vec()));
   match open(file, bytes.len() as u64, None) {
-    Ok(opened) if opened.format.fits() => Ok(opened),
-    Ok(_) => Err("it is too long for a WAV".to_string()),
+    Ok(opened) => Ok(opened),
     Err(Refused::Format(reason)) => Err(reason),
     Err(Refused::Read(e)) => Err(e.to_string()),
   }
@@ -391,14 +404,14 @@ fn opened_bytes(bytes: &[u8]) -> Result<Opened, String> {
 
 /// The length of the WAV a file of `bytes` is served as, or why it is not served as one.
 pub fn wav_length(bytes: &[u8]) -> Result<u64, String> {
-  Ok(HEADER + opened_bytes(bytes)?.format.pcm())
+  Ok(opened_bytes(bytes)?.wav.size)
 }
 
 /// `length` bytes from `start` of the WAV a file of `bytes` is served as, read as a response
 /// reads them, or why they could not be.
 pub fn wav_bytes(bytes: &[u8], start: u64, length: u64) -> Result<Vec<u8>, String> {
   let opened = opened_bytes(bytes)?;
-  let size = HEADER + opened.format.pcm();
+  let size = opened.wav.size;
   if start.checked_add(length).is_none_or(|end| end > size) {
     return Err(format!("the WAV has only {size} bytes"));
   }
@@ -407,7 +420,7 @@ pub fn wav_bytes(bytes: &[u8], start: u64, length: u64) -> Result<Vec<u8>, Strin
     pcm_from,
     pcm_length,
   } = parts(start, length);
-  let mut out = opened.format.header()[header].to_vec();
+  let mut out = opened.wav.header()[header].to_vec();
   let mut pcm = Pcm::new(opened, pcm_from, pcm_length);
   while let Some(piece) = pcm.step() {
     out.extend_from_slice(&piece?);
@@ -446,11 +459,6 @@ pub(super) async fn respond(
       )));
     }
   };
-  if !opened.format.fits() {
-    return Err(ApiError::unsupported_media(
-      "This file cannot be played: it is too long for a WAV",
-    ));
-  }
   let entity = Entity {
     name: Path::new(&file.name())
       .with_extension("wav")
@@ -458,7 +466,7 @@ pub(super) async fn respond(
       .into_owned(),
     etag: file.etag_of("wav"),
     kind: "audio/wav".to_string(),
-    size: HEADER + opened.format.pcm(),
+    size: opened.wav.size,
   };
   match serve::ranged(&entity, request) {
     Ranged::Answered(response) => Ok(response),
@@ -522,7 +530,7 @@ mod tests {
       width: 3,
       frames: 10,
     };
-    let header = format.header();
+    let header = format.fits().unwrap().header();
     let u32_at = |at: usize| u32::from_le_bytes(header[at..at + 4].try_into().unwrap());
     let u16_at = |at: usize| u16::from_le_bytes(header[at..at + 2].try_into().unwrap());
     assert_eq!(&header[..4], b"RIFF");
@@ -537,5 +545,61 @@ mod tests {
     assert_eq!(u16_at(34), 24);
     assert_eq!(&header[36..40], b"data");
     assert_eq!(u32_at(40), 60);
+  }
+
+  /// A 16-bit stereo ALAC tone at 8000 Hz in an MP4 container: four packets of 4096, 4096, 4096
+  /// and 3712 frames, one after the other in its media data.
+  const TONE: &[u8] = include_bytes!("fixtures/tone.m4a");
+
+  /// Where the box `kind` starts; each kind the tests change is in the tone once.
+  fn box_at(bytes: &[u8], kind: &[u8; 4]) -> usize {
+    bytes.windows(4).position(|w| w == kind).unwrap() - 4
+  }
+
+  fn get(bytes: &[u8], at: usize) -> u32 {
+    u32::from_be_bytes(bytes[at..at + 4].try_into().unwrap())
+  }
+
+  fn put(bytes: &mut [u8], at: usize, value: u32) {
+    bytes[at..at + 4].copy_from_slice(&value.to_be_bytes());
+  }
+
+  /// A box of `kind` holding the big-endian `words` and then `inner`.
+  fn boxed(kind: &[u8; 4], words: &[u32], inner: &[u8]) -> Vec<u8> {
+    let length = 8 + 4 * words.len() + inner.len();
+    let mut out = u32::try_from(length).unwrap().to_be_bytes().to_vec();
+    out.extend_from_slice(kind);
+    for word in words {
+      out.extend_from_slice(&word.to_be_bytes());
+    }
+    out.extend_from_slice(inner);
+    out
+  }
+
+  /// The tone with `entries` as its time-to-sample table, as sample counts and the frames each
+  /// sample lasts.
+  fn timed(entries: &[(u32, u32)]) -> Vec<u8> {
+    let mut bytes = TONE.to_vec();
+    let mut words = vec![0, u32::try_from(entries.len()).unwrap()];
+    words.extend(entries.iter().flat_map(|&(count, delta)| [count, delta]));
+    let table = boxed(b"stts", &words, &[]);
+    let at = box_at(&bytes, b"stts");
+    let old = get(&bytes, at) as usize;
+    bytes.splice(at..at + old, table.iter().copied());
+    // the boxes holding the table come before it, and the media data before them all
+    for kind in [b"moov", b"trak", b"mdia", b"minf", b"stbl"] {
+      let holder = box_at(&bytes, kind);
+      let grown = get(&bytes, holder) as usize + table.len() - old;
+      put(&mut bytes, holder, u32::try_from(grown).unwrap());
+    }
+    bytes
+  }
+
+  #[test]
+  fn a_length_past_what_a_wav_holds_is_refused_however_far() {
+    // the first entry sums to about 2^62 frames
+    let bytes = timed(&[(0x4000_0001, 0xffff_ffff), (1, 3712)]);
+    let refused = wav_length(&bytes).unwrap_err();
+    assert!(refused.contains("too long"), "{refused}");
   }
 }
