@@ -97,23 +97,31 @@ fn boxed(kind: &[u8; 4], words: &[u32], inner: &[u8]) -> Vec<u8> {
   out
 }
 
-/// The tone with `entries` as its time-to-sample table, as sample counts and the frames each
-/// sample lasts.
-fn timed(entries: &[(u32, u32)]) -> Vec<u8> {
-  let mut bytes = TONE.to_vec();
-  let mut words = vec![0, u32::try_from(entries.len()).unwrap()];
-  words.extend(entries.iter().flat_map(|&(count, delta)| [count, delta]));
-  let table = boxed(b"stts", &words, &[]);
-  let at = box_at(&bytes, b"stts");
+/// `bytes` with `table` in place of the first sample table box of its kind, and the boxes that
+/// hold it, which come before it, grown or shrunk to match.
+fn replaced(mut bytes: Vec<u8>, table: &[u8]) -> Vec<u8> {
+  let kind: &[u8; 4] = table[4..8].try_into().unwrap();
+  let at = box_at(&bytes, kind);
   let old = get(&bytes, at) as usize;
   bytes.splice(at..at + old, table.iter().copied());
-  // the boxes holding the table come before it, and the media data before them all
   for kind in [b"moov", b"trak", b"mdia", b"minf", b"stbl"] {
-    let holder = box_at(&bytes, kind);
+    // a track taken out of the file has no movie box around it
+    let Some(name) = bytes.windows(4).position(|w| w == kind) else {
+      continue;
+    };
+    let holder = name - 4;
     let grown = get(&bytes, holder) as usize + table.len() - old;
     put(&mut bytes, holder, u32::try_from(grown).unwrap());
   }
   bytes
+}
+
+/// The tone with `entries` as its time-to-sample table, as sample counts and the frames each
+/// sample lasts.
+fn timed(entries: &[(u32, u32)]) -> Vec<u8> {
+  let mut words = vec![0, u32::try_from(entries.len()).unwrap()];
+  words.extend(entries.iter().flat_map(|&(count, delta)| [count, delta]));
+  replaced(TONE.to_vec(), &boxed(b"stts", &words, &[]))
 }
 
 #[test]
@@ -147,8 +155,9 @@ fn whole(bytes: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 /// The tone made fragmented by a movie extends box at the end of its movie box, the file's last,
-/// and stating 30000 frames. After it, for each of `fragments`, a fragment of the first packet
-/// again with its media data; it holds the given track fragment boxes before the packet's.
+/// and stating 30000 frames. After it come fragments of the first packet again, each with its
+/// media data: `fragments` has one entry per fragment, holding the track fragment boxes it has
+/// before the packet's, or none.
 fn fragmented(fragments: &[&[u8]]) -> Vec<u8> {
   let mut bytes = TONE.to_vec();
   let mdhd = box_at(&bytes, b"mdhd");
@@ -206,6 +215,32 @@ fn a_range_past_the_last_packet_is_silence_as_in_the_whole() {
   assert_eq!(
     wav_bytes(&bytes, start, 1000),
     Ok(whole[start as usize..][..1000].to_vec())
+  );
+}
+
+#[test]
+fn a_range_past_where_another_track_ends_reads_the_audio() {
+  // a second track holding only the first packet again, so it ends 4096 frames in, and a seek
+  // that moves every track finds no place in it for a later frame
+  let trak_at = box_at(TONE, b"trak");
+  let trak = TONE[trak_at..][..get(TONE, trak_at) as usize].to_vec();
+  let trak_end = trak_at + trak.len();
+  let first_size = get(TONE, box_at(TONE, b"stsz") + 20);
+  let second = replaced(trak, &boxed(b"stts", &[0, 1, 1, 4096], &[]));
+  let mut second = replaced(second, &boxed(b"stsz", &[0, 0, 1, first_size], &[]));
+  let tkhd = box_at(&second, b"tkhd");
+  put(&mut second, tkhd + 20, 2);
+  let mut bytes = TONE.to_vec();
+  let moov = box_at(&bytes, b"moov");
+  let grown = get(&bytes, moov) + u32::try_from(second.len()).unwrap();
+  put(&mut bytes, moov, grown);
+  bytes.splice(trak_end..trak_end, second);
+  let audio = whole(&bytes).unwrap();
+  assert_eq!(audio, whole(TONE).unwrap());
+  let start = 44 + 12_000 * 4;
+  assert_eq!(
+    wav_bytes(&bytes, start, 1000),
+    Ok(audio[start as usize..][..1000].to_vec())
   );
 }
 
