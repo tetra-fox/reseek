@@ -2,6 +2,7 @@ import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MessagePane, type Target } from "#lib/chat/pane.svelte.js";
+import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import Composer from "./Composer.svelte";
@@ -17,7 +18,7 @@ describe("the composer", () => {
     document.body.innerHTML = "";
   });
 
-  let fetchCalls: () => { method: string }[] = () => [];
+  let fetchCalls: () => { method: string; body: unknown }[] = () => [];
   const open = (target: Target = { kind: "room", name: "indie" }) => {
     const net = fakeNetwork(() => undefined);
     fetchCalls = () => net.requests;
@@ -43,6 +44,18 @@ describe("the composer", () => {
     };
     return { box, type, press, pane };
   };
+
+  it("saves a conversation's draft at once when it closes before typing pauses", async () => {
+    const { type, pane } = open({ kind: "user", name: "alice" });
+    pane.conversation = { draft: "" } as never;
+    flushSync();
+    type("hello");
+    unmount(component!);
+    component = null;
+    await flush();
+    const puts = fetchCalls().filter((r) => r.method === "PUT");
+    expect(puts.map((r) => r.body)).toEqual([{ draft: "hello" }]);
+  });
 
   it("puts an emoji in place of its name with Tab, the caret after it", async () => {
     const { box, type, press } = open();
