@@ -76,6 +76,22 @@ describe("a suggesting box's keys", () => {
     expect(onchoose).toHaveBeenCalledExactlyOnceWith("two");
   });
 
+  it("gives up an Enter that waits when the text changes meanwhile", async () => {
+    let answer!: () => void;
+    const settle = () => new Promise<void>((done) => (answer = done));
+    const onchoose = vi.fn();
+    component = mount(Fixture, { target: document.body, props: { value: "o", onchoose, settle } });
+    flushSync();
+    const box = document.querySelector<HTMLInputElement>("[role=combobox]")!;
+    press(box, "Enter");
+    box.value = "ot";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+    answer();
+    await flush();
+    expect(onchoose).not.toHaveBeenCalled();
+  });
+
   it("leaves Enter in an empty box to the form", () => {
     const onchoose = vi.fn();
     component = mount(Fixture, { target: document.body, props: { value: "  ", onchoose } });

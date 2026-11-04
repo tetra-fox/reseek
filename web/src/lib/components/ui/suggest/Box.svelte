@@ -62,12 +62,16 @@
     onchoose(entry);
   };
 
-  /** Enter takes the entry the keys moved to, else the first once `settle` has answered */
+  /**
+   * Enter takes the entry the keys moved to, else the first once `settle` has answered; text
+   * typed while it waits is a new search, which the Enter was not for
+   */
   const enter = async () => {
     if (shown && highlight.lit !== null && highlight.lit !== first) return choose(highlight.lit);
+    const asked = text;
     const answer = settle?.();
     if (answer) await answer;
-    if (first !== null) choose(first);
+    if (first !== null && text === asked) choose(first);
   };
 
   // an empty box leaves Enter to the form the box is in
