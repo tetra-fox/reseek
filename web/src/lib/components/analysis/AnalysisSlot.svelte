@@ -84,12 +84,19 @@
   ondragleave={left}
   ondrop={dropped}>
   {#if sending}
+    {@const percent = Math.round(sending.sent * 100)}
     <div class="flex flex-1 items-center justify-center p-3">
-      <div class="flex w-full max-w-2xl items-center gap-3 text-sm" role="status">
+      <div class="flex w-full max-w-2xl items-center gap-3 text-sm">
         <span class="font-medium">{letter}</span>
         <div class="flex min-w-0 flex-1 flex-col gap-1">
-          <span class="truncate">Uploading {sending.name}: {Math.round(sending.sent * 100)}%</span>
-          <div class="h-1.5 overflow-hidden rounded-full bg-surface-muted">
+          <span class="truncate">Uploading {sending.name}: {percent}%</span>
+          <div
+            class="h-1.5 overflow-hidden rounded-full bg-surface-muted"
+            role="progressbar"
+            aria-label={`Uploading ${sending.name}`}
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}>
             <div class="h-full bg-accent transition-[width]" style:width={`${sending.sent * 100}%`}>
             </div>
           </div>
