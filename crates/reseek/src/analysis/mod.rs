@@ -71,8 +71,10 @@ pub struct Analysis {
   /// the uploads held, which go with a restart
   held: Mutex<uploads::Uploads>,
   queue: Mutex<Queue>,
-  /// the files of batches waiting for room in the queue, locked while they feed it
+  /// the files of batches waiting for room in the queue
   backlog: tokio::sync::Mutex<backlog::Backlog>,
+  /// held while a file of the backlog is on its way into the queue
+  feeding: tokio::sync::Mutex<()>,
   /// paths of reports and spectrogram files that did not read, so each is warned about once
   unreadable: Mutex<HashSet<String>>,
   /// woken when a job is queued or one ends
@@ -112,6 +114,7 @@ impl Analysis {
       dir,
       queue: Mutex::new(Queue::default()),
       backlog: tokio::sync::Mutex::default(),
+      feeding: tokio::sync::Mutex::default(),
       unreadable: Mutex::default(),
       wake: Notify::new(),
       full: AtomicBool::new(false),
