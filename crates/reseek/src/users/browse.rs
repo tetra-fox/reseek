@@ -39,6 +39,21 @@ impl Entry {
   }
 }
 
+/// A browse under way. Dropping it ends the browse, so a browse whose caller went away does
+/// not show as running.
+pub struct Browsing<'a> {
+  browses: &'a Browses,
+  username: String,
+  /// which browse of the user this is, which its progress names
+  pub browse: u64,
+}
+
+impl Drop for Browsing<'_> {
+  fn drop(&mut self) {
+    self.browses.ended(&self.username, self.browse);
+  }
+}
+
 /// The browses of every user.
 pub struct Browses {
   live: Live,
@@ -60,8 +75,9 @@ impl Browses {
     lock(&self.entries)
   }
 
-  /// A browse of `username` starts; returns its number, which its progress and its end name.
-  pub fn started(&self, username: &str) -> u64 {
+  /// A browse of `username` starts; its progress is taken under the number the returned
+  /// guard holds, and it ends when the guard is dropped, however the browse ended.
+  pub fn started(&self, username: &str) -> Browsing<'_> {
     let browse = {
       let mut next = lock(&self.next);
       *next += 1;
@@ -78,7 +94,11 @@ impl Browses {
         ended: None,
       },
     );
-    browse
+    Browsing {
+      browses: self,
+      username: username.to_string(),
+      browse,
+    }
   }
 
   /// More of the reply to `browse` arrived.
@@ -105,7 +125,7 @@ impl Browses {
   }
 
   /// `browse` of `username` ended, well or not; its progress is kept a while.
-  pub fn ended(&self, username: &str, browse: u64) {
+  fn ended(&self, username: &str, browse: u64) {
     if let Some(entry) = self
       .entries()
       .get_mut(username)
@@ -162,17 +182,19 @@ mod tests {
     let browses = Browses::new(Live::new(CancellationToken::new()));
     let first = browses.started("alice");
     assert_eq!(browses.status("alice"), None, "nothing arrived yet");
-    browses.progressed(first, &progress(50, 100));
+    browses.progressed(first.browse, &progress(50, 100));
     assert_eq!(browses.status("alice").unwrap().bytes_transferred, 50);
     let second = browses.started("alice");
-    browses.progressed(first, &progress(100, 100));
+    browses.progressed(first.browse, &progress(100, 100));
     assert_eq!(
       browses.status("alice"),
       None,
       "the old browse's progress is not taken"
     );
-    browses.progressed(second, &progress(100, 100));
-    browses.ended("alice", second);
+    drop(first);
+    browses.progressed(second.browse, &progress(100, 100));
+    // a browse whose caller went away ends as well as one that returned
+    drop(second);
     tokio::time::sleep(Duration::from_secs(4)).await;
     assert_eq!(browses.status("alice").unwrap().percent_complete, 100.0);
     tokio::time::sleep(Duration::from_secs(1)).await;

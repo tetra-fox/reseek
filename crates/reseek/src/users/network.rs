@@ -266,7 +266,8 @@ impl UserService for Users {
     self.reachable(username)?;
     self.directory.touch(username, Touch::Browse).await;
     self.directory.refetch_statistics(username);
-    let browse = self.browses.started(username);
+    let browsing = self.browses.started(username);
+    let browse = browsing.browse;
     let browses = self.browses.clone();
     let options = BrowseOptions {
       response_timeout: self
@@ -287,7 +288,7 @@ impl UserService for Users {
       .client()
       .browse(username, options, &CancellationToken::new())
       .await;
-    self.browses.ended(username, browse);
+    drop(browsing);
     let response = result.map_err(|e| unanswered(username, e))?;
     debug!(
       username,
