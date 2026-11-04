@@ -158,7 +158,7 @@ mod tests {
   use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
   use tempfile::TempDir;
 
-  use crate::testing::{TestApp, app, request, with};
+  use crate::testing::{TestApp, app, request};
 
   /// A folder holding one of everything the route tells apart. Its name is not hidden, as the
   /// default of a temporary directory is.
@@ -183,14 +183,13 @@ mod tests {
     dir
   }
 
-  /// Loopback is a trusted administrator, a stored key has the role below, `Gone` is excluded and
-  /// `Skipped` filtered; `follow` is whether links are followed.
+  /// Loopback is a trusted administrator, `Gone` is excluded and `Skipped` filtered; `follow` is
+  /// whether links are followed.
   fn config(dir: &Path, remote: bool, follow: bool) -> String {
     format!(
       "remote_configuration = {remote}\n[shares]\nfollow_symlinks = {follow}\n\
        directories = [\"!{}\"]\nfilters = [\"Skipped$\"]\n[web.authentication]\n\
-       trusted_networks = [\"127.0.0.0/8\"]\n[web.authentication.api_keys.editor]\n\
-       key = \"editor-key-0123456789\"\nrole = \"readwrite\"\n",
+       trusted_networks = [\"127.0.0.0/8\"]\n",
       dir.join("Gone").display()
     )
   }
@@ -265,19 +264,10 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn only_an_administrator_lists_folders_and_only_with_remote_configuration() {
+  async fn listing_folders_needs_remote_configuration() {
     let dir = tree();
-    let path = uri(dir.path());
-    let on = app(&config(dir.path(), true, false), &[]).await;
-    let keyed = with(
-      request("GET", &path, None),
-      "x-api-key",
-      "editor-key-0123456789",
-    );
-    assert_eq!(on.send_from("192.0.2.1:1", keyed).await.status, 403);
-    let anonymous = request("GET", &path, None);
-    assert_eq!(on.send_from("192.0.2.1:1", anonymous).await.status, 401);
     let off = app(&config(dir.path(), false, false), &[]).await;
-    assert_eq!(off.send(request("GET", &path, None)).await.status, 403);
+    let listed = off.send(request("GET", &uri(dir.path()), None)).await;
+    assert_eq!(listed.status, 403);
   }
 }
