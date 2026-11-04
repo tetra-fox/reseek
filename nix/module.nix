@@ -383,8 +383,10 @@ let
         ProtectHome = "read-only";
         PrivateTmp = true;
         NoNewPrivileges = true;
-        ReadWritePaths = writable;
-        ReadOnlyPaths = readOnly;
+        # a path that does not exist yet, such as a disk not mounted, is left out rather than
+        # failing the unit, so the daemon starts and says what is missing
+        ReadWritePaths = map (path: "-${path}") writable;
+        ReadOnlyPaths = map (path: "-${path}") readOnly;
         # netlink is how the daemon finds the default gateway to ask it for a port mapping
         RestrictAddressFamilies = [
           "AF_INET"
