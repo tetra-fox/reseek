@@ -310,6 +310,12 @@ impl Messaging {
   async fn forgotten(&self, room: &str) {
     self.rooms.tracker().left(room);
     self.rooms_changed();
+    self.note_left(room).await;
+    self.push_rooms().await;
+  }
+
+  /// Notes that we left `room`, so it is not joined again after a start.
+  async fn note_left(&self, room: &str) {
     let room_name = room.to_string();
     let now = Utc::now();
     if let Err(e) = self
@@ -319,7 +325,6 @@ impl Messaging {
     {
       warn!(room, error = %e, "room leave not noted");
     }
-    self.push_rooms().await;
   }
 
   pub(super) async fn send_room(&self, room: &str, message: String) -> Result<(), ApiError> {
