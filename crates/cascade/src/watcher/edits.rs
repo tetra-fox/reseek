@@ -7,7 +7,7 @@ use chrono::Utc;
 use serde_json::Value;
 use tracing::{debug, info};
 
-use super::{Change, FileEdit, Shared, State, Written};
+use super::{Change, FileEdit, Read, Shared, State, Written};
 use crate::describe::Apply;
 use crate::edit::FileEditor;
 use crate::files::{read_optional_text, revision_of};
@@ -156,7 +156,7 @@ impl<T: Root> State<T> {
     info!(file = name, path = %path.display(), "configuration file written");
     match self.load(shared) {
       Ok(change) => Ok(Written { revision, change }),
-      Err(failure) => Err(self.report(shared, failure)),
+      Err(failure) => Err(self.report(shared, failure, Read::Files)),
     }
   }
 }
