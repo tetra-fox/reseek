@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import { chat } from "./chat.svelte";
@@ -90,7 +91,22 @@ describe("a pane opened at a message", () => {
       const up = ids.filter((id) => id < before);
       return { messages: up.slice(-limit).map(message), hasMore: up.length > limit, gaps: [] };
     });
-    return asked;
+    return { asked };
+  };
+  /**
+   * Puts `wait` before every answer about the messages, which it can answer instead; the
+   * network's other answers are left alone
+   */
+  const delayed = (wait: (url: URL) => Promise<Response | undefined>) => {
+    const network = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+      if (url.pathname.endsWith("/messages")) {
+        const instead = await wait(url);
+        if (instead) return instead;
+      }
+      return network(input, init);
+    });
   };
   const ids = (pane: MessagePane) => pane.ordered.map((m) => m.localId);
   const room = { kind: "room", name: "indie" } as const;
@@ -123,7 +139,7 @@ describe("a pane opened at a message", () => {
     const pane = new MessagePane(room, () => "me", 150);
     await pane.load();
     const held = ids(pane).length;
-    const asked = stored(450);
+    const { asked } = stored(450);
     await pane.load();
     expect(asked, "a pane short of the newest reads nothing on a refresh").toEqual([]);
     expect(ids(pane).length).toBe(held);
@@ -158,6 +174,42 @@ describe("a pane opened at a message", () => {
     await down;
     expect(ids(pane)).toEqual(Array.from({ length: 100 }, (_, n) => n + 351));
     expect(pane.hasNewer).toBe(false);
+  });
+
+  it("reads the pages around it again when the first read failed", async () => {
+    stored(450);
+    let down = true;
+    delayed(async () =>
+      down
+        ? new Response(JSON.stringify({ error: "reseek is not reachable" }), {
+            status: 500,
+            headers: { "content-type": "application/json" }
+          })
+        : undefined
+    );
+    const pane = new MessagePane(room, () => "me", 150);
+    await pane.load();
+    expect(pane.error).not.toBe("");
+    down = false;
+    await pane.load();
+    expect(pane.error).toBe("");
+    expect(ids(pane)).toEqual(Array.from({ length: 200 }, (_, n) => n + 51));
+    expect([pane.hasMore, pane.hasNewer]).toEqual([true, true]);
+  });
+
+  it("lets the pages around it go when the view is emptied before they come", async () => {
+    stored(450);
+    let release!: () => void;
+    const held = new Promise<void>((done) => (release = done));
+    delayed(async () => void (await held));
+    const pane = new MessagePane(room, () => "me", 150);
+    const loading = pane.load();
+    await flush();
+    pane.clearView();
+    release();
+    await loading;
+    expect(ids(pane)).toEqual([]);
+    expect([pane.loaded, pane.hasMore, pane.hasNewer]).toEqual([true, false, false]);
   });
 
   it("opens empty on a room known by name with nothing stored", async () => {

@@ -23,6 +23,9 @@ let sent = 0;
 /** How long a room message the daemon took waits for the server's echo before it shows as not sent */
 export const ECHO_WAIT = 30_000;
 
+/** One read of stored messages, oldest first, and whether older ones are stored */
+type Page = { messages: Message[]; hasMore: boolean; gaps: Gap[] };
+
 /** 1 for a message still being sent, which goes after the stored ones */
 const sending = (m: Message) => (m.localId < 0 ? 1 : 0);
 
@@ -48,7 +51,7 @@ export class MessagePane {
   hasNewer = $state(false);
   /** counts the times the pane went back to the newest messages, which the list goes down to */
   returned = $state(0);
-  /** the first page is here */
+  /** the first page is here, or the view was emptied before it came */
   loaded = $state(false);
   /** why the last read failed, empty when it didn't */
   error = $state("");
@@ -105,34 +108,38 @@ export class MessagePane {
   }
 
   /**
-   * Reads the newest page, or the pages around the message the pane opens at; the first time it
-   * also finds where the unread messages start. A pane still short of the newest messages reads
-   * nothing here: they come as the list scrolls down to them
+   * Reads the newest page, or the pages around the message the pane opened at until they have
+   * come; the first time it also finds where the unread messages start. A pane still short of the
+   * newest messages reads nothing here: they come as the list scrolls down to them
    */
   load = async () => {
     // a room's read marker comes with the joined rooms, which a pane opened by a link or a
     // reload can be quicker than; its first unread message is placed from that marker
     if (!this.loaded && this.target.kind === "room") await chat.ready();
     if (this.hasNewer) return;
-    if (!this.loaded && this.#at !== null) return this.#readAround(this.#at);
     const view = this.#view;
-    const page = await this.#page({});
+    const at = this.loaded ? null : this.#at;
+    const page: Outcome<Page & { hasNewer?: boolean }> =
+      at === null ? await this.#page({}) : await this.#around(at);
     if (view !== this.#view) return;
-    if (!page.ok) {
-      this.error = page.error;
-      this.loaded = true;
-      return;
-    }
+    if (!page.ok) return void (this.error = page.error);
     this.error = "";
     for (const m of page.data.messages) this.#store(m);
     this.#gapsFrom(page.data.gaps);
-    if (!this.loaded) {
-      this.hasMore = page.data.hasMore;
-      this.unreadFrom = this.#firstUnread();
-      if (this.target.kind === "user") void this.#readConversation();
-    }
-    this.loaded = true;
+    if (this.loaded) return;
+    this.hasMore = page.data.hasMore;
+    // only the pages around a message can stop short of the newest
+    this.hasNewer = page.data.hasNewer ?? false;
+    this.#opened();
   };
+
+  /** The first messages are here: where the unread ones start, and a conversation's draft */
+  #opened() {
+    // what is unread lies past the pages read when newer ones remain
+    if (!this.hasNewer) this.unreadFrom = this.#firstUnread();
+    if (this.target.kind === "user") void this.#readConversation();
+    this.loaded = true;
+  }
 
   /** Reads the page before the oldest message shown */
   older = async () => {
@@ -193,6 +200,7 @@ export class MessagePane {
     this.unreadFrom = null;
     this.hasMore = false;
     this.hasNewer = false;
+    this.loaded = true;
   };
 
   /** Sends `text`; it shows at once, marked until the daemon has it, failed if it can't */
@@ -293,23 +301,23 @@ export class MessagePane {
     if (!this.hasNewer) this.#store(m);
   }
 
-  /** Reads the page ending at the message `localId` and the page after it */
-  async #readAround(localId: number) {
+  /** Reads the page ending at the message `localId` and the page after it, as one page */
+  async #around(localId: number): Promise<Outcome<Page & { hasNewer: boolean }>> {
     const [upTo, after] = await Promise.all([
       this.#page({ before: localId + 1 }),
       this.#page({ after: localId })
     ]);
-    this.loaded = true;
-    if (!upTo.ok) return void (this.error = upTo.error);
-    if (!after.ok) return void (this.error = after.error);
-    this.error = "";
-    for (const m of [...upTo.data.messages, ...after.data.messages]) this.#store(m);
-    this.#gapsFrom([...upTo.data.gaps, ...after.data.gaps]);
-    this.hasMore = upTo.data.hasMore;
-    this.hasNewer = after.data.hasMore;
-    // what is unread lies past the pages read when newer ones remain
-    if (!this.hasNewer) this.unreadFrom = this.#firstUnread();
-    if (this.target.kind === "user") void this.#readConversation();
+    if (!upTo.ok) return upTo;
+    if (!after.ok) return after;
+    return {
+      ok: true,
+      data: {
+        messages: [...upTo.data.messages, ...after.data.messages],
+        gaps: [...upTo.data.gaps, ...after.data.gaps],
+        hasMore: upTo.data.hasMore,
+        hasNewer: after.data.hasMore
+      }
+    };
   }
 
   /**
@@ -360,10 +368,7 @@ export class MessagePane {
     }
   }
 
-  async #page(cursor: {
-    before?: number;
-    after?: number;
-  }): Promise<Outcome<{ messages: Message[]; hasMore: boolean; gaps: Gap[] }>> {
+  async #page(cursor: { before?: number; after?: number }): Promise<Outcome<Page>> {
     const { kind, name } = this.target;
     const none = { ok: true as const, data: { messages: [], hasMore: false, gaps: [] } };
     if (kind === "user") {
