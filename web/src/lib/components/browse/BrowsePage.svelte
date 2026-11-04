@@ -190,7 +190,7 @@
       return index.get(at) ?? [];
     })
   );
-  const ticked = $derived(tickedCounts(browser.selected, (p) => p));
+  const ticked = $derived(tickedCounts(browser.selected));
 
   /** the files under a folder the filter keeps, each folder's worked out once per filter */
   const kept = $derived.by(() => {

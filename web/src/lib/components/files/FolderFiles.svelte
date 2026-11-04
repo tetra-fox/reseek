@@ -63,7 +63,7 @@
   );
   const columns = $derived(fileColumns({ quality: true, phone: viewport.phone }));
   const chosen = $derived(shown.filter((f) => selected.has(f.filename)));
-  const ticked = $derived(tickedCounts(selected, (id) => id));
+  const ticked = $derived(tickedCounts(selected));
   /** the downloads land in a folder named like the remote one */
   const destination = $derived(folder.split(separatorOf(folder)).filter(Boolean).pop());
 
