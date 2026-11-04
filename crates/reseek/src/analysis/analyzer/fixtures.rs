@@ -412,7 +412,7 @@ pub fn add_cover(path: &Path, bytes: usize) {
 
 /// The audio of the file at `path`, decoded whole.
 pub fn decoded(path: &Path) -> Audio {
-  let mut decoder = Decoder::open(path).unwrap();
+  let mut decoder = Decoder::open_through(path, |file| Box::new(file)).unwrap();
   let rate = decoder.claimed.sample_rate;
   let mut channels = vec![Vec::new(); decoder.channels];
   let mut window = vec![Vec::new(); decoder.channels];
