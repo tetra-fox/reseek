@@ -225,10 +225,12 @@
    * holding them. The first answer that is not a full success stops the rest
    */
   const download = async (list: RemoteFile[]): Promise<Enqueued> => {
+    // the user the files are from, whoever is browsed by the time a later batch goes
+    const username = browser.username;
     let last: Enqueued = { kind: "done", text: "" };
     for (const group of downloadPlan(list, topOf, browser.separator)) {
       last = await enqueue({
-        username: browser.username,
+        username,
         files: group.files.map((f) => asItem(f)),
         destination: group.destination ?? undefined
       });
