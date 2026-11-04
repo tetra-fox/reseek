@@ -12,7 +12,7 @@ const nixString = (s: string) =>
   `"${s.replace(/[\\"\n\r\t]|\$\{/g, (c) => NIX_ESCAPES[c] ?? `\\${c}`)}"`;
 
 /** A config value as a Nix expression, for pasting into a NixOS module's settings */
-export const toNix = (value: unknown, indent = ""): string => {
+const toNix = (value: unknown, indent = ""): string => {
   if (typeof value === "string") return nixString(value);
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   if (Array.isArray(value)) {
@@ -30,7 +30,7 @@ export const toNix = (value: unknown, indent = ""): string => {
 };
 
 /** Dotted keys and their values as nested attrs, `web.port` as `{ web = { port = 5030; }; }` */
-export const nest = (entries: [string, unknown][]) => {
+const nest = (entries: [string, unknown][]) => {
   const root: Record<string, unknown> = {};
   for (const [key, value] of entries) {
     const parts = key.split(".");
