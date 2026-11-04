@@ -175,7 +175,9 @@ pub struct Shares {
   covered: Mutex<Option<Arc<Settings>>>,
   /// the running scan's cancellation
   running: Mutex<Option<CancellationToken>>,
-  status: Mutex<Status>,
+  /// shared with the database writes that mark a scan suspect and that settle a scan's end,
+  /// so `scan_pending` changes in the same write as the row it follows
+  status: Arc<Mutex<Status>>,
   counts: watch::Sender<SharedCounts>,
   /// true once the startup load or scan is done, at once when shares are not scanned at
   /// startup
@@ -244,7 +246,7 @@ impl Shares {
       shutdown,
       covered: Mutex::new(None),
       running: Mutex::new(None),
-      status: Mutex::new(Status::default()),
+      status: Arc::new(Mutex::new(Status::default())),
       counts: watch::Sender::new(SharedCounts::default()),
       initialized: watch::Sender::new(options.flags.no_share_scan),
       watches: Mutex::new(None),
@@ -380,11 +382,16 @@ impl Shares {
   /// Marks the index as drifted from the disk, such as after a shared file was found missing
   /// or changed during an upload, so a rescan is pending and the next start scans again.
   pub async fn request_scan(&self) -> Result<(), DbError> {
+    let status = self.status.clone();
     self
       .db
-      .write(|conn| repository::mark_latest_suspect(conn))
+      .write(move |conn| {
+        repository::mark_latest_suspect(conn)?;
+        lock(&status).scan_pending = true;
+        Ok(())
+      })
       .await?;
-    self.publish(|status| status.scan_pending = true);
+    self.publish(|_| {});
     Ok(())
   }
 

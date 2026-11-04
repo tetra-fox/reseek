@@ -110,13 +110,11 @@ impl Shares {
             if !current {
               debug!("the share options changed while the scan ran, so a rescan stays pending");
             }
+            self.settle_pending(current).await;
             self.publish(|status| {
               status.scanning = false;
               status.faulted = false;
               status.canceled = false;
-              if current {
-                status.scan_pending = false;
-              }
               status.ready = true;
               status.loaded = true;
               status.progress = 1.0;
@@ -165,6 +163,32 @@ impl Shares {
       self.watch_shares(settings).await;
     }
     completed
+  }
+
+  /// Clears the pending rescan after a scan that completed, unless the options changed since it
+  /// started (`current` false) or a drift from the disk marked its row. The row is read and
+  /// the flag cleared in one write, which a drift's mark and flag are ordered against.
+  async fn settle_pending(&self, current: bool) {
+    let status = self.status.clone();
+    let settled = self
+      .db
+      .write(move |conn| {
+        let suspect = repository::latest_scan(conn)?.is_some_and(|scan| scan.suspect);
+        if current && !suspect {
+          lock(&status).scan_pending = false;
+        }
+        Ok(suspect)
+      })
+      .await;
+    match settled {
+      Ok(true) => {
+        debug!("a drift from the disk was reported while the scan ran, so a rescan stays pending")
+      }
+      Ok(false) => {}
+      Err(e) => {
+        warn!(error = %e, "the scan's row not read again; the pending rescan is left as it was")
+      }
+    }
   }
 
   /// Whether `settings` share what a scan started now would: the same entries, filters and
