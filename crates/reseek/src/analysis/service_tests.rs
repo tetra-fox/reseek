@@ -671,6 +671,19 @@ async fn an_upload_stops_at_its_limit_and_leaves_nothing() {
 }
 
 #[tokio::test]
+async fn an_upload_too_long_to_name_is_named_as_it_can_be_created() {
+  let app = app(TRUSTED, &[]).await;
+  // 270 bytes of UTF-8 before the extension
+  let long = format!("{}.flac", "曲".repeat(90));
+  let query: String = url::form_urlencoded::byte_serialize(long.as_bytes()).collect();
+  let (status, answer) = upload(&app, &query, Body::from(vec![0; 10])).await;
+  assert_eq!(status, 201, "{answer}");
+  let name = answer["path"].as_str().unwrap().split('/').nth(1).unwrap();
+  assert!(name.len() <= 255, "{name}");
+  assert!(name.ends_with(".flac"), "{name}");
+}
+
+#[tokio::test]
 async fn an_upload_is_not_held_to_the_size_of_a_json_body() {
   let app = app(TRUSTED, &[]).await;
   let (status, body) = upload(&app, "a.flac", Body::from(vec![0; 3 << 20])).await;

@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use super::{Analysis, store};
 use crate::api::error::ApiError;
-use crate::safety::{Os, file_name_safely};
+use crate::safety::{Os, creatable, file_name_safely};
 use crate::sync::lock;
 
 /// The folder under the analysis directory that holds the uploads.
@@ -147,8 +147,10 @@ impl Analysis {
     if body.size_hint().lower() > limit.as_u64() {
       return Err(too_large());
     }
+    // named as the system creates it, so the rename after the last byte cannot refuse it
     let name = file_name_safely(name, true, Os::CURRENT)
       .filter(|name| !name.is_empty())
+      .map(|name| creatable(&name, Os::CURRENT))
       .ok_or_else(|| ApiError::bad_request("The file has no name"))?;
     let id = Uuid::new_v4();
     let dir = self.uploads.join(id.to_string());
