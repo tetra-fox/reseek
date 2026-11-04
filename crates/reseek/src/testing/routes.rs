@@ -34,7 +34,7 @@ pub struct Operation {
 }
 
 /// Every operation in the API document.
-pub fn operations() -> Vec<Operation> {
+fn operations() -> Vec<Operation> {
   let document = serde_json::to_value(crate::api::openapi()).unwrap();
   let mut operations = Vec::new();
   for (route, item) in document["paths"].as_object().unwrap() {
