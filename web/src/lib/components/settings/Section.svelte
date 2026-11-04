@@ -135,14 +135,18 @@
   const saveable = $derived(fields.some((f) => edits[f.key].mode === "save"));
   const runtimeable = $derived(fields.some((f) => edits[f.key].mode === "runtime"));
 
+  /** A changed field as it is written, with the draft it was written from */
+  type Write = { field: Field; sent: Draft; set?: unknown; unset?: true };
+
   /** The changed fields of one mode as a set and an unset, or null when one doesn't parse */
   const collect = (mode: "save" | "runtime") => {
     const found: Record<string, string> = {};
-    const out: { field: Field; set?: unknown; unset?: true }[] = [];
+    const out: Write[] = [];
     for (const field of changed.filter((f) => edits[f.key].mode === mode)) {
+      const sent = draft[field.key];
       // the default put back: the key comes out, so the default applies and stays the default
-      if (defaulted.has(field.key) && same(draft[field.key], defaultDraft(field.key))) {
-        out.push({ field, unset: true });
+      if (defaulted.has(field.key) && same(sent, defaultDraft(field.key))) {
+        out.push({ field, sent, unset: true });
         continue;
       }
       const parsed = fromDraft(
@@ -152,7 +156,7 @@
         view.fields[field.key]
       );
       if ("error" in parsed) found[field.key] = parsed.error;
-      else out.push({ field, ...parsed });
+      else out.push({ field, sent, ...parsed });
     }
     errors = found;
     return Object.keys(found).length ? null : out;
@@ -160,34 +164,39 @@
 
   /**
    * Takes what the daemon now runs into the drafts of the keys just written, so the section
-   * shows no change for them and a later save doesn't send them again
+   * shows no change for them and a later save doesn't send them again. A draft edited while the
+   * write ran keeps the edit, which shows as a change to what now runs
    */
-  const settle = async (keys: string[]) => {
-    if (!keys.length) return;
+  const settle = async (writes: Write[]) => {
+    if (!writes.length) return;
     await onchanged();
     loaded = { ...loaded };
-    for (const key of keys) {
-      draft[key] = running[key];
+    for (const { field, sent } of writes) {
+      const key = field.key;
       loaded[key] = running[key];
       delete errors[key];
+      if (!same(draft[key], sent)) continue;
+      draft[key] = running[key];
       defaulted.delete(key);
       written[key] = (written[key] ?? 0) + 1;
     }
+    const keys = writes.map((w) => w.field.key);
     moved = moved.filter((key) => !keys.includes(key));
   };
 
-  const saving = new Busy();
+  /** one write at a time, to the files or to what runs, so their errors and drafts don't cross */
+  const writing = new Busy();
   /** Saves the changed options to their files; the page's bar saves every section with it */
   export const save = () =>
-    saving.run(async () => {
+    writing.run(async () => {
       const writes = collect("save");
       if (!writes) return { ok: true as const, data: null };
-      const byFile = new Map<string, typeof writes>();
+      const byFile = new Map<string, Write[]>();
       for (const write of writes) {
         const file = fileOf(view, write.field.key);
         byFile.set(file, [...(byFile.get(file) ?? []), write]);
       }
-      const done: string[] = [];
+      const done: Write[] = [];
       let restart: string[] = [];
       for (const [file, list] of byFile) {
         const outcome = await call(() =>
@@ -224,7 +233,7 @@
           );
           return outcome;
         }
-        done.push(...list.map((w) => w.field.key));
+        done.push(...list);
         restart = [...restart, ...outcome.data.restartRequired];
       }
       toast(
@@ -249,9 +258,8 @@
     { label: "For a day", value: "1d", words: "for a day" },
     { label: "Until removed", value: null, words: "until removed" }
   ];
-  const applying = new Busy();
   const apply = (expiry: (typeof EXPIRIES)[number]) =>
-    applying.run(async () => {
+    writing.run(async () => {
       const writes = collect("runtime");
       if (!writes) return { ok: true as const, data: null };
       const outcome = await call(() =>
@@ -278,7 +286,7 @@
       toast(
         `${section.title}: ${plural(writes.length, "setting", "settings")} applied ${expiry.words}`
       );
-      await settle(writes.map((w) => w.field.key));
+      await settle(writes);
       return { ok: true as const, data: null };
     });
 
@@ -397,7 +405,7 @@
         {/if}
         {#if runtimeable}
           <Menu.Root>
-            <Menu.Trigger disabled={!changed.length || applying.running}>
+            <Menu.Trigger disabled={!changed.length || writing.running}>
               {#snippet child({ props })}
                 <Button {...props} variant="outline">
                   Apply at runtime <ChevronDownIcon />
@@ -412,7 +420,7 @@
           </Menu.Root>
         {/if}
         {#if saveable}
-          <Button disabled={!changed.length || saving.running} onclick={save}>Save</Button>
+          <Button disabled={!changed.length || writing.running} onclick={save}>Save</Button>
         {/if}
       </div>
     </div>
