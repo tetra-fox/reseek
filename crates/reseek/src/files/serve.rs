@@ -361,10 +361,7 @@ pub(super) async fn body(
 ) -> Result<Body, ApiError> {
   let mut opened = tokio::fs::File::open(path)
     .await
-    .map_err(|e| match e.kind() {
-      std::io::ErrorKind::NotFound => ApiError::not_found("The file no longer exists"),
-      _ => ApiError::internal(format!("{} not opened: {e}", path.display())),
-    })?;
+    .map_err(|e| not_opened(path, e))?;
   opened
     .seek(std::io::SeekFrom::Start(start))
     .await
@@ -406,6 +403,15 @@ pub(super) async fn body(
     },
   );
   Ok(Body::from_stream(chunks))
+}
+
+/// What a request for the file at `path` is answered when the file cannot be opened: it is
+/// gone, since it was found when the request was read, or it cannot be read.
+pub(super) fn not_opened(path: &Path, e: std::io::Error) -> ApiError {
+  match e.kind() {
+    std::io::ErrorKind::NotFound => ApiError::not_found("The file no longer exists"),
+    _ => ApiError::internal(format!("{} not opened: {e}", path.display())),
+  }
 }
 
 #[cfg(test)]
