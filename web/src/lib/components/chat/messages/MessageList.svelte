@@ -164,11 +164,12 @@
   };
   /**
    * Keeps a view that follows the newest message on it as a change of width wraps the messages
-   * taller, which moves no scroll position and so would push the newest out of view
+   * taller, which moves no scroll position and so would push the newest out of view. A page read
+   * on the way down grows the list as well, and stays below the view
    */
   const followsEnd = (node: HTMLElement) => {
     const observer = new ResizeObserver(() => {
-      if (placed && atBottom && !interaction.frozen) toBottom();
+      if (placed && atBottom && !loadingNewer && !interaction.frozen) toBottom();
     });
     observer.observe(node);
     if (node.firstElementChild) observer.observe(node.firstElementChild);
@@ -267,6 +268,8 @@
       loadingNewer = true;
       await pane.newer();
       await tick();
+      // the page is below the view now, which is no longer at the bottom
+      seen();
       loadingNewer = false;
     }
   };

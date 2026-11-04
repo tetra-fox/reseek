@@ -182,6 +182,11 @@ test("Enter opens the results, a message opens its chat, Back and Escape return"
   // older and newer pages come as the list scrolls
   await log.evaluate((b) => (b.scrollTop = b.scrollHeight));
   await expect(log.locator('[data-message="251"]')).toBeAttached();
+  // the page read on the way down stays below the view, two frames on as well
+  await log.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
+  );
+  await expect(log.locator('[data-message="250"]')).toBeInViewport();
   await log.evaluate((b) => (b.scrollTop = 0));
   await expect(log.locator('[data-message="50"]')).toBeAttached();
   await expect(page.getByRole("button", { name: "Jump to latest" })).toBeVisible();
