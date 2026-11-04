@@ -24,7 +24,7 @@
   import { session } from "#lib/session.svelte.js";
   import { paletteScore, paletteValue } from "#lib/shell/palette.js";
   import { palette } from "#lib/shell/palette.svelte.js";
-  import { opensPalette, shortcutText } from "#lib/ui/keys.js";
+  import { opensPalette, shortcutText, TYPING_PAUSE } from "#lib/ui/keys.js";
   import { reach, USER_ACTIONS } from "#lib/users/actions.js";
 
   /** One thing the palette can do: go to a screen, a user, a room, a setting, a search */
@@ -163,7 +163,7 @@
       );
       // a directory that can't be read leaves the users already listed
       if (outcome.ok && query.trim() === text) known = outcome.data.users.map((u) => u.username);
-    }, 200);
+    }, TYPING_PAUSE);
     return () => clearTimeout(timer);
   });
 

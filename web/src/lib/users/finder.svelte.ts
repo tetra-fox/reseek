@@ -7,14 +7,13 @@ import { SERVER } from "#lib/chat/notices.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
 import { userHref } from "#lib/nav.js";
 import { call } from "#lib/request.js";
+import { TYPING_PAUSE } from "#lib/ui/keys.js";
 
 import { profileOf } from "./actions";
 import { bestMatches, CANDIDATES } from "./match";
 import type { UserSummary } from "./users.svelte";
 
 const LISTED = 8;
-/** how long after typing stops the text is read */
-const SETTLE_MS = 200;
 
 /** The entry that opens a user, or looks them up when the directory does not hold them */
 export const userValue = (name: string) => `user:${name}`;
@@ -73,7 +72,7 @@ export class UserFinder {
       const timer = setTimeout(() => {
         options.onread?.(value);
         void this.#read();
-      }, SETTLE_MS);
+      }, TYPING_PAUSE);
       return () => clearTimeout(timer);
     });
     onDestroy(this.abandon);

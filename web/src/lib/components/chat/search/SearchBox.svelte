@@ -22,6 +22,7 @@
   import { session } from "#lib/session.svelte.js";
   import { snippetParts } from "#lib/text.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { TYPING_PAUSE } from "#lib/ui/keys.js";
 
   import RoomFound from "./RoomFound.svelte";
 
@@ -63,11 +64,12 @@
   /** the hard result when there is one, else every result */
   const first = $derived(listed.hard ? hardValue(listed.hard) : ALL);
 
+  // the text is read once typing pauses
   $effect(() => {
     void text;
     const timer = setTimeout(() => {
       if (!box.current) void box.read();
-    }, 200);
+    }, TYPING_PAUSE);
     return () => clearTimeout(timer);
   });
 
