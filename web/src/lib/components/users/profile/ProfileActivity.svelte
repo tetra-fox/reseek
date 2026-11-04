@@ -8,6 +8,7 @@
   import Notice from "#lib/components/ui/Notice.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { formatDate, getFileName, plural } from "#lib/format.js";
+  import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
   import { endingText, isSucceeded } from "#lib/transfers/states.js";
 
@@ -18,10 +19,6 @@
   type Entry = { key: string; at: string; text: string };
 
   let wanted = $state(PAGE);
-  let entries = $state.raw<Entry[]>([]);
-  let more = $state(false);
-  let loaded = $state(false);
-  let errors = $state<string[]>([]);
 
   const transferEntry = (t: {
     id: string;
@@ -51,7 +48,8 @@
     };
   };
 
-  const load = async () => {
+  /** the newest `wanted` of each kind, merged; what could not be read is said beside them */
+  const activity = new Loader(async () => {
     const limit = wanted;
     const [transfers, messages, events] = await Promise.all([
       call(() =>
@@ -101,25 +99,25 @@
         found.push({ key: `e:${e.id}`, at: e.timestamp, text });
       }
     }
-    errors = [transfers, events].flatMap((o) => (o.ok ? [] : [o.error]));
     found.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-    more =
+    const more =
       (transfers.ok && transfers.data.total > limit) ||
       (messages.ok && messages.data.length >= limit) ||
       (events.ok && events.data.length >= limit);
-    entries = found;
-    loaded = true;
-  };
+    const errors = [transfers, events].flatMap((o) => (o.ok ? [] : [o.error]));
+    return { ok: true as const, data: { entries: found, more, errors } };
+  });
+  const entries = $derived(activity.data?.entries ?? []);
 
   $effect(() => {
     void wanted;
-    untrack(() => void load());
+    untrack(() => void activity.load());
   });
 </script>
 
-{#each errors as error (error)}<Notice kind="error">{error}</Notice>{/each}
+{#each activity.data?.errors ?? [] as error (error)}<Notice kind="error">{error}</Notice>{/each}
 
-{#if !loaded}
+{#if activity.loading}
   <Skeleton class="h-40" />
 {:else if !entries.length}
   <EmptyState icon={HistoryIcon} title="No activity with this user yet" />
@@ -133,7 +131,7 @@
       </li>
     {/each}
   </ol>
-  {#if more}
+  {#if activity.data?.more}
     <Button variant="outline" class="self-center" onclick={() => (wanted += PAGE)}
       >Load more</Button>
   {/if}
