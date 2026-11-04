@@ -25,3 +25,16 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: [version-update:semver-major]
+  # the workflows pin each action to a commit, with its version beside it
+  - package-ecosystem: github-actions
+    directories: ["/", "/.github/actions/setup-nix"]
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      actions:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]

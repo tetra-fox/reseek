@@ -1,53 +1,88 @@
-# merges dependabot's minor and patch bumps when `just ci` passes, with the web hash brought up
-# to date first, since dependabot cannot change it
+# Dependabot's pull requests: a test job runs `just ci` on the bump with a read-only token, and
+# a merge job that runs none of the bumped code merges the minor and patch bumps of cargo and
+# npm once it passes. The web hash follows the lockfile, which dependabot cannot change, so the
+# test job works it out and the merge job commits it. An action's bump is left for review: its
+# code runs where the release signing key is.
 name: deps
 
 on: pull_request
 
-permissions:
-  contents: write
-  pull-requests: write
-  actions: write
+permissions: {}
 
 jobs:
-  merge:
+  test:
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      update-type: ${{ steps.bump.outputs.update-type }}
+      ecosystem: ${{ steps.bump.outputs.package-ecosystem }}
+      web-hash: ${{ steps.hash.outputs.hash }}
+    env:
+      SOULFIND_REQUIRED: "1"
+      CARGO_INCREMENTAL: "0"
+      # a debug build with symbols outgrows the runner's disk
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
-      - uses: dependabot/fetch-metadata@v3
+      - uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         id: bump
-      - if: steps.bump.outputs.update-type != 'version-update:semver-major'
-        uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.head_ref }}
-      - if: steps.bump.outputs.update-type != 'version-update:semver-major'
-        uses: ./.github/actions/setup-nix
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      # purging old caches needs `actions: write`
+      - uses: ./.github/actions/setup-nix
+        with:
+          purge: "false"
       # the hash of the web dependencies follows the lockfile; nix reports it when it is empty
       - name: Update the web dependency hash
-        if: steps.bump.outputs.update-type != 'version-update:semver-major' && steps.bump.outputs.package-ecosystem == 'npm_and_yarn'
+        id: hash
+        if: steps.bump.outputs.package-ecosystem == 'npm_and_yarn'
         run: |
           sed -i 's|hash = "sha256-[^"]*"|hash = ""|' nix/web.nix
           hash=$(nix build .#packages.x86_64-linux.web 2>&1 | sed -n 's/.*got: *\(sha256-[^ ]*\).*/\1/p' | head -1)
           test -n "$hash"
           sed -i "s|hash = \"\"|hash = \"$hash\"|" nix/web.nix
-      - if: steps.bump.outputs.update-type != 'version-update:semver-major'
-        run: nix develop -c just ci
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+      - run: nix develop -c just ci
+
+  merge:
+    needs: test
+    if: >-
+      needs.test.outputs.update-type != 'version-update:semver-major'
+      && (needs.test.outputs.ecosystem == 'cargo' || needs.test.outputs.ecosystem == 'npm_and_yarn')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+      # the branch may have moved since the test; what was not tested is not merged
+      - name: Check the branch is what was tested
         env:
-          SOULFIND_REQUIRED: "1"
-          CARGO_INCREMENTAL: "0"
-          CARGO_PROFILE_DEV_DEBUG: "0"
-          CARGO_PROFILE_TEST_DEBUG: "0"
-      - name: Commit the hash
-        if: steps.bump.outputs.update-type != 'version-update:semver-major' && steps.bump.outputs.package-ecosystem == 'npm_and_yarn'
+          TESTED: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$TESTED"
+      - name: Commit the web hash
+        if: needs.test.outputs.web-hash != ''
+        env:
+          HASH: ${{ needs.test.outputs.web-hash }}
         run: |
+          [[ "$HASH" =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]]
+          sed -i "s|hash = \"sha256-[^\"]*\"|hash = \"$HASH\"|" nix/web.nix
           git diff --quiet && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "chore(deps): update the web hash"
           git push
-      - if: steps.bump.outputs.update-type != 'version-update:semver-major'
+      - name: Merge
         run: |
-          gh pr merge "$PR" --squash --delete-branch --subject "chore(deps): bump minor and patch versions" --body ""
+          gh pr merge "$PR" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)" \
+            --subject "chore(deps): bump minor and patch versions" --body ""
         env:
           PR: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
