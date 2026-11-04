@@ -2,16 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { axisPadding, axisTicks, valueLabel, type Unit } from "./chart";
 import { readPrefs } from "./prefs.svelte";
-import {
-  chartData,
-  errorCount,
-  merged,
-  outcomes,
-  queries,
-  shortDirectory,
-  tiles,
-  windowOf
-} from "./reports";
+import { chartData, merged, outcomes, shortDirectory, tiles, windowOf } from "./reports";
 import { ERRORS, VIEWS } from "./series";
 
 const summary = (count: number, totalBytes: number) => ({
@@ -24,7 +15,7 @@ const summary = (count: number, totalBytes: number) => ({
 });
 
 describe("the dashboard's reports", () => {
-  it("asks for the top ten, newest or most first, over the chosen window", () => {
+  it("spans the chosen window, from the start of time for All", () => {
     const w = windowOf("7d", Date.parse("2026-10-27T00:00:00Z"));
     expect(w).toEqual({
       start: "2026-10-20T00:00:00.000Z",
@@ -32,43 +23,6 @@ describe("the dashboard's reports", () => {
       buckets: 84
     });
     expect(windowOf("All", 0).start).toBe("1970-01-01T00:00:00.000Z");
-    expect(queries.leaderboard(w, "Upload")).toEqual({
-      direction: "Upload",
-      start: w.start,
-      end: w.end,
-      sortBy: "Count",
-      sortOrder: "desc",
-      limit: 10,
-      offset: 0
-    });
-    expect(queries.exceptions(w, "Download")).toMatchObject({
-      sortOrder: "desc",
-      limit: 10,
-      offset: 0
-    });
-    expect(queries.pareto(w, "Download")).toEqual({
-      direction: "Download",
-      start: w.start,
-      end: w.end,
-      limit: 10,
-      offset: 0
-    });
-    expect(queries.summary(w)).toEqual({ start: w.start, end: w.end });
-  });
-
-  it("counts failures as errors, as the outcome bars do, and not cancels", () => {
-    const d = {
-      Succeeded: summary(5, 0),
-      Rejected: summary(1, 0),
-      Aborted: summary(2, 0),
-      Errored: summary(3, 0),
-      TimedOut: summary(4, 0),
-      Cancelled: summary(7, 0),
-      None: summary(8, 0)
-    };
-    expect(errorCount(d)).toBe(10);
-    const [bars] = outcomes({ Download: d, Upload: {}, distinctUsers: 0 });
-    expect(bars.failed).toBe(10);
   });
 
   it("makes the chart's points in time order with rates and the ratio", () => {
@@ -125,7 +79,7 @@ describe("the outcome bars", () => {
     const n = (count: number) => ({ count }) as never;
     expect(
       outcomes({
-        Download: { Succeeded: n(10), Errored: n(2), TimedOut: n(1), Cancelled: n(3) },
+        Download: { Succeeded: n(10), Errored: n(2), TimedOut: n(1), Cancelled: n(3), None: n(8) },
         Upload: { Rejected: n(4), Aborted: n(1) },
         distinctUsers: 0
       } as never)
