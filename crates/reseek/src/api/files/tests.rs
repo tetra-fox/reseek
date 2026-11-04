@@ -143,7 +143,10 @@ async fn an_incomplete_archive_leaves_out_the_files_a_download_writes() {
   let answer = app.send(request("GET", &uri, None)).await;
   assert_eq!(answer.status, 200);
   let zip = zip::ZipArchive::new(std::io::Cursor::new(answer.body.to_vec())).unwrap();
-  let names: Vec<_> = zip.file_names().map(str::to_string).collect();
+  let names: Vec<_> = zip
+    .file_names()
+    .map(|name| name.unwrap().into_owned())
+    .collect();
   assert_eq!(names, ["done.flac"]);
   drop(guard);
 }
@@ -306,7 +309,10 @@ async fn a_directory_is_sent_as_a_zip_one_at_a_time_and_within_the_limit() {
     "attachment; filename=\"Album.zip\""
   );
   let mut zip = zip::ZipArchive::new(std::io::Cursor::new(answer.body.to_vec())).unwrap();
-  let names: Vec<_> = zip.file_names().map(str::to_string).collect();
+  let names: Vec<_> = zip
+    .file_names()
+    .map(|name| name.unwrap().into_owned())
+    .collect();
   assert_eq!(names, ["01.flac", "Scans/cover.jpg"]);
   let mut data = Vec::new();
   zip
