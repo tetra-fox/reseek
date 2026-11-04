@@ -98,6 +98,17 @@ RESEEK_PASSWORD=password ./reseek-linux-amd64 --slsk-username name --slsk-passwo
 
 Then open <http://localhost:5030>.
 
+### Relay agent
+
+To share files from another machine through your server, run `reseek-agent` there. It's next to `reseek` on the Releases page and in the Nix package. Turn on relay mode on the server and list the agent under `relay.agents` with a secret, then give the agent the server's address, an API key for it, and that secret:
+
+```sh
+RESEEK_CONTROLLER_API_KEY=key RESEEK_CONTROLLER_SECRET=secret ./reseek-agent-linux-amd64 \
+  --instance-name pc --controller-address https://server:5031 -s /path/to/music
+```
+
+It only dials out, so it needs no open port. On NixOS, `services.reseek-agent` runs it as its own user.
+
 ### Desktop
 
 Soon.
