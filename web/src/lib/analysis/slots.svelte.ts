@@ -87,9 +87,11 @@ class Slots {
     };
     const cancel = sendFile(file, mark, (outcome) => {
       this.#drop(id);
+      // a local file is never in the address, so it fills the slot and leaves the user where
+      // they are
       if (outcome.ok) {
         const { root, path } = outcome.data;
-        this.fill(id, { kind: "file", root, path }, file.name);
+        this[id] = { target: { kind: "file", root, path }, name: file.name };
       } else {
         toast(`Could not upload ${file.name}: ${outcome.error}`, "error");
       }
