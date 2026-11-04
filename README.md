@@ -133,9 +133,9 @@ Without Nix you'll want stable Rust, Node 26, pnpm and `just`. With Nix you alre
 
 ## Why not slskd or slskr?
 
-On slskd: it works, and I ran it for a long time. But I wanted something closer to Nicotine+ as a daemon and so that meant lots of additions: a users directory with profiles and blocking, chat that survives a restart, and a check on whether a "lossless" download really is one. Each of those needs changes inside the daemon, so a new UI wasn't enough, and upstreaming them would mean dropping a very large pull request on a hobbyist maintainer. Where slskd's API shape is fine it's kept, so existing tools keep working.
+On slskd: it works, and I ran it for a long time. But I wanted something closer to Nicotine+ as a daemon and so that meant lots of additions: a users directory with profiles and blocking, chat that survives a restart, and a check on whether a "lossless" download really is one. Each of those needs changes inside the daemon, so a new UI wasn't enough, and upstreaming them would mean dropping a very large pull request on a hobbyist maintainer.
 
-slskr is another Rust implementation, with a much bigger scope than I wanted. I wanted a small, focused codebase I could still read, that does one job and reads like one person decided what should be in it.
+slskr is another Rust implementation, with a much bigger scope than I wanted.
 
 ## AI usage disclaimer
 
