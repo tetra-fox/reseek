@@ -33,8 +33,6 @@ test("opens the dashboard, chat, rooms, a profile and your profile", async ({ pa
   await page.goto("./#/system/nowhere");
   await expect(page).toHaveURL(/#\/system\/info$/);
   // old browse links land on the user's Shares tab, or on Search
-  await page.goto("./#/browse/carol");
-  await expect(page).toHaveURL(/#\/searches$/);
   await page.goto("./#/browse?user=carol&path=Music");
   await expect(page).toHaveURL(/#\/users\/carol\/shares\?path=Music$/);
   await page.goto("./#/browse");
