@@ -12,7 +12,7 @@ use tracing::{debug, warn};
 use uuid::Uuid;
 
 use super::roots::{Refused, locate};
-use super::{Files, blocking, served_path, unreadable};
+use super::{Files, blocking, named, served_path, unreadable};
 use crate::api::error::ApiError;
 use crate::services::FileTarget;
 
@@ -81,13 +81,16 @@ impl Files {
               .logged(),
           );
         }
-        Err(Refused::Denied(e) | Refused::Io(e)) => return Err(unreadable("file", &shown, e)),
+        Err(Refused::Denied(e) | Refused::Io(e)) => {
+          return Err(unreadable("file", &checked, &shown, e));
+        }
       };
-      let metadata = std::fs::metadata(&resolved).map_err(|e| unreadable("file", &shown, e))?;
+      let metadata =
+        std::fs::metadata(&resolved).map_err(|e| unreadable("file", &checked, &shown, e))?;
       if !metadata.is_file() {
         return Err(ApiError::not_found(format!(
-          "'{}' is not a file",
-          shown.display()
+          "{} is not a file",
+          named(&checked)
         )));
       }
       let modified = metadata.modified().map_err(ApiError::internal)?;
@@ -112,14 +115,15 @@ impl Files {
     let shown = path.clone();
     let (resolved, metadata) = blocking(move || {
       let resolved = served_path(&dir, &checked)?;
-      let metadata = std::fs::metadata(&resolved).map_err(|e| unreadable("file", &shown, e))?;
+      let metadata =
+        std::fs::metadata(&resolved).map_err(|e| unreadable("file", &checked, &shown, e))?;
       Ok((resolved, metadata))
     })
     .await?;
     if !metadata.is_file() {
       return Err(ApiError::not_found(format!(
-        "'{}' is not a file",
-        path.display()
+        "{} is not a file",
+        named(&relative)
       )));
     }
     if root == FileRoot::Incomplete && self.writing.holds(&[&path, &resolved]) {

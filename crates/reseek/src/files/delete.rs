@@ -10,6 +10,7 @@ use tracing::{debug, warn};
 
 use super::roots::{Refused, locate};
 use super::writing::Writing;
+use super::{named, unreadable};
 use crate::api::error::ApiError;
 
 /// What a deletion removes.
@@ -39,7 +40,7 @@ pub(super) fn delete(
 ) -> Result<(), ApiError> {
   let shown = root.join(relative);
   let noun = kind.noun();
-  let missing = || ApiError::not_found(format!("The {noun} '{}' does not exist", shown.display()));
+  let missing = || ApiError::not_found(format!("The {noun} {} does not exist", named(relative)));
   let outside = || {
     warn!(path = %shown.display(), kind = noun, "deletion outside the application's directories refused");
     let message = match kind {
@@ -52,8 +53,8 @@ pub(super) fn delete(
     Ok(located) => located,
     Err(Refused::RootMissing) => return Err(missing()),
     Err(Refused::Outside) => return Err(outside()),
-    Err(Refused::Denied(e)) => return Err(denied(&shown, noun, &e)),
-    Err(Refused::Io(e)) => return Err(super::unreadable(noun, &shown, e)),
+    Err(Refused::Denied(e)) => return Err(denied(relative, noun, &e)),
+    Err(Refused::Io(e)) => return Err(unreadable(noun, relative, &shown, e)),
   };
   let segments: Vec<&str> = relative.split('/').filter(|s| !s.is_empty()).collect();
   let Some((name, parents)) = segments.split_last() else {
@@ -65,7 +66,7 @@ pub(super) fn delete(
   };
   if writing.holds(&[&located.path, &located.resolved]) {
     return Err(ApiError::conflict(
-      format!("'{}' is being written by a download", shown.display()),
+      format!("{} is being written by a download", named(relative)),
       None,
     ));
   }
@@ -79,7 +80,7 @@ pub(super) fn delete(
     }
     Err(Failure::Io(e)) if e.kind() == io::ErrorKind::PermissionDenied => {
       warn!(path = %shown.display(), error = %e, "deletion denied by the system");
-      Err(denied(&shown, noun, &e).logged())
+      Err(denied(relative, noun, &e).logged())
     }
     Err(Failure::Io(e)) => Err(ApiError::internal(format!(
       "{noun} {} not deleted: {e}",
@@ -88,10 +89,10 @@ pub(super) fn delete(
   }
 }
 
-fn denied(path: &Path, noun: &str, error: &io::Error) -> ApiError {
+fn denied(relative: &str, noun: &str, error: &io::Error) -> ApiError {
   ApiError::forbidden(format!(
-    "Deletion of the {noun} '{}' was denied: {error}",
-    path.display()
+    "Deletion of the {noun} {} was denied: {error}",
+    named(relative)
   ))
 }
 

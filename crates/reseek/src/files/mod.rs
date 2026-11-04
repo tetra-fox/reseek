@@ -235,8 +235,8 @@ impl Files {
     }
     Served::at(&resolved)
       .await
-      .map_err(|e| unreadable("file", &lexical, e))?
-      .ok_or_else(|| ApiError::not_found(format!("'{}' is not a file", lexical.display())))
+      .map_err(|e| unreadable("file", &path, &lexical, e))?
+      .ok_or_else(|| ApiError::not_found(format!("{} is not a file", named(&path))))
   }
 
   fn root(&self, root: FileRoot) -> &Path {
@@ -257,15 +257,22 @@ async fn blocking<T: Send + 'static>(
     .map_err(|e| ApiError::internal(format!("a file task did not finish: {e}")))?
 }
 
-/// The answer to `error` met reading `path`, which a message calls `what`: 404 when it is not
-/// there, 403 when the system refuses it, else a 500 with the error logged.
-fn unreadable(what: &str, path: &Path, error: std::io::Error) -> ApiError {
+/// How a message names the path `relative` under its root: from the root, as `'/Album/01.flac'`,
+/// so an answer does not tell where the root is on the server.
+fn named(relative: &str) -> String {
+  format!("'/{}'", relative.trim_start_matches('/'))
+}
+
+/// The answer to `error` met reading `path`, `relative` under its root, which a message calls
+/// `what`: 404 when it is not there, 403 when the system refuses it, else a 500 with the error
+/// and the whole path logged.
+fn unreadable(what: &str, relative: &str, path: &Path, error: std::io::Error) -> ApiError {
   if roots::missing(&error) {
-    ApiError::not_found(format!("The {what} '{}' does not exist", path.display()))
+    ApiError::not_found(format!("The {what} {} does not exist", named(relative)))
   } else if error.kind() == std::io::ErrorKind::PermissionDenied {
     ApiError::forbidden(format!(
-      "Access to {what} '{}' was denied: {error}",
-      path.display()
+      "Access to {what} {} was denied: {error}",
+      named(relative)
     ))
   } else {
     ApiError::internal(format!(
@@ -278,7 +285,7 @@ fn unreadable(what: &str, path: &Path, error: std::io::Error) -> ApiError {
 /// Finds the file `relative` under `root` to serve.
 fn served_path(root: &Path, relative: &str) -> Result<PathBuf, ApiError> {
   let shown = root.join(relative);
-  let missing = || ApiError::not_found(format!("The file '{}' does not exist", shown.display()));
+  let missing = || ApiError::not_found(format!("The file {} does not exist", named(relative)));
   match locate(root, relative) {
     Ok(located) if located.exists => Ok(located.resolved),
     Ok(_) | Err(Refused::RootMissing) => Err(missing()),
@@ -289,7 +296,7 @@ fn served_path(root: &Path, relative: &str) -> Result<PathBuf, ApiError> {
           .logged(),
       )
     }
-    Err(Refused::Denied(e) | Refused::Io(e)) => Err(unreadable("file", &shown, e)),
+    Err(Refused::Denied(e) | Refused::Io(e)) => Err(unreadable("file", relative, &shown, e)),
   }
 }
 
@@ -359,12 +366,8 @@ impl FileService for Files {
     let relative = path.to_string();
     let (located_name, members) = blocking(move || {
       let shown = dir.join(&relative);
-      let missing = || {
-        ApiError::not_found(format!(
-          "The directory '{}' does not exist",
-          shown.display()
-        ))
-      };
+      let missing =
+        || ApiError::not_found(format!("The directory {} does not exist", named(&relative)));
       let located = match locate(&dir, &relative) {
         Ok(located) if located.exists && located.resolved.is_dir() => located,
         Ok(_) | Err(Refused::RootMissing) => return Err(missing()),
@@ -375,11 +378,11 @@ impl FileService for Files {
           );
         }
         Err(Refused::Denied(e)) | Err(Refused::Io(e)) => {
-          return Err(unreadable("directory", &shown, e));
+          return Err(unreadable("directory", &relative, &shown, e));
         }
       };
-      let members =
-        archive::members(&located.resolved).map_err(|e| unreadable("directory", &shown, e))?;
+      let members = archive::members(&located.resolved)
+        .map_err(|e| unreadable("directory", &relative, &shown, e))?;
       Ok((located.name(), members))
     })
     .await?;
@@ -482,8 +485,8 @@ impl FileService for Files {
     let is_file = blocking(move || served_path(&dir, &checked).map(|path| path.is_file())).await?;
     if !is_file {
       return Err(ApiError::not_found(format!(
-        "'{}' is not a file",
-        self.root(root).join(&relative).display()
+        "{} is not a file",
+        named(&relative)
       )));
     }
     let (token, expires_at) = link::issue(
@@ -509,16 +512,17 @@ impl FileService for Files {
   async fn log_file(&self, name: &str, request: ContentRequest) -> Result<Response, ApiError> {
     let dir = self.logs.clone();
     let name = name.to_string();
+    let asked = name.clone();
     let resolved = blocking(move || {
-      let combined = safety::combine_safely(&dir.to_string_lossy(), &[&name], Os::CURRENT)
+      let combined = safety::combine_safely(&dir.to_string_lossy(), &[&asked], Os::CURRENT)
         .map_err(ApiError::bad_request)?;
       debug!(path = combined, "log file asked for");
-      served_path(&dir, &name)
+      served_path(&dir, &asked)
     })
     .await?;
     let mut served = Served::at(&resolved)
       .await
-      .map_err(|e| unreadable("log file", &resolved, e))?
+      .map_err(|e| unreadable("log file", &name, &resolved, e))?
       .ok_or_else(|| ApiError::not_found("The log file is not a regular file"))?;
     served.content_type = Some("text/plain; charset=utf-8");
     serve::respond(served, &request, &self.speed).await

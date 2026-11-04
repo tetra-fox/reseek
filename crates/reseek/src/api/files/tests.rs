@@ -295,6 +295,67 @@ async fn listings_and_deletions_stay_inside_their_roots() {
 }
 
 #[tokio::test]
+async fn a_refusal_names_the_path_under_its_root_not_on_the_server() {
+  let app = with_files(CONFIG).await;
+  let root = downloads(&app).to_string_lossy().into_owned();
+  let missing = b64("Album/02.flac");
+  let folder = b64("Album");
+  for (method, uri, body, message) in [
+    (
+      "GET",
+      format!("/api/v0/files/downloads/files/{missing}/content"),
+      None,
+      "The file '/Album/02.flac' does not exist",
+    ),
+    (
+      "DELETE",
+      format!("/api/v0/files/downloads/files/{missing}"),
+      None,
+      "The file '/Album/02.flac' does not exist",
+    ),
+    (
+      "GET",
+      format!("/api/v0/files/downloads/directories/{}", b64("Gone")),
+      None,
+      "The directory '/Gone' does not exist",
+    ),
+    (
+      "GET",
+      format!(
+        "/api/v0/files/downloads/directories/{}/archive",
+        b64("Gone")
+      ),
+      None,
+      "The directory '/Gone' does not exist",
+    ),
+    (
+      "GET",
+      format!("/api/v0/files/downloads/files/{folder}/content"),
+      None,
+      "'/Album' is not a file",
+    ),
+    (
+      "POST",
+      format!("/api/v0/files/downloads/files/{folder}/analysis"),
+      None,
+      "'/Album' is not a file",
+    ),
+    (
+      "POST",
+      "/api/v0/session/file-token".to_string(),
+      Some(json!({ "path": format!("downloads/{folder}") })),
+      "'/Album' is not a file",
+    ),
+  ] {
+    let answer = app.send(request(method, &uri, body)).await;
+    assert_eq!(answer.status, 404, "{method} {uri}");
+    let error = answer.json()["error"].as_str().unwrap().to_string();
+    assert_eq!(error, message, "{method} {uri}");
+    assert!(!error.contains(&root), "{error}");
+  }
+}
+
+#[tokio::test]
 async fn a_directory_is_sent_as_a_zip_one_at_a_time_and_within_the_limit() {
   let app = with_files(CONFIG).await;
   let uri = format!(

@@ -12,9 +12,7 @@ use crate::entries;
 /// The `.log` files in `dir`, by name; 404 when the directory does not exist.
 pub(super) fn files(dir: &Path) -> Result<Vec<FilesystemFile>, ApiError> {
   let entries = std::fs::read_dir(dir).map_err(|e| match e.kind() {
-    std::io::ErrorKind::NotFound => {
-      ApiError::not_found(format!("The directory '{}' does not exist", dir.display()))
-    }
+    std::io::ErrorKind::NotFound => ApiError::not_found("The log directory does not exist"),
     _ => ApiError::internal(format!("{} not read: {e}", dir.display())),
   })?;
   let mut found = Vec::new();
