@@ -282,9 +282,12 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
   };
   let near = |hz: f64| heard.share(|w| w.cutoff_hz.is_some_and(|c| (c - hz).abs() <= CLUSTER_HZ));
   let clustered = near(median);
-  let sharp_share = heard
-    .share(|w| w.sharp && w.cutoff_hz.is_some_and(|c| (c - median).abs() <= CLUSTER_HZ))
-    / clustered.max(f64::EPSILON);
+  let sharp_share = heard.share(|w| {
+    w.sharp
+      && w
+        .cutoff_hz
+        .is_some_and(|c| (c - median).abs() <= CLUSTER_HZ)
+  }) / clustered.max(f64::EPSILON);
   // a lossy file's own encoder cuts off too: only a cutoff well below its bitrate's counts
   let below_claim =
     |profile: &Profile| lossless || bitrate.is_some_and(|kbps| profile.kbps * 3 / 2 <= kbps);
@@ -472,10 +475,10 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     return reading;
   }
   // nothing above says otherwise: a lossy file that reaches past every cutoff too low for its
-  // bitrate stops where its own encoder does. Its encoder's cutoff is a ceiling that moves from
-  // frame to frame, and windows under it only lack high content, so it is judged at the top of
-  // its cutoffs
-  if !lossless && bitrate.is_some() {
+  // bitrate is judged against what its own bitrate keeps. Its encoder's cutoff is a ceiling that
+  // moves from frame to frame, and windows under it only lack high content, so it is judged at
+  // the top of its cutoffs
+  if !lossless && let Some(kbps) = bitrate {
     let cutoffs: Vec<f64> = heard.windows.iter().filter_map(|w| w.cutoff_hz).collect();
     let edge = percentile(&cutoffs, CEILING).unwrap_or(median);
     let too_low = PROFILES
@@ -485,20 +488,38 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
       .map_or(0.0, |p| p.hz);
     if edge > too_low + CLUSTER_HZ {
       reading.cutoff_hz = Some(edge);
-      reading.verdict = AnalysisVerdict::Consistent;
-      reading.confidence = 0.7 + 0.1 * near(edge);
-      reading.summary = match profile_at(edge) {
-        Some(profile) => format!(
-          "The content stops at about {}, where an encoder at {} cuts off, as a file of its \
-           bitrate does.",
-          khz(edge),
-          profile.name
-        ),
-        None => format!(
-          "The content reaches about {}, the top of what a file of its bitrate keeps.",
-          khz(edge)
-        ),
-      };
+      let profile = profile_at(edge);
+      if keeps_its_bitrate(edge, kbps) {
+        reading.verdict = AnalysisVerdict::Consistent;
+        reading.confidence = 0.7 + 0.1 * near(edge);
+        reading.summary = match profile {
+          Some(profile) => format!(
+            "The content stops at about {}, where an encoder at {} cuts off, at or above what \
+             a file of its bitrate keeps.",
+            khz(edge),
+            profile.name
+          ),
+          None => format!(
+            "The content reaches about {}, the top of what a file of its bitrate keeps.",
+            khz(edge)
+          ),
+        };
+        return reading;
+      }
+      reading.confidence = 0.4;
+      reading.encoder_guess = profile.map(|p| EncoderGuess {
+        profile: p.name.to_string(),
+        confidence: 0.4,
+      });
+      let at = profile.map_or(String::new(), |p| {
+        format!(", where an encoder at {} cuts off", p.name)
+      });
+      reading.summary = format!(
+        "The content stops at about {}{at}: below what a file of its bitrate keeps, but not \
+         low enough to call a transcode. A second lossy generation at a nearby bitrate is one \
+         explanation.",
+        khz(edge)
+      );
       return reading;
     }
   }
@@ -511,6 +532,22 @@ fn verdict(heard: &Heard, median: Option<f64>, lossless: bool, bitrate: Option<u
     "The windows do not fit one pattern.".to_string()
   };
   reading
+}
+
+/// Whether a cut at `edge` keeps what a file of `kbps` does: it sits at the cutoff of a bitrate
+/// no lower than the highest one up to `kbps`, or past every cutoff of that bitrate. A file below
+/// every bitrate known keeps whatever it does.
+fn keeps_its_bitrate(edge: f64, kbps: u32) -> bool {
+  let Some(own) = PROFILES.iter().map(|p| p.kbps).filter(|p| *p <= kbps).max() else {
+    return true;
+  };
+  match profile_at(edge) {
+    Some(profile) => profile.kbps >= own,
+    None => PROFILES
+      .iter()
+      .filter(|p| p.kbps == own)
+      .all(|p| edge > p.hz),
+  }
 }
 
 /// Whether the middle window is quiet.
@@ -594,5 +631,35 @@ mod tests {
       "{}",
       found.summary
     );
+  }
+
+  #[test]
+  fn a_cutoff_below_its_bitrates_own_but_above_two_thirds_of_it_is_inconclusive() {
+    let cuts = spread(&[(16_000.0, 100)]);
+    let found = verdict(&heard(&cuts), Some(16_000.0), false, Some(190));
+    assert_eq!(
+      found.verdict,
+      AnalysisVerdict::Inconclusive,
+      "{}",
+      found.summary
+    );
+    assert_eq!(found.confidence, 0.4);
+    let guess = found.encoder_guess.unwrap();
+    assert_eq!(
+      (guess.profile.as_str(), guess.confidence),
+      ("mp3 ~128 kbps", 0.4)
+    );
+    assert!(
+      found.summary.contains("second lossy generation"),
+      "{}",
+      found.summary
+    );
+    let own = verdict(
+      &heard(&spread(&[(18_600.0, 100)])),
+      Some(18_600.0),
+      false,
+      Some(190),
+    );
+    assert_eq!(own.verdict, AnalysisVerdict::Consistent, "{}", own.summary);
   }
 }
