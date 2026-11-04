@@ -2,7 +2,6 @@
 //! handler answers failures with.
 
 mod activity;
-pub mod agent;
 mod analysis;
 mod application;
 mod auth;
@@ -113,10 +112,6 @@ pub fn router(state: AppState) -> Router {
   let (router, _) = routes().split_for_parts();
   router
     .nest("/api/v0", application::hidden())
-    .route_layer(middleware::from_fn_with_state(
-      state.clone(),
-      agent::refuse_in_agent_mode,
-    ))
     .layer(middleware::from_fn_with_state(
       state.clone(),
       crate::auth::authenticate,

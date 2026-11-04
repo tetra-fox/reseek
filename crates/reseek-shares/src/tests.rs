@@ -81,7 +81,6 @@ fn setup(dir: &Path, cache: &Path) -> (Setup, watch::Receiver<SharesState>) {
     force_scan: false,
     volatile: false,
     case_sensitive: false,
-    relay_debug: false,
     publish: Box::new(move |shares| {
       told.send_replace(shares);
     }),

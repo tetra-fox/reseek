@@ -3,7 +3,6 @@
   import { page } from "$app/state";
   import FlaskConicalIcon from "@lucide/svelte/icons/flask-conical";
   import SunMoonIcon from "@lucide/svelte/icons/sun-moon";
-  import UserSearchIcon from "@lucide/svelte/icons/user-search";
   import { Dialog } from "bits-ui";
   import { toggleMode } from "mode-watcher";
   import { tick } from "svelte";
@@ -27,7 +26,6 @@
   afterNavigate(() => (sidebar.sheetOpen = false));
 
   const current = $derived(navCurrent(route(page.url).path)?.path);
-  const agent = $derived(app.mode === "agent");
   const canary = $derived(app.state?.version.isCanary ?? false);
 </script>
 
@@ -98,17 +96,9 @@
             <span class={["truncate", sidebar.collapsed && "hidden"]}>Canary</span>
           </li>
         {/if}
-        {#if agent}
-          <!-- a relay agent has only the System area, so the screens are one plain label -->
-          <li class="pointer-events-none nav-item">
-            <UserSearchIcon class="size-4 shrink-0" />
-            <span class={["truncate", sidebar.collapsed && "hidden"]}>Agent mode</span>
-          </li>
-        {:else}
-          {#each navItems as item (item.path)}
-            {@render link(item)}
-          {/each}
-        {/if}
+        {#each navItems as item (item.path)}
+          {@render link(item)}
+        {/each}
       </ul>
       <ul class="flex flex-col gap-1">
         <li>

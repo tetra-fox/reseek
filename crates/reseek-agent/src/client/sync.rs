@@ -11,18 +11,18 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-use api_types::relay::{RelayConnectionState, RelayErrorCode, RelayMessage};
+use api_types::relay::{RelayErrorCode, RelayMessage};
 use reqwest::multipart::{Form, Part};
+use reseek_relay_proto::backoff;
+use reseek_relay_proto::credential::Purpose;
+use reseek_relay_proto::frames;
+use reseek_shares::Shares;
 use tokio_util::io::ReaderStream;
 use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
 use super::AgentClient;
 use super::session::Link;
-use crate::shares::Shares;
-use reseek_relay_proto::backoff;
-use reseek_relay_proto::credential::Purpose;
-use reseek_relay_proto::frames;
 
 /// How many times the agent asks for an upload token.
 const TOKEN_ATTEMPTS: u32 = 3;
@@ -104,7 +104,6 @@ impl AgentClient {
     match self.upload_shares(link).await {
       Ok(()) => {
         link.set_ready();
-        self.publish(Some(link), RelayConnectionState::Ready);
         info!("Shares uploaded. Ready to relay files.");
       }
       Err(e) => {
@@ -119,14 +118,10 @@ impl AgentClient {
     }
   }
 
-  /// Copies the local index to a file, uploads it and deletes it.
+  /// Copies the local index to a file, uploads it and deletes it. One upload runs at a time,
+  /// so the copy has one name, and a copy an interrupted upload left is written over.
   async fn upload_shares(&self, link: &Link) -> Result<(), SyncError> {
-    tokio::fs::create_dir_all(&self.temporary)
-      .await
-      .map_err(|e| SyncError::Failed(format!("{}: {e}", self.temporary.display())))?;
-    let dump = self
-      .temporary
-      .join(format!("share_backup_{:016x}.db", rand::random::<u64>()));
+    let dump = self.uploads.join("share_index.db");
     let uploaded = match self.shares.dump(&dump).await {
       Ok(bytes) => {
         info!(bytes, "Beginning upload of shares");

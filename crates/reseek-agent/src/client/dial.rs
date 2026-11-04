@@ -17,9 +17,10 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use url::Url;
 
-use crate::config::Options;
 use reseek_relay_proto::credential::Key;
 use reseek_relay_proto::frames::MAX_FRAME;
+
+use crate::options::Options;
 
 /// How long dialing the controller may take, TLS and the upgrade included.
 const DIAL: Duration = Duration::from_secs(10);

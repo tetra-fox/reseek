@@ -15,12 +15,10 @@ pub struct Relay {
   /// Enables relay mode.
   #[cascade(env = "RESEEK_RELAY", cli = "-r|--relay", apply = "restart")]
   pub enabled: bool,
-  /// Relay role: `controller`, `agent`, or `debug` for a controller that is also its own
-  /// agent.
+  /// Relay role: `controller`, the one the daemon plays. The relay agent is the separate
+  /// `reseek-agent` program.
   #[cascade(env = "RESEEK_RELAY_MODE", cli = "-m|--relay-mode", apply = "restart")]
   pub mode: RelayMode,
-  /// Controller an agent connects to.
-  pub controller: RelayController,
   /// Agents allowed to connect to this controller, by name.
   #[cascade(user_keyed)]
   pub agents: BTreeMap<String, RelayAgent>,
@@ -79,39 +77,6 @@ impl Default for RelayLimits {
       share_database_max: bytesize::ByteSize::gib(2),
     }
   }
-}
-
-/// Controller an agent connects to.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Cascade)]
-#[serde(default)]
-pub struct RelayController {
-  /// Base URL of the controller, such as `https://host:5031`.
-  #[cascade(env = "RESEEK_CONTROLLER_ADDRESS", cli = "--controller-address")]
-  pub address: Option<String>,
-  /// Accepts any TLS certificate from the controller.
-  #[cascade(
-    env = "RESEEK_CONTROLLER_IGNORE_CERTIFICATE_ERRORS",
-    cli = "--controller-ignore-certificate-errors"
-  )]
-  pub ignore_certificate_errors: bool,
-  /// API key of the controller, with the read-write or administrator role.
-  #[cascade(
-    env = "RESEEK_CONTROLLER_API_KEY",
-    cli = "--controller-api-key",
-    secret
-  )]
-  pub api_key: Option<String>,
-  /// Secret the controller holds for this agent.
-  #[cascade(env = "RESEEK_CONTROLLER_SECRET", cli = "--controller-secret", secret)]
-  pub secret: Option<String>,
-  /// Fetches finished downloads from the controller.
-  #[cascade(env = "RESEEK_CONTROLLER_DOWNLOADS", cli = "--controller-downloads")]
-  pub downloads: bool,
-  /// Glob patterns matched against the path of a finished download under the downloads
-  /// directory of the controller, with `/` as the separator. Only matching downloads are
-  /// fetched. All downloads are fetched when empty.
-  #[cascade(env = "RESEEK_CONTROLLER_DOWNLOADS_FILTER")]
-  pub downloads_filter: Vec<String>,
 }
 
 /// An agent allowed to connect to this controller.

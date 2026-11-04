@@ -91,7 +91,7 @@ pub struct Downloads {
   events: EventBus,
   live: Live,
   telemetry: Arc<Telemetry>,
-  /// the relay controller, told of every finished download, in controller and debug mode
+  /// the relay controller, told of every finished download, when relay mode is on
   relay: Option<Arc<Controller>>,
   /// told of every finished download, which it analyzes when the options ask for it
   analysis: Arc<Analysis>,

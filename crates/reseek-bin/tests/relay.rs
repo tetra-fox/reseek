@@ -1,10 +1,11 @@
-//! Relay mode between two daemons: an agent logs in to its controller, uploads its shares, and
-//! a third user on soulfind downloads one of the agent's files from the controller with the
-//! bytes intact; a kicked agent's shares go with it and it comes back on its own, as it does
-//! after its controller restarts; an agent that stops takes its shares with it. The controller
-//! refuses a wrong secret, an unknown name, a replayed credential and an address outside the
-//! agent's networks. A controller's finished download is copied to an agent that asks for
-//! them, and a controller that stops closes its agents' sockets as shutting down.
+//! Relay mode between the daemon and the relay agent program: an agent logs in to its
+//! controller, uploads its shares, and a third user on soulfind downloads one of the agent's
+//! files from the controller with the bytes intact; a kicked agent's shares go with it and it
+//! comes back on its own, as it does after its controller restarts; an agent that stops takes
+//! its shares with it. The controller refuses a wrong secret, an unknown name, a replayed
+//! credential and an address outside the agent's networks. A
+//! controller's finished download is copied to an agent that asks for them, and a controller
+//! that stops closes its agents' sockets as shutting down.
 
 mod support;
 
@@ -12,16 +13,14 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use api_client::{Client, Credential, RelayReceived};
-use api_types::relay::{
-  LoginFailure, RELAY_PROTOCOL, RelayConnectionState, RelayEnvelope, RelayMessage,
-};
+use api_types::relay::{LoginFailure, RELAY_PROTOCOL, RelayEnvelope, RelayMessage};
 use api_types::state::State;
 use api_types::transfers::{QueueDownloadRequest, TransferDirection, TransferStates};
 use reseek_relay_proto::credential::{Key, Purpose};
 use soulseek_client::{ClientOptions, DownloadOutput, DownloadRequest, UploadInput, UploadRequest};
 use support::soulfind::{self, Soulfind};
 use support::transfers::{self, asked, content, file, scratch};
-use support::{ACCOUNT, Daemon, PATIENCE, daemon_on, free_port, signed_in, until};
+use support::{ACCOUNT, AGENT, Daemon, PATIENCE, Process, daemon_on, free_port, signed_in, until};
 use tokio_util::sync::CancellationToken;
 
 const KEY: &str = "agents-key-0123456789";
@@ -41,18 +40,25 @@ fn controller(dir: &Path, server: &Soulfind, name: &str, port: u16) -> Daemon {
   daemon_on(port, dir, server, name, free_port(), &[])
 }
 
-/// The agent `nas` in `dir`, sharing `dir/share`, connecting to the controller on `port`, with
-/// `extra` in its `[relay.controller]` table.
-fn agent(dir: &Path, port: u16, extra: &str) -> Daemon {
+/// The relay agent program `nas` in `dir`, sharing `dir/share`, connecting to the controller
+/// on `port`, with `extra` in its `[relay.controller]` table.
+fn agent(dir: &Path, port: u16, extra: &str) -> Process {
   let config = format!(
-    "instance_name = \"nas\"\n[relay]\nenabled = true\nmode = \"agent\"\n\
+    "instance_name = \"nas\"\n\
      [relay.controller]\naddress = \"http://127.0.0.1:{port}/\"\napi_key = \"{KEY}\"\n\
      secret = \"{SECRET}\"\n{extra}[shares]\ndirectories = [\"{}\"]\n",
     dir.join("share").display()
   );
   std::fs::write(dir.join("config.toml"), config).unwrap();
-  Daemon::start(dir, &[], &ACCOUNT)
+  Process::spawn(
+    std::process::Command::new(AGENT)
+      .args(["--app-dir", dir.to_str().unwrap()])
+      .env_clear(),
+  )
 }
+
+/// The line the agent logs once the controller took its shares.
+const READY: &[&str] = &["Shares uploaded. Ready to relay files."];
 
 /// Whether the controller serves the agent `nas` with `files` files.
 fn serving(state: &State, files: u32) -> bool {
@@ -78,6 +84,8 @@ async fn value_of(api: &Client, name: &str) -> f64 {
   api.metrics().await.unwrap()[name].samples.as_ref().unwrap()[0].value
 }
 
+/// The agent program logs in to a daemon controller over loopback, uploads its share, and
+/// serves one of its files to a peer downloading it from the controller.
 #[tokio::test]
 async fn an_agents_file_is_downloaded_through_its_controller() {
   let Some(server) = soulfind::server() else {
@@ -94,17 +102,14 @@ async fn an_agents_file_is_downloaded_through_its_controller() {
   let api = signed_in(&controller).await;
   until(&api, "logged in", support::logged_in).await;
   let agent = agent(agent_dir.path(), port, "");
-  let agent_api = signed_in(&agent).await;
   let state = until(&api, "serving the agent", |s| serving(s, 1)).await;
   assert_eq!(
     state.shares.hosts.as_deref(),
     Some(&["local".to_string(), "nas".to_string()][..])
   );
   assert_eq!(state.relay.agents[0].ip_address, "127.0.0.1");
-  until(&agent_api, "ready", |s| {
-    s.relay.controller.state == RelayConnectionState::Ready
-  })
-  .await;
+  assert_eq!(state.relay.agents[0].version, env!("CARGO_PKG_VERSION"));
+  agent.printed_line(READY).await;
   exactly(&api, "RelayAgentConnected", 1).await;
   exactly(&api, "RelayAgentSharesUpdated", 1).await;
   exactly(&api, "RelayAgentDisconnected", 0).await;
@@ -183,22 +188,16 @@ async fn an_agent_comes_back_after_its_controller_restarts_and_leaves_with_its_s
   let first = controller(controller_dir.path(), &server, &name, port);
   let api = signed_in(&first).await;
   let mut agent = agent(agent_dir.path(), port, "");
-  let agent_api = signed_in(&agent).await;
   until(&api, "serving the agent", |s| serving(s, 2)).await;
 
   drop(first);
-  until(&agent_api, "reconnecting", |s| {
-    s.relay.controller.state != RelayConnectionState::Ready
-  })
-  .await;
+  agent
+    .printed_line(&["relay controller connection lost"])
+    .await;
   let second = controller(controller_dir.path(), &server, &name, port);
   let api = signed_in(&second).await;
   until(&api, "serving the agent after the restart", |s| {
     serving(s, 2)
-  })
-  .await;
-  until(&agent_api, "ready again", |s| {
-    s.relay.controller.state == RelayConnectionState::Ready
   })
   .await;
 
@@ -225,7 +224,7 @@ async fn a_stopping_controller_closes_its_agents_as_shutting_down() {
   let api = signed_in(&stopping).await;
   let agent = agent(agent_dir.path(), port, "");
   until(&api, "serving the agent", |s| serving(s, 0)).await;
-  let pid = stopping.child.id().to_string();
+  let pid = stopping.process.child.id().to_string();
   let signaled = std::process::Command::new("kill")
     .args(["-TERM", &pid])
     .status()
@@ -234,7 +233,7 @@ async fn a_stopping_controller_closes_its_agents_as_shutting_down() {
   agent
     .printed_line(&["relay controller connection lost", "code=4010"])
     .await;
-  assert!(stopping.child.wait().unwrap().success());
+  assert!(stopping.process.child.wait().unwrap().success());
 }
 
 #[tokio::test]
@@ -329,13 +328,14 @@ async fn message(socket: &mut api_client::RelaySocket) -> RelayMessage {
   }
 }
 
-/// A socket of `api`'s, logged in as `agent` with a credential made with `secret`, or for the
-/// token `instead` when given; how the controller answered.
+/// A socket of `api`'s, logged in as `agent` of `version` with a credential made with `secret`,
+/// or for the token `instead` when given; how the controller answered.
 async fn log_in(
   api: &Client,
   agent: &str,
   secret: &str,
   instead: Option<&str>,
+  version: &str,
 ) -> (api_client::RelaySocket, RelayMessage, String) {
   let mut socket = api.relay_socket().await.unwrap();
   let RelayMessage::Challenge { token, .. } = message(&mut socket).await else {
@@ -348,7 +348,7 @@ async fn log_in(
     message: RelayMessage::Login {
       agent: agent.to_string(),
       credential,
-      version: "test".to_string(),
+      version: version.to_string(),
       capabilities: Vec::new(),
     },
   };
@@ -357,9 +357,15 @@ async fn log_in(
   (socket, answer, token)
 }
 
-/// Whether the login was refused for `reason` and the socket then closed as unauthorized.
-async fn refused(api: &Client, agent: &str, secret: &str, instead: Option<&str>) -> LoginFailure {
-  let (mut socket, answer, _) = log_in(api, agent, secret, instead).await;
+/// Why the login of `agent` of `version` was refused, once the socket closed as unauthorized.
+async fn refused(
+  api: &Client,
+  agent: &str,
+  secret: &str,
+  instead: Option<&str>,
+  version: &str,
+) -> LoginFailure {
+  let (mut socket, answer, _) = log_in(api, agent, secret, instead, version).await;
   let RelayMessage::LoginFailed { reason } = answer else {
     panic!("accepted: {answer:?}");
   };
@@ -379,16 +385,17 @@ async fn a_login_is_refused_for_each_wrong_part() {
     .unwrap()
     .with_credential(Credential::ApiKey(KEY.to_string()));
 
-  let wrong = refused(&api, "nas", "not-the-secret-0123", None).await;
+  let ours = env!("CARGO_PKG_VERSION");
+  let wrong = refused(&api, "nas", "not-the-secret-0123", None, ours).await;
   assert_eq!(wrong, LoginFailure::BadCredential);
-  let unknown = refused(&api, "stranger", SECRET, None).await;
+  let unknown = refused(&api, "stranger", SECRET, None, ours).await;
   assert_eq!(unknown, LoginFailure::UnknownAgent);
-  let outside = refused(&api, "fenced", "fenced-secret-0123456", None).await;
+  let outside = refused(&api, "fenced", "fenced-secret-0123456", None, ours).await;
   assert_eq!(outside, LoginFailure::AddressNotAllowed);
 
-  let (_logged_in, answer, used) = log_in(&api, "nas", SECRET, None).await;
+  let (_logged_in, answer, used) = log_in(&api, "nas", SECRET, None, ours).await;
   assert!(matches!(answer, RelayMessage::LoginOk { .. }), "{answer:?}");
-  let replayed = refused(&api, "nas", SECRET, Some(&used)).await;
+  let replayed = refused(&api, "nas", SECRET, Some(&used), ours).await;
   assert_eq!(replayed, LoginFailure::BadCredential);
 
   let admin = signed_in(&controller).await;

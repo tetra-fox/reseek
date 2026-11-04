@@ -1,5 +1,5 @@
-//! The relay calls: a controller's agents, an agent's connection, and the calls an agent makes
-//! to its controller with its API key.
+//! The relay calls: a controller's agents, and the calls an agent makes to its controller with
+//! its API key.
 
 use api_types::relay::{RelayAgentState, RelayFileUploadResult, RelayState};
 use base64::Engine;
@@ -35,21 +35,6 @@ impl Client {
   /// `DELETE /relay/agents/{name}`: closes an agent's connection.
   pub async fn kick_agent(&self, name: &str) -> Result<()> {
     done(self.delete(Route::new("relay/agents").segment(name))).await
-  }
-
-  /// `PUT /relay/agent`: starts this agent's connection to its controller.
-  pub async fn start_agent(&self) -> Result<()> {
-    done(self.put(Route::new("relay/agent"))).await
-  }
-
-  /// `DELETE /relay/agent`: closes this agent's connection to its controller.
-  pub async fn stop_agent(&self) -> Result<()> {
-    done(self.delete(Route::new("relay/agent"))).await
-  }
-
-  /// `POST /relay/agent/sync`: sends this agent's shares again.
-  pub async fn sync_agent(&self) -> Result<()> {
-    done(self.post(Route::new("relay/agent/sync"))).await
   }
 
   /// `POST /relay/controller/shares/{token}`: an agent sends its share list and database.

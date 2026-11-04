@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use api_types::relay::{LoginFailure, RelayConnectionState, RelayErrorCode, RelayMessage};
+use api_types::relay::{LoginFailure, RelayErrorCode, RelayMessage};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Instant, sleep_until};
@@ -17,12 +17,14 @@ use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, trace, warn};
 
-use super::AgentClient;
-use super::dial::{Settings, Socket};
-use crate::sync::lock;
+use reseek_relay_proto::credential::Purpose;
 use reseek_relay_proto::frames::{
   self, DEFER_EVERY, LOGIN_WITHIN, MAX_FRAME, PING_EVERY, SILENCE, close,
 };
+use reseek_shares::lock;
+
+use super::AgentClient;
+use super::dial::{Settings, Socket};
 
 /// How many frames wait to be written to the socket.
 const OUTBOUND: usize = 64;
@@ -130,21 +132,7 @@ impl AgentClient {
       share_answer: std::sync::Mutex::new(None),
       refusal: std::sync::Mutex::new(None),
     });
-    {
-      let mut current = lock(&self.link);
-      if !*self.started.borrow() {
-        drop(current);
-        debug!("the agent was stopped while dialing; the socket is closed unserved");
-        send_close(&mut socket, close::NORMAL).await;
-        return Ended {
-          ready: false,
-          code: None,
-          refusal: None,
-        };
-      }
-      *current = Some(link.clone());
-      self.set_state(RelayConnectionState::Authenticating);
-    }
+    *lock(&self.link) = Some(link.clone());
     let opened = Instant::now();
     let mut heard = opened;
     let mut ping = tokio::time::interval_at(opened + PING_EVERY, PING_EVERY);
@@ -247,16 +235,13 @@ impl AgentClient {
       RelayMessage::Challenge { token, .. } => {
         info!("Relay controller sent an authentication challenge");
         info!("Logging in...");
-        let credential = link
-          .settings
-          .key
-          .credential(reseek_relay_proto::credential::Purpose::Login, &token);
+        let credential = link.settings.key.credential(Purpose::Login, &token);
         link.send(
           None,
           RelayMessage::Login {
             agent: link.settings.agent.clone(),
             credential,
-            version: crate::version::info().current,
+            version: crate::VERSION.to_string(),
             capabilities: Vec::new(),
           },
         );
@@ -264,7 +249,6 @@ impl AgentClient {
       RelayMessage::LoginOk { server_version, .. } => {
         info!(controller_version = server_version, "Login succeeded.");
         link.logged_in.store(true, Ordering::Release);
-        self.publish(Some(link), RelayConnectionState::Connected);
         self.request_sync();
       }
       RelayMessage::LoginFailed { reason } => {

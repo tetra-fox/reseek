@@ -2,7 +2,7 @@
 //! its bytes for a peer's download. A file is looked up among the local shares only and read
 //! from disk; one the index has but the disk does not asks for a scan of the shares, and the
 //! controller is told so. The bytes go in an HTTP call that stays open while the peer reads
-//! them; the call ends with the daemon, which fails the transfer on the controller.
+//! them; the call ends with the agent, which fails the transfer on the controller.
 
 use std::io::SeekFrom;
 use std::sync::Arc;
@@ -14,10 +14,11 @@ use tokio_util::io::ReaderStream;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+use reseek_relay_proto::credential::Purpose;
+use reseek_shares::traverses;
+
 use super::AgentClient;
 use super::session::Link;
-use crate::safety::traverses;
-use reseek_relay_proto::credential::Purpose;
 
 /// Why a file cannot be sent, as the controller is told.
 struct Refusal {

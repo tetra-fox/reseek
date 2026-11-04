@@ -160,8 +160,6 @@ pub struct Setup {
   pub volatile: bool,
   /// the share filters match case
   pub case_sensitive: bool,
-  /// this is a debug relay, which serves its own files through itself as an agent
-  pub relay_debug: bool,
   /// told the share state each time it changes, while the engine's lock on it is held, so the
   /// states arrive in the order they were made
   pub publish: Box<dyn Fn(SharesState) + Send + Sync>,
@@ -183,8 +181,6 @@ pub struct Shares {
   /// the backup file, `None` when nothing is kept between starts
   backup: Option<PathBuf>,
   in_memory: bool,
-  /// a debug relay serves its own files through itself as an agent
-  relay_debug: bool,
   workers: u32,
   /// whether the share filters match case, as the engine started with
   case_sensitive: bool,
@@ -261,7 +257,6 @@ impl Shares {
       downloads: setup.downloads,
       backup: storage.backup,
       in_memory: storage.in_memory,
-      relay_debug: setup.relay_debug,
       workers: startup.cache.scan_workers(),
       case_sensitive: setup.case_sensitive,
       quiet,
@@ -386,16 +381,9 @@ impl Shares {
 
   /// Where the file a peer asked for by its exact remote name `masked` is: the local shares
   /// first, then each relay agent's in the order they were loaded; `None` when no host has it.
-  /// A debug relay passes over its local file, to serve it through itself as an agent.
   pub async fn resolve_file(&self, masked: &str) -> Result<Option<Resolved>, DbError> {
     if let Some(found) = self.resolve_local(masked).await? {
-      if !self.relay_debug {
-        return Ok(Some(found));
-      }
-      warn!(
-        filename = masked,
-        "Ignoring resolved local file to facilitate Relay debugging."
-      );
+      return Ok(Some(found));
     }
     for (host, db) in self.agent_databases() {
       let wanted = masked.to_string();

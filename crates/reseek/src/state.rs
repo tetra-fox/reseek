@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use api_types::live::LiveFrame;
-use api_types::relay::{RelayConnectionState, RelayControllerState, RelayMode, RelayState};
+use api_types::relay::RelayState;
 use api_types::state::{
   ConfigurationState, ConnectionWatchdogState, DirectoriesState, DistributedNetworkState,
   HealthState, IncomingSearchHealth, ListenState, PortMappingState, PortMappingStatus, Privileges,
@@ -15,7 +15,7 @@ use api_types::state::{
 use cascade::Loaded;
 use tokio::sync::watch;
 
-use crate::config::{Options, enums};
+use crate::config::Options;
 use crate::live::Live;
 use crate::paths::Paths;
 use crate::version;
@@ -83,20 +83,6 @@ pub fn configuration(loaded: &Loaded<Options>) -> ConfigurationState {
 
 /// The state before anything has happened: not connected, no shares, nobody in the relay.
 fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
-  let relay = &loaded.values.relay;
-  let mode = match relay.mode {
-    enums::RelayMode::Controller => RelayMode::Controller,
-    enums::RelayMode::Agent => RelayMode::Agent,
-    enums::RelayMode::Debug => RelayMode::Debug,
-  };
-  let controller_address = match relay.mode {
-    enums::RelayMode::Controller => None,
-    enums::RelayMode::Agent | enums::RelayMode::Debug => relay
-      .controller
-      .address
-      .as_deref()
-      .map(crate::config::redact::url),
-  };
   State {
     version: version::info(),
     pending_reconnect: false,
@@ -129,11 +115,7 @@ fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
       is_login_unanswered: false,
     },
     relay: RelayState {
-      mode,
-      controller: RelayControllerState {
-        address: controller_address,
-        state: RelayConnectionState::Disconnected,
-      },
+      enabled: loaded.values.relay.enabled,
       agents: Vec::new(),
     },
     health: HealthState {

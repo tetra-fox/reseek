@@ -127,14 +127,8 @@ export const titleOf = (crumbs: Crumb[]): string =>
 /** The document title for a route without steps of its own */
 export const title = (path: string): string => titleOf(baseCrumbs(path));
 
-/**
- * Where a route goes instead of rendering, or null when it renders: a relay agent shows only
- * the System area, and the root is the dashboard
- */
-export const redirectFor = (path: string, agent: boolean): string | null => {
-  if (agent) return path.startsWith("/system") ? null : "/system";
-  return path === "/" ? "/dashboard" : null;
-};
+/** Where a route goes instead of rendering, or null when it renders: the root is the dashboard */
+export const redirectFor = (path: string): string | null => (path === "/" ? "/dashboard" : null);
 
 /**
  * Where a path that no screen renders goes: the chat page for the old rooms paths, the screen

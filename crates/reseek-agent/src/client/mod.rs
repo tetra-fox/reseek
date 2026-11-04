@@ -1,37 +1,31 @@
-//! The agent: one connection to its controller for the life of the daemon. Once started it
-//! dials, logs in, uploads its shares and serves the controller's requests; whenever the socket
-//! is lost while it is still meant to be connected, it dials again, backing off up to 30
-//! seconds and starting over once it was ready. A refusal of its configuration backs off to the
-//! cap at once and is warned about once per reason. A change to the controller's settings
-//! closes the socket and dials again with the new ones.
+//! The agent's connection to its controller, one for the life of the program: it dials, logs
+//! in, uploads its shares and serves the controller's requests; whenever the socket is lost, it
+//! dials again, backing off up to 30 seconds and starting over once it was ready. A refusal of
+//! its configuration backs off to the cap at once and is warned about once per reason. A change
+//! to the controller's settings closes the socket and dials again with the new ones.
 
 mod dial;
 mod downloads;
 mod files;
 mod session;
 mod sync;
-#[cfg(test)]
-mod tests;
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
-use api_types::relay::RelayConnectionState;
 use cascade::Watcher;
+use reseek_relay_proto::backoff;
+use reseek_relay_proto::frames::close;
+use reseek_shares::{Shares, lock};
+use tokio::sync::Notify;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::{Notify, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 
-use crate::config::{Options, RelayController};
-use crate::shares::Shares;
-use crate::state::StateOwner;
-use crate::sync::lock;
+use crate::options::{Controller, Options};
 use dial::Settings;
-use reseek_relay_proto::backoff;
-use reseek_relay_proto::frames::close;
 use session::Link;
 
 /// The longest wait between two attempts to reach the controller.
@@ -45,16 +39,11 @@ pub struct AgentClient {
   this: Weak<AgentClient>,
   config: Watcher<Options>,
   shares: Arc<Shares>,
-  state: StateOwner,
   /// the downloads directory, which the controller's finished downloads are copied to
   downloads: PathBuf,
-  /// where the share index is written before it is uploaded
-  temporary: PathBuf,
-  /// this daemon is its own controller, so copies of its downloads are named apart
-  debug: bool,
+  /// where the share index is copied to before it is uploaded
+  uploads: PathBuf,
   shutdown: CancellationToken,
-  /// whether the agent is meant to be connected
-  started: watch::Sender<bool>,
   /// the socket now open
   link: Mutex<Option<Arc<Link>>>,
   /// a share upload runs
@@ -68,26 +57,24 @@ pub struct AgentClient {
 }
 
 impl AgentClient {
-  /// The agent of the options, copying finished downloads into `downloads`; `debug` when
-  /// the daemon is also the controller. Nothing is dialed until [`AgentClient::start`].
+  /// The agent of the options in `config`, serving `shares` and copying finished downloads
+  /// into `downloads`, until `shutdown`; the share index is copied into `uploads` to be sent.
+  /// It follows the options and the shares at once and connects once [`AgentClient::run`]
+  /// runs.
   pub fn new(
     config: Watcher<Options>,
     shares: Arc<Shares>,
-    state: StateOwner,
     downloads: PathBuf,
-    debug: bool,
+    uploads: PathBuf,
     shutdown: CancellationToken,
   ) -> Arc<Self> {
     let agent = Arc::new_cyclic(|this| Self {
       this: this.clone(),
       config,
       shares,
-      state,
       downloads,
-      temporary: std::env::temp_dir().join("reseek"),
-      debug,
+      uploads,
       shutdown,
-      started: watch::Sender::new(false),
       link: Mutex::new(None),
       syncing: AtomicBool::new(false),
       again: AtomicBool::new(false),
@@ -95,7 +82,6 @@ impl AgentClient {
       redial: Notify::new(),
     });
     let span = info_span!("relay_agent");
-    tokio::spawn(agent.clone().run().instrument(span.clone()));
     tokio::spawn(
       agent
         .clone()
@@ -113,74 +99,19 @@ impl AgentClient {
       .expect("the agent is only used inside the Arc it refers to")
   }
 
-  /// Starts connecting to the controller; nothing when it is started already.
-  pub fn start(&self) {
-    if !self.started.send_replace(true) {
-      info!("relay agent connection started");
-    }
-  }
-
-  /// Closes the connection to the controller and stops dialing. A socket a dial opens after
-  /// this is closed before it is served.
-  pub fn stop(&self) {
-    let link = {
-      let mut current = lock(&self.link);
-      self.started.send_replace(false);
-      self.set_state(RelayConnectionState::Disconnected);
-      current.take()
-    };
-    if let Some(link) = link {
-      link.close(close::NORMAL);
-    }
-  }
-
-  /// Uploads the shares again now; false when the agent is not logged in.
-  pub fn sync_now(&self) -> bool {
-    if !self.current().is_some_and(|link| link.logged_in()) {
-      return false;
-    }
-    self.request_sync();
-    true
-  }
-
   /// The socket now open.
   fn current(&self) -> Option<Arc<Link>> {
     lock(&self.link).clone()
   }
 
-  fn set_state(&self, state: RelayConnectionState) {
-    self
-      .state
-      .update(|current| current.relay.controller.state = state);
-  }
-
-  /// Publishes `state` while the agent is meant to be connected, and, for the phase of a
-  /// socket, while `link` is the socket open. A stop holds the same lock, so nothing published
-  /// here follows its `Disconnected`.
-  fn publish(&self, link: Option<&Arc<Link>>, state: RelayConnectionState) {
-    let current = lock(&self.link);
-    let open = link.is_none_or(|link| current.as_ref().is_some_and(|c| Arc::ptr_eq(c, link)));
-    if *self.started.borrow() && open {
-      self.set_state(state);
-    }
-  }
-
-  /// Waits until the agent is meant to be connected; false when the daemon stops first.
-  async fn started(&self) -> bool {
-    let mut started = self.started.subscribe();
-    tokio::select! {
-      () = self.shutdown.cancelled() => false,
-      waited = started.wait_for(|started| *started) => waited.is_ok(),
-    }
-  }
-
-  /// Dials, serves the socket and dials again while the agent is meant to be connected.
-  async fn run(self: Arc<Self>) {
+  /// Dials, serves the socket and dials again until the program stops; returns once the last
+  /// socket is closed.
+  pub async fn run(self: Arc<Self>) {
     let mut failures: u32 = 0;
     let mut refused = false;
     let mut shut_down = false;
     loop {
-      if !self.started().await {
+      if self.shutdown.is_cancelled() {
         return;
       }
       if failures > 0 {
@@ -202,18 +133,7 @@ impl AgentClient {
           () = tokio::time::sleep(delay) => {}
           () = self.redial.notified() => failures = 0,
         }
-        if !*self.started.borrow() {
-          continue;
-        }
       }
-      self.publish(
-        None,
-        if failures == 0 {
-          RelayConnectionState::Connecting
-        } else {
-          RelayConnectionState::Reconnecting
-        },
-      );
       let attempt = failures + 1;
       failures += 1;
       let settings = match Settings::new(&self.config.current().values) {
@@ -251,11 +171,6 @@ impl AgentClient {
         Some(reason) => self.warn_once(reason, "the relay controller refused this agent"),
         None => info!(code = ended.code, "relay controller connection lost"),
       }
-      if self.shutdown.is_cancelled() {
-        self.set_state(RelayConnectionState::Disconnected);
-      } else {
-        self.publish(None, RelayConnectionState::Reconnecting);
-      }
     }
   }
 
@@ -274,7 +189,7 @@ impl AgentClient {
   /// ones; whether finished downloads are fetched is read when one is offered.
   async fn follow_configuration(self: Arc<Self>) {
     let fingerprint = |options: &Options| {
-      let RelayController {
+      let Controller {
         address,
         ignore_certificate_errors,
         api_key,

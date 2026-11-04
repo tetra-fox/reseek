@@ -1,5 +1,6 @@
 //! Running the daemon program for a test: on a loopback port the system picks, with its
-//! directory, and stopped when the test is done with it.
+//! directory, and stopped when the test is done with it; and the relay agent program beside
+//! it.
 
 #![allow(dead_code, reason = "each test binary uses a part of it")]
 
@@ -55,6 +56,9 @@ pub async fn events(api: &Client, kind: &str, count: usize) -> Vec<serde_json::V
 /// signs in with, is refused under `--headless`.
 pub const PROGRAM: &str = env!("CARGO_BIN_EXE_reseek");
 
+/// The relay agent program.
+pub const AGENT: &str = env!("CARGO_BIN_EXE_reseek-agent");
+
 /// The raw answer to a body-less request.
 pub fn send(port: u16, method: &str, path: &str) -> Option<String> {
   let mut stream = TcpStream::connect(("127.0.0.1", port)).ok()?;
@@ -68,17 +72,22 @@ pub fn send(port: u16, method: &str, path: &str) -> Option<String> {
   Some(answer)
 }
 
-/// The daemon running for a test.
-pub struct Daemon {
+/// A program running for a test, killed when the test is done with it.
+pub struct Process {
   pub child: Child,
-  /// the loopback port it serves HTTP on
-  pub port: u16,
   printed: Arc<Printed>,
   reader: Option<JoinHandle<()>>,
 }
 
-/// What the daemon printed so far, read off its stdout as it is written so the pipe never
-/// fills up.
+/// The daemon running for a test.
+pub struct Daemon {
+  pub process: Process,
+  /// the loopback port it serves HTTP on
+  pub port: u16,
+}
+
+/// What a program printed so far, read off its stdout as it is written so the pipe never fills
+/// up.
 #[derive(Default)]
 struct Printed {
   text: Mutex<String>,
@@ -123,7 +132,8 @@ impl Daemon {
   /// Starts the daemon as [`Daemon::start`] does, on `port`. A daemon that exits before it
   /// answers fails the test with what it printed.
   pub fn start_on(port: u16, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Self {
-    let mut child = Command::new(PROGRAM)
+    let mut command = Command::new(PROGRAM);
+    command
       // never the release feed, which a release build would read
       .args([
         "--app-dir",
@@ -141,7 +151,47 @@ impl Daemon {
       ])
       .args(args)
       .env_clear()
-      .envs(env.iter().copied())
+      .envs(env.iter().copied());
+    let mut daemon = Self {
+      process: Process::spawn(&mut command),
+      port,
+    };
+    let started = Instant::now();
+    daemon.port = daemon.listening(started);
+    while send(daemon.port, "GET", "/health").is_none() {
+      daemon.process.still_running(started);
+      std::thread::sleep(Duration::from_millis(50));
+    }
+    daemon
+  }
+
+  /// The port the daemon says it listens on, once it says so.
+  fn listening(&mut self, started: Instant) -> u16 {
+    loop {
+      let printed = &self.process.printed;
+      let text = printed.text.lock().unwrap_or_else(PoisonError::into_inner);
+      if let Some(port) = listening_port(&text) {
+        return port;
+      }
+      let (text, _) = printed
+        .more
+        .wait_timeout(text, Duration::from_millis(50))
+        .unwrap_or_else(PoisonError::into_inner);
+      drop(text);
+      self.process.still_running(started);
+    }
+  }
+
+  /// The base URL to reach it at.
+  pub fn url(&self) -> String {
+    format!("http://127.0.0.1:{}", self.port)
+  }
+}
+
+impl Process {
+  /// Starts `command` with its standard output read as it is written.
+  pub fn spawn(command: &mut Command) -> Self {
+    let mut child = command
       .stdout(Stdio::piped())
       .stderr(Stdio::piped())
       .spawn()
@@ -152,56 +202,22 @@ impl Daemon {
       let printed = printed.clone();
       move || printed.read(stdout)
     });
-    let mut daemon = Self {
+    Self {
       child,
-      port,
       printed,
       reader: Some(reader),
-    };
-    let started = Instant::now();
-    daemon.port = daemon.listening(started);
-    while send(daemon.port, "GET", "/health").is_none() {
-      daemon.still_running(started);
-      std::thread::sleep(Duration::from_millis(50));
-    }
-    daemon
-  }
-
-  /// The port the daemon says it listens on, once it says so.
-  fn listening(&mut self, started: Instant) -> u16 {
-    loop {
-      let text = self
-        .printed
-        .text
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
-      if let Some(port) = listening_port(&text) {
-        return port;
-      }
-      let (text, _) = self
-        .printed
-        .more
-        .wait_timeout(text, Duration::from_millis(50))
-        .unwrap_or_else(PoisonError::into_inner);
-      drop(text);
-      self.still_running(started);
     }
   }
 
-  /// Fails the test when the daemon exited, or took too long to start.
+  /// Fails the test when the program exited, or took too long to start.
   fn still_running(&mut self, started: Instant) {
     if let Some(status) = self.child.try_wait().unwrap() {
       panic!(
-        "the daemon exited with {status} before it answered:\n{}",
+        "the program exited with {status} before it answered:\n{}",
         self.output()
       );
     }
     assert!(started.elapsed() < STARTUP, "never answered");
-  }
-
-  /// The base URL to reach it at.
-  pub fn url(&self) -> String {
-    format!("http://127.0.0.1:{}", self.port)
   }
 
   /// What it printed so far.
@@ -247,9 +263,9 @@ impl Daemon {
   }
 }
 
-impl Drop for Daemon {
+impl Drop for Process {
   fn drop(&mut self) {
-    // the daemon may have exited already, and then there is nothing to kill or reap
+    // the program may have exited already, and then there is nothing to kill or reap
     let _ = self.child.kill();
     let _ = self.child.wait();
   }

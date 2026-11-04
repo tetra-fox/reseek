@@ -1,7 +1,8 @@
 //! The relay protocol between a reseek controller and its agents, as both sides speak it: the
 //! socket's frames, close codes and timings ([`frames`]), the credentials an agent proves its
-//! secret with ([`credential`]), which versions may relay to each other ([`version`]), and how a
-//! loop that keeps failing waits before it tries again ([`backoff`]).
+//! secret with ([`credential`]), which versions may relay to each other ([`version`]), what an
+//! agent may be named ([`check_instance_name`]), and how a loop that keeps failing waits before
+//! it tries again ([`backoff`]).
 //!
 //! The messages themselves are in `api_types::relay`, with the rest of the API's types.
 
@@ -11,3 +12,47 @@ pub mod backoff;
 pub mod credential;
 pub mod frames;
 pub mod version;
+
+/// The characters an instance name may not hold, besides control characters and anything
+/// outside printable ASCII: a controller names a file after each agent, on any system.
+const NOT_IN_A_NAME: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+
+/// Whether the agent instance name `name`, the value of the option `key`, can name a file on
+/// any system: printable ASCII without separators or the characters Windows refuses, and not
+/// `.` or `..`. Says what is wrong when it cannot.
+pub fn check_instance_name(key: &str, name: &str) -> Result<(), String> {
+  let unfit = name
+    .chars()
+    .any(|c| !(' '..='~').contains(&c) || NOT_IN_A_NAME.contains(&c));
+  if unfit || name == "." || name == ".." {
+    return Err(format!(
+      "The field {key} must be printable ASCII without / \\ : * ? \" < > | and must not be '.' or '..'."
+    ));
+  }
+  Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn an_instance_name_must_be_able_to_name_a_file() {
+    for name in ["nas", "the agent", "a.b-c_d"] {
+      assert!(check_instance_name("n", name).is_ok(), "{name}");
+    }
+    for name in [
+      ".",
+      "..",
+      "a/b",
+      "a\\b",
+      "c:",
+      "nul\0",
+      "tab\there",
+      "naïve",
+      "a|b",
+    ] {
+      assert!(check_instance_name("n", name).is_err(), "{name:?}");
+    }
+  }
+}

@@ -27,7 +27,7 @@ const state = {
   shares: { files: 1200, directories: 80, scanning: false, scanPending: true, faulted: false },
   distributedNetwork: { hasParent: true, branchLevel: 2, children: ["x"], childLimit: 10 },
   health: { search: { incoming: { queueDepth: 3, latency: 12.4 } } },
-  relay: { mode: "None" },
+  relay: { enabled: false, agents: [] },
   pendingRestart: true,
   pendingReconnect: false,
   configuration: { lastReloadError: null }

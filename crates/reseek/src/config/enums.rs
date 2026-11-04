@@ -42,16 +42,51 @@ option_enum! {
   }
 }
 
-option_enum! {
-  /// Which side of a relay this instance is.
-  pub enum RelayMode {
-    /// takes connections from agents
-    #[default]
-    Controller = "controller",
-    /// connects to a controller and serves its shares through it
-    Agent = "agent",
-    /// a controller that also connects to itself as an agent, for development
-    Debug = "debug",
+/// Which side of a relay the daemon is: the controller, the one side it plays. The relay agent
+/// is the separate `reseek-agent` program, so `agent` and `debug`, the daemon's roles before
+/// it, are refused with a pointer to it rather than read as something else.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RelayMode {
+  /// takes connections from agents
+  #[default]
+  Controller,
+}
+
+impl RelayMode {
+  /// Every name, in declaration order.
+  pub const NAMES: &[&str] = &["controller"];
+
+  /// The roles the daemon no longer plays, which the relay agent program took over.
+  const MOVED: &[&str] = &["agent", "debug"];
+}
+
+impl serde::Serialize for RelayMode {
+  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(Self::NAMES[0])
+  }
+}
+
+impl<'de> serde::Deserialize<'de> for RelayMode {
+  fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    let text = String::deserialize(deserializer)?;
+    if text.eq_ignore_ascii_case(Self::NAMES[0]) {
+      return Ok(Self::Controller);
+    }
+    let message = if Self::MOVED.iter().any(|m| text.eq_ignore_ascii_case(m)) {
+      format!(
+        "`{text}` is no longer a relay mode of the daemon: run the relay agent as the \
+         reseek-agent program, and leave relay.mode unset or `controller`"
+      )
+    } else {
+      format!("`{text}` is not one of: {}", Self::NAMES.join(", "))
+    };
+    Err(serde::de::Error::custom(message))
+  }
+}
+
+impl cascade::Cascade for RelayMode {
+  fn shape() -> cascade::Shape {
+    cascade::Shape::choice(Self::NAMES)
   }
 }
 

@@ -301,7 +301,7 @@ async fn stopped_while_queued(
   .await;
   api.shut_down().await.unwrap();
   let stopping = Instant::now();
-  while daemon.child.try_wait().unwrap().is_none() {
+  while daemon.process.child.try_wait().unwrap().is_none() {
     assert!(stopping.elapsed() < PATIENCE, "the daemon stops");
     tokio::time::sleep(Duration::from_millis(50)).await;
   }

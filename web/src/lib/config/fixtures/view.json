@@ -113,14 +113,6 @@
     },
     "relay": {
       "agents": {},
-      "controller": {
-        "address": null,
-        "api_key": null,
-        "downloads": false,
-        "downloads_filter": [],
-        "ignore_certificate_errors": false,
-        "secret": null
-      },
       "controller_timeouts": {
         "file_ack": "5s",
         "file_info": "3s",
@@ -1134,7 +1126,7 @@
       "envVar": "RESEEK_INSTANCE_NAME",
       "cliFlag": "--instance-name",
       "kind": "string",
-      "doc": "Name of this instance in logs and to a relay controller.",
+      "doc": "Name of this instance in logs.",
       "choices": null,
       "default": "default",
       "apply": "restart",
@@ -1547,104 +1539,6 @@
         }
       ]
     },
-    "relay.controller.address": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_CONTROLLER_ADDRESS",
-      "cliFlag": "--controller-address",
-      "kind": "string",
-      "doc": "Base URL of the controller, such as `https://host:5031`.",
-      "choices": null,
-      "default": null,
-      "apply": "live",
-      "secret": false,
-      "notApplied": null,
-      "entries": []
-    },
-    "relay.controller.api_key": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_CONTROLLER_API_KEY",
-      "cliFlag": "--controller-api-key",
-      "kind": "string",
-      "doc": "API key of the controller, with the read-write or administrator role.",
-      "choices": null,
-      "default": null,
-      "apply": "live",
-      "secret": true,
-      "notApplied": null,
-      "entries": []
-    },
-    "relay.controller.downloads": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_CONTROLLER_DOWNLOADS",
-      "cliFlag": "--controller-downloads",
-      "kind": "bool",
-      "doc": "Fetches finished downloads from the controller.",
-      "choices": null,
-      "default": false,
-      "apply": "live",
-      "secret": false,
-      "notApplied": null,
-      "entries": []
-    },
-    "relay.controller.downloads_filter": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_CONTROLLER_DOWNLOADS_FILTER",
-      "cliFlag": null,
-      "kind": {
-        "list": "string"
-      },
-      "doc": "Glob patterns matched against the path of a finished download under the downloads directory of the controller, with `/` as the separator. Only matching downloads are fetched. All downloads are fetched when empty.",
-      "choices": null,
-      "default": [],
-      "apply": "live",
-      "secret": false,
-      "notApplied": null,
-      "entries": []
-    },
-    "relay.controller.ignore_certificate_errors": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_CONTROLLER_IGNORE_CERTIFICATE_ERRORS",
-      "cliFlag": "--controller-ignore-certificate-errors",
-      "kind": "bool",
-      "doc": "Accepts any TLS certificate from the controller.",
-      "choices": null,
-      "default": false,
-      "apply": "live",
-      "secret": false,
-      "notApplied": null,
-      "entries": []
-    },
-    "relay.controller.secret": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_CONTROLLER_SECRET",
-      "cliFlag": "--controller-secret",
-      "kind": "string",
-      "doc": "Secret the controller holds for this agent.",
-      "choices": null,
-      "default": null,
-      "apply": "live",
-      "secret": true,
-      "notApplied": null,
-      "entries": []
-    },
     "relay.controller_timeouts.file_ack": {
       "source": {
         "layer": "default"
@@ -1749,11 +1643,9 @@
       "envVar": "RESEEK_RELAY_MODE",
       "cliFlag": "--relay-mode",
       "kind": "string",
-      "doc": "Relay role: `controller`, `agent`, or `debug` for a controller that is also its own agent.",
+      "doc": "Relay role: `controller`, the one the daemon plays. The relay agent is the separate `reseek-agent` program.",
       "choices": [
-        "controller",
-        "agent",
-        "debug"
+        "controller"
       ],
       "default": "controller",
       "apply": "restart",
