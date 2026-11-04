@@ -5,6 +5,7 @@ import type { ConfigView } from "#lib/config/fields.js";
 import fixture from "#lib/config/fixtures/view.json";
 import { helpParts } from "#lib/config/help.js";
 import { sections } from "#lib/config/sections.js";
+import { flush } from "#lib/testing/flush.js";
 
 import Section from "./Section.svelte";
 
@@ -273,5 +274,58 @@ describe("a settings section", () => {
     props.query = "";
     flushSync();
     expect(port().value).toBe("6001");
+  });
+
+  it("keeps an edit made while the save of that option runs", async () => {
+    let answer!: () => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>(
+            (resolve) =>
+              (answer = () =>
+                resolve(
+                  Response.json({
+                    revision: "sha256:2",
+                    applied: ["web.port"],
+                    reconnectRequired: [],
+                    restartRequired: []
+                  })
+                ))
+          )
+      )
+    );
+    const target = document.createElement("div");
+    document.body.append(target);
+    const props = $state({
+      section: sections.find((s) => s.id === "web")!,
+      view,
+      // the daemon now runs what the save sent
+      onchanged: async () => {
+        const next = structuredClone(view);
+        (next.values as { web: { port: number } }).web.port = 6001;
+        props.view = next;
+      }
+    });
+    mounted.push(mount(Section, { target, props }));
+    flushSync();
+    const port = () => target.querySelector<HTMLInputElement>('[id="web.port"]')!;
+    const type = (text: string) => {
+      port().value = text;
+      port().dispatchEvent(new Event("input", { bubbles: true }));
+      flushSync();
+    };
+    type("6001");
+    [...target.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Save")!.click();
+    await vi.waitFor(() => expect(answer).toBeTypeOf("function"));
+    type("6002");
+    answer();
+    await flush();
+    expect(port().value).toBe("6002");
+    expect(target.querySelector('[aria-live="polite"]')!.textContent).toContain(
+      "1 setting changed"
+    );
+    vi.unstubAllGlobals();
   });
 });
