@@ -45,7 +45,7 @@ export const finishedOf = (metrics: Schemas["TransferMetrics"] | null): number |
     : null;
 
 /** The queries of the dashboard's reports, each as the daemon takes it */
-export const queries = {
+const queries = {
   summary: (w: Window) => ({ start: w.start, end: w.end }),
   histogram: (w: Window, buckets: number) => ({ start: w.start, end: w.end, buckets }),
   leaderboard: (w: Window, direction: Direction, sortBy: Schemas["LeaderboardSort"] = "Count") => ({
@@ -111,7 +111,7 @@ export const sumCounts = (d: Summaries | undefined) =>
 export const sumBytes = (d: Summaries | undefined) =>
   Object.values(d ?? {}).reduce((n, s) => n + s.totalBytes, 0);
 /** How many of a direction's transfers failed */
-export const errorCount = (d: Summaries | undefined) =>
+const errorCount = (d: Summaries | undefined) =>
   FAILED_OUTCOMES.reduce((n, outcome) => n + (d?.[outcome]?.count ?? 0), 0);
 
 /** One bucket of the history chart */
