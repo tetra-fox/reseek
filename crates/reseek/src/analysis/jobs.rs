@@ -404,6 +404,13 @@ impl Analysis {
   /// Removes what the cache holds beyond `analysis.cache_max_bytes`: uploads first, then the
   /// least recently viewed spectrogram and waveform files.
   pub(super) async fn evict(&self) {
+    self.evict_admitting(None).await;
+  }
+
+  /// [`Analysis::evict`], first holding `admitted`, an upload's path and size once all of it
+  /// arrived. It joins the uploads under the lock their eviction takes, so it is the newest
+  /// there and its own eviction keeps it, however many others arrive at the same time.
+  pub(super) async fn evict_admitting(&self, admitted: Option<(String, u64)>) {
     let limit = self
       .config
       .current()
@@ -415,10 +422,13 @@ impl Analysis {
       Ok(bytes) => bytes,
       Err(e) => {
         error!(error = %e, "the size of the analysis cache not read");
+        if let Some((relative, bytes)) = admitted {
+          lock(&self.held).add(relative, bytes);
+        }
         return;
       }
     };
-    let uploads = self.evict_uploads(limit, pictures).await;
+    let uploads = self.evict_uploads(limit, pictures, admitted).await;
     let gone = match store::evict(&self.db, limit.saturating_sub(uploads)).await {
       Ok(gone) => gone,
       Err(e) => {
