@@ -14,7 +14,9 @@ use super::store::StoredRole;
 use crate::crypto;
 use crate::db::{Database, DbError, read_timestamp, shifted, timestamp};
 
-/// How often a session's last use is written at most.
+/// How often a session's last use is written at most, for a long idle limit; a shorter limit
+/// writes it at a tenth of the limit, so the use recorded is never far enough behind to end a
+/// session in use.
 pub const SEEN_WRITES: Duration = Duration::minutes(5);
 
 /// How many random bytes a session id has.
@@ -98,7 +100,7 @@ pub struct StoredSession {
   pub created_at: DateTime<Utc>,
   /// when it ends regardless of use
   pub expires_at: DateTime<Utc>,
-  /// when it was last used, to within five minutes
+  /// when it was last used, to within a tenth of the idle limit and five minutes at most
   pub last_seen_at: DateTime<Utc>,
   /// the address it was last used from
   pub ip: Option<String>,
@@ -125,6 +127,12 @@ impl StoredSession {
   /// Whether it may still be used at `now` given the idle limit `idle`.
   pub fn active(&self, now: DateTime<Utc>, idle: Duration) -> bool {
     self.revoked_at.is_none() && self.expires_at > now && shifted(self.last_seen_at, idle) > now
+  }
+
+  /// Whether its use at `now` is to be written, the last one written being far enough behind
+  /// for the idle limit `idle`.
+  pub fn seen_due(&self, now: DateTime<Utc>, idle: Duration) -> bool {
+    now - self.last_seen_at >= SEEN_WRITES.min(idle / 10)
   }
 
   /// The principal its requests act as.
@@ -424,4 +432,44 @@ pub async fn prune(db: &Database, before: DateTime<Utc>) -> Result<usize, DbErro
     )
   })
   .await
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn a_session_in_use_outlasts_a_short_idle_limit() {
+    let start: DateTime<Utc> = "2026-11-04T12:00:00Z".parse().unwrap();
+    for idle in [
+      Duration::seconds(30),
+      Duration::minutes(5),
+      Duration::hours(1),
+    ] {
+      let mut session = StoredSession {
+        id: "id".into(),
+        subject: "alice".into(),
+        name: "alice".into(),
+        role: Role::ReadWrite,
+        origin: Origin::Local,
+        idp_sid: None,
+        id_token: None,
+        created_at: start,
+        expires_at: start + Duration::days(1),
+        last_seen_at: start,
+        ip: None,
+        user_agent: None,
+        revoked_at: None,
+      };
+      // a request every two seconds for two hours, each recording its use when it is due
+      let mut now = start;
+      while now < start + Duration::hours(2) {
+        now += Duration::seconds(2);
+        assert!(session.active(now, idle), "signed out at {now} with {idle}");
+        if session.seen_due(now, idle) {
+          session.last_seen_at = now;
+        }
+      }
+    }
+  }
 }

@@ -287,7 +287,7 @@ async fn session_of(
     );
     return Ok(None);
   }
-  if now - session.last_seen_at >= sessions::SEEN_WRITES {
+  if session.seen_due(now, idle) {
     let db = app.auth.db.clone();
     let id = session.id.clone();
     let ip = presented.client.ip.to_string();
