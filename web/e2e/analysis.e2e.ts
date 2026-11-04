@@ -794,6 +794,7 @@ test("opens a file, compares a second, and clears them, with the address followi
   // a slot cleared goes from the address too, and Back brings it back
   await b.getByRole("button", { name: "Clear slot B" }).click();
   await expect(b.getByRole("button", { name: "Add from Downloads" })).toBeVisible();
+  await expect(b).toBeFocused();
   await expect(page).not.toHaveURL(/&b=/);
   await page.goBack();
   await expect(view(b)).toBeVisible();
@@ -885,5 +886,6 @@ test("picks a file from the panel of the daemon's files", async ({ page }) => {
   await expect(tree.getByText("track.flac")).toHaveCount(0);
   await tree.getByText("01.flac").click();
   await expect(tree).toHaveCount(0);
+  await expect(a).toBeFocused();
   await expect(page).toHaveURL(/#\/analysis\?a=downloads%3AAlbum%2F01\.flac$/);
 });
