@@ -16,11 +16,17 @@
   let error = $state("");
   let sending = $state(false);
 
+  // each opening starts without the last one's error
+  $effect(() => {
+    if (open) error = "";
+  });
+
   const save = async () => {
     sending = true;
+    const to = group;
     const failed: string[] = [];
     for (const name of usernames) {
-      const outcome = await assignGroup(name, group);
+      const outcome = await assignGroup(name, to);
       if (outcome.ok) void users.load(name, { fresh: true });
       else failed.push(`${name}: ${outcome.error}`);
     }
@@ -28,13 +34,14 @@
     if (failed.length) error = failed.join("; ");
     else {
       open = false;
-      toast(group ? `Moved to group ${group}` : "Removed from the upload group");
+      toast(to ? `Moved to group ${to}` : "Removed from the upload group");
     }
   };
 </script>
 
 <Dialog
   bind:open
+  busy={sending}
   title={usernames.length === 1
     ? `Upload group for ${usernames[0]}`
     : `Upload group for ${usernames.length} users`}
@@ -52,7 +59,7 @@
   </Form>
   {#if error}<Notice kind="error">{error}</Notice>{/if}
   {#snippet footer()}
-    <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+    <Button variant="ghost" disabled={sending} onclick={() => (open = false)}>Cancel</Button>
     <Button disabled={sending} onclick={() => void save()}>Save</Button>
   {/snippet}
 </Dialog>
