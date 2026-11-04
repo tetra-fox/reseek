@@ -155,6 +155,62 @@ describe("a settings section", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps a table's hidden secret unless something is typed in its place", async () => {
+    const fetcher = vi.fn<(request: Request) => Promise<Response>>(
+      async () =>
+        new Response(
+          JSON.stringify({
+            revision: "sha256:2",
+            applied: [],
+            reconnectRequired: [],
+            restartRequired: []
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        )
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const v = structuredClone(view);
+    (v.values as { web: { authentication: { api_keys: unknown } } }).web.authentication.api_keys = {
+      robot: { key: "*****", role: "administrator", cidr: "10.0.0.0/8" }
+    };
+    const auth = render(
+      sections.find((s) => s.id === "authentication")!,
+      v
+    );
+    const status = () => auth.querySelector('[aria-live="polite"]')!.textContent!.trim();
+    const type = (label: string, text: string) => {
+      const input = auth.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      flushSync();
+    };
+    /** Saves, and returns the robot entry the save sent */
+    const saved = async () => {
+      const calls = fetcher.mock.calls.length;
+      [...auth.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Save")!.click();
+      await vi.waitFor(() => expect(status()).toBe("No changes"));
+      const body = await fetcher.mock.calls[calls][0].json();
+      return body.set["web.authentication.api_keys"].robot;
+    };
+
+    // another cell changed: the secret goes back as it was shown
+    type("Networks of robot", "192.168.0.0/16");
+    expect(await saved()).toEqual({ key: "*****", role: "administrator", cidr: "192.168.0.0/16" });
+    // typed into and emptied again: still kept, not taken out
+    type("Networks of robot", "10.0.0.1/32");
+    type("Key of robot", "a");
+    type("Key of robot", "");
+    expect(await saved()).toEqual({ key: "*****", role: "administrator", cidr: "10.0.0.1/32" });
+    // typed: sent
+    type("Key of robot", "robot-key-0123456789");
+    expect(await saved()).toEqual({
+      key: "robot-key-0123456789",
+      role: "administrator",
+      cidr: "10.0.0.0/8"
+    });
+    vi.unstubAllGlobals();
+  });
+
   it("puts a changed option back to its default by taking it out of the file", async () => {
     const fetcher = vi.fn<(request: Request) => Promise<Response>>(
       async () =>
