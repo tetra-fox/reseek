@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { live } from "#lib/live/live.svelte.js";
 import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
@@ -64,6 +65,7 @@ describe("a room's pane opened by a link", () => {
 
 describe("a pane opened at a message", () => {
   afterEach(() => {
+    live.stop();
     chat.clear();
     vi.unstubAllGlobals();
   });
@@ -71,7 +73,7 @@ describe("a pane opened at a message", () => {
   /** A room of `total` messages; `after` and `before` page through it as the daemon does */
   const stored = (total: number) => {
     const asked: string[] = [];
-    fakeNetwork((url) => {
+    const net = fakeNetwork((url) => {
       if (url.pathname.endsWith("/rooms/joined")) return [];
       if (url.pathname.endsWith("/conversations")) return [];
       if (!url.pathname.endsWith("/messages")) return undefined;
@@ -91,7 +93,7 @@ describe("a pane opened at a message", () => {
       const up = ids.filter((id) => id < before);
       return { messages: up.slice(-limit).map(message), hasMore: up.length > limit, gaps: [] };
     });
-    return { asked };
+    return { asked, frame: net.frame };
   };
   /**
    * Puts `wait` before every answer about the messages, which it can answer instead; the
@@ -197,6 +199,25 @@ describe("a pane opened at a message", () => {
     expect([pane.hasMore, pane.hasNewer]).toEqual([true, true]);
   });
 
+  it("keeps a message that arrives while its pages are read out of the stretch", async () => {
+    const { frame } = stored(450);
+    let release!: () => void;
+    const held = new Promise<void>((done) => (release = done));
+    delayed(async () => void (await held));
+    const pane = new MessagePane(room, () => "me", 150);
+    const stop = $effect.root(() => pane.follow());
+    live.start();
+    frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    const loading = pane.load();
+    frame("rooms.message", { roomName: "indie", message: message(451) });
+    await flush();
+    release();
+    await loading;
+    stop();
+    expect(ids(pane)).toEqual(Array.from({ length: 200 }, (_, n) => n + 51));
+    expect(pane.hasNewer).toBe(true);
+  });
+
   it("lets the pages around it go when the view is emptied before they come", async () => {
     stored(450);
     let release!: () => void;
@@ -210,6 +231,25 @@ describe("a pane opened at a message", () => {
     await loading;
     expect(ids(pane)).toEqual([]);
     expect([pane.loaded, pane.hasMore, pane.hasNewer]).toEqual([true, false, false]);
+  });
+
+  it("opens at the newest when a message is sent before the pages around it come", async () => {
+    stored(450);
+    let release!: () => void;
+    const held = new Promise<void>((done) => (release = done));
+    // only the reads around the message wait
+    delayed(async (url) => {
+      if (url.searchParams.has("before") || url.searchParams.has("after")) await held;
+      return undefined;
+    });
+    const pane = new MessagePane(room, () => "me", 150);
+    const loading = pane.load();
+    await flush();
+    await pane.send("hello");
+    release();
+    await loading;
+    expect(ids(pane).slice(0, -1)).toEqual(Array.from({ length: 100 }, (_, n) => n + 351));
+    expect([pane.loaded, pane.at, pane.hasNewer]).toEqual([true, null, false]);
   });
 
   it("opens empty on a room known by name with nothing stored", async () => {
