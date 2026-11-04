@@ -66,7 +66,8 @@ pub(super) fn unsent(error: ClientError) -> ApiError {
 impl Messaging {
   /// A private message from a user not blocked from messaging us: stored, then pushed, raised
   /// and counted unread. It stays unacknowledged until it is read, so the server delivers it
-  /// again at the next login until then; one the store refused is left to that.
+  /// again at the next login until then; one the store refused is left to that. A message
+  /// stored already is raised again but not pushed.
   pub(super) async fn received(&self, message: soulseek_client::PrivateMessage) {
     let inbound = Inbound {
       id: message.id,
@@ -96,7 +97,7 @@ impl Messaging {
         Ok(stored)
       })
       .await;
-    let stored = match stored {
+    let (stored, new) = match stored {
       Ok(stored) => stored,
       Err(e) => {
         return warn!(
@@ -110,6 +111,7 @@ impl Messaging {
       username,
       id = ?stored.id,
       replayed = stored.was_replayed,
+      new,
       "private message stored"
     );
     trace!(username, text = stored.message, "private message text");
@@ -118,8 +120,8 @@ impl Messaging {
       if let Err(e) = self.acknowledge_ids(SERVER, &[message.id]).await {
         debug!(error = ?e, "server notice not acknowledged; it comes again at the next login");
       }
-      // this push is what clients announce at once; one delivered again at a login is no news
-      if !stored.was_replayed {
+      // this push is what clients announce at once; one from the offline store is no news
+      if new && !stored.was_replayed {
         self
           .live
           .publish(LiveFrame::ApplicationServerMessage(ServerMessage {
@@ -137,12 +139,16 @@ impl Messaging {
         }));
       self.watch_peer(&username);
     }
-    self
-      .live
-      .publish(LiveFrame::ConversationsMessage(ConversationMessage {
-        username: username.clone(),
-        message: stored,
-      }));
+    // clients announce a pushed message unless it came from the offline store, so a repeat is
+    // not pushed; the conversation update carries its unread count
+    if new {
+      self
+        .live
+        .publish(LiveFrame::ConversationsMessage(ConversationMessage {
+          username: username.clone(),
+          message: stored,
+        }));
+    }
     if !notice {
       self.conversation_changed(&username).await;
     }
@@ -484,6 +490,35 @@ mod tests {
       announced.data["message"], "new",
       "the replayed one is skipped"
     );
+  }
+
+  #[tokio::test]
+  async fn a_message_delivered_again_is_not_pushed_as_new() {
+    let config = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
+    let app = app(config, &[]).await;
+    let mut stream = app
+      .stream_from(
+        "127.0.0.1:40000",
+        request("GET", "/api/v0/live?topics=conversations", None),
+      )
+      .await;
+    stream.until("hello").await;
+    let message = |id, replayed| soulseek_client::PrivateMessage {
+      id,
+      timestamp: SystemTime::now(),
+      username: "alice".into(),
+      message: format!("hello {id}"),
+      replayed,
+    };
+    // received live and left unread, delivered again at a reconnect, then a new one
+    app.state.messaging.received(message(1, false)).await;
+    app.state.messaging.received(message(1, true)).await;
+    app.state.messaging.received(message(2, false)).await;
+    let pushed = |frames: Vec<crate::testing::Sse>| frames.last().unwrap().data["message"].clone();
+    let first = pushed(stream.until("conversations.message").await);
+    let next = pushed(stream.until("conversations.message").await);
+    assert_eq!(first["message"], "hello 1");
+    assert_eq!(next["message"], "hello 2", "the repeat is no news");
   }
 
   #[tokio::test]
