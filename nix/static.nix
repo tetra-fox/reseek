@@ -1,6 +1,7 @@
-# The release binary for one Linux architecture: the daemon with the web UI built in, linked
-# statically against musl, so it runs on any Linux of that architecture without a Nix store. zig
-# compiles and links the C the dependencies carry, for whichever architecture is asked for.
+# The release binaries for one Linux architecture: the daemon with the web UI built in and the
+# relay agent, linked statically against musl, so they run on any Linux of that architecture
+# without a Nix store. zig compiles and links the C the dependencies carry, for whichever
+# architecture is asked for.
 {
   lib,
   rust-bin,
@@ -49,11 +50,12 @@ rustPlatform.buildRustPackage {
   installPhase = ''
     runHook preInstall
     install -Dm755 target/${target}/release/reseek $out/bin/reseek
+    install -Dm755 target/${target}/release/reseek-agent $out/bin/reseek-agent
     runHook postInstall
   '';
 
   meta = reseek.meta // {
-    description = "The reseek release binary for ${target}, linked statically";
+    description = "The reseek release binaries for ${target}, linked statically";
     platforms = lib.platforms.linux;
   };
 }

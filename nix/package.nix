@@ -1,5 +1,6 @@
-# The reseek daemon with the web UI built in, its shell completions and its man page. The UI
-# comes from the `web` derivation through WEBUI_DIR, so this build needs no network and no pnpm.
+# The reseek daemon with the web UI built in, its shell completions and its man page, and the
+# relay agent `reseek-agent`. The UI comes from the `web` derivation through WEBUI_DIR, so this
+# build needs no network and no pnpm.
 # The test suite runs in the check phase; the suites that need soulfind skip without it.
 {
   lib,
@@ -79,7 +80,7 @@ rustPlatform.buildRustPackage {
   };
 
   meta = {
-    description = "A Soulseek client daemon with a web UI";
+    description = "A Soulseek client daemon with a web UI, and its relay agent";
     license = lib.licenses.agpl3Only;
     mainProgram = "reseek";
     platforms = lib.platforms.linux ++ lib.platforms.darwin;
