@@ -46,8 +46,8 @@ pub(super) fn root(name: &str) -> Result<FileRoot, ApiError> {
   name.parse().map_err(ApiError::not_found)
 }
 
-/// The root a route that lists or removes files names: temporary files are reached one by one by
-/// whoever uploaded them, so that root is no route here.
+/// The root a route that lists or removes files names. Any principal reaches a temporary file by
+/// its path, under a random folder name only its uploader is told, so that root is no route here.
 fn listed(name: &str) -> Result<FileRoot, ApiError> {
   match root(name)? {
     FileRoot::Temporary => Err(ApiError::not_found(format!(
