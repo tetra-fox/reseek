@@ -145,4 +145,51 @@ describe("browse progress", () => {
       [null, ["Video\\x.mkv"]]
     ]);
   });
+
+  it("sends every batch of a download to the user it was asked of", async () => {
+    const asked: string[] = [];
+    let release!: () => void;
+    const held = new Promise<void>((done) => (release = done));
+    fakeNetwork(async (url, _method, body) => {
+      if (url.pathname.endsWith("/users/alice/browse")) {
+        return {
+          directories: [
+            { name: "Music", fileCount: 1, files: [file("1.flac")] },
+            { name: "Video", fileCount: 1, files: [file("x.mkv")] }
+          ],
+          directoryCount: 2,
+          lockedDirectories: [],
+          lockedDirectoryCount: 0
+        };
+      }
+      if (url.pathname.endsWith("/downloads/batches")) {
+        asked.push((body as { username: string }).username);
+        if (asked.length === 1) await held;
+        return { batchId: "b", failures: [] };
+      }
+      return undefined;
+    });
+    session.principal = { name: "me", role: "Administrator" } as never;
+    app.state = { server: { isConnected: true }, user: { username: "me" } } as never;
+    component = mount(BrowsePage, {
+      target: document.body,
+      props: { user: "alice", path: null }
+    });
+    await flushFaked();
+    await flushFaked();
+    for (const name of ["Music", "Video"]) {
+      document
+        .querySelector<HTMLElement>(`[role=checkbox][aria-label="Select every file in ${name}"]`)!
+        .click();
+    }
+    flushSync();
+    document.querySelector<HTMLElement>("[aria-label='Selected files'] button")!.click();
+    await flushFaked();
+    // another user is browsed while the first batch is sent
+    browser.username = "bob";
+    release();
+    await flushFaked();
+    await flushFaked();
+    expect(asked).toEqual(["alice", "alice"]);
+  });
 });
