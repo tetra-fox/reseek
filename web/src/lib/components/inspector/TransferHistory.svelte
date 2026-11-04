@@ -17,11 +17,13 @@
   let asked = 0;
   let historyOf: string | null = null;
   // the history is asked for once focus rests on a transfer and again at each of its new states;
-  // the one shown stays until the new one arrives, unless it is another transfer's
+  // the one shown stays until the new one arrives, unless it is another transfer's, whose answer
+  // still on its way is dropped
   $effect(() => {
     const shown = t;
     void shown.state;
     if (historyOf !== shown.id) {
+      asked++;
       history = null;
       error = "";
     }
