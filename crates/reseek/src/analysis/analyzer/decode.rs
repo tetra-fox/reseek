@@ -15,7 +15,7 @@ use symphonia::core::codecs::audio::well_known::{
 use symphonia::core::codecs::audio::{
   AudioCodecId, AudioCodecParameters, AudioDecoder, AudioDecoderOptions,
 };
-use symphonia::core::errors::Error;
+use symphonia::core::errors::{Error, SeekErrorKind};
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
 use symphonia::core::io::{MediaSource, MediaSourceStream};
@@ -255,24 +255,28 @@ impl Decoder {
     Ok(())
   }
 
-  /// Moves to the packet holding sample frame `frame`.
-  pub fn seek_frame(&mut self, frame: u64) -> Result<(), String> {
+  /// Moves to the packet holding sample frame `frame`; false, without moving, when no packet
+  /// holds it because the packets end before it.
+  pub fn seek_frame(&mut self, frame: u64) -> Result<bool, String> {
     let (numer, denom) = self.ticks();
     let rate = u128::from(self.claimed.sample_rate);
     let ticks = u128::from(frame) * denom / (numer * rate);
     let ts = i64::try_from(ticks).map_err(|_| "the position is out of range")?;
-    self
-      .format
-      .seek(
-        SeekMode::Accurate,
-        SeekTo::Timestamp {
-          ts: Timestamp::new(ts),
-          track_id: self.track,
-        },
-      )
-      .map_err(|e| format!("seeking failed: {e}"))?;
-    self.decoder.reset();
-    Ok(())
+    let sought = self.format.seek(
+      SeekMode::Accurate,
+      SeekTo::Timestamp {
+        ts: Timestamp::new(ts),
+        track_id: self.track,
+      },
+    );
+    match sought {
+      Ok(_) => {
+        self.decoder.reset();
+        Ok(true)
+      }
+      Err(Error::SeekError(SeekErrorKind::OutOfRange)) => Ok(false),
+      Err(e) => Err(format!("seeking failed: {e}")),
+    }
   }
 
   /// Decodes the next packet into `samples`, interleaved over every channel with each sample at

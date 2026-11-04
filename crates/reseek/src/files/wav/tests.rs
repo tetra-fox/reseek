@@ -146,10 +146,10 @@ fn whole(bytes: &[u8]) -> Result<Vec<u8>, String> {
   wav_bytes(bytes, 0, wav_length(bytes)?)
 }
 
-#[test]
-fn a_packet_timed_past_what_a_position_holds_fails_the_stream() {
-  // the tone made fragmented by a movie extends box at the end of its movie box, the file's
-  // last, and stating 30000 frames
+/// The tone made fragmented by a movie extends box at the end of its movie box, the file's last,
+/// and stating 30000 frames. After it, for each of `fragments`, a fragment of the first packet
+/// again with its media data; it holds the given track fragment boxes before the packet's.
+fn fragmented(fragments: &[&[u8]]) -> Vec<u8> {
   let mut bytes = TONE.to_vec();
   let mdhd = box_at(&bytes, b"mdhd");
   put(&mut bytes, mdhd + 24, 30_000);
@@ -161,36 +161,51 @@ fn a_packet_timed_past_what_a_position_holds_fails_the_stream() {
   bytes.extend_from_slice(&mvex);
   // the reader reads a packet only while it is at a media data box, so one follows the movie box
   bytes.extend_from_slice(&boxed(b"mdat", &[], &[]));
-  // two fragments of the first packet again, each with its media data after it; the first also
-  // holds a run of 2^30 + 1 samples lasting 2^32 - 1 frames each, none of them read, which the
-  // reader counts toward where the second fragment starts
   let first_at = get(&bytes, box_at(&bytes, b"stco") + 16) as usize;
   let first_size = get(&bytes, box_at(&bytes, b"stsz") + 20);
   let packet = bytes[first_at..][..first_size as usize].to_vec();
-  let unread = [
-    boxed(b"tfhd", &[8, 1, 0xffff_ffff], &[]),
-    boxed(b"trun", &[0, 0x4000_0001], &[]),
-  ]
-  .concat();
-  for (sequence, unread) in [(1, Some(&unread)), (2, None)] {
+  for (sequence, before) in (1..).zip(fragments) {
     let fragment = |base: usize| {
       let tfhd = boxed(b"tfhd", &[1, 1, 0, u32::try_from(base).unwrap()], &[]);
       let trun = boxed(b"trun", &[0x301, 1, 0, 4096, first_size], &[]);
-      let mut trafs: Vec<u8> = unread
-        .map(|unread| boxed(b"traf", &[], unread))
-        .unwrap_or_default();
-      trafs.extend(boxed(b"traf", &[], &[tfhd, trun].concat()));
+      let traf = boxed(b"traf", &[], &[tfhd, trun].concat());
       let mfhd = boxed(b"mfhd", &[0, sequence], &[]);
-      boxed(b"moof", &[], &[mfhd, trafs].concat())
+      boxed(b"moof", &[], &[mfhd, before.to_vec(), traf].concat())
     };
     let base = bytes.len() + fragment(0).len() + 8;
     bytes.extend_from_slice(&fragment(base));
     bytes.extend_from_slice(&boxed(b"mdat", &[], &packet));
   }
+  bytes
+}
+
+#[test]
+fn a_packet_timed_past_what_a_position_holds_fails_the_stream() {
+  // a run of 2^30 + 1 samples lasting 2^32 - 1 frames each, none of them read, which the reader
+  // counts toward where the second fragment starts
+  let unread = [
+    boxed(b"tfhd", &[8, 1, 0xffff_ffff], &[]),
+    boxed(b"trun", &[0, 0x4000_0001], &[]),
+  ]
+  .concat();
+  let bytes = fragmented(&[&boxed(b"traf", &[], &unread), &[]]);
   assert_eq!(wav_length(&bytes), Ok(HEADER + 30_000 * 4));
   assert_eq!(
     whole(&bytes),
     Err("the file's timing is out of range".to_string())
+  );
+}
+
+#[test]
+fn a_range_past_the_last_packet_is_silence_as_in_the_whole() {
+  // the movie box's four packets and the fragment's one hold 20096 of the 30000 frames stated
+  let bytes = fragmented(&[&[]]);
+  let whole = whole(&bytes).unwrap();
+  assert!(whole[44 + 20_096 * 4..].iter().all(|b| *b == 0));
+  let start = 44 + 25_000 * 4;
+  assert_eq!(
+    wav_bytes(&bytes, start, 1000),
+    Ok(whole[start as usize..][..1000].to_vec())
   );
 }
 
