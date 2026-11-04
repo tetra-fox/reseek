@@ -107,11 +107,28 @@ pub struct Provider {
   discovery: tokio::sync::Mutex<Discovery>,
 }
 
-#[derive(Default)]
+/// The provider's discovery document as read so far, and when its keys were last read.
 struct Discovery {
-  metadata: Option<(Metadata, Instant)>,
-  failed_at: Option<Instant>,
+  document: Document,
   keys_at: Option<Instant>,
+}
+
+/// Where reading the discovery document stands.
+enum Document {
+  /// never read; after a failed read, `failed_at` holds back the next try
+  Unread { failed_at: Option<Instant> },
+  /// read at `read_at`; once it is old and reading it again failed, `failed_at` holds back the
+  /// next try and the old document stays in use meanwhile
+  Read {
+    metadata: Box<Metadata>,
+    read_at: Instant,
+    failed_at: Option<Instant>,
+  },
+}
+
+/// Whether `failed_at` is a failure recent enough to hold back the next try.
+fn holds_back(failed_at: Option<Instant>) -> bool {
+  failed_at.is_some_and(|at| at.elapsed() < RETRY)
 }
 
 impl Providers {
@@ -139,45 +156,63 @@ impl Provider {
       name: name.to_string(),
       http: crate::http::outbound::client(options.ca_certificate.as_deref())?,
       options,
-      discovery: tokio::sync::Mutex::new(Discovery::default()),
+      discovery: tokio::sync::Mutex::new(Discovery {
+        document: Document::Unread { failed_at: None },
+        keys_at: None,
+      }),
     })
   }
 
-  /// The discovery document, read again when it is a day old. After a failed read the
-  /// provider is unavailable for a minute before the next try.
+  /// The discovery document, read again when it is a day old. After a failed read, the
+  /// provider is not tried again for a minute: until then the old document is used when there
+  /// is one, and the provider is unavailable when there is none.
   pub async fn metadata(&self) -> Result<Metadata, String> {
     let mut discovery = self.discovery.lock().await;
-    if let Some((metadata, at)) = &discovery.metadata
-      && at.elapsed() < DISCOVERY_AGE
-    {
-      return Ok(metadata.clone());
-    }
-    if discovery.failed_at.is_some_and(|at| at.elapsed() < RETRY) {
-      return Err("the identity provider could not be reached a moment ago".to_string());
+    match &discovery.document {
+      Document::Read {
+        metadata, read_at, ..
+      } if read_at.elapsed() < DISCOVERY_AGE => return Ok(Metadata::clone(metadata)),
+      Document::Read {
+        metadata,
+        failed_at,
+        ..
+      } if holds_back(*failed_at) => return Ok(Metadata::clone(metadata)),
+      Document::Unread { failed_at } if holds_back(*failed_at) => {
+        return Err("the identity provider could not be reached a moment ago".to_string());
+      }
+      Document::Read { .. } | Document::Unread { .. } => {}
     }
     match self.discover().await {
       Ok(metadata) => {
         info!(provider = self.name, "OpenID Connect provider discovered");
-        discovery.metadata = Some((metadata.clone(), Instant::now()));
+        discovery.document = Document::Read {
+          metadata: Box::new(metadata.clone()),
+          read_at: Instant::now(),
+          failed_at: None,
+        };
         discovery.keys_at = Some(Instant::now());
-        discovery.failed_at = None;
         Ok(metadata)
       }
-      Err(e) => {
-        discovery.failed_at = Some(Instant::now());
+      Err(e) => match &mut discovery.document {
         // a provider read before keeps its old document until the new one can be read
-        match &discovery.metadata {
-          Some((metadata, _)) => {
-            warn!(
-              provider = self.name,
-              error = e,
-              "OpenID Connect discovery failed; using the last document"
-            );
-            Ok(metadata.clone())
-          }
-          None => Err(e),
+        Document::Read {
+          metadata,
+          failed_at,
+          ..
+        } => {
+          warn!(
+            provider = self.name,
+            error = e,
+            "OpenID Connect discovery failed; using the last document"
+          );
+          *failed_at = Some(Instant::now());
+          Ok(Metadata::clone(metadata))
         }
-      }
+        Document::Unread { failed_at } => {
+          *failed_at = Some(Instant::now());
+          Err(e)
+        }
+      },
     }
   }
 
@@ -188,7 +223,9 @@ impl Provider {
       return None;
     }
     discovery.keys_at = Some(Instant::now());
-    let (metadata, at) = discovery.metadata.clone()?;
+    let Document::Read { metadata, .. } = &mut discovery.document else {
+      return None;
+    };
     match JsonWebKeySet::<CoreJsonWebKey>::fetch_async(metadata.jwks_uri(), &self.http).await {
       Ok(keys) => {
         debug!(
@@ -196,9 +233,8 @@ impl Provider {
           count = keys.keys().len(),
           "provider signing keys read again"
         );
-        let metadata = metadata.set_jwks(keys);
-        discovery.metadata = Some((metadata.clone(), at));
-        Some(metadata)
+        **metadata = Metadata::clone(metadata).set_jwks(keys);
+        Some(Metadata::clone(metadata))
       }
       Err(e) => {
         warn!(provider = self.name, error = %e, "provider signing keys not read");
@@ -297,5 +333,31 @@ pub fn discover_at_start(app: &AppState) {
       }
       .instrument(span),
     );
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::testing::issuer::Issuer;
+
+  #[tokio::test]
+  async fn metadata_stale_document_is_used_while_the_provider_is_down() {
+    let issuer = Issuer::start().await;
+    let options = Oidc {
+      issuer: Some(issuer.url.clone()),
+      ..Oidc::default()
+    };
+    let provider = Provider::new("test", options).unwrap();
+    provider.metadata().await.unwrap();
+    drop(issuer);
+    tokio::time::pause();
+    tokio::time::advance(DISCOVERY_AGE).await;
+    // the read fails, and the day-old document is used
+    provider.metadata().await.unwrap();
+    // and goes on being used while the provider is not tried again
+    provider.metadata().await.unwrap();
+    tokio::time::advance(RETRY).await;
+    provider.metadata().await.unwrap();
   }
 }
