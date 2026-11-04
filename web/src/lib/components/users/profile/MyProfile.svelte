@@ -98,11 +98,17 @@
     error = "";
   };
 
+  /**
+   * Saves the draft as it is now; what changes while it runs stays a change to save, and the
+   * save is over once the profile has been read again
+   */
   const save = async () => {
     saving = true;
     error = "";
     const steps: (() => Promise<{ ok: boolean; error?: string }>)[] = [];
     const file = picked;
+    const removing = removed;
+    const description = text;
     if (file) {
       steps.push(() =>
         call(() =>
@@ -116,8 +122,7 @@
     } else if (removed && profile?.hasPicture) {
       steps.push(() => call(() => api.DELETE("/api/v0/profile/picture")));
     }
-    if (saved !== null && text !== saved) {
-      const description = text;
+    if (saved !== null && description !== saved) {
       steps.push(() => call(() => api.PUT("/api/v0/profile", { body: { description } })));
     }
     for (const step of steps) {
@@ -127,12 +132,12 @@
         break;
       }
     }
-    saving = false;
     await ownProfile.loader.load();
+    saving = false;
     if (error) return;
-    saved = text;
-    picked = null;
-    removed = false;
+    saved = description;
+    if (picked === file) picked = null;
+    if (removing) removed = false;
     toast("Profile saved");
   };
 

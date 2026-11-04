@@ -34,7 +34,8 @@ describe("your own profile page", () => {
     document.body.innerHTML = "";
   });
 
-  it("previews a picked picture and changed text, and saves both", async () => {
+  /** Signs in as an administrator who may edit the profile, and gives the view that says so */
+  const asAdmin = () => {
     session.principal = { name: "me", role: "Administrator" } as never;
     app.state = {
       user: {
@@ -46,6 +47,30 @@ describe("your own profile page", () => {
     const view = structuredClone(fixture) as typeof fixture;
     (view.values as Record<string, unknown>).remote_configuration = true;
     for (const file of view.files) file.writable = true;
+    vi.stubGlobal(
+      "URL",
+      Object.assign(URL, { createObjectURL: () => "blob:picked", revokeObjectURL: () => {} })
+    );
+    return view;
+  };
+  const type = (text: string) => {
+    const textarea = document.querySelector<HTMLTextAreaElement>("#profile-text")!;
+    textarea.value = text;
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+  };
+  const pickPicture = () => {
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff])], "me.jpg", { type: "image/jpeg" });
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+  };
+  const saveButton = () =>
+    [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Save")!;
+
+  it("previews a picked picture and changed text, and saves both", async () => {
+    const view = asAdmin();
     const net = fakeNetwork((url, method) => {
       if (url.pathname.endsWith("/api/v0/options/view")) return view;
       if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return own;
@@ -54,22 +79,12 @@ describe("your own profile page", () => {
       if (method === "PUT") return { status: 204 };
       return undefined;
     });
-    vi.stubGlobal(
-      "URL",
-      Object.assign(URL, { createObjectURL: () => "blob:picked", revokeObjectURL: () => {} })
-    );
     component = mount(MyProfile, { target: document.body });
     await flush();
 
-    const textarea = document.querySelector<HTMLTextAreaElement>("#profile-text")!;
-    expect(textarea.value).toBe("hello");
-    textarea.value = "plays bass\nlikes dub";
-    textarea.dispatchEvent(new Event("input", { bubbles: true }));
-    const file = new File([new Uint8Array([0xff, 0xd8, 0xff])], "me.jpg", { type: "image/jpeg" });
-    const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
-    Object.defineProperty(input, "files", { value: [file], configurable: true });
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-    flushSync();
+    expect(document.querySelector<HTMLTextAreaElement>("#profile-text")!.value).toBe("hello");
+    type("plays bass\nlikes dub");
+    pickPicture();
 
     // the preview and the card follow the draft before anything is saved
     expect([...document.querySelectorAll("img")].map((i) => i.getAttribute("src"))).toContain(
@@ -81,11 +96,48 @@ describe("your own profile page", () => {
     expect(document.body.textContent).toContain("30 files");
     expect(net.requests.filter((r) => r.method === "PUT")).toEqual([]);
 
-    [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Save")!.click();
+    saveButton().click();
     await flush();
     const puts = net.requests.filter((r) => r.method === "PUT");
     expect(puts.map((r) => r.url.pathname)).toEqual(["/api/v0/profile/picture", "/api/v0/profile"]);
     expect(puts[1].body).toEqual({ description: "plays bass\nlikes dub" });
+  });
+
+  it("saves once, and keeps text typed while it saves as a change", async () => {
+    const view = asAdmin();
+    let stored = own;
+    let reread: Promise<void> | null = null;
+    const net = fakeNetwork(async (url, method, body) => {
+      if (url.pathname.endsWith("/api/v0/options/view")) return view;
+      if (url.pathname.endsWith("/api/v0/interests")) return interests;
+      if (url.pathname.endsWith("/api/v0/profile") && method === "GET") {
+        if (reread) await reread;
+        return stored;
+      }
+      if (url.pathname.endsWith("/api/v0/profile")) {
+        stored = { ...stored, ...(body as object) };
+        return { status: 204 };
+      }
+      if (method === "PUT") return { status: 204 };
+      return undefined;
+    });
+    component = mount(MyProfile, { target: document.body });
+    await flush();
+    let release!: () => void;
+    reread = new Promise((done) => (release = done));
+    type("plays bass");
+    pickPicture();
+    saveButton().click();
+    await flush();
+    // the profile is read again after the writes, and the save is not over until it is
+    expect(saveButton().disabled).toBe(true);
+    saveButton().click();
+    type("plays bass and drums");
+    release();
+    await flush();
+    const puts = net.requests.filter((r) => r.method === "PUT");
+    expect(puts.map((r) => r.url.pathname)).toEqual(["/api/v0/profile/picture", "/api/v0/profile"]);
+    expect(saveButton().disabled).toBe(false);
   });
 
   it("saves interests as they change, each on one list only", async () => {
