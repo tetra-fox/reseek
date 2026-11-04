@@ -1,6 +1,7 @@
 <script lang="ts">
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import XIcon from "@lucide/svelte/icons/x";
+  import { tick } from "svelte";
 
   import type { SlotId } from "#lib/analysis/address.js";
   import type { FileReport } from "#lib/analysis/report.svelte.js";
@@ -42,6 +43,14 @@
   const name = $derived(loaded?.name ?? (path && getFileName(path)));
   const track = $derived(loaded && report ? trackOf(loaded.target, report.relativePath) : null);
 
+  let section = $state<HTMLElement | null>(null);
+  /** Puts focus on the slot once it has changed, as the control that had it is gone */
+  const refocus = () => void tick().then(() => section?.focus());
+  const clear = () => {
+    slots.clear(id);
+    refocus();
+  };
+
   /** a file dragged over the slot, which a drag across its children keeps counted */
   let depth = 0;
   let over = $state(false);
@@ -74,6 +83,8 @@
 </script>
 
 <section
+  bind:this={section}
+  tabindex="-1"
   aria-label={`Slot ${letter}`}
   class={[
     "relative flex min-w-0 flex-col max-md:min-h-72 md:min-h-0",
@@ -106,7 +117,7 @@
       </div>
     </div>
   {:else if !loaded}
-    <EmptySlot {id} />
+    <EmptySlot {id} onpicked={refocus} />
   {:else}
     <header class="flex min-h-9 shrink-0 items-center gap-2 border-b px-3 py-0.5">
       <span class="font-medium">{letter}</span>
@@ -129,7 +140,7 @@
         size="sm"
         class="ml-auto shrink-0"
         aria-label={`Clear slot ${letter}`}
-        onclick={() => slots.clear(id)}><XIcon />Clear</Button>
+        onclick={clear}><XIcon />Clear</Button>
     </header>
     <div class="flex flex-col gap-2 px-3 py-2 md:min-h-0 md:flex-1 md:overflow-y-auto">
       {#if job}<AnalysisProgress {job} />{/if}

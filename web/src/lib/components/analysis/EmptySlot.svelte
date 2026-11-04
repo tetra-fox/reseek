@@ -20,9 +20,9 @@
   // a row with nothing in it: its letter in the corner and, centered, the ways to fill it, with the
   // panel of the daemon's files sliding open under them, a sheet on a phone. The first row keeps
   // the latest results there too, so the page is of use with nothing loaded
-  type Props = { id: SlotId };
+  type Props = { id: SlotId; onpicked: () => void };
 
-  let { id }: Props = $props();
+  let { id, onpicked }: Props = $props();
 
   let picking = $state(false);
   let input = $state<HTMLInputElement | null>(null);
@@ -32,6 +32,7 @@
   const pick = (target: Target, name: string) => {
     picking = false;
     slots.fill(id, target, name);
+    onpicked();
   };
   const chosen = () => {
     const file = input?.files?.[0];
