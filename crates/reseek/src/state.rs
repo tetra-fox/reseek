@@ -60,13 +60,14 @@ impl StateOwner {
     });
   }
 
-  /// Takes the outcome of a configuration load: its reload error and what waits for a
-  /// restart. What waits for a reconnect is the network's to say, since it depends on the
-  /// connection.
+  /// Takes the outcome of a configuration load: its reload error, what waits for a restart and
+  /// the upload limit. What waits for a reconnect is the network's to say, since it depends on
+  /// the connection.
   pub fn configured(&self, loaded: &Loaded<Options>) {
     self.update(|state| {
       state.configuration = configuration(loaded);
       state.pending_restart = !loaded.pending_restart.is_empty();
+      state.process.upload_max_bytes = loaded.values.analysis.upload_max_bytes.as_u64();
     });
   }
 }
@@ -192,6 +193,7 @@ fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
       arch: std::env::consts::ARCH.to_string(),
       memory_bytes: 0,
       auto_analysis_workers: crate::config::Workers::auto(),
+      upload_max_bytes: loaded.values.analysis.upload_max_bytes.as_u64(),
     },
     listeners: Vec::new(),
   }

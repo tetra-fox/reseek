@@ -22085,7 +22085,8 @@
           "os",
           "arch",
           "memoryBytes",
-          "autoAnalysisWorkers"
+          "autoAnalysisWorkers",
+          "uploadMaxBytes"
         ],
         "properties": {
           "arch": {
@@ -22115,6 +22116,13 @@
             "type": "integer",
             "format": "int32",
             "description": "the process id",
+            "minimum": 0
+          },
+          "uploadMaxBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the largest file, in bytes, taken from a browser upload for analysis, as the options in\neffect set it",
+            "example": 2000000000,
             "minimum": 0
           }
         }

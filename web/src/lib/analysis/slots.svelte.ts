@@ -1,7 +1,9 @@
 import { goto } from "$app/navigation";
 import { navigating, page } from "$app/state";
 
+import { app } from "#lib/app.svelte.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
+import { formatBytes } from "#lib/format.js";
 import { href, route } from "#lib/nav.js";
 
 import { analysisHref, parseTarget, type SlotId } from "./address";
@@ -106,6 +108,16 @@ class Slots {
     if (!analyzable(file.name)) {
       const text = `${file.name} cannot be analyzed, as it is not a type the analyzer reads.`;
       return void toast(text, "error");
+    }
+    // the daemon refuses a larger file as well, but only once it is being sent, which a browser
+    // can report as a lost connection rather than as the answer
+    const limit = app.state?.process.uploadMaxBytes;
+    if (limit !== undefined && file.size > limit) {
+      const largest = formatBytes(limit);
+      return void toast(
+        `${file.name} is too large to upload. The largest upload is ${largest}.`,
+        "error"
+      );
     }
     this.#stopSending(id);
     if (this[id]) this.clear(id);

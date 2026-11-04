@@ -67,6 +67,10 @@ pub struct ProcessState {
   /// the processors, at least one
   #[schema(example = 4)]
   pub auto_analysis_workers: u32,
+  /// the largest file, in bytes, taken from a browser upload for analysis, as the options in
+  /// effect set it
+  #[schema(example = 2_000_000_000)]
+  pub upload_max_bytes: u64,
 }
 
 /// The running version and whether a newer one exists.
