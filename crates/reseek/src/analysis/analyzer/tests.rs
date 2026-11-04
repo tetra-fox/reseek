@@ -190,6 +190,26 @@ fn padded_bits_are_flagged_beside_the_verdict() {
 }
 
 #[test]
+fn the_peak_is_the_loudest_sample_of_either_channel() {
+  let dir = tempfile::tempdir().unwrap();
+  let mut audio = music(1, 44_100, pink);
+  // the loudest sample is in the second channel
+  audio.channels[0].iter_mut().for_each(|s| *s *= 0.5);
+  let path = flac(dir.path(), "peak.flac", &audio, 16);
+  let loudest = fixtures::decoded(&path)
+    .channels
+    .iter()
+    .flatten()
+    .fold(0f64, |peak, s| peak.max(f64::from(s.abs())));
+  let reading = analyzed(&path);
+  let peak = reading.measures.peak_dbfs.unwrap();
+  assert!(
+    (peak - 20.0 * loudest.log10()).abs() < 1e-6,
+    "{peak} dBFS against {loudest}"
+  );
+}
+
+#[test]
 fn a_mono_source_copied_to_stereo_shows_in_the_measures() {
   let dir = tempfile::tempdir().unwrap();
   let mono = music(1, 44_100, pink).mono_to_stereo();

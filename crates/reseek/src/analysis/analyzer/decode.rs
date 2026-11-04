@@ -426,3 +426,33 @@ fn note_bits(bits: &mut Option<(u32, u32)>, decoded: &GenericAudioBufferRef<'_>)
   let (before, _) = bits.unwrap_or((0, width));
   *bits = Some((before | found, width));
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  /// A 16-bit ALAC tone in an MP4 container.
+  const TONE: &[u8] = include_bytes!("../../files/fixtures/tone.m4a");
+
+  fn opened(bytes: Vec<u8>) -> Decoder {
+    let mut hint = Hint::new();
+    hint.with_extension("m4a");
+    Decoder::from_source(Box::new(std::io::Cursor::new(bytes)), &hint).unwrap()
+  }
+
+  #[test]
+  fn alac_states_its_bit_depth_in_its_magic_cookie() {
+    assert_eq!(opened(TONE.to_vec()).claimed.bit_depth, Some(16));
+    // the cookie is the last 24 bytes of the 36-byte `alac` box inside the sample entry; its
+    // bit depth is the sixth of them
+    let mut bytes = TONE.to_vec();
+    let inner = bytes
+      .windows(8)
+      .position(|w| w == [0, 0, 0, 0x24, b'a', b'l', b'a', b'c'])
+      .unwrap();
+    let depth = inner + 8 + 4 + 5;
+    assert_eq!(bytes[depth], 16);
+    bytes[depth] = 24;
+    assert_eq!(opened(bytes).claimed.bit_depth, Some(24));
+  }
+}
