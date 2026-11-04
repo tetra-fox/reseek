@@ -78,6 +78,7 @@ impl Messaging {
     let username = inbound.username.clone();
     let notice = username == SERVER;
     let now = Utc::now();
+    let active = self.active.clone();
     let stored = self
       .db
       .write(move |conn| {
@@ -89,6 +90,9 @@ impl Messaging {
         }
         let stored = store::receive(&tx, &inbound)?;
         tx.commit()?;
+        if !notice {
+          lock(&active).insert(inbound.username);
+        }
         Ok(stored)
       })
       .await;
@@ -124,7 +128,6 @@ impl Messaging {
           }));
       }
     } else {
-      lock(&self.active).insert(username.clone());
       self.users.touch(&username, Touch::MessageIn).await;
       self
         .events
@@ -278,8 +281,9 @@ impl Messaging {
       .ok_or_else(|| no_conversation(username))
   }
 
-  /// Sends a private message to `username`, on one line, and stores what was sent once the
-  /// server took it; a user blocked from messages is refused, as is a text of line breaks alone.
+  /// Sends a private message to `username`, on one line, and opens the conversation and stores
+  /// what was sent once the server took it; a user blocked from messages is refused, as is a
+  /// text of line breaks alone.
   pub(super) async fn send_private(&self, username: &str, message: String) -> Result<(), ApiError> {
     if self.users.is_blocked(username, None, BlockScope::Messages) {
       return Err(ApiError::forbidden("The user is blocked"));
@@ -288,23 +292,25 @@ impl Messaging {
     if message.is_empty() {
       return Err(ApiError::bad_request("The message is empty"));
     }
-    let name = username.to_string();
-    let now = Utc::now();
-    self
-      .db
-      .write(move |conn| store::activate(conn, &name, now))
-      .await
-      .map_err(internal)?;
-    lock(&self.active).insert(username.to_string());
     self
       .client()
       .send_private_message(username, &message)
       .await
       .map_err(unsent)?;
+    // the conversation opens once the server took the message
     let name = username.to_string();
+    let active = self.active.clone();
     let sent = self
       .db
-      .write(move |conn| store::sent(conn, &name, &message, Utc::now()))
+      .write(move |conn| {
+        let now = Utc::now();
+        let tx = conn.transaction()?;
+        store::activate(&tx, &name, now)?;
+        let sent = store::sent(&tx, &name, &message, now)?;
+        tx.commit()?;
+        lock(&active).insert(name);
+        Ok(sent)
+      })
       .await
       .map_err(|e| {
         warn!(username, error = %e, "private message sent but not stored");
@@ -388,12 +394,16 @@ impl Messaging {
 
   async fn closed(&self, username: &str, purge: bool) -> Result<(), ApiError> {
     let name = username.to_string();
+    let active = self.active.clone();
     self
       .db
-      .write(move |conn| store::close(conn, &name, purge, Utc::now()))
+      .write(move |conn| {
+        store::close(conn, &name, purge, Utc::now())?;
+        lock(&active).remove(&name);
+        Ok(())
+      })
       .await
       .map_err(internal)?;
-    lock(&self.active).remove(username);
     debug!(username, purge, "conversation closed");
     self.conversation_changed(username).await;
     Ok(())
@@ -474,6 +484,26 @@ mod tests {
       announced.data["message"], "new",
       "the replayed one is skipped"
     );
+  }
+
+  #[tokio::test]
+  async fn a_message_the_server_did_not_take_opens_no_conversation() {
+    let config = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
+    let app = app(config, &[]).await;
+    let from = "127.0.0.1:40000";
+    let body = serde_json::json!("hello");
+    let sent = app
+      .send_from(
+        from,
+        request("POST", "/api/v0/conversations/alice", Some(body)),
+      )
+      .await;
+    assert_eq!(sent.status, 409, "not logged in");
+    let read = app
+      .send_from(from, request("GET", "/api/v0/conversations/alice", None))
+      .await;
+    assert_eq!(read.status, 404);
+    assert!(!app.state.messaging.is_open("alice"));
   }
 
   #[test]
