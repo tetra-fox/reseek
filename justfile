@@ -15,7 +15,8 @@ dev: web-install
 build: web-build
     cargo build --release
 
-# the static release binaries for linux x86_64 and aarch64 into dist/, with the ui built in
+# the static release binaries for linux x86_64 and aarch64 into dist/: the daemon with the ui
+# built in, and the relay agent
 release:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -23,9 +24,11 @@ release:
     for arch in amd64 arm64; do
       out="$(nix build --no-link --print-out-paths ".#release-$arch")"
       install -m755 "$out/bin/reseek" "dist/reseek-linux-$arch"
+      install -m755 "$out/bin/reseek-agent" "dist/reseek-agent-linux-$arch"
     done
 
-# the universal macos binary into dist/, with the ui built in; run on a mac
+# the universal macos binaries into dist/: the daemon with the ui built in, and the relay agent;
+# run on a mac
 release-macos: web-build
     #!/usr/bin/env bash
     set -euo pipefail
@@ -34,8 +37,10 @@ release-macos: web-build
       rustup target add "$target"
       cargo build --release -p reseek-bin --target "$target"
     done
-    lipo -create -output dist/reseek-macos-universal \
-      target/x86_64-apple-darwin/release/reseek target/aarch64-apple-darwin/release/reseek
+    for program in reseek reseek-agent; do
+      lipo -create -output "dist/$program-macos-universal" \
+        "target/x86_64-apple-darwin/release/$program" "target/aarch64-apple-darwin/release/$program"
+    done
 
 # the container image `reseek` from the release binaries, with podman or docker
 docker: release
