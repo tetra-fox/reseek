@@ -18,6 +18,7 @@
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
+  import { Loader } from "#lib/loader.svelte.js";
   import { call } from "#lib/request.js";
   import { act, storeOf } from "#lib/transfers/actions.js";
   import { type ColumnId, templateOf } from "#lib/transfers/grid/columns.js";
@@ -33,44 +34,35 @@
   type Which = "both" | "Download" | "Upload";
 
   const rows = new Keyed<Transfer>((t) => t.id);
-  let order = $state<string[]>([]);
-  let total = $state(0);
   let wanted = $state(PAGE);
   let which = $state<Which>("both");
-  let loaded = $state(false);
-  let error = $state("");
   let removing = $state<Transfer | null>(null);
   let confirmOpen = $state(false);
 
-  let generation = 0;
-  const load = async () => {
-    const at = ++generation;
-    const direction = which === "both" ? undefined : which;
-    const outcome = await call(() =>
-      api.GET("/api/v0/users/{username}/transfers", {
-        params: {
-          path: { username },
-          query: { ...byUser(username).query, direction, offset: 0, limit: wanted }
-        }
-      })
-    );
-    if (at !== generation) return;
-    loaded = true;
-    if (!outcome.ok) return void (error = outcome.error);
-    error = "";
-    rows.reconcile(outcome.data.transfers);
-    order = outcome.data.transfers.map((t) => t.id);
-    total = outcome.data.total;
-  };
+  /** the newest `wanted` transfers in the directions asked for, with how many there are in all */
+  const listed = new Loader(
+    () => {
+      const direction = which === "both" ? undefined : which;
+      return call(() =>
+        api.GET("/api/v0/users/{username}/transfers", {
+          params: {
+            path: { username },
+            query: { ...byUser(username).query, direction, offset: 0, limit: wanted }
+          }
+        })
+      );
+    },
+    (data) => rows.reconcile(data.transfers)
+  );
 
   keepCurrent(
-    () => void load(),
+    () => void listed.load(),
     () => "transfers"
   );
   $effect(() => {
     void which;
     void wanted;
-    untrack(() => void load());
+    untrack(() => void listed.load());
   });
   // this user's transfers change in place; a new one shows with the next load
   $effect(() =>
@@ -80,11 +72,12 @@
   );
   $effect(() =>
     live.on("transfers.added", (t) => {
-      if (t.username === username) void load();
+      if (t.username === username) void listed.load();
     })
   );
 
-  const shown = $derived(order.flatMap((id) => rows.get(id) ?? []));
+  const shown = $derived((listed.data?.transfers ?? []).flatMap((t) => rows.get(t.id) ?? []));
+  const total = $derived(listed.data?.total ?? 0);
   const list = new ListControl<Transfer>({
     lines: () => shown,
     key: (t) => t.id,
@@ -133,9 +126,9 @@
   <span class="ml-auto text-sm text-fg-muted">{plural(total, "transfer", "transfers")}</span>
 </div>
 
-<LoadError loader={{ error, load }} />
+<LoadError loader={listed} />
 
-{#if !loaded}
+{#if listed.loading}
   <Skeleton class="h-40" />
 {:else if !shown.length}
   <EmptyState icon={RepeatIcon} title="No transfers with this user" />
@@ -177,7 +170,7 @@
       {/each}
     </div>
   </div>
-  {#if order.length < total}
+  {#if shown.length < total}
     <Button variant="outline" class="self-center" onclick={() => (wanted += PAGE)}
       >Load more</Button>
   {/if}
