@@ -241,9 +241,9 @@ pub trait MessagingService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// Sets us online or away by hand; the server is told at once while logged in, else at the
-  /// next login.
-  async fn set_status(&self, status: OwnStatus) -> Result<(), ApiError> {
+  /// Sets us online or away by hand, as `by` asked; the server is told at once while logged in,
+  /// else at the next login.
+  async fn set_status(&self, status: OwnStatus, by: &str) -> Result<(), ApiError> {
     Err(not_yet(DOMAIN))
   }
 }

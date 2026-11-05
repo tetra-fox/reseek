@@ -6,11 +6,13 @@
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use api_types::state::OwnStatus;
 use rusqlite::OptionalExtension;
 use soulseek_proto::UserPresence;
-use tokio::time::sleep;
+
+use tokio::time::{Instant, sleep_until};
 use tracing::{debug, info, warn};
 
 use super::Messaging;
@@ -19,6 +21,12 @@ use crate::sync::lock;
 
 /// What the reply is sent with, so the one who gets it can tell it was not typed.
 const AUTOMATIC: &str = "[Automatic Message] ";
+
+/// What changes our status when nobody asked: the UI being open or not for a while.
+const IDLE: &str = "auto-away";
+
+/// What sets the away kept from the last run.
+const RESTORED: &str = "restart";
 
 /// Why we are away.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,16 +65,15 @@ impl Messaging {
       .await;
     match kept {
       Ok(Some(true)) => {
-        info!("away, as set before the restart");
-        self.change_status(Some(Away::ByHand)).await;
+        self.change_status(Some(Away::ByHand), RESTORED).await;
       }
       Ok(_) => {}
       Err(e) => warn!(error = %e, "kept status not read; starting online"),
     }
   }
 
-  /// Sets us online or away by hand, which is kept across restarts.
-  pub(super) async fn set_status(&self, status: OwnStatus) -> Result<(), ApiError> {
+  /// Sets us online or away by hand, as `by` asked, which is kept across restarts.
+  pub(super) async fn set_status(&self, status: OwnStatus, by: &str) -> Result<(), ApiError> {
     let away = status == OwnStatus::Away;
     self
       .db
@@ -79,13 +86,13 @@ impl Messaging {
       })
       .await
       .map_err(ApiError::internal)?;
-    self.change_status(away.then_some(Away::ByHand)).await;
+    self.change_status(away.then_some(Away::ByHand), by).await;
     Ok(())
   }
 
-  /// Makes `next` our status. Going from online to away or back is shown in the state and told
-  /// to the server; coming back forgets who was answered.
-  async fn change_status(&self, next: Option<Away>) {
+  /// Makes `next` our status, for `by`: who asked, or what changed it. Going from online to away
+  /// or back is shown in the state and told to the server; coming back forgets who was answered.
+  async fn change_status(&self, next: Option<Away>, by: &str) {
     let changed = {
       let mut inner = lock(&self.status.inner);
       let was = inner.away;
@@ -103,7 +110,7 @@ impl Messaging {
     } else {
       OwnStatus::Online
     };
-    info!(?status, why = ?next, "our status changed");
+    info!(?status, why = ?next, by, "our status changed");
     self.state.update(|state| state.user.status = status);
     self.tell_status().await;
   }
@@ -169,40 +176,59 @@ impl Messaging {
     let mut audience = self.live.audience();
     let mut config = self.config.subscribe();
     let mut after = config.borrow_and_update().values.chat.auto_away;
-    // the wait since the last person left has not run out
-    let mut waiting = true;
+    let mut people = audience.borrow_and_update().people;
+    // when we go away, while nobody is at the UI and `after` is not zero
+    let arm = |people: u32, after: Duration| {
+      (people == 0 && !after.is_zero()).then(|| Instant::now() + after)
+    };
+    let mut deadline = arm(people, after);
     loop {
-      let people = audience.borrow_and_update().people;
-      if people > 0 && lock(&self.status.inner).away == Some(Away::Idle) {
-        self.change_status(None).await;
-      }
-      let idle = people == 0 && waiting && !after.is_zero();
       tokio::select! {
         () = self.shutdown.cancelled() => return,
         changed = audience.changed() => {
           if changed.is_err() {
             return;
           }
-          waiting = true;
+          // the feed's followers change the audience too; only people restart the wait
+          let now = audience.borrow_and_update().people;
+          if now == people {
+            continue;
+          }
+          people = now;
+          deadline = arm(people, after);
+          if people > 0 {
+            self.end_idle_away().await;
+          }
         }
         changed = config.changed() => {
           if changed.is_err() {
             return;
           }
           let now = config.borrow_and_update().values.chat.auto_away;
-          if now != after {
-            after = now;
-            waiting = true;
+          if now == after {
+            continue;
+          }
+          after = now;
+          deadline = arm(people, after);
+          if after.is_zero() {
+            self.end_idle_away().await;
           }
         }
-        () = sleep(after), if idle => {
-          waiting = false;
+        () = sleep_until(deadline.unwrap_or_else(Instant::now)), if deadline.is_some() => {
+          deadline = None;
           if lock(&self.status.inner).away.is_none() {
             debug!(after = ?after, "nobody has had the UI open");
-            self.change_status(Some(Away::Idle)).await;
+            self.change_status(Some(Away::Idle), IDLE).await;
           }
         }
       }
+    }
+  }
+
+  /// Ends an away that came from nobody being at the UI; one set by hand stays.
+  async fn end_idle_away(&self) {
+    if lock(&self.status.inner).away == Some(Away::Idle) {
+      self.change_status(None, IDLE).await;
     }
   }
 
@@ -275,5 +301,38 @@ mod tests {
       .await;
     person.until("hello").await;
     status(&mut script, "Online").await;
+  }
+
+  #[tokio::test]
+  async fn streams_of_scripts_opening_and_closing_do_not_hold_off_away() {
+    let config = format!(
+      "{TRUSTED}[web.authentication.api_keys.script]\nkey = \"script-key-0123456789\"\n\
+       role = \"readonly\"\n[chat]\nauto_away = \"300ms\"\n"
+    );
+    let app = app(&config, &[]).await;
+    let watch = |from| {
+      let opened = request("GET", "/api/v0/live?topics=application", None);
+      app.stream_from(from, with(opened, "x-api-key", "script-key-0123456789"))
+    };
+    let mut script = watch("10.0.0.1:40000").await;
+    let away = async {
+      loop {
+        let frame = script.until("application.state").await.pop().unwrap();
+        if frame.data["user"]["status"] == "Away" {
+          return;
+        }
+      }
+    };
+    // another script opens a stream and closes it, again and again, well within the wait
+    let churn = async {
+      loop {
+        drop(watch("10.0.0.2:40000").await);
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+      }
+    };
+    tokio::select! {
+      () = away => {}
+      () = churn => unreachable!("the churn runs until away"),
+    }
   }
 }

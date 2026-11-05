@@ -1,6 +1,6 @@
 //! The application routes: the state document, the version and the release check, shutting
-//! down and restarting, the connection to the Soulseek server, our away status, and the log. Diagnostics that
-//! the API document leaves out are here too.
+//! down and restarting, the connection to the Soulseek server, our away status, and the log.
+//! Diagnostics that the API document leaves out are here too.
 
 use api_types::application::{DatabaseFile, DisconnectReason, StatusChange, VersionLatestQuery};
 use api_types::auth::Role;
@@ -206,8 +206,11 @@ async fn set_status(
   caller: Authorized<ReadWrite>,
   Json(change): Json<StatusChange>,
 ) -> Result<StatusCode, ApiError> {
-  app.services.messaging.set_status(change.status).await?;
-  info!(by = caller.principal.subject, status = ?change.status, "status set");
+  app
+    .services
+    .messaging
+    .set_status(change.status, &caller.principal.subject)
+    .await?;
   Ok(StatusCode::NO_CONTENT)
 }
 

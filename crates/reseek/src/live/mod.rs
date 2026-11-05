@@ -143,9 +143,10 @@ impl Drop for Registered {
       }
     }
     let counts = self.counts;
-    self.hub.audience.send_modify(|audience| {
+    self.hub.audience.send_if_modified(|audience| {
       audience.people -= counts.people;
       audience.public_rooms -= counts.public_rooms;
+      counts != Audience::default()
     });
   }
 }
@@ -216,7 +217,7 @@ impl Live {
     self.hub.lock().streams.values().any(|q| q.follows(&topic))
   }
 
-  /// Who has a stream open, as it changes.
+  /// Who has a stream open; a receiver is woken only when a count changed.
   pub fn audience(&self) -> watch::Receiver<Audience> {
     self.hub.audience.subscribe()
   }
@@ -255,9 +256,11 @@ impl Live {
     hub.next_stream += 1;
     let id = hub.next_stream;
     hub.streams.insert(id, queue.clone());
-    self.hub.audience.send_modify(|audience| {
+    // a stream that adds nobody, such as a script's, changes nothing anyone waits on
+    self.hub.audience.send_if_modified(|audience| {
       audience.people += counts.people;
       audience.public_rooms += counts.public_rooms;
+      counts != Audience::default()
     });
     Ok(Registered {
       queue,

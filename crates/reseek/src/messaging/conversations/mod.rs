@@ -294,6 +294,7 @@ impl Messaging {
       .ok_or_else(|| no_conversation(username))
   }
 
+  /// Sends a private message someone wrote to `username`, as [`Messaging::send`] does.
   pub(super) async fn send_private(&self, username: &str, message: String) -> Result<(), ApiError> {
     self.send(username, message, false).await
   }

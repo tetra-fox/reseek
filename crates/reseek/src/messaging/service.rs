@@ -187,7 +187,7 @@ impl MessagingService for Messaging {
     Messaging::search(self, query).await
   }
 
-  async fn set_status(&self, status: OwnStatus) -> Result<(), ApiError> {
-    Messaging::set_status(self, status).await
+  async fn set_status(&self, status: OwnStatus, by: &str) -> Result<(), ApiError> {
+    Messaging::set_status(self, status, by).await
   }
 }
