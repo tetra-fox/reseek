@@ -390,4 +390,33 @@ describe("a chat pane", () => {
     await flush();
     expect(row(Number(drawn[0]))).toBe(first);
   });
+
+  it("keeps a user's card open while the list moves itself for a new message", async () => {
+    const net = fakeNetwork((url, method) => {
+      if (url.pathname.endsWith("/conversations/alice/messages")) return [privateMessage(1)];
+      if (url.pathname.endsWith("/users/alice")) return { username: "alice", known: false };
+      if (method === "PUT") return { status: 200 };
+      return undefined;
+    });
+    live.start();
+    net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    component = mount(Pane, {
+      target: document.body,
+      props: { target: { kind: "user", name: "alice" } }
+    });
+    await flush();
+    const card = () => document.querySelector('[role="dialog"][aria-label="Profile of alice"]');
+    row(1).querySelector<HTMLAnchorElement>("a")!.click();
+    await flush();
+    expect(card()).not.toBeNull();
+
+    net.frame("conversations.message", { username: "alice", message: privateMessage(2) });
+    await flush();
+    expect(ids()).toEqual(["1", "2"]);
+    // a list at its end keeps to it as the new line is measured, a scroll the browser announces
+    // and jsdom, which lays nothing out, does not
+    document.querySelector('[role="log"]')!.dispatchEvent(new Event("scroll"));
+    await flush();
+    expect(card()).not.toBeNull();
+  });
 });

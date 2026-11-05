@@ -38,6 +38,7 @@
 
   const me = Symbol("username");
   let link = $state<HTMLAnchorElement | null>(null);
+  let cardBox = $state<HTMLElement | null>(null);
   let shown = $state<"card" | "menu" | null>(null);
   /** the card was opened from the keyboard, so focus goes into it and back to the link after */
   let keyboard = $state(false);
@@ -54,12 +55,21 @@
   const active = $derived(open.owner === me ? shown : null);
   // the list the name is in holds still while its card or menu is open
   $effect(() => (active ? interaction.hold() : undefined));
-  // a scroll of what is under the card closes it
+  // the user scrolling the page under the card closes it. A list that moves itself, to keep
+  // its view as lines arrive, does not: the card follows its name, and hides while the name is
+  // out of view
   $effect(() => {
     if (active !== "card") return;
-    const close = () => hide();
-    window.addEventListener("scroll", close, { capture: true, passive: true });
-    return () => window.removeEventListener("scroll", close, { capture: true });
+    const close = (e: Event) => {
+      if (!(e.target instanceof Node && cardBox?.contains(e.target))) hide();
+    };
+    const options = { capture: true, passive: true };
+    window.addEventListener("wheel", close, options);
+    window.addEventListener("touchmove", close, options);
+    return () => {
+      window.removeEventListener("wheel", close, options);
+      window.removeEventListener("touchmove", close, options);
+    };
   });
 
   const show = (what: "card" | "menu", byKeyboard = false, byClick = false) => {
@@ -167,7 +177,9 @@
   <Popover.Root open onOpenChange={(o) => !o && hide()}>
     <Popover.Portal>
       <Popover.Content
+        bind:ref={cardBox}
         customAnchor={link}
+        hideWhenDetached
         side="bottom"
         align="start"
         sideOffset={4}

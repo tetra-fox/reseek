@@ -121,4 +121,21 @@ describe("a username", () => {
     flushSync();
     expect(card()).not.toBeNull();
   });
+
+  it("closes the card the user scrolls away from, and not on a scroll inside it", async () => {
+    link.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    flushSync();
+    await vi.advanceTimersByTimeAsync(0);
+    card()!.dispatchEvent(new WheelEvent("wheel", { bubbles: true }));
+    flushSync();
+    expect(card()).not.toBeNull();
+    document.body.dispatchEvent(new Event("scroll"));
+    flushSync();
+    expect(card()).not.toBeNull();
+    document.body.dispatchEvent(new WheelEvent("wheel", { bubbles: true }));
+    flushSync();
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync();
+    expect(card()).toBeNull();
+  });
 });
