@@ -6,6 +6,7 @@ import { MessagePane, PAGE } from "#lib/chat/pane.svelte.js";
 import { dismiss, toasts } from "#lib/feedback/toast.svelte.js";
 import { ListWindow } from "#lib/lists/virtual.svelte.js";
 import { flush } from "#lib/testing/flush.js";
+import { press } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import MessageList from "./MessageList.svelte";
@@ -104,5 +105,21 @@ describe("the message list", () => {
     expect(to.mock.calls).toEqual([[join, "center"]]);
     expect(toEnd).not.toHaveBeenCalled();
     expect(toasts.map((t) => t.text)).toEqual(["That message is no longer stored."]);
+  });
+
+  it("walks past the messages of ours that are not sent", async () => {
+    history(3);
+    const { pane, box } = await open();
+    await pane.send("lost");
+    pane.messages.upsert({ ...pane.ordered[0], localId: -2, text: "going", sending: "sending" });
+    await flush();
+    expect(pane.ordered.map((m) => m.sending ?? m.localId)).toEqual([1, 2, 3, "failed", "sending"]);
+    box.focus();
+    press(box, "ArrowUp");
+    await flush();
+    expect((document.activeElement as HTMLElement).dataset.message).toBe("3");
+    press(document.activeElement!, "ArrowDown");
+    await flush();
+    expect((document.activeElement as HTMLElement).dataset.message).toBe("3");
   });
 });

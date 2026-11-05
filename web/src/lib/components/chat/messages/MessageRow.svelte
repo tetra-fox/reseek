@@ -5,7 +5,7 @@
   import ReplyIcon from "@lucide/svelte/icons/reply";
   import type { Component } from "svelte";
 
-  import { LONG, type Message } from "#lib/chat/messages/messages.js";
+  import { actionable, LONG, type Message } from "#lib/chat/messages/messages.js";
   import { actionOf } from "#lib/chat/messages/rich.js";
   import Button from "#lib/components/ui/Button.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
@@ -66,25 +66,27 @@
   const action = $derived(notice ? null : actionOf(m.text));
   const text = $derived(action ?? m.text);
 
-  /** What can be done with the message, on its toolbar and in its menu */
-  const actions = $derived.by(
-    (): { label: string; icon: Component; run?: () => void; href?: string }[] => {
-      if (m.hidden || m.sending !== undefined) return [];
-      return [
-        ...(onreply
-          ? [{ label: "Reply with a quote", icon: ReplyIcon, run: () => onreply(m) }]
-          : []),
-        { label: "Copy the text", icon: CopyIcon, run: () => void copyText(m.text) },
-        ...(room && !m.self
-          ? reach(m.author, { only: ["message"] }).map((reached) => ({
-              label: reached.of(m.author),
-              icon: reached.icon,
-              href: reached.href
-            }))
-          : [])
-      ];
-    }
+  /** One thing to do with the message: a function to run or a page to go to */
+  type Action = { label: string; icon: Component } & (
+    | { run: () => void; href?: never }
+    | { href: string; run?: never }
   );
+
+  /** What can be done with the message, on its toolbar and in its menu */
+  const actions = $derived.by((): Action[] => {
+    if (!actionable(m)) return [];
+    return [
+      ...(onreply ? [{ label: "Reply with a quote", icon: ReplyIcon, run: () => onreply(m) }] : []),
+      { label: "Copy the text", icon: CopyIcon, run: () => void copyText(m.text) },
+      ...(room && !m.self
+        ? reach(m.author, { only: ["message"] }).map((reached) => ({
+            label: reached.of(m.author),
+            icon: reached.icon,
+            href: reached.href
+          }))
+        : [])
+    ];
+  });
 
   let row = $state<HTMLElement | null>(null);
   let toolbar = $state<HTMLElement | null>(null);
@@ -251,7 +253,7 @@
     <Menu.Root open onOpenChange={onmenu}>
       <Menu.Content align="end" customAnchor={row}>
         {#each actions as action (action.label)}
-          <Menu.Item onSelect={action.run ?? (() => void goto(action.href ?? ""))}>
+          <Menu.Item onSelect={action.run ?? (() => void goto(action.href))}>
             <action.icon />{action.label}
           </Menu.Item>
         {/each}

@@ -21,6 +21,9 @@ export type Message = {
   sending?: "sending" | "failed";
 };
 
+/** Whether there is anything to do with a message: shown, and stored rather than on its way */
+export const actionable = (m: Message) => !m.hidden && m.sending === undefined;
+
 export type Gap = Schemas["HistoryGap"];
 
 /** A line of the message list */

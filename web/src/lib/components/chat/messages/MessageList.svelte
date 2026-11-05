@@ -6,7 +6,13 @@
   import { tick, untrack } from "svelte";
   import { fly } from "svelte/transition";
 
-  import { type Line, layout, LONG, type Message } from "#lib/chat/messages/messages.js";
+  import {
+    actionable,
+    type Line,
+    layout,
+    LONG,
+    type Message
+  } from "#lib/chat/messages/messages.js";
   import { pullOlder } from "#lib/chat/messages/older.js";
   import { isNotices } from "#lib/chat/notices.js";
   import type { MessagePane } from "#lib/chat/pane.svelte.js";
@@ -153,9 +159,9 @@
     if (e.target !== box && e.target !== activeRow()) return;
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault();
-      const indexes = lines.flatMap((line, i) => {
-        return line.kind === "message" && !line.message.hidden ? [i] : [];
-      });
+      const indexes = lines.flatMap((line, i) =>
+        line.kind === "message" && actionable(line.message) ? [i] : []
+      );
       const idOf = (i: number) => (lines[i] as Line & { kind: "message" }).message.localId;
       const at = indexes.findIndex((i) => idOf(i) === active);
       const from = at === -1 ? indexes.findLastIndex((i) => shown.isDrawn(i)) : at;
