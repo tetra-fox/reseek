@@ -8,6 +8,7 @@ use tracing::{info, warn};
 
 use crate::api::error::ApiError;
 use crate::app::AppState;
+use crate::config::Options;
 use crate::db::{Database, DbError};
 use crate::network::options::client_options;
 
@@ -37,10 +38,10 @@ pub async fn stored(db: &Database) -> Result<bool, DbError> {
   db.read(read).await
 }
 
-/// The patch that gives the client the global limits of the pair `alternative` names.
-fn limits(app: &AppState, alternative: bool) -> Result<ClientOptionsPatch, ApiError> {
-  let wanted =
-    client_options(&app.config.current().values, alternative).map_err(ApiError::internal)?;
+/// The patch that gives the client the global limits `options` set for the pair `alternative`
+/// names.
+fn limits(options: &Options, alternative: bool) -> Result<ClientOptionsPatch, ApiError> {
+  let wanted = client_options(options, alternative).map_err(ApiError::internal)?;
   Ok(ClientOptionsPatch {
     maximum_upload_speed: Some(wanted.maximum_upload_speed),
     maximum_download_speed: Some(wanted.maximum_download_speed),
@@ -55,8 +56,14 @@ pub async fn switch(app: &AppState, alternative: bool, by: &str) -> Result<(), A
   let network = &app.network;
   let _reconfiguring = network.reconfiguring().lock().await;
   let client = network.client();
+  let was = app.state.current().alternative_speed_limits;
+  let options = app.config.current();
+  let (wanted, back) = (
+    limits(&options.values, alternative)?,
+    limits(&options.values, was)?,
+  );
   client
-    .reconfigure_options(limits(app, alternative)?)
+    .reconfigure_options(wanted)
     .await
     .map_err(ApiError::internal)?;
   let kept = app
@@ -64,9 +71,8 @@ pub async fn switch(app: &AppState, alternative: bool, by: &str) -> Result<(), A
     .write(move |conn| write(conn, alternative))
     .await;
   if let Err(e) = kept {
-    let was = app.state.current().alternative_speed_limits;
-    if let Err(back) = client.reconfigure_options(limits(app, was)?).await {
-      warn!(error = %back, "client speed limits not put back after a failed switch");
+    if let Err(refused) = client.reconfigure_options(back).await {
+      warn!(error = %refused, "client speed limits not put back after a failed switch");
     }
     return Err(ApiError::internal(e));
   }
