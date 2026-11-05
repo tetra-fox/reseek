@@ -3,7 +3,6 @@ import { goto } from "$app/navigation";
 import { app } from "#lib/app.svelte.js";
 import { copyText } from "#lib/feedback/clipboard.svelte.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
-import { enqueue } from "#lib/files/downloads.js";
 import { downloadFile } from "#lib/format.js";
 import { href } from "#lib/nav.js";
 import { blocking } from "#lib/users/block.svelte.js";
@@ -52,15 +51,6 @@ export const openFolder = (transfers: Transfer[]) => {
   const folder = folderOf(transfers);
   if (folder === null) return toast("None of these downloads has finished", "error");
   void goto(href(`/system/files?root=downloads&path=${encodeURIComponent(folder)}`));
-};
-
-/** Downloads the file again as a new download in a job of its own */
-export const redownload = async (t: Transfer) => {
-  const result = await enqueue({
-    username: t.username,
-    files: [{ filename: t.filename, size: t.size }]
-  });
-  toast(result.text, result.kind === "done" ? "info" : "error");
 };
 
 export const copyPath = (path: string) => void copyText(path);

@@ -26,7 +26,6 @@
     open,
     openFolder,
     queuePosition,
-    redownload,
     saveToDevice,
     storeOf
   } from "#lib/transfers/actions.js";
@@ -70,18 +69,20 @@
   <RemoteFileItems path={t.filename} username={t.username} />
   {#if write}
     <Menu.Separator />
+    <!-- both go through the daemon's retry, which keeps the download's folder and search -->
     {#if can.retry}
       <Menu.Item onSelect={() => void act(storeOf(t), "retry", [t.id])}>
         <RotateCwIcon />Retry
+      </Menu.Item>
+    {:else if can.downloadAgain}
+      <Menu.Item onSelect={() => void act(storeOf(t), "retry", [t.id])}>
+        <RefreshCwIcon />Download again
       </Menu.Item>
     {/if}
     {#if can.cancel}
       <Menu.Item onSelect={() => void act(storeOf(t), "cancel", [t.id])}><XIcon />Cancel</Menu.Item>
     {/if}
     <Menu.Item onSelect={onremove}><Trash2Icon />Remove</Menu.Item>
-    {#if can.redownload}
-      <Menu.Item onSelect={() => void redownload(t)}><RefreshCwIcon />Re-download</Menu.Item>
-    {/if}
   {/if}
   {#if can.queuePosition}
     <Menu.Item onSelect={() => void queuePosition(t)}

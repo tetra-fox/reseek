@@ -19,12 +19,12 @@ describe("the row menu", () => {
       "openFolder",
       "copyLocalPath",
       "remove",
-      "redownload"
+      "downloadAgain"
     ]);
     for (const state of STATES.filter(
       (s) => s.startsWith("Completed, ") && !s.endsWith("Succeeded")
     )) {
-      expect(enabled(state)).toEqual(["retry", "remove", "redownload"]);
+      expect(enabled(state)).toEqual(["retry", "remove"]);
     }
   });
 
