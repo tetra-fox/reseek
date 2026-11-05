@@ -260,9 +260,9 @@ impl Searches {
   }
 
   /// `scope` with the rooms or buddies a search with it goes to: every room we are in for a
-  /// rooms scope that names none, and our buddies online now for a buddies scope. A rooms
-  /// scope that names a room we are not in is refused, and so is a scope that would reach no
-  /// one.
+  /// rooms scope that names none, and our buddies online now for a buddies scope, which names
+  /// no one itself. A rooms scope that names a room we are not in is refused, and so is a scope
+  /// that would reach no one.
   fn reached(&self, scope: &SearchScope) -> Result<SearchScope, ApiError> {
     let subjects = match scope.scope_type {
       SearchScopeType::Rooms => {
@@ -285,6 +285,11 @@ impl Searches {
         }
       }
       SearchScopeType::Buddies => {
+        if !scope.subjects.is_empty() {
+          return Err(ApiError::bad_request(
+            "A buddies search names no one: it goes to every buddy online",
+          ));
+        }
         if self.users.buddy_names().is_empty() {
           return Err(ApiError::conflict("There are no buddies to search", None));
         }
@@ -602,6 +607,10 @@ mod tests {
     assert_eq!(
       reached(SearchScopeType::Buddies, &[]).unwrap().subjects,
       ["alice"]
+    );
+    assert!(
+      reached(SearchScopeType::Buddies, &["alice"]).is_err(),
+      "a buddies search names no one itself"
     );
   }
 }
