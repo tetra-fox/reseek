@@ -28,7 +28,7 @@ export class RoomMembers {
   readonly users = new Keyed<RoomUser>((u) => u.username);
   /** the room as last read or pushed: owner, operators, tickers */
   room = $state.raw<Schemas["Room"] | null>(null);
-  /** why the last read failed, empty when it didn't */
+  /** why the last read failed, empty when it didn't or a push brought the whole room since */
   error = $state("");
   /** what happened to the members since the pane opened, folded into bursts, oldest first */
   bursts = $state<Burst[]>([]);
@@ -47,6 +47,7 @@ export class RoomMembers {
       live.on("rooms.update", (room) => {
         if (room.name !== this.name) return;
         this.#pushes += 1;
+        this.error = "";
         this.#take(room, true);
       })
     );
@@ -86,12 +87,13 @@ export class RoomMembers {
     const outcome = await call(() =>
       api.GET("/api/v0/rooms/joined/{roomName}", { params: byRoom(this.name) })
     );
-    if (this.#pushes !== pushes) return void this.users.abandon(turn);
+    // a later read, or a push of the whole room, is newer than this answer
+    if (this.#pushes !== pushes || !this.users.latest(turn)) return void this.users.abandon(turn);
     if (!outcome.ok) {
-      if (this.users.abandon(turn)) this.error = outcome.error;
+      this.users.abandon(turn);
+      this.error = outcome.error;
       return;
     }
-    if (!this.users.latest(turn)) return;
     this.error = "";
     this.#take(outcome.data, false, turn);
   };

@@ -22,17 +22,23 @@ describe("a room's members", () => {
 
   it("keep the room a push brought while a read from before it was on its way", async () => {
     let answer: ((room: unknown) => void) | undefined;
-    const net = fakeNetwork((url) =>
-      url.pathname.endsWith("/rooms/joined/jazz")
-        ? new Promise((resolve) => (answer = resolve))
-        : undefined
-    );
+    let reads = 0;
+    const net = fakeNetwork((url) => {
+      if (!url.pathname.endsWith("/rooms/joined/jazz")) return undefined;
+      reads += 1;
+      if (reads === 1) return { status: 503, body: { error: "the daemon is restarting" } };
+      return new Promise((resolve) => (answer = resolve));
+    });
     live.start();
     net.frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
     const members = new RoomMembers("jazz");
     const stop = $effect.root(() => members.follow());
     flushSync();
 
+    await members.load();
+    expect(members.error).toBe("the daemon is restarting");
+
+    // Retry
     const reading = members.load();
     await vi.waitFor(() => expect(answer).toBeDefined());
     net.frame("rooms.update", jazz("new"));
@@ -43,6 +49,7 @@ describe("a room's members", () => {
 
     expect(members.wall.map((l) => l.ticker)).toEqual(["new"]);
     expect(members.room?.tickers[0].ticker).toBe("new");
+    expect(members.error).toBe("");
     stop();
   });
 });
