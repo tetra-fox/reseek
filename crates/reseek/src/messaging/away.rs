@@ -89,30 +89,33 @@ impl Messaging {
       })
       .await
       .map_err(ApiError::internal)?;
-    self.change_status(away.then_some(Away::ByHand), by).await;
-    self.status.set_by_hand.notify_one();
+    // a set that changes nothing, as a script setting us online again, does not restart the wait
+    if self.change_status(away.then_some(Away::ByHand), by).await {
+      self.status.set_by_hand.notify_one();
+    }
     Ok(())
   }
 
-  /// Makes `next` our status, for `by`: who asked, or what changed it.
-  async fn change_status(&self, next: Option<Away>, by: &str) {
-    self.change_status_if(|_| true, next, by).await;
+  /// Makes `next` our status, for `by`: who asked, or what changed it; whether we went from
+  /// online to away or back.
+  async fn change_status(&self, next: Option<Away>, by: &str) -> bool {
+    self.change_status_if(|_| true, next, by).await
   }
 
   /// Makes `next` our status, for `by`, when `when` holds for the status as it is, both read and
-  /// set in one hold of the lock. Going from online to away or back is shown in the state and
-  /// told to the server; coming back forgets who was answered.
+  /// set in one hold of the lock; whether we went from online to away or back. That change is
+  /// shown in the state and told to the server; coming back forgets who was answered.
   async fn change_status_if(
     &self,
     when: impl FnOnce(Option<Away>) -> bool,
     next: Option<Away>,
     by: &str,
-  ) {
+  ) -> bool {
     let changed = {
       let mut inner = lock(&self.status.inner);
       let was = inner.away;
       if !when(was) {
-        return;
+        return false;
       }
       inner.away = next;
       if next.is_none() {
@@ -121,7 +124,7 @@ impl Messaging {
       was.is_some() != next.is_some()
     };
     if !changed {
-      return;
+      return false;
     }
     let status = if next.is_some() {
       OwnStatus::Away
@@ -131,6 +134,7 @@ impl Messaging {
     info!(?status, by, "our status changed");
     self.state.update(|state| state.user.status = status);
     self.tell_status().await;
+    true
   }
 
   /// Tells the server whether we are away, while logged in, and shows us so in the rooms. The
@@ -235,10 +239,10 @@ impl Messaging {
         () = self.status.set_by_hand.notified() => deadline = arm(people, after),
         () = sleep_until(deadline.unwrap_or_else(Instant::now)), if deadline.is_some() => {
           deadline = None;
-          debug!(after = ?after, "nobody has had the UI open");
-          self
+          let went = self
             .change_status_if(|away| away.is_none(), Some(Away::Idle), IDLE)
             .await;
+          debug!(after = ?after, went_away = went, "nobody has had the UI open");
         }
       }
     }
@@ -414,5 +418,24 @@ mod tests {
     set(&app, "Online").await;
     shown(&mut script, "Online").await;
     shown(&mut script, "Away").await;
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_script_setting_us_online_again_and_again_does_not_hold_off_away() {
+    let (app, mut script) = watched().await;
+    shown(&mut script, "Away").await;
+    let someone = person(&app).await;
+    shown(&mut script, "Online").await;
+    drop(someone);
+    let again = async {
+      loop {
+        set(&app, "Online").await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+      }
+    };
+    tokio::select! {
+      () = shown(&mut script, "Away") => {}
+      () = again => unreachable!("setting goes on until away"),
+    }
   }
 }
