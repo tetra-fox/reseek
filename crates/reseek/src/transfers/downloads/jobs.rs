@@ -21,7 +21,9 @@ use crate::transfers::listing::remote_directory;
 use crate::transfers::{Record, text_at};
 
 /// The jobs whose files are still being enqueued: none of them is over, whatever its
-/// downloads do. Read and changed only inside writes of `transfers.db`.
+/// downloads do. A job is opened before any download of it runs, as none exists yet or, on a
+/// resume, every one has ended, so no write ending one can come before it; it is closed and
+/// read only inside writes of `transfers.db`, whose one writer orders them.
 pub(super) type Open = Arc<Mutex<HashSet<Uuid>>>;
 
 /// Whether the download `id` has a row that is not finished, read before a write ends it.

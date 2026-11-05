@@ -283,3 +283,52 @@ async fn a_job_is_told_once_by_the_cancel_that_ends_its_last_download() {
     [3, 1, 2]
   );
 }
+
+#[tokio::test]
+async fn a_download_removed_by_its_cancel_is_left_out_of_the_job_it_ends() {
+  let app = app(TRUSTED, &[]).await;
+  let job = Uuid::new_v4();
+  let kept = Record {
+    job_id: Some(job),
+    ..done("alice", "@@a\\Album\\1.flac")
+  };
+  let stuck = Record {
+    job_id: Some(job),
+    ..Record::download("alice", "@@a\\Album\\2.flac", 10, None)
+  };
+  insert(&app, &kept).await;
+  insert(&app, &stuck).await;
+  let mut stream = app
+    .stream_from(
+      "127.0.0.1:1",
+      request("GET", "/api/v0/live?topics=transfers", None),
+    )
+    .await;
+  assert_eq!(stream.next().await.unwrap().event, "hello");
+  let uri = format!("/api/v0/transfers/downloads/alice/{}?remove=true", stuck.id);
+  let (status, _) = app.call("DELETE", &uri, None).await;
+  assert_eq!(status, 204);
+  let mut frames = Vec::new();
+  for _ in 0..3 {
+    frames.push(stream.next().await.unwrap());
+  }
+  let events: Vec<&str> = frames.iter().map(|f| f.event.as_str()).collect();
+  assert_eq!(
+    events,
+    [
+      "transfers.updated",
+      "transfers.removed",
+      "transfers.job_finished"
+    ]
+  );
+  let told = &frames[2].data;
+  assert_eq!(
+    [
+      &told["fileCount"],
+      &told["succeededCount"],
+      &told["canceledCount"]
+    ],
+    [1, 1, 0],
+    "the removed download is not counted"
+  );
+}

@@ -247,45 +247,53 @@ impl Downloads {
     if self.cancel_running(id, remove, None) {
       return Ok(());
     }
-    if !record.is_completed() {
-      // a record no task runs any more, left behind by a failure; a task that ended it since
-      // it was read keeps how it ended
-      let canceled = TransferStates::Completed | TransferStates::Cancelled;
-      let at = Utc::now();
-      record.state = canceled;
-      record.ended_at = Some(at);
-      record.exception = Some(CANCELED.to_string());
-      record.next_attempt_at = None;
-      record.place_in_queue = None;
-      let written = record.clone();
-      let open = self.open_jobs.clone();
-      let (ended, finished) = self
-        .db
-        .write(move |conn| {
-          let tx = conn.transaction()?;
-          let ended = store::end_unless_ended(&tx, id, canceled, at, CANCELED)?;
-          let finished = if ended {
-            store::entered(&tx, id, canceled, at)?;
-            jobs::ended_by(&tx, &written, true, &open)?
-          } else {
-            None
-          };
-          tx.commit()?;
-          Ok((ended, finished))
-        })
-        .await
-        .map_err(ApiError::internal)?;
-      if ended {
-        info!(%id, username, "download without a running task ended as canceled");
-        self.push(&record);
-        self.tell(finished);
-      }
+    // a record no task runs any more, left behind by a failure, is ended canceled here; a task
+    // that ended it since it was read keeps how it ended. The removal is in the same write, so
+    // a removed download is left out of its job when that write ends the job
+    let canceled = TransferStates::Completed | TransferStates::Cancelled;
+    let at = Utc::now();
+    let unfinished = !record.is_completed();
+    if !unfinished && !remove {
+      return Ok(());
     }
-    if remove {
-      removal::remove(&self.db, &self.live, TransferDirection::Download, id)
-        .await
-        .map_err(ApiError::internal)?;
+    record.state = canceled;
+    record.ended_at = Some(at);
+    record.exception = Some(CANCELED.to_string());
+    record.next_attempt_at = None;
+    record.place_in_queue = None;
+    let written = record.clone();
+    let open = self.open_jobs.clone();
+    let (ended, removed, finished) = self
+      .db
+      .write(move |conn| {
+        let tx = conn.transaction()?;
+        let ended = unfinished && store::end_unless_ended(&tx, id, canceled, at, CANCELED)?;
+        if ended {
+          store::entered(&tx, id, canceled, at)?;
+        }
+        let removed = if remove {
+          removal::remove_one(&tx, TransferDirection::Download, id)?
+        } else {
+          None
+        };
+        let finished = if ended {
+          jobs::ended_by(&tx, &written, true, &open)?
+        } else {
+          None
+        };
+        tx.commit()?;
+        Ok((ended, removed, finished))
+      })
+      .await
+      .map_err(ApiError::internal)?;
+    if ended {
+      info!(%id, username, "download without a running task ended as canceled");
+      self.push(&record);
     }
+    if let Some(peer) = removed {
+      removal::push(&self.live, TransferDirection::Download, &[(id, peer)]);
+    }
+    self.tell(finished);
     Ok(())
   }
 
