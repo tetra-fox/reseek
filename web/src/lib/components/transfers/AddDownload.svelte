@@ -4,7 +4,7 @@
   import Input from "#lib/components/ui/Input.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { enqueue } from "#lib/files/downloads.js";
+  import { enqueueJob } from "#lib/files/downloads.js";
   import { parsePaste } from "#lib/transfers/add.js";
 
   // a download by hand: a user and a path, or links and search results pasted in
@@ -26,15 +26,12 @@
 
   const submit = async () => {
     busy = true;
-    const lines: string[] = [];
-    let failed = false;
-    for (const [user, files] of wanted) {
-      const result = await enqueue({ username: user, files });
-      failed ||= result.kind !== "done";
-      lines.push(`${user}: ${result.text}`);
-    }
+    const result = await enqueueJob(
+      [...wanted].map(([user, files]) => ({ username: user, files }))
+    );
     busy = false;
-    toast(lines.join("; "), failed ? "error" : "info");
+    const failed = result.kind !== "done";
+    toast(result.text, failed ? "error" : "info");
     if (!failed) {
       username = "";
       path = "";

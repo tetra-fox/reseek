@@ -13,7 +13,7 @@
   import Username from "#lib/components/users/Username.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import type { FileColumn } from "#lib/files/columns.js";
-  import { asItem, type Enqueued, enqueue, followDownloads } from "#lib/files/downloads.js";
+  import { asItem, type Enqueued, enqueueJob, followDownloads } from "#lib/files/downloads.js";
   import { formatBytes, formatSpeed, getFileName, plural } from "#lib/format.js";
   import { inspector } from "#lib/inspector/inspector.svelte.js";
   import { Arrivals } from "#lib/lists/arrivals.svelte.js";
@@ -84,28 +84,21 @@
     }
   });
 
-  /** Enqueues rows, one batch per user, and says what came of it */
-  const download = async (list: DenseRow[]): Promise<Enqueued> => {
+  /** Enqueues rows as one job, one batch per user, and says what came of it */
+  const download = (list: DenseRow[]): Promise<Enqueued> => {
     const byUser = new Map<string, DenseRow[]>();
     for (const r of list) {
       const mine = byUser.get(r.username);
       if (mine) mine.push(r);
       else byUser.set(r.username, [r]);
     }
-    const failed: string[] = [];
-    let queued = 0;
-    for (const [username, mine] of byUser) {
-      const result = await enqueue({
+    return enqueueJob(
+      [...byUser].map(([username, mine]) => ({
         username,
         files: mine.map((r) => asItem(r.file)),
         searchId
-      });
-      if (result.kind === "done") queued += mine.length;
-      else failed.push(`${username}: ${result.text}`);
-    }
-    const text = `${plural(queued, "file", "files")} queued`;
-    if (!failed.length) return { kind: "done", text };
-    return { kind: queued ? "partial" : "none", text: `${text}. Failed: ${failed.join("; ")}` };
+      }))
+    );
   };
   /** Downloads rows and says what came of it in a toast */
   const downloadNow = async (list: DenseRow[]) => {

@@ -31,6 +31,7 @@
     downloadPlan,
     type Enqueued,
     enqueue,
+    enqueueJob,
     followDownloads
   } from "#lib/files/downloads.js";
   import { FILTER_PLACEHOLDER } from "#lib/files/filters.js";
@@ -226,23 +227,17 @@
     ancestors(at, browser.tree, browser.separator)[0] ?? getFileName(at);
 
   /**
-   * Downloads files: each top folder's as batches that keep their folders below the deepest one
-   * holding them. The first answer that is not a full success stops the rest
+   * Downloads files as one job: each top folder's as batches that keep their folders below the
+   * deepest one holding them
    */
-  const download = async (list: RemoteFile[]): Promise<Enqueued> => {
-    // the user the files are from, whoever is browsed by the time a later batch goes
-    const username = browser.username;
-    let last: Enqueued = { kind: "done", text: "" };
-    for (const group of downloadPlan(list, topOf, browser.separator)) {
-      last = await enqueue({
-        username,
+  const download = (list: RemoteFile[]): Promise<Enqueued> =>
+    enqueueJob(
+      downloadPlan(list, topOf, browser.separator).map((group) => ({
+        username: browser.username,
         files: group.files.map((f) => asItem(f)),
         destination: group.destination ?? undefined
-      });
-      if (last.kind !== "done") break;
-    }
-    return last;
-  };
+      }))
+    );
 
   /** Every file under a folder, filtered or not, as one batch in a folder named like it */
   const downloadFolder = async (node: FolderNode<RemoteFile>) => {

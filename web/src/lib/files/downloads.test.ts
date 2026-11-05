@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
+import { fakeNetwork } from "#lib/testing/network.js";
 
-import { downloadPlan } from "./downloads";
+import { downloadPlan, enqueueJob } from "./downloads";
 
 const file = (filename: string, size = 10): Schemas["File"] => ({
   filename,
@@ -52,5 +53,43 @@ describe("downloading a selection", () => {
       ["A/CD2", ["@@a\\Music\\A\\CD2\\2.flac"]],
       [null, ["@@a\\Video\\x.mkv"]]
     ]);
+  });
+});
+
+describe("enqueueing a job", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** Enqueues a job whose batches the daemon answers with `answers`, in order */
+  const outcome = (answers: Omit<Schemas["EnqueuedJobBatch"], "username" | "batchId">[]) => {
+    fakeNetwork(() => ({
+      id: "j",
+      batches: answers.map((a) => ({ username: "", batchId: a.error ? null : "b", ...a }))
+    }));
+    return enqueueJob(
+      answers.map((_, i) => ({
+        username: `user${i}`,
+        files: [
+          { filename: `${i}\\a.flac`, size: 1 },
+          { filename: `${i}\\b.flac`, size: 1 }
+        ]
+      }))
+    );
+  };
+  const offline = { failures: [], error: { error: "User x appears to be offline" } };
+
+  it("counts a batch refused whole as every one of its files not queued", async () => {
+    const refusedOne = { message: "Skipped: Already in progress", filename: "1\\a.flac" };
+    expect(await outcome([offline, { failures: [refusedOne], error: null }])).toEqual({
+      kind: "partial",
+      text: "Queued 1 of 4 files. Could not queue User x appears to be offline; 1\\a.flac: Skipped: Already in progress"
+    });
+    expect(await outcome([offline, offline])).toEqual({
+      kind: "failed",
+      text: "User x appears to be offline"
+    });
+    expect(await outcome([{ failures: [], error: null }])).toEqual({
+      kind: "done",
+      text: "2 files queued"
+    });
   });
 });

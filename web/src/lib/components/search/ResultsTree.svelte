@@ -29,7 +29,7 @@
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { fileColumns, fileTemplate, fileWidth } from "#lib/files/columns.js";
-  import { asItem, type Enqueued, enqueue, followDownloads } from "#lib/files/downloads.js";
+  import { asItem, type Enqueued, enqueueJob, followDownloads } from "#lib/files/downloads.js";
   import { folderLinks } from "#lib/files/links.js";
   import { fetchFolder } from "#lib/files/remote.js";
   import { slskLink } from "#lib/files/slsk.js";
@@ -143,8 +143,8 @@
     ontick: (yes: boolean) => tick(node, yes)
   });
 
-  /** Downloads files, one batch per user, and says what came of it */
-  const download = async (files: Item[]): Promise<Enqueued> => {
+  /** Downloads files as one job, one batch per user, and says what came of it */
+  const download = (files: Item[]): Promise<Enqueued> => {
     const byUser = new Map<string, Item[]>();
     for (const f of files) {
       if (f.locked) continue;
@@ -152,12 +152,13 @@
       if (listed) listed.push(f);
       else byUser.set(f.owner, [f]);
     }
-    let last: Enqueued = { kind: "done", text: "" };
-    for (const [username, mine] of byUser) {
-      last = await enqueue({ username, files: mine.map((f) => asItem(f)), searchId });
-      if (last.kind !== "done") break;
-    }
-    return last;
+    return enqueueJob(
+      [...byUser].map(([username, mine]) => ({
+        username,
+        files: mine.map((f) => asItem(f)),
+        searchId
+      }))
+    );
   };
   const downloadNow = async (files: Item[]) => {
     const outcome = await download(files);

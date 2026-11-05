@@ -15,6 +15,7 @@ export type Enqueued =
   | { kind: "done"; text: string }
   | { kind: "partial" | "none" | "failed"; text: string };
 
+/** Files from one user to download together, which go into one batch */
 type Request = {
   username: string;
   files: EnqueueItem[];
@@ -50,53 +51,60 @@ export const followDownloads = () => {
 };
 
 /**
- * Enqueues files from one user as one batch. The batch exists even when files were refused, so
- * the outcome is read from its failures: none, some or every file
+ * Enqueues everything picked in one go as one job, a batch per request, which the daemon tells
+ * of once when all of it has finished. A batch is made even when some of its files were refused,
+ * so the outcome is read from the failures and from the batches refused whole
  */
-export const enqueue = async ({
-  username,
-  files,
-  searchId,
-  destination
-}: Request): Promise<Enqueued> => {
-  const keys = files.map((f) => fileKey(username, f.filename));
+export const enqueueJob = async (requests: Request[]): Promise<Enqueued> => {
+  const keys = requests.flatMap(({ username, files }) =>
+    files.map((f) => fileKey(username, f.filename))
+  );
   for (const key of keys) starting.add(key);
   const outcome = await call(() =>
-    api.POST("/api/v0/transfers/downloads/batches", {
+    api.POST("/api/v0/transfers/downloads/jobs", {
       body: {
-        username,
-        files,
-        searchId: searchId ?? null,
-        options: destination ? { destination } : undefined
+        batches: requests.map(({ username, files, searchId, destination }) => ({
+          username,
+          files,
+          searchId: searchId ?? null,
+          options: destination ? { destination } : undefined
+        }))
       }
     })
   );
-  const refused = new Set(
-    outcome.ok ? outcome.data.failures.map((f) => fileKey(username, f.filename)) : keys
-  );
+  const answers = outcome.ok ? outcome.data.batches : [];
+  const refused = new Set<string>();
+  const why: string[] = [];
+  requests.forEach(({ username, files }, i) => {
+    const answer = answers[i];
+    if (!answer || answer.error) {
+      for (const f of files) refused.add(fileKey(username, f.filename));
+      if (answer?.error) why.push(answer.error.error);
+      return;
+    }
+    for (const f of answer.failures) {
+      refused.add(fileKey(username, f.filename));
+      why.push(`${f.filename}: ${f.message}`);
+    }
+  });
   for (const key of keys) {
     if (refused.has(key)) starting.delete(key);
     else setTimeout(() => starting.delete(key), STARTING_MS);
   }
-  if (!outcome.ok) {
-    const text = outcome.status === 404 ? `${username} appears to be offline` : outcome.error;
-    return { kind: "failed", text };
-  }
-  const { failures } = outcome.data;
-  const why = failures.map((f) => `${f.filename}: ${f.message}`).join("; ");
-  if (failures.length === 0) {
-    return {
-      kind: "done",
-      text: `${plural(files.length, "file", "files")} queued`
-    };
-  }
-  if (failures.length >= files.length)
-    return { kind: "none", text: `Could not queue any files: ${why}` };
+  if (!outcome.ok) return { kind: "failed", text: outcome.error };
+  const total = keys.length;
+  const reasons = [...new Set(why)].join("; ");
+  if (answers.every((a) => a.error)) return { kind: "failed", text: reasons };
+  if (refused.size === 0) return { kind: "done", text: `${plural(total, "file", "files")} queued` };
+  if (refused.size >= total) return { kind: "none", text: `Could not queue any files: ${reasons}` };
   return {
     kind: "partial",
-    text: `Queued ${files.length - failures.length} of ${plural(files.length, "file", "files")}. Could not queue ${why}`
+    text: `Queued ${total - refused.size} of ${plural(total, "file", "files")}. Could not queue ${reasons}`
   };
 };
+
+/** Enqueues files from one user as a job of one batch */
+export const enqueue = (request: Request): Promise<Enqueued> => enqueueJob([request]);
 
 /** The attributes of a file in a listing, as an enqueue keeps them to show with the download */
 export const asItem = (file: Schemas["File"], filename = file.filename): EnqueueItem => ({
