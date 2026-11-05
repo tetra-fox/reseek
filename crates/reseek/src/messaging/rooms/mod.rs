@@ -158,6 +158,14 @@ impl Messaging {
       return Err(ClientError::Canceled);
     };
     self.rooms_changed();
+    // the server's list taken before we created a private room does not list it as ours
+    if data
+      .private
+      .as_ref()
+      .is_some_and(|private| private.owner == us)
+    {
+      self.forget_room_list().await;
+    }
     let countries = data
       .users
       .iter()
@@ -178,6 +186,12 @@ impl Messaging {
       .publish(LiveFrame::RoomsUpdate(Box::new(room.clone())));
     self.push_rooms().await;
     Ok(room)
+  }
+
+  /// Forgets the server's room list after a change to our rooms it predates, so the next look
+  /// at it asks the server.
+  async fn forget_room_list(&self) {
+    *self.rooms.available.lock().await = None;
   }
 
   /// Pushes the rooms we are in.

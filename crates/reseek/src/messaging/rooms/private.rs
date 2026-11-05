@@ -127,11 +127,12 @@ impl Messaging {
     Ok(())
   }
 
-  /// We no longer belong to the private room `room`, so we are not in it and it is not joined
-  /// again after a start.
+  /// We no longer belong to the private room `room`, so we are not in it, it is not joined
+  /// again after a start, and the server's room list is asked for anew.
   pub(super) async fn dropped(&self, room: &str) {
     self.rooms.tracker().drop_private(room);
     self.rooms_changed();
+    self.forget_room_list().await;
     self.note_left(room).await;
     self.push_rooms().await;
   }
