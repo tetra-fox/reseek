@@ -194,6 +194,22 @@ describe("editability", () => {
     expect(editability(v, "web.port")).toMatchObject({ mode: "locked" });
   });
 
+  it("says on a page that keeps a change until removed how it is kept, without Copy as Nix", () => {
+    const v = copy();
+    v.files[0].writable = false;
+    v.files[0].readOnlyReason = "permission denied";
+    expect(editability(v, "soulseek.description", "page")).toEqual({
+      mode: "runtime",
+      notice:
+        "config.toml is not writable (permission denied). A change here is kept as a runtime override until removed."
+    });
+    v.managedBy = "nixos";
+    expect(editability(v, "soulseek.description", "page").notice).toBe(
+      "Managed by nixos. A change here is kept as a runtime override until removed."
+    );
+    expect(editability(v, "web.port", "page")).toEqual(editability(v, "web.port"));
+  });
+
   it("names why a file can't be written", () => {
     const v = copy();
     v.files[0].writable = false;

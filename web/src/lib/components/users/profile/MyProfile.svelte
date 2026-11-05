@@ -42,12 +42,24 @@
   const profile = $derived(ownProfile.data);
   const name = $derived(app.state?.user.username ?? session.principal?.name ?? "");
   const remote = $derived(valueAt(view.data?.values, "remote_configuration") === true);
-  const textEdit = $derived(view.data ? editability(view.data, "soulseek.description") : null);
-  const pictureEdit = $derived(view.data ? editability(view.data, "soulseek.picture") : null);
+  const textEdit = $derived(
+    view.data ? editability(view.data, "soulseek.description", "page") : null
+  );
+  const pictureEdit = $derived(
+    view.data ? editability(view.data, "soulseek.picture", "page") : null
+  );
   const canText = $derived(admin && remote && !!textEdit && textEdit.mode !== "locked");
   const canPicture = $derived(admin && remote && !!pictureEdit && pictureEdit.mode !== "locked");
-  const passwordEdit = $derived(view.data ? editability(view.data, "soulseek.password") : null);
+  const passwordEdit = $derived(
+    view.data ? editability(view.data, "soulseek.password", "page") : null
+  );
   const canPassword = $derived(admin && remote && !!passwordEdit && passwordEdit.mode !== "locked");
+  // the server takes a new password at once, so the one in the configuration stops working
+  const passwordNotice = $derived(
+    passwordEdit?.mode === "runtime"
+      ? `${passwordEdit.notice} Add the new password to the configuration as well.`
+      : (passwordEdit?.notice ?? null)
+  );
 
   let text = $state("");
   /** the text as saved, which the draft is compared with */
@@ -249,7 +261,7 @@
         <InterestsEditor {interests} disabled={!admin} />
       </Card>
 
-      <AccountCard {name} allowed={canPassword} notice={passwordEdit?.notice ?? null} />
+      <AccountCard {name} allowed={canPassword} notice={passwordNotice} />
     </div>
   </div>
 {/if}

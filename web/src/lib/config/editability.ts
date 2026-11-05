@@ -23,7 +23,17 @@ export const managerOf = (view: ConfigView, key: string): string | null => {
   return view.managedBy ?? (file?.path.startsWith("/nix/store/") ? "nix" : null);
 };
 
-export const editability = (view: ConfigView, key: string): Editability => {
+/**
+ * Where a change is made: the settings page, which asks how long a value applied at runtime
+ * lasts and offers Copy as Nix, or a page that keeps it until removed and offers neither
+ */
+export type ChangedFrom = "settings" | "page";
+
+export const editability = (
+  view: ConfigView,
+  key: string,
+  from: ChangedFrom = "settings"
+): Editability => {
   const field = view.fields[key];
   if (!field)
     return { mode: "locked", notice: "This option is not recognized by this version of reseek" };
@@ -47,12 +57,20 @@ export const editability = (view: ConfigView, key: string): Editability => {
     };
   }
   const runtime = apply === "live" || apply === "reconnect";
+  const manager = managerOf(view, key);
+  const why = file?.readOnlyReason ?? "read-only";
+  if (runtime && from === "page") {
+    const unsaved = manager ? `Managed by ${manager}.` : `${name} is not writable (${why}).`;
+    return {
+      mode: "runtime",
+      notice: `${unsaved} A change here is kept as a runtime override until removed.`
+    };
+  }
   // a value applied here lasts as long as the choice made when applying it
   const applied =
     source.layer === "runtime"
       ? `The value applied here lasts ${lasting(source)}.`
       : "Changes made here apply immediately and last until restart or until removed, as chosen when applying.";
-  const manager = managerOf(view, key);
   if (manager) {
     return runtime
       ? {
@@ -64,7 +82,6 @@ export const editability = (view: ConfigView, key: string): Editability => {
           notice: `Set by ${manager}. Requires a restart. Use Copy as Nix and add the result to the configuration.`
         };
   }
-  const why = file?.readOnlyReason ?? "read-only";
   return runtime
     ? {
         mode: "runtime",
