@@ -24,6 +24,7 @@ let
   ];
   environmentFiles = lib.optional (cfg.environmentFile != null) cfg.environmentFile;
   inherit (import ./module-lib.nix { inherit lib; })
+    dropInName
     refusesDefaultLogin
     refusedDefaultLogin
     uncheckedDefaultLogin
@@ -99,7 +100,7 @@ in
     // lib.listToAttrs (
       lib.imap1 (
         index: file:
-        lib.nameValuePair "reseek/config.d/${lib.fixedWidthNumber 2 index}-${baseNameOf (toString file)}" {
+        lib.nameValuePair "reseek/config.d/${lib.fixedWidthNumber 2 index}-${dropInName file}" {
           source = file;
         }
       ) cfg.extraConfigFiles
