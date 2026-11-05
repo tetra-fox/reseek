@@ -5,6 +5,7 @@
   import Rows3Icon from "@lucide/svelte/icons/rows-3";
 
   import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
+  import * as Filter from "#lib/components/ui/filter/filter.js";
   import Input from "#lib/components/ui/Input.svelte";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import Select from "#lib/components/ui/Select.svelte";
@@ -12,7 +13,9 @@
   import Switch from "#lib/components/ui/Switch.svelte";
   import { FILTER_PLACEHOLDER } from "#lib/files/filters.js";
   import { plural } from "#lib/format.js";
-  import { LONG_QUEUE, type ResultSort, searchOptions } from "#lib/settings.svelte.js";
+  import { type ActiveFilter, TEXT_FILTER } from "#lib/lists/filtered.js";
+  import { HIDING } from "#lib/search/results.js";
+  import { type ResultSort, searchOptions } from "#lib/settings.svelte.js";
 
   import FilterHelp from "./FilterHelp.svelte";
   import FilterPresets from "./FilterPresets.svelte";
@@ -21,6 +24,8 @@
     filter: string;
     /** what the filter and toggles leave, out of everything that came */
     counts: { files: number; users: number; allFiles: number; allUsers: number };
+    /** the filters on, the Hide chips' and the text's */
+    filters: ActiveFilter[];
     /** results are still coming */
     running: boolean;
     /** the results are all in, so sorting them moves nothing under the reader */
@@ -35,6 +40,7 @@
   let {
     filter = $bindable(),
     counts,
+    filters,
     running,
     sortable,
     blockedCount,
@@ -46,6 +52,9 @@
     { value: "uploadSpeed", label: "Fastest upload speed" },
     { value: "queueLength", label: "Shortest queue" }
   ];
+
+  /** the filters behind the phone's Filters button: the chips', not the text box's */
+  const toggles = $derived(filters.filter((f) => f.id !== TEXT_FILTER));
 
   const VIEWS = [
     { id: "cards", label: "Tree", icon: FolderTreeIcon },
@@ -71,7 +80,8 @@
     <p class="ml-auto flex items-center gap-1.5 text-sm text-fg-muted tabular-nums" role="status">
       {#if running}<Spinner class="size-3.5" />{/if}
       {plural(counts.files, "file", "files")} from {plural(counts.users, "user", "users")}
-      {#if counts.users !== counts.allUsers}
+      <!-- with a filter on, the line of filters under the toolbar counts what it leaves -->
+      {#if counts.users !== counts.allUsers && !filters.length}
         <span class="text-fg-subtle">
           (of {counts.allFiles.toLocaleString()} from {counts.allUsers.toLocaleString()})
         </span>
@@ -79,18 +89,16 @@
     </p>
   </div>
   <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-    <label class="flex items-center gap-2">
-      <Switch bind:checked={searchOptions.hideLocked} />Hide locked files
-    </label>
-    <label class="flex items-center gap-2">
-      <Switch bind:checked={searchOptions.hideNoFreeSlots} />Hide users with no free slot
-    </label>
-    <label class="flex items-center gap-2" title="Users who were offline when last seen">
-      <Switch bind:checked={searchOptions.hideOffline} />Hide offline users
-    </label>
-    <label class="flex items-center gap-2">
-      <Switch bind:checked={searchOptions.hideLongQueues} />Hide queues longer than {LONG_QUEUE}
-    </label>
+    <Filter.Panel filters={toggles}>
+      <Filter.Group label="Hide">
+        {#each HIDING as h (h.key)}
+          <Filter.Chip
+            pressed={searchOptions[h.key]}
+            title={h.key === "hideOffline" ? "Users who were offline when last seen" : undefined}
+            onclick={() => (searchOptions[h.key] = !searchOptions[h.key])}>{h.chip}</Filter.Chip>
+        {/each}
+      </Filter.Group>
+    </Filter.Panel>
     {#if searchOptions.view === "cards"}
       <label class="flex items-center gap-2">
         <Switch bind:checked={searchOptions.fold} onCheckedChange={(fold) => onfold(fold)} />Fold
@@ -110,7 +118,7 @@
       icon={FilterIcon}
       aria-label="Filter"
       placeholder={FILTER_PLACEHOLDER}
-      class="font-mono text-xs md:text-xs" />
+      class={["font-mono text-xs md:text-xs", filter.trim() && Filter.FILTERING]} />
     <FilterHelp />
   </div>
   <FilterPresets bind:filter />

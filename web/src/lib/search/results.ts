@@ -1,6 +1,6 @@
 import type { Schemas } from "#lib/api/client.js";
 import { filterResponse, type Filters } from "#lib/files/filters.js";
-import type { ResultSort } from "#lib/settings.svelte.js";
+import { LONG_QUEUE, type ResultSort } from "#lib/settings.svelte.js";
 
 export type SearchResponse = Schemas["SearchResponse"];
 export type SearchFile = Schemas["File"];
@@ -22,6 +22,21 @@ export class ResultKeys {
     return { key: `${n}:${response.username}`, response };
   }
 }
+
+/**
+ * The toggles that hide results, each with its chip's name beside the others under "Hide", and
+ * its name alone in the line of filters on
+ */
+export const HIDING = [
+  { key: "hideLocked", chip: "Locked files", label: "Locked files hidden" },
+  { key: "hideNoFreeSlots", chip: "No free slot", label: "Users with no free slot hidden" },
+  { key: "hideOffline", chip: "Offline users", label: "Offline users hidden" },
+  {
+    key: "hideLongQueues",
+    chip: `Queues over ${LONG_QUEUE}`,
+    label: `Queues over ${LONG_QUEUE} hidden`
+  }
+] as const;
 
 export type ResultOptions = {
   /** users whose cards were dismissed, and users who are blocked unless shown */

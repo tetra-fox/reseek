@@ -6,6 +6,7 @@
   import { app } from "#lib/app.svelte.js";
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
+  import { FILTERING } from "#lib/components/ui/filter/filter.js";
   import Input from "#lib/components/ui/Input.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -91,7 +92,7 @@
     <span
       class={[
         "group flex items-center rounded-full border text-xs",
-        on ? "border-accent bg-accent-soft text-accent-soft-fg" : "text-fg-muted"
+        on ? FILTERING : "text-fg-muted"
       ]}>
       <button
         type="button"

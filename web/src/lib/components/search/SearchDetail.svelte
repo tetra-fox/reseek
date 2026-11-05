@@ -6,7 +6,7 @@
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import SearchXIcon from "@lucide/svelte/icons/search-x";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
   import { app } from "#lib/app.svelte.js";
@@ -15,6 +15,7 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import * as Filter from "#lib/components/ui/filter/filter.js";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
@@ -23,13 +24,14 @@
   import { parseFilters } from "#lib/files/filters.js";
   import { plural } from "#lib/format.js";
   import { useInspector } from "#lib/inspector/inspector.svelte.js";
+  import { type ActiveFilter, clearAll, typedFilter } from "#lib/lists/filtered.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { live } from "#lib/live/live.svelte.js";
   import { href } from "#lib/nav.js";
   import { denseRows } from "#lib/search/dense.js";
   import type { Picked } from "#lib/search/facts.js";
   import { recent, togglePin } from "#lib/search/recent.svelte.js";
-  import { pipeline } from "#lib/search/results.js";
+  import { HIDING, pipeline } from "#lib/search/results.js";
   import { Results } from "#lib/search/results.svelte.js";
   import { openSearch, scopeLabel, searches } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
@@ -151,14 +153,24 @@
     results.results.length - dismissedCount - fromBlocked - view.length
   );
 
-  /** Empties the filter and turns off every toggle that hides results */
-  const clearFilters = () => {
-    typed = "";
-    filterText = "";
-    searchOptions.hideLocked = false;
-    searchOptions.hideNoFreeSlots = false;
-    searchOptions.hideOffline = false;
-    searchOptions.hideLongQueues = false;
+  /** the toggles that hide results and the filter text, while on */
+  const filters = $derived<ActiveFilter[]>([
+    ...HIDING.filter((h) => searchOptions[h.key]).map((h) => ({
+      id: h.key,
+      label: h.label,
+      clear: () => (searchOptions[h.key] = false)
+    })),
+    ...typedFilter(filterText, () => {
+      typed = "";
+      filterText = "";
+    })
+  ]);
+  /** gives focus to the results once the filters are off */
+  const refocus = () => (dense ?? tree)?.focus();
+  const clearFilters = async () => {
+    clearAll(filters);
+    await tick();
+    refocus();
   };
   const rows = $derived(searchOptions.view === "dense" ? denseRows(view) : []);
   const counts = $derived({
@@ -224,7 +236,7 @@
     {#if filteredCount}
       <span
         >{plural(filteredCount, "result", "results")} hidden by filters
-        <Button variant="link" onclick={clearFilters}>Clear filters</Button></span>
+        <Button variant="link" onclick={() => void clearFilters()}>Clear filters</Button></span>
     {/if}
     {#if dismissedCount}
       <span
@@ -304,6 +316,7 @@
     <ResultsToolbar
       bind:filter={typed}
       {counts}
+      {filters}
       running={!complete}
       sortable={results.stored}
       blockedCount={blocked.size}
@@ -312,6 +325,12 @@
         usersOpen = !fold;
         expansion.forget((key) => key.startsWith("user:"));
       }} />
+    <Filter.Summary
+      {filters}
+      shown={counts.files}
+      total={counts.allFiles}
+      noun={["file", "files"]}
+      {refocus} />
 
     {#if searchOptions.view === "dense"}
       {#if rows.length}
