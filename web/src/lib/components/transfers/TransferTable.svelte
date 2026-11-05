@@ -75,7 +75,7 @@
    */
   const slot = (depth: number) => (viewport.phone ? Math.min(depth, 1) : depth);
   const tree = $derived(treeOf(items));
-  const flat = $derived(view.groupBy === "flat" || view.groupBy === "batch");
+  const flat = $derived(view.groupBy === "flat" || view.groupBy === "job");
   const ids = (group: Group) => group.transfers.map((t) => t.id);
   const ticked = (group: Group) => group.transfers.filter((t) => selected.has(t.id)).length;
 

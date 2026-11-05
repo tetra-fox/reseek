@@ -1,6 +1,6 @@
 import type { Schemas } from "#lib/api/client.js";
 import { notifier, notifyOptions } from "#lib/chat/notify.svelte.js";
-import { getDirectoryName, getFileName, plural } from "#lib/format.js";
+import { fromWhom, getDirectoryName, getFileName, plural } from "#lib/format.js";
 import { live } from "#lib/live/live.svelte.js";
 import { href } from "#lib/nav.js";
 
@@ -8,12 +8,6 @@ import type { Transfer } from "./states";
 
 /** How long uploads queued by one user are gathered into one notification */
 export const QUEUED_GATHER_MS = 2_000;
-
-/** Who a job's files came from, in words */
-const fromWhom = (usernames: string[]) =>
-  usernames.length <= 2
-    ? usernames.join(" and ")
-    : `${usernames[0]} and ${usernames.length - 1} others`;
 
 /** A finished job's notification: its title and body */
 const jobNotice = (job: Schemas["DownloadJobFinished"]) => {

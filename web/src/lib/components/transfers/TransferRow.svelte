@@ -247,9 +247,8 @@
         : ""}
     {:else if column === "attempts"}
       {t.attempts}
-    {:else if column === "batch"}
-      {#if t.batchId}<span class="font-mono text-xs" title={t.batchId}>{t.batchId.slice(0, 8)}</span
-        >{/if}
+    {:else if column === "job"}
+      {#if t.jobId}<span class="font-mono text-xs" title={t.jobId}>{t.jobId.slice(0, 8)}</span>{/if}
     {:else if column === "group"}
       {user?.group.name ?? ""}
     {:else if column === "actions"}

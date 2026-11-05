@@ -143,7 +143,7 @@
     ontick: (yes: boolean) => tick(node, yes)
   });
 
-  /** Downloads files as one job, one batch per user, and says what came of it */
+  /** Downloads files as one job, one group per user, and says what came of it */
   const download = (files: Item[]): Promise<Enqueued> => {
     const byUser = new Map<string, Item[]>();
     for (const f of files) {

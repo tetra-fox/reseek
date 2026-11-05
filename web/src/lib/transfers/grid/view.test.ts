@@ -68,6 +68,30 @@ describe("the transfers view", () => {
     expect(layout([a, c], "flat", () => true).map((i) => i.key)).toEqual([a.id, c.id]);
   });
 
+  it("groups by what was queued together, named by its file, its folder or its users", () => {
+    const disc1 = transfer({ jobId: "j1", filename: "@@a\\Music\\Album\\CD1\\1.flac" });
+    const other = transfer({ jobId: "j2", filename: "@@a\\Music\\Single.flac" });
+    const disc2 = transfer({ jobId: "j1", filename: "@@a\\Music\\Album\\CD2\\1.flac" });
+    const top = transfer({ jobId: "j3", filename: "@@a\\1.flac" });
+    const second = transfer({ jobId: "j3", filename: "@@a\\2.flac" });
+    const mixed = transfer({ jobId: "j4", filename: "@@a\\Album\\1.flac" });
+    const bobs = transfer({ jobId: "j4", username: "bob", filename: "@@b\\Album\\2.flac" });
+    const old = transfer({ filename: "@@a\\old.flac" });
+    const groups = layout(
+      [disc1, other, disc2, top, second, mixed, bobs, old],
+      "job",
+      () => true
+    ).flatMap((i) => (i.type === "group" ? [i.group] : []));
+    expect(groups.map((g) => [g.key, g.label, g.transfers.map((t) => t.id)])).toEqual([
+      ["job:j1", "Album from alice", [disc1.id, disc2.id]],
+      ["job:j2", "Single.flac from alice", [other.id]],
+      ["job:j3", "Downloads from alice", [top.id, second.id]],
+      ["job:j4", "Downloads from alice and bob", [mixed.id, bobs.id]],
+      ["job:none", "Other downloads", [old.id]]
+    ]);
+    expect(groups[0].siblings).toHaveLength(5);
+  });
+
   it("gives a folder every transfer below it, and its siblings for Alt-click", () => {
     const a = transfer({ filename: "x\\A\\1.flac" });
     const b = transfer({ filename: "x\\B\\1.flac" });

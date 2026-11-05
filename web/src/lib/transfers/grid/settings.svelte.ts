@@ -15,7 +15,7 @@ export type ViewSettings = {
   filters: { states: ChipId[]; analysis: MarkFilter | null };
 };
 
-const GROUPINGS: GroupBy[] = ["user", "folder", "batch", "flat"];
+const GROUPINGS: GroupBy[] = ["user", "folder", "job", "flat"];
 const SORTS: SortKey[] = [
   "file",
   "user",

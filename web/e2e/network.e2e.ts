@@ -6,11 +6,11 @@ import { login } from "./support/login";
 const PEER = "smokepeer";
 const file = (n: number) => ({ filename: `share\\Album\\${n}.flac`, size: 200_000 });
 
-/** Asks the daemon, through the page's session, to download `files` from the peer */
+/** Asks the daemon, through the page's session, to download `files` from the peer as one job */
 const enqueue = async (page: Page, files: { filename: string; size: number }[]) => {
   const origin = new URL(page.url()).origin;
-  const answer = await page.request.post(`api/v0/transfers/downloads/${PEER}`, {
-    data: files,
+  const answer = await page.request.post("api/v0/transfers/downloads/jobs", {
+    data: { groups: [{ username: PEER, files }] },
     headers: { Origin: origin }
   });
   expect(answer.status(), await answer.text()).toBe(201);

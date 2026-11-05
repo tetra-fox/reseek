@@ -2085,43 +2085,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v0/transfers/downloads/batches": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enqueues files from one user as a batch. Answered 201 when every file was enqueued, 207 when
-         *     some were, and 200 when none was; the batch exists in every case.
-         */
-        post: operations["enqueue_batch"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/transfers/downloads/batches/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** One batch with its downloads; `includeRemoved` lists removed ones too. */
-        get: operations["batch"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v0/transfers/downloads/bulk": {
         parameters: {
             query?: never;
@@ -2149,11 +2112,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enqueues batches as one job, told of once when every download of it has ended. Each batch
-         *     is checked as the batch call checks it, and the job is refused whole when one is not valid;
-         *     a batch refused when it is enqueued, such as one whose user is offline, carries why and
-         *     leaves the others enqueued. Answered 201 when every file was enqueued, 207 when some were,
-         *     and 200 when none was.
+         * Enqueues files as one download job, in groups of files from one user each, told of once when
+         *     every download of it has ended. The job is refused whole when a group is not valid; a group
+         *     refused when it is enqueued, such as one whose user is offline, carries why and leaves the
+         *     others enqueued. Answered 201 when every file was enqueued, 207 when some were, and 200 when
+         *     none was.
          */
         post: operations["enqueue_job"];
         delete?: never;
@@ -2189,11 +2152,7 @@ export interface paths {
         /** The downloads from one user, grouped by remote directory. */
         get: operations["user_downloads"];
         put?: never;
-        /**
-         * Enqueues files from one user. Answered 201 when at least one file was enqueued and 200 when
-         *     none was; the files that were not are listed with why.
-         */
-        post: operations["enqueue"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3422,78 +3381,6 @@ export interface components {
             /** @description the signed logout token naming the provider session or the subject to sign out */
             logout_token: string;
         };
-        /**
-         * @description Downloads from one user enqueued together. A batch is never changed after it is made; its
-         *     counts and state are worked out from its transfers when it is read.
-         */
-        Batch: {
-            /**
-             * Format: int64
-             * @description the sizes of the transfers added up, in bytes
-             */
-            bytesTotal: number;
-            /**
-             * Format: int64
-             * @description the bytes moved by the transfers added up
-             */
-            bytesTransferred: number;
-            /**
-             * Format: int32
-             * @description how many of them completed, whatever the outcome
-             */
-            completedCount: number;
-            /**
-             * Format: date-time
-             * @description when the batch was made
-             */
-            createdAt: string;
-            /** @description always `Download` */
-            direction: components["schemas"]["TransferDirection"];
-            /**
-             * Format: int32
-             * @description how many of them completed other than successfully
-             */
-            failedCount: number;
-            /**
-             * Format: int32
-             * @description how many transfers the batch has
-             */
-            fileCount: number;
-            /**
-             * Format: uuid
-             * @description the batch's id
-             */
-            id: string;
-            /** @description where the files go and how the caller tagged the batch */
-            options: components["schemas"]["BatchOptions"];
-            /**
-             * Format: uuid
-             * @description the search the files were found by, null when there is none
-             */
-            searchId?: string | null;
-            /** @description where the batch is as a whole */
-            state: components["schemas"]["BatchState"];
-            /** @description the batch's transfers, without removed ones unless they were asked for */
-            transfers: components["schemas"]["Transfer"][];
-            /** @description the user the files come from */
-            username: string;
-        };
-        /** @description Where a batch's files go and how the caller tags it. */
-        BatchOptions: {
-            /**
-             * @description a relative path under the downloads directory that every file of the batch goes to,
-             *     in place of the directory the download pattern gives; null for the pattern
-             * @example Artist/Album
-             */
-            destination?: string | null;
-            /** @description a tag of the caller's choosing, given to the download pattern; null for none */
-            externalId?: string | null;
-        };
-        /**
-         * @description Where a batch is as a whole.
-         * @enum {string}
-         */
-        BatchState: "Pending" | "InProgress" | "Completed" | "Failed";
         /** @description The configuration's rules that block users by pattern, address or file. */
         BlacklistRules: {
             blocklistFile?: null | components["schemas"]["BlocklistFile"];
@@ -4289,10 +4176,8 @@ export interface components {
              */
             profile: string;
         };
-        /** @description One file of a batch. */
-        EnqueueDownloadBatchItem: {
-            /** @description the file's attributes as the response gave them, kept to be shown with the download */
-            attributes?: components["schemas"]["FileAttribute"][];
+        /** @description One file to download. */
+        EnqueueDownloadFile: {
             /**
              * @description the remote filename exactly as a search or browse response gave it
              * @example @@abcde\Music\Artist\Album\01 - Track.flac
@@ -4300,24 +4185,23 @@ export interface components {
             filename: string;
             /**
              * Format: int64
-             * @description the file's size in bytes as the response gave it
+             * @description the file's size in bytes as the response gave it, 0 when unknown
              */
-            size: number;
+            size?: number;
         };
         /**
-         * @description Downloads several files from one user as one batch, which can give them a common
-         *     destination.
+         * @description Files from one user, one group of a download job. Each of its downloads keeps the group's
+         *     destination and search.
          */
-        EnqueueDownloadBatchRequest: {
-            /** @description the files, at least one, no filename twice */
-            files: components["schemas"]["EnqueueDownloadBatchItem"][];
+        EnqueueDownloadGroup: {
             /**
-             * Format: uuid
-             * @description the batch's id, not the nil id; a new one is made when null
+             * @description a relative path under the downloads directory that every file of the group goes to, in
+             *     place of the directory the download pattern gives; null for the pattern
+             * @example Artist/Album
              */
-            id?: string | null;
-            /** @description where the files go and how the caller tags the batch */
-            options?: components["schemas"]["BatchOptions"];
+            destination?: string | null;
+            /** @description the files, at least one, no filename twice */
+            files: components["schemas"]["EnqueueDownloadFile"][];
             /**
              * Format: uuid
              * @description the search the files were found by, null when there is none
@@ -4329,30 +4213,23 @@ export interface components {
              */
             username: string;
         };
-        /** @description What enqueueing a batch did. */
-        EnqueueDownloadBatchResponse: {
-            /** @description the batch with the downloads that were created */
-            batch: components["schemas"]["Batch"];
-            /** @description the files that were not enqueued, and why */
-            failures: components["schemas"]["EnqueueFailure"][];
-        };
         /**
-         * @description Downloads several batches as one job: everything picked in one go, such as an album whose
+         * @description Downloads everything picked in one go as one download job, such as a file, an album whose
          *     discs go to folders of their own, or files from several users picked from one search. The
          *     job is told of once, by a `transfers.job_finished` frame, when every one of its downloads
          *     has ended.
          */
         EnqueueDownloadJobRequest: {
-            /** @description the batches, at least one, enqueued in this order */
-            batches: components["schemas"]["EnqueueDownloadBatchRequest"][];
+            /** @description the groups, at least one, enqueued in this order */
+            groups: components["schemas"]["EnqueueDownloadGroup"][];
         };
-        /** @description What enqueueing a job did. */
+        /** @description What enqueueing a download job did. */
         EnqueueDownloadJobResponse: {
-            /** @description what came of each batch, in the order of the request */
-            batches: components["schemas"]["EnqueuedJobBatch"][];
+            /** @description what came of each group, in the order of the request */
+            groups: components["schemas"]["EnqueuedDownloadGroup"][];
             /**
              * Format: uuid
-             * @description the job's id, which its `transfers.job_finished` frame carries
+             * @description the job's id, which its downloads and its `transfers.job_finished` frame carry
              */
             id: string;
         };
@@ -4363,17 +4240,14 @@ export interface components {
             /** @description why it was not enqueued, such as `Skipped: Already in progress` */
             message: string;
         };
-        /** @description What came of one batch of a job. */
-        EnqueuedJobBatch: {
-            /**
-             * Format: uuid
-             * @description the batch made, null when it was not
-             */
-            batchId?: string | null;
+        /** @description What came of one group of a download job. */
+        EnqueuedDownloadGroup: {
+            /** @description the downloads made */
+            enqueued: components["schemas"]["Transfer"][];
             error?: null | components["schemas"]["ErrorBody"];
-            /** @description the files of the batch made that were not enqueued, and why */
+            /** @description the files of the group that were not enqueued, and why */
             failures: components["schemas"]["EnqueueFailure"][];
-            /** @description the user the batch's files come from */
+            /** @description the user the group's files come from */
             username: string;
         };
         /** @description One field of the elements of a list of tables or the entries of a user-keyed map. */
@@ -5689,12 +5563,6 @@ export interface components {
                  */
                 averageSpeed: number;
                 /**
-                 * Format: uuid
-                 * @description the batch the download was enqueued in, null for downloads enqueued one by one and for
-                 *     uploads
-                 */
-                batchId?: string | null;
-                /**
                  * Format: int64
                  * @description bytes still to move
                  */
@@ -5734,6 +5602,12 @@ export interface components {
                  * @description the transfer's id, never reused
                  */
                 id: string;
+                /**
+                 * Format: uuid
+                 * @description the download job the download was queued in: everything queued with it in one go; null
+                 *     for uploads
+                 */
+                jobId?: string | null;
                 /**
                  * @description the absolute local path of a download's file once it was moved into the downloads
                  *     directory, null before that and for uploads
@@ -6030,29 +5904,6 @@ export interface components {
         ProxyProvider: {
             /** @description the proxy's identity headers are honored */
             enabled: boolean;
-        };
-        /**
-         * @description One file to download from the user named in the path. The body of the call is a list of
-         *     these.
-         */
-        QueueDownloadRequest: {
-            /**
-             * @description the remote filename exactly as a search or browse response gave it
-             * @example @@abcde\Music\Artist\Album\01 - Track.flac
-             */
-            filename: string;
-            /**
-             * Format: int64
-             * @description the file's size in bytes as the response gave it, 0 when unknown
-             */
-            size?: number;
-        };
-        /** @description What enqueueing a list of files did. */
-        QueueDownloadResponse: {
-            /** @description the downloads that were created */
-            enqueued: components["schemas"]["Transfer"][];
-            /** @description the files that were not enqueued, and why */
-            failed: components["schemas"]["EnqueueFailure"][];
         };
         /** @description Transfers waiting in a queue. */
         QueuedMetrics: {
@@ -7232,12 +7083,6 @@ export interface components {
              */
             averageSpeed: number;
             /**
-             * Format: uuid
-             * @description the batch the download was enqueued in, null for downloads enqueued one by one and for
-             *     uploads
-             */
-            batchId?: string | null;
-            /**
              * Format: int64
              * @description bytes still to move
              */
@@ -7277,6 +7122,12 @@ export interface components {
              * @description the transfer's id, never reused
              */
             id: string;
+            /**
+             * Format: uuid
+             * @description the download job the download was queued in: everything queued with it in one go; null
+             *     for uploads
+             */
+            jobId?: string | null;
             /**
              * @description the absolute local path of a download's file once it was moved into the downloads
              *     directory, null before that and for uploads
@@ -15636,166 +15487,6 @@ export interface operations {
             };
         };
     };
-    enqueue_batch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnqueueDownloadBatchRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnqueueDownloadBatchResponse"];
-                };
-            };
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnqueueDownloadBatchResponse"];
-                };
-            };
-            207: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnqueueDownloadBatchResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    batch: {
-        parameters: {
-            query?: {
-                /** @description also list transfers that were removed */
-                includeRemoved?: boolean;
-            };
-            header?: never;
-            path: {
-                /** @description the batch's id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Batch"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
     bulk_downloads: {
         parameters: {
             query?: never;
@@ -15940,8 +15631,6 @@ export interface operations {
                 state?: components["schemas"]["TransferStateFilter"][];
                 /** @description only transfers with this peer */
                 username?: string;
-                /** @description only downloads of this batch */
-                batchId?: string;
                 /** @description also list transfers that were removed */
                 includeRemoved?: boolean;
                 /** @description only transfers requested at or after this time */
@@ -16024,104 +15713,6 @@ export interface operations {
                 };
             };
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    enqueue: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description the peer */
-                username: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QueueDownloadRequest"][];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QueueDownloadResponse"];
-                };
-            };
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QueueDownloadResponse"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17385,8 +16976,6 @@ export interface operations {
                 state?: components["schemas"]["TransferStateFilter"][];
                 /** @description only transfers with this peer */
                 username?: string;
-                /** @description only downloads of this batch */
-                batchId?: string;
                 /** @description also list transfers that were removed */
                 includeRemoved?: boolean;
                 /** @description only transfers requested at or after this time */

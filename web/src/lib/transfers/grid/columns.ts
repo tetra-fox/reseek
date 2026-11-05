@@ -19,7 +19,7 @@ export type ColumnId =
   | "ended"
   | "elapsed"
   | "attempts"
-  | "batch"
+  | "job"
   | "group"
   | "actions";
 
@@ -133,7 +133,7 @@ export const COLUMNS: Column[] = (
       sort: "attempts",
       end: true
     },
-    { id: "batch", label: "Batch", visible: false, width: "6.25rem", only: "download" },
+    { id: "job", label: "Download job", visible: false, width: "6.25rem", only: "download" },
     { id: "group", label: "Group", visible: false, width: "7rem", only: "upload" },
     {
       id: "actions",

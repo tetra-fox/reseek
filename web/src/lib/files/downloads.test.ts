@@ -23,7 +23,7 @@ const plan = (files: string[], topOf: (path: string) => string, separator: "\\" 
   ).map((g): [string | null, string[]] => [g.destination, g.files.map((f) => f.filename)]);
 
 describe("downloading a selection", () => {
-  it("splits it from the deepest folder holding it: its own files, then one batch per subfolder", () => {
+  it("splits it from the deepest folder holding it: its own files, then one group per subfolder", () => {
     const groups = plan(
       [
         "C:\\Music\\Album\\Disc 1\\Extras\\x.mp3",
@@ -59,11 +59,11 @@ describe("downloading a selection", () => {
 describe("enqueueing a job", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  /** Enqueues a job whose batches the daemon answers with `answers`, in order */
-  const outcome = (answers: Omit<Schemas["EnqueuedJobBatch"], "username" | "batchId">[]) => {
+  /** Enqueues a job whose groups the daemon answers with `answers`, in order */
+  const outcome = (answers: Omit<Schemas["EnqueuedDownloadGroup"], "username" | "enqueued">[]) => {
     fakeNetwork(() => ({
       id: "j",
-      batches: answers.map((a) => ({ username: "", batchId: a.error ? null : "b", ...a }))
+      groups: answers.map((a) => ({ username: "", enqueued: [], ...a }))
     }));
     return enqueueJob(
       answers.map((_, i) => ({
@@ -77,7 +77,7 @@ describe("enqueueing a job", () => {
   };
   const offline = { failures: [], error: { error: "User x appears to be offline" } };
 
-  it("counts a batch refused whole as every one of its files not queued", async () => {
+  it("counts a group refused whole as every one of its files not queued", async () => {
     const refusedOne = { message: "Skipped: Already in progress", filename: "1\\a.flac" };
     expect(await outcome([offline, { failures: [refusedOne], error: null }])).toEqual({
       kind: "partial",

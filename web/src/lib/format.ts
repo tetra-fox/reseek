@@ -196,6 +196,12 @@ export const formatAttributes = (file: {
 /** The last part of a remote path, after its last backslash or slash */
 export const getFileName = (path: string): string => path.split("\\").pop()!.split("/").pop()!;
 
+/** Who files came from, in words: one or two names, or the first and how many others */
+export const fromWhom = (usernames: string[]) =>
+  usernames.length <= 2
+    ? usernames.join(" and ")
+    : `${usernames[0]} and ${usernames.length - 1} others`;
+
 /**
  * The directory part of a remote path, by the separator it uses: `/` when it has one, else `\`.
  * A separator at the very start is not a cut, so "\\foo" stays as it is

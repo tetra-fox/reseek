@@ -149,7 +149,7 @@
       shown: () =>
         write &&
         direction === "download" &&
-        group.kind !== "batch" &&
+        group.kind !== "job" &&
         analyzerOffered() &&
         list.some(analyzableDownload),
       run: () => void analyzeBatch(list.map(downloadCandidate), `${group.label} has no downloads`)
@@ -203,7 +203,7 @@
     {/if}
     <span class="text-xs text-fg-muted"
       ><span
-        >{plural(list.length, "file", "files")} · {formatBytes(bytes)}{group.kind === "batch"
+        >{plural(list.length, "file", "files")} · {formatBytes(bytes)}{group.kind === "job"
           ? ` · ${done} done, ${failed} failed`
           : ""}</span
       ></span>

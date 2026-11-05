@@ -1,19 +1,21 @@
 import { type Mark, MARK_FILTERS, markToken, passes } from "#lib/analysis/marks.js";
 import { fileMatches, filterPlaceholder, parseFilters } from "#lib/files/filters.js";
-import { getDirectoryName } from "#lib/format.js";
+import { fromWhom, getDirectoryName, getFileName } from "#lib/format.js";
 import { type ActiveFilter, typedFilter } from "#lib/lists/filtered.js";
 import { type ChipId, STATE_CHIPS, type Transfer } from "#lib/transfers/states.js";
 import {
+  commonFolder,
   type FolderNode,
   folderNode,
   folderTree,
   itemsUnder,
+  separatorOf,
   type TreeLine
 } from "#lib/tree/folders.js";
 
 import type { ViewSettings } from "./settings.svelte";
 
-export type GroupBy = "user" | "folder" | "batch" | "flat";
+export type GroupBy = "user" | "folder" | "job" | "flat";
 
 /** A transfer's analysis as filters read it: its mark, and whether it could be analyzed */
 export type MarkLookup = (t: Transfer) => { mark: Mark | undefined; analyzable: boolean };
@@ -83,9 +85,9 @@ export const activeFilters = (
   return [...on, ...typedFilter(text, clearText)];
 };
 
-/** A group header in the table: a user, a folder of a user, or a batch */
+/** A group header in the table: a user, a folder of a user, or a download job */
 export type Group = {
-  kind: "user" | "folder" | "batch";
+  kind: "user" | "folder" | "job";
   key: string;
   label: string;
   username: string;
@@ -118,6 +120,26 @@ export type SortKey =
   | "started"
   | "ended"
   | "attempts";
+
+/**
+ * A download job's name from its downloads: its one file, else the folder holding every file
+ * when they come from one user, else who they came from
+ */
+const jobLabel = (list: Transfer[]) => {
+  const who = fromWhom([...new Set(list.map((t) => t.username))]);
+  if (list.length === 1) return `${getFileName(list[0].filename)} from ${who}`;
+  const separator = separatorOf(list[0].filename);
+  const folder = list.every((t) => t.username === list[0].username)
+    ? commonFolder(
+        list.map((t) => t.filename),
+        separator
+      )
+    : "";
+  // a folder at the top of a share names the share, not what was picked from it
+  return folder.includes(separator)
+    ? `${getFileName(folder)} from ${who}`
+    : `Downloads from ${who}`;
+};
 
 const bucket = <K>(rows: Transfer[], key: (t: Transfer) => K) => {
   const groups = new Map<K, Transfer[]>();
@@ -204,13 +226,13 @@ export const layout = (
   } else if (groupBy === "folder") {
     for (const [username, list] of bucket(sorted, (t) => t.username)) folders(username, list, 0);
   } else {
-    const batches = [...bucket(sorted, (t) => t.batchId ?? null)];
-    const siblings = batches.map(([batch]) => `batch:${batch ?? "none"}`);
-    for (const [batch, list] of batches) {
+    const jobs = [...bucket(sorted, (t) => t.jobId ?? null)];
+    const siblings = jobs.map(([job]) => `job:${job ?? "none"}`);
+    for (const [job, list] of jobs) {
       add({
-        kind: "batch",
-        key: `batch:${batch ?? "none"}`,
-        label: batch ? `Batch ${batch.slice(0, 8)}` : "Not in a batch",
+        kind: "job",
+        key: `job:${job ?? "none"}`,
+        label: job ? jobLabel(list) : "Other downloads",
         username: list[0].username,
         depth: 0,
         transfers: list,

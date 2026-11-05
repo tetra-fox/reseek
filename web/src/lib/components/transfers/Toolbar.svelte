@@ -73,7 +73,7 @@
   const GROUPINGS: { id: GroupBy; label: string }[] = $derived([
     { id: "user", label: "User › folder" },
     { id: "folder", label: "Folder" },
-    ...(direction === "download" ? [{ id: "batch" as const, label: "Batch" }] : []),
+    ...(direction === "download" ? [{ id: "job" as const, label: "Queued together" }] : []),
     { id: "flat", label: "Flat" }
   ]);
 

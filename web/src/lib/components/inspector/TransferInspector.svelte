@@ -100,7 +100,7 @@
   const technical = $derived<Field[]>([
     { label: "State", value: t.state },
     { label: "ID", value: t.id },
-    { label: "Batch ID", value: t.batchId },
+    { label: "Download job ID", value: t.jobId },
     { label: "Remote path", value: t.filename },
     { label: "Local path", value: t.localPath },
     { label: "Peer address", value: address },

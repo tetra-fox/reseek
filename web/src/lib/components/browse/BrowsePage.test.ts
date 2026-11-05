@@ -89,8 +89,8 @@ describe("browse progress", () => {
     ]);
   });
 
-  it("ticks a folder over the files under it and downloads one batch per top folder in one job", async () => {
-    const batches: unknown[] = [];
+  it("ticks a folder over the files under it and downloads one group per top folder in one job", async () => {
+    const groups: unknown[] = [];
     fakeNetwork((url, _method, body) => {
       if (url.pathname.endsWith("/users/alice/browse")) {
         return {
@@ -105,11 +105,11 @@ describe("browse progress", () => {
         };
       }
       if (url.pathname.endsWith("/downloads/jobs")) {
-        const asked = (body as { batches: { username: string }[] }).batches;
-        batches.push(...asked);
+        const asked = (body as { groups: { username: string }[] }).groups;
+        groups.push(...asked);
         return {
           id: "j",
-          batches: asked.map((b) => ({ ...b, batchId: "b", failures: [], error: null }))
+          groups: asked.map((g) => ({ ...g, enqueued: [], failures: [], error: null }))
         };
       }
       return undefined;
@@ -139,9 +139,9 @@ describe("browse progress", () => {
     await flushFaked();
     await flushFaked();
     expect(
-      batches.map((b) => {
-        const batch = b as { files: { filename: string }[]; options?: { destination: string } };
-        return [batch.options?.destination ?? null, batch.files.map((f) => f.filename)];
+      groups.map((g) => {
+        const group = g as { files: { filename: string }[]; destination: string | null };
+        return [group.destination, group.files.map((f) => f.filename)];
       })
     ).toEqual([
       [null, ["Music\\1.flac"]],

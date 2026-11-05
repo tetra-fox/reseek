@@ -162,7 +162,7 @@ test("a file's row fills as it downloads, then flashes and shows it done", async
   );
   await page.route("**/api/v0/transfers/downloads/jobs", (route) =>
     route.fulfill({
-      json: { id: "j", batches: [{ username: "carol", batchId: "b", failures: [], error: null }] }
+      json: { id: "j", groups: [{ username: "carol", enqueued: [], failures: [], error: null }] }
     })
   );
   const tree = await browseCarol(page);

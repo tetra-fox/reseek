@@ -54,7 +54,7 @@ export const openFolder = (transfers: Transfer[]) => {
   void goto(href(`/system/files?root=downloads&path=${encodeURIComponent(folder)}`));
 };
 
-/** Downloads the file again as a new download in a batch of its own */
+/** Downloads the file again as a new download in a job of its own */
 export const redownload = async (t: Transfer) => {
   const result = await enqueue({
     username: t.username,

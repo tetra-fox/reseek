@@ -37,6 +37,18 @@ export const parentOf = (path: string, separator: Separator) => {
   return cut === -1 ? "" : path.slice(0, cut);
 };
 
+/** The deepest folder that holds every one of `paths`, "" when they share none */
+export const commonFolder = (paths: string[], separator: Separator) => {
+  let common = getDirectoryName(paths[0]);
+  for (const path of paths) {
+    const folder = getDirectoryName(path);
+    while (common && folder !== common && !folder.startsWith(common + separator)) {
+      common = parentOf(common, separator);
+    }
+  }
+  return common;
+};
+
 /** Every item in a folder and in the folders below it */
 export const itemsUnder = <T>(node: FolderNode<T>): T[] => {
   const found: T[] = [];

@@ -2,20 +2,19 @@ import { SvelteSet } from "svelte/reactivity";
 
 import { api, type Schemas } from "#lib/api/client.js";
 import { plural } from "#lib/format.js";
-import { getDirectoryName } from "#lib/format.js";
 import { keepCurrent } from "#lib/live/keep.svelte.js";
 import { call } from "#lib/request.js";
 import { downloads, fileKey } from "#lib/transfers/transfers.svelte.js";
-import { parentOf, type Separator } from "#lib/tree/folders.js";
+import { commonFolder, type Separator } from "#lib/tree/folders.js";
 
-export type EnqueueItem = Schemas["EnqueueDownloadBatchItem"];
+export type EnqueueItem = Schemas["EnqueueDownloadFile"];
 
 /** What an enqueue came to, in words for the status next to the button and its toast */
 export type Enqueued =
   | { kind: "done"; text: string }
   | { kind: "partial" | "none" | "failed"; text: string };
 
-/** Files from one user to download together, which go into one batch */
+/** Files from one user to download together, one group of a download job */
 type Request = {
   username: string;
   files: EnqueueItem[];
@@ -51,9 +50,9 @@ export const followDownloads = () => {
 };
 
 /**
- * Enqueues everything picked in one go as one job, a batch per request, which the daemon tells
- * of once when all of it has finished. A batch is made even when some of its files were refused,
- * so the outcome is read from the failures and from the batches refused whole
+ * Enqueues everything picked in one go as one download job, a group per request, which the
+ * daemon tells of once when all of it has finished. The outcome is read from the files each
+ * group refused and from the groups refused whole
  */
 export const enqueueJob = async (requests: Request[]): Promise<Enqueued> => {
   const keys = requests.flatMap(({ username, files }) =>
@@ -63,19 +62,19 @@ export const enqueueJob = async (requests: Request[]): Promise<Enqueued> => {
   const outcome = await call(() =>
     api.POST("/api/v0/transfers/downloads/jobs", {
       body: {
-        batches: requests.map(({ username, files, searchId, destination }) => ({
+        groups: requests.map(({ username, files, searchId, destination }) => ({
           username,
           files,
           searchId: searchId ?? null,
-          options: destination ? { destination } : undefined
+          destination: destination || null
         }))
       }
     })
   );
-  const answers = outcome.ok ? outcome.data.batches : [];
+  const answers = outcome.ok ? outcome.data.groups : [];
   const refused = new Set<string>();
   const why: string[] = [];
-  // a batch refused whole, its user offline say, has the same reason for each of its files
+  // a group refused whole, its user offline say, has the same reason for each of its files
   const wholly: string[] = [];
   requests.forEach(({ username, files }, i) => {
     const answer = answers[i];
@@ -108,14 +107,13 @@ export const enqueueJob = async (requests: Request[]): Promise<Enqueued> => {
   };
 };
 
-/** Enqueues files from one user as a job of one batch */
+/** Enqueues files from one user as a download job of one group */
 export const enqueue = (request: Request): Promise<Enqueued> => enqueueJob([request]);
 
-/** The attributes of a file in a listing, as an enqueue keeps them to show with the download */
+/** A file in a listing as an enqueue asks for it */
 export const asItem = (file: Schemas["File"], filename = file.filename): EnqueueItem => ({
   filename,
-  size: file.size,
-  attributes: file.attributes
+  size: file.size
 });
 
 export type DownloadGroup = {
@@ -161,20 +159,8 @@ const downloadGroups = (
     }));
 };
 
-/** The deepest folder that holds every one of the files, by their paths */
-const commonFolder = (files: Schemas["File"][], separator: Separator) => {
-  let common = getDirectoryName(files[0].filename);
-  for (const file of files) {
-    const folder = getDirectoryName(file.filename);
-    while (common && folder !== common && !folder.startsWith(common + separator)) {
-      common = parentOf(common, separator);
-    }
-  }
-  return common;
-};
-
 /**
- * Selected files split into the batches that download them. The files under each top folder,
+ * Selected files split into the groups that download them. The files under each top folder,
  * which `topOf` gives a path's, are split from the deepest folder holding all of them: those
  * directly in it go where the download pattern puts them, and each subfolder's go to that
  * subfolder's path from the folder's parent, so a selection keeps its folders
@@ -192,6 +178,13 @@ export const downloadPlan = (
     else byTop.set(top, [file]);
   }
   return [...byTop.values()].flatMap((grouped) =>
-    downloadGroups(commonFolder(grouped, separator), grouped, separator)
+    downloadGroups(
+      commonFolder(
+        grouped.map((f) => f.filename),
+        separator
+      ),
+      grouped,
+      separator
+    )
   );
 };

@@ -230,7 +230,7 @@
     ancestors(at, browser.tree, browser.separator)[0] ?? getFileName(at);
 
   /**
-   * Downloads files as one job: each top folder's as batches that keep their folders below the
+   * Downloads files as one job: each top folder's as groups that keep their folders below the
    * deepest one holding them
    */
   const download = (list: RemoteFile[]): Promise<Enqueued> =>
@@ -242,7 +242,7 @@
       }))
     );
 
-  /** Every file under a folder, filtered or not, as one batch in a folder named like it */
+  /** Every file under a folder, filtered or not, as one job in a folder named like it */
   const downloadFolder = async (node: FolderNode<RemoteFile>) => {
     const outcome = await enqueue({
       username: browser.username,

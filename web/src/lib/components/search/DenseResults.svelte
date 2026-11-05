@@ -84,7 +84,7 @@
     }
   });
 
-  /** Enqueues rows as one job, one batch per user, and says what came of it */
+  /** Enqueues rows as one job, one group per user, and says what came of it */
   const download = (list: DenseRow[]): Promise<Enqueued> => {
     const byUser = new Map<string, DenseRow[]>();
     for (const r of list) {
