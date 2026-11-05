@@ -64,10 +64,7 @@
     speeds: number[];
     /** ticks the row; `range` when shift was held */
     onselect: (range: boolean) => void;
-    /**
-     * Opens the inspector on the file, at its analysis with `analyze`, in the large view with
-     * `large`; a screen without the inspector leaves it out
-     */
+    /** opens the inspector on the file; a screen without the inspector leaves it out */
     ondetails?: () => void;
     onremove: () => void;
     onblock: (deny: boolean) => void;
