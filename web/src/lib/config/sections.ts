@@ -424,7 +424,7 @@ export const sections: Section[] = [
         { key: "chat.notifications.room_messages", label: "Every message in notifying rooms" }
       ]),
       ...under("Transfers", [
-        { key: "notifications.transfers.batch_finished", label: "Downloads finished" },
+        { key: "notifications.transfers.job_finished", label: "Downloads finished" },
         { key: "notifications.transfers.upload_queued", label: "An upload was queued" }
       ])
     ]

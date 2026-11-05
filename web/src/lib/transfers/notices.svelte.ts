@@ -50,7 +50,7 @@ class TransferNotices {
     // a job canceled whole was ended by the user, who needs no telling
     if (job.canceledCount === job.fileCount) return;
     const { title, body } = jobNotice(job);
-    notifier.other(notifyOptions().batchFinished, title, body, `job:${job.id}`, href("/downloads"));
+    notifier.other(notifyOptions().jobFinished, title, body, `job:${job.id}`, href("/downloads"));
   }
 
   #added(t: Transfer) {

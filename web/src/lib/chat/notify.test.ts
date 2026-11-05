@@ -22,7 +22,7 @@ const options: NotifyOptions = {
   privateMessages: "both",
   mentions: "both",
   roomMessages: "off",
-  batchFinished: "both",
+  jobFinished: "both",
   uploadQueued: "off"
 };
 const arrival = (fields: Partial<Arrival>): Arrival => ({

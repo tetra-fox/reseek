@@ -92,7 +92,7 @@ describe("controls and drafts", () => {
     expect(
       controlOf(field("shares.cache.storage_mode"), view.fields["shares.cache.storage_mode"])
     ).toBe("select");
-    for (const key of ["chat.notifications.mentions", "notifications.transfers.batch_finished"]) {
+    for (const key of ["chat.notifications.mentions", "notifications.transfers.job_finished"]) {
       expect(controlOf(field(key), view.fields[key])).toBe("notify-mode");
     }
     expect(controlOf(field("soulseek.password"), view.fields["soulseek.password"])).toBe("secret");

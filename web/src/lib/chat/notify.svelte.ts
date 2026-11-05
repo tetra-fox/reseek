@@ -16,7 +16,7 @@ export type NotifyOptions = {
   privateMessages: NotifyMode;
   mentions: NotifyMode;
   roomMessages: NotifyMode;
-  batchFinished: NotifyMode;
+  jobFinished: NotifyMode;
   uploadQueued: NotifyMode;
 };
 
@@ -30,7 +30,7 @@ export const notifyOptions = (): NotifyOptions => {
     privateMessages: mode(chat.private_messages, "both"),
     mentions: mode(chat.mentions, "both"),
     roomMessages: mode(chat.room_messages, "off"),
-    batchFinished: mode(transfers.batch_finished, "both"),
+    jobFinished: mode(transfers.job_finished, "both"),
     uploadQueued: mode(transfers.upload_queued, "off")
   };
 };

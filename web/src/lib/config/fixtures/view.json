@@ -101,7 +101,7 @@
     },
     "notifications": {
       "transfers": {
-        "batch_finished": "both",
+        "job_finished": "both",
         "upload_queued": "off"
       }
     },
@@ -1387,15 +1387,15 @@
       "notApplied": null,
       "entries": []
     },
-    "notifications.transfers.batch_finished": {
+    "notifications.transfers.job_finished": {
       "source": {
         "layer": "default"
       },
       "file": "config.toml",
-      "envVar": "RESEEK_NOTIFICATIONS_TRANSFERS_BATCH_FINISHED",
+      "envVar": "RESEEK_NOTIFICATIONS_TRANSFERS_JOB_FINISHED",
       "cliFlag": null,
       "kind": "string",
-      "doc": "How the end of a batch of downloads is announced: everything queued in one go, such as a file, a folder or an album, told of once when all of it has finished.",
+      "doc": "How the end of a download job is announced: everything queued in one go, such as a file, a folder or an album, told of once when all of it has finished.",
       "choices": [
         "off",
         "sound",
