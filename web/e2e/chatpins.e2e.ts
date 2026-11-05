@@ -165,6 +165,14 @@ test("pins hold their place through a drag, the keys and a reload", async ({ pag
   await expect(page.locator("body")).toHaveCSS("pointer-events", "auto");
   await pin(page, "room:ambient", "ambient");
   await expect.poll(() => pinned(page)).toEqual(["room:jazz", "user:alice", "room:ambient"]);
+  // the daemon holds the last write before the reset after the test
+  await expect
+    .poll(() => daemonPins(page))
+    .toEqual([
+      { kind: "room", name: "jazz" },
+      { kind: "user", name: "alice" },
+      { kind: "room", name: "ambient" }
+    ]);
 });
 
 test("other tabs are told of the pins, on open and on a change", async ({ page }) => {
@@ -231,5 +239,12 @@ test.describe("on a phone", () => {
     await swipe(client, row, { x: row.x, y: row.y - 200 });
     await expect.poll(() => box.evaluate((e) => e.scrollTop)).toBeGreaterThan(50);
     await expect.poll(() => pinned(page)).toEqual(["room:indie", "user:person1", "room:jazz"]);
+    await expect
+      .poll(() => daemonPins(page))
+      .toEqual([
+        { kind: "room", name: "indie" },
+        { kind: "user", name: "person1" },
+        { kind: "room", name: "jazz" }
+      ]);
   });
 });
