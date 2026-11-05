@@ -252,6 +252,7 @@ mod tests {
     "users.browse_progress",
     "users.updated",
     "users.removed",
+    "users.presence",
     "chat.unread",
     "chat.pins",
     "events.raised",
