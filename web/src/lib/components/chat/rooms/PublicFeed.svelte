@@ -98,10 +98,13 @@
           description="Each message said in a public room shows here as it is said." />
       {/if}
     {:else}
+      <!-- a log takes focus, so the keys scroll it -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <div
         bind:this={box}
-        class="min-h-0 flex-1 overflow-y-auto py-2"
+        class="min-h-0 flex-1 overflow-y-auto py-2 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
         role="log"
+        tabindex="0"
         aria-live="off"
         aria-label="Messages in public rooms"
         onscroll={seen}>
