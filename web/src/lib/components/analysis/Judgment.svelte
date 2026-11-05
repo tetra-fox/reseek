@@ -10,6 +10,7 @@
     targetKey
   } from "#lib/analysis/analysis.js";
   import Button from "#lib/components/ui/Button.svelte";
+  import Segmented from "#lib/components/ui/Segmented.svelte";
   import Textarea from "#lib/components/ui/Textarea.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatDate } from "#lib/format.js";
@@ -21,11 +22,12 @@
 
   let { target, report, onsaved }: Props = $props();
 
-  const CHOICES: [Judgment | null, string][] = [
-    ["legit", JUDGMENTS.legit],
-    ["fake", JUDGMENTS.fake],
-    [null, "Not decided"]
-  ];
+  /** the choices, `undecided` standing for no judgment */
+  const CHOICES = [
+    { id: "legit", label: JUDGMENTS.legit },
+    { id: "fake", label: JUDGMENTS.fake },
+    { id: "undecided", label: "Not decided" }
+  ] as const;
   let choice = $state<Judgment | null>(null);
   let note = $state("");
   let saving = $state(false);
@@ -56,22 +58,17 @@
 
 <fieldset class="flex flex-col gap-2" disabled={!write || saving}>
   <legend class="mb-1 text-sm font-medium">Your judgment</legend>
-  <div class="flex flex-wrap gap-1" role="radiogroup" aria-label="Your judgment">
-    {#each CHOICES as [value, text] (text)}
-      <button
-        type="button"
-        role="radio"
-        aria-checked={choice === value}
-        class={[
-          "rounded-control border px-3 py-1 text-sm",
-          choice === value ? "border-accent bg-accent-soft text-accent-soft-fg" : "hover:bg-hover"
-        ]}
-        onclick={() => {
-          choice = value;
-          saved = false;
-        }}>{text}</button>
-    {/each}
-  </div>
+  <Segmented
+    size="sm"
+    label="Your judgment"
+    options={CHOICES}
+    bind:value={
+      () => choice ?? "undecided",
+      (id) => {
+        choice = id === "undecided" ? null : id;
+        saved = false;
+      }
+    } />
   <label class="flex flex-col gap-1 text-sm">
     <span class="text-fg-muted">Note</span>
     <Textarea
