@@ -254,6 +254,8 @@
                 class="size-3.5" />{/if}
             {line.title}
           </button>
+          {#if write && line.key === PINNED}<span class="sr-only">Move a pin with {moveKeys}.</span
+            >{/if}
         </div>
       {:else}
         {@const t = line.target}
