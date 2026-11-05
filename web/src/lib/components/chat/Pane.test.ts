@@ -76,6 +76,7 @@ describe("a chat pane", () => {
     session.principal = null;
     app.state = null;
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     document.body.innerHTML = "";
   });
 
@@ -370,6 +371,8 @@ describe("a chat pane", () => {
       if (url.pathname.endsWith("/conversations/alice") && method === "GET") return { status: 404 };
       return undefined;
     });
+    // jsdom measures every line as 0 high, which would draw them all
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(24);
     live.start();
     component = mount(Pane, {
       target: document.body,

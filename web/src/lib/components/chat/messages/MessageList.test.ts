@@ -38,10 +38,13 @@ const history = (total: number) => {
 };
 
 describe("the message list", () => {
-  let component: ReturnType<typeof mount> | null = null;
+  /**
+   * the lists mounted, each in a box of its own, so a test that runs past its time can't reach
+   * the next one's
+   */
+  const mounted: ReturnType<typeof mount>[] = [];
   afterEach(() => {
-    if (component) unmount(component);
-    component = null;
+    for (const component of mounted.splice(0)) unmount(component);
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     while (toasts.length) dismiss(toasts[0].id);
@@ -51,12 +54,10 @@ describe("the message list", () => {
   const open = async (at: number | null = null) => {
     const pane = new MessagePane({ kind: "user", name: "alice" }, () => "me", at);
     await pane.load();
-    component = mount(MessageList, {
-      target: document.body,
-      props: { pane, watch: [], onread: () => {} }
-    });
+    const target = document.body.appendChild(document.createElement("div"));
+    mounted.push(mount(MessageList, { target, props: { pane, watch: [], onread: () => {} } }));
     await flush();
-    const box = document.querySelector<HTMLElement>('[role="log"]')!;
+    const box = target.querySelector<HTMLElement>('[role="log"]')!;
     // jsdom lays nothing out: the box is 300 px wide, its scrollbar past that
     Object.defineProperty(box, "clientWidth", { value: 300 });
     return { pane, box };
@@ -69,6 +70,8 @@ describe("the message list", () => {
 
   it("reads page after page to the start while the scrollbar is held at the top", async () => {
     const { pages } = history(250);
+    // jsdom measures every line as 0 high, which would draw them all
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(24);
     const { pane, box } = await open();
     // a press on the scrollbar, beside the content
     box.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 305 }));
