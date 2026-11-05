@@ -1,4 +1,5 @@
 import type { Snippet } from "svelte";
+import { innerWidth } from "svelte/reactivity/window";
 
 import { fields, stored } from "#lib/stored.svelte.js";
 import { viewport } from "#lib/ui/viewport.svelte.js";
@@ -8,8 +9,11 @@ export const PANE_MIN = 320;
 /** The docked inspector's default width, in pixels */
 export const PANE_WIDTH = 384;
 
-/** The docked inspector's greatest width: half the window, the list keeping the rest */
-export const paneMax = () => Math.max(PANE_MIN, Math.round(window.innerWidth * 0.5));
+/**
+ * The docked inspector's greatest width: half the window, the list keeping the rest. It follows
+ * the window as it is resized. The window's width is only unknown off a browser, where it is 0
+ */
+export const paneMax = () => Math.max(PANE_MIN, Math.round((innerWidth.current ?? 0) * 0.5));
 
 /**
  * How long focus rests on a file before the inspector asks the daemon about it, so holding an

@@ -1,3 +1,5 @@
+import { innerHeight } from "svelte/reactivity/window";
+
 import { api, type Schemas } from "#lib/api/client.js";
 import { Keyed } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
@@ -12,8 +14,12 @@ export const DOCK_MIN = 120;
 /** The docked activity log's default height, in pixels */
 export const DOCK_HEIGHT = 288;
 
-/** The docked activity log's greatest height: most of the window, the screen above keeping some */
-export const dockMax = () => Math.max(DOCK_MIN, Math.round(window.innerHeight * 0.6));
+/**
+ * The docked activity log's greatest height: most of the window, the screen above keeping some.
+ * It follows the window as it is resized. The window's height is only unknown off a browser,
+ * where it is 0
+ */
+export const dockMax = () => Math.max(DOCK_MIN, Math.round((innerHeight.current ?? 0) * 0.6));
 
 /** Whether the activity log is open, its height when docked and the kinds it hides, kept in this browser */
 export const activityPrefs = stored("reseek.activity", (saved) => {
