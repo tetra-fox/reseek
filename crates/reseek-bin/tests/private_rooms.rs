@@ -1,7 +1,7 @@
 //! Private rooms against a scripted server: giving up a room we own, which the server does not
 //! answer, leaves the room and forgets it at once, and the server's room list is asked for anew
-//! after we create a room, give one up or are added to one; a room someone else owns is not
-//! ours to give up.
+//! after we create a room, give one up or are added to one; a room not joined as its owner is
+//! not ours to give up.
 
 mod support;
 
@@ -172,15 +172,32 @@ async fn giving_up_a_room_sends_it_unanswered_then_leaves_it() {
 }
 
 #[tokio::test]
-async fn a_room_someone_else_owns_is_not_given_up() {
+async fn a_room_not_joined_as_its_owner_is_not_given_up() {
   let dir = tempfile::tempdir().unwrap();
   let (_running, api, mut server) = scripted(dir.path()).await;
   join_club(&api, &mut server, "bob").await;
-
   let refused = api.drop_room_ownership("club").await.unwrap_err();
   assert_eq!(refused.status(), Some(reqwest::StatusCode::FORBIDDEN));
   let state = api.application().await.unwrap();
   assert!(state.rooms.iter().any(|room| room == "club"));
+
+  // a room we were only added to names no owner
+  server
+    .send(&ServerResponse::PrivateRoomAdded(PrivateRoomAdded {
+      room: "den".into(),
+    }))
+    .await;
+  let started = std::time::Instant::now();
+  let refused = loop {
+    match api.drop_room_ownership("den").await {
+      Err(e) if e.status() == Some(reqwest::StatusCode::NOT_FOUND) => {
+        assert!(started.elapsed() < PATIENCE, "the addition never came in");
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+      }
+      answer => break answer.unwrap_err(),
+    }
+  };
+  assert_eq!(refused.status(), Some(reqwest::StatusCode::FORBIDDEN));
 }
 
 #[tokio::test]
