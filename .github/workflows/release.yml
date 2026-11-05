@@ -97,6 +97,8 @@ jobs:
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           draft: true
+          # a tag such as v0.1.0-rc1 is published as a prerelease, which is never marked latest
+          prerelease: ${{ contains(github.ref_name, '-') }}
           body_path: notes.md
           files: |
             reseek-*
