@@ -170,18 +170,14 @@ impl ApiError {
     self.detail.as_deref()
   }
 
-  /// The body that answers the error, logged as a response with it is, for an error sent as
-  /// part of a larger answer.
+  /// The full reason of a 500, which is logged and never sent.
+  pub fn reason(&self) -> Option<&str> {
+    self.internal.as_deref()
+  }
+
+  /// The body that answers the error, for an error sent as part of a larger answer; whoever
+  /// sends it logs it.
   pub fn into_body(self) -> ErrorBody {
-    let status = self.status;
-    // the request's span, which every handler runs in, names the request
-    match (&self.internal, self.logged) {
-      (_, true) => {}
-      (Some(reason), false) => tracing::error!(%status, error = reason, "request failed"),
-      (None, false) => {
-        tracing::debug!(%status, error = self.error, detail = self.detail, "request refused");
-      }
-    }
     ErrorBody {
       error: self.error,
       detail: self.detail,
@@ -192,6 +188,14 @@ impl ApiError {
 impl IntoResponse for ApiError {
   fn into_response(self) -> Response {
     let status = self.status;
+    // the request's span, which every handler runs in, names the request
+    match (&self.internal, self.logged) {
+      (_, true) => {}
+      (Some(reason), false) => tracing::error!(%status, error = reason, "request failed"),
+      (None, false) => {
+        tracing::debug!(%status, error = self.error, detail = self.detail, "request refused");
+      }
+    }
     let retry_after = self.retry_after;
     let mut response = (status, Json(self.into_body())).into_response();
     if let Some(seconds) = retry_after {

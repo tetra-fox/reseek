@@ -13,6 +13,7 @@ use api_types::transfers::{
 use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::json;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use super::batches::{self, BatchRow};
@@ -276,12 +277,26 @@ impl TransferService for Downloads {
           failures: enqueued.failed,
           error: None,
         },
-        Err(e) => EnqueuedJobBatch {
-          username,
-          batch_id: None,
-          failures: Vec::new(),
-          error: Some(e.into_body()),
-        },
+        Err(e) => {
+          match e.reason() {
+            Some(reason) => {
+              error!(username, %job, batch = %id, reason, "job's download batch failed")
+            }
+            None => info!(
+              username,
+              %job,
+              batch = %id,
+              error = e.message(),
+              "job's download batch refused"
+            ),
+          }
+          EnqueuedJobBatch {
+            username,
+            batch_id: None,
+            failures: Vec::new(),
+            error: Some(e.into_body()),
+          }
+        }
       })
       .collect();
     Ok(EnqueueDownloadJobResponse { id: job, batches })
