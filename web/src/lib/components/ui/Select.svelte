@@ -2,6 +2,7 @@
   import CheckIcon from "@lucide/svelte/icons/check";
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import { Select } from "bits-ui";
+  import type { ClassValue } from "svelte/elements";
 
   import { cn } from "#lib/ui/cn.js";
 
@@ -11,7 +12,7 @@
     "id"?: string;
     "aria-label"?: string;
     "disabled"?: boolean;
-    "class"?: string;
+    "class"?: ClassValue;
   };
 
   let {
