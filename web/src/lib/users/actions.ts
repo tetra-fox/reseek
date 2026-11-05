@@ -47,6 +47,9 @@ export const links = (username: string, folder?: string) => ({
   )
 });
 
+/** Our Soulseek name: the one logged in, or the configured one while disconnected, when the state names none */
+const ownName = () => app.state?.user.username ?? fields(fields(app.options).soulseek).username;
+
 /**
  * The ways to reach `username` this session has, `only` narrowing them. Messaging and searching
  * take ReadWrite, nobody messages themselves, and `server` is no user, so it has none
@@ -60,7 +63,7 @@ export const reach = (
   const write = session.can("ReadWrite");
   const open = {
     profile: to.profile,
-    message: write && !!app.state && app.state.user.username !== username ? to.message : null,
+    message: write && !!app.state && ownName() !== username ? to.message : null,
     shares: to.browse,
     search: write ? to.search : null
   };
@@ -76,10 +79,7 @@ export const reach = (
  * before it nobody can tell whether `username` is ours
  */
 export const canManage = (username: string) =>
-  session.can("ReadWrite") &&
-  username !== SERVER &&
-  !!app.state &&
-  app.state.user.username !== username;
+  session.can("ReadWrite") && username !== SERVER && !!app.state && ownName() !== username;
 
 /** Whether `block` comes from the configuration, which the API cannot lift */
 export const configBlocked = (block: Schemas["Block"] | null | undefined) =>

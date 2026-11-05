@@ -42,6 +42,7 @@ describe("who can be a buddy or blocked", () => {
   afterEach(() => {
     session.principal = null;
     app.state = null;
+    app.options = null;
   });
 
   it("is anyone but ourselves and server, for a ReadWrite account", () => {
@@ -54,12 +55,19 @@ describe("who can be a buddy or blocked", () => {
     expect(canManage("alice")).toBe(false);
   });
 
-  it("is nobody before the daemon's state arrives, and anyone while it names no user", () => {
+  it("is nobody before the daemon's state arrives", () => {
     session.principal = { name: "me", role: "ReadWrite" } as never;
     expect(canManage("me")).toBe(false);
     expect(canManage("alice")).toBe(false);
+  });
+
+  it("is never ourselves while disconnected, by the configured name", () => {
+    session.principal = { name: "me", role: "ReadWrite" } as never;
     app.state = { user: { username: null } } as never;
+    app.options = { soulseek: { username: "me" } } as never;
+    expect(canManage("me")).toBe(false);
     expect(canManage("alice")).toBe(true);
+    expect(ids("me")).toEqual(["profile", "shares", "search"]);
   });
 
   it("can be unblocked only when the block is not the configuration's", () => {
