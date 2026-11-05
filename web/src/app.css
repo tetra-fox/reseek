@@ -500,15 +500,21 @@
   }
 }
 
-/* a line of a list without dividers. Its tint is rounded and stops a little short of the next
-   line's, inside a clear border, so two tinted lines read as two while the pointer never falls
-   between lines */
-@utility pick-row {
-  @apply rounded-control border-y border-transparent line-tint bg-clip-padding;
+/* a line whose small controls stay a little shorter than the line less its divider, so on a short
+   line a control's tint stays between the dividers as on a tall one. A list that sets its lines'
+   height puts it in --line-h */
+@utility line-controls {
   --spacing-control-sm: min(
     --theme(--spacing-control-sm inline),
     calc(var(--line-h, 100vh) - 0.25rem)
   );
+}
+
+/* a line of a list without dividers. Its tint is rounded and stops a little short of the next
+   line's, inside a clear border, so two tinted lines read as two while the pointer never falls
+   between lines */
+@utility pick-row {
+  @apply rounded-control border-y border-transparent line-tint bg-clip-padding line-controls;
 }
 
 /* a line of an activity log, the network's and a room's: the time, which never wraps, an icon,
@@ -547,20 +553,13 @@
 }
 
 /* a line of a list with a divider under it, but for the last line, which the list controller
-   marks and whose divider would double the frame below it: clear, so the line keeps its height. A
-   list that sets its lines' height in --line-h keeps their small controls a little shorter than a
-   line less its divider, so on a short line a control's tint stays between the dividers as on a
-   tall one */
+   marks and whose divider would double the frame below it: clear, so the line keeps its height */
 @utility list-row {
-  @apply line-tint;
+  @apply line-tint line-controls;
   border-bottom-width: 1px;
   &[data-last] {
     border-bottom-color: transparent;
   }
-  --spacing-control-sm: min(
-    --theme(--spacing-control-sm inline),
-    calc(var(--line-h, 100vh) - 0.25rem)
-  );
 }
 
 /* a row's buttons, put on an element inside a `group` row or a list line. Half shown until the row
