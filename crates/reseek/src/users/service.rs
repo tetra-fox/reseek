@@ -239,6 +239,8 @@ impl Directory {
 
   /// Forgets `username` and their block; with `purge` their transfers leave the listings.
   pub(crate) async fn remove(&self, username: &str, purge: bool) -> Result<(), ApiError> {
+    // a buddy change made meanwhile would leave the map holding a buddy without a row
+    let _changing = self.buddies.changing().await;
     let name = username.to_string();
     let deleted = self
       .db

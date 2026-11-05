@@ -11,7 +11,7 @@ use crate::transfers::fixtures::{Row, insert};
 use api_types::events::EventType;
 use api_types::transfers::{SortOrder, TransferDirection};
 use api_types::users::blocking::BlockSource;
-use api_types::users::{Buddy, UserList, UserListQuery};
+use api_types::users::{Buddy, BuddyChange, UserList, UserListQuery};
 use api_types::users::{UserPresence, UserSort};
 use serde_json::{Value, json};
 
@@ -595,5 +595,35 @@ async fn a_buddy_change_keeps_what_it_leaves_out_and_sets_what_they_see() {
   assert_eq!(
     app.state.users.sees("me"),
     api_types::shares::ShareVisibility::Everyone
+  );
+}
+
+#[tokio::test]
+async fn two_buddy_changes_made_at_once_both_hold() {
+  let app = app(CONFIG, &[]).await;
+  let users = &app.state.users;
+  let trusted = BuddyChange {
+    trusted: Some(true),
+    notify_presence: None,
+  };
+  let notify = BuddyChange {
+    trusted: None,
+    notify_presence: Some(true),
+  };
+  let (a, b) = tokio::join!(
+    users.set_buddy("alice", trusted),
+    users.set_buddy("alice", notify)
+  );
+  a.unwrap();
+  b.unwrap();
+  let both = Buddy {
+    trusted: true,
+    notify_presence: true,
+  };
+  assert_eq!(users.buddy("alice"), Some(both));
+  let (_, summary) = app.call("GET", "/api/v0/users/alice/summary", None).await;
+  assert_eq!(
+    summary["buddy"],
+    json!({ "trusted": true, "notifyPresence": true })
   );
 }

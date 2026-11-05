@@ -52,19 +52,29 @@ fn confirmation(reported: Option<IpAddr>, from: Option<IpAddr>) -> Result<IpAddr
 }
 
 /// Every buddy by name, as `users.db` has them.
-#[derive(Default)]
-pub struct Buddies(Mutex<HashMap<String, Buddy>>);
+pub struct Buddies {
+  all: Mutex<HashMap<String, Buddy>>,
+  /// held while a buddy is changed, from reading their settings to the row and the map holding
+  /// the new ones, so of two changes made at once the second builds on the first
+  changing: tokio::sync::Mutex<()>,
+}
 
 impl Buddies {
   /// The buddies of `users.db` as `conn` reads them.
   pub fn read(conn: &Connection) -> rusqlite::Result<Self> {
-    Ok(Self(Mutex::new(
-      store::buddies(conn)?.into_iter().collect(),
-    )))
+    Ok(Self {
+      all: Mutex::new(store::buddies(conn)?.into_iter().collect()),
+      changing: tokio::sync::Mutex::new(()),
+    })
   }
 
   fn all(&self) -> MutexGuard<'_, HashMap<String, Buddy>> {
-    lock(&self.0)
+    lock(&self.all)
+  }
+
+  /// Waits until no other buddy change runs, and holds off the next one until it is dropped.
+  pub async fn changing(&self) -> tokio::sync::MutexGuard<'_, ()> {
+    self.changing.lock().await
   }
 
   /// `username`'s row now says `buddy`.
@@ -187,6 +197,7 @@ impl Directory {
         None,
       ));
     }
+    let _changing = self.buddies.changing().await;
     let before = self.buddy(username);
     let buddy = changed(before, change);
     self.change(username, Change::Buddy(Some(buddy))).await?;
@@ -200,6 +211,7 @@ impl Directory {
   /// Takes `username` off the buddy list. The server goes on telling us their presence until
   /// the session ends, which changes nothing we show.
   pub(crate) async fn remove_buddy(&self, username: &str) -> Result<(), ApiError> {
+    let _changing = self.buddies.changing().await;
     self.change(username, Change::Buddy(None)).await?;
     info!(username, "buddy removed");
     Ok(())
