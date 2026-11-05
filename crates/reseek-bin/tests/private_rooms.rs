@@ -1,14 +1,15 @@
 //! Private rooms against a scripted server: giving up a room we own, which the server does not
 //! answer, leaves the room and forgets it at once, and the server's room list is asked for anew
-//! after we create a room or give one up; a room someone else owns is not ours to give up.
+//! after we create a room, give one up or are added to one; a room someone else owns is not
+//! ours to give up.
 
 mod support;
 
 use api_client::Client;
 use api_types::messaging::rooms::RoomInfo;
 use soulseek_proto::server::{
-  JoinRoomRequest, LeaveRoom, PrivateRoomData, PrivateRoomDropOwnership, RoomData, RoomList,
-  UserData, UserStats,
+  JoinRoomRequest, LeaveRoom, PrivateMessageResponse, PrivateRoomAdded, PrivateRoomData,
+  PrivateRoomDropOwnership, RoomData, RoomList, UserData, UserStats,
 };
 use soulseek_proto::{ServerRequest, ServerResponse, UserPresence};
 use support::client::{ServerSide, USERNAME};
@@ -76,22 +77,32 @@ async fn available(api: &Client, server: &mut ServerSide, list: RoomList) -> Vec
   }
 }
 
-/// The server's list with `club` among the rooms we own, or among the public ones.
-fn club_listed(owned: bool) -> RoomList {
+/// Where the server's list has `club`.
+enum Listed {
+  Owned,
+  Member,
+  Public,
+}
+
+/// The server's list with `club` where `listed` says.
+fn club_listed(listed: Listed) -> RoomList {
   let club = vec![soulseek_proto::server::RoomInfo {
     name: "club".into(),
     user_count: 1,
   }];
-  if owned {
-    RoomList {
+  match listed {
+    Listed::Owned => RoomList {
       owned: club,
       ..RoomList::default()
-    }
-  } else {
-    RoomList {
+    },
+    Listed::Member => RoomList {
+      private: club,
+      ..RoomList::default()
+    },
+    Listed::Public => RoomList {
       public: club,
       ..RoomList::default()
-    }
+    },
   }
 }
 
@@ -110,7 +121,7 @@ async fn giving_up_a_room_sends_it_unanswered_then_leaves_it() {
   let before = available(&api, &mut server, RoomList::default()).await;
   assert!(before.is_empty());
   join_club(&api, &mut server, USERNAME).await;
-  let created = available(&api, &mut server, club_listed(true)).await;
+  let created = available(&api, &mut server, club_listed(Listed::Owned)).await;
   assert!(
     club(&created).is_owned,
     "the list is asked for after the room is created"
@@ -152,7 +163,7 @@ async fn giving_up_a_room_sends_it_unanswered_then_leaves_it() {
   let state = api.application().await.unwrap();
   assert!(!state.rooms.iter().any(|room| room == "club"));
   assert!(api.joined_rooms().await.unwrap().is_empty());
-  let after = available(&api, &mut server, club_listed(false)).await;
+  let after = available(&api, &mut server, club_listed(Listed::Public)).await;
   let listed = club(&after);
   assert!(
     !listed.is_owned && !listed.is_private,
@@ -170,4 +181,44 @@ async fn a_room_someone_else_owns_is_not_given_up() {
   assert_eq!(refused.status(), Some(reqwest::StatusCode::FORBIDDEN));
   let state = api.application().await.unwrap();
   assert!(state.rooms.iter().any(|room| room == "club"));
+}
+
+#[tokio::test]
+async fn a_room_we_are_added_to_is_listed_at_the_next_look() {
+  let dir = tempfile::tempdir().unwrap();
+  let (_running, api, mut server) = scripted(dir.path()).await;
+  assert!(
+    available(&api, &mut server, RoomList::default())
+      .await
+      .is_empty()
+  );
+
+  // the daemon takes the server's events in order, so once the message after the addition is
+  // in, the addition is too
+  server
+    .send(&ServerResponse::PrivateRoomAdded(PrivateRoomAdded {
+      room: "club".into(),
+    }))
+    .await;
+  server
+    .send(&ServerResponse::PrivateMessage(PrivateMessageResponse {
+      id: 1,
+      timestamp: 1_700_000_000,
+      username: "chatty".into(),
+      message: "hello".into(),
+      is_new: true,
+    }))
+    .await;
+  let started = std::time::Instant::now();
+  while api.conversation("chatty", false).await.is_err() {
+    assert!(started.elapsed() < PATIENCE, "the message never came in");
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+  }
+
+  let added = available(&api, &mut server, club_listed(Listed::Member)).await;
+  let listed = club(&added);
+  assert!(
+    listed.is_private && !listed.is_owned,
+    "the list is asked for after we are added"
+  );
 }

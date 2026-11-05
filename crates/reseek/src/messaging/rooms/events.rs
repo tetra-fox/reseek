@@ -118,6 +118,7 @@ impl Messaging {
       Event::PrivateRoomMembershipAdded(room) => {
         info!(room, "Added to private room");
         self.rooms.tracker().change_private(&room, |_| {});
+        self.forget_room_list().await;
         self.push_rooms().await;
       }
       Event::PrivateRoomMembershipRemoved(room) => {
@@ -126,6 +127,7 @@ impl Messaging {
       }
       Event::PrivateRoomModerationAdded(room) => {
         info!(room, "Promoted to moderator in private room");
+        self.forget_room_list().await;
         if let Some(us) = self.logged_in_as() {
           self.change_private(&room, |private| {
             private.operators.insert(us);
@@ -134,6 +136,7 @@ impl Messaging {
       }
       Event::PrivateRoomModerationRemoved(room) => {
         info!(room, "Demoted from moderator in private room");
+        self.forget_room_list().await;
         if let Some(us) = self.logged_in_as() {
           self.change_private(&room, |private| {
             private.operators.remove(&us);
