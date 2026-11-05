@@ -8,6 +8,7 @@
 
 mod interests;
 mod password;
+mod recommendations;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -52,6 +53,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
       delete_profile_picture
     ))
     .merge(interests::routes())
+    .merge(recommendations::routes())
     .merge(password::routes())
 }
 

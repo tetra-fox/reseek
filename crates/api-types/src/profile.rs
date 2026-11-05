@@ -67,6 +67,41 @@ pub struct Interests {
   pub hated: Vec<String>,
 }
 
+/// An interest the server recommends, with its score: above zero it is recommended, higher
+/// first; zero and below it is recommended against.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Recommendation {
+  /// the interest
+  #[schema(example = "electronic")]
+  pub interest: String,
+  /// the server's score for it
+  pub score: i32,
+}
+
+/// Interests the server recommends and those it recommends against, each list best first. The
+/// reply of `GET /interests/recommendations`, `GET /interests/popular` and
+/// `GET /interests/{interest}/recommendations`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Recommendations {
+  /// recommended, highest score first
+  pub recommended: Vec<Recommendation>,
+  /// recommended against, lowest score first
+  pub unrecommended: Vec<Recommendation>,
+}
+
+/// A user whose interests are like ours. The items of `GET /interests/similar-users`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SimilarUser {
+  /// the user
+  #[schema(example = "alice")]
+  pub username: String,
+  /// how alike, as the server rates it; higher is more alike
+  pub rating: u32,
+}
+
 /// A new password for our Soulseek account, the body of `PUT /application/password`.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

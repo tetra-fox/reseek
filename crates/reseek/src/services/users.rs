@@ -1,5 +1,6 @@
 //! Other users: what the network says about them, and the directory of users we know.
 
+use api_types::profile::Interests;
 use api_types::users::{
   BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory, StatisticsSnapshot,
   UserEndpoint, UserInfo, UserList, UserListQuery, UserProfile, UserStatus, UserSummary,
@@ -53,6 +54,11 @@ pub trait UserService: Send + Sync {
 
   /// A user's share and speed figures, asked of the server.
   async fn statistics(&self, username: &str) -> Result<StatisticsSnapshot, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// What a user likes and hates, asked of the server.
+  async fn interests(&self, username: &str) -> Result<Interests, ApiError> {
     Err(not_yet(DOMAIN))
   }
 

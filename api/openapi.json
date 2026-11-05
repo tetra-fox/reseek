@@ -4247,6 +4247,309 @@
         }
       }
     },
+    "/api/v0/interests/popular": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Interests popular across the whole network.",
+        "operationId": "popular",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recommendations"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/interests/recommendations": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Interests the server recommends to us from what we like and hate.",
+        "operationId": "personal",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recommendations"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/interests/similar-users": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Users whose interests are like ours, most alike first.",
+        "operationId": "similar_users",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SimilarUser"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/interests/{interest}/recommendations": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Interests recommended to those who like one interest.",
+        "operationId": "related",
+        "parameters": [
+          {
+            "name": "interest",
+            "in": "path",
+            "description": "the interest",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recommendations"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/interests/{interest}/users": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Users who like one interest.",
+        "operationId": "liked_by",
+        "parameters": [
+          {
+            "name": "interest",
+            "in": "path",
+            "description": "the interest",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/live": {
       "get": {
         "tags": [
@@ -14602,6 +14905,87 @@
         }
       }
     },
+    "/api/v0/users/{username}/interests": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "What a user likes and hates, asked of the server now.",
+        "operationId": "interests",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Interests"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/users/{username}/mute": {
       "put": {
         "tags": [
@@ -22464,6 +22848,50 @@
           }
         }
       },
+      "Recommendation": {
+        "type": "object",
+        "description": "An interest the server recommends, with its score: above zero it is recommended, higher\nfirst; zero and below it is recommended against.",
+        "required": [
+          "interest",
+          "score"
+        ],
+        "properties": {
+          "interest": {
+            "type": "string",
+            "description": "the interest",
+            "example": "electronic"
+          },
+          "score": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the server's score for it"
+          }
+        }
+      },
+      "Recommendations": {
+        "type": "object",
+        "description": "Interests the server recommends and those it recommends against, each list best first. The\nreply of `GET /interests/recommendations`, `GET /interests/popular` and\n`GET /interests/{interest}/recommendations`.",
+        "required": [
+          "recommended",
+          "unrecommended"
+        ],
+        "properties": {
+          "recommended": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Recommendation"
+            },
+            "description": "recommended, highest score first"
+          },
+          "unrecommended": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Recommendation"
+            },
+            "description": "recommended against, lowest score first"
+          }
+        }
+      },
       "RelayAgentConnected": {
         "type": "object",
         "description": "The data of `RelayAgentConnected`.",
@@ -23920,6 +24348,27 @@
           "scanning": {
             "type": "boolean",
             "description": "a scan is running"
+          }
+        }
+      },
+      "SimilarUser": {
+        "type": "object",
+        "description": "A user whose interests are like ours. The items of `GET /interests/similar-users`.",
+        "required": [
+          "username",
+          "rating"
+        ],
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how alike, as the server rates it; higher is more alike",
+            "minimum": 0
+          },
+          "username": {
+            "type": "string",
+            "description": "the user",
+            "example": "alice"
           }
         }
       },

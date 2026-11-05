@@ -11,6 +11,7 @@
   import NotesEditor from "./NotesEditor.svelte";
   import ProfileView from "./ProfileView.svelte";
   import TagsEditor from "./TagsEditor.svelte";
+  import UserInterests from "./UserInterests.svelte";
 
   // what the user says about themselves, what we note about them, and what we did together
   let { profile: p }: { profile: Schemas["UserProfile"] } = $props();
@@ -47,6 +48,8 @@
     <p class="text-sm text-fg-muted">The profile has not been loaded. Use Refresh to request it.</p>
   {/if}
 </Card>
+
+<UserInterests username={p.username} />
 
 <div class="grid gap-section md:grid-cols-2">
   <Card title="Notes">

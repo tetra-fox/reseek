@@ -8,6 +8,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use api_types::profile::Interests;
 use api_types::users::{
   BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory as SharedDirectory,
   StatisticsSnapshot, UserEndpoint, UserInfo, UserList, UserListQuery, UserProfile, UserStatus,
@@ -326,6 +327,20 @@ impl UserService for Users {
       .statistics_of(self.network.client(), username)
       .await
       .map_err(|e| unanswered(username, e))
+  }
+
+  async fn interests(&self, username: &str) -> Result<Interests, ApiError> {
+    self.reachable(username)?;
+    let interests = self
+      .network
+      .client()
+      .get_user_interests(username)
+      .await
+      .map_err(|e| unanswered(username, e))?;
+    Ok(Interests {
+      liked: interests.likes,
+      hated: interests.hates,
+    })
   }
 
   async fn watch(&self, username: &str) -> Result<(), ApiError> {

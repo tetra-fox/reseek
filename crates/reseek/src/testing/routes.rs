@@ -82,6 +82,7 @@ pub fn probe(operation: &Operation) -> Request<Body> {
       "{type}" => "Noop".to_string(),
       "{name}" => "home".to_string(),
       "{key}" => "rooms".to_string(),
+      "{interest}" => "jazz".to_string(),
       "{id}" if route.starts_with("/api/v0/conversations/") => "7".to_string(),
       "{id}" | "{token}" => ID.to_string(),
       other => other.to_string(),

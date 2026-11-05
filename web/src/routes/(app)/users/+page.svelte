@@ -6,11 +6,13 @@
   import BlockedList from "#lib/components/users/BlockedList.svelte";
   import BuddyList from "#lib/components/users/BuddyList.svelte";
   import Directory from "#lib/components/users/Directory.svelte";
+  import InterestsPage from "#lib/components/users/interests/InterestsPage.svelte";
   import { href, route, userHref } from "#lib/nav.js";
   import { BUDDY } from "#lib/wording.js";
 
   // /users is the directory; ?user=<name> goes to that user's profile, ?tag= filters by a tag,
-  // ?has=transfers those we transferred with, ?tab=buddies shows the buddies and ?tab=blocked the
+  // ?has=transfers those we transferred with, ?tab=buddies shows the buddies, ?tab=interests the
+  // recommendations and similar users, for one interest with ?interest=, and ?tab=blocked the
   // blocked users
   const query = $derived(route(page.url).query);
   $effect(() => {
@@ -20,14 +22,22 @@
   const TABS = [
     { id: "all", title: "All users", to: "/users" },
     { id: "buddies", title: BUDDY.plural, to: "/users?tab=buddies" },
+    { id: "interests", title: "Interests", to: "/users?tab=interests" },
     { id: "blocked", title: "Blocked users", to: "/users?tab=blocked" }
   ];
   const tab = $derived(TABS.find((t) => t.id === query.get("tab")) ?? TABS[0]);
+  const interest = $derived(query.get("interest")?.trim().toLowerCase() || null);
 </script>
 
-{#if tab.id !== "all"}<Crumbs steps={[{ label: tab.title }]} />{/if}
+{#if tab.id !== "all"}
+  <Crumbs
+    steps={[
+      { label: tab.title, href: href(tab.to) },
+      ...(tab.id === "interests" && interest ? [{ label: interest }] : [])
+    ]} />
+{/if}
 
-<!-- the tabs wrap where a large text size leaves no room for all three on a phone -->
+<!-- the tabs wrap where a large text size leaves no room for all of them on a phone -->
 <nav aria-label="Users" class="flex flex-wrap gap-1">
   {#each TABS as t (t.id)}
     <a href={href(t.to)} aria-current={tab.id === t.id ? "page" : undefined} class="nav-tab">
@@ -40,6 +50,8 @@
   <BlockedList />
 {:else if tab.id === "buddies"}
   <BuddyList />
+{:else if tab.id === "interests"}
+  <InterestsPage {interest} />
 {:else}
   {#key `${query.get("tag")}|${query.get("has")}`}
     <Directory tag={query.get("tag")} withTransfers={query.get("has") === "transfers"} />

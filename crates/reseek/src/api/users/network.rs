@@ -1,6 +1,7 @@
 //! What the network says about a user: their address, browsing their shares, one of their
-//! directories, their info, presence and figures, and watching them.
+//! directories, their info, presence, figures and interests, and watching them.
 
+use api_types::profile::Interests;
 use api_types::users::{
   BrowseProgress, BrowseResponse, CachedUser, Directory, DirectoryRequest, StatisticsSnapshot,
   UserEndpoint, UserInfo, UserStatus, UsernameQuery,
@@ -26,6 +27,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(info))
     .routes(routes!(status))
     .routes(routes!(statistics))
+    .routes(routes!(interests))
     .routes(routes!(watch, unwatch))
     .routes(routes!(watched))
     .routes(routes!(cache))
@@ -164,6 +166,24 @@ async fn statistics(
   NamedUser(username): NamedUser,
 ) -> Result<Json<StatisticsSnapshot>, ApiError> {
   app.services.users.statistics(&username).await.map(Json)
+}
+
+/// What a user likes and hates, asked of the server now.
+#[utoipa::path(
+  get, path = "/users/{username}/interests", tag = "users",
+  params(("username" = String, Path, description = "the user"), UsernameQuery),
+  responses(
+    (status = 200, body = Interests), (status = 401, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 502, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn interests(
+  State(app): State<AppState>,
+  _caller: Authorized<AnyRole>,
+  NamedUser(username): NamedUser,
+) -> Result<Json<Interests>, ApiError> {
+  app.services.users.interests(&username).await.map(Json)
 }
 
 /// Asks the server to report a user's presence and figures as they change.

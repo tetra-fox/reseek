@@ -34,6 +34,11 @@ export class OwnInterests {
     return this.#changed ?? this.loader.data ?? { liked: [], hated: [] };
   }
 
+  /** Resolves once every change made so far has been answered */
+  get settled(): Promise<void> {
+    return this.#saves;
+  }
+
   add = (side: Side, text: string) => {
     // in the form the daemon keeps, so an interest moved from the other list leaves it
     const interest = text.trim().toLowerCase();
