@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { layout } from "#lib/chat/messages/messages.js";
 import { MessagePane, PAGE } from "#lib/chat/pane.svelte.js";
 import { dismiss, toasts } from "#lib/feedback/toast.svelte.js";
+import { interaction } from "#lib/lists/interaction.svelte.js";
 import { ListWindow } from "#lib/lists/virtual.svelte.js";
 import { flush } from "#lib/testing/flush.js";
 import { press } from "#lib/testing/keys.js";
@@ -105,6 +106,30 @@ describe("the message list", () => {
     expect(to.mock.calls).toEqual([[join, "center"]]);
     expect(toEnd).not.toHaveBeenCalled();
     expect(toasts.map((t) => t.text)).toEqual(["That message is no longer stored."]);
+  });
+
+  it("brings the message the keys are on into view before opening its menu", async () => {
+    history(250);
+    // jsdom measures every line as 0 high, which would draw them all
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(24);
+    const { box } = await open();
+    const to = vi.spyOn(ListWindow.prototype, "scrollTo").mockImplementation(() => {});
+    box.focus();
+    press(box, "ArrowUp");
+    await flush();
+    const active = document.activeElement as HTMLElement;
+    expect(active.dataset.message).toBeDefined();
+    const at = Number(active.parentElement!.dataset.index);
+    to.mockClear();
+
+    press(active, "Enter");
+    await flush();
+    expect(to.mock.calls).toEqual([[at]]);
+    expect(document.querySelector('[role="menu"]')).not.toBeNull();
+    press(document.querySelector('[role="menuitem"]')!, "Escape");
+    await flush();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(interaction.frozen).toBe(false);
   });
 
   it("walks past the messages of ours that are not sent", async () => {

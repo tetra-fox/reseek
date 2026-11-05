@@ -177,6 +177,10 @@
     } else if (active !== null) {
       if (e.key !== "Enter" && e.key !== "ContextMenu" && !(e.key === "F10" && e.shiftKey)) return;
       e.preventDefault();
+      // a message that has left the lines has no row to open a menu from
+      if (activeAt === -1) return;
+      // the menu hangs from the message, which may have been scrolled away from
+      shown.scrollTo(activeAt);
       menuFor = active;
     }
   };
