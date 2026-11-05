@@ -115,35 +115,48 @@
     });
   });
 
-  /** a folder as a node of the tree, its contents once it has been read */
-  const nodeOf = (folder: Entry): FolderNode<Entry> => {
-    const read = listings.get(folder.path);
-    const inside = read ? entries(read, folder.path.split("/"), sort.by, sort.dir) : [];
-    const children = inside.filter((e) => e.kind === "directory").map(nodeOf);
-    const items = inside.filter((e) => e.kind === "file" && shows(e));
-    const at = { key: folder.path, path: folder.path, label: folder.name };
-    return folderNode(at, items, children, (e) => e.size ?? 0);
-  };
+  /** which files the list shows by their analysis, every file when null */
+  let only = $state<MarkFilter | null>(null);
+  const shows = (e: Entry) =>
+    e.kind !== "file" || !only || passes(only, marks.file(root, e.path), analyzable(e.name));
   const top = $derived(listing ? entries(listing, parts, sort.by, sort.dir) : []);
-  const roots = $derived(top.filter((e) => e.kind === "directory").map(nodeOf));
-  /** the shown folder itself, which its own files and the way up belong to */
-  const here = $derived(
-    folderNode(
+  /**
+   * The tree's lines with the files `keep` lets through: the way up, the folders, open ones with
+   * what they hold once read, then the shown folder's own files
+   */
+  const linesOf = (keep: (e: Entry) => boolean): TreeLine<Entry>[] => {
+    const nodeOf = (folder: Entry): FolderNode<Entry> => {
+      const read = listings.get(folder.path);
+      const inside = read ? entries(read, folder.path.split("/"), sort.by, sort.dir) : [];
+      const children = inside.filter((e) => e.kind === "directory").map(nodeOf);
+      const items = inside.filter((e) => e.kind === "file" && keep(e));
+      const at = { key: folder.path, path: folder.path, label: folder.name };
+      return folderNode(at, items, children, (e) => e.size ?? 0);
+    };
+    const roots = top.filter((e) => e.kind === "directory").map(nodeOf);
+    // the shown folder itself, which its own files and the way up belong to
+    const here = folderNode(
       { key: path, path, label: parts.at(-1) ?? root },
-      top.filter((e) => e.kind !== "directory" && shows(e)),
+      top.filter((e) => e.kind !== "directory" && keep(e)),
       roots,
       (e) => e.size ?? 0
-    )
-  );
-  const lines = $derived<TreeLine<Entry>[]>([
-    ...top
-      .filter((e) => e.kind === "up")
-      .map((e) => ({ kind: "item" as const, key: e.key, item: e, depth: 0, folder: here })),
-    ...treeLines(roots, expansion.isOpen, (e) => e.key),
-    ...top
-      .filter((e) => e.kind === "file" && shows(e))
-      .map((e) => ({ kind: "item" as const, key: e.key, item: e, depth: 0, folder: here }))
-  ]);
+    );
+    return [
+      ...top
+        .filter((e) => e.kind === "up")
+        .map((e) => ({ kind: "item" as const, key: e.key, item: e, depth: 0, folder: here })),
+      ...treeLines(roots, expansion.isOpen, (e) => e.key),
+      ...top
+        .filter((e) => e.kind === "file" && keep(e))
+        .map((e) => ({ kind: "item" as const, key: e.key, item: e, depth: 0, folder: here }))
+    ];
+  };
+  const lines = $derived(linesOf(shows));
+  const fileCount = (all: TreeLine<Entry>[]) =>
+    all.filter((l) => l.kind === "item" && l.item.kind === "file").length;
+  const shownFiles = $derived(fileCount(lines));
+  /** the files the tree would show without the filter, which the shown ones are counted out of */
+  const allFiles = $derived(only ? fileCount(linesOf(() => true)) : shownFiles);
   /** every entry read so far, by key, for the selection */
   const byKey = $derived.by(() => {
     const map = new Map<string, Entry>();
@@ -155,20 +168,7 @@
     return map;
   });
   const managed = $derived(fields(app.options).remote_file_management === true);
-  /** which files the list shows by their analysis, every file when null */
-  let only = $state<MarkFilter | null>(null);
-  const shows = (e: Entry) =>
-    e.kind !== "file" || !only || passes(only, marks.file(root, e.path), analyzable(e.name));
   $effect(() => marks.retain());
-  /** the files the list holds unfiltered: the shown folder's and those of the folders open in it */
-  const files = $derived(
-    [...listings]
-      .filter(([at]) => at === path || expansion.isOpen(at))
-      .flatMap(([at, read]) => entries(read, at.split("/").filter(Boolean), sort.by, sort.dir))
-      .filter((e) => e.kind === "file")
-  );
-  /** the files in the shown folder itself, which an emptied list says the filter hides */
-  const filesHere = $derived(top.filter((e) => e.kind === "file").length);
   const filters = $derived<ActiveFilter[]>(
     FILE_FILTERS.filter((f) => f.id === only).map((f) => ({
       id: f.id,
@@ -377,8 +377,8 @@
 
 <Filter.Summary
   {filters}
-  shown={files.filter(shows).length}
-  total={files.length}
+  shown={shownFiles}
+  total={allFiles}
   noun={["file", "files"]}
   refocus={() => tree?.focus()} />
 
@@ -541,10 +541,10 @@
     </SelectionBar>
   {/if}
   {#if lines.every((l) => l.kind === "item" && l.item.kind === "up")}
-    {#if only && filesHere}
+    {#if allFiles}
       <Filter.Empty
         {filters}
-        total={filesHere}
+        total={allFiles}
         noun={["file", "files"]}
         refocus={() => tree?.focus()} />
     {:else}
