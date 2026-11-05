@@ -28,8 +28,9 @@ const jobNotice = (job: Schemas["DownloadJobFinished"]) => {
   ].filter(Boolean);
   // a folder at the top of a share names the share, not what was picked from it
   const name = /[\\/]/.test(job.folder) ? getFileName(job.folder) : "";
+  const ended = job.succeededCount ? "finished" : "failed";
   return {
-    title: name ? `${name} finished` : "Downloads finished",
+    title: name ? `${name} ${ended}` : `Downloads ${ended}`,
     body: [`${plural(job.fileCount, "file", "files")} from ${who}`, ...outcomes].join(", ")
   };
 };
