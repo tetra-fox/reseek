@@ -233,14 +233,16 @@ describe("a settings section", () => {
       sections.find((s) => s.id === "web")!,
       v
     );
-    const row = web.querySelector('[id="web.port-help"]')!.parentElement!;
-    const reset = [...row.querySelectorAll("button")].find((b) =>
-      b.title.startsWith("Changed from the default")
-    )!;
+    // the help sits in the row's first part, the restore button after the control
+    const row = (key: string) =>
+      web.querySelector(`[id="${key}-help"]`)!.parentElement!.parentElement!;
+    const restore = (key: string) =>
+      [...row(key).querySelectorAll("button")].find((b) =>
+        b.title.startsWith("Changed from the default")
+      );
+    const reset = restore("web.port")!;
     // a field already at its default has no marker
-    expect(web.querySelector('[id="web.ui-help"]')!.parentElement!.textContent).not.toContain(
-      "default\n"
-    );
+    expect(restore("web.ui")).toBeUndefined();
     reset.click();
     flushSync();
     expect(web.querySelector<HTMLInputElement>('[id="web.port"]')!.value).toBe("5030");

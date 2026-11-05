@@ -65,10 +65,15 @@
   const notApplied = $derived(info.notApplied);
   /** a table takes the row's whole width, and says what is wrong by its rows */
   const tabular = $derived(control === "map" || control === "table-list");
+  const restorable = $derived(!!custom && edit.mode !== "locked");
+  const environment = $derived(!!(info.envVar || info.cliFlag));
+  /** the row has buttons that go with the option rather than its value */
+  const tools = $derived(restorable || environment);
 </script>
 
 <!-- one setting: what it is on the left, its control on the right, stacked on phones, and a table
-     under what it is at any width -->
+     under what it is at any width. The restore and environment buttons come after the control:
+     under the help on a wider screen, under the control on a phone and under a table -->
 <div
   class={[
     "grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-2 px-5 py-4 md:items-start",
@@ -82,17 +87,7 @@
         <span class="size-1.5 rounded-full bg-accent" title="Not saved yet"></span>
         <span class="sr-only">not saved yet</span>
       {/if}
-      {#if custom && edit.mode !== "locked"}
-        <button
-          type="button"
-          class="flex items-center gap-1 rounded-badge border border-dashed border-accent/50 px-1.5 text-xs text-accent-soft-fg hover:bg-accent-soft"
-          title={tabular
-            ? "Changed from the default. Click to restore it."
-            : `Changed from the default (${shown(info.default)}). Click to restore it.`}
-          onclick={ondefault}>
-          <RotateCcwIcon class="size-3" />default
-        </button>
-      {:else if custom}
+      {#if custom && edit.mode === "locked"}
         <Badge tone="outline" title={tabular ? undefined : `The default is ${shown(info.default)}`}
           >not default</Badge>
       {/if}
@@ -108,44 +103,13 @@
           >Default <code class="font-mono wrap-anywhere">{shown(info.default)}</code>.</span>
       {/if}
     </p>
-    {#if info.envVar || info.cliFlag}
-      <LinkPreview.Root openDelay={250} closeDelay={150}>
-        <LinkPreview.Trigger>
-          {#snippet child({ props })}
-            <button
-              {...props}
-              type="button"
-              class="flex w-fit items-center gap-1 rounded-badge text-xs text-fg-subtle hover:text-fg"
-              aria-label={`Set ${field.label} from the environment or the command line`}>
-              <TerminalIcon class="size-3.5" />Environment and flag
-            </button>
-          {/snippet}
-        </LinkPreview.Trigger>
-        <LinkPreview.Portal>
-          <LinkPreview.Content
-            side="bottom"
-            align="start"
-            sideOffset={4}
-            class="z-50 flex w-max max-w-[calc(100vw-1rem)] flex-col gap-1.5 rounded-card border bg-overlay p-3 text-xs shadow-raised motion-safe:animate-popover-in">
-            <p class="text-fg-muted">Environment variable and command-line flag:</p>
-            {#each [info.envVar && `${info.envVar}=…`, info.cliFlag && `${info.cliFlag} …`].filter((t): t is string => !!t) as text (text)}
-              <span class="flex items-center gap-2">
-                <code
-                  class="min-w-0 flex-1 rounded-badge bg-surface-muted px-1.5 py-0.5 font-mono wrap-anywhere"
-                  >{text}</code>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Copy ${text.split(/[= ]/)[0]}`}
-                  onclick={() => void copyText(text.split(/[= ]/)[0])}><CopyIcon /></Button>
-              </span>
-            {/each}
-          </LinkPreview.Content>
-        </LinkPreview.Portal>
-      </LinkPreview.Root>
-    {/if}
   </div>
-  <div class="flex min-w-0 flex-col gap-1">
+  <div
+    class={[
+      "flex min-w-0 flex-col gap-1",
+      !tabular && "md:col-start-2 md:row-start-1",
+      !tabular && tools && "md:row-span-2"
+    ]}>
     {#key generation}
       <FieldControl
         {field}
@@ -172,4 +136,60 @@
     {@render extra?.()}
     {#if moved}<p class="text-xs text-warning-soft-fg">The running value has changed</p>{/if}
   </div>
+  {#if tools}
+    <div
+      class={[
+        "flex flex-wrap items-center gap-x-3 gap-y-1",
+        !tabular && "md:col-start-1 md:row-start-2"
+      ]}>
+      {#if restorable}
+        <button
+          type="button"
+          class="flex items-center gap-1 rounded-badge border border-dashed border-accent/50 px-1.5 text-xs text-accent-soft-fg hover:bg-accent-soft"
+          title={tabular
+            ? "Changed from the default. Click to restore it."
+            : `Changed from the default (${shown(info.default)}). Click to restore it.`}
+          aria-label={`Restore the default of ${field.label}`}
+          onclick={ondefault}>
+          <RotateCcwIcon class="size-3" />default
+        </button>
+      {/if}
+      {#if environment}
+        <LinkPreview.Root openDelay={250} closeDelay={150}>
+          <LinkPreview.Trigger>
+            {#snippet child({ props })}
+              <button
+                {...props}
+                type="button"
+                class="flex w-fit items-center gap-1 rounded-badge text-xs text-fg-subtle hover:text-fg"
+                aria-label={`Set ${field.label} from the environment or the command line`}>
+                <TerminalIcon class="size-3.5" />Environment and flag
+              </button>
+            {/snippet}
+          </LinkPreview.Trigger>
+          <LinkPreview.Portal>
+            <LinkPreview.Content
+              side="bottom"
+              align="start"
+              sideOffset={4}
+              class="z-50 flex w-max max-w-[calc(100vw-1rem)] flex-col gap-1.5 rounded-card border bg-overlay p-3 text-xs shadow-raised motion-safe:animate-popover-in">
+              <p class="text-fg-muted">Environment variable and command-line flag:</p>
+              {#each [info.envVar && `${info.envVar}=…`, info.cliFlag && `${info.cliFlag} …`].filter((t): t is string => !!t) as text (text)}
+                <span class="flex items-center gap-2">
+                  <code
+                    class="min-w-0 flex-1 rounded-badge bg-surface-muted px-1.5 py-0.5 font-mono wrap-anywhere"
+                    >{text}</code>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Copy ${text.split(/[= ]/)[0]}`}
+                    onclick={() => void copyText(text.split(/[= ]/)[0])}><CopyIcon /></Button>
+                </span>
+              {/each}
+            </LinkPreview.Content>
+          </LinkPreview.Portal>
+        </LinkPreview.Root>
+      {/if}
+    </div>
+  {/if}
 </div>
