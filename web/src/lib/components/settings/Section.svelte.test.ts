@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ConfigView } from "#lib/config/fields.js";
+import { type ConfigView, controlOf } from "#lib/config/fields.js";
 import fixture from "#lib/config/fixtures/view.json";
 import { helpParts } from "#lib/config/help.js";
 import { sections } from "#lib/config/sections.js";
@@ -32,8 +32,15 @@ describe("a settings section", () => {
   it("renders a row for every option of every section, with its help and control", () => {
     for (const section of sections) {
       const target = render(section);
+      // a label names its control, but for a group of controls, which carries the name itself
       const labels = [...target.querySelectorAll("label")].map((l) => l.getAttribute("for"));
-      expect(labels).toEqual(section.fields.map((f) => f.key));
+      expect(labels).toEqual(
+        section.fields.map((f) =>
+          ["map", "table-list", "notify-mode"].includes(controlOf(f, view.fields[f.key]))
+            ? null
+            : f.key
+        )
+      );
       for (const field of section.fields) {
         // the help reads as written, with what is between backticks set as code
         const parts = helpParts(view.fields[field.key].doc);

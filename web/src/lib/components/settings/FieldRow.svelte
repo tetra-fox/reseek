@@ -65,6 +65,8 @@
   const notApplied = $derived(info.notApplied);
   /** a table takes the row's whole width, and says what is wrong by its rows */
   const tabular = $derived(control === "map" || control === "table-list");
+  /** whether the control is one element a label can name */
+  const labelable = $derived(!tabular && control !== "notify-mode");
   const restorable = $derived(!!custom && edit.mode !== "locked");
   const environment = $derived(!!(info.envVar || info.cliFlag));
   /** the row has buttons that go with the option rather than its value */
@@ -82,7 +84,10 @@
   ]}>
   <div class="flex min-w-0 flex-col gap-1 md:pt-1.5">
     <div class="flex flex-wrap items-center gap-inline">
-      <label for={field.key} class="min-w-0 text-sm font-medium wrap-anywhere">{field.label}</label>
+      <!-- a group of radios or a table is no element a label can name; it carries the name itself -->
+      <label
+        for={labelable ? field.key : undefined}
+        class="min-w-0 text-sm font-medium wrap-anywhere">{field.label}</label>
       {#if changed}
         <span class="size-1.5 rounded-full bg-accent" title="Not saved yet"></span>
         <span class="sr-only">not saved yet</span>
