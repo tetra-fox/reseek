@@ -4985,7 +4985,8 @@ export interface components {
             presence?: null | components["schemas"]["UserPresence"];
             /**
              * Format: date-time
-             * @description when `presence` was observed, null when never
+             * @description when `presence` was first observed after another one, null when never: the time it was
+             *     last seen to change, which cannot reach back past a time we were not connected
              */
             presenceAt?: string | null;
             statistics?: null | components["schemas"]["StoredStatistics"];
