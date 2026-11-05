@@ -186,6 +186,7 @@ impl Messaging {
         .instrument(info_span!("messaging")),
     );
     *lock(&messaging.worker) = Some(worker);
+    messaging.follow_blocks();
     messaging.tasks.spawn(
       messaging
         .clone()

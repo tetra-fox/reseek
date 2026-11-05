@@ -1,11 +1,11 @@
 //! What the server tells us about rooms: who joins and leaves, what is said, the tickers, and
 //! the private rooms we belong to. A message is stored before anyone is told of it; one for a
 //! room we are not in is dropped, and one from a user blocked for rooms is stored hidden and
-//! told to no one.
+//! told to no one. A change of a block pushes every room again, with its tickers marked anew.
 
 use std::collections::BTreeMap;
 
-use api_types::events::{Event as BusEvent, RoomMessageReceivedEvent};
+use api_types::events::{Event as BusEvent, EventType, RoomMessageReceivedEvent};
 use api_types::live::LiveFrame;
 use api_types::messaging::rooms::{
   RoomMessageReceived, RoomUserJoined, RoomUserLeft, RoomUserStatus,
@@ -144,6 +144,40 @@ impl Messaging {
         }
       }
       other => trace!(?other, "client event no room engine follows"),
+    }
+  }
+
+  /// Pushes every room we are in again whenever a block is made, changed or ends, so a wall
+  /// shows the ticker of a user it now hides or no longer hides at once. Every room goes, not
+  /// only those the user is in, since a block naming addresses can hide any member.
+  pub(in crate::messaging) fn follow_blocks(&self) {
+    for kind in [EventType::UserBlocked, EventType::UserUnblocked] {
+      let messaging = self.this.clone();
+      self.events.subscribe("rooms", Some(kind), move |_| {
+        // the engine is dropped only as the daemon ends
+        if let Some(messaging) = messaging.upgrade() {
+          messaging.push_rooms_again();
+        }
+        async { Ok(()) }
+      });
+    }
+  }
+
+  /// Pushes every room we are in as it is now.
+  fn push_rooms_again(&self) {
+    let names: Vec<String> = self
+      .rooms
+      .tracker()
+      .rooms()
+      .iter()
+      .map(|room| room.name.clone())
+      .collect();
+    debug!(
+      rooms = names.len(),
+      "rooms pushed again after a block changed"
+    );
+    for name in names {
+      self.push_room(&name);
     }
   }
 
@@ -420,6 +454,56 @@ mod tests {
       .map(|t| (t.username.as_str(), t.hidden))
       .collect();
     assert_eq!(hidden, [("bob", false), ("mallory", true)]);
+  }
+
+  #[tokio::test]
+  async fn a_block_and_its_end_reach_an_open_wall_at_once() {
+    let app = app(
+      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
+      &[],
+    )
+    .await;
+    let messaging = &app.state.messaging;
+    let data = RoomData {
+      name: "indie".into(),
+      users: Vec::new(),
+      private: None,
+    };
+    messaging.rooms.tracker().joined(&data, "me");
+    let set = Event::RoomTickerAdded {
+      room_name: "indie".into(),
+      ticker: soulseek_proto::server::RoomTicker {
+        username: "mallory".into(),
+        message: "listening".into(),
+      },
+    };
+    messaging.room_event(set).await;
+    let mut stream = app
+      .stream_from(
+        "127.0.0.1:40000",
+        crate::testing::request("GET", "/api/v0/live?topics=rooms", None),
+      )
+      .await;
+    stream.until("hello").await;
+    // each change of the block pushes the room, its ticker marked as the block now says
+    let mut wall_says = async |hidden: bool| loop {
+      let frame = stream.until("rooms.update").await.pop().unwrap();
+      if frame.data["tickers"][0]["hidden"] == hidden {
+        return;
+      }
+    };
+    let block = serde_json::json!({ "scopes": ["rooms"] });
+    let path = "/api/v0/users/mallory/block";
+    let answer = app
+      .send(crate::testing::request("PUT", path, Some(block)))
+      .await;
+    assert_eq!(answer.status, 200);
+    wall_says(true).await;
+    let answer = app
+      .send(crate::testing::request("DELETE", path, None))
+      .await;
+    assert_eq!(answer.status, 204);
+    wall_says(false).await;
   }
 
   #[tokio::test]
