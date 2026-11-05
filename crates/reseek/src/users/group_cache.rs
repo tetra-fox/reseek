@@ -163,15 +163,32 @@ impl Directory {
     Ok(self.statistics_fetched(username, &fetched.stats).await)
   }
 
+  /// Asks the server for `username`'s statistics now and keeps them for the upload group,
+  /// leaving the user's row to the caller.
+  pub(super) async fn statistics_untouched(
+    &self,
+    client: &Client,
+    username: &str,
+  ) -> Result<StatisticsSnapshot, ClientError> {
+    let fetched = client.get_user_statistics(username).await?;
+    Ok(self.statistics_kept(username, &fetched.stats))
+  }
+
   /// Statistics we asked for: kept, and the user touched with them.
   async fn statistics_fetched(&self, username: &str, stats: &UserStats) -> StatisticsSnapshot {
+    let taken = self.statistics_kept(username, stats);
+    self
+      .touch(username, Touch::Statistics(taken.statistics.clone()))
+      .await;
+    taken
+  }
+
+  /// Statistics we asked for, kept for the upload group.
+  fn statistics_kept(&self, username: &str, stats: &UserStats) -> StatisticsSnapshot {
     let taken = snapshot(stats);
     self.groups.update(username, true, |facts| {
       facts.statistics = Some(taken.clone());
     });
-    self
-      .touch(username, Touch::Statistics(taken.statistics.clone()))
-      .await;
     taken
   }
 

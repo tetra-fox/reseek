@@ -30,7 +30,7 @@ mod transfers;
 pub use blocking::reason_fits;
 pub use groups::{DEFAULT as DEFAULT_GROUP, LEECHERS, PRIVILEGED};
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -100,10 +100,10 @@ pub struct Directory {
 }
 
 impl Directory {
-  /// Opens `users.db` in `location`, tags the stored pictures that have no tag, and loads the
-  /// blocks, the groups we put users in and the blocklist file, then starts the touch writer,
-  /// the expiry and retention sweeps and the follower of the configuration, which all stop
-  /// when `shutdown` is canceled. A user's figures are read from `transfers` and `messaging`.
+  /// Opens `users.db` in `location` and loads the blocks, the groups we put users in and the
+  /// blocklist file, then starts the touch writer, the expiry and retention sweeps and the
+  /// follower of the configuration, which all stop when `shutdown` is canceled. A user's
+  /// figures are read from `transfers` and `messaging`.
   pub async fn open(
     location: &Location,
     transfers: Database,
@@ -114,9 +114,6 @@ impl Directory {
     shutdown: CancellationToken,
   ) -> Result<Arc<Self>, String> {
     let db = Database::open(&store::SCHEMA, location)
-      .await
-      .map_err(|e| format!("users.db: {e}"))?;
-    db.write(info::tag_pictures)
       .await
       .map_err(|e| format!("users.db: {e}"))?;
     let (ours, overrides, known) = db
@@ -276,6 +273,26 @@ impl Directory {
   pub async fn touch(&self, username: &str, touch: Touch) {
     // a touch dropped for a full channel is logged where it is dropped
     self.toucher.send(username, touch).await;
+  }
+
+  /// Marks that we dealt with `username` for each of `touches` and writes them before
+  /// returning, for a caller that answers from the row; pushes their summary when the row
+  /// changed.
+  async fn touch_now(&self, username: &str, touches: Vec<Touch>) {
+    let now = Utc::now();
+    let mut pending = touch::Pending::default();
+    for touch in touches {
+      pending.fold(touch, now);
+    }
+    let batch = BTreeMap::from([(username.to_string(), pending)]);
+    match self.db.write(move |conn| touch::write(conn, &batch)).await {
+      Ok(changed) => {
+        for username in changed {
+          self.changed(&username).await;
+        }
+      }
+      Err(e) => warn!(username, error = %e, "user touches not written"),
+    }
   }
 
   /// Whether `username`, connecting from `ip` when known, is blocked from `scope`, by our

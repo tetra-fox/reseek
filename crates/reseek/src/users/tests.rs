@@ -509,46 +509,48 @@ async fn a_picture_has_a_url_only_while_it_is_stored_under_it() {
     queue_length: 0,
     has_free_slot: true,
   };
+  let profile_info = async |app: &crate::testing::TestApp, name: &str| {
+    let path = format!("/api/v0/users/{name}/profile");
+    let (_, profile) = app.call("GET", &path, None).await;
+    (
+      profile["info"]["hasPicture"].clone(),
+      profile["info"]["pictureUrl"].clone(),
+    )
+  };
   let app = app(
     &format!("{CONFIG}[users]\npicture_max_bytes = \"8B\"\n"),
     &[],
   )
   .await;
-  let directory = &app.state.users;
-  let stored = directory.store_info("alice", sent(b"GIF89a")).await;
-  let url = profile::stored_info("alice", &stored)
-    .info
-    .picture_url
-    .unwrap();
-  let (_, shown) = app.call("GET", "/api/v0/users/alice/profile", None).await;
-  assert_eq!(
-    shown["info"]["pictureUrl"],
-    json!(url),
-    "the profile and the reply agree"
-  );
-  let served = app.send(request("GET", &url, None)).await;
+  app.state.users.store_info("alice", sent(b"GIF89a")).await;
+  let (_, url) = profile_info(&app, "alice").await;
+  let served = app.send(request("GET", url.as_str().unwrap(), None)).await;
   assert_eq!(
     (served.status.as_u16(), &served.body[..]),
     (200, &b"GIF89a"[..])
   );
 
-  directory
+  app
+    .state
+    .users
     .store_info("bob", sent(b"GIF89a, too large"))
     .await;
-  let (_, bob) = app.call("GET", "/api/v0/users/bob/profile", None).await;
-  assert_eq!(bob["info"]["hasPicture"], true);
   assert_eq!(
-    bob["info"]["pictureUrl"],
-    Value::Null,
+    profile_info(&app, "bob").await,
+    (json!(true), Value::Null),
     "a picture too large is not kept"
   );
 
   let unkept =
     crate::testing::app(&format!("{CONFIG}[users]\ncache_pictures = false\n"), &[]).await;
-  let stored = unkept
+  unkept
     .state
     .users
     .store_info("alice", sent(b"GIF89a"))
     .await;
-  assert_eq!(stored.picture_tag, None, "pictures are not kept");
+  assert_eq!(
+    profile_info(&unkept, "alice").await,
+    (json!(true), Value::Null),
+    "pictures are not kept"
+  );
 }

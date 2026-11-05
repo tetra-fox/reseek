@@ -104,19 +104,12 @@ pub fn summary(user: KnownUser, stored: Option<&Stored>, figures: &UserFigures) 
   }
 }
 
-/// `username`'s info as a profile shows it.
-pub fn stored_info(username: &str, info: &Info) -> StoredInfo {
-  StoredInfo {
-    description: info.description.clone(),
-    info: info_summary(username, info),
-  }
-}
-
 /// The whole profile of a user.
 pub fn profile(user: KnownUser, stored: Option<&Stored>, figures: UserFigures) -> UserProfile {
-  let info = stored
-    .and_then(|s| s.info.as_ref())
-    .map(|info| stored_info(&user.username, info));
+  let info = stored.and_then(|s| s.info.as_ref()).map(|info| StoredInfo {
+    description: info.description.clone(),
+    info: info_summary(&user.username, info),
+  });
   UserProfile {
     info,
     notes: stored.map(|s| s.notes.clone()).unwrap_or_default(),

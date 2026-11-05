@@ -23,7 +23,6 @@ use tracing::debug;
 
 use super::browse::Browses;
 use super::info::PeerInfo;
-use super::store::Info;
 use super::{Directory, Touch};
 use crate::api::error::ApiError;
 use crate::config::Options;
@@ -130,9 +129,8 @@ impl Users {
     Ok(())
   }
 
-  /// Asks `username`'s client for its info and stores what it said, before returning it as the
-  /// API shows it and as it was stored.
-  async fn fetch_info(&self, username: &str) -> Result<(UserInfo, Info), ClientError> {
+  /// Asks `username`'s client for its info and stores what it said before returning it.
+  async fn fetch_info(&self, username: &str) -> Result<UserInfo, ClientError> {
     let fetched = self
       .network
       .client()
@@ -146,64 +144,58 @@ impl Users {
       queue_length: fetched.queue_length,
       has_free_slot: fetched.has_free_upload_slot,
     };
-    let stored = self.directory.store_info(username, said).await;
-    Ok((shown, stored))
+    self.directory.store_info(username, said).await;
+    Ok(shown)
   }
 
   /// `username`'s profile after asking the network for their status, statistics and info,
-  /// each on its own and all within five seconds; what could not be asked is the stored value,
+  /// each on its own and all within five seconds, and storing the answers; the profile is read
+  /// from the row afterwards, and what the refresh did not store is the value from before,
   /// marked stale. A user nobody stored who the server says does not exist is a 404, and is
   /// asked about first: the server answers statistics for any name, and keeping those would
   /// store a row for a user who does not exist.
   async fn refreshed_profile(&self, username: &str) -> Result<UserProfile, ApiError> {
-    let mut profile = self.directory.profile(username).await?;
-    if !profile.user.known && !self.exists(username).await {
+    let (row, _) = self
+      .directory
+      .stored(username)
+      .await
+      .map_err(ApiError::internal)?;
+    if row.is_none() && !self.exists(username).await {
       return Err(ApiError::not_found(format!(
         "User {username} does not exist"
       )));
     }
+    // stored times keep microseconds, so the start of the refresh is compared at that grain
+    let asked_at = chrono::SubsecRound::trunc_subsecs(chrono::Utc::now(), 6);
     let client = self.network.client();
-    let (status, statistics, fetched) = tokio::join!(
+    let (status, statistics, info) = tokio::join!(
       tokio::time::timeout(REFRESH_TIMEOUT, self.directory.status_of(client, username)),
       tokio::time::timeout(
         REFRESH_TIMEOUT,
-        self.directory.statistics_of(client, username)
+        self.directory.statistics_untouched(client, username)
       ),
       tokio::time::timeout(REFRESH_TIMEOUT, self.fetch_info(username)),
     );
-    let (status, statistics, fetched) = (
-      refreshed("status", username, status),
-      refreshed("statistics", username, statistics),
-      refreshed("info", username, fetched),
-    );
-    let now = chrono::Utc::now();
-    if let Some(status) = status {
-      profile.user.presence = Some(status.presence);
-      profile.user.presence_at = Some(now);
-      profile.user.is_privileged = status.is_privileged;
-      let touch = Touch::Status {
+    // the info is stored as it arrives; reading the outcome logs a failure
+    refreshed("info", username, info);
+    let mut touches = Vec::new();
+    if let Some(status) = refreshed("status", username, status) {
+      touches.push(Touch::Status {
         presence: status.presence,
         is_privileged: status.is_privileged,
-      };
-      self.directory.touch(username, touch).await;
+      });
     }
-    match (statistics, profile.user.statistics.as_mut()) {
-      (Some(fresh), _) => {
-        profile.user.statistics = Some(api_types::users::StoredStatistics {
-          statistics: fresh.statistics,
-          fetched_at: fresh.updated_at,
-          stale: false,
-        });
-      }
-      (None, Some(stored)) => stored.stale = true,
-      (None, None) => {}
+    if let Some(fresh) = refreshed("statistics", username, statistics) {
+      touches.push(Touch::Statistics(fresh.statistics));
     }
-    match (fetched, profile.info.as_mut()) {
-      (Some((_, stored)), _) => {
-        profile.info = Some(super::profile::stored_info(username, &stored));
-      }
-      (None, Some(stored)) => stored.info.stale = true,
-      (None, None) => {}
+    self.directory.touch_now(username, touches).await;
+
+    let mut profile = self.directory.profile(username).await?;
+    if let Some(stored) = profile.user.statistics.as_mut() {
+      stored.stale = stored.fetched_at < asked_at;
+    }
+    if let Some(stored) = profile.info.as_mut() {
+      stored.info.stale = stored.info.fetched_at < asked_at;
     }
     Ok(profile)
   }
@@ -313,7 +305,6 @@ impl UserService for Users {
     self
       .fetch_info(username)
       .await
-      .map(|(shown, _)| shown)
       .map_err(|e| unanswered(username, e))
   }
 

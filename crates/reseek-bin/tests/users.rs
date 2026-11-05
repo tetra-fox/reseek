@@ -113,7 +113,12 @@ async fn a_profile_names_its_picture_by_a_url_that_serves_it_at_once() {
     assert!(info.info.has_picture);
     info.info.picture_url.expect("a stored picture has a URL")
   };
-  let first = url(api.user_profile(&peer.username, true).await.unwrap());
+  let profile = api.user_profile(&peer.username, true).await.unwrap();
+  assert!(
+    profile.user.known && profile.user.first_seen_at.is_some(),
+    "a first view shows the row it made: {profile:?}"
+  );
+  let first = url(profile);
   let served = api.user_picture(&peer.username).await.unwrap();
   assert_eq!(&served[..], b"\x89PNG\r\n\x1a\nfirst");
   assert!(
@@ -126,6 +131,33 @@ async fn a_profile_names_its_picture_by_a_url_that_serves_it_at_once() {
   assert_ne!(first, second, "a new picture is a new URL");
   let served = api.user_picture(&peer.username).await.unwrap();
   assert_eq!(&served[..], b"\x89PNG\r\n\x1a\nsecond");
+}
+
+#[tokio::test]
+async fn a_first_view_of_an_offline_user_shows_the_row_it_made() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let dir = tempfile::tempdir().unwrap();
+  let name = soulfind::username("daemon");
+  let running = daemon(dir.path(), &server, &name, &[]);
+  let api = signed_in(&running).await;
+  until(&api, "logged in", logged_in).await;
+  let options = ClientOptions {
+    listen_port: free_port(),
+    ..ClientOptions::default()
+  };
+  let gone = server.login("gone", options).await;
+  gone.client.disconnect(Some("gone"), None).await;
+
+  let profile = api.user_profile(&gone.username, true).await.unwrap();
+  assert!(profile.user.known, "{profile:?}");
+  assert!(profile.user.first_seen_at.is_some(), "{profile:?}");
+  assert!(profile.user.statistics.is_some(), "{profile:?}");
+  assert_eq!(
+    profile.info, None,
+    "an offline user says nothing of themselves"
+  );
 }
 
 #[tokio::test]

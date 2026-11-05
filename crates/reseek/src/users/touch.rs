@@ -102,7 +102,8 @@ pub struct Pending {
 }
 
 impl Pending {
-  fn fold(&mut self, touch: Touch, at: DateTime<Utc>) {
+  /// Adds `touch`, made at `at`, to the touches folded so far.
+  pub fn fold(&mut self, touch: Touch, at: DateTime<Utc>) {
     self.seen_at = Some(self.seen_at.map_or(at, |seen| seen.max(at)));
     match touch {
       Touch::RoomMessage => self.room = true,

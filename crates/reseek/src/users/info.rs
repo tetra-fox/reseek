@@ -1,10 +1,10 @@
 //! What a user's client says about itself, kept on their row as soon as it arrives rather than
-//! with the touches gathered over a second: the answer to whoever asked names the picture by a
-//! URL, and that URL has to serve the picture the moment the answer is read.
+//! with the touches gathered over a second: a refreshed profile is read back from the row, and
+//! names the picture by a URL that has to serve it the moment the profile is read.
 
 use chrono::Utc;
 use rusqlite::{Connection, params};
-use tracing::{info, warn};
+use tracing::warn;
 
 use super::Directory;
 use super::service::picture_tag;
@@ -28,10 +28,9 @@ pub struct PeerInfo {
 
 impl Directory {
   /// Stores what `username`'s client said about itself, making their row when there is none,
-  /// pushes their summary, and returns the info as stored. The picture is kept only while
-  /// `users.cache_pictures` is on and it is no larger than `users.picture_max_bytes`; the info
-  /// returned has a picture tag only when the picture is stored under it.
-  pub(super) async fn store_info(&self, username: &str, peer: PeerInfo) -> Info {
+  /// and pushes their summary. The picture is kept only while `users.cache_pictures` is on and
+  /// it is no larger than `users.picture_max_bytes`, and its tag is stored with it.
+  pub(super) async fn store_info(&self, username: &str, peer: PeerInfo) {
     let has_picture = peer.picture.is_some();
     let picture = {
       let options = self.config.current();
@@ -50,23 +49,13 @@ impl Directory {
       picture_tag: picture.as_deref().map(picture_tag),
     };
     let name = username.to_string();
-    let row = stored.clone();
     let written = self
       .db
-      .write(move |conn| write(conn, &name, &row, picture.as_deref()))
+      .write(move |conn| write(conn, &name, &stored, picture.as_deref()))
       .await;
     match written {
-      Ok(()) => {
-        self.changed(username).await;
-        stored
-      }
-      Err(e) => {
-        warn!(username, error = %e, "user info not stored");
-        Info {
-          picture_tag: None,
-          ..stored
-        }
-      }
+      Ok(()) => self.changed(username).await,
+      Err(e) => warn!(username, error = %e, "user info not stored"),
     }
   }
 }
@@ -96,29 +85,4 @@ fn write(
     ],
   )?;
   tx.commit()
-}
-
-/// Gives every stored picture that has no tag its tag, so its URL can be made.
-pub fn tag_pictures(conn: &mut Connection) -> rusqlite::Result<()> {
-  let tx = conn.transaction()?;
-  let untagged = tx
-    .prepare("SELECT username FROM users WHERE picture IS NOT NULL AND picture_tag IS NULL")?
-    .query_map([], |row| row.get::<_, String>(0))?
-    .collect::<rusqlite::Result<Vec<_>>>()?;
-  for username in &untagged {
-    let picture: Vec<u8> = tx.query_row(
-      "SELECT picture FROM users WHERE username = ?1",
-      [username],
-      |row| row.get(0),
-    )?;
-    tx.execute(
-      "UPDATE users SET picture_tag = ?2 WHERE username = ?1",
-      params![username, picture_tag(&picture)],
-    )?;
-  }
-  tx.commit()?;
-  if !untagged.is_empty() {
-    info!(count = untagged.len(), "stored user pictures tagged");
-  }
-  Ok(())
 }
