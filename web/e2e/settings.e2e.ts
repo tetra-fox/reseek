@@ -125,6 +125,20 @@ test("sets how a notification is announced, and offers the permission Desktop ne
   ).toBeChecked();
 });
 
+test("a row's control comes before its other buttons in the tab order", async ({ page }) => {
+  await login(page, "/system/settings");
+  await page.locator('[id="soulseek.listen_port"]').focus();
+  await page.keyboard.press("Tab");
+  const trigger = page.getByRole("button", {
+    name: "Set Listen port from the environment or the command line"
+  });
+  await expect(trigger).toBeFocused();
+  // and it shows after the control on a phone, where the row is one column
+  await page.setViewportSize({ width: 360, height: 640 });
+  const input = (await page.locator('[id="soulseek.listen_port"]').boundingBox())!;
+  expect((await trigger.boundingBox())!.y).toBeGreaterThanOrEqual(input.y + input.height);
+});
+
 test("a table's Remove button keeps clear of the fields of its row", async ({ page }) => {
   await login(page, "/system/settings");
   const table = page.locator('[id="search.filter_presets"]');
