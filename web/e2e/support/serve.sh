@@ -6,10 +6,17 @@
 # and the soulseek-rs CLI (SOULSEEK_RS_BIN or PATH) are found: then it logs in to a soulfind of
 # its own, where the soulseek-rs CLI serves a few files as `smokepeer`, so the daemon can have
 # real transfers. The ports after SMOKE_PORT are theirs.
+#
+# The daemon's log is kept after the run in target/smoke-logs/<SMOKE_PORT>, for reading a failure.
 set -euo pipefail
 port="${SMOKE_PORT:-5139}"
+target="${CARGO_TARGET_DIR:-$(dirname "$0")/../../../target}"
+logs="$target/smoke-logs/$port"
+rm -rf "$logs"
 dir="$(mktemp -d)"
-trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$dir"' EXIT
+trap 'kill $(jobs -p) 2>/dev/null || true; rm -rf "$dir"' EXIT
+# playwright stops the servers with SIGTERM; exiting on it runs the cleanup above
+trap 'exit 143' TERM INT
 
 soulfind="${SOULFIND_BIN:-$(command -v soulfind || true)}"
 soulseek_rs="${SOULSEEK_RS_BIN:-$(command -v soulseek-rs || true)}"
@@ -49,4 +56,4 @@ no_version_check = true
 no_share_scan = $([ -n "$connect" ] && echo false || echo true)
 $connect
 TOML
-"${CARGO_TARGET_DIR:-$(dirname "$0")/../../../target}/debug/reseek" --app-dir "$dir" --no-logo
+"$target/debug/reseek" --app-dir "$dir" --log-dir "$logs" --no-logo

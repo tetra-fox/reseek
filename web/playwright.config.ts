@@ -16,6 +16,12 @@ const chromium = (): string => {
   }
 };
 
+/**
+ * How the servers are stopped: SIGTERM lets serve.sh remove its directory; without it playwright
+ * sends SIGKILL, which no trap sees
+ */
+const gracefulShutdown = { signal: "SIGTERM", timeout: 10_000 } as const;
+
 export default defineConfig({
   testDir: "e2e",
   testMatch: "**/*.e2e.ts",
@@ -57,12 +63,14 @@ export default defineConfig({
       command: "./e2e/support/serve.sh",
       url: `http://127.0.0.1:${port}/reseek/`,
       reuseExistingServer: false,
+      gracefulShutdown,
       env: { SMOKE_PORT: String(port) }
     },
     {
       command: "./e2e/support/serve.sh",
       url: `http://127.0.0.1:${networkPort}/reseek/`,
       reuseExistingServer: false,
+      gracefulShutdown,
       env: { SMOKE_PORT: String(networkPort), SMOKE_NETWORK: "1" }
     }
   ]
