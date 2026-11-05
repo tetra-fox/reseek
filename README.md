@@ -19,7 +19,7 @@ Soulseek client & daemon
 
 Grab the [compose file](#docker-compose) below, fill in your Soulseek login and a password for the web UI, `docker compose up -d`, open <http://localhost:5030>.
 
-The web UI login is `reseek` / `reseek` until you set `RESEEK_PASSWORD`. reseek refuses to start with that default anywhere other machines can reach it, which in a container is always; on a plain binary, keep it on `--http-ip-address 127.0.0.1` or set a password.
+The web UI login is `reseek` / `reseek` until you set `RESEEK_PASSWORD`. reseek refuses to start with that default anywhere other machines can reach it, which in a container is always; on a plain binary, keep it on `--http-ip-address 127.0.0.1` with either `--no-https` or `--https-ip-address 127.0.0.1`, or set a password.
 
 ## Deployment
 

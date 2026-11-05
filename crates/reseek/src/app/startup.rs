@@ -81,7 +81,8 @@ pub(super) fn warn_about(options: &Options, logging: &Logging) {
 
 /// Refuses a start whose built-in account still has the default password while other machines
 /// can reach the web server; on this machine alone it is warned about. The error says how to
-/// set a password.
+/// set a password. nix/module-lib.nix mirrors this check for the NixOS and Home Manager
+/// modules; change both.
 pub(super) fn check_default_login(options: &Options) -> Result<(), String> {
   let auth = &options.web.authentication;
   let default_login = !auth.disabled
@@ -102,25 +103,32 @@ pub(super) fn check_default_login(options: &Options) -> Result<(), String> {
     "The built-in account {} still has the default password, and {reached}. Set a password \
      with RESEEK_PASSWORD or web.authentication.password, or web.authentication.password_hash \
      from `reseek hash-password`; or keep the web server on this machine with \
-     web.ip_address = \"127.0.0.1\" and no reverse proxy.",
+     web.ip_address = \"127.0.0.1\" (--http-ip-address) and either web.https.ip_address = \
+     \"127.0.0.1\" (--https-ip-address) or HTTPS off (web.https.disabled, --no-https), with no \
+     reverse proxy.",
     auth.username
   ))
 }
 
-/// How other machines reach the web server, if they do: an HTTP or HTTPS address that is not
-/// this machine's loopback, or a reverse proxy that forwards their requests
+/// How other machines reach the web server, if they do: an HTTP or HTTPS listener bound to an
+/// address that is not this machine's loopback, or a reverse proxy that forwards their requests
 fn reached_from_elsewhere(web: &crate::config::Web) -> Option<String> {
-  let https = (!web.https.disabled).then_some(&web.https.ip_address);
-  let address = [Some(&web.ip_address), https]
+  let https = (!web.https.disabled).then_some(("HTTPS", &web.https.ip_address));
+  let reachable = [Some(("HTTP", &web.ip_address)), https]
     .into_iter()
     .flatten()
-    // the addresses were checked with the rest of the configuration
-    .flat_map(|list| crate::config::addresses::list(list.as_deref()).unwrap_or_default())
-    .find(|ip| !ip.to_canonical().is_loopback());
-  if let Some(ip) = address {
-    return Some(format!(
-      "the web server listens on {ip}, which other machines can reach"
-    ));
+    .find_map(|(listener, list)| {
+      // the addresses were checked with the rest of the configuration
+      let addresses = crate::config::addresses::list(list.as_deref()).unwrap_or_default();
+      let ip = addresses
+        .into_iter()
+        .find(|ip| !ip.to_canonical().is_loopback())?;
+      Some(format!(
+        "the {listener} listener binds {ip}, which other machines can reach"
+      ))
+    });
+  if reachable.is_some() {
+    return reachable;
   }
   if let Some(url) = &web.external_url {
     return Some(format!("the web server is served at {url}"));
@@ -185,12 +193,17 @@ mod tests {
   fn a_default_login_is_refused_only_where_other_machines_reach_it() {
     let mut options = Options::default();
     let refused = check_default_login(&options).unwrap_err();
-    assert!(refused.contains("listens on ::"), "{refused}");
-    options.web.ip_address = Some("127.0.0.1, ::1".into());
+    assert!(refused.contains("HTTP listener binds ::"), "{refused}");
     assert!(
-      check_default_login(&options).is_err(),
-      "HTTPS listens everywhere"
+      refused.contains("web.https.ip_address") && refused.contains("--no-https"),
+      "the advice names both listeners: {refused}"
     );
+    options.web.ip_address = Some("127.0.0.1, ::1".into());
+    let refused = check_default_login(&options).unwrap_err();
+    assert!(refused.contains("HTTPS listener binds ::"), "{refused}");
+    options.web.https.disabled = true;
+    assert_eq!(check_default_login(&options), Ok(()));
+    options.web.https.disabled = false;
     options.web.https.ip_address = Some("[::ffff:127.0.0.1]".into());
     let ((), text) = logged(|| check_default_login(&options).unwrap());
     assert!(text.contains("default password"), "{text}");

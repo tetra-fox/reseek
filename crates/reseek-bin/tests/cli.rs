@@ -172,29 +172,32 @@ fn an_invalid_configuration_exits_three_and_a_held_lock_five() {
   assert_eq!(locked.status.code(), Some(5), "{}", text(&locked.stdout));
 }
 
+/// `just dev` starts the daemon with these flags, so a fresh clone without a password has to
+/// pass the default login check with them
+const DEV_FLAGS: &str = include_str!("../dev-flags");
+
 #[test]
 fn the_default_login_is_refused_where_other_machines_can_reach_it() {
   let dir = tempfile::tempdir().unwrap();
   let app_dir = dir.path().to_str().unwrap();
-  let start = ["--app-dir", app_dir, "-n", "--no-start", "--no-https"];
-  let open = run(&start, &[]);
+  let start = ["--app-dir", app_dir, "-n", "--no-start"];
+  let open = run(&[&start[..], &["--no-https"]].concat(), &[]);
   let printed = format!("{}{}", text(&open.stdout), text(&open.stderr));
   assert_eq!(open.status.code(), Some(3), "{printed}");
   assert!(
     printed.contains("default password") && printed.contains("RESEEK_PASSWORD"),
     "{printed}"
   );
-  let on_this_machine = run(
-    &[
-      &start[..],
-      &["--http-ip-address", "127.0.0.1", "--http-port", "0"],
-    ]
-    .concat(),
-    &[],
+  let dev: Vec<&str> = DEV_FLAGS.split_whitespace().collect();
+  let on_this_machine = run(&[&start[..], &dev, &["--http-port", "0"]].concat(), &[]);
+  assert_eq!(
+    on_this_machine.status.code(),
+    Some(0),
+    "{}",
+    text(&on_this_machine.stdout)
   );
-  assert_eq!(on_this_machine.status.code(), Some(0));
   let with_password = run(
-    &[&start[..], &["--http-port", "0"]].concat(),
+    &[&start[..], &["--no-https", "--http-port", "0"]].concat(),
     &[("RESEEK_PASSWORD", "a password of my own")],
   );
   assert_eq!(with_password.status.code(), Some(0));

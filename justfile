@@ -3,12 +3,13 @@
 default:
     @just --list
 
-# the daemon without its built-in ui, restarted on change, plus the vite ui with proxy
+# the daemon without its built-in ui, restarted on change, plus the vite ui with proxy; the
+# daemon's flags are in crates/reseek-bin/dev-flags, which the cli tests start it with
 dev: web-install
     #!/usr/bin/env bash
     set -euo pipefail
     trap 'kill 0' EXIT
-    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek-bin -- --web-ui=false --http-ip-address 127.0.0.1,::1 &
+    watchexec --restart --watch crates --exts rs,toml -- cargo run -p reseek-bin -- $(cat crates/reseek-bin/dev-flags) &
     pnpm --dir web dev
 
 # pnpm build, then cargo build --release (cargo never runs pnpm)
