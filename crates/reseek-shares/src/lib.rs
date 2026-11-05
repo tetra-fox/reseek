@@ -248,7 +248,7 @@ pub struct Shares {
   /// the views other than everything whose browse cache was written, rewritten whenever the
   /// shares change
   browse_views: Mutex<BTreeSet<View>>,
-  /// the aliases of the visibility lists warned of for matching no share, lower case
+  /// the aliases of the visibility lists that matched no share on any host when last checked
   unmatched: Mutex<HashSet<String>>,
   /// grows each time the local index changed
   changed: watch::Sender<u64>,
@@ -348,40 +348,43 @@ impl Shares {
   }
 
   /// What a user who sees the shares visible to `sees` sees, under the share options in
-  /// effect. An alias the visibility lists name that no share on any host has is warned of,
-  /// once: a share meant to be hidden whose alias is spelled otherwise is seen by everyone.
+  /// effect.
   pub fn view(&self, sees: ShareVisibility) -> View {
-    let (view, listed) = {
+    View::of(&lock(&self.applied), sees)
+  }
+
+  /// Warns of each alias of the visibility lists that no share on any host has, when it comes
+  /// to have none, and says so when it has one again: a share meant to be hidden whose alias is
+  /// spelled otherwise is seen by everyone. Run whenever the lists or the hosts' shares change.
+  fn check_unmatched(&self) {
+    let listed: Vec<String> = {
       let applied = lock(&self.applied);
-      let listed: Vec<String> = applied
+      applied
         .buddies_only
         .iter()
         .chain(&applied.trusted_only)
         .cloned()
-        .collect();
-      (View::of(&applied, sees), listed)
+        .collect()
     };
-    if !listed.is_empty() {
-      self.warn_unmatched(listed);
-    }
-    view
-  }
-
-  /// Warns once of each alias of `listed` that no share on any host has.
-  fn warn_unmatched(&self, listed: Vec<String>) {
-    let mut warned = lock(&self.unmatched);
-    for alias in listed {
-      let key = alias.to_lowercase();
-      if warned.contains(&key) || self.has_alias(&key) {
-        continue;
-      }
+    let now: HashSet<String> = listed
+      .into_iter()
+      .filter(|alias| !self.has_alias(&alias.to_lowercase()))
+      .collect();
+    let mut before = lock(&self.unmatched);
+    for alias in now.difference(&before) {
       warn!(
         alias,
         "a share listed as buddy-only or trusted-only matches no share's alias on any host; \
          it hides nothing"
       );
-      warned.insert(key);
     }
+    for alias in before.difference(&now) {
+      info!(
+        alias,
+        "a share listed as buddy-only or trusted-only matches a share again"
+      );
+    }
+    *before = now;
   }
 
   /// The files matching an incoming search that `view` sees, the local ones first, then each

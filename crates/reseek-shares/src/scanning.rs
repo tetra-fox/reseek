@@ -158,6 +158,7 @@ impl Shares {
         false
       }
     };
+    self.check_unmatched();
     self.refresh_browse_caches().await;
     *lock(&self.browse_throttle.last) = Some(Instant::now());
     if completed {

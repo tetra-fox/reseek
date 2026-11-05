@@ -178,6 +178,7 @@ impl Shares {
     *lock(&self.local_counts) = counted;
     self.counts.send_replace(self.server_counts());
     self.changed.send_modify(|n| *n += 1);
+    self.check_unmatched();
     self.refresh_browse_caches().await;
     Ok(settings)
   }
@@ -309,5 +310,6 @@ impl Shares {
     if pending {
       self.publish(|status| status.scan_pending = true);
     }
+    self.check_unmatched();
   }
 }

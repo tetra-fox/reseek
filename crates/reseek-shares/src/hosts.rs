@@ -304,10 +304,12 @@ impl Shares {
       })
   }
 
-  /// After an agent's host came or went: the state and the server's counts follow at once, the
-  /// browse cache once the hosts have been still for a moment.
+  /// After an agent's host came or went: the state, the server's counts and the check of the
+  /// visibility lists follow at once, the browse cache once the hosts have been still for a
+  /// moment.
   fn hosts_changed(self: &Arc<Self>) {
     self.publish(|_| {});
+    self.check_unmatched();
     self.counts.send_replace(self.server_counts());
     if self
       .hosts_settling
