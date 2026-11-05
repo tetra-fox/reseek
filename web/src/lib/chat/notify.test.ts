@@ -157,6 +157,27 @@ describe("what a mode delivers", () => {
   });
 });
 
+describe("asking for permission", () => {
+  const permission = notifier.permission;
+  afterEach(() => {
+    notifier.permission = permission;
+    vi.unstubAllGlobals();
+  });
+
+  it("takes the answer of a browser that gives it only to a callback", async () => {
+    vi.stubGlobal("Notification", {
+      permission: "default",
+      requestPermission: (answer?: (p: NotificationPermission) => void) => {
+        answer?.("granted");
+        return undefined;
+      }
+    });
+    notifier.permission = "default";
+    await notifier.ask();
+    expect(notifier.permission).toBe("granted");
+  });
+});
+
 describe("the new message toast", () => {
   // jsdom's media elements don't play, and private messages sound by default
   beforeEach(() => {

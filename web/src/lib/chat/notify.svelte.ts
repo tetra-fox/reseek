@@ -80,10 +80,25 @@ class Notifier {
         : "insecure"
   );
 
+  constructor() {
+    if (this.permission !== "unsupported" && this.permission !== "insecure") void this.#follow();
+  }
+
+  /** Follows a change made in the browser's site settings, where the browser tells of one */
+  async #follow() {
+    // a browser without the permissions API, or without this permission in it, has nothing to tell
+    const status = await navigator.permissions?.query({ name: "notifications" }).catch(() => null);
+    status?.addEventListener("change", () => (this.permission = Notification.permission));
+  }
+
   /** Asks the browser for permission to notify */
   ask = async () => {
     if (this.permission === "unsupported" || this.permission === "insecure") return;
-    this.permission = await Notification.requestPermission();
+    // an older Safari gives the answer only to a callback and returns no promise; the promise,
+    // where there is one, never rejects
+    this.permission = await new Promise<NotificationPermission>((answer) => {
+      void Notification.requestPermission(answer)?.then(answer);
+    });
   };
 
   /** A private message arrived; `level` is its conversation's, `open` the pane on screen */
