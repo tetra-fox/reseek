@@ -1,6 +1,8 @@
 <script lang="ts" module>
-  // image files, fetched per country shown, rather than inlined into the script every page loads.
-  // xx is the package's placeholder box; longer names are regions no country code can be
+  // the package's 4:3 flags, one image file per two-letter code, which the browser fetches only for
+  // the countries it shows rather than every page loading them inlined in its script. `xx` is left
+  // out, since it is the package's placeholder box. the files with longer names are subdivisions
+  // and unions, which no country code from the server names.
   const FILES = import.meta.glob<string>(
     ["/node_modules/flag-icons/flags/4x3/??.svg", "!/node_modules/flag-icons/flags/4x3/xx.svg"],
     { eager: true, query: "?url&no-inline", import: "default" }
