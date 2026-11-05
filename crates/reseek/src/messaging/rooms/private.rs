@@ -1,6 +1,7 @@
 //! Changing a private room: adding and removing members and operators, and giving up our
-//! membership or our ownership. The server says yes by announcing the change. A change it does
-//! not announce in time may still have been made.
+//! membership or our ownership. The server says yes by announcing the change, and a change it
+//! does not announce in time may still have been made. Giving up ownership it does not answer
+//! at all.
 
 use soulseek_client::ClientError;
 use tracing::{debug, warn};
@@ -107,13 +108,21 @@ impl Messaging {
     Ok(())
   }
 
+  /// Gives up our private room `room` and leaves it. The server makes it a public room without
+  /// an owner and keeps us in it, so the room is left to match what we show: not ours, not in.
   pub(in crate::messaging) async fn drop_ownership(&self, room: &str) -> Result<(), ApiError> {
     self.belongs(room)?;
-    self
-      .client()
+    let client = self.client();
+    client
       .drop_private_room_ownership(room)
       .await
-      .map_err(|e| unconfirmed(room, "drop ownership", e))?;
+      .map_err(unsent)?;
+    let joined = self.rooms.tracker().get(room).is_some_and(|r| r.joined);
+    // ownership is given up either way; a leave that fails leaves the server with us in a public
+    // room we no longer show, which the next join of it leaves and joins again
+    if joined && let Err(e) = client.leave_room(room).await {
+      warn!(room, error = %e, "room given up but not left");
+    }
     self.dropped(room).await;
     Ok(())
   }

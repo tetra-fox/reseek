@@ -1,5 +1,6 @@
 //! Private rooms: adding and removing members and operators, and giving up membership or
-//! ownership. Each completes when the server announces the change.
+//! ownership. Each completes when the server announces the change, except giving up ownership,
+//! which the server does not answer.
 
 use soulseek_proto::server::{
   PrivateRoomAddOperator, PrivateRoomAddUser, PrivateRoomDropMembership, PrivateRoomDropOwnership,
@@ -106,13 +107,14 @@ impl Client {
       .await
   }
 
-  /// gives up the private room `room` we own, which closes it
+  /// gives up the private room `room` we own. The server turns it into a public room without
+  /// an owner, keeps us in it and cuts its members off, telling no one, so this completes once
+  /// the request is on the socket
   pub async fn drop_private_room_ownership(&self, room: &str) -> Result<(), ClientError> {
     non_blank("room name", room)?;
     self
-      .ask(
+      .tell(
         &format!("drop ownership of private room {room}"),
-        room_key(ServerCode::PrivateRoomRemoved, room),
         ServerRequest::PrivateRoomDropOwnership(PrivateRoomDropOwnership {
           room: room.to_owned(),
         }),

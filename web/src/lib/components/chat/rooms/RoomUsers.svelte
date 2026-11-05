@@ -122,9 +122,9 @@
   const giveUp = () =>
     confirmation.ask({
       title: "Give up ownership",
-      body: `Give up ownership of ${members.name}? The server dissolves a private room without an owner.`,
+      body: `${members.name} becomes a public room with no owner, and you leave it. Its members lose access to it and are not told.`,
       confirm: "Give up",
-      run: () => void members.dropOwnership().then(report(`Gave up ownership of ${members.name}`))
+      run: () => void members.dropOwnership().then(report(`Gave up ${members.name} and left it`))
     });
   const quit = () =>
     confirmation.ask({

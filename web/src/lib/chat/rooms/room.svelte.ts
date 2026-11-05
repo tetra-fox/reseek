@@ -159,7 +159,7 @@ export class RoomMembers {
       api.DELETE("/api/v0/rooms/private/{roomName}/membership", { params: byRoom(this.name) })
     );
 
-  /** Gives up our ownership of the private room, which dissolves it */
+  /** Gives up our ownership of the private room, which turns it public, and leaves it */
   dropOwnership = () =>
     call(() =>
       api.DELETE("/api/v0/rooms/private/{roomName}/ownership", { params: byRoom(this.name) })

@@ -1513,7 +1513,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Gives up our ownership of a private room. */
+        /**
+         * Gives up our ownership of a private room and leaves it.
+         * @description The room becomes public without an owner, and its members lose access without being told.
+         */
         delete: operations["drop_ownership"];
         options?: never;
         head?: never;
@@ -13761,7 +13764,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description ownership given up */
+            /** @description ownership given up and the room left */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -13793,14 +13796,6 @@ export interface operations {
                 };
             };
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            504: {
                 headers: {
                     [name: string]: unknown;
                 };

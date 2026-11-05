@@ -189,7 +189,8 @@ impl Client {
     done(self.delete(Route::new("rooms/private").room(room).then("membership"))).await
   }
 
-  /// `DELETE /rooms/private/{roomName}/ownership`: gives up our ownership of a private room.
+  /// `DELETE /rooms/private/{roomName}/ownership`: gives up our ownership of a private room
+  /// and leaves it.
   pub async fn drop_room_ownership(&self, room: &str) -> Result<()> {
     done(self.delete(Route::new("rooms/private").room(room).then("ownership"))).await
   }

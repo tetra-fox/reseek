@@ -377,14 +377,16 @@ async fn drop_membership(
   Ok(StatusCode::NO_CONTENT)
 }
 
-/// Gives up our ownership of a private room.
+/// Gives up our ownership of a private room and leaves it.
+///
+/// The room becomes public without an owner, and its members lose access without being told.
 #[utoipa::path(
   delete, path = "/rooms/private/{roomName}/ownership", tag = "rooms",
   params(("roomName" = String, Path, description = "the room"), RoomNameQuery),
   responses(
-    (status = 204, description = "ownership given up"), (status = 401, body = api_types::ErrorBody),
-    (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
-    (status = 503, body = api_types::ErrorBody), (status = 504, body = api_types::ErrorBody)
+    (status = 204, description = "ownership given up and the room left"),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 404, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
 )]
 async fn drop_ownership(

@@ -190,7 +190,7 @@ pub trait MessagingService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// Gives up our ownership of a private room.
+  /// Gives up our ownership of a private room and leaves it.
   async fn drop_ownership(&self, room: &str) -> Result<(), ApiError> {
     Err(not_yet(DOMAIN))
   }

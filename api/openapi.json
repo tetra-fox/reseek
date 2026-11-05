@@ -7791,7 +7791,8 @@
         "tags": [
           "rooms"
         ],
-        "summary": "Gives up our ownership of a private room.",
+        "summary": "Gives up our ownership of a private room and leaves it.",
+        "description": "The room becomes public without an owner, and its members lose access without being told.",
         "operationId": "drop_ownership",
         "parameters": [
           {
@@ -7815,7 +7816,7 @@
         ],
         "responses": {
           "204": {
-            "description": "ownership given up"
+            "description": "ownership given up and the room left"
           },
           "401": {
             "description": "",
@@ -7848,16 +7849,6 @@
             }
           },
           "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "504": {
             "description": "",
             "content": {
               "application/json": {

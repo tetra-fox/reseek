@@ -183,7 +183,7 @@ async fn members_and_operators_are_added_and_removed_as_the_room_sees_it() {
 }
 
 #[tokio::test]
-async fn a_member_can_leave_a_private_room_and_its_owner_close_it() {
+async fn a_member_can_leave_a_private_room_and_its_owner_give_it_up() {
   let Some(server) = soulfind::server() else {
     return;
   };
