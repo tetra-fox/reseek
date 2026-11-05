@@ -159,7 +159,8 @@
     !m.mention && "hover:bg-hover/60",
     highlight && "bg-accent-soft/50 ring-1 ring-accent/50 ring-inset",
     active &&
-      "outline-none focus-within:bg-hover/60 focus-within:ring-2 focus-within:ring-accent focus-within:ring-inset"
+      "outline-none focus-within:bg-hover/60 focus-within:ring-2 focus-within:ring-accent focus-within:ring-inset",
+    menu && "bg-hover/60 ring-2 ring-accent ring-inset"
   ]}
   tabindex={active ? -1 : undefined}
   data-message={m.localId}>
@@ -227,7 +228,7 @@
     {/if}
   </div>
   {#if actions.length}
-    <!-- over the message's top right corner on hover or while focus is in it.
+    <!-- over the message's top right corner on hover, while focus is in it or its menu is open.
          Last in the message, so a screen reader reads the author and the text first. Every
          action is also in the menu, which a touch reaches with a long press -->
     <div
@@ -236,7 +237,7 @@
       aria-label="Message actions"
       class={[
         "absolute -top-3 right-3 z-10 items-center rounded-control border bg-overlay p-0.5 shadow-raised group-focus-within/message:flex group-hover/message:flex",
-        "hidden"
+        menu ? "flex" : "hidden"
       ]}>
       {#each actions as action (action.label)}
         <Button
