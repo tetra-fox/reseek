@@ -135,7 +135,16 @@ export class MessagePane {
     // only the pages around a message can stop short of the newest
     this.hasNewer = page.data.hasNewer ?? false;
     this.#opened();
+    if (at !== null && !this.hasNewer) await this.#reachedNewest();
   };
+
+  /**
+   * The pane holds the newest messages again, so frames count from here on; this read brings
+   * what arrived while they did not
+   */
+  #reachedNewest() {
+    return this.load();
+  }
 
   /** The first messages are here: where the unread ones start, and a conversation's draft */
   #opened() {
@@ -169,8 +178,7 @@ export class MessagePane {
     for (const m of page.data.messages) this.#store(m);
     this.#gapsFrom(page.data.gaps);
     this.hasNewer = page.data.hasMore;
-    // frames count from here on; this read brings what arrived while they did not
-    if (!this.hasNewer) await this.load();
+    if (!this.hasNewer) await this.#reachedNewest();
   };
 
   /**
