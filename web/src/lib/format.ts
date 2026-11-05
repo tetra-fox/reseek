@@ -163,6 +163,9 @@ const DAY = new Intl.DateTimeFormat([], {
 });
 const NUMBER = new Intl.NumberFormat();
 
+/** A count with the browser's digit grouping: "1,200" */
+export const formatCount = (n: number): string => NUMBER.format(n);
+
 /** An instant in the browser's time zone, short, for tables: "Mar 14, 09:05" */
 export const dateTime = (iso: string): string => DATE_TIME.format(new Date(iso));
 
@@ -214,7 +217,7 @@ export const NONE = "—";
 
 /** `n` with the noun for that many, "1 file" or "2,048 files" */
 export const plural = (n: number, one: string, many: string): string =>
-  `${NUMBER.format(n)} ${n === 1 ? one : many}`;
+  `${formatCount(n)} ${n === 1 ? one : many}`;
 
 const LIST = new Intl.ListFormat("en", { type: "conjunction" });
 

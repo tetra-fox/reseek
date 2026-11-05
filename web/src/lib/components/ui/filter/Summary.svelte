@@ -6,7 +6,7 @@
   import {
     type ActiveFilter,
     announce,
-    clearAll,
+    clearThen,
     focusAfter,
     type Noun,
     showing
@@ -60,13 +60,6 @@
     after = { id: next === null ? null : filters[next].id };
     filters[at].clear();
   };
-
-  const clear = async () => {
-    if (onclear) onclear();
-    else clearAll(filters);
-    await tick();
-    refocus();
-  };
 </script>
 
 <p class="sr-only" role="status">{said}</p>
@@ -97,7 +90,7 @@
       <button
         type="button"
         class="ml-auto font-medium underline underline-offset-2 hover:no-underline"
-        onclick={() => void clear()}>Clear filters</button>
+        onclick={() => void clearThen(filters, onclear, refocus)}>Clear filters</button>
     {/if}
   </div>
 {/if}

@@ -1,4 +1,6 @@
-import { listText, plural } from "#lib/format.js";
+import { tick } from "svelte";
+
+import { formatCount, listText, plural } from "#lib/format.js";
 
 /** A filter narrowing a list, as the list's summary names it and takes it off */
 export type ActiveFilter = {
@@ -12,8 +14,6 @@ export type ActiveFilter = {
 
 /** What a list holds, one and many: ["download", "downloads"] */
 export type Noun = readonly [string, string];
-
-const NUMBER = new Intl.NumberFormat();
 
 /** The id of a list's text filter among its filters */
 export const TEXT_FILTER = "text";
@@ -30,7 +30,7 @@ export const showing = (shown: number, total: number | null, noun: Noun) => {
   if (total === null) return `${plural(shown, ...noun)} ${shown === 1 ? "matches" : "match"}`;
   if (shown === total)
     return total === 1 ? `Showing the only ${noun[0]}` : `Showing all ${plural(total, ...noun)}`;
-  return `Showing ${NUMBER.format(shown)} of ${plural(total, ...noun)}`;
+  return `Showing ${formatCount(shown)} of ${plural(total, ...noun)}`;
 };
 
 /** Why a list that holds something shows nothing: "The filters hide all 340 downloads" */
@@ -46,6 +46,21 @@ export const announce = (filters: ActiveFilter[]) =>
 
 export const clearAll = (filters: ActiveFilter[]) => {
   for (const f of filters) f.clear();
+};
+
+/**
+ * Turns every filter off, through `onclear` where the filters cannot be turned off one after
+ * another, then gives focus to the list once it has come back
+ */
+export const clearThen = async (
+  filters: ActiveFilter[],
+  onclear: (() => void) | undefined,
+  refocus: () => void
+) => {
+  if (onclear) onclear();
+  else clearAll(filters);
+  await tick();
+  refocus();
 };
 
 /**

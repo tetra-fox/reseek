@@ -5,6 +5,7 @@
   import PlusIcon from "@lucide/svelte/icons/plus";
   import type { HTMLButtonAttributes } from "svelte/elements";
 
+  import { formatCount } from "#lib/format.js";
   import { cn } from "#lib/ui/cn.js";
 
   import { FILTERING } from "./tint";
@@ -43,6 +44,6 @@
   <Icon class={["size-3.5 shrink-0", !filtering && "text-fg-subtle"]} />
   <span class={[hides && !pressed && "line-through"]}>{@render children?.()}</span>
   {#if count !== undefined}
-    <span class={["tabular-nums", !filtering && "text-fg-muted"]}>{count.toLocaleString()}</span>
+    <span class={["tabular-nums", !filtering && "text-fg-muted"]}>{formatCount(count)}</span>
   {/if}
 </button>
