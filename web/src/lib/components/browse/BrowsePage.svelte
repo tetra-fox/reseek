@@ -84,7 +84,10 @@
 
   /** the file the inspector shows, which follows focus in the tree, and whose share it is in */
   let picked = $state.raw<{ username: string; file: RemoteFile } | null>(null);
-  const shown = $derived(picked?.username === browser.username ? picked : null);
+  /** the picked file while the filter leaves it in this user's tree */
+  const shown = $derived(
+    picked?.username === browser.username && (!filter || filter.item(picked.file)) ? picked : null
+  );
   useInspector(
     inspected,
     () => !!shown,

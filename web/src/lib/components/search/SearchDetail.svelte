@@ -67,13 +67,13 @@
   // the counts come with the list's frames
   $effect(() => live.retain("search"));
 
-  /** the file the inspector shows, which follows focus in the results */
+  /** the file focus last came to in the results, which the inspector shows */
   let picked = $state.raw<Picked | null>(null);
   let dense = $state<DenseResults | null>(null);
   let tree = $state<ResultsTree | null>(null);
   useInspector(
     inspected,
-    () => !!picked,
+    () => !!shown,
     () => (dense ?? tree)?.focus()
   );
 
@@ -174,6 +174,17 @@
       options((key) => searchOptions[key], filterText, results.stored ? searchOptions.sort : null)
     )
   );
+  /** the picked file while the filters leave it in the results */
+  const shown = $derived.by(() => {
+    if (!picked) return null;
+    const { username, file } = picked;
+    const listed = (r: Result) =>
+      r.response.username === username &&
+      (file.locked ? r.response.lockedFiles : r.response.files).some(
+        (f) => f.filename === file.filename
+      );
+    return view.some(listed) ? picked : null;
+  });
   /** the results with the named filters off, which the line of filters counts the shown ones of */
   const unnamed = $derived(
     anyNamed
@@ -250,14 +261,14 @@
 </script>
 
 {#snippet inspected()}
-  {#if picked}
-    {@const shown = picked}
+  {#if shown}
+    {@const offer = shown}
     <RemoteFileInspector
-      file={shown.file}
-      username={shown.username}
-      facts={shown.facts}
-      ondownload={canWrite && connected && !shown.file.locked
-        ? () => void downloadPicked(shown)
+      file={offer.file}
+      username={offer.username}
+      facts={offer.facts}
+      ondownload={canWrite && connected && !offer.file.locked
+        ? () => void downloadPicked(offer)
         : undefined} />
   {/if}
 {/snippet}

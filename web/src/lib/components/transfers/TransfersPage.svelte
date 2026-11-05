@@ -127,13 +127,15 @@
     for (const f of MARK_FILTERS) result[f.id] = all.filter(marked(markLookup, f.id)).length;
     return result;
   });
-  const filtered = $derived.by(() => {
+  /** whether the filters let a transfer into the table */
+  const keeps = $derived.by(() => {
     const byText = textFilter(text, markLookup);
     const byState = inStates(view.filters.states);
     const byMark =
       markLookup && view.filters.analysis ? marked(markLookup, view.filters.analysis) : null;
-    return all.filter((t) => byState(t) && (!byMark || byMark(t)) && (!byText || byText(t)));
+    return (t: Transfer) => byState(t) && (!byMark || byMark(t)) && (!byText || byText(t));
   });
+  const filtered = $derived(all.filter(keeps));
 
   const filters = $derived(
     activeFilters(view.filters, text, () => {
@@ -152,9 +154,11 @@
   const items = $derived(hold(layout(grid.rows, view.groupBy, folds.isOpen)));
   const rows = $derived(items.flatMap((i) => (i.type === "row" ? [i.transfer] : [])));
   const chosen = $derived(all.filter((t) => selected.has(t.id)));
-  const shown = $derived(
-    shownId && !store.hidden.has(shownId) ? store.list.get(shownId) : undefined
-  );
+  /** the transfer the inspector shows while it is in the table */
+  const shown = $derived.by(() => {
+    const t = shownId && !store.hidden.has(shownId) ? store.list.get(shownId) : undefined;
+    return t && keeps(t) ? t : undefined;
+  });
   useInspector(
     inspected,
     () => !!shown,

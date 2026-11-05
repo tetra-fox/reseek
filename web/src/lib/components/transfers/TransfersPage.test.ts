@@ -450,6 +450,23 @@ describe("the transfers table", () => {
       expect(pane()).toBeNull();
     });
 
+    it("show no transfer in the inspector once the filter takes it out of the table", async () => {
+      const a = transfer({ filename: "x\\a.flac" });
+      listing = [a];
+      await start();
+      press(grid(), "ArrowDown");
+      press(grid(), "i");
+      expect(pane()?.querySelector("h2")?.textContent).toBe("a.flac");
+      const filter = document.querySelector<HTMLInputElement>('input[aria-label="Filter"]')!;
+      filter.value = "nothing matches";
+      filter.dispatchEvent(new Event("input", { bubbles: true }));
+      await vi.advanceTimersByTimeAsync(200);
+      flushSync();
+      expect(row(a.id)).toBeNull();
+      expect(pane()?.querySelector("h2")).toBeNull();
+      expect(pane()?.textContent).toContain("Select a file to see its details.");
+    });
+
     it("give focus back to the table when the inspector closes from inside", async () => {
       const a = transfer();
       listing = [a];

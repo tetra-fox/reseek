@@ -178,7 +178,11 @@
   );
   /** the key of the file the inspector shows, which follows focus in the tree */
   let shownKey = $state<string | null>(null);
-  const shown = $derived(shownKey === null ? undefined : byKey.get(shownKey));
+  const shown = $derived.by(() => {
+    const e = shownKey === null ? undefined : byKey.get(shownKey);
+    // a file the filter takes out of the tree is not shown either
+    return e && shows(e) ? e : undefined;
+  });
   useInspector(
     inspected,
     () => !!shown,
