@@ -103,7 +103,7 @@ test("sets how a notification is announced, and offers the permission Desktop ne
   // the notice follows the choices on the form, saved or not
   await choose("Private messages", "Sound");
   await choose("Mentions", "Off");
-  await choose("A batch of downloads finished", "Sound");
+  await choose("Downloads finished", "Sound");
   await expect(notice).toBeHidden();
   await choose("An upload was queued", "Desktop");
   await expect(notice).toBeVisible();
@@ -114,7 +114,7 @@ test("sets how a notification is announced, and offers the permission Desktop ne
   // only the upload's mode is saved: the daemon is shared, and the chat page reads the others
   await choose("Private messages", "Both");
   await choose("Mentions", "Both");
-  await choose("A batch of downloads finished", "Both");
+  await choose("Downloads finished", "Both");
   await section.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Notifications: 1 setting saved")).toBeVisible();
   await page.reload();

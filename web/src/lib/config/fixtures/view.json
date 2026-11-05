@@ -102,7 +102,6 @@
     "notifications": {
       "transfers": {
         "batch_finished": "both",
-        "download_finished": "off",
         "upload_queued": "off"
       }
     },
@@ -1396,7 +1395,7 @@
       "envVar": "RESEEK_NOTIFICATIONS_TRANSFERS_BATCH_FINISHED",
       "cliFlag": null,
       "kind": "string",
-      "doc": "How the end of a batch of downloads, such as an album, is announced.",
+      "doc": "How the end of a batch of downloads is announced: everything queued in one go, such as a file, a folder or an album, told of once when all of it has finished.",
       "choices": [
         "off",
         "sound",
@@ -1404,27 +1403,6 @@
         "both"
       ],
       "default": "both",
-      "apply": "live",
-      "secret": false,
-      "notApplied": null,
-      "entries": []
-    },
-    "notifications.transfers.download_finished": {
-      "source": {
-        "layer": "default"
-      },
-      "file": "config.toml",
-      "envVar": "RESEEK_NOTIFICATIONS_TRANSFERS_DOWNLOAD_FINISHED",
-      "cliFlag": null,
-      "kind": "string",
-      "doc": "How a finished download is announced.",
-      "choices": [
-        "off",
-        "sound",
-        "desktop",
-        "both"
-      ],
-      "default": "off",
       "apply": "live",
       "secret": false,
       "notApplied": null,

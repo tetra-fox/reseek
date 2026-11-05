@@ -22,7 +22,6 @@ const options: NotifyOptions = {
   privateMessages: "both",
   mentions: "both",
   roomMessages: "off",
-  downloadFinished: "off",
   batchFinished: "both",
   uploadQueued: "off"
 };

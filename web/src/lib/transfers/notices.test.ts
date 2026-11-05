@@ -3,10 +3,23 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Schemas } from "#lib/api/client.js";
 import { notifier } from "#lib/chat/notify.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
-import { transfer } from "#lib/testing/fixtures.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import "./notices.svelte";
+
+type Job = Schemas["DownloadJobFinished"];
+
+const job = (fields: Partial<Job>): Job => ({
+  id: crypto.randomUUID(),
+  usernames: ["alice"],
+  filename: "@@a\\Music\\Album\\01 One.flac",
+  folder: "@@a\\Music\\Album",
+  fileCount: 1,
+  succeededCount: 1,
+  failedCount: 0,
+  canceledCount: 0,
+  ...fields
+});
 
 describe("transfer notifications", () => {
   afterEach(() => {
@@ -15,36 +28,26 @@ describe("transfer notifications", () => {
     vi.unstubAllGlobals();
   });
 
-  it("tell of a batch only when it has several files, once all are done", async () => {
+  it("tell of each finished job, a job of one file as a download", async () => {
     const told = vi.spyOn(notifier, "other").mockImplementation(() => {});
-    const batches: Record<string, { fileCount: number; completedCount: number }> = {
-      one: { fileCount: 1, completedCount: 1 },
-      album: { fileCount: 2, completedCount: 2 }
-    };
-    const net = fakeNetwork((url) => {
-      const id = url.pathname.split("/").pop()!;
-      const batch = batches[id];
-      return batch ? { ...batch, failedCount: 0 } : undefined;
-    });
+    const net = fakeNetwork(() => undefined);
     live.start();
     net.frame("hello", { principal: { name: "a", role: "ReadOnly" } } as Schemas["Hello"]);
-    const settle = async () => {
-      for (let i = 0; i < 5; i++) await new Promise((done) => setTimeout(done, 0));
-    };
-    const done = { state: "Completed, Succeeded" };
-    net.frame("transfers.updated", transfer({ ...done, batchId: "one" }));
-    await settle();
-    const delivered = () => told.mock.calls.map(([mode, title]) => [mode, title]);
-    expect(delivered()).toEqual([["off", "Download finished"]]);
-    net.frame("transfers.updated", transfer({ ...done, batchId: "album" }));
-    net.frame("transfers.updated", transfer({ ...done, batchId: "album" }));
-    await settle();
-    // by default each file is quiet and the end of the batch is what is announced
-    expect(delivered()).toEqual([
-      ["off", "Download finished"],
-      ["off", "Download finished"],
-      ["off", "Download finished"],
-      ["both", "Folder finished: Album"]
+    const finished = (fields: Partial<Job>) => net.frame("transfers.job_finished", job(fields));
+    finished({});
+    finished({ succeededCount: 0, failedCount: 1 });
+    finished({ fileCount: 12, succeededCount: 9, failedCount: 2, canceledCount: 1 });
+    finished({ usernames: ["alice", "bob", "carol"], folder: "", fileCount: 3, succeededCount: 3 });
+    finished({ folder: "@@a", fileCount: 2, succeededCount: 2 });
+    finished({ fileCount: 2, succeededCount: 0, canceledCount: 2 });
+    for (let i = 0; i < 5; i++) await new Promise((done) => setTimeout(done, 0));
+    expect(told.mock.calls.map(([mode, title, body]) => [mode, title, body])).toEqual([
+      ["both", "Download finished", "01 One.flac from alice"],
+      ["both", "Download failed", "01 One.flac from alice"],
+      ["both", "Album finished", "12 files from alice, 2 failed, 1 canceled"],
+      ["both", "Downloads finished", "3 files from alice and 2 others"],
+      // the top of a share is not named, and a job canceled whole is not told of
+      ["both", "Downloads finished", "2 files from alice"]
     ]);
   });
 });

@@ -65,10 +65,8 @@ pub struct Notifications {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
 pub struct TransferNotifications {
-  /// How a finished download is announced.
-  #[cascade(env = "RESEEK_NOTIFICATIONS_TRANSFERS_DOWNLOAD_FINISHED")]
-  pub download_finished: NotificationMode,
-  /// How the end of a batch of downloads, such as an album, is announced.
+  /// How the end of a batch of downloads is announced: everything queued in one go, such as a
+  /// file, a folder or an album, told of once when all of it has finished.
   #[cascade(env = "RESEEK_NOTIFICATIONS_TRANSFERS_BATCH_FINISHED")]
   pub batch_finished: NotificationMode,
   /// How an upload queued by another user is announced.
@@ -79,7 +77,6 @@ pub struct TransferNotifications {
 impl Default for TransferNotifications {
   fn default() -> Self {
     Self {
-      download_finished: NotificationMode::Off,
       batch_finished: NotificationMode::Both,
       upload_queued: NotificationMode::Off,
     }
