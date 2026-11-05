@@ -9,10 +9,12 @@
     pictureUrl?: string | null;
     /** a picture held in the page, such as one picked and not yet uploaded; wins over `pictureUrl` */
     src?: string | null;
+    /** what the picture shows, for where the name is not beside it; empty leaves it unread */
+    alt?: string;
     class?: string;
   };
 
-  let { name, pictureUrl, src, class: className = "size-8" }: Props = $props();
+  let { name, pictureUrl, src, alt = "", class: className = "size-8" }: Props = $props();
 
   // the hue of the name's color, so a face and a name match
   const hue = $derived(nameHue(name));
@@ -21,7 +23,7 @@
 {#if src || pictureUrl}
   <img
     src={src || `${root()}${pictureUrl}`}
-    alt=""
+    {alt}
     class={cn("shrink-0 rounded-full object-cover", className)} />
 {:else}
   <span

@@ -12,6 +12,8 @@
     pictureUrl: string | null;
     /** a picture picked and not saved yet */
     src: string | null;
+    /** what the picture shows */
+    alt: string;
     disabled: boolean;
     /** there is a picture to take away */
     removable: boolean;
@@ -22,7 +24,8 @@
     onremove: () => void;
   };
 
-  let { name, pictureUrl, src, disabled, removable, onpick, onrefuse, onremove }: Props = $props();
+  let { name, pictureUrl, src, alt, disabled, removable, onpick, onrefuse, onremove }: Props =
+    $props();
 
   const TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"];
   const FORMATS = "JPEG, PNG, GIF, WebP or BMP";
@@ -62,7 +65,7 @@
     over = false;
     take(e.dataTransfer?.files[0]);
   }}>
-  <Avatar {name} {pictureUrl} {src} class="size-24 text-3xl" />
+  <Avatar {name} {pictureUrl} {src} {alt} class="size-24 text-3xl" />
   <div class="flex min-w-48 flex-1 flex-col gap-2">
     <p class="text-sm">{over ? "Drop to use this picture" : "Drag a picture here"}</p>
     <p class="text-xs text-fg-muted">

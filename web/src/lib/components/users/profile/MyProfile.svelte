@@ -96,6 +96,7 @@
   ]);
   const dirty = $derived((saved !== null && text !== saved) || !!picked || removed);
   const shownPicture = $derived(removed ? null : (profile?.pictureUrl ?? null));
+  const pictureAlt = $derived(pickedUrl ? "Your new profile picture" : "Your profile picture");
 
   const pick = (file: File) => {
     error = "";
@@ -201,6 +202,7 @@
           {name}
           pictureUrl={shownPicture}
           src={pickedUrl}
+          alt={pictureAlt}
           description={text}
           uploadSlots={profile.uploadSlots}
           freeUploadSlot={profile.freeUploadSlot}
@@ -233,6 +235,7 @@
           {name}
           pictureUrl={shownPicture}
           src={pickedUrl}
+          alt={pictureAlt}
           disabled={!canPicture}
           removable={!removed && (profile.hasPicture || !!picked)}
           onpick={pick}

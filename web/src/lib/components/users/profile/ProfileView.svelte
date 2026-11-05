@@ -13,18 +13,20 @@
     pictureUrl: string | null | undefined;
     /** a picture held in the page, shown instead of the saved one */
     src?: string | null;
+    /** what the picture shows, when the page does not name whose it is */
+    alt?: string;
     description: string;
     uploadSlots: number;
     freeUploadSlot: boolean;
     queueLength: number;
   };
 
-  let { name, pictureUrl, src, description, uploadSlots, freeUploadSlot, queueLength }: Props =
+  let { name, pictureUrl, src, alt, description, uploadSlots, freeUploadSlot, queueLength }: Props =
     $props();
 </script>
 
 <div class="flex flex-col gap-4 sm:flex-row">
-  <Avatar {name} {pictureUrl} {src} class="size-32 text-4xl" />
+  <Avatar {name} {pictureUrl} {src} {alt} class="size-32 text-4xl" />
   <div class="flex min-w-0 flex-1 flex-col gap-3">
     {#if description}
       <p class="cursor-text text-sm wrap-anywhere whitespace-pre-wrap">
