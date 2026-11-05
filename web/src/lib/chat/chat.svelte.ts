@@ -166,16 +166,17 @@ class Chat {
       this.#readNotices(),
       pins.read()
     ]);
-    // a read that began after this one answers with what is newer, and says why it failed
+    // a read that began after this one answers with what is newer, and says why it failed; the
+    // two turns begin together, so one check covers both
     if (!this.conversations.latest(turns.conversations)) return;
     if (conversations.ok) {
       this.conversations.reconcile(conversations.data, turns.conversations);
       this.#peers();
     } else {
-      this.conversations.failed(turns.conversations);
+      this.conversations.abandon(turns.conversations);
     }
     if (rooms.ok) this.rooms.reconcile(rooms.data, turns.rooms);
-    else this.rooms.failed(turns.rooms);
+    else this.rooms.abandon(turns.rooms);
     const reasons = [];
     if (!conversations.ok) reasons.push(`Conversations: ${conversations.error}`);
     if (!rooms.ok) reasons.push(`Rooms: ${rooms.error}`);
@@ -231,7 +232,9 @@ class Chat {
       api.PUT("/api/v0/rooms/joined/{roomName}/read", { params: byRoom(name), body: { localId } })
     );
     const room = this.rooms.get(name);
-    if (outcome.ok && room) room.lastReadId = Math.max(room.lastReadId, localId);
+    if (outcome.ok && room) {
+      this.rooms.assign(name, { lastReadId: Math.max(room.lastReadId, localId) });
+    }
     return outcome;
   };
 

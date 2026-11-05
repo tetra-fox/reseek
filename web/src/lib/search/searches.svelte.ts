@@ -70,7 +70,7 @@ class Searches {
     const turn = this.list.reading();
     const outcome = await call(() => api.GET("/api/v0/searches"));
     if (outcome.ok) return this.#set(outcome.data, turn);
-    if (this.list.failed(turn)) loadFailed(this, outcome.error);
+    if (this.list.abandon(turn)) loadFailed(this, outcome.error);
   };
 
   /**

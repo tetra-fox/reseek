@@ -30,7 +30,7 @@ export const patch = <T extends object>(target: T, source: T) => {
  * changes is patched in place: the same object, with only the fields that differ written, so its
  * DOM nodes stay and only the changed text updates. A push frame upserts one row; a poll's whole
  * answer goes through `reconcile`. A reload takes a turn from `reading` before it asks and hands
- * it to `reconcile` with the answer, or to `failed`: the answer may have been read before frames
+ * it to `reconcile` with the answer, or to `abandon`: the answer may have been read before frames
  * that arrive while it is on its way, so the rows those frames changed keep their change, and an
  * answer overtaken by a later reload is not taken. While the user interacts with a list
  * (`interaction.frozen`), removals wait, marked in `removed`, and happen when it ends
@@ -109,8 +109,11 @@ export class Keyed<T extends object> {
     return turn === this.#turn;
   }
 
-  /** Ends the reload with `turn`, whose ask failed; gives back whether it was the latest */
-  failed(turn: number) {
+  /**
+   * Ends the reload with `turn` without taking an answer, as when its ask failed or its answer is
+   * outdated; gives back whether it was the latest
+   */
+  abandon(turn: number) {
     if (!this.latest(turn)) return false;
     this.#changed = null;
     return true;

@@ -34,6 +34,8 @@ export class RoomMembers {
   bursts = $state<Burst[]>([]);
   /** the members' tickers, the latest change first */
   wall = $state.raw<WallLine[]>([]);
+  /** counts the pushes of the whole room, each newer than any read already on its way */
+  #pushes = 0;
 
   constructor(name: string) {
     this.name = name;
@@ -43,7 +45,9 @@ export class RoomMembers {
   follow() {
     $effect(() =>
       live.on("rooms.update", (room) => {
-        if (room.name === this.name) this.#take(room, true);
+        if (room.name !== this.name) return;
+        this.#pushes += 1;
+        this.#take(room, true);
       })
     );
     $effect(() =>
@@ -78,11 +82,13 @@ export class RoomMembers {
   /** Reads the room and its users */
   load = async () => {
     const turn = this.users.reading();
+    const pushes = this.#pushes;
     const outcome = await call(() =>
       api.GET("/api/v0/rooms/joined/{roomName}", { params: byRoom(this.name) })
     );
+    if (this.#pushes !== pushes) return void this.users.abandon(turn);
     if (!outcome.ok) {
-      if (this.users.failed(turn)) this.error = outcome.error;
+      if (this.users.abandon(turn)) this.error = outcome.error;
       return;
     }
     if (!this.users.latest(turn)) return;

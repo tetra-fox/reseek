@@ -54,7 +54,7 @@
           }
         })
       );
-      if (!outcome.ok) rows.failed(turn);
+      if (!outcome.ok) rows.abandon(turn);
       return outcome;
     },
     (data) => rows.reconcile(data.transfers, turn)

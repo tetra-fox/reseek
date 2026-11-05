@@ -77,7 +77,7 @@ export class Transfers {
       this.direction === "download"
         ? await call(() => api.GET("/api/v0/transfers/downloads"))
         : await call(() => api.GET("/api/v0/transfers/uploads"));
-    if (!outcome.ok) return this.list.failed(turn) ? loadFailed(this, outcome.error) : undefined;
+    if (!outcome.ok) return this.list.abandon(turn) ? loadFailed(this, outcome.error) : undefined;
     const files = outcome.data.flatMap((u) => u.directories.flatMap((d) => d.files));
     if (!this.list.reconcile(files, turn)) return;
     this.loaded = true;

@@ -106,7 +106,7 @@
         api.GET("/api/v0/users", { params: { query: { ...ask, offset, limit } } })
       );
       if (!outcome.ok) {
-        if (!rows.failed(turn)) return;
+        if (!rows.abandon(turn)) return;
         error = outcome.error;
         loaded = true;
         return;
