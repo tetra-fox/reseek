@@ -4,8 +4,9 @@
 //! comes back on its own, as it does after its controller restarts; an agent that stops takes
 //! its shares with it. The controller refuses a wrong secret, an unknown name, a replayed
 //! credential, an address outside the agent's networks and a version off its release line. A
-//! controller's finished download is copied to an agent that asks for them, and a controller
-//! that stops closes its agents' sockets as shutting down.
+//! controller's finished download is copied to an agent that asks for them, a controller that
+//! stops closes its agents' sockets as shutting down, and an agent stopped by a signal closes
+//! its own.
 
 mod support;
 
@@ -234,6 +235,28 @@ async fn a_stopping_controller_closes_its_agents_as_shutting_down() {
     .printed_line(&["relay controller connection lost", "code=4010"])
     .await;
   assert!(stopping.process.child.wait().unwrap().success());
+}
+
+/// The agent program, stopped by a signal, closes its socket, says so and exits cleanly, and its
+/// controller lets it go.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_signal_stops_an_agent_cleanly() {
+  let (controller_dir, agent_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+  std::fs::write(controller_dir.path().join("config.toml"), CONTROLLER).unwrap();
+  let controller = Daemon::start(controller_dir.path(), &[], &ACCOUNT);
+  let api = signed_in(&controller).await;
+  std::fs::create_dir_all(agent_dir.path().join("share")).unwrap();
+  let mut agent = agent(agent_dir.path(), controller.port, "");
+  until(&api, "serving the agent", |s| serving(s, 0)).await;
+  let signaled = std::process::Command::new("kill")
+    .args(["-TERM", &agent.child.id().to_string()])
+    .status()
+    .unwrap();
+  assert!(signaled.success());
+  assert!(agent.child.wait().unwrap().success());
+  agent.printed_line(&["reseek-agent stopped"]).await;
+  until(&api, "the agent gone", |s| s.relay.agents.is_empty()).await;
 }
 
 #[tokio::test]
