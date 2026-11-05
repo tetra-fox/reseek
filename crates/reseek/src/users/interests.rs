@@ -24,8 +24,8 @@ fn normalized(entry: &str) -> String {
   entry.trim().to_lowercase()
 }
 
-/// The lists as stored, each entry normalized. Entries stored before interests were lowercased
-/// can become one; the first one stored is kept, which puts it in the liked list when both had it.
+/// The lists as stored, each entry normalized. Rows kept in mixed case fold into one; the first
+/// stored wins, so a liked one beats a hated one.
 fn stored(conn: &Connection) -> rusqlite::Result<Interests> {
   let mut interests = Interests::default();
   let mut statement =
