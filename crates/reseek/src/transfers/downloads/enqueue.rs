@@ -45,7 +45,7 @@ pub struct FileRequest {
 
 /// Files from one user to enqueue together, one group of a job, with where they go and what
 /// found them, which each of their downloads keeps.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub struct Group {
   /// the user the files come from
   pub username: String,
