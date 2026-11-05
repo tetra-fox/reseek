@@ -32,6 +32,15 @@ pub enum ReadEvent {
   Frame(Vec<u8>),
 }
 
+/// What the read loop does with the payload of the frame whose header it just reported
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FrameBody {
+  /// reads it into the frame and reports its progress
+  Read,
+  /// reads past it without keeping it, so no frame is reported
+  Skip,
+}
+
 /// A complete message frame, length prefix included, that was encoded ahead of time and is read
 /// from `reader` as it is written, so a large one is never held in memory whole
 pub struct EncodedFrame {
@@ -132,18 +141,22 @@ impl MessageConn {
   /// connection closes. `sink` runs on the loop's task, so it must not block; anything slow
   /// belongs on a task of its own. Only the first call starts a loop; later ones return false.
   pub fn start_reading(&self, mut sink: impl FnMut(ReadEvent) + Send + 'static) -> bool {
-    self.spawn_read_loop(None, move |event, _| sink(event))
+    self.spawn_read_loop(None, move |event, _| {
+      sink(event);
+      FrameBody::Read
+    })
   }
 
   /// Starts the read loop like [`MessageConn::start_reading`], except that after reading each
   /// frame the loop waits for a permit from `gate` and hands it to `sink` with the frame. The
   /// next frame is read only once a permit was free, so while every permit is held by frames
   /// being handled the remote's writes back up instead of frames being dropped. Header and
-  /// progress events come without a permit.
+  /// progress events come without a permit. What `sink` answers to a header decides whether
+  /// the frame's payload is read or skipped; its answer to other events is not used.
   pub(crate) fn start_reading_gated(
     &self,
     gate: Arc<Semaphore>,
-    sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>) + Send + 'static,
+    sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>) -> FrameBody + Send + 'static,
   ) -> bool {
     self.spawn_read_loop(Some(gate), sink)
   }
@@ -151,7 +164,7 @@ impl MessageConn {
   fn spawn_read_loop(
     &self,
     gate: Option<Arc<Semaphore>>,
-    sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>) + Send + 'static,
+    sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>) -> FrameBody + Send + 'static,
   ) -> bool {
     let reading = self
       .reading
@@ -338,7 +351,7 @@ async fn write_encoded(half: &mut ConnWriteHalf, frame: EncodedFrame) -> Result<
 async fn read_loop(
   reading: Reading,
   gate: Option<Arc<Semaphore>>,
-  mut sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>),
+  mut sink: impl FnMut(ReadEvent, Option<OwnedSemaphorePermit>) -> FrameBody,
 ) {
   let Reading {
     mut half,
@@ -365,7 +378,18 @@ async fn read_loop(
       .flatten()
       .expect("a length that passed the check, followed by the code, is a complete header");
     let total = len as usize - width;
-    sink(ReadEvent::Header { len, code }, None);
+    if sink(ReadEvent::Header { len, code }, None) == FrameBody::Skip {
+      let mut skipped = 0;
+      while skipped < total {
+        let size = chunk.len().min(total - skipped);
+        if half.read_exact(&mut chunk[..size]).await.is_err() {
+          return;
+        }
+        skipped += size;
+      }
+      tracing::trace!(len, code, "frame skipped");
+      continue;
+    }
     sink(
       ReadEvent::Progress {
         code,

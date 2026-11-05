@@ -13,13 +13,11 @@ use soulseek_proto::{PeerCode, PeerMessage, RemoteFilename};
 use tokio_util::sync::CancellationToken;
 
 use crate::client::{Client, failed, non_blank};
-use crate::error::{ClientError, ConnectionErrorKind, MessageErrorKind};
+use crate::error::{ClientError, ConnectionErrorKind};
 use crate::events::Event;
 use crate::peers::{IncomingBrowse, write_peer};
 use crate::waiter::WaitKey;
 
-/// the largest browse response accepted, compressed
-const MAX_BROWSE_RESPONSE: u64 = 64 << 20;
 /// how long a folder request waits for its answer unless told otherwise
 const FOLDER_CONTENTS_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -147,15 +145,8 @@ impl Client {
       connection,
       mut received,
     } = first_bytes.await?;
-    // the payload after the code
+    // the payload after the code; a response too large to follow failed the wait above
     let size = u64::from(length).saturating_sub(4);
-    if size > MAX_BROWSE_RESPONSE {
-      return Err(ClientError::Message {
-        kind: MessageErrorKind::Read,
-        message: "browse response too large".into(),
-        source: None,
-      });
-    }
     tracing::debug!(username, size, "browse response arriving");
     let progress = |received: u64| {
       let progress = BrowseProgress::new(username, received, size);

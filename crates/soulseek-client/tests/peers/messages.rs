@@ -233,7 +233,7 @@ async fn responses_nobody_asked_for_are_dropped_before_inflating() {
   )));
   mallory.send(&frames).await;
   logs
-    .wait_for(&["browse response nobody follows", "dropped before inflating"])
+    .wait_for(&["browse response nobody follows", "skipped"])
     .await;
   logs
     .wait_for(&[

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::support::scripted::{BOB, Scripted};
 use crate::support::soulfind::{self, User};
-use crate::support::{PATIENCE, free_port, listening_options};
+use crate::support::{Logs, PATIENCE, free_port, listening_options};
 use soulseek_client::{BrowseOptions, BrowseProgress, ClientError, ClientOptions, Event};
 use soulseek_proto::peer::{BrowseResponse, Directory, File, UserInfo};
 use soulseek_proto::{PeerMessage, RemoteFilename};
@@ -152,7 +152,8 @@ async fn a_folder_comes_with_the_folders_below_it_and_info_says_who_may_upload()
 }
 
 #[tokio::test]
-async fn a_browse_response_larger_than_the_bound_is_refused_from_its_header() {
+async fn a_browse_response_larger_than_the_bound_is_refused_and_never_inflated() {
+  let logs = Logs::capture();
   let mut scripted = Scripted::start().await;
   let browse = tokio::spawn({
     let client = scripted.client().clone();
@@ -164,7 +165,7 @@ async fn a_browse_response_larger_than_the_bound_is_refused_from_its_header() {
   });
   let mut bob = scripted.connected().await;
   assert_eq!(bob.read_peer().await, PeerMessage::BrowseRequest);
-  // the header of a response just over 64 MiB, of which nothing more is sent
+  // the header of a response just over 64 MiB
   let len: u32 = (64 << 20) + 5;
   let mut header = len.to_le_bytes().to_vec();
   header.extend(5u32.to_le_bytes());
@@ -177,6 +178,22 @@ async fn a_browse_response_larger_than_the_bound_is_refused_from_its_header() {
   assert!(
     matches!(&error, ClientError::Message { message, .. } if message == "browse response too large"),
     "{error:?}"
+  );
+  // the rest of it, which is no zlib stream, then a request on the same connection
+  let mut rest = vec![0; len as usize - 4];
+  rest.extend(PeerMessage::InfoRequest.encode());
+  bob.send(&rest).await;
+  assert!(matches!(
+    bob.read_peer().await,
+    PeerMessage::InfoResponse(_)
+  ));
+  logs
+    .wait_for(&["browse response nobody follows", "skipped"])
+    .await;
+  assert!(
+    logs.lines_with(&["malformed message rejected"]).is_empty(),
+    "{}",
+    logs.text()
   );
 }
 

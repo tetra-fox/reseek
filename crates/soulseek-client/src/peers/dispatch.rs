@@ -5,10 +5,10 @@
 //! frame, so a stuck resolver slows the peers sending to it and loses nothing.
 //!
 //! Browse, folder and search responses are compressed, and anyone can connect and send them
-//! under any name. Each is inflated only when something waits for it: a browse response only
-//! when a browse followed its header on this connection, a folder or search response only once
-//! the token at its start, inflated alone, is one we wait for. A connection inflates one of them
-//! at a time, on the blocking pool.
+//! under any name. Each is inflated only when something waits for it: a browse response is not
+//! even kept unless a browse follows its header on this connection and its length is within
+//! bounds, a folder or search response is inflated only once the token at its start, inflated
+//! alone, is one we wait for. A connection inflates one of them at a time, on the blocking pool.
 
 use std::sync::Arc;
 
@@ -21,9 +21,12 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, watch};
 use tracing::Instrument;
 
 use crate::client::Client;
-use crate::conn::{MessageConn, ReadEvent};
+use crate::conn::{FrameBody, MessageConn, ReadEvent};
 use crate::error::{ClientError, MessageErrorKind};
 use crate::waiter::WaitKey;
+
+/// the largest browse response followed, compressed
+const MAX_BROWSE_RESPONSE: u64 = 64 << 20;
 
 /// The start of a browse response on its way, so its progress can be followed: the frame's
 /// length, the connection bringing it, and how many payload bytes of it have arrived
@@ -42,58 +45,92 @@ struct Arrival {
   frame: Vec<u8>,
   /// held until the frame is handled, against the bound on frames handled at once
   permit: Option<OwnedSemaphorePermit>,
-  /// a browse followed the header of this frame, which is a browse response
-  followed: bool,
   /// the connection's turn to inflate, one compressed message at a time
   inflating: Arc<Semaphore>,
 }
 
 impl Client {
   /// Starts the read loop of a peer message connection. A browse response's header completes
-  /// the wait for it before the payload arrives, and its progress is published as it does.
+  /// the wait for it before the payload arrives, and its progress is published as it does; one
+  /// no browse follows is skipped unread.
   pub(crate) fn start_peer_reading(&self, conn: &MessageConn) {
     let client = self.downgrade();
     let reader = conn.clone();
     let mut browse: Option<watch::Sender<usize>> = None;
-    let mut followed = false;
     let inflating = Arc::new(Semaphore::new(1));
     let gate = self.peers().handlers.clone();
     conn.start_reading_gated(gate, move |event, permit| match event {
       ReadEvent::Header { len, code } if code == PeerCode::BrowseResponse.code() => {
         let (progress, received) = watch::channel(0);
-        browse = Some(progress);
-        followed = false;
-        if let (Some(client), Some(username)) = (client.upgrade(), reader.handle().username()) {
-          let key = WaitKey::BrowseResponseConnection {
-            username: username.to_owned(),
-          };
-          let incoming = IncomingBrowse {
-            length: len,
-            connection: reader.clone(),
-            received,
-          };
-          // every browse of this user follows the response
-          followed = client.waiter().complete_all(&key, incoming) > 0;
+        let followed = client
+          .upgrade()
+          .is_some_and(|client| client.browse_arriving(&reader, len, received));
+        browse = followed.then_some(progress);
+        if followed {
+          FrameBody::Read
+        } else {
+          FrameBody::Skip
         }
       }
       ReadEvent::Progress { code, current, .. } if code == PeerCode::BrowseResponse.code() => {
         if let Some(progress) = &browse {
           progress.send_replace(current);
         }
+        FrameBody::Read
       }
       ReadEvent::Frame(frame) => {
         if let Some(client) = client.upgrade() {
           let arrival = Arrival {
             frame,
             permit,
-            followed,
             inflating: inflating.clone(),
           };
           client.dispatch_peer_frame(&reader, arrival);
         }
+        FrameBody::Read
       }
-      ReadEvent::Header { .. } | ReadEvent::Progress { .. } => {}
+      ReadEvent::Header { .. } | ReadEvent::Progress { .. } => FrameBody::Read,
     });
+  }
+
+  /// Hands the browses of the connection's user the start of the browse response `len` long
+  /// whose payload is arriving; whether one follows it. One too large to accept fails them.
+  fn browse_arriving(
+    &self,
+    conn: &MessageConn,
+    len: u32,
+    received: watch::Receiver<usize>,
+  ) -> bool {
+    let Some(username) = conn.handle().username() else {
+      tracing::debug!("browse response from a connection with no name, skipped");
+      return false;
+    };
+    let key = WaitKey::BrowseResponseConnection {
+      username: username.to_owned(),
+    };
+    // the payload after the code
+    let size = u64::from(len).saturating_sub(4);
+    let followed = if size > MAX_BROWSE_RESPONSE {
+      let error = ClientError::Message {
+        kind: MessageErrorKind::Read,
+        message: "browse response too large".into(),
+        source: None,
+      };
+      self.waiter().fault_all(&key, error);
+      false
+    } else {
+      let incoming = IncomingBrowse {
+        length: len,
+        connection: conn.clone(),
+        received,
+      };
+      // every browse of this user follows the response
+      self.waiter().complete_all(&key, incoming) > 0
+    };
+    if !followed {
+      tracing::debug!(size, "browse response nobody follows, skipped");
+    }
+    followed
   }
 
   /// Hands the frame to a task of its own, which keeps its permit until the frame is handled
@@ -135,13 +172,9 @@ impl Client {
 
   /// Whether the compressed message `frame` of `code`, which `username` sent, is one something
   /// waits for; one that is not is dropped here, before more than its first fields are inflated.
-  /// `followed` tells whether a browse followed the frame's header.
-  fn awaited(&self, username: &str, code: PeerCode, frame: &[u8], followed: bool) -> bool {
+  /// A browse response that reaches here was followed from its header.
+  fn awaited(&self, username: &str, code: PeerCode, frame: &[u8]) -> bool {
     match code {
-      PeerCode::BrowseResponse if !followed => {
-        tracing::debug!("browse response nobody follows, dropped before inflating");
-        false
-      }
       PeerCode::FolderContentsResponse => {
         let limits = self.options().limits.frame_limits();
         // a malformed one has been logged by the peek
@@ -170,7 +203,6 @@ impl Client {
     let Arrival {
       frame,
       permit: _permit,
-      followed,
       inflating,
     } = arrival;
     let limits = self.options().limits.frame_limits();
@@ -184,7 +216,7 @@ impl Client {
     }
     let username = conn.handle().username().unwrap_or_default().to_owned();
     let message = match code.filter(|&code| limits.inflated_bytes(code).is_some()) {
-      Some(code) if !self.awaited(&username, code, &frame, followed) => return,
+      Some(code) if !self.awaited(&username, code, &frame) => return,
       Some(code) => match decode_compressed(frame, &inflating, limits).await {
         Some(Ok(message)) => message,
         Some(Err(error)) => {
