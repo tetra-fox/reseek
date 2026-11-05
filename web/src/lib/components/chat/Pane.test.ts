@@ -8,7 +8,7 @@ import { ECHO_WAIT } from "#lib/chat/pane.svelte.js";
 import { chatLayout } from "#lib/chat/prefs.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { session } from "#lib/session.svelte.js";
-import { joinedRoom } from "#lib/testing/fixtures.js";
+import { conversation, joinedRoom } from "#lib/testing/fixtures.js";
 import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
@@ -389,6 +389,39 @@ describe("a chat pane", () => {
     });
     await flush();
     expect(row(Number(drawn[0]))).toBe(first);
+  });
+
+  it("offers the names in the chat for @, ourselves left out and each once", async () => {
+    const member = (username: string) => ({ username, self: username === "me" }) as never;
+    fakeNetwork((url) => {
+      if (url.pathname.endsWith("/conversations/alice/messages")) return [];
+      if (url.pathname.endsWith("/rooms/joined/indie/messages")) {
+        return { messages: [], hasMore: false, gaps: [] };
+      }
+      if (url.pathname.endsWith("/rooms/joined/indie")) {
+        const users = [member("me"), member("mel")];
+        return { name: "indie", isPrivate: false, users, tickers: [], messages: null };
+      }
+      return undefined;
+    });
+    chat.rooms.upsert(joinedRoom("indie"));
+    chat.conversations.upsert(conversation("alice"));
+    chat.conversations.upsert(conversation("me"));
+    const offered = async (target: { kind: "room" | "user"; name: string }) => {
+      component = mount(Pane, { target: document.body, props: { target } });
+      await flush();
+      const box = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')!;
+      box.value = "@";
+      box.setSelectionRange(1, 1);
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+      flushSync();
+      const names = [...document.querySelectorAll('[aria-label="Usernames"] [role="option"]')];
+      unmount(component);
+      component = null;
+      return names.map((o) => o.textContent?.trim());
+    };
+    expect(await offered({ kind: "room", name: "indie" })).toEqual(["mel"]);
+    expect(await offered({ kind: "user", name: "alice" })).toEqual(["alice"]);
   });
 
   it("keeps a user's card open while the list moves itself for a new message", async () => {

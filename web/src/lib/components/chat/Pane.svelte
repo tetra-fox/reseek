@@ -115,10 +115,15 @@
     if (!outcome.ok) toast(outcome.error, "error");
     else void members?.load();
   };
-  const names = () =>
-    target.kind === "room"
-      ? members!.users.rows.map((u) => u.username)
-      : [target.name, ...chat.conversations.rows.map((c) => c.username)];
+  // the people `@` can name: never ourselves, and each once
+  const names = () => {
+    const us = app.state?.user.username;
+    const all =
+      target.kind === "room"
+        ? members!.users.rows.map((u) => u.username)
+        : [target.name, ...chat.conversations.rows.map((c) => c.username)];
+    return [...new Set(all)].filter((name) => name !== us);
+  };
 </script>
 
 {#snippet side(members: RoomMembers)}
