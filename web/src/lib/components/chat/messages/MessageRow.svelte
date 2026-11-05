@@ -35,7 +35,7 @@
     room: boolean;
     /** a notice from the server: the time and the text, with nothing that belongs to a person */
     notice?: boolean;
-    /** the keys are on it, so its actions show and Tab reaches them */
+    /** the keys are on it: it takes focus, and Tab goes from it to its actions */
     active: boolean;
     /** its menu is open */
     menu: boolean;
@@ -87,6 +87,25 @@
   );
 
   let row = $state<HTMLElement | null>(null);
+  let toolbar = $state<HTMLElement | null>(null);
+  /**
+   * Tab from the message the keys are on goes to its actions, which come after its text;
+   * Shift+Tab from the first of them, or Escape from any, comes back
+   */
+  const keydown = (e: KeyboardEvent) => {
+    if (!active || !row || !toolbar) return;
+    const first = toolbar.querySelector<HTMLElement>("a, button");
+    const back =
+      (e.key === "Tab" && e.shiftKey && e.target === first) ||
+      (e.key === "Escape" && toolbar.contains(e.target as Node));
+    if (e.key === "Tab" && !e.shiftKey && e.target === row && first) {
+      e.preventDefault();
+      first.focus();
+    } else if (back) {
+      e.preventDefault();
+      row.focus();
+    }
+  };
   let press: ReturnType<typeof setTimeout> | undefined;
   const released = () => clearTimeout(press);
   $effect(() => released);
@@ -115,9 +134,13 @@
   {/if}
 {/snippet}
 
+<!-- the tabindex is only ever -1: the message the keys are on takes focus from them, not Tab.
+     Its keys are Tab and Escape between it and its actions -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
   bind:this={row}
   role="article"
+  onkeydown={keydown}
   onpointerdown={pressed}
   onpointerup={released}
   onpointercancel={released}
@@ -133,8 +156,10 @@
         : "border-transparent",
     !m.mention && "hover:bg-hover/60",
     highlight && "bg-accent-soft/50 ring-1 ring-accent/50 ring-inset",
-    active && "bg-hover/60 ring-2 ring-accent ring-inset"
+    active &&
+      "outline-none focus-within:bg-hover/60 focus-within:ring-2 focus-within:ring-accent focus-within:ring-inset"
   ]}
+  tabindex={active ? -1 : undefined}
   data-message={m.localId}>
   <div class="flex justify-end">
     {#if head}
@@ -198,12 +223,16 @@
     {/if}
   </div>
   {#if actions.length}
-    <!-- over the message's top right corner on hover, or while the keys are on it. Every action
-         is also in the menu, which a touch reaches with a long press -->
+    <!-- over the message's top right corner on hover or while focus is in it.
+         Last in the message, so a screen reader reads the author and the text first. Every
+         action is also in the menu, which a touch reaches with a long press -->
     <div
+      bind:this={toolbar}
+      role="group"
+      aria-label="Message actions"
       class={[
         "absolute -top-3 right-3 z-10 items-center rounded-control border bg-overlay p-0.5 shadow-raised group-focus-within/message:flex group-hover/message:flex",
-        active ? "flex" : "hidden"
+        "hidden"
       ]}>
       {#each actions as action (action.label)}
         <Button

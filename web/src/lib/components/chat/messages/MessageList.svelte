@@ -75,6 +75,17 @@
     return (head ? 32 : 2) + 20 * rows;
   };
 
+  /** the message the arrow keys are on, the one message that can take focus */
+  let active = $state<number | null>(null);
+  /** the message whose menu is open */
+  let menuFor = $state<number | null>(null);
+  /** where the active message is in the lines, -1 when none is */
+  const activeAt = $derived(
+    active === null
+      ? -1
+      : lines.findIndex((l) => l.kind === "message" && l.message.localId === active)
+  );
+
   /** the lines drawn when the user took hold of the list, which stay drawn while it is held */
   let held: string[] = [];
   /*
@@ -82,50 +93,64 @@
    * guessed before it is drawn and measured once it is. Older messages arriving above leave the
    * first message in view where it was; at the bottom, new ones are followed unless the user
    * holds the list. While the user holds it (a selection, a press), the lines drawn when they
-   * took hold stay drawn, so nothing selected leaves the page
+   * took hold stay drawn, so nothing selected leaves the page. The active message stays drawn
+   * too, so focus on it is never dropped with it
    */
   const shown = new ListWindow(
     () => lines,
     (line) => line.key,
-    () => ({
-      estimateSize: (index) => guess(lines[index]),
-      overscan: 12,
-      paddingEnd: 8,
-      // while the scrollbar is held at the top, older pages go above it rather than keep the view
-      anchor: gripped ? undefined : (line) => line.kind === "message",
-      // a page read on the way down stays below the view, which is reading older messages
-      followOnAppend: !interaction.frozen && !pane.hasNewer && !loadingNewer,
-      anchorTo: "end",
-      scrollEndThreshold: NEAR,
-      rangeExtractor: (range) => {
-        const drawn = defaultRangeExtractor(range);
-        if (!interaction.frozen || !held.length) return drawn;
-        const keys = new Set(drawn.map((index) => lines[index]?.key));
-        const kept = held.flatMap((key) => {
-          const index = lines.findIndex((l) => l.key === key);
-          return index === -1 || keys.has(key) ? [] : [index];
-        });
-        return [...drawn, ...kept].toSorted((a, b) => a - b);
-      }
-    })
+    () => {
+      const keep = activeAt;
+      return {
+        estimateSize: (index) => guess(lines[index]),
+        overscan: 12,
+        paddingEnd: 8,
+        // while the scrollbar is held at the top, older pages go above it rather than keep the view
+        anchor: gripped ? undefined : (line) => line.kind === "message",
+        // a page read on the way down stays below the view, which is reading older messages
+        followOnAppend: !interaction.frozen && !pane.hasNewer && !loadingNewer,
+        anchorTo: "end",
+        scrollEndThreshold: NEAR,
+        rangeExtractor: (range) => {
+          const drawn = new Set(defaultRangeExtractor(range));
+          if (keep !== -1) drawn.add(keep);
+          if (interaction.frozen) {
+            for (const key of held) {
+              const index = lines.findIndex((l) => l.key === key);
+              if (index !== -1) drawn.add(index);
+            }
+          }
+          return [...drawn].toSorted((a, b) => a - b);
+        }
+      };
+    }
   );
   $effect(() => {
     const keys = shown.drawn.map((d) => d.key);
     if (!interaction.frozen) held = keys;
   });
 
-  /** the message the arrow keys are on, whose actions show */
-  let active = $state<number | null>(null);
-  /** the message whose menu is open */
-  let menuFor = $state<number | null>(null);
   // the lines stay as they are while a message's menu hangs from one
   $effect(() => {
     if (menuFor !== null) return interaction.hold();
   });
 
-  /** The arrows walk the messages with an action, from the newest drawn; Enter opens the menu */
+  /** The active message's element, while it is drawn */
+  const activeRow = () =>
+    active === null ? null : box?.querySelector<HTMLElement>(`[data-message="${active}"]`);
+
+  /** Gives the active message DOM focus once it is drawn, so Tab goes on to its actions */
+  const focusActive = async () => {
+    await tick();
+    activeRow()?.focus({ preventScroll: true });
+  };
+
+  /**
+   * The arrows walk the messages with an action, from the newest drawn, and focus each; Enter
+   * opens the menu. Keys on a control inside a message are the control's
+   */
   const keydown = (e: KeyboardEvent) => {
-    if (e.target !== box) return;
+    if (e.target !== box && e.target !== activeRow()) return;
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault();
       const indexes = lines.flatMap((line, i) => {
@@ -139,8 +164,10 @@
       if (to === undefined) return;
       active = idOf(to);
       shown.scrollTo(to);
+      void focusActive();
     } else if (e.key === "Escape") {
       active = null;
+      box?.focus({ preventScroll: true });
     } else if (active !== null) {
       if (e.key !== "Enter" && e.key !== "ContextMenu" && !(e.key === "F10" && e.shiftKey)) return;
       e.preventDefault();
@@ -148,9 +175,13 @@
     }
   };
 
-  /** Focus left the list, not for a control of the active message: the keys are off it */
+  /**
+   * Focus went from the log to something else, not the active message's menu: the keys are off
+   * it. Focus that went nowhere, as when the window is left, comes back to the message
+   */
   const focusout = (e: FocusEvent) => {
-    if (menuFor === null && !box?.contains(e.relatedTarget as Node | null)) active = null;
+    const to = e.relatedTarget;
+    if (menuFor === null && to instanceof Node && !box?.contains(to)) active = null;
   };
 
   /** Reads whether the view is at the bottom */
@@ -341,8 +372,8 @@
               menu={line.message.localId === menuFor}
               onmenu={(open) => {
                 menuFor = open ? line.message.localId : null;
-                // the keys go on where the menu was opened from, the row itself having no focus
-                if (!open && active !== null) box?.focus({ preventScroll: true });
+                // the keys go on from the message the menu was opened on
+                if (!open && active !== null) void focusActive();
               }}
               {onreply}
               onretry={() => void pane.retry(line.message)} />

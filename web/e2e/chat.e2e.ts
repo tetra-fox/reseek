@@ -203,15 +203,24 @@ test("the keys reach what can be done with a message", async ({ page }) => {
   await expect(copy).toBeHidden();
   await log.focus();
   await page.keyboard.press("ArrowUp");
-  // the message the keys are on shows its toolbar, one Tab away
+  // the keys put focus on the newest message, which shows its toolbar
+  const newest = log.locator("[data-message]").last();
+  await expect(newest).toBeFocused();
   await expect(copy).toHaveCount(1);
   await expect(copy).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("menuitem", { name: "Copy the text" })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(log).toBeFocused();
+  await expect(newest).toBeFocused();
+  // Tab goes from the message to its own toolbar, which comes after its text, and back
   await page.keyboard.press("Tab");
-  await expect(log.locator("[data-message] :focus")).toHaveCount(1);
+  const first = newest.getByRole("group", { name: "Message actions" }).getByRole("button").first();
+  await expect(first).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(newest).toBeFocused();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Escape");
+  await expect(newest).toBeFocused();
 });
 
 test("a private message stays on one line", async ({ page }) => {
