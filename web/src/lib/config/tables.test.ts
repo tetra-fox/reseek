@@ -119,6 +119,10 @@ describe("tables", () => {
     expect(byRow.get(rows[0].id)).toContain(`${key}.robot.key`);
     expect(byRow.get(rows[1].id)).toContain(`${key}.robot2.key`);
     expect(rest).toEqual(["Something else."]);
+    // a row whose name starts another's takes only what names it
+    const dotted = rowsOf("map", '[["a",{}],["a.b",{}]]');
+    const nested = rowErrors(key, "map", dotted, `The field ${key}.a.b.key must contain a value.`);
+    expect([...nested.byRow.keys()]).toEqual([dotted[1].id]);
     const list = rowsOf("table-list", "[{},{}]");
     expect(
       rowErrors("x", "table-list", list, "The field x[1].token is hidden.").byRow.get(list[1].id)

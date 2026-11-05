@@ -177,11 +177,18 @@ export const rowErrors = (
   const byRow = new Map<number, string>();
   const rest: string[] = [];
   for (const message of error?.split("; ").filter(Boolean) ?? []) {
-    const row = rows.find((row, i) => {
-      if (control !== "map") return message.includes(`${key}[${i}]`);
-      const path = `${key}.${row.name.trim()}`;
-      return message.includes(`${path}.`) || message.includes(`${path} `);
-    });
+    // a name may start another's, `a` and `a.b`, so the longest name a message holds is its row
+    const row = rows
+      .filter((row, i) => {
+        if (control !== "map") return message.includes(`${key}[${i}]`);
+        const path = `${key}.${row.name.trim()}`;
+        return message.includes(`${path}.`) || message.includes(`${path} `);
+      })
+      .reduce<Row | undefined>(
+        (longest, row) =>
+          longest && longest.name.trim().length >= row.name.trim().length ? longest : row,
+        undefined
+      );
     if (row) byRow.set(row.id, [byRow.get(row.id), message].filter(Boolean).join(" "));
     else rest.push(message);
   }
