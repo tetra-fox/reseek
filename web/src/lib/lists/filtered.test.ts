@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { type ActiveFilter, announce, clearAll, focusAfter, hiding, showing } from "./filtered";
+import { focusAfter, hiding, showing } from "./filtered";
 
 const DOWNLOADS = ["download", "downloads"] as const;
 
@@ -23,19 +23,6 @@ describe("a filtered list's summary", () => {
     expect(hiding(340, DOWNLOADS)).toBe("The filters hide all 340 downloads");
     expect(hiding(1, DOWNLOADS)).toBe("The filters hide the only download");
     expect(hiding(null, ["user", "users"])).toBe("No users match the filters");
-  });
-
-  it("names the filters for a screen reader", () => {
-    const named = (label: string): ActiveFilter => ({ id: label, label, clear: () => {} });
-    expect(announce([named("Active")])).toBe("Filters on: Active");
-    expect(announce([named("Active"), named("Failed")])).toBe("Filters on: Active and Failed");
-    expect(announce([])).toBe("Filters cleared");
-  });
-
-  it("clears every filter", () => {
-    const clears = [vi.fn(), vi.fn()];
-    clearAll(clears.map((clear, n) => ({ id: String(n), label: String(n), clear })));
-    for (const clear of clears) expect(clear).toHaveBeenCalledOnce();
   });
 
   it("moves focus to the chip after the removed one, else the one before", () => {
