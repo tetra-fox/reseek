@@ -324,6 +324,8 @@ impl Shares {
       setup.scan_at_startup,
       setup.force_scan,
     );
+    // the startup load or scan checks again; without one this is the only check until a change
+    shares.check_unmatched();
     Ok(shares)
   }
 
@@ -354,8 +356,9 @@ impl Shares {
   }
 
   /// Warns of each alias of the visibility lists that no share on any host has, when it comes
-  /// to have none, and says so when it has one again: a share meant to be hidden whose alias is
-  /// spelled otherwise is seen by everyone. Run whenever the lists or the hosts' shares change.
+  /// to have none, and says so when it comes to have one: a share meant to be hidden whose
+  /// alias is spelled otherwise is seen by everyone. Run whenever the lists or the hosts'
+  /// shares change.
   fn check_unmatched(&self) {
     let listed: Vec<String> = {
       let applied = lock(&self.applied);
@@ -381,7 +384,7 @@ impl Shares {
     for alias in before.difference(&now) {
       info!(
         alias,
-        "a share listed as buddy-only or trusted-only matches a share again"
+        "a share listed as buddy-only or trusted-only now matches a share"
       );
     }
     *before = now;
