@@ -3,11 +3,13 @@
 //! or `?username=` when given, which reaches names a path cannot hold such as `..`.
 //!
 //! Reading takes the ReadOnly role and changing what we keep about a user ReadWrite; putting a
-//! user in a group, forgetting a user and importing blocks take Administrator.
+//! user in a group, forgetting a user, importing blocks and giving privileges take
+//! Administrator.
 
 mod blocking;
 mod directory;
 mod network;
+mod privileges;
 
 use utoipa_axum::router::OpenApiRouter;
 
@@ -18,4 +20,5 @@ pub fn routes() -> OpenApiRouter<AppState> {
   network::routes()
     .merge(directory::routes())
     .merge(blocking::routes())
+    .merge(privileges::routes())
 }

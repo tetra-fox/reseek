@@ -766,6 +766,57 @@
         }
       }
     },
+    "/api/v0/application/privileges": {
+      "get": {
+        "tags": [
+          "application"
+        ],
+        "summary": "Our privileges, asked of the server now; the state document takes them too.",
+        "operationId": "own_privileges",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Privileges"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/application/status": {
       "put": {
         "tags": [
@@ -14841,6 +14892,110 @@
         }
       }
     },
+    "/api/v0/users/{username}/privileges": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Gives a user whole days of our privileges. Refused for more days than we have left, asked of\nthe server first, and for ourselves; our own privileges are read again afterwards.",
+        "operationId": "give_privileges",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrivilegesGift"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "given"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/users/{username}/profile": {
       "get": {
         "tags": [
@@ -22006,6 +22161,22 @@
             "format": "int32",
             "description": "seconds of privilege left",
             "minimum": 0
+          }
+        }
+      },
+      "PrivilegesGift": {
+        "type": "object",
+        "description": "Days of our privileges to give a user, the body of `POST /users/{username}/privileges`.",
+        "required": [
+          "days"
+        ],
+        "properties": {
+          "days": {
+            "type": "integer",
+            "format": "int32",
+            "description": "whole days, at least one and at most the days we have left",
+            "example": 7,
+            "minimum": 1
           }
         }
       },

@@ -207,3 +207,12 @@ pub struct UsernameQuery {
   /// the username, exactly
   pub username: Option<String>,
 }
+
+/// Days of our privileges to give a user, the body of `POST /users/{username}/privileges`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PrivilegesGift {
+  /// whole days, at least one and at most the days we have left
+  #[schema(example = 7, minimum = 1)]
+  pub days: u32,
+}

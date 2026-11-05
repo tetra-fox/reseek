@@ -7,6 +7,7 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
+  import GiftIcon from "@lucide/svelte/icons/gift";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
@@ -15,6 +16,7 @@
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
 
   import { api, byUser, type Schemas } from "#lib/api/client.js";
+  import { app } from "#lib/app.svelte.js";
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
@@ -47,6 +49,8 @@
   import { nameColor } from "#lib/users/colors.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
+  import GivePrivileges from "./GivePrivileges.svelte";
+
   type Props = {
     profile: Schemas["UserProfile"];
     /** a refresh from the network is running */
@@ -65,6 +69,10 @@
   const groups = $derived(userGroups());
   const lostGroup = $derived(!!p.groupOverride && !groups.includes(p.groupOverride));
 
+  /** someone else, whom our privileges can be given to */
+  const other = $derived(name !== app.state?.user.username);
+
+  let giving = $state(false);
   let deleting = $state(false);
   let purge = $state(false);
   const forgetting = new Busy();
@@ -263,6 +271,9 @@
         <Menu.Item onSelect={() => void copyText(name)}><CopyIcon />Copy username</Menu.Item>
         <Menu.Item onSelect={() => window.open(userHref(name), "_blank", "noopener")}
           ><ExternalLinkIcon />Open in new tab</Menu.Item>
+        {#if admin && other}
+          <Menu.Item onSelect={() => (giving = true)}><GiftIcon />Give privileges</Menu.Item>
+        {/if}
         {#if admin && p.known}
           <Menu.Separator />
           <Menu.Item onSelect={() => (deleting = true)}><Trash2Icon />Forget user</Menu.Item>
@@ -271,6 +282,8 @@
     </Menu.Root>
   </div>
 </section>
+
+<GivePrivileges username={name} bind:open={giving} />
 
 <Dialog
   bind:open={deleting}
