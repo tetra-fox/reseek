@@ -81,6 +81,7 @@ test.describe("on a phone", () => {
   test("nothing is resized: the lists are sheets", async ({ page }) => {
     await room(page);
     await expect(page.getByRole("heading", { name: "indie" })).toBeVisible();
-    await expect(page.getByRole("separator")).toHaveCount(0);
+    // a resize handle carries an orientation; the message log's day dividers are separators too
+    await expect(page.locator('[role="separator"][aria-orientation]')).toHaveCount(0);
   });
 });
