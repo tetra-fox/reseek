@@ -14,6 +14,7 @@ const message = (fields: Partial<Message>): Message => ({
   mention: false,
   hidden: false,
   replayed: false,
+  automatic: false,
   unread: false,
   ...fields
 });

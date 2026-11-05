@@ -11,6 +11,7 @@ const message = (localId: number, timestamp: string, author = "alice"): Message 
   mention: false,
   hidden: false,
   replayed: false,
+  automatic: false,
   unread: false
 });
 

@@ -197,6 +197,14 @@
             {/snippet}
           </Tooltip>
         {/if}
+        {#if m.automatic}
+          <Tooltip
+            text="You were away, so reseek answered the first message from this person with your away reply.">
+            {#snippet child({ props })}
+              <span {...props} class="text-xs text-fg-subtle italic">sent automatically</span>
+            {/snippet}
+          </Tooltip>
+        {/if}
       </div>
     {/if}
     {#if m.hidden && !shownHidden}

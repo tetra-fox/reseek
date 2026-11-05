@@ -15,6 +15,8 @@ export type Message = {
   hidden: boolean;
   /** first delivered from the server's offline store, so it was sent while we were not logged in */
   replayed: boolean;
+  /** a reply we sent on our own to someone who wrote while we were away */
+  automatic: boolean;
   /** an inbound private message not acknowledged yet; a notice from the server never is unread */
   unread: boolean;
   /** a message we sent that the daemon has not stored yet, or failed to send */
@@ -49,6 +51,7 @@ export const fromPrivate = (m: Schemas["PrivateMessage"], self: string): Message
   mention: false,
   hidden: false,
   replayed: m.wasReplayed,
+  automatic: m.autoReply,
   unread: m.direction === "In" && !m.isAcknowledged && m.username !== SERVER
 });
 
@@ -62,6 +65,7 @@ export const fromRoom = (m: Schemas["RoomMessage"]): Message => ({
   mention: m.isMention,
   hidden: m.hidden,
   replayed: false,
+  automatic: false,
   unread: false
 });
 
@@ -108,9 +112,11 @@ export const layout = (messages: Message[], gaps: Gap[], unreadFrom: number | nu
       lines.push({ kind: "unread", key: "unread" });
       previous = null;
     }
+    // a reply sent while away has a header of its own, which says so
     const head =
       !previous ||
       previous.author !== message.author ||
+      message.automatic ||
       at - Date.parse(previous.timestamp) > GROUP_MS;
     lines.push({ kind: "message", key: `m:${message.localId}`, message, head });
     previous = message;

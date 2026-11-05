@@ -236,6 +236,7 @@ export class MessagePane {
       mention: false,
       hidden: false,
       replayed: false,
+      automatic: false,
       unread: false,
       sending: "sending"
     };

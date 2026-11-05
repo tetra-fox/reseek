@@ -4,13 +4,29 @@
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
 
   import { activityPrefs } from "#lib/activity/activity.svelte.js";
+  import { api } from "#lib/api/client.js";
   import { app } from "#lib/app.svelte.js";
+  import Tooltip from "#lib/components/ui/Tooltip.svelte";
+  import { Busy } from "#lib/feedback/busy.svelte.js";
   import { formatSpeedPadded } from "#lib/format.js";
+  import { call } from "#lib/request.js";
+  import { session } from "#lib/session.svelte.js";
   import { REPOSITORY } from "#lib/shell/project.js";
   import { shortcutAria, shortcutText } from "#lib/ui/keys.js";
 
   const connected = $derived(app.isServerConnected);
   const username = $derived(app.state?.user.username);
+  const away = $derived(app.state?.user.status === "Away");
+  const canSet = $derived(session.can("ReadWrite"));
+  const setting = new Busy();
+  const setStatus = () =>
+    setting.run(() =>
+      call(() =>
+        api.PUT("/api/v0/application/status", {
+          body: { status: away ? "Online" : "Away" }
+        })
+      )
+    );
 
   /** The figures of one direction, none when no figures came yet */
   const figures = (direction: "downloads" | "uploads") => {
@@ -30,10 +46,31 @@
      text size leaves no room, the speeds move to a second line together -->
 <footer
   class="relative z-20 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 border-t bg-surface/90 px-gutter py-1.5 text-xs backdrop-blur-md md:gap-x-4">
-  <span class="flex min-w-0 items-center gap-1.5">
-    <span class={["size-2 shrink-0 rounded-full", connected ? "bg-success" : "bg-danger"]}></span>
-    <span class="truncate font-medium">{connected && username ? username : "Disconnected"}</span>
-  </span>
+  <!-- our name, and whether others see us online or away, which a click changes -->
+  <Tooltip
+    text={canSet
+      ? away
+        ? "Others see you as away. Click to show as online."
+        : "Others see you as online. Click to show as away."
+      : undefined}>
+    {#snippet child({ props })}
+      <button
+        {...props}
+        type="button"
+        disabled={!canSet || setting.running}
+        class="-mx-1 flex h-control-sm min-w-0 items-center gap-1.5 rounded-badge px-1 enabled:hover:bg-hover"
+        onclick={() => void setStatus()}>
+        <span
+          class={[
+            "size-2 shrink-0 rounded-full",
+            !connected ? "bg-danger" : away ? "bg-warning" : "bg-success"
+          ]}></span>
+        <span class="truncate font-medium"
+          >{connected && username ? username : "Disconnected"}</span>
+        {#if away}<span class="shrink-0 text-fg-muted">Away</span>{/if}
+      </button>
+    {/snippet}
+  </Tooltip>
   <span class="flex shrink-0 items-center gap-3 md:gap-4">
     <span class="flex shrink-0 items-center gap-1.5" aria-label="Downloads">
       <ArrowDownIcon class="size-3.5 text-info" />
