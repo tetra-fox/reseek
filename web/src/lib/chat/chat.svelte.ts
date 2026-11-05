@@ -1,5 +1,3 @@
-import { SvelteMap } from "svelte/reactivity";
-
 import { api, byRoom, byUser, type Schemas } from "#lib/api/client.js";
 import { Keyed } from "#lib/lists/keyed.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
@@ -16,9 +14,6 @@ export type ChatUnread = Schemas["ChatUnread"];
 
 /** How many conversation peers have their summaries read at once, the newest conversations first */
 const PEERS = 200;
-
-/** What the sidebar shows under a room: its latest message seen in this page */
-export type Preview = { author: string; text: string; at: string };
 
 /** The key of a conversation's or a room's pane */
 export const paneKey = (kind: "user" | "room", name: string) => `${kind}:${name}`;
@@ -43,8 +38,6 @@ class Chat {
   latestNotice = $state.raw<Schemas["PrivateMessage"] | null>(null);
   /** the counts from the last `chat.unread` frame, null until one came */
   unread = $state.raw<ChatUnread | null>(null);
-  /** the latest message of each room seen since the page loaded, by pane key */
-  readonly previews = new SvelteMap<string, Preview>();
   /** the pane on screen, by pane key, which gets no notification while the tab is visible */
   openPane = $state<string | null>(null);
   /** why the last read of the conversations, the rooms or both failed, empty when neither did */
@@ -80,13 +73,14 @@ class Chat {
     });
     live.on("rooms.list", (list) => this.rooms.reconcile(list));
     live.on("rooms.message", ({ roomName, message }) => {
-      this.previews.set(paneKey("room", roomName), {
-        author: message.username,
-        text: message.message,
-        at: message.timestamp
-      });
       const room = this.rooms.get(roomName);
-      this.rooms.assign(roomName, { lastMessageAt: message.timestamp });
+      // a hidden message is shown collapsed, so the row goes on showing the one before it
+      this.rooms.assign(
+        roomName,
+        message.hidden
+          ? { lastMessageAt: message.timestamp }
+          : { lastMessageAt: message.timestamp, lastMessage: message }
+      );
       void notifier.roomMessage(roomName, message, room?.notify ?? "mentions", this.openPane);
     });
     live.on("chat.unread", (counts) => (this.unread = counts));
@@ -145,7 +139,6 @@ class Chat {
     this.latestNotice = null;
     this.error = "";
     this.unread = null;
-    this.previews.clear();
     pins.clear();
   }
 

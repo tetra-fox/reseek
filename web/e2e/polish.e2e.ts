@@ -208,6 +208,7 @@ test("two highlighted rows stay apart, with no gap for the pointer", async ({ pa
         notify: "mentions",
         userCount: 3,
         lastMessageAt: null,
+        lastMessage: null,
         lastReadId: 0
       }))
     })

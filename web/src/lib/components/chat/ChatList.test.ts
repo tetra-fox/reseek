@@ -118,6 +118,26 @@ describe("the chat list", () => {
     expect(ticked()).toEqual(["room:indie", "user:bob"]);
   });
 
+  it("shows a room's newest message as the rooms are read, before any arrives", () => {
+    start();
+    chat.rooms.assign("indie", {
+      lastMessage: {
+        localId: 4,
+        timestamp: "2026-10-26T10:00:00Z",
+        username: "bob",
+        message: "anyone here?",
+        roomName: "indie",
+        self: false,
+        isMention: false,
+        hidden: false
+      }
+    });
+    flushSync();
+    const row = document.querySelector("[data-line='room:indie']")!;
+    expect(row.textContent).toContain("bob: anyone here?");
+    expect(document.querySelector("[data-line='room:jazz']")!.textContent).toContain("3 users");
+  });
+
   it("orders conversations by their newest message and holds the order while held", () => {
     start();
     const keys = () =>

@@ -118,6 +118,7 @@ describe("the join dialog", () => {
             notify: "mentions",
             userCount: 40,
             lastMessageAt: null,
+            lastMessage: null,
             lastReadId: 0
           }
         ];

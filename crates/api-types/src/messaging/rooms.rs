@@ -109,6 +109,8 @@ pub struct JoinedRoom {
   pub user_count: u32,
   /// when the latest stored message arrived, null when none is stored
   pub last_message_at: Option<DateTime<Utc>>,
+  /// the newest stored message not hidden, null when there is none
+  pub last_message: Option<RoomMessage>,
   /// the `localId` of the newest message shown as read, 0 before any was
   pub last_read_id: i64,
 }

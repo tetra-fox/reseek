@@ -39,6 +39,7 @@ describe("a room's pane opened by a link", () => {
             notify: "mentions",
             userCount: 3,
             lastMessageAt: null,
+            lastMessage: null,
             lastReadId: 3
           }
         ];

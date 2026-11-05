@@ -75,6 +75,7 @@ export const fakeChat = async (page: Page) => {
       notify: "mentions",
       userCount: MEMBERS.length,
       lastMessageAt: at(5),
+      lastMessage: roomMessages.at(-1),
       lastReadId: 6
     }
   ];
@@ -565,6 +566,7 @@ export const longRoom = async (page: Page, n: number) => {
           notify: "mentions",
           userCount: 5,
           lastMessageAt: messages.at(-1)!.timestamp,
+          lastMessage: messages.at(-1),
           lastReadId: n
         }
       ]

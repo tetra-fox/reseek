@@ -43,6 +43,7 @@ export const joinedRoom = (name: string, fields: Partial<JoinedRoom> = {}): Join
   notify: "mentions",
   userCount: 3,
   lastMessageAt: null,
+  lastMessage: null,
   lastReadId: 0,
   ...fields
 });

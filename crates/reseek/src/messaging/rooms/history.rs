@@ -147,6 +147,17 @@ pub fn newest(conn: &Connection, room: &str) -> rusqlite::Result<Option<DateTime
   last.as_deref().map(read_timestamp).transpose()
 }
 
+/// The newest message stored for `room` that is not hidden, `None` without one.
+pub fn latest_shown(conn: &Connection, room: &str) -> rusqlite::Result<Option<RoomMessage>> {
+  conn
+    .prepare_cached(&format!(
+      "SELECT {MESSAGE} FROM room_messages WHERE room_name = ?1 AND hidden = 0 \
+       ORDER BY local_id DESC LIMIT 1"
+    ))?
+    .query_row([room], message)
+    .optional()
+}
+
 /// When the message with `local_id` in `room` arrived, or the first after it when it is gone;
 /// `None` when there is neither.
 pub fn arrived_from(

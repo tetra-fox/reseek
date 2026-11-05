@@ -266,7 +266,13 @@
         {@const last = notices ? chat.latestNotice : conversation?.lastMessage}
         {@const preview = last
           ? { author: "", text: last.message, at: last.timestamp }
-          : chat.previews.get(line.key)}
+          : room?.lastMessage
+            ? {
+                author: room.lastMessage.username,
+                text: room.lastMessage.message,
+                at: room.lastMessage.timestamp
+              }
+            : undefined}
         {@const counts = t.kind === "room" ? chat.roomUnread(t.name) : null}
         {@const unread = person ? chat.unreadOf(t.name) : 0}
         {@const notify = (room ?? conversation)?.notify}
