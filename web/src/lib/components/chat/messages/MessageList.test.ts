@@ -147,4 +147,17 @@ describe("the message list", () => {
     await flush();
     expect((document.activeElement as HTMLElement).dataset.message).toBe("3");
   });
+
+  it("gives focus back to the log when the view is cleared under the message the keys are on", async () => {
+    history(3);
+    const { pane, box } = await open();
+    box.focus();
+    press(box, "ArrowUp");
+    await flush();
+    expect((document.activeElement as HTMLElement).dataset.message).toBe("3");
+    pane.clearView();
+    await flush();
+    expect(document.querySelector("[data-message]")).toBeNull();
+    expect(document.activeElement).toBe(box);
+  });
 });

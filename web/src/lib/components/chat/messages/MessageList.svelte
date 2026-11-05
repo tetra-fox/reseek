@@ -151,6 +151,14 @@
     activeRow()?.focus({ preventScroll: true });
   };
 
+  // the lines can lose the active message, as when the view is cleared or goes to the newest
+  // messages: before its row leaves, focus on it goes back to the log
+  $effect.pre(() => {
+    if (active === null || activeAt !== -1) return;
+    if (activeRow()?.contains(document.activeElement)) box?.focus({ preventScroll: true });
+    active = null;
+  });
+
   /**
    * The arrows walk the messages with an action, from the newest drawn, and focus each; Enter
    * opens the menu. Keys on a control inside a message are the control's
@@ -177,8 +185,6 @@
     } else if (active !== null) {
       if (e.key !== "Enter" && e.key !== "ContextMenu" && !(e.key === "F10" && e.shiftKey)) return;
       e.preventDefault();
-      // a message that has left the lines has no row to open a menu from
-      if (activeAt === -1) return;
       // the menu hangs from the message, which may have been scrolled away from
       shown.scrollTo(activeAt);
       menuFor = active;
