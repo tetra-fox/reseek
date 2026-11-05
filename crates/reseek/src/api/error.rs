@@ -216,9 +216,10 @@ impl From<cascade::Error> for ApiError {
           .collect::<Vec<_>>()
           .join("; "),
       ),
-      e @ (E::Value { .. } | E::Parse { .. }) => {
-        Self::invalid("Invalid configuration", e.to_string())
+      E::Value { key, message, .. } => {
+        Self::invalid("Invalid configuration", format!("{key}: {message}"))
       }
+      e @ E::Parse { .. } => Self::invalid("Invalid configuration", e.to_string()),
       E::UnknownKey(key) => Self::bad_request(format!("Unknown key {key}")),
       E::NeedsRestart(key) => {
         Self::invalid("Requires a restart and must be saved to the file", key)

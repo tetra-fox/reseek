@@ -160,6 +160,18 @@ describe("controls and drafts", () => {
     const found = errorsByKey("web.port: must be at least 1; web.ui: no", ["web.port", "web.ui"]);
     expect(Object.fromEntries(found)).toEqual({ "web.port": "must be at least 1", "web.ui": "no" });
     expect(errorsByKey("a: one; a: two", ["a"]).get("a")).toBe("one; two");
+    // a value its type refuses, as the daemon words it; a table's names the row's field
+    const typed = errorsByKey(
+      'analysis.timeout: invalid value: string "five", expected a duration; ' +
+        "transfers.groups: invalid type: floating point `1.5`, expected u32 " +
+        "(at transfers.groups.friends.upload.slots)",
+      ["analysis.timeout", "transfers.groups"]
+    );
+    expect(Object.fromEntries(typed)).toEqual({
+      "analysis.timeout": 'invalid value: string "five", expected a duration',
+      "transfers.groups":
+        "invalid type: floating point `1.5`, expected u32 (at transfers.groups.friends.upload.slots)"
+    });
   });
 });
 

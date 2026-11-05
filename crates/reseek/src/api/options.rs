@@ -424,9 +424,9 @@ fn option_errors(error: &cascade::Error) -> Vec<OptionError> {
         message: i.message.clone(),
       })
       .collect(),
-    cascade::Error::Value { key, .. } => vec![OptionError {
+    cascade::Error::Value { key, message, .. } => vec![OptionError {
       key: Some(key.clone()),
-      message: error.to_string(),
+      message: message.clone(),
     }],
     other => vec![OptionError {
       key: None,
@@ -821,6 +821,42 @@ mod tests {
     assert_eq!(fine, json!({ "valid": true, "errors": [], "warnings": [] }));
     let broken = app.send(check("[web\n")).await.json();
     assert_eq!(broken["errors"][0]["key"], json!(null));
+  }
+
+  #[tokio::test]
+  async fn a_value_its_type_refuses_is_keyed_like_any_refusal() {
+    let app = app(TRUSTED, &[]).await;
+    let view = app
+      .send(request("GET", "/api/v0/options/view", None))
+      .await
+      .json();
+    let revision = view["files"][0]["revision"].clone();
+    let refused = app
+      .send(request(
+        "PATCH",
+        "/api/v0/options/file",
+        Some(json!({ "set": { "analysis.timeout": "five" }, "revision": revision })),
+      ))
+      .await;
+    assert_eq!(refused.status, 400);
+    let detail = refused.json()["detail"].as_str().unwrap().to_string();
+    assert!(detail.starts_with("analysis.timeout: "), "{detail}");
+    assert!(!detail.contains("set by"), "{detail}");
+
+    let checked = app
+      .send(request(
+        "POST",
+        "/api/v0/options/file/validate",
+        Some(json!({ "text": format!("{TRUSTED}[analysis]\ntimeout = \"five\"\n") })),
+      ))
+      .await
+      .json();
+    assert_eq!(checked["errors"][0]["key"], "analysis.timeout");
+    let message = checked["errors"][0]["message"].as_str().unwrap();
+    assert!(
+      !message.contains("analysis.timeout") && !message.contains("set by"),
+      "{message}"
+    );
   }
 
   #[tokio::test]
