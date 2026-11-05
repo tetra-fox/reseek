@@ -26,7 +26,10 @@ const daemon = (read: () => unknown = () => undefined) => {
       : read()
   );
   live.start();
-  network.frame("hello", { principal: { name: "me", role: "ReadWrite" } } as Schemas["Hello"]);
+  network.frame("hello", {
+    principal: { name: "me", role: "ReadWrite" },
+    resumed: false
+  } as Schemas["Hello"]);
   const writes = () => network.requests.filter((r) => r.method === "PUT");
   return {
     writes,
@@ -39,7 +42,13 @@ const daemon = (read: () => unknown = () => undefined) => {
     tell: async (pins: Schemas["ChatPins"]) => {
       network.frame("chat.pins", pins);
       await flush();
-    }
+    },
+    /** a stream opened again without the frames missed, as after a restart */
+    reopen: () =>
+      network.frame("hello", {
+        principal: { name: "me", role: "ReadWrite" },
+        resumed: false
+      } as Schemas["Hello"])
   };
 };
 
@@ -140,5 +149,14 @@ describe("the pins", () => {
     expect(pins.list).toEqual([room("jazz")]);
     await answer(1);
     expect(pins.list).toEqual([room("indie")]);
+  });
+
+  it("takes the daemon's list after a restart on an older database", async () => {
+    const { tell, reopen } = daemon();
+    await tell({ revision: 50, pins: [room("jazz"), room("indie")] });
+    // the daemon's database was put back from a backup, which counts from where it was
+    reopen();
+    await tell({ revision: 30, pins: [room("jazz")] });
+    expect(pins.list).toEqual([room("jazz")]);
   });
 });

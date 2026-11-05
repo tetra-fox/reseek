@@ -29,6 +29,11 @@ class Pins {
 
   constructor() {
     live.on("chat.pins", (pins) => this.#take(pins));
+    // a stream opened without the frames missed is followed by the daemon's current lists, and
+    // a daemon restarted on another database counts its revisions from elsewhere
+    live.on("hello", (hello) => {
+      if (!hello.resumed) this.#revision = 0;
+    });
   }
 
   /** Whether `chat` is pinned */
