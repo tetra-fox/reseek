@@ -116,6 +116,7 @@ pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
 mod tests {
   use super::*;
   use crate::transfers::fixtures::{Row, insert, transfers};
+  use crate::transfers::{Record, store};
 
   #[tokio::test]
   async fn unfinished_transfers_end_errored_and_finished_ones_stay() {
@@ -216,5 +217,44 @@ mod tests {
       .await
       .unwrap();
     assert_eq!(marks, 0);
+  }
+
+  #[tokio::test]
+  async fn interrupted_downloads_of_one_job_are_taken_under_that_job() {
+    let db = transfers().await;
+    let job = Uuid::new_v4();
+    let in_job = |filename: &str| Record {
+      job_id: Some(job),
+      ..Record::download("alice", filename, 1, None)
+    };
+    let records = [
+      in_job("a\\1.flac"),
+      in_job("a\\2.flac"),
+      Record::download("alice", "b\\old.flac", 1, None),
+    ];
+    db.write(move |conn| {
+      for record in &records {
+        store::insert(conn, record)?;
+      }
+      Ok(())
+    })
+    .await
+    .unwrap();
+    end_unfinished(&db).await.unwrap();
+    let resumable = take_resumable(&db).await.unwrap();
+    let mut taken: Vec<(Option<Uuid>, Vec<&str>)> = resumable
+      .iter()
+      .map(|((_, _, job), files)| (*job, files.iter().map(|f| f.filename.as_str()).collect()))
+      .collect();
+    let mut expected = vec![
+      (Some(job), vec!["a\\1.flac", "a\\2.flac"]),
+      (None, vec!["b\\old.flac"]),
+    ];
+    expected.sort();
+    taken.sort();
+    assert_eq!(
+      taken, expected,
+      "a download from before jobs comes back under none"
+    );
   }
 }
