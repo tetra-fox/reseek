@@ -1,6 +1,6 @@
 //! Private rooms against a scripted server: giving up a room we own, which the server does not
 //! answer, leaves the room and forgets it at once, and the server's room list is asked for anew
-//! after we create a room or give one up.
+//! after we create a room or give one up; a room someone else owns is not ours to give up.
 
 mod support;
 
@@ -158,4 +158,16 @@ async fn giving_up_a_room_sends_it_unanswered_then_leaves_it() {
     !listed.is_owned && !listed.is_private,
     "the list is asked for after the room is given up"
   );
+}
+
+#[tokio::test]
+async fn a_room_someone_else_owns_is_not_given_up() {
+  let dir = tempfile::tempdir().unwrap();
+  let (_running, api, mut server) = scripted(dir.path()).await;
+  join_club(&api, &mut server, "bob").await;
+
+  let refused = api.drop_room_ownership("club").await.unwrap_err();
+  assert_eq!(refused.status(), Some(reqwest::StatusCode::FORBIDDEN));
+  let state = api.application().await.unwrap();
+  assert!(state.rooms.iter().any(|room| room == "club"));
 }

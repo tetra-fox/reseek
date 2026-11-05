@@ -110,9 +110,23 @@ impl Messaging {
 
   /// Gives up our private room `room` and leaves it. The server makes it a public room without
   /// an owner and keeps us in it, so the room is left to match what we show: not ours, not in.
+  /// A room we know someone else owns is refused.
   pub(in crate::messaging) async fn drop_ownership(&self, room: &str) -> Result<(), ApiError> {
     self.belongs(room)?;
     let client = self.client();
+    let us = client
+      .own_username(&format!("give up private room {room}"))
+      .map_err(unsent)?;
+    let owner = self
+      .rooms
+      .tracker()
+      .private(room)
+      .and_then(|p| p.owner.clone());
+    if owner.is_some_and(|owner| owner != us) {
+      return Err(ApiError::forbidden(format!(
+        "The room {room} is not ours to give up"
+      )));
+    }
     client
       .drop_private_room_ownership(room)
       .await
