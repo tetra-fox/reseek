@@ -68,7 +68,7 @@ impl serde::Serialize for RelayMode {
 
 impl<'de> serde::Deserialize<'de> for RelayMode {
   fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-    let text = String::deserialize(deserializer)?;
+    let text = cascade::choice_text(deserializer, Self::NAMES)?;
     if text.eq_ignore_ascii_case(Self::NAMES[0]) {
       return Ok(Self::Controller);
     }

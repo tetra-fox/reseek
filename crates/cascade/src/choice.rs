@@ -66,7 +66,7 @@ macro_rules! option_enum {
       fn deserialize<D: $crate::__private::serde::Deserializer<'de>>(
         deserializer: D,
       ) -> Result<Self, D::Error> {
-        let text = <String as $crate::__private::serde::Deserialize>::deserialize(deserializer)?;
+        let text = $crate::choice_text(deserializer, Self::NAMES)?;
         Self::parse(&text).ok_or_else(|| {
           <D::Error as $crate::__private::serde::de::Error>::custom(format!(
             "`{text}` is not one of: {}",
@@ -82,6 +82,35 @@ macro_rules! option_enum {
       }
     }
   };
+}
+
+/// Reads the text of an option whose value is one of `names`, as written; the caller matches it
+/// against the names. A value that is not text is refused with the names, so the message says
+/// what to write instead.
+///
+/// # Errors
+///
+/// When the value is not a string.
+pub fn choice_text<'de, D: serde::Deserializer<'de>>(
+  deserializer: D,
+  names: &'static [&'static str],
+) -> Result<String, D::Error> {
+  deserializer.deserialize_str(Names(names))
+}
+
+/// Takes a string, and expects one of its names in a refusal.
+struct Names(&'static [&'static str]);
+
+impl serde::de::Visitor<'_> for Names {
+  type Value = String;
+
+  fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    write!(formatter, "one of {}", self.0.join(", "))
+  }
+
+  fn visit_str<E: serde::de::Error>(self, text: &str) -> Result<String, E> {
+    Ok(text.to_string())
+  }
 }
 
 #[cfg(test)]
@@ -109,5 +138,11 @@ mod tests {
       "{e}"
     );
     assert!(serde_json::from_str::<Role>("\"1\"").is_err(), "no numbers");
+    let e = serde_json::from_str::<Role>("true").unwrap_err();
+    assert!(
+      e.to_string()
+        .starts_with("invalid type: boolean `true`, expected one of readonly, readwrite"),
+      "{e}"
+    );
   }
 }

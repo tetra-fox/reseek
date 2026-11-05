@@ -100,6 +100,7 @@ mod write;
 mod testing;
 
 pub use cascade_derive::Cascade;
+pub use choice::choice_text;
 pub use describe::{Apply, Cascade, Kind, Shape};
 pub use edit::FileEditor;
 pub use error::{Error, Invalid};
