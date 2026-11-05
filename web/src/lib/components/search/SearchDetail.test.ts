@@ -3,13 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
+import InspectorPane from "#lib/components/inspector/InspectorPane.svelte";
 import { toasts } from "#lib/feedback/toast.svelte.js";
 import { UNDO_MS } from "#lib/feedback/undo.js";
+import { inspectorPrefs } from "#lib/inspector/inspector.svelte.js";
 import { live } from "#lib/live/live.svelte.js";
 import { searches } from "#lib/search/searches.svelte.js";
 import { session } from "#lib/session.svelte.js";
 import { searchOptions } from "#lib/settings.svelte.js";
 import { flushFaked } from "#lib/testing/flush.js";
+import { press } from "#lib/testing/keys.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
 import SearchDetail from "./SearchDetail.svelte";
@@ -66,6 +69,7 @@ describe("search results", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => {
     if (component) unmount(component);
+    inspectorPrefs.open = false;
     searchOptions.view = "cards";
     app.options = null;
     session.principal = null;
@@ -200,6 +204,30 @@ describe("search results", () => {
     expect(rows()[0]).toBe(first);
     expect(rows()[2]).toBe(third);
     expect(selection.toString()).toBe(selected);
+  });
+
+  it("show no file in the inspector once the filter takes it out of the results", async () => {
+    searchOptions.view = "dense";
+    const stored = [response("alice", 300)];
+    const net = await open(stored);
+    const pane = mount(InspectorPane, { target: document.body });
+    net.frame("search.response", { searchId: ID, response: stored[0] });
+    await flushFaked();
+    const grid = document.querySelector('[role=grid][aria-label^="Search results"]')!;
+    const details = () => document.querySelector('aside[aria-label="Details"]');
+    press(grid, "ArrowDown");
+    press(grid, "i");
+    expect(details()?.querySelector("h2")?.textContent).toBe("01 One.flac");
+
+    const filter = document.querySelector<HTMLInputElement>('input[aria-label="Filter"]')!;
+    filter.value = "nothing matches";
+    filter.dispatchEvent(new Event("input", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(200);
+    flushSync();
+    expect(document.querySelector("[role=grid] [role=row][data-line]")).toBeNull();
+    expect(details()?.querySelector("h2")).toBeNull();
+    expect(details()?.textContent).toContain("Select a file to see its details.");
+    unmount(pane);
   });
 
   it("open and close a folder, and with Alt every folder beside it", async () => {
