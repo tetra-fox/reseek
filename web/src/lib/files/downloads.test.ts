@@ -81,7 +81,7 @@ describe("enqueueing a job", () => {
     const refusedOne = { message: "Skipped: Already in progress", filename: "1\\a.flac" };
     expect(await outcome([offline, { failures: [refusedOne], error: null }])).toEqual({
       kind: "partial",
-      text: "Queued 1 of 4 files. Could not queue User x appears to be offline; 1\\a.flac: Skipped: Already in progress"
+      text: "Queued 1 of 4 files. Could not queue 2 files from user0: User x appears to be offline; 1\\a.flac: Skipped: Already in progress"
     });
     expect(await outcome([offline, offline])).toEqual({
       kind: "failed",

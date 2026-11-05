@@ -75,11 +75,15 @@ export const enqueueJob = async (requests: Request[]): Promise<Enqueued> => {
   const answers = outcome.ok ? outcome.data.batches : [];
   const refused = new Set<string>();
   const why: string[] = [];
+  // a batch refused whole, its user offline say, has the same reason for each of its files
+  const wholly: string[] = [];
   requests.forEach(({ username, files }, i) => {
     const answer = answers[i];
     if (!answer || answer.error) {
       for (const f of files) refused.add(fileKey(username, f.filename));
-      if (answer?.error) why.push(answer.error.error);
+      if (!answer?.error) return;
+      wholly.push(answer.error.error);
+      why.push(`${plural(files.length, "file", "files")} from ${username}: ${answer.error.error}`);
       return;
     }
     for (const f of answer.failures) {
@@ -94,7 +98,8 @@ export const enqueueJob = async (requests: Request[]): Promise<Enqueued> => {
   if (!outcome.ok) return { kind: "failed", text: outcome.error };
   const total = keys.length;
   const reasons = [...new Set(why)].join("; ");
-  if (answers.every((a) => a.error)) return { kind: "failed", text: reasons };
+  if (answers.every((a) => a.error))
+    return { kind: "failed", text: [...new Set(wholly)].join("; ") };
   if (refused.size === 0) return { kind: "done", text: `${plural(total, "file", "files")} queued` };
   if (refused.size >= total) return { kind: "none", text: `Could not queue any files: ${reasons}` };
   return {
