@@ -79,12 +79,14 @@
     <InspectorToggle />
     <p class="ml-auto flex items-center gap-1.5 text-sm text-fg-muted tabular-nums" role="status">
       {#if running}<Spinner class="size-3.5" />{/if}
-      {plural(counts.files, "file", "files")} from {plural(counts.users, "user", "users")}
-      <!-- with a filter on, the line of filters under the toolbar counts what it leaves -->
-      {#if counts.users !== counts.allUsers && !filters.length}
-        <span class="text-fg-subtle">
-          (of {counts.allFiles.toLocaleString()} from {counts.allUsers.toLocaleString()})
-        </span>
+      <!-- with a filter on, the line of filters under the toolbar carries the count -->
+      {#if !filters.length}
+        {plural(counts.files, "file", "files")} from {plural(counts.users, "user", "users")}
+        {#if counts.users !== counts.allUsers}
+          <span class="text-fg-subtle">
+            (of {counts.allFiles.toLocaleString()} from {counts.allUsers.toLocaleString()})
+          </span>
+        {/if}
       {/if}
     </p>
   </div>
@@ -94,7 +96,7 @@
         {#each HIDING as h (h.key)}
           <Filter.Chip
             pressed={searchOptions[h.key]}
-            title={h.key === "hideOffline" ? "Users who were offline when last seen" : undefined}
+            title={h.hint}
             onclick={() => (searchOptions[h.key] = !searchOptions[h.key])}>{h.chip}</Filter.Chip>
         {/each}
       </Filter.Group>

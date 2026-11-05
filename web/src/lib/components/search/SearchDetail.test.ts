@@ -268,6 +268,41 @@ describe("search results", () => {
     expect(text()).not.toContain("hidden by filters");
   });
 
+  it("count the filters' line out of what they act on, and leave the default toggle alone", async () => {
+    const locked = { ...response("carol", 100, []), lockedFiles: [file("@@c\\x\\1.flac")] };
+    const stored = [
+      response("alice", 300),
+      response("bob", 200),
+      { ...locked, lockedFileCount: 1 }
+    ];
+    const net = await open(stored);
+    for (const r of stored) net.frame("search.response", { searchId: ID, response: r });
+    await flushFaked();
+    const text = () => document.body.textContent?.replace(/\s+/g, " ") ?? "";
+    const button = (label: string) =>
+      [...document.querySelectorAll("button")].filter((b) => b.textContent?.trim() === label);
+    // locked files are hidden from the start, which the line of filters does not name
+    expect(searchOptions.hideLocked).toBe(true);
+    expect(text()).not.toContain("Showing");
+    expect(text()).toContain("1 result hidden by Locked files");
+
+    // a dismissed user's files are not the filters' to count
+    document.querySelector<HTMLButtonElement>('button[aria-label="Hide this result"]')!.click();
+    const box = document.querySelector<HTMLInputElement>('input[aria-label="Filter"]')!;
+    box.value = "One";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(200);
+    flushSync();
+    expect(text()).toContain("Showing 1 of 2 files");
+    expect(text()).not.toContain("Locked files hidden");
+
+    button("Clear filters")[0].click();
+    await vi.advanceTimersByTimeAsync(200);
+    flushSync();
+    expect(text()).not.toContain("Showing");
+    expect(searchOptions.hideLocked).toBe(true);
+  });
+
   it("put a preset in the filter box, which keeps only what it matches", async () => {
     app.options = {
       search: { filter_presets: [{ name: "FLAC", filter: "type:flac" }] }

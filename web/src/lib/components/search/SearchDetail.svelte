@@ -22,7 +22,7 @@
   import { undoable } from "#lib/feedback/undo.js";
   import { asItem, enqueue } from "#lib/files/downloads.js";
   import { parseFilters } from "#lib/files/filters.js";
-  import { plural } from "#lib/format.js";
+  import { listText, plural } from "#lib/format.js";
   import { useInspector } from "#lib/inspector/inspector.svelte.js";
   import { type ActiveFilter, clearAll, typedFilter } from "#lib/lists/filtered.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -31,11 +31,16 @@
   import { denseRows } from "#lib/search/dense.js";
   import type { Picked } from "#lib/search/facts.js";
   import { recent, togglePin } from "#lib/search/recent.svelte.js";
-  import { HIDING, pipeline } from "#lib/search/results.js";
+  import { HIDING, type HideKey, pipeline, type Result } from "#lib/search/results.js";
   import { Results } from "#lib/search/results.svelte.js";
   import { openSearch, scopeLabel, searches } from "#lib/search/searches.svelte.js";
   import { session } from "#lib/session.svelte.js";
-  import { LONG_QUEUE, searchOptions } from "#lib/settings.svelte.js";
+  import {
+    HIDE_DEFAULTS,
+    LONG_QUEUE,
+    type ResultSort,
+    searchOptions
+  } from "#lib/settings.svelte.js";
   import { useCrumbs } from "#lib/shell/crumbs.svelte.js";
   import { Expansion } from "#lib/tree/expansion.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
@@ -125,20 +130,52 @@
     return () => clearTimeout(timer);
   });
 
-  const view = $derived(
-    pipeline(results.results, {
-      hidden: (u) => dismissed.has(u) || (!showBlocked && blocked.has(u)),
-      filters: parseFilters(filterText),
-      hideLocked: searchOptions.hideLocked,
-      hideNoFreeSlots: searchOptions.hideNoFreeSlots,
-      offline: searchOptions.hideOffline ? (u) => users.get(u)?.presence === "Offline" : undefined,
-      maxQueue: searchOptions.hideLongQueues ? LONG_QUEUE : null,
-      // results stay in the order they came while the search runs, so nothing jumps
-      sort: results.stored ? searchOptions.sort : null
+  /**
+   * the toggles turned on beyond how they start, and the filter text: what the line of filters
+   * names and Clear filters turns off. A toggle on from the start shows only as its pressed chip
+   */
+  const filters = $derived<ActiveFilter[]>([
+    ...HIDING.filter((h) => searchOptions[h.key] && !HIDE_DEFAULTS[h.key]).map((h) => ({
+      id: h.key,
+      label: h.label,
+      clear: () => (searchOptions[h.key] = false)
+    })),
+    ...typedFilter(filterText, () => {
+      typed = "";
+      filterText = "";
     })
+  ]);
+  const named = $derived(new Set(filters.map((f) => f.id)));
+
+  /** the pipeline's options with the toggles `on` holds for and the filter `text` */
+  const options = (on: (key: HideKey) => boolean, text: string, sort: ResultSort | null) => ({
+    hidden: (u: string) => dismissed.has(u) || (!showBlocked && blocked.has(u)),
+    filters: parseFilters(text),
+    hideLocked: on("hideLocked"),
+    hideNoFreeSlots: on("hideNoFreeSlots"),
+    offline: on("hideOffline") ? (u: string) => users.get(u)?.presence === "Offline" : undefined,
+    maxQueue: on("hideLongQueues") ? LONG_QUEUE : null,
+    sort
+  });
+  const view = $derived(
+    pipeline(
+      results.results,
+      // results stay in the order they came while the search runs, so nothing jumps
+      options((key) => searchOptions[key], filterText, results.stored ? searchOptions.sort : null)
+    )
+  );
+  /** the results with the named filters off, which the line of filters counts the shown ones of */
+  const unnamed = $derived(
+    filters.length
+      ? pipeline(
+          results.results,
+          options((key) => searchOptions[key] && !named.has(key), "", null)
+        )
+      : view
   );
   // what keeps results out of view, counted apart since each has its own way back: the ones
-  // dismissed, those from blocked users, and the rest, which the filter and toggles hide
+  // dismissed, those from blocked users, those the toggles on from the start hide, and those the
+  // named filters hide
   const dismissedCount = $derived(
     results.results.filter((r) => dismissed.has(r.response.username)).length
   );
@@ -149,22 +186,13 @@
           (r) => !dismissed.has(r.response.username) && blocked.has(r.response.username)
         ).length
   );
-  const filteredCount = $derived(
-    results.results.length - dismissedCount - fromBlocked - view.length
+  /** the toggles on from the start and still on */
+  const defaults = $derived(HIDING.filter((h) => searchOptions[h.key] && !named.has(h.key)));
+  const byDefaults = $derived(
+    results.results.length - dismissedCount - fromBlocked - unnamed.length
   );
+  const filteredCount = $derived(unnamed.length - view.length);
 
-  /** the toggles that hide results and the filter text, while on */
-  const filters = $derived<ActiveFilter[]>([
-    ...HIDING.filter((h) => searchOptions[h.key]).map((h) => ({
-      id: h.key,
-      label: h.label,
-      clear: () => (searchOptions[h.key] = false)
-    })),
-    ...typedFilter(filterText, () => {
-      typed = "";
-      filterText = "";
-    })
-  ]);
   /** gives focus to the results once the filters are off */
   const refocus = () => (dense ?? tree)?.focus();
   const clearFilters = async () => {
@@ -173,14 +201,13 @@
     refocus();
   };
   const rows = $derived(searchOptions.view === "dense" ? denseRows(view) : []);
+  const fileCount = (list: Result[]) =>
+    list.reduce((n, r) => n + r.response.fileCount + r.response.lockedFileCount, 0);
   const counts = $derived({
-    files: view.reduce((n, r) => n + r.response.fileCount + r.response.lockedFileCount, 0),
+    files: fileCount(view),
     users: view.length,
     allUsers: results.results.length,
-    allFiles: results.results.reduce(
-      (n, r) => n + r.response.fileCount + r.response.lockedFileCount,
-      0
-    )
+    allFiles: fileCount(results.results)
   });
 
   const again = () => {
@@ -242,6 +269,16 @@
       <span
         >{dismissedCount} dismissed
         <Button variant="link" onclick={() => dismissed.clear()}>Show again</Button></span>
+    {/if}
+    {#if byDefaults}
+      <span
+        >{plural(byDefaults, "result", "results")} hidden by {listText(defaults.map((h) => h.chip))}
+        <Button
+          variant="link"
+          onclick={() => {
+            for (const h of defaults) searchOptions[h.key] = false;
+          }}>Show</Button
+        ></span>
     {/if}
     {#if fromBlocked}
       <span
@@ -328,7 +365,7 @@
     <Filter.Summary
       {filters}
       shown={counts.files}
-      total={counts.allFiles}
+      total={fileCount(unnamed)}
       noun={["file", "files"]}
       {refocus} />
 
@@ -356,7 +393,7 @@
       <EmptyState icon={SearchXIcon} title="All results are hidden">
         {#snippet action()}{@render hiddenLine()}{/snippet}
       </EmptyState>
-    {:else if filteredCount || dismissedCount || fromBlocked}
+    {:else if filteredCount || dismissedCount || fromBlocked || byDefaults}
       {@render hiddenLine()}
     {/if}
   {:else if !complete}
