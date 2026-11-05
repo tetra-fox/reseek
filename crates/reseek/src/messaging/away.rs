@@ -259,7 +259,9 @@ impl Messaging {
 
 #[cfg(test)]
 mod tests {
-  use crate::testing::{app, request, with};
+  use std::time::Duration;
+
+  use crate::testing::{TestApp, app, request, with};
 
   const TRUSTED: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
 
@@ -355,40 +357,62 @@ mod tests {
     }
   }
 
-  #[tokio::test]
-  async fn ending_an_away_set_by_hand_with_nobody_at_the_ui_waits_again() {
+  /// A daemon whose away comes after `auto_away` of 300 ms, a stream of a script watching our
+  /// status, which counts as nobody at the UI, and a way to set the status by request, which
+  /// does not count either.
+  async fn watched() -> (TestApp, crate::testing::Stream) {
     let config = format!(
       "{TRUSTED}[web.authentication.api_keys.script]\nkey = \"script-key-0123456789\"\n\
        role = \"readonly\"\n[chat]\nauto_away = \"300ms\"\n"
     );
     let app = app(&config, &[]).await;
     let opened = request("GET", "/api/v0/live?topics=application", None);
-    let mut script = app
+    let script = app
       .stream_from(
         "10.0.0.1:40000",
         with(opened, "x-api-key", "script-key-0123456789"),
       )
       .await;
-    let mut status = async |wanted: &str| loop {
-      let frame = script.until("application.state").await.pop().unwrap();
+    (app, script)
+  }
+
+  async fn shown(stream: &mut crate::testing::Stream, wanted: &str) {
+    loop {
+      let frame = stream.until("application.state").await.pop().unwrap();
       if frame.data["user"]["status"] == wanted {
         return;
       }
-    };
-    // a request is no one at the UI: only an open event stream is
-    let set = |status: &str| {
-      let body = serde_json::json!({ "status": status });
-      app.send_from(
-        "127.0.0.1:40000",
-        request("PUT", "/api/v0/application/status", Some(body)),
-      )
-    };
-    set("Away").await;
-    status("Away").await;
-    // the wait runs out while we are away by hand, which it leaves as it is
-    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
-    set("Online").await;
-    status("Online").await;
-    status("Away").await;
+    }
+  }
+
+  async fn set(app: &TestApp, status: &str) {
+    let body = serde_json::json!({ "status": status });
+    let set = request("PUT", "/api/v0/application/status", Some(body));
+    assert_eq!(app.send_from("127.0.0.1:40000", set).await.status, 204);
+  }
+
+  async fn person(app: &TestApp) -> crate::testing::Stream {
+    let opened = request("GET", "/api/v0/live?topics=application", None);
+    let mut stream = app.stream_from("127.0.0.1:40000", opened).await;
+    stream.until("hello").await;
+    stream
+  }
+
+  // paused time runs the timers in order: the wait runs out while we are away by hand, before
+  // the test sets us online
+  #[tokio::test(start_paused = true)]
+  async fn ending_an_away_set_by_hand_with_nobody_at_the_ui_waits_again() {
+    let (app, mut script) = watched().await;
+    // the wait armed at the start runs out during the start's database work
+    shown(&mut script, "Away").await;
+    let someone = person(&app).await;
+    shown(&mut script, "Online").await;
+    set(&app, "Away").await;
+    shown(&mut script, "Away").await;
+    drop(someone);
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    set(&app, "Online").await;
+    shown(&mut script, "Online").await;
+    shown(&mut script, "Away").await;
   }
 }
