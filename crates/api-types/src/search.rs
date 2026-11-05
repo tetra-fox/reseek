@@ -56,6 +56,12 @@ pub enum SearchScopeType {
   User,
   /// only the members of the room named in `subjects`
   Room,
+  /// only the members of the rooms named in `subjects`, which are rooms we are in; every room
+  /// we are in when `subjects` is empty, filled in when the search starts
+  Rooms,
+  /// only our buddies who are online when the search starts, whom `subjects` names once it
+  /// started
+  Buddies,
   /// the network, as a wishlist search
   Wishlist,
 }
@@ -67,7 +73,8 @@ pub struct SearchScope {
   /// the kind of scope
   #[serde(rename = "type")]
   pub scope_type: SearchScopeType,
-  /// the usernames for `user`, the one room name for `room`, empty otherwise
+  /// the usernames for `user` and `buddies`, the room names for `room` and `rooms`, empty
+  /// otherwise
   #[serde(default)]
   pub subjects: Vec<String>,
 }

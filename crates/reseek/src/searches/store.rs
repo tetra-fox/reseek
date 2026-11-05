@@ -30,6 +30,8 @@ fn scope_text(scope: SearchScopeType) -> &'static str {
     SearchScopeType::Network => "network",
     SearchScopeType::User => "user",
     SearchScopeType::Room => "room",
+    SearchScopeType::Rooms => "rooms",
+    SearchScopeType::Buddies => "buddies",
     SearchScopeType::Wishlist => "wishlist",
   }
 }
@@ -52,6 +54,8 @@ fn search(row: &Row) -> rusqlite::Result<Search> {
   let scope_type = match row.get_ref(3)?.as_str()? {
     "user" => SearchScopeType::User,
     "room" => SearchScopeType::Room,
+    "rooms" => SearchScopeType::Rooms,
+    "buddies" => SearchScopeType::Buddies,
     "wishlist" => SearchScopeType::Wishlist,
     _ => SearchScopeType::Network,
   };

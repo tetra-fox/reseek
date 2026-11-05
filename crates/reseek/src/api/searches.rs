@@ -77,7 +77,7 @@ fn timeout(timeout: &SearchTimeout) -> Result<Duration, ApiError> {
 }
 
 /// Refuses a search with no text, with only excluded terms, with only terms of one character,
-/// or with a scope that names the wrong number of users or rooms.
+/// or with a scope that names the wrong number of users or rooms, or names buddies itself.
 fn search_request(request: &SearchRequest) -> Result<(), ApiError> {
   if request.search_text.trim().is_empty() {
     return Err(ApiError::bad_request(
@@ -103,6 +103,9 @@ fn search_request(request: &SearchRequest) -> Result<(), ApiError> {
     SearchScopeType::Room if subjects != 1 => {
       Err(ApiError::bad_request("A room search must name one room"))
     }
+    SearchScopeType::Buddies if subjects != 0 => Err(ApiError::bad_request(
+      "A buddies search names no one: it goes to every buddy online",
+    )),
     _ => Ok(()),
   }
 }

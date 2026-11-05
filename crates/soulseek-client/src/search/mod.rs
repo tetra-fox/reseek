@@ -37,8 +37,8 @@ pub enum SearchScope {
   Network,
   /// everyone, from the wishlist, which the server allows only at its wishlist interval
   Wishlist,
-  /// the members of one room
-  Room(String),
+  /// the members of these rooms, one request per room
+  Rooms(Vec<String>),
   /// these users
   User(Vec<String>),
 }
@@ -47,7 +47,10 @@ impl SearchScope {
   fn validate(&self) -> Result<(), ClientError> {
     match self {
       Self::Network | Self::Wishlist => Ok(()),
-      Self::Room(room) => non_blank("room name", room),
+      Self::Rooms(rooms) if rooms.is_empty() => Err(ClientError::InvalidArgument(
+        "A room search needs at least one room".into(),
+      )),
+      Self::Rooms(rooms) => rooms.iter().try_for_each(|room| non_blank("room name", room)),
       Self::User(usernames) if usernames.is_empty() => Err(ClientError::InvalidArgument(
         "A user search needs at least one username".into(),
       )),
@@ -69,11 +72,16 @@ impl SearchScope {
         token,
         query,
       })],
-      Self::Room(room) => vec![ServerRequest::RoomSearch(RoomSearch {
-        room: room.clone(),
-        token,
-        query,
-      })],
+      Self::Rooms(rooms) => rooms
+        .iter()
+        .map(|room| {
+          ServerRequest::RoomSearch(RoomSearch {
+            room: room.clone(),
+            token,
+            query: query.clone(),
+          })
+        })
+        .collect(),
       Self::User(usernames) => usernames
         .iter()
         .map(|username| {
@@ -508,6 +516,7 @@ mod tests {
     let requests = scope.requests(7, "daft punk");
     assert_eq!(requests.len(), 2);
     assert!(SearchScope::User(Vec::new()).validate().is_err());
-    assert!(SearchScope::Room(" ".into()).validate().is_err());
+    assert!(SearchScope::Rooms(vec![" ".into()]).validate().is_err());
+    assert!(SearchScope::Rooms(Vec::new()).validate().is_err());
   }
 }

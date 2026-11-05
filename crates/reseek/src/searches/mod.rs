@@ -4,7 +4,8 @@
 //! deleted every five minutes.
 //!
 //! [`Searches`] is the engine; it answers the API's search calls and the search topic's
-//! snapshot, and tells the download engine what a download's search was for.
+//! snapshot, and tells the download engine what a download's search was for. A search of the
+//! rooms we are in or of our buddies names, once it starts, the rooms or buddies it went to.
 
 mod running;
 mod store;
@@ -35,6 +36,7 @@ use crate::config::Options;
 use crate::db::{Database, DbError, Location, shifted};
 use crate::live::Live;
 use crate::network::Network;
+use crate::state::StateOwner;
 use crate::services::{Canceled, SearchService};
 use crate::sync::lock;
 use crate::users::Directory;
@@ -55,8 +57,10 @@ pub struct Searches {
   this: Weak<Searches>,
   db: Database,
   network: Arc<Network>,
-  /// where a responder's country is found
+  /// where a responder's country is found, and our buddies
   users: Arc<Directory>,
+  /// the rooms we are in
+  state: StateOwner,
   live: Live,
   config: Watcher<Options>,
   /// held while a search starts; a second start meanwhile is refused
@@ -86,21 +90,14 @@ fn normalized(text: &str) -> String {
   sendable(SearchQuery::parse(text)).search_text()
 }
 
-/// Where the client sends a search with `scope`, which the API checked: a room search names
-/// one room.
+/// Where the client sends a search with `scope`, whose subjects name the rooms or users.
 fn client_scope(scope: &SearchScope) -> soulseek_client::SearchScope {
   use soulseek_client::SearchScope as To;
   match scope.scope_type {
     SearchScopeType::Network => To::Network,
     SearchScopeType::Wishlist => To::Wishlist,
-    SearchScopeType::User => To::User(scope.subjects.clone()),
-    SearchScopeType::Room => To::Room(
-      scope
-        .subjects
-        .first()
-        .cloned()
-        .expect("the API takes a room search only with its one room"),
-    ),
+    SearchScopeType::User | SearchScopeType::Buddies => To::User(scope.subjects.clone()),
+    SearchScopeType::Room | SearchScopeType::Rooms => To::Rooms(scope.subjects.clone()),
   }
 }
 
@@ -131,11 +128,13 @@ fn unreadable(error: std::io::Error) -> rusqlite::Error {
 
 impl Searches {
   /// Opens `search.db` in `location`; searches go out through `network`, their responders'
-  /// countries are found in `users`, and they are pushed to `live`.
+  /// countries and our buddies are found in `users`, the rooms we are in in `state`, and they
+  /// are pushed to `live`.
   pub async fn open(
     location: &Location,
     network: Arc<Network>,
     users: Arc<Directory>,
+    state: StateOwner,
     live: Live,
     config: Watcher<Options>,
   ) -> Result<Arc<Self>, DbError> {
@@ -145,6 +144,7 @@ impl Searches {
       db,
       network,
       users,
+      state,
       live,
       config,
       starting: tokio::sync::Mutex::new(()),
@@ -259,6 +259,47 @@ impl Searches {
     }
   }
 
+  /// `scope` with the rooms or buddies a search with it goes to: every room we are in for a
+  /// rooms scope that names none, and our buddies online now for a buddies scope. A rooms
+  /// scope that names a room we are not in is refused, and so is a scope that would reach no
+  /// one.
+  fn reached(&self, scope: &SearchScope) -> Result<SearchScope, ApiError> {
+    let subjects = match scope.scope_type {
+      SearchScopeType::Rooms => {
+        let joined = self.state.current().rooms.clone();
+        if let Some(room) = scope.subjects.iter().find(|room| !joined.contains(room)) {
+          return Err(ApiError::bad_request(format!("The room {room} is not joined")));
+        }
+        if scope.subjects.is_empty() && joined.is_empty() {
+          return Err(ApiError::conflict(
+            "No room is joined",
+            Some("Join a room to search the rooms you are in".to_string()),
+          ));
+        }
+        if scope.subjects.is_empty() {
+          joined
+        } else {
+          scope.subjects.clone()
+        }
+      }
+      SearchScopeType::Buddies => {
+        if self.users.buddy_names().is_empty() {
+          return Err(ApiError::conflict("There are no buddies to search", None));
+        }
+        let online = self.users.buddies_online();
+        if online.is_empty() {
+          return Err(ApiError::conflict("No buddy is online", None));
+        }
+        online
+      }
+      _ => return Ok(scope.clone()),
+    };
+    Ok(SearchScope {
+      scope_type: scope.scope_type,
+      subjects,
+    })
+  }
+
   /// The answer to a search the client refused with `error`.
   fn refusal(&self, error: ClientError) -> ApiError {
     match error {
@@ -289,11 +330,12 @@ impl SearchService for Searches {
     };
     let client = self.network.client().clone();
     let id = request.id.unwrap_or_else(Uuid::new_v4);
+    let scope = self.reached(&request.scope)?;
     let record = Search {
       id,
       search_text: normalized(&request.search_text),
       token: client.next_token(),
-      scope: request.scope.clone(),
+      scope: scope.clone(),
       state: SearchStates::Requested,
       is_complete: false,
       started_at: Utc::now(),
@@ -325,7 +367,7 @@ impl SearchService for Searches {
     let state_changed: SearchStateChanged =
       Arc::new(move |_, snapshot| reported.state_changed(snapshot.state));
     let options = options(&request, search_timeout, state_changed);
-    let scope = client_scope(&request.scope);
+    let scope = client_scope(&scope);
     let (text, token) = (record.search_text.clone(), record.token);
     let this = self.this();
     let span = info_span!("search", %id);
@@ -513,5 +555,48 @@ mod tests {
       "one character is too short"
     );
     assert_eq!(normalized("é pink"), "pink", "characters, not bytes");
+  }
+
+  #[tokio::test]
+  async fn a_rooms_search_reaches_every_room_joined_and_a_buddies_search_the_buddies_online() {
+    let app = app("", &[]).await;
+    let searches = &app.state.searches;
+    let reached = |scope_type, subjects: &[&str]| {
+      searches.reached(&SearchScope {
+        scope_type,
+        subjects: subjects.iter().map(|s| s.to_string()).collect(),
+      })
+    };
+    assert!(reached(SearchScopeType::Rooms, &[]).is_err(), "no room joined");
+    app
+      .state
+      .state
+      .update(|state| state.rooms = vec!["indie".into(), "jazz".into()]);
+    assert_eq!(
+      reached(SearchScopeType::Rooms, &[]).unwrap().subjects,
+      ["indie", "jazz"]
+    );
+    assert_eq!(
+      reached(SearchScopeType::Rooms, &["jazz"]).unwrap().subjects,
+      ["jazz"]
+    );
+    assert!(reached(SearchScopeType::Rooms, &["metal"]).is_err());
+
+    let users = &app.state.users;
+    assert!(reached(SearchScopeType::Buddies, &[]).is_err(), "no buddy");
+    for name in ["alice", "bob"] {
+      users.set_buddy(name, Default::default()).await.unwrap();
+    }
+    assert!(
+      reached(SearchScopeType::Buddies, &[]).is_err(),
+      "no buddy known online"
+    );
+    users.privileged_listed(&["alice".to_string(), "bob".to_string()]);
+    users.status_received("alice", api_types::users::UserPresence::Away, false);
+    users.status_received("bob", api_types::users::UserPresence::Offline, false);
+    assert_eq!(
+      reached(SearchScopeType::Buddies, &[]).unwrap().subjects,
+      ["alice"]
+    );
   }
 }

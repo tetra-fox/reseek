@@ -91,7 +91,7 @@ async fn network_and_room_searches_take_the_answers_and_end_when_they_stop() {
       .await
       .unwrap();
   }
-  let scopes = [SearchScope::Network, SearchScope::Room(room.clone())];
+  let scopes = [SearchScope::Network, SearchScope::Rooms(vec![room.clone()])];
   for scope in scopes {
     let mut events = searcher.client.subscribe();
     let (done, responses) = search(&searcher, scope.clone(), quick()).await;
