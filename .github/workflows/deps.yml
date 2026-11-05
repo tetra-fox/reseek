@@ -43,7 +43,10 @@ jobs:
         if: steps.bump.outputs.package-ecosystem == 'npm_and_yarn'
         run: |
           sed -i 's|hash = "sha256-[^"]*"|hash = ""|' nix/web.nix
-          hash=$(nix build .#packages.x86_64-linux.web 2>&1 | sed -n 's/.*got: *\(sha256-[^ ]*\).*/\1/p' | head -1)
+          # with the hash blank the build always fails, and its error carries the hash; whether the
+          # step goes on is decided by the test below, not by the build's exit status
+          hash=$( { nix build .#packages.x86_64-linux.web 2>&1 || true; } \
+            | sed -n '/got: *sha256-/{s/.*got: *\(sha256-[^ ]*\).*/\1/p;q;}')
           test -n "$hash"
           sed -i "s|hash = \"\"|hash = \"$hash\"|" nix/web.nix
           echo "hash=$hash" >> "$GITHUB_OUTPUT"
