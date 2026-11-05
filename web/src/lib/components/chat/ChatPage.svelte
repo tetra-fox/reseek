@@ -19,6 +19,7 @@
   import type { SearchKind } from "#lib/chat/search/match.js";
   import { ChatSearch } from "#lib/chat/search/search.svelte.js";
   import JoinRoomDialog from "#lib/components/chat/rooms/JoinRoomDialog.svelte";
+  import PublicFeed from "#lib/components/chat/rooms/PublicFeed.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
@@ -34,8 +35,9 @@
   import SearchResults from "./search/SearchResults.svelte";
 
   type Props = {
-    /** the pane to show, "search" for the search results, null for none */
-    target: Target | "search" | null;
+    /** the pane to show, "search" for the search results, "public" for the public room feed,
+     * null for none */
+    target: Target | "search" | "public" | null;
     /** a message to open the pane at */
     at: number | null;
     /** the search, on its results and on a chat opened from them */
@@ -65,14 +67,14 @@
     () => kind,
     RESULTS_PAGE
   );
-  const fromResults = $derived(!!q && !!target && target !== "search");
+  const fromResults = $derived(!!q && !!target && target !== "search" && target !== "public");
   // the results wait only while the search is what is being followed
   $effect(() => {
     if (!q) results.forget();
   });
 
   const current = $derived(
-    target && target !== "search" ? paneKey(target.kind, target.name) : null
+    target && target !== "search" && target !== "public" ? paneKey(target.kind, target.name) : null
   );
   const wantsDesktop = $derived(chatWantsDesktop(notifyOptions()));
   const asking = $derived(notifier.permission === "default" && wantsDesktop);
@@ -81,6 +83,7 @@
   // the breadcrumb names the chat on show
   useCrumbs(() => {
     if (target === "search") return [{ label: "Search results" }];
+    if (target === "public") return [{ label: "All public rooms" }];
     if (!target) return [];
     return [{ label: target.kind === "room" ? `#${target.name}` : chatName(target) }];
   });
@@ -133,7 +136,7 @@
 <svelte:window onkeydown={keydown} />
 
 {#snippet list()}
-  <ChatList {current} {q} {onjoin} {onnew} />
+  <ChatList {current} feed={target === "public"} {q} {onjoin} {onnew} />
 {/snippet}
 
 {#snippet lead()}
@@ -186,6 +189,8 @@
       {#key q}
         <SearchResults search={results} {q} {kind} {lead} {onjoin} {onnew} />
       {/key}
+    {:else if target === "public"}
+      <PublicFeed {lead} />
     {:else if target}
       {#if fromResults}
         <button

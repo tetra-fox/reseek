@@ -8,6 +8,7 @@
   import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
   import HashIcon from "@lucide/svelte/icons/hash";
   import MessageSquarePlusIcon from "@lucide/svelte/icons/message-square-plus";
+  import RadioTowerIcon from "@lucide/svelte/icons/radio-tower";
   import ServerIcon from "@lucide/svelte/icons/server";
   import UsersRoundIcon from "@lucide/svelte/icons/users-round";
   import { tick } from "svelte";
@@ -30,7 +31,7 @@
   import { freezesWhileUsed, heldOrder, interaction } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { RowDrag } from "#lib/lists/rowdrag.svelte.js";
-  import { chatHref, roomHref } from "#lib/nav.js";
+  import { chatHref, publicFeedHref, roomHref } from "#lib/nav.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
   import { inControl, moveKeys, moveStep } from "#lib/ui/keys.js";
@@ -43,13 +44,15 @@
   type Props = {
     /** the pane on screen, by pane key */
     current: string | null;
+    /** the feed of every public room is on screen */
+    feed?: boolean;
     /** the search the address holds, which the search box shows */
     q?: string;
     onjoin: (name?: string) => void;
     onnew: (username?: string) => void;
   };
 
-  let { current, q = "", onjoin, onnew }: Props = $props();
+  let { current, feed = false, q = "", onjoin, onnew }: Props = $props();
 
   type Line =
     | { kind: "header"; key: string; title: string; ids: string[] }
@@ -397,13 +400,21 @@
     </div>
   {/if}
 
-  {#if write}
-    <!-- side by side while both fit, one over the other at a large text size -->
-    <div class="flex flex-wrap gap-1">
+  <!-- side by side while they fit, one over the other at a large text size -->
+  <div class="flex flex-wrap gap-1">
+    {#if write}
       <Button variant="outline" size="sm" class="flex-auto" onclick={() => onjoin()}
         ><UsersRoundIcon />Join a room</Button>
       <Button variant="outline" size="sm" class="flex-auto" onclick={() => onnew()}
         ><MessageSquarePlusIcon />New message</Button>
-    </div>
-  {/if}
+    {/if}
+    <Button
+      variant="ghost"
+      size="sm"
+      class="flex-auto text-fg-muted aria-[current=page]:nav-current"
+      href={publicFeedHref()}
+      aria-current={feed ? "page" : undefined}
+      title="What is said in every public room, as it is said"
+      ><RadioTowerIcon />All public rooms</Button>
+  </div>
 </div>

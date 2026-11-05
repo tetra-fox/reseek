@@ -36,11 +36,14 @@ export const sharesHref = (username: string, folder?: string | null) =>
 export const chatHref = (username: string) =>
   href(
     `/chat/${
-      username === "search" || username === "rooms"
+      username === "search" || username === "rooms" || username === "public"
         ? `%${username.charCodeAt(0).toString(16)}${username.slice(1)}`
         : segment(username)
     }`
   );
+
+/** The link to the feed of every public room */
+export const publicFeedHref = () => href("/chat/public");
 
 /** The link to a room's pane */
 export const roomHref = (room: string) => href(`/chat/rooms/${segment(room)}`);

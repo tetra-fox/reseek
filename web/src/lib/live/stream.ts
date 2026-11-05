@@ -17,6 +17,7 @@ export type Topic =
   | "transfers"
   | "conversations"
   | "rooms"
+  | "public_rooms"
   | "users"
   | "events"
   | "activity";
@@ -30,6 +31,7 @@ const ORDER = [
   "transfers",
   "conversations",
   "rooms",
+  "public_rooms",
   "users",
   "events",
   "activity"
