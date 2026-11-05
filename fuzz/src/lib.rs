@@ -8,11 +8,13 @@ use flate2::Compression;
 use flate2::bufread::ZlibEncoder;
 use soulseek_proto::{DecodeError, Limits, PeerMessage};
 
-/// keeps a fuzz run's memory bounded while still exercising the inflate limit
+/// inflate caps a fuzz input can reach: libFuzzer's inputs are at most 4 KiB by default, and a
+/// raw zlib stream of 4 KiB inflates to about 4 MiB (deflate tops out near 1032:1), so 1 MiB is
+/// within reach of the raw-stream mode
 pub const LIMITS: Limits = Limits {
-  inflated_browse_bytes: 16 << 20,
-  inflated_folder_bytes: 16 << 20,
-  inflated_search_bytes: 16 << 20,
+  inflated_browse_bytes: 1 << 20,
+  inflated_folder_bytes: 1 << 20,
+  inflated_search_bytes: 1 << 20,
   ..Limits::DEFAULT
 };
 
