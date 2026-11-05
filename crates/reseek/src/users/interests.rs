@@ -1,5 +1,6 @@
 //! What we like and hate: kept in `users.db`, told to the server at every login and when the
-//! lists change. A change made while logged out reaches the server at the next login.
+//! lists change. A change made while logged out reaches the server at the next login. An
+//! interest is trimmed and lowercased, as other clients keep theirs, so `Jazz` and `jazz` are one.
 
 use api_types::profile::Interests;
 use rusqlite::{Connection, params};
@@ -18,7 +19,13 @@ enum Change<'a> {
   StopHating(&'a str),
 }
 
-/// The lists as stored.
+/// An interest as it is kept and sent.
+fn normalized(entry: &str) -> String {
+  entry.trim().to_lowercase()
+}
+
+/// The lists as stored, each entry normalized. Entries stored before interests were lowercased
+/// can become one; the first one stored is kept, which puts it in the liked list when both had it.
 fn stored(conn: &Connection) -> rusqlite::Result<Interests> {
   let mut interests = Interests::default();
   let mut statement =
@@ -28,6 +35,10 @@ fn stored(conn: &Connection) -> rusqlite::Result<Interests> {
   })?;
   for row in rows {
     let (interest, liked) = row?;
+    let interest = normalized(&interest);
+    if interests.liked.contains(&interest) || interests.hated.contains(&interest) {
+      continue;
+    }
     let list = if liked {
       &mut interests.liked
     } else {
@@ -56,16 +67,16 @@ fn replace(conn: &mut Connection, new: &Interests) -> rusqlite::Result<Interests
   Ok(old)
 }
 
-/// `list` trimmed, without repeats; a blank entry is refused.
+/// `list` normalized, without repeats; a blank entry is refused.
 fn cleaned(list: Vec<String>) -> Result<Vec<String>, ApiError> {
   let mut kept: Vec<String> = Vec::with_capacity(list.len());
   for entry in list {
-    let entry = entry.trim();
+    let entry = normalized(&entry);
     if entry.is_empty() {
       return Err(ApiError::bad_request("An interest may not be blank"));
     }
-    if !kept.iter().any(|seen| seen == entry) {
-      kept.push(entry.to_string());
+    if !kept.contains(&entry) {
+      kept.push(entry);
     }
   }
   Ok(kept)
@@ -116,7 +127,7 @@ impl Directory {
   }
 
   /// Makes the lists `new` and tells the server what changed when logged in. An interest is in
-  /// one list at most; blanks are refused and repeats dropped.
+  /// one list at most; entries are normalized, blanks refused and repeats dropped.
   pub async fn set_interests(&self, new: Interests) -> Result<Interests, ApiError> {
     let new = Interests {
       liked: cleaned(new.liked)?,
@@ -169,6 +180,7 @@ impl Directory {
 
 #[cfg(test)]
 mod tests {
+  use super::super::testing::users_db;
   use super::*;
 
   fn lists(liked: &[&str], hated: &[&str]) -> Interests {
@@ -195,9 +207,31 @@ mod tests {
   }
 
   #[test]
-  fn entries_are_trimmed_and_repeats_dropped_but_blanks_refused() {
-    let list = vec![" jazz ".to_string(), "jazz".to_string(), "dub".to_string()];
-    assert_eq!(cleaned(list).unwrap(), ["jazz", "dub"]);
+  fn entries_are_trimmed_lowercased_and_repeats_dropped_but_blanks_refused() {
+    let list = [" Jazz ", "jazz", "DUB", "Ambient Dub", "ambient dub"];
+    let list = list.iter().map(ToString::to_string).collect();
+    assert_eq!(cleaned(list).unwrap(), ["jazz", "dub", "ambient dub"]);
     assert!(cleaned(vec!["  ".to_string()]).is_err());
+  }
+
+  #[tokio::test]
+  async fn entries_stored_in_mixed_case_are_read_lowercased_once() {
+    let db = users_db().await;
+    let read = db
+      .write(|conn| {
+        let mut insert = conn.prepare("INSERT INTO interests (interest, liked) VALUES (?1, ?2)")?;
+        for (interest, liked) in [
+          ("Jazz", true),
+          ("jazz", true),
+          ("JAZZ", false),
+          ("Noise", false),
+        ] {
+          insert.execute(params![interest, liked])?;
+        }
+        stored(conn)
+      })
+      .await
+      .unwrap();
+    assert_eq!(read, lists(&["jazz"], &["noise"]));
   }
 }

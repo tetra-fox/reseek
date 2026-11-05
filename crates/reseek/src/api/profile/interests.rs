@@ -29,8 +29,9 @@ async fn get_interests(
   app.users.interests().await.map(Json)
 }
 
-/// Replaces what we like and hate and answers with the lists kept, trimmed and without repeats.
-/// The server is told what changed, now when logged in and at the next login otherwise.
+/// Replaces what we like and hate and answers with the lists kept, trimmed, lowercased and
+/// without repeats. The server is told what changed, now when logged in and at the next login
+/// otherwise.
 #[utoipa::path(
   put, path = "/interests", tag = "profile", request_body = Interests,
   responses(

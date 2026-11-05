@@ -29,4 +29,24 @@ describe("our own interests", () => {
     await interests.loader.load();
     expect(interests.lists).toEqual(held);
   });
+
+  it("skip one already listed and move one from the other list, whatever its case", async () => {
+    let held: Interests = { liked: ["jazz"], hated: [] };
+    const puts: Interests[] = [];
+    fakeNetwork((_url, method, body) => {
+      if (method === "GET") return held;
+      held = body as Interests;
+      puts.push(held);
+      return held;
+    });
+    const interests = new OwnInterests();
+    await interests.loader.load();
+    interests.add("liked", " Jazz ");
+    await flush();
+    expect(puts).toEqual([]);
+
+    interests.add("hated", "JAZZ");
+    await flush();
+    expect(puts).toEqual([{ liked: [], hated: ["jazz"] }]);
+  });
 });

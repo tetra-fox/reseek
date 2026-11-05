@@ -35,8 +35,11 @@ export class OwnInterests {
   }
 
   add = (side: Side, text: string) => {
-    const interest = text.trim();
-    if (interest) this.#save(withInterest(this.lists, side, interest));
+    // in the form the daemon keeps, so an interest moved from the other list leaves it
+    const interest = text.trim().toLowerCase();
+    if (interest && !this.lists[side].includes(interest)) {
+      this.#save(withInterest(this.lists, side, interest));
+    }
   };
 
   remove = (side: Side, interest: string) => {
