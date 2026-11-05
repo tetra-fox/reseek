@@ -37,6 +37,7 @@ pub struct Share {
   /// who other users must be to see the share; a relay agent leaves it to the server, which
   /// fills it in from its own options
   #[serde(default)]
+  #[schema(required = true)]
   pub visibility: ShareVisibility,
 }
 

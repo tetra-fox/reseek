@@ -102,6 +102,9 @@
       "url": "/metrics"
     },
     "notifications": {
+      "buddies": {
+        "presence": "both"
+      },
       "transfers": {
         "job_finished": "both",
         "upload_queued": "off"
@@ -196,6 +199,7 @@
       ]
     },
     "shares": {
+      "buddies_only": [],
       "cache": {
         "retention": null,
         "storage_mode": "memory",
@@ -204,7 +208,8 @@
       "directories": [],
       "filters": [],
       "follow_symlinks": false,
-      "share_downloads": false
+      "share_downloads": false,
+      "trusted_only": []
     },
     "shutdown_timeout": "10s",
     "soulseek": {
@@ -1421,6 +1426,27 @@
       "notApplied": null,
       "entries": []
     },
+    "notifications.buddies.presence": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_NOTIFICATIONS_BUDDIES_PRESENCE",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "How a buddy coming online, going away or going offline is announced, for the buddies set to tell of it.",
+      "choices": [
+        "off",
+        "sound",
+        "desktop",
+        "both"
+      ],
+      "default": "both",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
     "notifications.transfers.job_finished": {
       "source": {
         "layer": "default"
@@ -2042,7 +2068,7 @@
       "envVar": "RESEEK_RETENTION_USERS",
       "cliFlag": null,
       "kind": "duration",
-      "doc": "Time without being seen after which a user is removed from the users directory. Pinned, noted, tagged, blocked and grouped users are kept.",
+      "doc": "Time without being seen after which a user is removed from the users directory. Buddies and noted, tagged, blocked and grouped users are kept.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -2131,6 +2157,24 @@
           "secret": false
         }
       ]
+    },
+    "shares.buddies_only": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SHARE_BUDDIES_ONLY",
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Aliases of the shares only buddies see, matched ignoring case; trusted buddies see them too. Everyone else is answered as if they were not shared. The server's list also covers a relay agent's shares by their alias; an agent's own list is not used.",
+      "choices": null,
+      "default": [],
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
     },
     "shares.cache.retention": {
       "source": {
@@ -2246,6 +2290,24 @@
       "doc": "Also shares the downloads directory.",
       "choices": null,
       "default": false,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "shares.trusted_only": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_SHARE_TRUSTED_ONLY",
+      "cliFlag": null,
+      "kind": {
+        "list": "string"
+      },
+      "doc": "Aliases of the shares only trusted buddies see, matched ignoring case. Everyone else is answered as if they were not shared. The server's list also covers a relay agent's shares by their alias; an agent's own list is not used.",
+      "choices": null,
+      "default": [],
       "apply": "live",
       "secret": false,
       "notApplied": null,

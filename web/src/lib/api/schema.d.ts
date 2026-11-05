@@ -2680,6 +2680,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/users/{username}/buddy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Makes a user our buddy, or changes whether they are trusted and whether we are told of their
+         *     presence; a field left out keeps its value, and an empty body makes a buddy with neither.
+         *     Our own account and the server's notices cannot be a buddy.
+         */
+        put: operations["set_buddy"];
+        post?: never;
+        /** Takes a user off our buddy list. */
+        delete: operations["remove_buddy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/users/{username}/directory": {
         parameters: {
             query?: never;
@@ -2802,24 +2824,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/users/{username}/pin": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Pins a user to the top of the directory. */
-        put: operations["pin"];
-        post?: never;
-        /** Unpins a user. */
-        delete: operations["unpin"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3558,6 +3562,37 @@ export interface components {
              * @description how many entries `lockedDirectories` has
              */
             lockedDirectoryCount: number;
+        };
+        /** @description A user on our buddy list: listed first, their presence followed from one login to the next. */
+        Buddy: {
+            /** @description we are told when they come online, go away or go offline */
+            notifyPresence: boolean;
+            /** @description they also see the shares only trusted buddies see */
+            trusted: boolean;
+        };
+        /**
+         * @description The body of `PUT /users/{username}/buddy`, which makes a user our buddy or changes how. A
+         *     field left out keeps its value, false for a new buddy.
+         */
+        BuddyChange: {
+            /** @description we are told when they come online, go away or go offline */
+            notifyPresence?: boolean | null;
+            /** @description they also see the shares only trusted buddies see */
+            trusted?: boolean | null;
+        };
+        /** @description The data of `BuddyPresenceChanged`, and of the `users.presence` frame. */
+        BuddyPresenceChanged: {
+            /** @description their presence now */
+            presence: components["schemas"]["UserPresence"];
+            /** @description their presence before */
+            previous: components["schemas"]["UserPresence"];
+            /** @description the buddy */
+            username: string;
+            /**
+             * Format: int32
+             * @description the shape version of this event type, 0
+             */
+            version: number;
         };
         /**
          * @description What a bulk call does to each of its transfers.
@@ -4338,6 +4373,11 @@ export interface components {
             /** @enum {string} */
             type: "UserUnblocked";
         } | {
+            /** @description a buddy we asked to be told about came online, went away or went offline */
+            data: components["schemas"]["BuddyPresenceChanged"];
+            /** @enum {string} */
+            type: "BuddyPresenceChanged";
+        } | {
             /** @description an API token was created */
             data: components["schemas"]["TokenChanged"];
             /** @enum {string} */
@@ -4435,7 +4475,7 @@ export interface components {
          * @description What kind of event something is, written as its name and read ignoring case.
          * @enum {string}
          */
-        EventType: "DownloadFileComplete" | "DownloadDirectoryComplete" | "UploadFileComplete" | "PrivateMessageReceived" | "RoomMessageReceived" | "UserBlocked" | "UserUnblocked" | "TokenCreated" | "TokenRevoked" | "SessionCreated" | "SessionRevoked" | "LoginFailed" | "FileAnalysisComplete" | "DownloadFileFailed" | "ScriptRunCompleted" | "SoulseekClientConnected" | "SoulseekClientDisconnected" | "RelayAgentConnected" | "RelayAgentDisconnected" | "RelayAgentSharesUpdated" | "Noop";
+        EventType: "DownloadFileComplete" | "DownloadDirectoryComplete" | "UploadFileComplete" | "PrivateMessageReceived" | "RoomMessageReceived" | "UserBlocked" | "UserUnblocked" | "BuddyPresenceChanged" | "TokenCreated" | "TokenRevoked" | "SessionCreated" | "SessionRevoked" | "LoginFailed" | "FileAnalysisComplete" | "DownloadFileFailed" | "ScriptRunCompleted" | "SoulseekClientConnected" | "SoulseekClientDisconnected" | "RelayAgentConnected" | "RelayAgentDisconnected" | "RelayAgentSharesUpdated" | "Noop";
         /**
          * @description How often one error message occurred, a row of
          *     `GET /telemetry/reports/transfers/exceptions/pareto` and of a user report.
@@ -4908,6 +4948,7 @@ export interface components {
         /** @description What the known-users directory holds about a user, shared by the summary and the profile. */
         KnownUser: {
             block?: null | components["schemas"]["Block"];
+            buddy?: null | components["schemas"]["Buddy"];
             conversation?: null | components["schemas"]["ConversationSummary"];
             /**
              * @description the user's country as ISO 3166-1 alpha-2, from a room member list; null when never seen
@@ -4941,8 +4982,6 @@ export interface components {
             lastSeenAt?: string | null;
             /** @description chat notifications for the user are off */
             muted: boolean;
-            /** @description the user is listed first */
-            pinned: boolean;
             presence?: null | components["schemas"]["UserPresence"];
             /**
              * Format: date-time
@@ -5178,6 +5217,14 @@ export interface components {
             data: components["schemas"]["UserRemoved"];
             /** @enum {string} */
             type: "users.removed";
+        } | {
+            /**
+             * @description a buddy we asked to be told about came online, went away or went offline; also on the
+             *     `application` topic, so every open page can tell of it
+             */
+            data: components["schemas"]["BuddyPresenceChanged"];
+            /** @enum {string} */
+            type: "users.presence";
         } | {
             /** @description unread counts, on open and on change */
             data: components["schemas"]["ChatUnread"];
@@ -6499,7 +6546,10 @@ export interface components {
         };
         /** @description Where a search is sent and to whom. */
         SearchScope: {
-            /** @description the usernames for `user`, the one room name for `room`, empty otherwise */
+            /**
+             * @description the usernames for `user` and `buddies`, the room names for `room` and `rooms`, empty
+             *     otherwise
+             */
             subjects?: string[];
             /** @description the kind of scope */
             type: components["schemas"]["SearchScopeType"];
@@ -6508,7 +6558,7 @@ export interface components {
          * @description Where a search is sent.
          * @enum {string}
          */
-        SearchScopeType: "network" | "user" | "room" | "wishlist";
+        SearchScopeType: "network" | "user" | "room" | "rooms" | "buddies" | "wishlist";
         /**
          * @description the names of the set state flags joined by ", "
          * @example Completed, TimedOut
@@ -6696,6 +6746,11 @@ export interface components {
             raw: string;
             /** @description the path other users see, the same as `alias` */
             remotePath: string;
+            /**
+             * @description who other users must be to see the share; a relay agent leaves it to the server, which
+             *     fills it in from its own options
+             */
+            visibility: components["schemas"]["ShareVisibility"];
         };
         /** @description One folder of this machine, a choice in the folder picker. */
         ShareFolder: {
@@ -6713,6 +6768,13 @@ export interface components {
             /** @description more folders are there than were listed */
             truncated: boolean;
         };
+        /**
+         * @description Who sees a shared folder in our browse listing, folder contents and search answers, and may
+         *     download from it. Ordered from the widest audience to the narrowest, so a user who sees
+         *     shares of one visibility also sees those of every wider one.
+         * @enum {string}
+         */
+        ShareVisibility: "everyone" | "buddies" | "trusted";
         /**
          * @description The shares of every host by host name: `local` for this instance, always present, and each
          *     relay agent's instance name.
@@ -7753,8 +7815,8 @@ export interface components {
             presence: components["schemas"]["UserPresence"];
         };
         /**
-         * @description A user's presence changed, the data of a `users.status` frame. Sent only for users with an
-         *     open conversation or a transfer.
+         * @description A user's presence changed, the data of a `users.status` frame. Sent only for our buddies and
+         *     users with an open conversation or a transfer.
          */
         UserStatusChanged: {
             /** @description the new status */
@@ -17442,8 +17504,8 @@ export interface operations {
                 tag?: string;
                 /** @description only users in this group */
                 group?: string;
-                /** @description only pinned users, or only users not pinned */
-                pinned?: boolean;
+                /** @description only our buddies, or only users who are not */
+                buddy?: boolean;
                 /** @description only users last seen with this presence */
                 presence?: components["schemas"]["UserPresence"];
                 /** @description only users with transfers, or only users without */
@@ -18014,6 +18076,122 @@ export interface operations {
             };
         };
     };
+    set_buddy: {
+        parameters: {
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
+            header?: never;
+            path: {
+                /** @description the user */
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["BuddyChange"];
+            };
+        };
+        responses: {
+            /** @description a buddy */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    remove_buddy: {
+        parameters: {
+            query?: {
+                /** @description the username, exactly */
+                username?: string;
+            };
+            header?: never;
+            path: {
+                /** @description the user */
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no longer a buddy */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     directory: {
         parameters: {
             query?: {
@@ -18450,102 +18628,6 @@ export interface operations {
                 };
             };
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    pin: {
-        parameters: {
-            query?: {
-                /** @description the username, exactly */
-                username?: string;
-            };
-            header?: never;
-            path: {
-                /** @description the user */
-                username: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description pinned */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    unpin: {
-        parameters: {
-            query?: {
-                /** @description the username, exactly */
-                username?: string;
-            };
-            header?: never;
-            path: {
-                /** @description the user */
-                username: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description unpinned */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };

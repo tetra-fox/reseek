@@ -13164,9 +13164,9 @@
             }
           },
           {
-            "name": "pinned",
+            "name": "buddy",
             "in": "query",
-            "description": "only pinned users, or only users not pinned",
+            "description": "only our buddies, or only users who are not",
             "required": false,
             "schema": {
               "type": "boolean"
@@ -13995,6 +13995,168 @@
         }
       }
     },
+    "/api/v0/users/{username}/buddy": {
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Makes a user our buddy, or changes whether they are trusted and whether we are told of their\npresence; a field left out keeps its value, and an empty body makes a buddy with neither.\nOur own account and the server's notices cannot be a buddy.",
+        "operationId": "set_buddy",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/BuddyChange"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "a buddy"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Takes a user off our buddy list.",
+        "operationId": "remove_buddy",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "description": "the user",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no longer a buddy"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/users/{username}/directory": {
       "post": {
         "tags": [
@@ -14613,132 +14775,6 @@
             }
           },
           "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v0/users/{username}/pin": {
-      "put": {
-        "tags": [
-          "users"
-        ],
-        "summary": "Pins a user to the top of the directory.",
-        "operationId": "pin",
-        "parameters": [
-          {
-            "name": "username",
-            "in": "path",
-            "description": "the user",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "username",
-            "in": "query",
-            "description": "the username, exactly",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "pinned"
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "users"
-        ],
-        "summary": "Unpins a user.",
-        "operationId": "unpin",
-        "parameters": [
-          {
-            "name": "username",
-            "in": "path",
-            "description": "the user",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "username",
-            "in": "query",
-            "description": "the username, exactly",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "unpinned"
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -16600,6 +16636,74 @@
           }
         }
       },
+      "Buddy": {
+        "type": "object",
+        "description": "A user on our buddy list: listed first, their presence followed from one login to the next.",
+        "required": [
+          "trusted",
+          "notifyPresence"
+        ],
+        "properties": {
+          "notifyPresence": {
+            "type": "boolean",
+            "description": "we are told when they come online, go away or go offline"
+          },
+          "trusted": {
+            "type": "boolean",
+            "description": "they also see the shares only trusted buddies see"
+          }
+        }
+      },
+      "BuddyChange": {
+        "type": "object",
+        "description": "The body of `PUT /users/{username}/buddy`, which makes a user our buddy or changes how. A\nfield left out keeps its value, false for a new buddy.",
+        "properties": {
+          "notifyPresence": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "we are told when they come online, go away or go offline"
+          },
+          "trusted": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "they also see the shares only trusted buddies see"
+          }
+        }
+      },
+      "BuddyPresenceChanged": {
+        "type": "object",
+        "description": "The data of `BuddyPresenceChanged`, and of the `users.presence` frame.",
+        "required": [
+          "version",
+          "username",
+          "presence",
+          "previous"
+        ],
+        "properties": {
+          "presence": {
+            "$ref": "#/components/schemas/UserPresence",
+            "description": "their presence now"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/UserPresence",
+            "description": "their presence before"
+          },
+          "username": {
+            "type": "string",
+            "description": "the buddy"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the shape version of this event type, 0",
+            "minimum": 0
+          }
+        }
+      },
       "BulkAction": {
         "type": "string",
         "description": "What a bulk call does to each of its transfers.",
@@ -18203,6 +18307,26 @@
           },
           {
             "type": "object",
+            "description": "a buddy we asked to be told about came online, went away or went offline",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/BuddyPresenceChanged",
+                "description": "a buddy we asked to be told about came online, went away or went offline"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "BuddyPresenceChanged"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "an API token was created",
             "required": [
               "data",
@@ -18542,6 +18666,7 @@
           "RoomMessageReceived",
           "UserBlocked",
           "UserUnblocked",
+          "BuddyPresenceChanged",
           "TokenCreated",
           "TokenRevoked",
           "SessionCreated",
@@ -19484,8 +19609,7 @@
           "isPrivileged",
           "group",
           "tags",
-          "muted",
-          "pinned"
+          "muted"
         ],
         "properties": {
           "block": {
@@ -19496,6 +19620,17 @@
               {
                 "$ref": "#/components/schemas/Block",
                 "description": "our block of the user, or the configuration's; null when not blocked"
+              }
+            ]
+          },
+          "buddy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Buddy",
+                "description": "the user is our buddy, with what that buddy may do and what we hear of them; null for a\nuser who is not"
               }
             ]
           },
@@ -19567,10 +19702,6 @@
           "muted": {
             "type": "boolean",
             "description": "chat notifications for the user are off"
-          },
-          "pinned": {
-            "type": "boolean",
-            "description": "the user is listed first"
           },
           "presence": {
             "oneOf": [
@@ -20436,6 +20567,26 @@
                 "type": "string",
                 "enum": [
                   "users.removed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "a buddy we asked to be told about came online, went away or went offline; also on the\n`application` topic, so every open page can tell of it",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/BuddyPresenceChanged",
+                "description": "a buddy we asked to be told about came online, went away or went offline; also on the\n`application` topic, so every open page can tell of it"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "users.presence"
                 ]
               }
             }
@@ -23051,7 +23202,7 @@
             "items": {
               "type": "string"
             },
-            "description": "the usernames for `user`, the one room name for `room`, empty otherwise"
+            "description": "the usernames for `user` and `buddies`, the room names for `room` and `rooms`, empty\notherwise"
           },
           "type": {
             "$ref": "#/components/schemas/SearchScopeType",
@@ -23066,6 +23217,8 @@
           "network",
           "user",
           "room",
+          "rooms",
+          "buddies",
           "wishlist"
         ]
       },
@@ -23361,7 +23514,8 @@
           "isExcluded",
           "localPath",
           "raw",
-          "remotePath"
+          "remotePath",
+          "visibility"
         ],
         "properties": {
           "alias": {
@@ -23416,6 +23570,10 @@
           "remotePath": {
             "type": "string",
             "description": "the path other users see, the same as `alias`"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/ShareVisibility",
+            "description": "who other users must be to see the share; a relay agent leaves it to the server, which\nfills it in from its own options"
           }
         }
       },
@@ -23464,6 +23622,15 @@
             "description": "more folders are there than were listed"
           }
         }
+      },
+      "ShareVisibility": {
+        "type": "string",
+        "description": "Who sees a shared folder in our browse listing, folder contents and search answers, and may\ndownload from it. Ordered from the widest audience to the narrowest, so a user who sees\nshares of one visibility also sees those of every wider one.",
+        "enum": [
+          "everyone",
+          "buddies",
+          "trusted"
+        ]
       },
       "SharesByHost": {
         "type": "object",
@@ -25384,7 +25551,7 @@
       },
       "UserStatusChanged": {
         "type": "object",
-        "description": "A user's presence changed, the data of a `users.status` frame. Sent only for users with an\nopen conversation or a transfer.",
+        "description": "A user's presence changed, the data of a `users.status` frame. Sent only for our buddies and\nusers with an open conversation or a transfer.",
         "required": [
           "username",
           "status"
