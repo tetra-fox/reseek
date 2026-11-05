@@ -28,37 +28,23 @@ pub struct LocalInfo {
 
 /// The profile text and picture of `options`; the picture is read each time.
 pub async fn local_info(options: &Options) -> LocalInfo {
-  let soulseek = &options.soulseek;
-  let picture = match &soulseek.picture {
-    Some(path) => match tokio::fs::read(path).await {
-      Ok(bytes) => Some(bytes),
-      Err(e) => {
-        if let Some(suppressed) = PICTURE_UNREAD.allow() {
-          warn!(path = %path.display(), error = %e, suppressed, "profile picture not read");
-        }
-        None
-      }
-    },
-    None => None,
-  };
   LocalInfo {
-    description: soulseek.description.clone(),
-    picture,
+    description: options.soulseek.description.clone(),
+    picture: picture(options).await,
   }
 }
 
-/// Whether `soulseek.picture` of `options` names a file, found without reading it.
-pub async fn has_picture(options: &Options) -> bool {
-  let Some(path) = &options.soulseek.picture else {
-    return false;
-  };
-  match tokio::fs::metadata(path).await {
-    Ok(metadata) => metadata.is_file(),
+/// The bytes of the profile picture `options` names, `None` without one or when it could not be
+/// read.
+pub async fn picture(options: &Options) -> Option<Vec<u8>> {
+  let path = options.soulseek.picture.as_ref()?;
+  match tokio::fs::read(path).await {
+    Ok(bytes) => Some(bytes),
     Err(e) => {
       if let Some(suppressed) = PICTURE_UNREAD.allow() {
-        warn!(path = %path.display(), error = %e, suppressed, "profile picture not found");
+        warn!(path = %path.display(), error = %e, suppressed, "profile picture not read");
       }
-      false
+      None
     }
   }
 }

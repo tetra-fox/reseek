@@ -24,8 +24,10 @@ pub struct OwnProfile {
   pub description: String,
   /// a picture is sent with it
   pub has_picture: bool,
-  /// where the picture is fetched, null without one
-  #[schema(example = "/api/v0/profile/picture")]
+  /// where the picture is fetched, a URL that changes whenever the picture does; null without one
+  #[schema(
+    example = "/api/v0/profile/picture?v=2cea274d0bedc39ec4ab6ba9e59ec889e3ed6fb56a1cf088a64d9b383378dc97"
+  )]
   pub picture_url: Option<String>,
   /// the upload slots a user we know nothing about is told of, those of the default group
   pub upload_slots: u32,

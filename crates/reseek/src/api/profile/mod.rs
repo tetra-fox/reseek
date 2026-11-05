@@ -33,13 +33,13 @@ use crate::app::AppState;
 use crate::auth::{Administrator, AnyRole, Authorized, require_interactive};
 use crate::config::{Options, view};
 use crate::profile::{self, MAX_UPLOAD, UPLOAD_TYPES};
-use crate::users::picture_response;
+use crate::users::{picture_response, picture_tag};
 
 /// The option that holds the profile text.
 const DESCRIPTION: &str = "soulseek.description";
 /// The option that holds the path of the profile picture.
 const PICTURE: &str = "soulseek.picture";
-/// Where the picture peers are sent is fetched, without the URL base.
+/// Where the picture peers are sent is fetched, without the URL base and the version.
 const PICTURE_URL: &str = "/api/v0/profile/picture";
 
 /// The profile routes.
@@ -67,12 +67,13 @@ async fn get_profile(
   _caller: Authorized<AnyRole>,
 ) -> Json<OwnProfile> {
   let current = app.config.current();
-  let has_picture = crate::profile::has_picture(&current.values).await;
+  let picture = profile::picture(&current.values).await;
   let forecast = app.uploads.default_forecast();
   Json(OwnProfile {
     description: current.values.soulseek.description.clone(),
-    has_picture,
-    picture_url: has_picture.then(|| PICTURE_URL.to_string()),
+    has_picture: picture.is_some(),
+    // the URL changes with the picture, so a page showing the old one fetches the new one
+    picture_url: picture.map(|p| format!("{PICTURE_URL}?v={}", picture_tag(&p))),
     upload_slots: forecast.total_slots,
     free_upload_slot: forecast.free_slots > 0,
     queue_length: forecast.position,
@@ -128,12 +129,11 @@ async fn get_profile_picture(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
 ) -> Result<Response, ApiError> {
-  let picture = crate::profile::local_info(&app.config.current().values)
+  let picture = profile::picture(&app.config.current().values)
     .await
-    .picture
     .ok_or_else(|| ApiError::not_found("No profile picture is set"))?;
-  // it changes whenever a new one is uploaded, so the browser asks again each time
-  Ok(picture_response(picture, "private, no-cache"))
+  // the profile names it by a URL that changes with it, so a copy kept a day is never stale
+  Ok(picture_response(picture, "private, max-age=86400"))
 }
 
 /// Sets the picture other users are sent: a JPEG, PNG, GIF, WebP or BMP image of at most 1 MiB,

@@ -57,7 +57,7 @@ async fn the_text_and_the_picture_round_trip_through_the_file() {
     "Jazz, mostly.\nAsk before you queue a lot."
   );
   assert_eq!(changed["hasPicture"], true);
-  assert_eq!(changed["pictureUrl"], "/api/v0/profile/picture");
+  let url = changed["pictureUrl"].as_str().unwrap();
   let file = json!({ "layer": "file", "file": "config.toml" });
   assert_eq!(changed["sources"]["description"], file);
   assert_eq!(changed["sources"]["picture"], file);
@@ -65,9 +65,7 @@ async fn the_text_and_the_picture_round_trip_through_the_file() {
   assert!(written.contains("Jazz, mostly."), "{written}");
   assert!(written.contains("picture.jpg"), "{written}");
 
-  let picture = app
-    .send(request("GET", "/api/v0/profile/picture", None))
-    .await;
+  let picture = app.send(request("GET", url, None)).await;
   assert_eq!(picture.status, 200);
   assert_eq!(picture.headers["content-type"], "image/jpeg");
   let decoded = image::load_from_memory(&picture.body).unwrap();
@@ -87,6 +85,37 @@ async fn the_text_and_the_picture_round_trip_through_the_file() {
   let after = profile(&app).await;
   assert_eq!(after["hasPicture"], false);
   assert_eq!(after["sources"]["picture"], json!({ "layer": "default" }));
+}
+
+#[tokio::test]
+async fn a_new_picture_is_fetched_from_a_new_url() {
+  let app = app(CONFIG, &[]).await;
+  let url = async || {
+    profile(&app).await["pictureUrl"]
+      .as_str()
+      .unwrap()
+      .to_string()
+  };
+  assert_eq!(
+    upload(&app, png(64, 64, BLUE), "image/png").await.status,
+    204
+  );
+  let first = url().await;
+  let red = Rgba([220, 20, 20, 255]);
+  assert_eq!(
+    upload(&app, png(64, 64, red), "image/png").await.status,
+    204
+  );
+  let second = url().await;
+  assert_ne!(
+    first, second,
+    "a page showing the old one fetches the new one"
+  );
+  let fetched = app.send(request("GET", &second, None)).await;
+  assert_eq!(fetched.status, 200);
+  let stored = app.state.paths.data.join("profile/picture.jpg");
+  assert_eq!(fetched.body, std::fs::read(&stored).unwrap());
+  assert_eq!(fetched.headers["cache-control"], "private, max-age=86400");
 }
 
 #[tokio::test]

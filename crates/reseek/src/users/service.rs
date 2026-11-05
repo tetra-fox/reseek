@@ -42,11 +42,18 @@ fn picture_type(bytes: &[u8]) -> &'static str {
   }
 }
 
-/// `picture` as the whole response: its type from its first bytes, `cache_control`, and the
-/// SHA-256 of its bytes as its ETag.
+/// The SHA-256 of `picture` in hex, which changes whenever the picture does.
+pub(crate) fn picture_tag(picture: &[u8]) -> String {
+  Sha256::digest(picture)
+    .iter()
+    .map(|b| format!("{b:02x}"))
+    .collect()
+}
+
+/// `picture` as the whole response: its type from its first bytes, `cache_control`, and its
+/// [`picture_tag`] as its ETag.
 pub(crate) fn picture_response(picture: Vec<u8>, cache_control: &'static str) -> Response {
-  let digest = Sha256::digest(&picture);
-  let tag: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+  let tag = picture_tag(&picture);
   let content_type = picture_type(&picture);
   let mut response = picture.into_response();
   let headers = response.headers_mut();

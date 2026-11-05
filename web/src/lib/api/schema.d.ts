@@ -5528,8 +5528,8 @@ export interface components {
             /** @description a picture is sent with it */
             hasPicture: boolean;
             /**
-             * @description where the picture is fetched, null without one
-             * @example /api/v0/profile/picture
+             * @description where the picture is fetched, a URL that changes whenever the picture does; null without one
+             * @example /api/v0/profile/picture?v=2cea274d0bedc39ec4ab6ba9e59ec889e3ed6fb56a1cf088a64d9b383378dc97
              */
             pictureUrl?: string | null;
             /**
