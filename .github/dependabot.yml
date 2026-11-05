@@ -25,6 +25,17 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: [version-update:semver-major]
+  # the image's base; ci does not build the image, so this bump is merged by hand after
+  # `just docker-smoke`
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
   # the workflows pin each action to a commit, with its version beside it
   - package-ecosystem: github-actions
     directories: ["/", "/.github/actions/setup-nix"]
