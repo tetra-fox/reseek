@@ -165,10 +165,12 @@ pub fn write(
     if pending.creates {
       ensure(&tx, username, seen_at)?;
     }
+    // the presence's time is when it last changed, so a report of the same presence keeps it
     if pending.room {
       let rows = tx.execute(
-        "UPDATE users SET last_seen_at = max(last_seen_at, ?2), last_presence = 'Online' \
-         WHERE username = ?1",
+        "UPDATE users SET last_seen_at = max(last_seen_at, ?2), \
+         presence_at = CASE WHEN last_presence = 'Online' THEN coalesce(presence_at, ?2) ELSE ?2 END, \
+         last_presence = 'Online' WHERE username = ?1",
         params![username, timestamp(seen_at)],
       )?;
       if rows == 0 {
@@ -177,8 +179,9 @@ pub fn write(
     }
     if let Some((presence, privileged, at)) = pending.status {
       tx.execute(
-        "UPDATE users SET last_presence = ?2, presence_at = ?3, is_privileged = ?4 \
-         WHERE username = ?1",
+        "UPDATE users SET \
+         presence_at = CASE WHEN last_presence IS ?2 THEN coalesce(presence_at, ?3) ELSE ?3 END, \
+         last_presence = ?2, is_privileged = ?4 WHERE username = ?1",
         params![username, presence_text(presence), timestamp(at), privileged],
       )?;
     }
@@ -284,5 +287,53 @@ mod tests {
     )
     .await;
     assert!(waiting.is_err(), "a message touch waits for room");
+  }
+
+  #[tokio::test]
+  async fn the_presence_keeps_the_time_it_last_changed() {
+    let db = users_db().await;
+    let at = |text: &str| -> DateTime<Utc> { text.parse().unwrap() };
+    let status = |presence, when: &str| Pending {
+      seen_at: Some(at(when)),
+      creates: true,
+      status: Some((presence, false, at(when))),
+      ..Pending::default()
+    };
+    let room = |when: &str| Pending {
+      seen_at: Some(at(when)),
+      room: true,
+      ..Pending::default()
+    };
+    let since = |pending: Pending| {
+      let db = db.clone();
+      async move {
+        db.write(move |conn| {
+          write(conn, &BTreeMap::from([("alice".to_string(), pending)]))?;
+          Ok(get(conn, "alice")?.unwrap().presence)
+        })
+        .await
+        .unwrap()
+      }
+    };
+    let online = since(status(UserPresence::Online, "2026-11-02T08:00:00Z")).await;
+    assert_eq!(
+      since(status(UserPresence::Online, "2026-11-04T09:00:00Z")).await,
+      online,
+      "the same presence again, as after a login, keeps when it began"
+    );
+    assert_eq!(
+      since(room("2026-11-04T10:00:00Z")).await,
+      online,
+      "a room message from someone online changes nothing"
+    );
+    assert_eq!(
+      since(status(UserPresence::Away, "2026-11-04T11:00:00Z")).await,
+      Some((UserPresence::Away, Some(at("2026-11-04T11:00:00Z"))))
+    );
+    assert_eq!(
+      since(room("2026-11-04T12:00:00Z")).await,
+      Some((UserPresence::Online, Some(at("2026-11-04T12:00:00Z")))),
+      "a room message from someone away puts them online from then"
+    );
   }
 }

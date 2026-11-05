@@ -195,7 +195,8 @@ pub struct KnownUser {
   pub last_seen_at: Option<DateTime<Utc>>,
   /// the last presence observed, null when never observed
   pub presence: Option<UserPresence>,
-  /// when `presence` was observed, null when never
+  /// when `presence` was first observed after another one, null when never: the time it was
+  /// last seen to change, which cannot reach back past a time we were not connected
   pub presence_at: Option<DateTime<Utc>>,
   /// the server last reported the user as privileged
   pub is_privileged: bool,

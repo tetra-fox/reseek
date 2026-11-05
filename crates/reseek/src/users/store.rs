@@ -47,7 +47,7 @@ pub struct Stored {
   pub first_seen_at: DateTime<Utc>,
   /// when we last dealt with them
   pub last_seen_at: DateTime<Utc>,
-  /// the presence last observed, with when
+  /// the presence last observed, with when it was first observed after another one
   pub presence: Option<(UserPresence, Option<DateTime<Utc>>)>,
   /// the server last called them privileged
   pub is_privileged: bool,
