@@ -86,17 +86,26 @@ fn changes<'a>(old: &'a Interests, new: &'a Interests) -> Vec<Change<'a>> {
     .collect()
 }
 
-/// Tells the server one change, which is logged when it cannot; the next login sends the lists
-/// again.
-async fn send(client: &Client, change: Change<'_>) {
-  let sent = match change {
-    Change::Like(interest) => client.add_liked_interest(interest).await,
-    Change::Hate(interest) => client.add_hated_interest(interest).await,
-    Change::StopLiking(interest) => client.remove_liked_interest(interest).await,
-    Change::StopHating(interest) => client.remove_hated_interest(interest).await,
-  };
-  if let Err(e) = sent {
-    warn!(error = %e, ?change, "interest not sent to the server");
+/// Tells the server `changes`, the `list` named in the log. What cannot be sent is logged once
+/// for the list, since a lost connection fails every message after it; the next login sends the
+/// lists again.
+async fn send(client: &Client, list: &str, changes: Vec<Change<'_>>) {
+  let mut failed = 0;
+  let mut first = None;
+  for change in changes {
+    let sent = match change {
+      Change::Like(interest) => client.add_liked_interest(interest).await,
+      Change::Hate(interest) => client.add_hated_interest(interest).await,
+      Change::StopLiking(interest) => client.remove_liked_interest(interest).await,
+      Change::StopHating(interest) => client.remove_hated_interest(interest).await,
+    };
+    if let Err(e) = sent {
+      failed += 1;
+      first.get_or_insert(e);
+    }
+  }
+  if let Some(e) = first {
+    warn!(error = %e, failed, list, "interests not sent to the server");
   }
 }
 
@@ -118,6 +127,7 @@ impl Directory {
         "'{both}' cannot be both liked and hated"
       )));
     }
+    let _sending = self.interests_sending.lock().await;
     let kept = new.clone();
     let old = self
       .db
@@ -128,9 +138,7 @@ impl Directory {
     debug!(changes = changes.len(), "interests changed");
     match self.client.get() {
       Some(client) if client.state() == ClientState::READY => {
-        for change in changes {
-          send(client, change).await;
-        }
+        send(client, "changes", changes).await;
       }
       _ => debug!("interests reach the server at the next login"),
     }
@@ -139,6 +147,7 @@ impl Directory {
 
   /// Tells the server everything we like and hate, which it does not keep between sessions.
   pub async fn send_interests(&self, client: &Client) {
+    let _sending = self.interests_sending.lock().await;
     let interests = match self.interests().await {
       Ok(interests) => interests,
       Err(e) => {
@@ -151,12 +160,10 @@ impl Directory {
       hated = interests.hated.len(),
       "sending our interests to the server"
     );
-    for interest in &interests.liked {
-      send(client, Change::Like(interest)).await;
-    }
-    for interest in &interests.hated {
-      send(client, Change::Hate(interest)).await;
-    }
+    let liked = interests.liked.iter().map(|i| Change::Like(i)).collect();
+    send(client, "liked", liked).await;
+    let hated = interests.hated.iter().map(|i| Change::Hate(i)).collect();
+    send(client, "hated", hated).await;
   }
 }
 

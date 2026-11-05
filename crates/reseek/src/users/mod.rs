@@ -93,6 +93,9 @@ pub struct Directory {
   summaries: Mutex<HashMap<String, (Instant, UserSummary)>>,
   /// who has a row, with their country
   known: Known,
+  /// held while our interests are read or written and then sent, so a login's send and a
+  /// change made during it cannot interleave
+  interests_sending: tokio::sync::Mutex<()>,
 }
 
 impl Directory {
@@ -149,6 +152,7 @@ impl Directory {
       figures: FigureCache::default(),
       summaries: Mutex::new(HashMap::new()),
       known,
+      interests_sending: tokio::sync::Mutex::new(()),
     });
     tokio::spawn(
       directory
