@@ -28,7 +28,7 @@
     top: 0
   });
 
-  const motion = chartMotion();
+  const motion = $derived(chartMotion());
 
   /** Each part of each bar: its series and where it lies in counts */
   const parts = (d: Row) => {
@@ -85,19 +85,22 @@
               tickSpacing={rem.px * 4}
               tickOcclusion
               tickLabelProps={tickLabel} />
-            <!-- each part takes a click, which opens the list of those transfers -->
-            {#each data as d (d.direction)}
-              {#each parts(d) as p (p.series.key)}
-                <Bar
-                  data={d}
-                  x={() => [p.from, p.to]}
-                  fill={p.series.color}
-                  opacity={hovered && hovered !== d ? 0.45 : 1}
-                  class="cursor-pointer transition-opacity"
-                  {motion}
-                  onclick={() => open(d.direction, p.series.state)} />
+            <!-- each part takes a click, which opens the list of those transfers. A mark takes its
+                 motion as it mounts, so the marks start again when it changes -->
+            {#key motion}
+              {#each data as d (d.direction)}
+                {#each parts(d) as p (p.series.key)}
+                  <Bar
+                    data={d}
+                    x={() => [p.from, p.to]}
+                    fill={p.series.color}
+                    opacity={hovered && hovered !== d ? 0.45 : 1}
+                    class="cursor-pointer transition-opacity"
+                    {motion}
+                    onclick={() => open(d.direction, p.series.state)} />
+                {/each}
               {/each}
-            {/each}
+            {/key}
           </Svg>
           <Tooltip.Root>
             {#snippet children({ data: d })}

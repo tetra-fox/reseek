@@ -48,7 +48,8 @@ export const disclose = (node: Element) =>
 
 /**
  * How a chart's marks grow in as it first shows and move to new figures: a short tween, or none
- * when reduced motion is asked for. Read once as a mark mounts
+ * when reduced motion is asked for. A mark takes it as it mounts, so a chart that reads it in a
+ * `$derived` and keys its marks on it follows the setting while it shows
  */
 export const chartMotion = () =>
   prefersReducedMotion.current

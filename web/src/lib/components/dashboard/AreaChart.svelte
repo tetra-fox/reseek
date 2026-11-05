@@ -40,7 +40,7 @@
       [data[0], data.at(-1)].flatMap((p) => (p ? [xLabel(p.timestamp)] : []))
     )
   );
-  const motion = chartMotion();
+  const motion = $derived(chartMotion());
   const toggle = (direction: Direction) =>
     (hidden = hidden.includes(direction)
       ? hidden.filter((d) => d !== direction)
@@ -113,22 +113,25 @@
           tickSpacing={rem.px * 6}
           tickOcclusion
           tickLabelProps={tickLabel} />
-        {#each shown as s (s.key)}
-          <LinearGradient vertical>
-            {#snippet stopsContent()}
-              <stop offset="0%" stop-color={s.color} stop-opacity="0.32" />
-              <stop offset="100%" stop-color={s.color} stop-opacity="0.02" />
-            {/snippet}
-            {#snippet children({ gradient })}
-              <Area
-                y1={(d: (typeof rows)[number]) => d[s.key]}
-                fill={gradient}
-                curve={chartCurve}
-                line={{ stroke: s.color, strokeWidth: 1.5 }}
-                {motion} />
-            {/snippet}
-          </LinearGradient>
-        {/each}
+        <!-- a mark takes its motion as it mounts, so the marks start again when it changes -->
+        {#key motion}
+          {#each shown as s (s.key)}
+            <LinearGradient vertical>
+              {#snippet stopsContent()}
+                <stop offset="0%" stop-color={s.color} stop-opacity="0.32" />
+                <stop offset="100%" stop-color={s.color} stop-opacity="0.02" />
+              {/snippet}
+              {#snippet children({ gradient })}
+                <Area
+                  y1={(d: (typeof rows)[number]) => d[s.key]}
+                  fill={gradient}
+                  curve={chartCurve}
+                  line={{ stroke: s.color, strokeWidth: 1.5 }}
+                  {motion} />
+              {/snippet}
+            </LinearGradient>
+          {/each}
+        {/key}
         <Highlight lines={{ class: "stroke-fg-subtle" }} />
         {#each shown as s (s.key)}
           <Highlight y={(d: (typeof rows)[number]) => d[s.key]} points={{ fill: s.color, r: 3 }} />
