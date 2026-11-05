@@ -70,16 +70,20 @@ describe("a pane opened at a message", () => {
     vi.unstubAllGlobals();
   });
 
-  /** A room of `total` messages; `after` and `before` page through it as the daemon does */
+  /**
+   * A room of `total` messages, which a message arriving raises; `after` and `before` page
+   * through it as the daemon does
+   */
   const stored = (total: number) => {
     const asked: string[] = [];
+    const held = { asked, total, frame: (() => {}) as ReturnType<typeof fakeNetwork>["frame"] };
     const net = fakeNetwork((url) => {
       if (url.pathname.endsWith("/rooms/joined")) return [];
       if (url.pathname.endsWith("/conversations")) return [];
       if (!url.pathname.endsWith("/messages")) return undefined;
       asked.push(url.search);
       const limit = Number(url.searchParams.get("limit"));
-      const ids = Array.from({ length: total }, (_, n) => n + 1);
+      const ids = Array.from({ length: held.total }, (_, n) => n + 1);
       const after = url.searchParams.get("after");
       if (after !== null) {
         const past = ids.filter((id) => id > Number(after));
@@ -89,26 +93,32 @@ describe("a pane opened at a message", () => {
           gaps: []
         };
       }
-      const before = Number(url.searchParams.get("before") ?? total + 1);
+      const before = Number(url.searchParams.get("before") ?? held.total + 1);
       const up = ids.filter((id) => id < before);
       return { messages: up.slice(-limit).map(message), hasMore: up.length > limit, gaps: [] };
     });
-    return { asked, frame: net.frame };
+    held.frame = net.frame;
+    return held;
   };
   /**
-   * Puts `wait` before every answer about the messages, which it can answer instead; the
-   * network's other answers are left alone
+   * Holds every answer about the messages until `wait` is done, or gives what it answers
+   * instead; the answer is made before the wait, as the room was when it was asked
    */
   const delayed = (wait: (url: URL) => Promise<Response | undefined>) => {
     const network = globalThis.fetch;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input), location.href);
-      if (url.pathname.endsWith("/messages")) {
-        const instead = await wait(url);
-        if (instead) return instead;
-      }
-      return network(input, init);
+      const answer = await network(input, init);
+      if (!url.pathname.endsWith("/messages")) return answer;
+      return (await wait(url)) ?? answer;
     });
+  };
+  /** The live stream, followed by `pane` until the returned function is called */
+  const following = (pane: MessagePane, frame: ReturnType<typeof stored>["frame"]) => {
+    const stop = $effect.root(() => pane.follow());
+    live.start();
+    frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    return stop;
   };
   const ids = (pane: MessagePane) => pane.ordered.map((m) => m.localId);
   const room = { kind: "room", name: "indie" } as const;
@@ -205,9 +215,7 @@ describe("a pane opened at a message", () => {
     const held = new Promise<void>((done) => (release = done));
     delayed(async () => void (await held));
     const pane = new MessagePane(room, () => "me", 150);
-    const stop = $effect.root(() => pane.follow());
-    live.start();
-    frame("hello", { principal: { name: "me", role: "Administrator" } } as never);
+    const stop = following(pane, frame);
     const loading = pane.load();
     frame("rooms.message", { roomName: "indie", message: message(451) });
     await flush();
@@ -216,6 +224,26 @@ describe("a pane opened at a message", () => {
     stop();
     expect(ids(pane)).toEqual(Array.from({ length: 200 }, (_, n) => n + 51));
     expect(pane.hasNewer).toBe(true);
+  });
+
+  it("reads a message that arrives while its pages are read when they reach the newest", async () => {
+    const room450 = stored(450);
+    let release!: () => void;
+    const held = new Promise<void>((done) => (release = done));
+    delayed(async () => void (await held));
+    const pane = new MessagePane(room, () => "me", 400);
+    const stop = following(pane, room450.frame);
+    const loading = pane.load();
+    // both pages are answered and on their way when 451 arrives
+    await flush();
+    room450.total = 451;
+    room450.frame("rooms.message", { roomName: "indie", message: message(451) });
+    await flush();
+    release();
+    await loading;
+    stop();
+    expect(ids(pane).at(-1)).toBe(451);
+    expect(pane.hasNewer).toBe(false);
   });
 
   it("lets the pages around it go when the view is emptied before they come", async () => {
