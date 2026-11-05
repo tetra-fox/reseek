@@ -224,7 +224,7 @@
   <Button
     variant="ghost"
     size="icon-sm"
-    class="row-menu"
+    class="row-action"
     aria-label={`Remove ${nameOf(row, i)}`}
     onclick={() => remove(row)}>
     <Trash2Icon />
@@ -265,7 +265,8 @@
                 .map((part) => part.text)
                 .join("")}>{column.label}</th>
           {/each}
-          {#if !disabled}<th scope="col" class="w-0 p-0"><span class="sr-only">Remove</span></th
+          {#if !disabled}<th scope="col" class="box-content w-control-sm p-0 pr-3"
+              ><span class="sr-only">Remove</span></th
             >{/if}
         </tr>
       </thead>
@@ -273,7 +274,7 @@
         {#each rows as row, i (row.id)}
           <tr
             data-row={row.id}
-            class="group relative border-b align-top last:border-b-0 max-md:flex max-md:flex-col max-md:gap-2 max-md:py-2">
+            class="group border-b align-top last:border-b-0 max-md:flex max-md:flex-col max-md:gap-2 max-md:py-2">
             {#if named}
               <td class="max-md:flex max-md:flex-col max-md:gap-1">
                 <span class="text-xs font-medium text-fg-muted md:hidden">{nameLabel}</span>
@@ -287,7 +288,10 @@
               </td>
             {/each}
             {#if !disabled}
-              <td class="w-0 p-0 max-md:self-end">{@render removeButton(row, i)}</td>
+              <!-- a cell of its own, so the button never covers the field before it -->
+              <td class="box-content w-control-sm p-0 pr-3 max-md:self-end">
+                {@render removeButton(row, i)}
+              </td>
             {/if}
           </tr>
           {#if trouble(row)}

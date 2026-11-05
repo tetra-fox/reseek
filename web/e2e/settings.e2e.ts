@@ -125,6 +125,30 @@ test("sets how a notification is announced, and offers the permission Desktop ne
   ).toBeChecked();
 });
 
+test("a table's Remove button keeps clear of the fields of its row", async ({ page }) => {
+  await login(page, "/system/settings");
+  const table = page.locator('[id="search.filter_presets"]');
+  await table.getByRole("button", { name: "Add to Filter presets" }).click();
+  const row = table.locator("tbody tr").last();
+  await row.getByRole("textbox").last().fill("a filter long enough to reach the end of its field");
+  const remove = row.getByRole("button", { name: /^Remove/ });
+  // on a desktop's table, then stacked in a window narrower than a tablet
+  for (const width of [1280, 600]) {
+    await page.setViewportSize({ width, height: 720 });
+    await row.getByRole("textbox").last().focus();
+    const button = (await remove.boundingBox())!;
+    for (const field of await row.getByRole("textbox").all()) {
+      const box = (await field.boundingBox())!;
+      const apart =
+        button.x >= box.x + box.width ||
+        button.x + button.width <= box.x ||
+        button.y >= box.y + box.height ||
+        button.y + button.height <= box.y;
+      expect(apart, `at ${width} px`).toBe(true);
+    }
+  }
+});
+
 test.describe("at a 24 px text size on a 360 px phone", () => {
   test.use({ viewport: { width: 360, height: 640 } });
 
