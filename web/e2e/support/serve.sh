@@ -10,7 +10,8 @@
 # The daemon's log is kept after the run in target/smoke-logs/<SMOKE_PORT>, for reading a failure.
 set -euo pipefail
 port="${SMOKE_PORT:-5139}"
-target="${CARGO_TARGET_DIR:-$(dirname "$0")/../../../target}"
+# the daemon takes only an absolute log directory
+target="${CARGO_TARGET_DIR:-$(cd "$(dirname "$0")/../../.." && pwd)/target}"
 logs="$target/smoke-logs/$port"
 rm -rf "$logs"
 dir="$(mktemp -d)"
