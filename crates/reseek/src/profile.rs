@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
-use image::{DynamicImage, ImageFormat, ImageReader, Limits, Rgb, RgbImage};
+use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits, Rgb, RgbImage};
 use soulseek_client::LogLimiter;
 use tracing::warn;
 
@@ -101,8 +101,9 @@ pub enum PictureError {
 }
 
 /// `bytes`, a JPEG, PNG, GIF, WebP or BMP image, as a JPEG at most [`LONGEST_SIDE`] pixels on its
-/// longest side. Transparent parts are made white, since a JPEG has no transparency; a GIF
-/// gives its first frame. Decoding and encoding take a while, so this is run off the runtime.
+/// longest side, turned upright as its orientation tag says. Transparent parts are made white,
+/// since a JPEG has no transparency; a GIF gives its first frame. Decoding and encoding take a
+/// while, so this is run off the runtime.
 pub fn reencode(bytes: &[u8]) -> Result<Vec<u8>, PictureError> {
   let mut reader = ImageReader::new(Cursor::new(bytes))
     .with_guessed_format()
@@ -121,8 +122,15 @@ pub fn reencode(bytes: &[u8]) -> Result<Vec<u8>, PictureError> {
   limits.max_image_width = Some(MAX_DECODED_SIDE);
   limits.max_image_height = Some(MAX_DECODED_SIDE);
   limits.max_alloc = Some(MAX_DECODE_ALLOCATION);
-  reader.limits(limits);
-  let image = reader.decode()?;
+  reader.limits(limits.clone());
+  let mut decoder = reader.into_decoder()?;
+  // the decoded image counts against the cap, and what is left of it is the decoder's
+  limits.reserve(decoder.total_bytes())?;
+  decoder.set_limits(limits)?;
+  // a phone stores a photo as the sensor saw it, with a tag saying how to turn it to show it
+  let orientation = decoder.orientation()?;
+  let mut image = DynamicImage::from_decoder(decoder)?;
+  image.apply_orientation(orientation);
   let image = if image.width().max(image.height()) > LONGEST_SIDE {
     image.resize(LONGEST_SIDE, LONGEST_SIDE, FilterType::Lanczos3)
   } else {
@@ -178,6 +186,25 @@ mod tests {
     source.write_to(&mut bmp, ImageFormat::Bmp).unwrap();
     let picture = decoded(&reencode(bmp.get_ref()).unwrap());
     assert_eq!((picture.width(), picture.height()), (16, 8));
+  }
+
+  #[test]
+  fn a_photo_tagged_as_turned_is_kept_upright() {
+    // a big-endian TIFF block with one entry: orientation 6, turn a quarter clockwise to show
+    let exif = [
+      b"MM\0\x2a\0\0\0\x08".as_slice(),
+      &[0, 1],
+      &[0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0],
+      &[0, 0, 0, 0],
+    ]
+    .concat();
+    let stored = RgbImage::from_pixel(40, 20, Rgb([200, 30, 30]));
+    let mut jpeg = Vec::new();
+    let mut encoder = JpegEncoder::new(&mut jpeg);
+    image::ImageEncoder::set_exif_metadata(&mut encoder, exif).unwrap();
+    encoder.encode_image(&stored).unwrap();
+    let picture = decoded(&reencode(&jpeg).unwrap());
+    assert_eq!((picture.width(), picture.height()), (20, 40));
   }
 
   #[test]
