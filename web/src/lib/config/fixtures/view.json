@@ -2168,7 +2168,7 @@
       "kind": {
         "list": "string"
       },
-      "doc": "Aliases of the shares only buddies see, matched ignoring case; trusted buddies see them too. Everyone else is answered as if they were not shared. The server's list also covers a relay agent's shares by their alias; an agent's own list is not used.",
+      "doc": "Aliases of the shares only buddies see, matched ignoring case; trusted buddies see them too. Everyone else is answered as if they were not shared. A buddy is recognized only when they connect from the address the server reports for them, so one on our own network sees what everyone sees. The server's list also covers a relay agent's shares by their alias; an agent's own list is not used.",
       "choices": null,
       "default": [],
       "apply": "live",
@@ -2305,7 +2305,7 @@
       "kind": {
         "list": "string"
       },
-      "doc": "Aliases of the shares only trusted buddies see, matched ignoring case. Everyone else is answered as if they were not shared. The server's list also covers a relay agent's shares by their alias; an agent's own list is not used.",
+      "doc": "Aliases of the shares only trusted buddies see, matched ignoring case. Everyone else is answered as if they were not shared. A buddy is recognized only when they connect from the address the server reports for them, so one on our own network sees what everyone sees. The server's list also covers a relay agent's shares by their alias; an agent's own list is not used.",
       "choices": null,
       "default": [],
       "apply": "live",
