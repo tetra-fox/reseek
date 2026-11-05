@@ -144,7 +144,8 @@ async fn get_profile_picture(
     description = "the image",
     content(
       (api_types::files::FileContent = "image/jpeg"), (api_types::files::FileContent = "image/png"),
-      (api_types::files::FileContent = "image/gif"), (api_types::files::FileContent = "image/webp")
+      (api_types::files::FileContent = "image/gif"), (api_types::files::FileContent = "image/webp"),
+      (api_types::files::FileContent = "image/bmp")
     )
   ),
   responses(

@@ -11808,6 +11808,7 @@ export interface operations {
         /** @description the image */
         requestBody: {
             content: {
+                "image/bmp": components["schemas"]["FileContent"];
                 "image/gif": components["schemas"]["FileContent"];
                 "image/jpeg": components["schemas"]["FileContent"];
                 "image/png": components["schemas"]["FileContent"];

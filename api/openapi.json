@@ -5214,6 +5214,11 @@
         "requestBody": {
           "description": "the image",
           "content": {
+            "image/bmp": {
+              "schema": {
+                "$ref": "#/components/schemas/FileContent"
+              }
+            },
             "image/gif": {
               "schema": {
                 "$ref": "#/components/schemas/FileContent"
