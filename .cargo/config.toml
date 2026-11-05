@@ -5,7 +5,8 @@ debug = "line-tables-only"
 [profile.test]
 debug = "line-tables-only"
 
-# mold links much faster than the default linker; the dev shells carry it
+# mold links much faster than the default linker; the dev shells carry it. A target table applies
+# to every profile, release too, which is fine: the shipped builds leave .cargo out of their sources
 [target.x86_64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
