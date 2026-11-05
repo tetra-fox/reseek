@@ -104,13 +104,12 @@ impl Messaging {
       Ok(id) => *lock(&self.session) = Some(id),
       Err(e) => warn!(error = %e, "session not logged; room history gaps may be missing"),
     }
+    // before the rooms are joined, so the server lists us in them as we are
+    self.status_at_login().await;
     self.rejoin();
     self.watch_conversations();
     let this = self.this();
-    self.tasks.spawn(async move {
-      this.status_at_login().await;
-      this.feed_at_login().await;
-    });
+    self.tasks.spawn(async move { this.feed_at_login().await });
   }
 
   /// The session ended at `now`, with the daemon stopping or with the connection.
