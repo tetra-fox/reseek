@@ -171,7 +171,9 @@
       <time
         class={[
           "pt-px leading-5 whitespace-nowrap text-fg-subtle tabular-nums",
-          notice ? "text-xs" : "invisible text-[0.625rem] group-hover/message:visible"
+          notice
+            ? "text-xs"
+            : "invisible text-[0.625rem] group-focus-within/message:visible group-hover/message:visible"
         ]}
         datetime={m.timestamp}
         title={formatDate(m.timestamp)}>{shortTime(m.timestamp)}</time>
