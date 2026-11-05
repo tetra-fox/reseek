@@ -18,9 +18,21 @@ export type SearchScope = Schemas["SearchScope"];
 /** A search's state names the terminal flag once it is done */
 export const isDone = (state: string) => state.includes("Completed");
 
-/** The scope as the list shows it, null for the whole network */
-export const scopeLabel = (scope: SearchScope): string | null =>
-  scope.type === "network" ? null : `${scope.type}: ${(scope.subjects ?? []).join(", ")}`;
+/** How many of a scope's subjects its label names before it counts the rest */
+const NAMED = 3;
+
+/**
+ * The scope as the list shows it, null for the whole network. A rooms or buddies search names
+ * no one until it starts, when the daemon fills in whom it went to
+ */
+export const scopeLabel = (scope: SearchScope): string | null => {
+  if (scope.type === "network") return null;
+  const subjects = scope.subjects ?? [];
+  if (!subjects.length) return scope.type === "rooms" ? "joined rooms" : scope.type;
+  const named = subjects.slice(0, NAMED).join(", ");
+  const more = subjects.length > NAMED ? ` and ${subjects.length - NAMED} more` : "";
+  return `${scope.type}: ${named}${more}`;
+};
 
 /** What an offer to run a search says */
 export const searchFor = (text: string) => `Search for ${text}`;

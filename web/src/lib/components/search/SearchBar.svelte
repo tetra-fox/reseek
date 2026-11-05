@@ -9,6 +9,7 @@
   import Badge from "#lib/components/ui/Badge.svelte";
   import Button from "#lib/components/ui/Button.svelte";
   import Marked from "#lib/components/ui/Marked.svelte";
+  import Segmented from "#lib/components/ui/Segmented.svelte";
   import * as Suggest from "#lib/components/ui/suggest/suggest.js";
   import UserEntries from "#lib/components/users/UserEntries.svelte";
   import { parseSlsk, slskBrowse } from "#lib/files/slsk.js";
@@ -25,7 +26,8 @@
   import Recent from "./Recent.svelte";
 
   type Props = {
-    /** where the search goes; the whole network when not given */
+    /** where the search goes; when not given, the bar offers the network, the rooms we are in or
+     * our buddies */
     scope?: SearchScope;
     /** drops the scope, back to the whole network */
     onclearscope?: () => void;
@@ -53,18 +55,28 @@
   const link = $derived(parseSlsk(phrase));
   const connected = $derived(app.isServerConnected);
   const scoped = $derived(scope ? scopeLabel(scope) : null);
+  /** where the search goes when the page gives no scope */
+  let reach = $state<"network" | "rooms" | "buddies">("network");
+  const REACH = [
+    { id: "network", label: "Network" },
+    { id: "rooms", label: "Joined rooms" },
+    { id: "buddies", label: "Buddies" }
+  ] as const;
+  const sentTo = $derived<SearchScope | undefined>(
+    scope ?? (reach === "network" ? undefined : { type: reach, subjects: [] })
+  );
   const earlier = $derived(
     bestMatches([...recent.pinned, ...recent.texts], phrase, (t) => t)
       .filter((t) => t !== phrase)
       .slice(0, EARLIER)
   );
-  // a search of one user's shares and a link have no user to offer
-  const finder = new UserFinder(() => (scope || link ? "" : phrase), {
+  // a search of anything but the network and a link have no user to offer
+  const finder = new UserFinder(() => (sentTo || link ? "" : phrase), {
     tab: "shares",
     onmissed: () => (open = true)
   });
 
-  const search = (words: string) => openSearch(words, scope);
+  const search = (words: string) => openSearch(words, sentTo);
 
   const run = () => {
     if (link) {
@@ -105,7 +117,7 @@
       autofocus
       data-lpignore="true"
       aria-label="Search files and users"
-      placeholder="Files and users"
+      placeholder={sentTo ? "Files" : "Files and users"}
       disabled={!connected}
       class="h-11 pl-10 text-base md:text-base">
       <Suggest.Item value={RUN} icon={link ? LinkIcon : SearchIcon}>
@@ -135,6 +147,14 @@
       <SearchIcon class="@min-[16rem]:hidden" /><span class="@max-[16rem]:sr-only">Search</span>
     </Button>
   </div>
+  {#if !scope}
+    <Segmented
+      size="xs"
+      class="self-start"
+      label="Search where"
+      options={REACH}
+      bind:value={reach} />
+  {/if}
   {#if app.state && !connected}
     <p class="text-xs text-fg-muted">Connect to the Soulseek server to search.</p>
   {/if}
