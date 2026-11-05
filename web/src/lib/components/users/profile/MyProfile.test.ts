@@ -170,10 +170,10 @@ describe("your own profile page", () => {
   it("saves interests as they change, each on one list only", async () => {
     session.principal = { name: "me", role: "Administrator" } as never;
     app.state = { user: { username: "me" }, server: { isLoggedIn: true } } as never;
-    const net = fakeNetwork((url, method) => {
+    const net = fakeNetwork((url, method, body) => {
       if (url.pathname.endsWith("/api/v0/options/view")) return fixture;
       if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return own;
-      if (url.pathname.endsWith("/api/v0/interests")) return interests;
+      if (url.pathname.endsWith("/api/v0/interests")) return method === "PUT" ? body : interests;
       return undefined;
     });
     component = mount(MyProfile, { target: document.body });
@@ -189,5 +189,13 @@ describe("your own profile page", () => {
     expect(puts.map((r) => r.body)).toEqual([{ liked: ["dub"], hated: ["polka", "jazz"] }]);
     expect(dislike.value).toBe("");
     expect(document.querySelector('[aria-label="Remove jazz"]')).not.toBeNull();
+
+    // focus stays in the list a chip is taken off, and goes to its box once the list is empty
+    document.querySelector<HTMLButtonElement>('[aria-label="Remove polka"]')!.click();
+    await flush();
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Remove jazz");
+    document.querySelector<HTMLButtonElement>('[aria-label="Remove jazz"]')!.click();
+    await flush();
+    expect(document.activeElement).toBe(dislike);
   });
 });

@@ -1,6 +1,7 @@
 <script lang="ts">
   import PlusIcon from "@lucide/svelte/icons/plus";
   import XIcon from "@lucide/svelte/icons/x";
+  import { tick } from "svelte";
 
   import LoadError from "#lib/components/LoadError.svelte";
   import Badge from "#lib/components/ui/Badge.svelte";
@@ -21,10 +22,23 @@
     interests.add(side, typed[side]);
     typed[side] = "";
   };
+
+  const boxes = $state<Record<Side, HTMLElement | null>>({ liked: null, hated: null });
+  const inputs = $state<Record<Side, HTMLInputElement | null>>({ liked: null, hated: null });
+
+  // the button pressed goes with its chip, so focus moves to the chip that took its place, the
+  // one before it at the end of the list, or the box for adding when the list is empty
+  const remove = async (side: Side, interest: string) => {
+    const at = lists[side].indexOf(interest);
+    interests.remove(side, interest);
+    await tick();
+    const left = boxes[side]?.querySelectorAll<HTMLButtonElement>("li button") ?? [];
+    (left[Math.min(at, left.length - 1)] ?? inputs[side])?.focus();
+  };
 </script>
 
 {#snippet list(side: Side, title: string, adding: string)}
-  <div class="flex min-w-0 flex-col gap-2">
+  <div bind:this={boxes[side]} class="flex min-w-0 flex-col gap-2">
     <h4 class="text-xs font-medium text-fg-muted">{title}</h4>
     {#if lists[side].length}
       <ul class="flex flex-wrap gap-1" aria-label={title}>
@@ -36,7 +50,7 @@
                 <button
                   type="button"
                   aria-label={`Remove ${interest}`}
-                  onclick={() => interests.remove(side, interest)}>
+                  onclick={() => void remove(side, interest)}>
                   <XIcon class="size-3" />
                 </button>
               {/if}
@@ -50,6 +64,7 @@
     {#if !disabled}
       <form class="flex gap-inline" onsubmit={(e) => add(e, side)}>
         <Input
+          bind:ref={inputs[side]}
           class="h-control-sm"
           placeholder={adding}
           aria-label={adding}
