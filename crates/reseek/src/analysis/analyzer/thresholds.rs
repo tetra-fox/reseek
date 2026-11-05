@@ -89,7 +89,7 @@ pub(in crate::analysis) struct Profile {
   pub hz: f64,
   /// how a report names it
   pub name: &'static str,
-  /// the nominal bitrate, in kbit/s
+  /// the highest nominal bitrate cut here, in kbit/s
   pub kbps: u32,
 }
 
@@ -141,9 +141,10 @@ pub(in crate::analysis) const PROFILES: &[Profile] = &[
     name: "mp3 ~224 kbps",
     kbps: 224,
   },
+  // LAME 3.100 cuts 224 kbps here too, so the name says both
   Profile {
     hz: 19_530.0,
-    name: "mp3 ~256 kbps",
+    name: "mp3 ~224-256 kbps",
     kbps: 256,
   },
   Profile {
@@ -170,6 +171,6 @@ pub(in crate::analysis) fn profile_at(hz: f64) -> Option<&'static Profile> {
 pub(in crate::analysis) const GUIDES: &[(f64, &str)] = &[
   (16_000.0, "MP3 128k"),
   (19_000.0, "MP3 192k"),
-  (19_500.0, "MP3 256k"),
+  (19_500.0, "MP3 224-256k"),
   (20_000.0, "MP3 320k / AAC"),
 ];
