@@ -446,6 +446,16 @@
     {/each}
   </div>
 {:else}
+  <!-- folders stay in view while the filter hides every file, and the tree below them fills the
+       screen, so the way back goes above it -->
+  {#if only && allFiles && !shownFiles}
+    <Filter.Empty
+      {filters}
+      total={allFiles}
+      noun={["file", "files"]}
+      refocus={() => tree?.focus()}
+      class="py-4" />
+  {/if}
   <FileTree
     bind:this={tree}
     class={["shadow-card", loading && "opacity-60"]}
@@ -540,18 +550,8 @@
       {/snippet}
     </SelectionBar>
   {/if}
-  {#if lines.every((l) => l.kind === "item" && l.item.kind === "up")}
-    {#if allFiles}
-      <Filter.Empty
-        {filters}
-        total={allFiles}
-        noun={["file", "files"]}
-        refocus={() => tree?.focus()} />
-    {:else}
-      <EmptyRow
-        text={root === "downloads" && !path
-          ? "No finished downloads yet"
-          : "This folder is empty"} />
-    {/if}
+  {#if lines.every((l) => l.kind === "item" && l.item.kind === "up") && !allFiles}
+    <EmptyRow
+      text={root === "downloads" && !path ? "No finished downloads yet" : "This folder is empty"} />
   {/if}
 {/if}
