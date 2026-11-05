@@ -62,7 +62,11 @@ services:
       - /path/to/music:/music:ro
 ```
 
-The container runs as 1000:1000; `PUID` and `PGID` change that. An application directory a container running as root wrote is root's, so give it to the new user once with `chown -R 1000:1000 ./reseek`, or set `PUID` and `PGID` to 0 to keep running as root.
+The container runs as 1000:1000; `PUID` and `PGID` change that, or set both to 0 to run as root. A new `PUID` or `PGID` over an application directory an earlier container wrote, as root or as other ids, gives the new user the directory itself but not the files already in it. The container warns at start when it finds one; give them over once, with your `PUID` and `PGID` in place of these:
+
+```sh
+sudo chown -R 1001:1001 ./reseek
+```
 
 ### Nix
 
