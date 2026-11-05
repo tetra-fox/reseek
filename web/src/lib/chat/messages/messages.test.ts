@@ -46,12 +46,11 @@ describe("the message list's lines", () => {
   });
 
   it("marks where the unread messages start and a day change", () => {
+    // days change at the browser's midnight, so these times are on its clock
+    const local = (day: number, hour: number, minute: number) =>
+      new Date(2026, 9, day, hour, minute).toISOString();
     const lines = layout(
-      [
-        message(1, "2026-10-25T23:59:00Z"),
-        message(2, "2026-10-26T12:00:00Z"),
-        message(3, "2026-10-26T12:01:00Z")
-      ],
+      [message(1, local(25, 23, 59)), message(2, local(26, 12, 0)), message(3, local(26, 12, 1))],
       [],
       3
     );
