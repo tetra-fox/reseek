@@ -20,15 +20,28 @@
 
   const limits = $derived(speedLimitsOf(app.options, app.state));
   const write = $derived(session.can("ReadWrite"));
+  /** how long a switch the daemon took waits for the state frame to say so */
+  const FRAME_WAIT_MS = 5_000;
   /** the choice sent and not yet back in the state frame */
   let sending = $state<boolean | null>(null);
   const alternative = $derived(sending ?? limits.alternative);
+  // the switch shows the choice until the state frame carries it, so it never flicks back
+  $effect(() => {
+    if (sending !== null && limits.alternative === sending) sending = null;
+  });
 
   const choose = async (on: boolean) => {
     sending = on;
     const outcome = await switchSpeedLimits(on);
-    if (!outcome.ok) toast(outcome.error, "error");
-    sending = null;
+    if (!outcome.ok) {
+      toast(outcome.error, "error");
+      sending = null;
+      return;
+    }
+    // a frame that never comes, while the stream is down, leaves the state's answer shown
+    setTimeout(() => {
+      if (sending === on) sending = null;
+    }, FRAME_WAIT_MS);
   };
 </script>
 

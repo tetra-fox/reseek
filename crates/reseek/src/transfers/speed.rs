@@ -4,7 +4,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 use soulseek_client::ClientOptionsPatch;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::api::error::ApiError;
 use crate::app::AppState;
@@ -37,32 +37,43 @@ pub async fn stored(db: &Database) -> Result<bool, DbError> {
   db.read(read).await
 }
 
-/// Puts the alternative speed limits in force, or the normal ones, `by` naming who asked: kept,
-/// shown in the state, and applied to the uploads' buckets and the client.
+/// The patch that gives the client the global limits of the pair `alternative` names.
+fn limits(app: &AppState, alternative: bool) -> Result<ClientOptionsPatch, ApiError> {
+  let wanted =
+    client_options(&app.config.current().values, alternative).map_err(ApiError::internal)?;
+  Ok(ClientOptionsPatch {
+    maximum_upload_speed: Some(wanted.maximum_upload_speed),
+    maximum_download_speed: Some(wanted.maximum_download_speed),
+    ..ClientOptionsPatch::default()
+  })
+}
+
+/// Puts the alternative speed limits in force, or the normal ones, `by` naming who asked: the
+/// client first, then kept, shown in the state and applied to the uploads' buckets. A client or
+/// database that refuses leaves the pair in force as it was.
 pub async fn switch(app: &AppState, alternative: bool, by: &str) -> Result<(), ApiError> {
   let network = &app.network;
   let _reconfiguring = network.reconfiguring().lock().await;
-  app
-    .transfers
-    .write(move |conn| write(conn, alternative))
+  let client = network.client();
+  client
+    .reconfigure_options(limits(app, alternative)?)
     .await
     .map_err(ApiError::internal)?;
+  let kept = app
+    .transfers
+    .write(move |conn| write(conn, alternative))
+    .await;
+  if let Err(e) = kept {
+    let was = app.state.current().alternative_speed_limits;
+    if let Err(back) = client.reconfigure_options(limits(app, was)?).await {
+      warn!(error = %back, "client speed limits not put back after a failed switch");
+    }
+    return Err(ApiError::internal(e));
+  }
   app
     .state
     .update(|state| state.alternative_speed_limits = alternative);
   app.uploads.switch_speed_limits(alternative);
-  let wanted =
-    client_options(&app.config.current().values, alternative).map_err(ApiError::internal)?;
-  let patch = ClientOptionsPatch {
-    maximum_upload_speed: Some(wanted.maximum_upload_speed),
-    maximum_download_speed: Some(wanted.maximum_download_speed),
-    ..ClientOptionsPatch::default()
-  };
-  network
-    .client()
-    .reconfigure_options(patch)
-    .await
-    .map_err(ApiError::internal)?;
   info!(by, alternative, "speed limits switched");
   Ok(())
 }
