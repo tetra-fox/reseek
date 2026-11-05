@@ -203,6 +203,7 @@ export class MessagePane {
     this.hasMore = page.data.hasMore;
     if (this.loaded) this.returned += 1;
     else this.#opened();
+    await this.#reachedNewest();
   };
 
   /**

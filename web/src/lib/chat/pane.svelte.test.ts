@@ -246,6 +246,30 @@ describe("a pane opened at a message", () => {
     expect(pane.hasNewer).toBe(false);
   });
 
+  it("reads a message that arrives while it goes to the newest", async () => {
+    const room450 = stored(450);
+    const pane = new MessagePane(room, () => "me", 150);
+    await pane.load();
+    let release!: () => void;
+    const held = new Promise<void>((done) => (release = done));
+    // only the newest page waits
+    delayed(async (url) => {
+      if (!url.searchParams.has("before") && !url.searchParams.has("after")) await held;
+      return undefined;
+    });
+    const stop = following(pane, room450.frame);
+    const going = pane.latest();
+    await flush();
+    room450.total = 451;
+    room450.frame("rooms.message", { roomName: "indie", message: message(451) });
+    await flush();
+    release();
+    await going;
+    stop();
+    expect(ids(pane).at(-1)).toBe(451);
+    expect(pane.hasNewer).toBe(false);
+  });
+
   it("lets the pages around it go when the view is emptied before they come", async () => {
     stored(450);
     let release!: () => void;
