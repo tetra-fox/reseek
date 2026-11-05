@@ -21,6 +21,8 @@ pub struct Tracked {
   pub users: BTreeMap<String, RoomUser>,
   /// the users' tickers, by username
   pub tickers: BTreeMap<String, String>,
+  /// the users whose tickers were last handed out hidden
+  pub hidden: BTreeSet<String>,
 }
 
 /// A private room we belong to, whether we are in it now or not.
@@ -109,6 +111,7 @@ impl Tracker {
         joined: true,
         users,
         tickers: BTreeMap::new(),
+        hidden: BTreeSet::new(),
       }),
     }
     if let Some(private) = &data.private {
@@ -206,6 +209,13 @@ impl Tracker {
         true
       }
       None => false,
+    }
+  }
+
+  /// Takes `hidden` as the users whose tickers in `room` were last handed out hidden.
+  pub fn handed_out_hidden(&mut self, room: &str, hidden: BTreeSet<String>) {
+    if let Some(tracked) = self.get_mut(room) {
+      tracked.hidden = hidden;
     }
   }
 

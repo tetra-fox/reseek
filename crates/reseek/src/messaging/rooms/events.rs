@@ -1,7 +1,7 @@
 //! What the server tells us about rooms: who joins and leaves, what is said, the tickers, and
 //! the private rooms we belong to. A message is stored before anyone is told of it; one for a
 //! room we are not in is dropped, and one from a user blocked for rooms is stored hidden and
-//! told to no one. A change of a block pushes every room again, with its tickers marked anew.
+//! told to no one. A change of a block pushes again the rooms whose tickers it hides or shows.
 
 use std::collections::BTreeMap;
 
@@ -147,9 +147,9 @@ impl Messaging {
     }
   }
 
-  /// Pushes every room we are in again whenever a block is made, changed or ends, so a wall
-  /// shows the ticker of a user it now hides or no longer hides at once. Every room goes, not
-  /// only those the user is in, since a block naming addresses can hide any member.
+  /// Pushes the rooms whose tickers a block now hides or shows whenever a block is made,
+  /// changed or ends, so their walls follow at once. Every room is checked, not only those the
+  /// user is in, since a block naming addresses can hide any member.
   pub(in crate::messaging) fn follow_blocks(&self) {
     for kind in [EventType::UserBlocked, EventType::UserUnblocked] {
       let messaging = self.this.clone();
@@ -163,21 +163,24 @@ impl Messaging {
     }
   }
 
-  /// Pushes every room we are in as it is now.
+  /// Pushes the rooms we are in whose tickers would be marked otherwise than when they were
+  /// last handed out.
   fn push_rooms_again(&self) {
-    let names: Vec<String> = self
-      .rooms
-      .tracker()
-      .rooms()
-      .iter()
-      .map(|room| room.name.clone())
-      .collect();
-    debug!(
-      rooms = names.len(),
-      "rooms pushed again after a block changed"
-    );
-    for name in names {
-      self.push_room(&name);
+    let moved: Vec<String> = {
+      let tracker = self.rooms.tracker();
+      tracker
+        .rooms()
+        .iter()
+        .filter(|room| self.hidden_of(room.tickers.keys()) != room.hidden)
+        .map(|room| room.name.clone())
+        .collect()
+    };
+    if moved.is_empty() {
+      return;
+    }
+    debug!(rooms = ?moved, "rooms whose tickers a block hides or shows pushed again");
+    for name in &moved {
+      self.push_room(name);
     }
   }
 
@@ -504,6 +507,53 @@ mod tests {
       .await;
     assert_eq!(answer.status, 204);
     wall_says(false).await;
+  }
+
+  #[tokio::test]
+  async fn a_block_that_hides_no_ticker_pushes_no_room() {
+    let app = app(
+      "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n",
+      &[],
+    )
+    .await;
+    let messaging = &app.state.messaging;
+    let data = RoomData {
+      name: "indie".into(),
+      users: Vec::new(),
+      private: None,
+    };
+    messaging.rooms.tracker().joined(&data, "me");
+    let set = Event::RoomTickerAdded {
+      room_name: "indie".into(),
+      ticker: soulseek_proto::server::RoomTicker {
+        username: "mallory".into(),
+        message: "listening".into(),
+      },
+    };
+    messaging.room_event(set).await;
+    let mut stream = app
+      .stream_from(
+        "127.0.0.1:40000",
+        crate::testing::request("GET", "/api/v0/live?topics=rooms", None),
+      )
+      .await;
+    stream.until("hello").await;
+    // eve has no ticker and mallory's block is only for uploads, so neither changes the wall;
+    // the blocks are handled in order, so the first room pushed is the one mallory's hides
+    let blocks = [
+      ("eve", serde_json::json!({ "scopes": ["rooms"] })),
+      ("mallory", serde_json::json!({ "scopes": ["uploads"] })),
+      ("mallory", serde_json::json!({ "scopes": ["rooms"] })),
+    ];
+    for (username, block) in blocks {
+      let path = format!("/api/v0/users/{username}/block");
+      let answer = app
+        .send(crate::testing::request("PUT", &path, Some(block)))
+        .await;
+      assert_eq!(answer.status, 200);
+    }
+    let frame = stream.until("rooms.update").await.pop().unwrap();
+    assert_eq!(frame.data["tickers"][0]["hidden"], true);
   }
 
   #[tokio::test]

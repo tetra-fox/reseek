@@ -11,6 +11,7 @@ pub mod tracker;
 
 pub use events::room_of;
 
+use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -361,13 +362,26 @@ impl Messaging {
       .map_err(unsent)
   }
 
-  /// `room` with the tickers of users whose room messages are hidden marked hidden.
+  /// Of the users with `tickers`, those whose room messages are hidden.
+  pub(super) fn hidden_of<'a>(
+    &self,
+    tickers: impl IntoIterator<Item = &'a String>,
+  ) -> BTreeSet<String> {
+    tickers
+      .into_iter()
+      .filter(|username| self.users.is_blocked(username, None, BlockScope::Rooms))
+      .cloned()
+      .collect()
+  }
+
+  /// `room` with the tickers of users whose room messages are hidden marked hidden, as it is
+  /// handed out; the room keeps who was marked, so a block that changes nothing pushes nothing.
   pub(super) fn marked(&self, mut room: Room) -> Room {
+    let hidden = self.hidden_of(room.tickers.iter().map(|ticker| &ticker.username));
     for ticker in &mut room.tickers {
-      ticker.hidden = self
-        .users
-        .is_blocked(&ticker.username, None, BlockScope::Rooms);
+      ticker.hidden = hidden.contains(&ticker.username);
     }
+    self.rooms.tracker().handed_out_hidden(&room.name, hidden);
     room
   }
 
