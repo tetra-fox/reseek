@@ -57,8 +57,12 @@ export type Drawn<L> = { line: L; key: string; index: number; start: number; siz
 export class ListWindow<L> {
   #virtualizer: Virtualizer<HTMLElement, HTMLElement>;
   #element = $state<HTMLElement | null>(null);
-  /** bumped whenever the virtualizer reports a change, which the derived values below follow */
+  /** bumped once for the changes the virtualizer reported, which the derived values below follow */
   #version = $state(0);
+  /** bumped at the first change the virtualizer reports since the last was taken in */
+  #reported = $state(0);
+  /** a change was reported and not yet taken in */
+  #pending = false;
   /** bumped whenever the options change, after which the virtualizer reads the DOM again */
   #updates = $state(0);
 
@@ -106,7 +110,7 @@ export class ListWindow<L> {
       observeElementRect,
       observeElementOffset,
       scrollToFn: elementScroll,
-      onChange: () => this.#version++
+      onChange: () => this.#report()
     });
     let sizes: unknown;
     let onchange: (() => void) | undefined;
@@ -128,11 +132,7 @@ export class ListWindow<L> {
           ...options,
           count: all.length,
           getItemKey: (index) => key(all[index]),
-          getScrollElement: () => element,
-          onChange: () => {
-            this.#version++;
-            onchange?.();
-          }
+          getScrollElement: () => element
         });
         onchange = changed;
         shown = all;
@@ -165,7 +165,25 @@ export class ListWindow<L> {
         kept = null;
       });
     });
+    // every line drawn in one update is measured as it is attached, each a change; taken in at
+    // once, the lines are laid out again once rather than once per line
+    $effect(() => {
+      void this.#reported;
+      untrack(() => {
+        if (!this.#pending) return;
+        this.#pending = false;
+        this.#version++;
+        onchange?.();
+      });
+    });
     $effect(() => this.#virtualizer._didMount());
+  }
+
+  /** Notes a change the virtualizer reported, for the effect above to take in */
+  #report() {
+    if (this.#pending) return;
+    this.#pending = true;
+    this.#reported++;
   }
 
   /** The first line in view that `anchor` accepts, by key, and how far below the view's top it starts */
