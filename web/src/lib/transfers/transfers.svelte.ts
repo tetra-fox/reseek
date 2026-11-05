@@ -72,12 +72,16 @@ export class Transfers {
   }
 
   load = async () => {
+    const turn = this.list.reading();
     const outcome =
       this.direction === "download"
         ? await call(() => api.GET("/api/v0/transfers/downloads"))
         : await call(() => api.GET("/api/v0/transfers/uploads"));
+    // a reload that began after this one answers with what is newer
+    if (!this.list.latest(turn)) return;
     if (!outcome.ok) return loadFailed(this, outcome.error);
-    this.list.reconcile(outcome.data.flatMap((u) => u.directories.flatMap((d) => d.files)));
+    const files = outcome.data.flatMap((u) => u.directories.flatMap((d) => d.files));
+    this.list.reconcile(files, turn);
     this.loaded = true;
     this.error = "";
   };

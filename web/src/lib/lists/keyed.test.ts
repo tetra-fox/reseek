@@ -27,6 +27,24 @@ describe("same and patch", () => {
   });
 });
 
+describe("a reload's answer", () => {
+  it("leaves the rows frames added, patched or removed while it was read", () => {
+    const list = new Keyed<Row>((row) => row.id);
+    list.reconcile(rows(["1", "one", 1], ["2", "two", 2], ["3", "six", 3]));
+    const turn = list.reading();
+    list.upsert({ id: "1", name: "one", size: 10 });
+    list.upsert({ id: "4", name: "new", size: 4 });
+    list.remove("2");
+    // read before those frames; only row 3 changed since the last answer
+    list.reconcile(rows(["1", "one", 1], ["2", "two", 2], ["3", "six", 30]), turn);
+    expect(list.rows).toEqual(rows(["1", "one", 10], ["3", "six", 30], ["4", "new", 4]));
+
+    // the next answer is taken whole
+    list.reconcile(rows(["1", "one", 11], ["4", "new", 4]), list.reading());
+    expect(list.rows).toEqual(rows(["1", "one", 11], ["4", "new", 4]));
+  });
+});
+
 describe("a keyed list on screen", () => {
   let component: ReturnType<typeof mount> | null = null;
   afterEach(() => {

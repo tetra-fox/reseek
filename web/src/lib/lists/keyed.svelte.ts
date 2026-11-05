@@ -29,7 +29,9 @@ export const patch = <T extends object>(target: T, source: T) => {
  * Rows kept by a stable id, for lists rendered with `{#each list.rows as row (key)}`. A row that
  * changes is patched in place: the same object, with only the fields that differ written, so its
  * DOM nodes stay and only the changed text updates. A push frame upserts one row; a poll's whole
- * answer goes through `reconcile`. While the user interacts with a list (`interaction.frozen`),
+ * answer goes through `reconcile`. A reload takes a turn from `reading` before it asks: its answer
+ * may have been read before frames that arrive while it is on its way, so the rows those frames
+ * changed keep their change. While the user interacts with a list (`interaction.frozen`),
  * removals wait, marked in `removed`, and happen when it ends
  */
 export class Keyed<T extends object> {
@@ -39,6 +41,10 @@ export class Keyed<T extends object> {
   removed = new SvelteSet<string>();
   /** the rows in the order they were first added */
   rows = $derived([...this.#rows.values()]);
+  /** the turn of the last reload that began */
+  #turn = 0;
+  /** the keys added, patched or removed since that reload began, until its answer is taken */
+  #changed: Set<string> | null = null;
 
   constructor(key: (row: T) => string) {
     this.#key = key;
@@ -55,6 +61,7 @@ export class Keyed<T extends object> {
   /** Adds a row, or patches the one with its key; gives back the row the list keeps */
   upsert(row: T): T {
     const key = this.#key(row);
+    this.#changed?.add(key);
     const kept = this.#rows.get(key);
     if (kept) {
       patch(kept, row);
@@ -68,6 +75,7 @@ export class Keyed<T extends object> {
 
   /** Removes a row, or marks it removed until the interaction ends */
   remove(key: string) {
+    this.#changed?.add(key);
     if (!this.#rows.has(key)) return;
     if (!interaction.frozen) {
       this.#rows.delete(key);
@@ -81,15 +89,41 @@ export class Keyed<T extends object> {
     });
   }
 
-  /** Makes the list hold exactly `rows`: patches what changed, adds what is new, removes the rest */
-  reconcile(rows: T[]) {
-    const keep = new Set<string>();
-    for (const row of rows) keep.add(this.#key(this.upsert(row)));
-    for (const key of this.#rows.keys()) if (!keep.has(key)) this.remove(key);
+  /** Begins a reload of the whole list: gives back its turn, for `latest` and `reconcile` */
+  reading(): number {
+    this.#changed = new Set();
+    return ++this.#turn;
   }
 
+  /** Whether no reload began after the one with `turn`, so its answer is the newest coming */
+  latest(turn: number) {
+    return turn === this.#turn;
+  }
+
+  /**
+   * Makes the list hold exactly `rows`: patches what changed, adds what is new, removes the rest.
+   * With the `turn` of the latest reload, `rows` is its answer, and a row added, patched or
+   * removed since that reload began is left as it is
+   */
+  reconcile(rows: T[], turn?: number) {
+    const since = turn === undefined ? null : this.#changed;
+    if (turn !== undefined) this.#changed = null;
+    const keep = new Set<string>();
+    for (const row of rows) {
+      const key = this.#key(row);
+      keep.add(key);
+      if (!since?.has(key)) this.upsert(row);
+    }
+    for (const key of this.#rows.keys()) {
+      if (!keep.has(key) && !since?.has(key)) this.remove(key);
+    }
+  }
+
+  /** Empties the list; the answer of a reload that began before is not taken */
   clear() {
     this.#rows.clear();
     this.removed.clear();
+    this.#changed = null;
+    this.#turn += 1;
   }
 }
