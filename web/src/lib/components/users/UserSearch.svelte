@@ -1,6 +1,7 @@
 <script lang="ts">
   import SearchIcon from "@lucide/svelte/icons/search";
 
+  import { FILTERING } from "#lib/components/ui/filter/filter.js";
   import * as Suggest from "#lib/components/ui/suggest/suggest.js";
   import { UserFinder } from "#lib/users/finder.svelte.js";
 
@@ -38,6 +39,7 @@
   type="search"
   autocomplete="off"
   placeholder="Username, tag or note"
-  aria-label="Search users">
+  aria-label="Search users"
+  class={[text && FILTERING]}>
   <UserEntries {finder} {text} />
 </Suggest.Box>
