@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { toasts } from "#lib/feedback/toast.svelte.js";
-import { live } from "#lib/live/live.svelte.js";
+import { DEBOUNCE_MS, live } from "#lib/live/live.svelte.js";
 import { conversation } from "#lib/testing/fixtures.js";
 import { flush } from "#lib/testing/flush.js";
 import { fakeNetwork } from "#lib/testing/network.js";
@@ -109,6 +109,57 @@ describe("the chat store", () => {
     answer(undefined);
     await flush();
     expect(chat.latestNotice?.localId).toBe(3);
+  });
+
+  it("reads a notice a stream that resumed to add the conversations never sends", async () => {
+    const notice = {
+      localId: 3,
+      id: 3,
+      timestamp: "2026-10-26T10:00:00Z",
+      username: "server",
+      direction: "In",
+      message: "user bob has not enabled private room add",
+      isAcknowledged: false,
+      wasReplayed: false
+    } as const;
+    let stored: typeof notice | null = null;
+    const net = fakeNetwork((url) => {
+      if (url.pathname.endsWith("/conversations/server")) {
+        return stored
+          ? { ...conversation("server"), isServerNotice: true, lastMessage: stored }
+          : undefined;
+      }
+      if (url.pathname.endsWith("/conversations") || url.pathname.endsWith("/rooms/joined")) {
+        return [];
+      }
+      return undefined;
+    });
+    vi.useFakeTimers();
+    const greet = (resumed: boolean) =>
+      net.frame("hello", { principal: { name: "me", role: "Administrator" }, resumed } as never);
+    const release = live.retain("application");
+    try {
+      live.start();
+      greet(false);
+      chat.start();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(chat.latestNotice).toBeNull();
+      // the notice's frames go to the stream without the conversations, and the one that adds
+      // them resumes past the notice's own frame
+      stored = notice;
+      net.frame("application.server_message", {
+        message: notice.message,
+        receivedAt: notice.timestamp
+      });
+      net.frame("metrics.update", {} as never);
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+      greet(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(chat.latestNotice?.localId).toBe(3);
+    } finally {
+      release();
+      vi.useRealTimers();
+    }
   });
 
   it("says why each read failed when both did", async () => {

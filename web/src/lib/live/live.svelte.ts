@@ -59,6 +59,9 @@ export class Live {
   #deps: Deps;
   #wanted = new Map<Topic, number>();
   #handlers = new Map<FrameType, Set<(data: unknown) => void>>();
+  #added = new Set<(topics: Topic[]) => void>();
+  /** the topics of the stream that last greeted, whose frames are being handed over */
+  #following: Topic[] = [];
   #stream: Stream | null = null;
   #replacing: Stream | null = null;
   #lastId: string | null = null;
@@ -96,6 +99,7 @@ export class Live {
   stop() {
     this.#shut();
     this.#lastId = null;
+    this.#following = [];
     this.principal = null;
   }
 
@@ -121,6 +125,15 @@ export class Live {
     const wrapped = handler as (data: unknown) => void;
     set.add(wrapped);
     return () => set.delete(wrapped);
+  }
+
+  /**
+   * Calls `handler` with the topics a resumed stream follows that the one before it did not:
+   * nothing was sent for them before the resume point, so their stores read again
+   */
+  onAdded(handler: (topics: Topic[]) => void): () => void {
+    this.#added.add(handler);
+    return () => this.#added.delete(handler);
   }
 
   /** The topics asked for right now, in the order the stream asks for them */
@@ -183,6 +196,11 @@ export class Live {
       this.status = "connected";
       // the topics changed while this stream was opening
       if (stream.topics.join(",") !== this.topics.join(",")) this.#topicsChanged();
+      const added = frame.data.resumed
+        ? stream.topics.filter((topic) => !this.#following.includes(topic))
+        : [];
+      this.#following = stream.topics;
+      if (added.length) for (const handler of this.#added) handler(added);
     }
     if (id !== null) this.#lastId = id;
     const handlers = this.#handlers.get(frame.type);

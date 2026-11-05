@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Live } from "./live.svelte";
+import { Live, type Topic } from "./live.svelte";
 import { SILENCE_MS } from "./stream";
 
 /** One request the fake server got, with the body it answers through */
@@ -162,15 +162,19 @@ describe("Live", () => {
     expect(server.opened).toHaveLength(2);
   });
 
-  it("opens a stream for new topics before closing the old one", async () => {
+  it("opens a stream for new topics before closing the old one, and says which it added", async () => {
     const server = fakeServer();
     const live = make(server.fetcher);
     live.retain("application");
     const removed: string[] = [];
     live.on("users.removed", (data) => removed.push(data.username));
+    const added: Topic[][] = [];
+    live.onAdded((topics) => added.push(topics));
     live.start();
     server.opened[0].send(hello(1) + frame(2, "users.removed", { username: "old" }));
     await settle();
+    // a stream that did not resume sends the snapshots of all its topics
+    expect(added).toEqual([]);
 
     const release = live.retain("users");
     await vi.advanceTimersByTimeAsync(249);
@@ -188,6 +192,7 @@ describe("Live", () => {
     expect(server.opened[0].signal.aborted).toBe(true);
     expect(removed).toEqual(["old", "twice"]);
     expect(live.status).toBe("connected");
+    expect(added).toEqual([["users"]]);
 
     // a release and a retain within the debounce open nothing
     release();

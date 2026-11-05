@@ -90,6 +90,9 @@ class Chat {
       void notifier.roomMessage(roomName, message, room?.notify ?? "mentions", this.openPane);
     });
     live.on("chat.unread", (counts) => (this.unread = counts));
+    live.onAdded((topics) => {
+      if (topics.includes("conversations") || topics.includes("rooms")) void this.load();
+    });
   }
 
   /** The total for the navigation's badge: unread private messages and room mentions */

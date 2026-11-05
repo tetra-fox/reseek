@@ -59,9 +59,14 @@ class Activity {
   follow() {
     if (this.#release) return this.#release;
     const release = live.retain("activity");
+    // a stream that resumed to follow the log carries nothing from before its resume point
+    const added = live.onAdded((topics) => {
+      if (topics.includes("activity")) void this.load();
+    });
     void this.load();
     this.#release = () => {
       release();
+      added();
       this.#release = null;
     };
     return this.#release;

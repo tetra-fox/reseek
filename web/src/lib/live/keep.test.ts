@@ -8,6 +8,8 @@ import { RECONCILE_MS } from "./keep.svelte";
 import { FALLBACK_MS, live } from "./live.svelte";
 
 const HELLO = 'event: hello\ndata: {"principal":{"name":"a","role":"ReadOnly"}}\n\n';
+const RESUMED =
+  'event: hello\ndata: {"principal":{"name":"a","role":"ReadOnly"},"resumed":true}\n\n';
 
 describe("keepCurrent", () => {
   let send: (text: string) => void;
@@ -118,11 +120,29 @@ describe("keepCurrent", () => {
     expect(reload).toHaveBeenCalledTimes(2);
   });
 
+  it("reloads when a stream that resumed starts following its topic", async () => {
+    const release = live.retain("application");
+    try {
+      live.start();
+      send(`id: 1\n${HELLO}`);
+      await vi.advanceTimersByTimeAsync(0);
+      component = mount(Keep, { target: document.body, props: { reload, topic: "transfers" } });
+      flushSync();
+      await vi.advanceTimersByTimeAsync(300);
+      expect(reload).not.toHaveBeenCalled();
+      send(`id: 1\n${RESUMED}`);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(reload).toHaveBeenCalledOnce();
+    } finally {
+      release();
+    }
+  });
+
   it("does not reload on the greeting of a stream reopened for other topics", async () => {
     await connected();
     const release = live.retain("search");
     await vi.advanceTimersByTimeAsync(300);
-    send(HELLO);
+    send(RESUMED);
     await vi.advanceTimersByTimeAsync(0);
     flushSync();
     expect(live.topics).toEqual(["search", "transfers"]);

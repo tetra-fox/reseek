@@ -30,7 +30,14 @@ class Marks {
   /** Keeps the marks current while the returned function has not been called */
   retain(): () => void {
     if (this.#holders++ === 0) {
-      this.#stops = [live.retain("transfers"), live.on("files.analysis", () => void this.#read())];
+      this.#stops = [
+        live.retain("transfers"),
+        live.on("files.analysis", () => void this.#read()),
+        // a stream that resumed to follow transfers carries no report finished before its resume point
+        live.onAdded((topics) => {
+          if (topics.includes("transfers")) void this.#read();
+        })
+      ];
       void this.#read();
     }
     return () => {
