@@ -14,11 +14,13 @@
   import { app } from "#lib/app.svelte.js";
   import InspectorToggle from "#lib/components/inspector/InspectorToggle.svelte";
   import Button from "#lib/components/ui/Button.svelte";
+  import * as Filter from "#lib/components/ui/filter/filter.js";
   import Input from "#lib/components/ui/Input.svelte";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import SplitButton from "#lib/components/ui/SplitButton.svelte";
   import { formatBytes, formatSpeed } from "#lib/format.js";
+  import { type ActiveFilter, TEXT_FILTER } from "#lib/lists/filtered.js";
   import { session } from "#lib/session.svelte.js";
   import { type BulkAction, SCOPES } from "#lib/transfers/bulk.js";
   import { COLUMNS, columnsFor } from "#lib/transfers/grid/columns.js";
@@ -32,6 +34,8 @@
     view: ViewSettings;
     /** how many transfers each state chip stands for, and all of them */
     counts: Record<ChipId | "all", number>;
+    /** the filters on, the state and analysis chips' and the text's */
+    filters: ActiveFilter[];
     /** how many downloads each analysis chip stands for; null on the uploads screen */
     markCounts: Record<MarkFilter, number> | null;
     text: string;
@@ -47,6 +51,7 @@
     direction,
     view,
     counts,
+    filters,
     markCounts,
     text = $bindable(),
     disabled,
@@ -83,6 +88,9 @@
   );
   const sortLabel = $derived(SORTS.find((s) => s.id === view.sort.id)?.label ?? view.sort.id);
 
+  /** the filters behind the phone's Filters button: the chips', not the text box's beside it */
+  const chipFilters = $derived(filters.filter((f) => f.id !== TEXT_FILTER));
+
   const reset = () => Object.assign(view, defaults(direction));
 
   const toggleChip = (id: ChipId) => {
@@ -97,47 +105,35 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <div class="flex flex-wrap items-center gap-inline">
-    <div class="flex flex-wrap gap-1" role="group" aria-label="States">
-      <Button
-        variant={view.filters.states.length ? "outline" : "secondary"}
-        size="sm"
-        aria-pressed={!view.filters.states.length}
-        onclick={() => (view.filters.states = [])}>
-        All <span class="text-fg-muted tabular-nums">{counts.all}</span>
-      </Button>
-      {#each STATE_CHIPS as chip (chip.id)}
-        {@const on = view.filters.states.includes(chip.id)}
-        <Button
-          variant={on ? "secondary" : "outline"}
-          size="sm"
-          aria-pressed={on}
-          onclick={() => toggleChip(chip.id)}>
-          {chip.label} <span class="text-fg-muted tabular-nums">{counts[chip.id]}</span>
-        </Button>
-      {/each}
-    </div>
-    {#if markCounts && analyzerOffered()}
-      <div class="flex flex-wrap gap-1" role="group" aria-label="Analysis">
-        {#each MARK_FILTERS as f (f.id)}
-          {@const on = view.filters.analysis === f.id}
-          <Button
-            variant={on ? "secondary" : "outline"}
-            size="sm"
-            aria-pressed={on}
-            onclick={() => (view.filters.analysis = on ? null : f.id)}>
-            {f.label} <span class="text-fg-muted tabular-nums">{markCounts[f.id]}</span>
-          </Button>
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <Filter.Panel filters={chipFilters}>
+      <Filter.Group label="State">
+        {#each STATE_CHIPS as chip (chip.id)}
+          <Filter.Chip
+            pressed={view.filters.states.includes(chip.id)}
+            count={counts[chip.id]}
+            onclick={() => toggleChip(chip.id)}>{chip.label}</Filter.Chip>
         {/each}
-      </div>
-    {/if}
+      </Filter.Group>
+      {#if markCounts && analyzerOffered()}
+        <Filter.Group label="Analysis">
+          {#each MARK_FILTERS as f (f.id)}
+            {@const on = view.filters.analysis === f.id}
+            <Filter.Chip
+              pressed={on}
+              count={markCounts[f.id]}
+              onclick={() => (view.filters.analysis = on ? null : f.id)}>{f.label}</Filter.Chip>
+          {/each}
+        </Filter.Group>
+      {/if}
+    </Filter.Panel>
     <div class="relative min-w-48 flex-1">
       <Input
         bind:value={text}
         type="search"
         aria-label="Filter"
         placeholder={TRANSFER_PLACEHOLDER}
-        class="h-control-sm" />
+        class={["h-control-sm", text.trim() && Filter.FILTERING]} />
     </div>
   </div>
   <div class="flex flex-wrap items-center gap-inline">

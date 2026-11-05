@@ -1,6 +1,7 @@
-import { type Mark, markToken, passes } from "#lib/analysis/marks.js";
+import { type Mark, MARK_FILTERS, markToken, passes } from "#lib/analysis/marks.js";
 import { fileMatches, filterPlaceholder, parseFilters } from "#lib/files/filters.js";
 import { getDirectoryName } from "#lib/format.js";
+import { type ActiveFilter, typedFilter } from "#lib/lists/filtered.js";
 import { type ChipId, STATE_CHIPS, type Transfer } from "#lib/transfers/states.js";
 import {
   type FolderNode,
@@ -9,6 +10,8 @@ import {
   itemsUnder,
   type TreeLine
 } from "#lib/tree/folders.js";
+
+import type { ViewSettings } from "./settings.svelte";
 
 export type GroupBy = "user" | "folder" | "batch" | "flat";
 
@@ -59,6 +62,25 @@ export const textFilter = (text: string, marks?: MarkLookup): ((t: Transfer) => 
 export const inStates = (chips: ChipId[]) => {
   const tests = STATE_CHIPS.filter((c) => chips.includes(c.id)).map((c) => c.test);
   return (t: Transfer) => !tests.length || tests.some((test) => test(t.state));
+};
+
+/**
+ * The filters narrowing the transfers screen, each taken off alone: the state chips in their
+ * order, the analysis chip, then the text, which `clearText` empties
+ */
+export const activeFilters = (
+  filters: ViewSettings["filters"],
+  text: string,
+  clearText: () => void
+): ActiveFilter[] => {
+  const on: ActiveFilter[] = STATE_CHIPS.filter((c) => filters.states.includes(c.id)).map((c) => ({
+    id: `state:${c.id}`,
+    label: c.label,
+    clear: () => (filters.states = filters.states.filter((s) => s !== c.id))
+  }));
+  const mark = MARK_FILTERS.find((f) => f.id === filters.analysis);
+  if (mark) on.push({ id: "analysis", label: mark.label, clear: () => (filters.analysis = null) });
+  return [...on, ...typedFilter(text, clearText)];
 };
 
 /** A group header in the table: a user, a folder of a user, or a batch */

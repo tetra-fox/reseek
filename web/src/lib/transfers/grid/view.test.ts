@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { transfer } from "#lib/testing/fixtures.js";
 
-import { layout, textFilter } from "./view";
+import type { ViewSettings } from "./settings.svelte";
+import { activeFilters, layout, textFilter } from "./view";
 
 describe("the transfers view", () => {
   it("filters by user, folder, extension and words", () => {
@@ -79,5 +80,25 @@ describe("the transfers view", () => {
       ["B", 1, 2]
     ]);
     expect(groups[1].folder).toBe("x\\A");
+  });
+
+  it("names each filter on and takes each off alone", () => {
+    const filters: ViewSettings["filters"] = { states: ["errored", "active"], analysis: "fake" };
+    let text = " flac ";
+    const on = () => activeFilters(filters, text, () => (text = ""));
+    // in the order the chips stand in, then the analysis, then the text
+    expect(on().map((f) => f.label)).toEqual([
+      "Active",
+      "Failed",
+      "Marked fake",
+      "Matching \u201cflac\u201d"
+    ]);
+    on()[1].clear();
+    expect(filters.states).toEqual(["active"]);
+    on()[1].clear();
+    expect(filters.analysis).toBeNull();
+    on()[1].clear();
+    expect(text).toBe("");
+    expect(on().map((f) => f.id)).toEqual(["state:active"]);
   });
 });

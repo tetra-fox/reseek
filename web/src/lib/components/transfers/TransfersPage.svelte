@@ -12,10 +12,12 @@
   import Button from "#lib/components/ui/Button.svelte";
   import ConfirmDialog from "#lib/components/ui/ConfirmDialog.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import * as Filter from "#lib/components/ui/filter/filter.js";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { formatBytes, getDirectoryName, getFileName, plural } from "#lib/format.js";
   import { inspector, useInspector } from "#lib/inspector/inspector.svelte.js";
+  import type { Noun } from "#lib/lists/filtered.js";
   import { heldOrder } from "#lib/lists/interaction.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
   import { session } from "#lib/session.svelte.js";
@@ -25,6 +27,7 @@
   import { transferGrid } from "#lib/transfers/grid/grid.svelte.js";
   import { views } from "#lib/transfers/grid/settings.svelte.js";
   import {
+    activeFilters,
     inStates,
     type Item,
     layout,
@@ -131,6 +134,16 @@
       markLookup && view.filters.analysis ? marked(markLookup, view.filters.analysis) : null;
     return all.filter((t) => byState(t) && (!byMark || byMark(t)) && (!byText || byText(t)));
   });
+
+  const filters = $derived(
+    activeFilters(view.filters, text, () => {
+      typed = "";
+      text = "";
+    })
+  );
+  const noun = $derived<Noun>(
+    direction === "download" ? ["download", "downloads"] : ["upload", "uploads"]
+  );
 
   // while the user holds the table still, rows keep their places and new ones go below
   const hold = heldOrder<Item>((item) => item.key);
@@ -263,12 +276,22 @@
   {direction}
   {view}
   {counts}
+  {filters}
   {markCounts}
   bind:text={typed}
   disabled={working || !filtered.length}
   onbulk={bulk}
   onadd={() => (adding = true)}
   onmessage={() => (messaging = true)} />
+
+{#if store.loaded}
+  <Filter.Summary
+    {filters}
+    shown={filtered.length}
+    total={all.length}
+    {noun}
+    refocus={() => table?.focus()} />
+{/if}
 
 {#if !store.loaded && store.error}
   <ErrorSegment caption={store.error} retry={() => void store.load()} retryLabel="Retry" />
@@ -287,6 +310,13 @@
     description={direction === "download"
       ? "Downloads start from search results, from a user's shares, or from Add with a path or link."
       : undefined} />
+{:else if !filtered.length}
+  <Filter.Empty
+    {filters}
+    total={all.length}
+    {noun}
+    refocus={() => table?.focus()}
+    class="rounded-card border bg-surface shadow-card" />
 {:else}
   <TransferTable
     bind:this={table}
