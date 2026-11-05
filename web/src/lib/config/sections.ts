@@ -322,6 +322,12 @@ export const sections: Section[] = [
           ...AT_LEAST_1,
           placeholder: NO_LIMIT
         },
+        {
+          key: "transfers.download.alt_speed_limit",
+          label: "Alternative download speed limit (KiB/s)",
+          ...AT_LEAST_1,
+          placeholder: NO_LIMIT
+        },
         { key: "transfers.download.request_style", label: "Download request style" },
         { key: "transfers.download.retry.attempts", label: "Download attempts", ...AT_LEAST_1 },
         { key: "transfers.download.retry.delay", label: "First retry delay" },
@@ -345,6 +351,12 @@ export const sections: Section[] = [
         {
           key: "transfers.upload.speed_limit",
           label: "Upload speed limit (KiB/s)",
+          ...AT_LEAST_1,
+          placeholder: NO_LIMIT
+        },
+        {
+          key: "transfers.upload.alt_speed_limit",
+          label: "Alternative upload speed limit (KiB/s)",
           ...AT_LEAST_1,
           placeholder: NO_LIMIT
         }

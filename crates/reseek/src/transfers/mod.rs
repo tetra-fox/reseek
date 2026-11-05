@@ -13,6 +13,7 @@ pub mod prune;
 pub mod record;
 pub mod removal;
 pub mod service;
+pub mod speed;
 pub mod store;
 pub mod uploads;
 
@@ -23,10 +24,11 @@ use rusqlite::types::Type;
 use crate::db::{self, Database, DbError, Location, Schema};
 pub use record::{COLUMNS, Record, transfer};
 
-/// `transfers.db`: the `Transfers` table and each transfer's state history.
+/// `transfers.db`: the `Transfers` table, each transfer's state history, and which speed limits
+/// are in force.
 pub static SCHEMA: Schema = db::schema!(
   "transfers",
-  ["0001_initial", "0002_jobs", "0003_fold_batches"]
+  ["0001_initial", "0002_jobs", "0003_fold_batches", "0004_speed_limits"]
 );
 
 /// Opens `transfers.db` in `location`.

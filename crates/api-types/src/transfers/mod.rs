@@ -182,6 +182,14 @@ pub struct ClientTransfers {
   pub downloads: Vec<serde_json::Value>,
 }
 
+/// Which speed limits are in force, the body of `PUT /transfers/speed-limits`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeedLimitsSwitch {
+  /// the alternative speed limits in place of the normal ones
+  pub alternative: bool,
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

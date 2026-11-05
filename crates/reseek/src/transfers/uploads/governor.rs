@@ -1,5 +1,6 @@
 //! The upload speed limits of the groups: one bucket per group, filled every 100 ms with its
-//! group's `speed_limit`, `privileged` with `transfers.upload.speed_limit`. Every chunk of an
+//! group's `speed_limit`, `privileged` with the global upload limit in force, the alternative
+//! one while the alternative limits are switched on. Every chunk of an
 //! upload asks the bucket of the group its user is in at that moment, then the client's own
 //! bucket for every upload, so the slower limit governs. What the group's bucket granted and
 //! the chunk did not move, because the client's limit took less or the socket took less, goes
@@ -9,6 +10,7 @@
 //! once; a chunk already waiting on an old bucket is served by it within 100 ms.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
 use soulseek_client::{Governor as ChunkGovernor, Reporter, TokenBucket};
@@ -29,17 +31,20 @@ pub struct Governor {
   buckets: RwLock<Arc<HashMap<String, Arc<TokenBucket>>>>,
   /// what the buckets were made from
   built_from: Mutex<(Groups, Option<u32>)>,
+  /// the alternative speed limits are in force
+  alternative: AtomicBool,
 }
 
-/// One bucket per group for `options`, each full.
-fn buckets(options: &Options) -> HashMap<String, Arc<TokenBucket>> {
+/// One bucket per group for `options`, each full, with the alternative global limit when
+/// `alternative`.
+fn buckets(options: &Options, alternative: bool) -> HashMap<String, Arc<TokenBucket>> {
   let groups = &options.transfers.groups;
   // an unset limit is the client's no limit
   let bucket = |limit: Option<u32>| Arc::new(TokenBucket::for_speed(limit.unwrap_or(0)));
   let mut buckets = HashMap::from([
     (
       PRIVILEGED.to_string(),
-      bucket(options.transfers.upload.speed_limit),
+      bucket(options.transfers.upload_speed_limit(alternative)),
     ),
     (
       DEFAULT_GROUP.to_string(),
@@ -56,33 +61,42 @@ fn buckets(options: &Options) -> HashMap<String, Arc<TokenBucket>> {
   buckets
 }
 
-/// What made the buckets: the groups and the global speed.
-fn made_from(options: &Options) -> (Groups, Option<u32>) {
+/// What made the buckets: the groups and the global speed in force.
+fn made_from(options: &Options, alternative: bool) -> (Groups, Option<u32>) {
   (
     options.transfers.groups.clone(),
-    options.transfers.upload.speed_limit,
+    options.transfers.upload_speed_limit(alternative),
   )
 }
 
 impl Governor {
-  /// The buckets for `options`.
+  /// The buckets for `options`, with the normal speed limits in force.
   pub fn new(options: &Options) -> Self {
     Self {
-      buckets: RwLock::new(Arc::new(buckets(options))),
-      built_from: Mutex::new(made_from(options)),
+      buckets: RwLock::new(Arc::new(buckets(options, false))),
+      built_from: Mutex::new(made_from(options, false)),
+      alternative: AtomicBool::new(false),
     }
   }
 
   /// Makes every bucket again, full, when a group or the global speed changed.
   pub fn configure(&self, options: &Options) {
     let mut built_from = lock(&self.built_from);
-    let wanted = made_from(options);
+    let alternative = self.alternative.load(Ordering::Acquire);
+    let wanted = made_from(options, alternative);
     if *built_from == wanted {
       return;
     }
-    *self.buckets.write().unwrap_or_else(PoisonError::into_inner) = Arc::new(buckets(options));
+    *self.buckets.write().unwrap_or_else(PoisonError::into_inner) =
+      Arc::new(buckets(options, alternative));
     *built_from = wanted;
     debug!("upload speed limits of the groups made again");
+  }
+
+  /// Puts the alternative speed limits in force, or the normal ones, for `options`.
+  pub fn switch(&self, alternative: bool, options: &Options) {
+    self.alternative.store(alternative, Ordering::Release);
+    self.configure(options);
   }
 
   /// The bucket of `group`, or the default group's for a group without one.

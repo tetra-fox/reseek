@@ -19,6 +19,11 @@ pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Re
     at_least("transfers.upload.slots", upload.slots, 1),
   );
   check_speed("transfers.upload.speed_limit", upload.speed_limit, report);
+  check_speed(
+    "transfers.upload.alt_speed_limit",
+    upload.alt_speed_limit,
+    report,
+  );
   check_limits("transfers.upload.limits", &upload.limits, report);
 
   let download = &transfers.download;
@@ -29,6 +34,11 @@ pub(super) fn check(transfers: &Transfers, case_sensitive: bool, report: &mut Re
   check_speed(
     "transfers.download.speed_limit",
     download.speed_limit,
+    report,
+  );
+  check_speed(
+    "transfers.download.alt_speed_limit",
+    download.alt_speed_limit,
     report,
   );
   let retry = &download.retry;

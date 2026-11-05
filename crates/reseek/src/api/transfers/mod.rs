@@ -1,9 +1,10 @@
-//! The transfers routes: downloads under `/transfers/downloads` and uploads under
-//! `/transfers/uploads`. Reading takes the ReadOnly role, changing anything ReadWrite, bumping
-//! an upload Administrator. A user literally named `all`, `batches`, `bulk` or `list` is reached
-//! through the listings, not the per-user routes.
+//! The transfers routes: downloads under `/transfers/downloads`, uploads under
+//! `/transfers/uploads` and the switch of the speed limits. Reading takes the ReadOnly role,
+//! changing anything ReadWrite, bumping an upload Administrator. A user literally named `all`,
+//! `batches`, `bulk` or `list` is reached through the listings, not the per-user routes.
 
 mod downloads;
+mod speed;
 mod uploads;
 
 use api_types::transfers::TransferListQuery;
@@ -18,7 +19,9 @@ const PAGE_MAX: u32 = 1000;
 
 /// The transfers routes.
 pub fn routes() -> OpenApiRouter<AppState> {
-  downloads::routes().merge(uploads::routes())
+  downloads::routes()
+    .merge(uploads::routes())
+    .merge(speed::routes())
 }
 
 /// Refuses a flat listing's page size outside 1 to 1000.

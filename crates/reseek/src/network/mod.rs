@@ -118,6 +118,9 @@ pub struct Network {
   mapper: PortMapper,
   /// whether other users can connect to us
   reachability: Arc<Reachability>,
+  /// held while the client's options are patched, so an option change and a switch of the
+  /// speed limits each read the other's outcome
+  reconfiguring: tokio::sync::Mutex<()>,
 }
 
 impl Network {
@@ -134,7 +137,8 @@ impl Network {
     shutdown: CancellationToken,
   ) -> Result<Arc<Self>, String> {
     let startup = config.current();
-    let mut client_options = options::client_options(&startup.values)?;
+    let alternative = state.current().alternative_speed_limits;
+    let mut client_options = options::client_options(&startup.values, alternative)?;
     client_options.validate().map_err(|e| e.to_string())?;
     let searches = IncomingSearches::new(&startup.values, shutdown.clone());
     Ok(Arc::new_cyclic(|this| {
@@ -175,6 +179,7 @@ impl Network {
         state,
         excluded: Mutex::new(Arc::from(Vec::new())),
         statistics: tokio::sync::Mutex::new(None),
+        reconfiguring: tokio::sync::Mutex::new(()),
         events: Mutex::new(Some(events)),
         following: Mutex::new(None),
         drained: CancellationToken::new(),
@@ -194,6 +199,11 @@ impl Network {
   /// The Soulseek client, for the operations the engines start.
   pub fn client(&self) -> &Client {
     &self.client
+  }
+
+  /// Held while the client's options are patched.
+  pub fn reconfiguring(&self) -> &tokio::sync::Mutex<()> {
+    &self.reconfiguring
   }
 
   /// The loop that keeps the server connection up.

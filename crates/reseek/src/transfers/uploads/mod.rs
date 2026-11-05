@@ -307,6 +307,13 @@ impl Uploads {
     true
   }
 
+  /// Puts the alternative speed limits in force for uploads, or the normal ones.
+  pub fn switch_speed_limits(&self, alternative: bool) {
+    self
+      .governor
+      .switch(alternative, &self.config.current().values);
+  }
+
   /// Cancels every upload to `username` still waiting in the queue, ending each with
   /// "Blocked"; for a user just blocked from uploads.
   pub fn blocked(&self, username: &str) {

@@ -283,6 +283,7 @@
     },
     "transfers": {
       "download": {
+        "alt_speed_limit": null,
         "destination": {
           "exists": "rename",
           "permissions": {
@@ -366,6 +367,7 @@
         "queue_refresh": "2m"
       },
       "upload": {
+        "alt_speed_limit": null,
         "limits": {
           "daily": {
             "failures": null,
@@ -3022,6 +3024,22 @@
       "notApplied": null,
       "entries": []
     },
+    "transfers.download.alt_speed_limit": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_DOWNLOAD_ALT_SPEED_LIMIT",
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Total download speed limit in KiB/s while the alternative limits are on. No limit when not set.",
+      "choices": null,
+      "default": null,
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
     "transfers.download.destination.exists": {
       "source": {
         "layer": "default"
@@ -3844,6 +3862,22 @@
       "doc": "Interval at which the page requests the queue position of visible remotely queued downloads. Minimum: 30 seconds.",
       "choices": null,
       "default": "2m",
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "transfers.upload.alt_speed_limit": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_UPLOAD_ALT_SPEED_LIMIT",
+      "cliFlag": null,
+      "kind": "integer",
+      "doc": "Total upload speed limit in KiB/s while the alternative limits are on. No limit when not set.",
+      "choices": null,
+      "default": null,
       "apply": "live",
       "secret": false,
       "notApplied": null,

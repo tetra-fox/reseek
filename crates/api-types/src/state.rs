@@ -35,6 +35,8 @@ pub struct State {
   pub shares: SharesState,
   /// the chat rooms we are in
   pub rooms: Vec<String>,
+  /// the alternative speed limits are in force in place of the normal ones
+  pub alternative_speed_limits: bool,
   /// the outcome of the last configuration reload
   pub configuration: ConfigurationState,
   /// where finished and unfinished downloads are kept on this machine

@@ -194,6 +194,10 @@ impl AppState {
     let transfers = crate::transfers::open(&location)
       .await
       .map_err(|e| StartError::Open(format!("transfers.db: {e}")))?;
+    let alternative = crate::transfers::speed::stored(&transfers)
+      .await
+      .map_err(|e| StartError::Open(format!("transfers.db: {e}")))?;
+    state.update(|state| state.alternative_speed_limits = alternative);
     let auth = Arc::new(auth);
     let files = Files::start(
       config.clone(),
@@ -308,6 +312,7 @@ impl AppState {
       shutdown.clone(),
     );
     network.attach_uploads(uploads.clone());
+    uploads.switch_speed_limits(alternative);
     let clock = Clock::new(shutdown.clone());
     let mut services = Services::unavailable();
     services.transfers = Arc::new(Transfers {

@@ -57,7 +57,9 @@ async fn apply(app: &AppState, applied: &Options, current: &Arc<Loaded<Options>>
     || applied.transfers.download != values.transfers.download
     || applied.chat.accept_private_room_invitations != values.chat.accept_private_room_invitations
   {
-    let patch = match options::patch(applied, values) {
+    let _reconfiguring = network.reconfiguring().lock().await;
+    let alternative = app.state.current().alternative_speed_limits;
+    let patch = match options::patch(applied, values, alternative) {
       Ok(patch) => patch,
       Err(e) => {
         warn!(error = e, "Failed to apply option update");

@@ -164,6 +164,7 @@ fn initial(loaded: &Loaded<Options>, paths: &Paths) -> State {
       files: 0,
     },
     rooms: Vec::new(),
+    alternative_speed_limits: false,
     configuration: configuration(loaded),
     directories: DirectoriesState {
       downloads: paths.downloads.display().to_string(),

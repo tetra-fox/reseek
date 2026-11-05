@@ -12362,6 +12362,50 @@
         }
       }
     },
+    "/api/v0/transfers/speed-limits": {
+      "put": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Puts the alternative speed limits in force, or the normal ones. The choice lasts across\nrestarts and shows as `alternativeSpeedLimits` in the state.",
+        "operationId": "switch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeedLimitsSwitch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "switched"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/transfers/uploads": {
       "get": {
         "tags": [
@@ -23895,6 +23939,19 @@
           }
         }
       },
+      "SpeedLimitsSwitch": {
+        "type": "object",
+        "description": "Which speed limits are in force, the body of `PUT /transfers/speed-limits`.",
+        "required": [
+          "alternative"
+        ],
+        "properties": {
+          "alternative": {
+            "type": "boolean",
+            "description": "the alternative speed limits in place of the normal ones"
+          }
+        }
+      },
       "State": {
         "type": "object",
         "description": "The daemon's state, as `GET /application` returns it and `application.state` frames carry\nit.",
@@ -23910,6 +23967,7 @@
           "distributedNetwork",
           "shares",
           "rooms",
+          "alternativeSpeedLimits",
           "configuration",
           "directories",
           "startedAt",
@@ -23917,6 +23975,10 @@
           "listeners"
         ],
         "properties": {
+          "alternativeSpeedLimits": {
+            "type": "boolean",
+            "description": "the alternative speed limits are in force in place of the normal ones"
+          },
           "configuration": {
             "$ref": "#/components/schemas/ConfigurationState",
             "description": "the outcome of the last configuration reload"

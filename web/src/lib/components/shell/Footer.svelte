@@ -14,6 +14,8 @@
   import { REPOSITORY } from "#lib/shell/project.js";
   import { shortcutAria, shortcutText } from "#lib/ui/keys.js";
 
+  import SpeedLimits from "./SpeedLimits.svelte";
+
   const connected = $derived(app.isServerConnected);
   const username = $derived(app.state?.user.username);
   const away = $derived(app.state?.user.status === "Away");
@@ -75,7 +77,7 @@
       </button>
     {/snippet}
   </Tooltip>
-  <span class="flex shrink-0 items-center gap-3 md:gap-4">
+  <SpeedLimits>
     <span class="flex shrink-0 items-center gap-1.5" aria-label="Downloads">
       <ArrowDownIcon class="size-3.5 text-info" />
       <span class="font-mono whitespace-pre tabular-nums">{downloads.speed}</span>
@@ -88,7 +90,7 @@
       <span class="text-fg-muted max-md:hidden"
         >{uploads.active} active · {uploads.queued} queued</span>
     </span>
-  </span>
+  </SpeedLimits>
   <button
     type="button"
     aria-pressed={activityPrefs.open}

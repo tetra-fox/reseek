@@ -28,9 +28,10 @@ const HEADERS: u32 = 40;
 /// The probes a distributed connection's keep-alive sends before it gives up.
 const DISTRIBUTED_PROBES: u32 = 3;
 
-/// The client options `options` call for, without the resolvers, which are the daemon's own
-/// and never change. Fails only for options that did not pass validation.
-pub fn client_options(options: &Options) -> Result<ClientOptions, String> {
+/// The client options `options` call for, with the alternative speed limits in force when
+/// `alternative`, without the resolvers, which are the daemon's own and never change. Fails
+/// only for options that did not pass validation.
+pub fn client_options(options: &Options, alternative: bool) -> Result<ClientOptions, String> {
   let soulseek = &options.soulseek;
   let transfers = &options.transfers;
   let listen_ip_address: IpAddr = soulseek
@@ -54,8 +55,8 @@ pub fn client_options(options: &Options) -> Result<ClientOptions, String> {
       .slots
       .unwrap_or(ClientOptions::default().maximum_concurrent_downloads),
     // the client takes 0 as no limit
-    maximum_upload_speed: transfers.upload.speed_limit.unwrap_or(0),
-    maximum_download_speed: transfers.download.speed_limit.unwrap_or(0),
+    maximum_upload_speed: transfers.upload_speed_limit(alternative).unwrap_or(0),
+    maximum_download_speed: transfers.download_speed_limit(alternative).unwrap_or(0),
     deduplicate_search_requests: true,
     message_timeout: MESSAGE_TIMEOUT,
     transfer_response_timeout: soulseek.connection.timeout.transfer_response,
@@ -89,10 +90,15 @@ pub fn client_options(options: &Options) -> Result<ClientOptions, String> {
 }
 
 /// The patch that moves a client running with the options for `previous` to the options for
-/// `current`: each option that differs, and the speed limits always.
-pub fn patch(previous: &Options, current: &Options) -> Result<ClientOptionsPatch, String> {
-  let from = client_options(previous)?;
-  let to = client_options(current)?;
+/// `current`, the alternative speed limits in force when `alternative`: each option that
+/// differs, and the speed limits always.
+pub fn patch(
+  previous: &Options,
+  current: &Options,
+  alternative: bool,
+) -> Result<ClientOptionsPatch, String> {
+  let from = client_options(previous, alternative)?;
+  let to = client_options(current, alternative)?;
   fn changed<T: PartialEq>(from: T, to: T) -> Option<T> {
     (from != to).then_some(to)
   }
@@ -270,10 +276,13 @@ mod tests {
 
   #[test]
   fn connection_sets_follow_the_kind_of_connection() {
-    let client = client_options(&options(
-      "[soulseek.connection]\nmtu = 1500\n[soulseek.connection.buffer]\ntransfer = 100000\n\
+    let client = client_options(
+      &options(
+        "[soulseek.connection]\nmtu = 1500\n[soulseek.connection.buffer]\ntransfer = 100000\n\
        write_queue = 75\n[soulseek.connection.timeout]\ninactivity = \"20s\"\ntransfer = \"45s\"\n",
-    ))
+      ),
+      false,
+    )
     .unwrap();
     let server = &client.server_connection_options;
     assert_eq!(server.inactivity_timeout, None);
@@ -307,16 +316,19 @@ mod tests {
 
   #[test]
   fn unset_limits_are_none_for_the_client() {
-    let client = client_options(&Options::default()).unwrap();
+    let client = client_options(&Options::default(), false).unwrap();
     assert_eq!(
       (client.maximum_upload_speed, client.maximum_download_speed),
       (0, 0)
     );
     assert_eq!(client.maximum_concurrent_uploads, 10);
     assert_eq!(client.maximum_concurrent_downloads, i32::MAX as u32);
-    let limited = client_options(&options(
-      "[transfers.upload]\nspeed_limit = 100\nslots = 3\n[transfers.download]\nslots = 4\n",
-    ))
+    let limited = client_options(
+      &options(
+        "[transfers.upload]\nspeed_limit = 100\nslots = 3\n[transfers.download]\nslots = 4\n",
+      ),
+      false,
+    )
     .unwrap();
     assert_eq!(limited.maximum_upload_speed, 100);
     assert_eq!(limited.maximum_concurrent_uploads, 3);
@@ -326,15 +338,15 @@ mod tests {
   /// A client started with the options of `previous` and patched to `current` runs with the
   /// options a client started with `current` has.
   async fn patched_like_started(previous: &Options, current: &Options) {
-    let client = Client::new(client_options(previous).unwrap()).unwrap();
+    let client = Client::new(client_options(previous, false).unwrap()).unwrap();
     let reconnect = client
-      .reconfigure_options(patch(previous, current).unwrap())
+      .reconfigure_options(patch(previous, current, false).unwrap())
       .await
       .unwrap();
     assert!(!reconnect, "a disconnected client never needs a reconnect");
     assert_eq!(
       format!("{:?}", client.options()),
-      format!("{:?}", client_options(current).unwrap())
+      format!("{:?}", client_options(current, false).unwrap())
     );
     client.dispose().await;
   }
@@ -362,12 +374,12 @@ mod tests {
   #[test]
   fn only_what_changed_is_patched_but_the_speeds_always_are() {
     let previous = Options::default();
-    let patch = patch(&previous, &previous).unwrap();
+    let patch = patch(&previous, &previous, false).unwrap();
     assert_eq!(patch.maximum_upload_speed, Some(0));
     assert_eq!(patch.maximum_download_speed, Some(0));
     assert!(patch.listen_port.is_none() && patch.server_connection_options.is_none());
     let current = options("[soulseek.connection.timeout]\ntransfer = \"40s\"\n");
-    let patch = super::patch(&previous, &current).unwrap();
+    let patch = super::patch(&previous, &current, false).unwrap();
     assert!(patch.transfer_connection_options.is_some());
     assert!(
       patch.server_connection_options.is_none(),

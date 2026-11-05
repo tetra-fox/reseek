@@ -2354,6 +2354,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/transfers/speed-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Puts the alternative speed limits in force, or the normal ones. The choice lasts across
+         *     restarts and shows as `alternativeSpeedLimits` in the state.
+         */
+        put: operations["switch"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/transfers/uploads": {
         parameters: {
             query?: never;
@@ -6936,11 +6956,18 @@ export interface components {
              */
             unread: number[][];
         };
+        /** @description Which speed limits are in force, the body of `PUT /transfers/speed-limits`. */
+        SpeedLimitsSwitch: {
+            /** @description the alternative speed limits in place of the normal ones */
+            alternative: boolean;
+        };
         /**
          * @description The daemon's state, as `GET /application` returns it and `application.state` frames carry
          *     it.
          */
         State: {
+            /** @description the alternative speed limits are in force in place of the normal ones */
+            alternativeSpeedLimits: boolean;
             /** @description the outcome of the last configuration reload */
             configuration: components["schemas"]["ConfigurationState"];
             /** @description the loop that reconnects to the server */
@@ -16989,6 +17016,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    switch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpeedLimitsSwitch"];
+            };
+        };
+        responses: {
+            /** @description switched */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
             };
         };
     };

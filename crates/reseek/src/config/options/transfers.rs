@@ -24,6 +24,28 @@ pub struct Transfers {
   pub ui: TransfersUi,
 }
 
+impl Transfers {
+  /// The total upload speed limit in KiB/s, the alternative one when `alternative`. No limit
+  /// when `None`.
+  pub fn upload_speed_limit(&self, alternative: bool) -> Option<u32> {
+    if alternative {
+      self.upload.alt_speed_limit
+    } else {
+      self.upload.speed_limit
+    }
+  }
+
+  /// The total download speed limit in KiB/s, the alternative one when `alternative`. No limit
+  /// when `None`.
+  pub fn download_speed_limit(&self, alternative: bool) -> Option<u32> {
+    if alternative {
+      self.download.alt_speed_limit
+    } else {
+      self.download.speed_limit
+    }
+  }
+}
+
 /// Uploads to other users.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
 #[serde(default)]
@@ -35,6 +57,10 @@ pub struct Upload {
   /// Total upload speed limit in KiB/s. No limit when not set.
   #[cascade(env = "RESEEK_UPLOAD_SPEED_LIMIT", cli = "--upload-speed-limit")]
   pub speed_limit: Option<u32>,
+  /// Total upload speed limit in KiB/s while the alternative limits are on. No limit when not
+  /// set.
+  #[cascade(env = "RESEEK_UPLOAD_ALT_SPEED_LIMIT")]
+  pub alt_speed_limit: Option<u32>,
   /// Per-user queue and download limits, unless the group of the user sets its own.
   pub limits: Limits,
 }
@@ -44,6 +70,7 @@ impl Default for Upload {
     Self {
       slots: 10,
       speed_limit: None,
+      alt_speed_limit: None,
       limits: Limits::default(),
     }
   }
@@ -85,6 +112,10 @@ pub struct Download {
   /// Total download speed limit in KiB/s. No limit when not set.
   #[cascade(env = "RESEEK_DOWNLOAD_SPEED_LIMIT", cli = "--download-speed-limit")]
   pub speed_limit: Option<u32>,
+  /// Total download speed limit in KiB/s while the alternative limits are on. No limit when
+  /// not set.
+  #[cascade(env = "RESEEK_DOWNLOAD_ALT_SPEED_LIMIT")]
+  pub alt_speed_limit: Option<u32>,
   /// How a file is requested: `queue`, the queue request every current client sends, or
   /// `transfer_request`, the older transfer request that the peer answers.
   pub request_style: RequestStyle,
