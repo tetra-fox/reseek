@@ -29,8 +29,9 @@ describe("a settings section", () => {
     return target;
   };
 
-  it("renders a row for every option of every section, with its help and control", () => {
-    for (const section of sections) {
+  it.each(sections.map((s) => [s.id, s] as const))(
+    "renders a row for every option of the %s section, with its help and control",
+    (_, section) => {
       const target = render(section);
       // a label names its control, but for a group of controls, which carries the name itself
       const labels = [...target.querySelectorAll("label")].map((l) => l.getAttribute("for"));
@@ -41,18 +42,20 @@ describe("a settings section", () => {
             : f.key
         )
       );
+      // the section is all the document holds; jsdom finds an id from an index, while a
+      // selector walks the whole section for every field
       for (const field of section.fields) {
         // the help reads as written, with what is between backticks set as code
         const parts = helpParts(view.fields[field.key].doc);
-        const help = target.querySelector(`[id="${field.key}-help"]`)!;
+        const help = document.getElementById(`${field.key}-help`)!;
         expect(help.textContent).toContain(parts.map((p) => p.text).join(""));
         expect([...help.querySelectorAll("code")].map((c) => c.textContent)).toEqual(
           expect.arrayContaining(parts.filter((p) => p.code).map((p) => p.text))
         );
-        expect(target.querySelector(`[id="${field.key}"]`)).not.toBeNull();
+        expect(document.getElementById(field.key)).not.toBeNull();
       }
     }
-  });
+  );
 
   it("shows where each value comes from and when a change applies", () => {
     const v = structuredClone(view);
