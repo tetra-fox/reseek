@@ -66,16 +66,16 @@ fn file_name(name: &str, os: Os) -> String {
 /// `pattern` with its `${NAME}`s filled in, made safe. Fails only when the result would leave
 /// the downloads directory, which making it safe rules out.
 pub fn subdirectory(pattern: Option<&str>, source: &Source<'_>, os: Os) -> Result<String, String> {
-  let pattern = pattern.unwrap_or(DEFAULT_PATTERN);
-  if pattern.eq_ignore_ascii_case(DOWNLOADS_ITSELF) {
-    return Ok(String::new());
-  }
   if let Some(destination) = source
     .destination
     .filter(|destination| !destination.trim().is_empty())
   {
     // the download's own destination is taken as written, its `${NAME}`s left as they are
     return contained(creatable_path(destination, os), os);
+  }
+  let pattern = pattern.unwrap_or(DEFAULT_PATTERN);
+  if pattern.eq_ignore_ascii_case(DOWNLOADS_ITSELF) {
+    return Ok(String::new());
   }
   let source_path = directory_name_safely(source.filename, false, true, os).unwrap_or_default();
   let source_directory = source_path
@@ -261,6 +261,11 @@ mod tests {
       unix("${SOURCE_DIRECTORY}", &explicit),
       "Artist/_/Album/${SOURCE_USERNAME}",
       "taken as written, made safe"
+    );
+    assert_eq!(
+      unix("{}", &explicit),
+      "Artist/_/Album/${SOURCE_USERNAME}",
+      "the download's own destination is taken under the pattern {{}} too"
     );
     let found = SearchFound {
       id: "0b5d7f91-1111-4222-8333-944455566677".parse().unwrap(),
