@@ -11786,7 +11786,13 @@ export interface operations {
     };
     get_profile_picture: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description the picture's tag, so the URL changes whenever the picture does and a cached copy is never
+                 *     stale; the server does not read it
+                 */
+                v?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -18530,6 +18536,11 @@ export interface operations {
             query?: {
                 /** @description the username, exactly */
                 username?: string;
+                /**
+                 * @description the picture's tag, so the URL changes whenever the picture does and a cached copy is never
+                 *     stale; the server does not read it
+                 */
+                v?: string;
             };
             header?: never;
             path: {

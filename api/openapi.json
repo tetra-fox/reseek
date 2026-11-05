@@ -5176,6 +5176,17 @@
         ],
         "summary": "The picture other users are sent with our profile.",
         "operationId": "get_profile_picture",
+        "parameters": [
+          {
+            "name": "v",
+            "in": "query",
+            "description": "the picture's tag, so the URL changes whenever the picture does and a cached copy is never\nstale; the server does not read it",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -14785,6 +14796,15 @@
             "name": "username",
             "in": "query",
             "description": "the username, exactly",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "v",
+            "in": "query",
+            "description": "the picture's tag, so the URL changes whenever the picture does and a cached copy is never\nstale; the server does not read it",
             "required": false,
             "schema": {
               "type": "string"

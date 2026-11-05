@@ -1,9 +1,18 @@
 //! Our own profile: the text and picture other users are sent when they ask for our user info.
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::options::OptionSource;
+
+/// The query a picture URL carries, ours or another user's.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct PictureVersion {
+  /// the picture's tag, so the URL changes whenever the picture does and a cached copy is never
+  /// stale; the server does not read it
+  pub v: Option<String>,
+}
 
 /// Where the text and the picture of our profile come from.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

@@ -120,6 +120,7 @@ async fn put_profile(
 /// The picture other users are sent with our profile.
 #[utoipa::path(
   get, path = "/profile/picture", tag = "profile",
+  params(api_types::profile::PictureVersion),
   responses(
     (status = 200, content_type = "image/*", body = api_types::files::FileContent),
     (status = 401, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody)
