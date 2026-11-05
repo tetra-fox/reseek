@@ -39,10 +39,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-      # purging old caches needs `actions: write`
       - uses: ./.github/actions/setup-nix
-        with:
-          purge: "false"
       # the hash of the web dependencies follows the lockfile; nix reports it when it is empty
       - name: Update the web dependency hash
         id: hash

@@ -1,0 +1,31 @@
+# after each ci run, every ref keeps only its newest nix store cache, so old stores do not crowd
+# the current ones out of the cache quota. deleting caches needs `actions: write`, which is why
+# this job is apart from ci: it checks nothing out and runs no repository or dependency code
+name: cache
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions:
+  actions: write
+
+# each run trims every ref, so a queued run replaces an older queued one
+concurrency:
+  group: ${{ github.workflow }}
+
+jobs:
+  trim:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete all but the newest nix store cache of each ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          # the key prefix the setup-nix action saves under
+          PREFIX: nix-${{ runner.os }}-
+        run: |
+          gh cache list --key "$PREFIX" --limit 1000 --json id,ref,createdAt \
+            --jq 'group_by(.ref)[] | sort_by(.createdAt) | .[:-1][] | .id' \
+            | xargs -r -n1 gh cache delete
