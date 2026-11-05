@@ -1,4 +1,5 @@
 import { goto } from "$app/navigation";
+import { flushSync } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "#lib/app.svelte.js";
@@ -85,6 +86,19 @@ describe("the Analysis page's slots", () => {
       "#/analysis?a=downloads%3Aone.flac&b=downloads%3Atwo.flac",
       { reset: false, replace: true }
     );
+  });
+
+  it("follows the address without undoing a change before its address lands", () => {
+    const address = $state({ query: new URLSearchParams("a=downloads:one.flac") });
+    const stop = $effect.root(() => {
+      $effect(() => slots.follow(address.query));
+    });
+    flushSync();
+    expect(slots.a?.target).toEqual(file("one.flac"));
+    slots.clear("a");
+    flushSync();
+    expect(slots.a).toBeNull();
+    stop();
   });
 
   it("sends only a file the analyzer reads", () => {
