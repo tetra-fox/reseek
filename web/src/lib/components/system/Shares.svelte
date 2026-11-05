@@ -13,20 +13,25 @@
   import Dialog from "#lib/components/ui/Dialog.svelte";
   import EmptyRow from "#lib/components/ui/EmptyRow.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
+  import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Spinner from "#lib/components/ui/Spinner.svelte";
+  import { editability, fileOf } from "#lib/config/editability.js";
+  import { valueAt } from "#lib/config/sections.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
+  import { toast } from "#lib/feedback/toast.svelte.js";
   import { plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
+  import { live } from "#lib/live/live.svelte.js";
   import { Loader } from "#lib/loader.svelte.js";
   import { href } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
-  import { contentsText } from "#lib/system/shares.js";
+  import { contentsText, VISIBILITY, withVisibility } from "#lib/system/shares.js";
 
   import AddShare from "./AddShare.svelte";
 
@@ -94,7 +99,70 @@
     });
   });
 
-  const COLUMNS = "6rem minmax(12rem,2fr) 6rem 6rem minmax(6rem,1fr) minmax(6rem,1fr)";
+  // who sees each share is two lists of aliases in the options, changed here where the options
+  // can be saved to their file
+  const BUDDIES_KEY = "shares.buddies_only";
+  const TRUSTED_KEY = "shares.trusted_only";
+  const admin = $derived(session.can("Administrator"));
+  const view = new Loader(() => call(() => api.GET("/api/v0/options/view")));
+  $effect(() => {
+    if (admin) untrack(() => void view.load());
+  });
+  $effect(() =>
+    live.on("application.options", () => {
+      if (admin) void view.load();
+      void shares.load();
+    })
+  );
+  const settable = $derived.by(() => {
+    const data = view.data;
+    if (!data || valueAt(data.values, "remote_configuration") !== true) return false;
+    const file = fileOf(data, BUDDIES_KEY);
+    return (
+      file === fileOf(data, TRUSTED_KEY) &&
+      [BUDDIES_KEY, TRUSTED_KEY].every((key) => editability(data, key, "page").mode === "save")
+    );
+  });
+  const VISIBILITIES = (["everyone", "buddies", "trusted"] as const).map((value) => ({
+    value,
+    label: VISIBILITY[value]
+  }));
+  const setVisibility = async (r: Row, to: Schemas["ShareVisibility"]) => {
+    const data = view.data;
+    if (!data || to === r.visibility) return;
+    const lists = withVisibility(
+      {
+        buddies: (valueAt(data.values, BUDDIES_KEY) ?? []) as string[],
+        trusted: (valueAt(data.values, TRUSTED_KEY) ?? []) as string[]
+      },
+      r.alias,
+      to
+    );
+    const file = fileOf(data, BUDDIES_KEY);
+    const outcome = await call(() =>
+      api.PATCH("/api/v0/options/file", {
+        body: {
+          file,
+          revision: data.files.find((f) => f.name === file)?.revision ?? null,
+          set: { [BUDDIES_KEY]: lists.buddies, [TRUSTED_KEY]: lists.trusted },
+          unset: []
+        }
+      })
+    );
+    if (!outcome.ok) {
+      toast(outcome.error, "error");
+      // a file changed on disk is read again, so a second try goes through
+      return void view.load();
+    }
+    // every share on any host with the alias, as the daemon matches it
+    for (const row of rows.rows)
+      if (row.alias.toLowerCase() === r.alias.toLowerCase())
+        rows.upsert({ ...row, visibility: to });
+    void view.load();
+  };
+
+  const COLUMNS =
+    "6rem minmax(12rem,2fr) 6rem 6rem minmax(6rem,1fr) minmax(6rem,1fr) minmax(9rem,10rem)";
 </script>
 
 <div class="flex flex-wrap items-center gap-inline">
@@ -174,7 +242,7 @@
           role="row"
           class="grid min-w-max gap-2 border-b bg-surface-muted px-4 py-1.5 text-xs font-medium text-fg-muted"
           style:grid-template-columns={COLUMNS}>
-          {#each ["Host", "Local path", "Folders", "Files", "Alias", "Remote path"] as h (h)}
+          {#each ["Host", "Local path", "Folders", "Files", "Alias", "Remote path", "Visible to"] as h (h)}
             <span role="columnheader">{h}</span>
           {/each}
         </div>
@@ -210,6 +278,17 @@
             <span role="gridcell" class="tabular-nums">{r.files?.toLocaleString() ?? "?"}</span>
             <span role="gridcell" class="truncate">{r.alias}</span>
             <span role="gridcell" class="truncate font-mono text-xs">{r.remotePath}</span>
+            <span role="gridcell">
+              {#if settable}
+                <Select
+                  class="h-control-sm w-full"
+                  aria-label={`Who sees ${r.alias}`}
+                  bind:value={() => r.visibility, (to) => void setVisibility(r, to)}
+                  options={VISIBILITIES} />
+              {:else}
+                {VISIBILITY[r.visibility]}
+              {/if}
+            </span>
           </div>
         {:else}
           <EmptyRow text="No shares configured" />

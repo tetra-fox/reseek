@@ -29,3 +29,30 @@ export const contentsText = (share: Schemas["Share"], directories: Schemas["Dire
       return [swapStart(dir.name, share.remotePath, share.localPath), ...files, ""].join("\n");
     })
     .join("\n");
+
+/** How a share's visibility is named */
+export const VISIBILITY: Record<Schemas["ShareVisibility"], string> = {
+  everyone: "Everyone",
+  buddies: "Buddies",
+  trusted: "Trusted buddies"
+};
+
+/** The lists of `shares.buddies_only` and `shares.trusted_only` */
+export type VisibilityLists = { buddies: string[]; trusted: string[] };
+
+/**
+ * The lists with the share `alias` made visible to `to`: its entries, matched ignoring case as
+ * the daemon matches them, leave both lists, and it joins the one `to` names
+ */
+export const withVisibility = (
+  lists: VisibilityLists,
+  alias: string,
+  to: Schemas["ShareVisibility"]
+): VisibilityLists => {
+  const other = (a: string) => a.toLowerCase() !== alias.toLowerCase();
+  const buddies = lists.buddies.filter(other);
+  const trusted = lists.trusted.filter(other);
+  if (to === "buddies") buddies.push(alias);
+  if (to === "trusted") trusted.push(alias);
+  return { buddies, trusted };
+};

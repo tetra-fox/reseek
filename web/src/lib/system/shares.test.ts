@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { contentsText, entryPath, shareEntry } from "./shares";
+import { contentsText, entryPath, shareEntry, withVisibility } from "./shares";
 
 describe("a share's contents as text", () => {
   it("names directories by local path and lists their files sorted, without the share prefix", () => {
@@ -30,5 +30,16 @@ describe("share entries", () => {
     expect(entryPath("!/music")).toBe("/music");
     expect(entryPath("-[x]/music/[live]")).toBe("/music/[live]");
     expect(entryPath("D:\\Music\\")).toBe("D:\\Music");
+  });
+});
+
+describe("a share's visibility", () => {
+  it("moves its alias between the lists, matching any case", () => {
+    const lists = { buddies: ["rare", "Other"], trusted: ["RARE"] };
+    expect(withVisibility(lists, "Rare", "trusted")).toEqual({
+      buddies: ["Other"],
+      trusted: ["Rare"]
+    });
+    expect(withVisibility(lists, "Rare", "everyone")).toEqual({ buddies: ["Other"], trusted: [] });
   });
 });
