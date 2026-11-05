@@ -3,7 +3,7 @@ import type { Schemas } from "#lib/api/client.js";
 import type { Control, Field } from "./sections";
 
 /** What a table's cell edits, from the kind the daemon reports for the field */
-export type CellKind = "text" | "secret" | "number" | "bool" | "select" | "list";
+export type CellKind = "text" | "secret" | "integer" | "number" | "bool" | "select" | "list";
 
 /** A field of a table's rows, as a column or a labeled input */
 export type Column = {
@@ -35,7 +35,8 @@ const kindOf = (entry: Schemas["EntryView"]): CellKind => {
   if (entry.secret) return "secret";
   if (entry.choices) return "select";
   if (entry.kind === "bool") return "bool";
-  if (entry.kind === "integer" || entry.kind === "float") return "number";
+  if (entry.kind === "integer") return "integer";
+  if (entry.kind === "float") return "number";
   return typeof entry.kind === "object" ? "list" : "text";
 };
 
@@ -120,6 +121,9 @@ export const withCell = (row: Row, key: string, cell: unknown): Row => {
   return { ...row, value: put(row.value, key.split("."), held) };
 };
 
+/** Whether a cell holds a number, whole or not */
+export const isNumeric = (column: Column) => column.kind === "integer" || column.kind === "number";
+
 /** Whether a cell shows a secret the daemon holds and does not send */
 export const isHidden = (cell: unknown) => cell === REDACTED;
 
@@ -135,15 +139,18 @@ export const rowProblems = (control: Control, rows: Row[], columns: Column[]) =>
   const named = new Map<string, number>();
   for (const { name } of rows) named.set(name.trim(), (named.get(name.trim()) ?? 0) + 1);
   for (const row of rows) {
-    const number = columns.find(
-      (c) => c.kind === "number" && typeof cellOf(row, c.key) === "string"
-    );
+    const number = columns.find((c) => isNumeric(c) && typeof cellOf(row, c.key) === "string");
+    const fraction = columns.find((c) => {
+      const cell = cellOf(row, c.key);
+      return c.kind === "integer" && typeof cell === "number" && !Number.isInteger(cell);
+    });
     if (control === "map" && !row.name.trim()) problems.set(row.id, "Give this row a name");
     else if (control === "map" && named.get(row.name.trim())! > 1)
       problems.set(row.id, "Another row has this name");
     else if (control === "table-list" && !Object.keys(row.value).length)
       problems.set(row.id, "This row is empty");
     else if (number) problems.set(row.id, `${number.label} must be a number`);
+    else if (fraction) problems.set(row.id, `${fraction.label} must be a whole number`);
   }
   return problems;
 };

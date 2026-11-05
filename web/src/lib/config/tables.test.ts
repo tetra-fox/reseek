@@ -53,7 +53,7 @@ describe("tables", () => {
       "secret",
       "select",
       "list",
-      "number",
+      "integer",
       "bool"
     ]);
   });
@@ -93,6 +93,13 @@ describe("tables", () => {
       [3, "slots must be a number"]
     ]);
     expect(tableValue("map", '[["",{}]]', columns)).toEqual({ error: "Give this row a name" });
+    const whole = [column("slots", "integer")];
+    expect(tableValue("map", '[["a",{"slots":1.5}]]', whole)).toEqual({
+      error: "slots must be a whole number"
+    });
+    expect(tableValue("map", '[["a",{"slots":"x"}]]', whole)).toEqual({
+      error: "slots must be a number"
+    });
     expect(tableValue("map", '[[" a ",{"slots":2}]]', columns)).toEqual({
       set: { a: { slots: 2 } }
     });

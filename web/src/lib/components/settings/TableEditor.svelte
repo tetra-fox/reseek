@@ -21,6 +21,7 @@
     defaultText,
     draftOf,
     isHidden,
+    isNumeric,
     type Row,
     rowErrors,
     rowProblems,
@@ -202,14 +203,18 @@
       {disabled} />
   {:else}
     <Input
-      class={[INLINE, column.kind === "number" ? "tabular-nums" : "font-mono"].join(" ")}
-      inputmode={column.kind === "number" ? "decimal" : undefined}
+      class={[INLINE, isNumeric(column) ? "tabular-nums" : "font-mono"].join(" ")}
+      inputmode={column.kind === "integer"
+        ? "numeric"
+        : column.kind === "number"
+          ? "decimal"
+          : undefined}
       aria-label={label}
       placeholder={defaultText(column)}
       value={String(held ?? "")}
       oninput={(e) => {
         const text = e.currentTarget.value;
-        setCell(row, column.key, column.kind === "number" ? typedNumber(text) : text);
+        setCell(row, column.key, isNumeric(column) ? typedNumber(text) : text);
       }}
       {disabled} />
   {/if}
