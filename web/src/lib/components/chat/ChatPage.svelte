@@ -102,7 +102,7 @@
     void goto(t.kind === "user" ? chatHref(t.name) : roomHref(t.name), { reset: false });
 
   // the chat opened from the results gives way to them, so Back passes over neither twice
-  const backToResults = () => void goto(resultsHref(q, kind), { replaceState: true });
+  const backToResults = () => void goto(resultsHref(q, kind), { replace: true });
 
   // Alt+Up and Alt+Down move to the chat above or below; Escape goes back to the search results
   // a chat was opened from, once nothing open takes it
