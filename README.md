@@ -96,6 +96,14 @@ chmod +x reseek-linux-amd64
 RESEEK_PASSWORD=password ./reseek-linux-amd64 --slsk-username name --slsk-password password -s /path/to/music
 ```
 
+On macOS it's `reseek-macos-universal`. It isn't signed with an Apple developer certificate or notarized, so if you downloaded it in a browser, macOS refuses to run it until you clear the quarantine flag (or click Open Anyway under Privacy & Security in System Settings):
+
+```sh
+xattr -d com.apple.quarantine reseek-macos-universal
+chmod +x reseek-macos-universal
+RESEEK_PASSWORD=password ./reseek-macos-universal --slsk-username name --slsk-password password -s /path/to/music
+```
+
 Then open <http://localhost:5030>.
 
 ### Relay agent
