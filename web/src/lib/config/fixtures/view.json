@@ -34,7 +34,8 @@
         "browse",
         "messages",
         "rooms"
-      ]
+      ],
+      "refusal_message": "File not shared."
     },
     "chat": {
       "accept_private_room_invitations": true,
@@ -660,7 +661,7 @@
       "envVar": "RESEEK_BLACKLIST_FILE",
       "cliFlag": "--blacklist-file",
       "kind": "string",
-      "doc": "Blocklist file in CIDR, P2P or DAT format. Reloaded when a `blacklist` option changes.",
+      "doc": "Blocklist file in CIDR, P2P or DAT format. Reloaded when a `blacklist` option changes. Users at listed addresses also have their private messages dropped and their room messages hidden, once their address is known.",
       "choices": null,
       "default": null,
       "apply": "live",
@@ -687,6 +688,22 @@
         "messages",
         "rooms"
       ],
+      "apply": "live",
+      "secret": false,
+      "notApplied": null,
+      "entries": []
+    },
+    "blocking.refusal_message": {
+      "source": {
+        "layer": "default"
+      },
+      "file": "config.toml",
+      "envVar": "RESEEK_BLOCKING_REFUSAL_MESSAGE",
+      "cliFlag": null,
+      "kind": "string",
+      "doc": "What a user blocked from uploads is told when they ask to download from us.",
+      "choices": null,
+      "default": "File not shared.",
       "apply": "live",
       "secret": false,
       "notApplied": null,
@@ -3219,7 +3236,7 @@
       "kind": {
         "list": "string"
       },
-      "doc": "Networks whose addresses are refused.",
+      "doc": "Networks whose addresses are refused. Users at these addresses also have their private messages dropped and their room messages hidden, once their address is known.",
       "choices": null,
       "default": [],
       "apply": "live",

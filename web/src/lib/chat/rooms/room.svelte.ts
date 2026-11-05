@@ -7,8 +7,11 @@ import { addChange, type Burst, type PresenceKind } from "./presence";
 
 export type RoomUser = Schemas["RoomUser"];
 
-/** One member's ticker on the room's wall, with when it was last seen to change */
-export type WallLine = { username: string; ticker: string; at: number };
+/**
+ * One member's ticker on the room's wall, with when it was last seen to change and whether it is
+ * hidden along with the member's room messages
+ */
+export type WallLine = { username: string; ticker: string; hidden: boolean; at: number };
 
 /** How many folded lines of presence changes a room keeps, the oldest going first */
 const KEPT = 500;
@@ -202,10 +205,11 @@ export class RoomMembers {
     const now = Date.now();
     const fresh: WallLine[] = [];
     const kept: WallLine[] = [];
-    for (const { username, ticker } of tickers) {
+    for (const { username, ticker, hidden } of tickers) {
       const line = held.get(username);
-      if (line && line.ticker === ticker) kept.push(line);
-      else fresh.push({ username, ticker, at: line || this.wall.length ? now : 0 });
+      if (line && line.ticker === ticker)
+        kept.push(line.hidden === hidden ? line : { ...line, hidden });
+      else fresh.push({ username, ticker, hidden, at: line || this.wall.length ? now : 0 });
     }
     this.wall = [...fresh, ...kept].toSorted((a, b) => b.at - a.at);
   }

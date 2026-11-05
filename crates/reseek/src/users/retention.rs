@@ -43,6 +43,7 @@ mod tests {
           username: "blocked".into(),
           reason: String::new(),
           scopes: vec![BlockScope::Uploads],
+          addresses: Vec::new(),
           created_at: Some(old),
           expires_at: None,
           created_by: Some("admin".into()),

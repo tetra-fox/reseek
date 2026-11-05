@@ -275,7 +275,8 @@ pub struct Blacklisted {
   pub members: Vec<String>,
   /// Regular expressions matched against usernames.
   pub patterns: Vec<String>,
-  /// Networks whose addresses are refused.
+  /// Networks whose addresses are refused. Users at these addresses also have their private
+  /// messages dropped and their room messages hidden, once their address is known.
   pub cidrs: Vec<String>,
 }
 

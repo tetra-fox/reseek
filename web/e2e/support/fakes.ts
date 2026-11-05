@@ -105,8 +105,8 @@ export const fakeChat = async (page: Page) => {
           self: false
         })),
         tickers: [
-          { username: "alice", ticker: "listening to Geogaddi" },
-          { username: "bob", ticker: "sharing the whole BoC catalog" }
+          { username: "alice", ticker: "listening to Geogaddi", hidden: false },
+          { username: "bob", ticker: "sharing the whole BoC catalog", hidden: false }
         ],
         messages: null
       }

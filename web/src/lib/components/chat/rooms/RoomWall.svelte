@@ -16,14 +16,17 @@
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
 
-  // the room's wall: each member's ticker, the latest change first, and a field to set our own
+  // the room's wall: each member's ticker, the latest change first, and a field to set our own.
+  // The tickers of users whose room messages are hidden are hidden too
   let { members }: { members: RoomMembers } = $props();
 
   const us = $derived(app.state?.user.username ?? "");
   const mine = $derived(members.wall.find((l) => l.username === us)?.ticker ?? "");
   const write = $derived(session.can("ReadWrite"));
+  const shown = $derived(members.wall.filter((l) => !l.hidden));
+  const hiddenCount = $derived(members.wall.length - shown.length);
   const list = new ListControl<WallLine>({
-    lines: () => members.wall,
+    lines: () => shown,
     key: (l) => l.username,
     id: (l) => l.username,
     onopen: (l) => void goto(userHref(l.username))
@@ -72,7 +75,7 @@
     tabindex="0"
     {@attach list.attach}
     {@attach freezesWhileUsed}>
-    {#each members.wall as line, i (line.username)}
+    {#each shown as line, i (line.username)}
       <div role="row" {...list.line(line, i)} class="list-row px-1 py-1.5 text-sm">
         <div role="gridcell">
           <div class="flex items-baseline gap-2">
@@ -90,4 +93,11 @@
       </div>
     {/each}
   </div>
+  {#if hiddenCount}
+    <p class="text-xs text-fg-muted">
+      {hiddenCount === 1
+        ? "1 ticker from a blocked user is hidden"
+        : `${hiddenCount} tickers from blocked users are hidden`}
+    </p>
+  {/if}
 </section>

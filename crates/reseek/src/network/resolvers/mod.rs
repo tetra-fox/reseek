@@ -170,7 +170,7 @@ fn blocked(edges: &Edges, username: &str, endpoint: Option<SocketAddr>, scope: B
 
 /// A peer asks us to queue an upload of `filename`: a name with a `.` or `..` part is refused,
 /// a request finding too many waiting to be decided is dropped, and a user blocked from uploads
-/// is told the file is not shared; the upload engine decides the rest.
+/// is told `blocking.refusal_message`; the upload engine decides the rest.
 pub async fn enqueue_download(
   edges: &Edges,
   username: &str,
@@ -189,7 +189,14 @@ pub async fn enqueue_download(
   }
   if blocked(edges, username, Some(endpoint), BlockScope::Uploads) {
     uploads.request_refused();
-    return Err(ClientError::DownloadEnqueue(NOT_SHARED.into()));
+    let refusal = edges
+      .config
+      .current()
+      .values
+      .blocking
+      .refusal_message
+      .clone();
+    return Err(ClientError::DownloadEnqueue(refusal));
   }
   let sees = edges.users.sees_from(username, endpoint.ip()).await;
   uploads.request(username, filename.as_str(), sees).await?;
@@ -340,6 +347,36 @@ pub(crate) mod tests {
         .queue_length,
       i32::MAX as u32
     );
+  }
+
+  #[tokio::test]
+  async fn an_address_blocked_with_a_user_is_refused_with_the_refusal_message() {
+    let app = app(
+      &format!("{CONFIG}[blocking]\nrefusal_message = \"Banned\"\n"),
+      &[],
+    )
+    .await;
+    let block = json!({ "scopes": ["uploads"], "addresses": ["198.51.100.0/24"] });
+    let answer = app
+      .send(request("PUT", "/api/v0/users/mallory/block", Some(block)))
+      .await;
+    assert_eq!(answer.status, 200, "{:?}", answer.body);
+    assert_eq!(answer.json()["addresses"], json!(["198.51.100.0/24"]));
+    let edges = edges(&app);
+    let file = name("@@music\\a.mp3");
+    let banned =
+      |result| matches!(result, Err(ClientError::DownloadEnqueue(reason)) if reason == "Banned");
+    assert!(banned(
+      enqueue_download(&edges, "eve", from("198.51.100.9"), &file).await
+    ));
+    assert!(!banned(
+      enqueue_download(&edges, "eve", from("203.0.113.9"), &file).await
+    ));
+    let bad = json!({ "addresses": ["mallory's house"] });
+    let answer = app
+      .send(request("PUT", "/api/v0/users/mallory/block", Some(bad)))
+      .await;
+    assert_eq!(answer.status, 400);
   }
 
   #[tokio::test]

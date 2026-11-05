@@ -1,6 +1,8 @@
 //! Who is blocked from what: our blocks, kept in `blocks` and in memory for the check every
 //! network edge makes, and the configuration's blacklist of names, patterns, networks and the
-//! blocklist file. Each answer is remembered a while, keyed by user, address and scope.
+//! blocklist file. A block of ours may name addresses too, and then blocks anyone connecting
+//! from them from its scopes. Each answer is remembered a while, keyed by user, address and
+//! scope.
 
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
@@ -58,6 +60,7 @@ pub fn configured(username: &str) -> Block {
     username: username.to_string(),
     reason: String::new(),
     scopes: BlockScope::ALL.to_vec(),
+    addresses: Vec::new(),
     created_at: None,
     expires_at: None,
     created_by: None,
@@ -73,8 +76,30 @@ pub fn reason_fits(reason: &str) -> bool {
   reason.chars().count() <= REASON_CHARS
 }
 
+/// The most addresses a block names.
+pub const ADDRESSES: usize = 16;
+
+/// `addresses` trimmed and without repeats, each an IP address, a network or a range; the
+/// error says there are too many, or names the first that is none of them.
+pub fn addresses_of(addresses: Vec<String>) -> Result<Vec<String>, String> {
+  if addresses.len() > ADDRESSES {
+    return Err(format!("A block names at most {ADDRESSES} addresses"));
+  }
+  let mut kept: Vec<String> = Vec::with_capacity(addresses.len());
+  for address in addresses {
+    let address = address.trim().to_string();
+    if let Err(e) = address.parse::<IpRange>() {
+      return Err(format!("Address '{address}' is invalid: {e}"));
+    }
+    if !kept.contains(&address) {
+      kept.push(address);
+    }
+  }
+  Ok(kept)
+}
+
 /// The columns [`block`] reads, in its order.
-const COLUMNS: &str = "username, reason, scopes, created_at, expires_at, created_by";
+const COLUMNS: &str = "username, reason, scopes, created_at, expires_at, created_by, addresses";
 
 fn block(row: &Row) -> rusqlite::Result<Block> {
   let expires_at = row
@@ -82,10 +107,15 @@ fn block(row: &Row) -> rusqlite::Result<Block> {
     .as_deref()
     .map(read_timestamp)
     .transpose()?;
+  let addresses: String = row.get(6)?;
+  let addresses = serde_json::from_str(&addresses).map_err(|e| {
+    rusqlite::Error::FromSqlConversionFailure(6, rusqlite::types::Type::Text, Box::new(e))
+  })?;
   Ok(Block {
     username: row.get(0)?,
     reason: row.get(1)?,
     scopes: scopes(row.get(2)?),
+    addresses,
     created_at: Some(read_timestamp(&row.get::<_, String>(3)?)?),
     expires_at,
     created_by: Some(row.get(5)?),
@@ -131,14 +161,16 @@ pub fn store(conn: &mut Connection, block: &Block, now: DateTime<Utc>) -> rusqli
   let created_by = block.created_by.as_deref().ok_or_else(|| {
     rusqlite::Error::ToSqlConversionFailure("a stored block names who made it".into())
   })?;
+  let addresses = serde_json::to_string(&block.addresses)
+    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
   let tx = conn.transaction()?;
   ensure(&tx, &block.username, now)?;
   tx.execute(
-    "INSERT INTO blocks (username, reason, scopes, created_at, expires_at, created_by) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
+    "INSERT INTO blocks (username, reason, scopes, created_at, expires_at, created_by, addresses) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) \
      ON CONFLICT (username) DO UPDATE SET reason = excluded.reason, scopes = excluded.scopes, \
      created_at = excluded.created_at, expires_at = excluded.expires_at, \
-     created_by = excluded.created_by",
+     created_by = excluded.created_by, addresses = excluded.addresses",
     params![
       block.username,
       block.reason,
@@ -146,6 +178,7 @@ pub fn store(conn: &mut Connection, block: &Block, now: DateTime<Utc>) -> rusqli
       timestamp(block.created_at.unwrap_or(now)),
       block.expires_at.map(timestamp),
       created_by,
+      addresses,
     ],
   )?;
   tx.commit()
@@ -228,10 +261,19 @@ impl Rules {
 }
 
 /// An unexpired block of ours, as the check needs it.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct Active {
   bits: u32,
   expires_at: Option<DateTime<Utc>>,
+  /// the addresses blocked with the user
+  ranges: Vec<IpRange>,
+}
+
+impl Active {
+  /// Whether it blocks from `scope` at `now`.
+  fn blocks(&self, scope: BlockScope, now: DateTime<Utc>) -> bool {
+    self.bits & bit(scope) != 0 && stands(self.expires_at, now)
+  }
 }
 
 /// The loaded blocklist file.
@@ -303,7 +345,18 @@ impl Blocks {
 
   /// Takes our block of a user, new or replaced.
   pub fn set(&self, block: &Block) {
-    self
+    let ranges: Vec<IpRange> = block
+      .addresses
+      .iter()
+      .filter_map(|text| {
+        text
+          .parse()
+          .inspect_err(|e| warn!(address = text, error = %e, "blocked address not used"))
+          .ok()
+      })
+      .collect();
+    let addressed = !ranges.is_empty();
+    let before = self
       .active
       .write()
       .unwrap_or_else(PoisonError::into_inner)
@@ -312,19 +365,31 @@ impl Blocks {
         Active {
           bits: bits(&block.scopes),
           expires_at: block.expires_at,
+          ranges,
         },
       );
-    self.forget(&block.username);
+    self.forget_for(&block.username, before, addressed);
   }
 
   /// Drops our block of `username`.
   pub fn unset(&self, username: &str) {
-    self
+    let before = self
       .active
       .write()
       .unwrap_or_else(PoisonError::into_inner)
       .remove(username);
-    self.forget(username);
+    self.forget_for(username, before, false);
+  }
+
+  /// Forgets the answers a change of `username`'s block from `before` may have changed: every
+  /// answer when the block named addresses before or does now (`addressed`), since those
+  /// answer for other users too, else the user's own.
+  fn forget_for(&self, username: &str, before: Option<Active>, addressed: bool) {
+    if addressed || before.is_some_and(|b| !b.ranges.is_empty()) {
+      lock(&self.decisions).clear();
+    } else {
+      self.forget(username);
+    }
   }
 
   /// Drops the remembered answers older than they are kept for.
@@ -389,12 +454,13 @@ impl Blocks {
       .read()
       .unwrap_or_else(PoisonError::into_inner)
       .get(username)
-      .is_some_and(|active| active.bits & bit(scope) != 0 && stands(active.expires_at, Utc::now()))
+      .is_some_and(|active| active.blocks(scope, Utc::now()))
   }
 
   /// Whether `username`, connecting from `ip` when known, is blocked from `scope`: by our
-  /// block with that scope, or by the configuration's blacklist, which blocks from every
-  /// scope. A user blocked without an address is blocked from every address.
+  /// block with that scope, by a block of ours with that scope naming `ip`, or by the
+  /// configuration's blacklist, which blocks from every scope. A user blocked without an
+  /// address is blocked from every address.
   pub fn is_blocked(&self, username: &str, ip: Option<IpAddr>, scope: BlockScope) -> bool {
     let key = (username.to_string(), ip, scope);
     {
@@ -411,12 +477,16 @@ impl Blocks {
         return true;
       }
     }
-    let ours = self
-      .active
-      .read()
-      .unwrap_or_else(PoisonError::into_inner)
-      .get(username)
-      .is_some_and(|active| active.bits & bit(scope) != 0 && stands(active.expires_at, Utc::now()));
+    let now = Utc::now();
+    let ours = {
+      let active = self.active.read().unwrap_or_else(PoisonError::into_inner);
+      active.get(username).is_some_and(|a| a.blocks(scope, now))
+        || ip.is_some_and(|ip| {
+          active
+            .values()
+            .any(|a| a.blocks(scope, now) && a.ranges.iter().any(|range| range.contains(ip)))
+        })
+    };
     let blocked = ours || {
       let rules = self
         .rules
@@ -463,6 +533,7 @@ mod tests {
       username: username.to_string(),
       reason: String::new(),
       scopes: scopes.to_vec(),
+      addresses: Vec::new(),
       created_at: Some(Utc::now()),
       expires_at: None,
       created_by: Some("admin".to_string()),
@@ -502,6 +573,48 @@ mod tests {
     );
     blocks.unset("alice");
     assert!(!blocks.is_blocked("alice", None, BlockScope::Uploads));
+  }
+
+  #[test]
+  fn an_address_blocked_with_a_user_blocks_anyone_from_it_in_its_scopes() {
+    let blocks = Blocks::new(&Options::default(), &[]);
+    let at = |ip: &str, scope| blocks.is_blocked("carol", Some(ip.parse().unwrap()), scope);
+    assert!(
+      !at("203.0.113.7", BlockScope::Uploads),
+      "remembered before the block"
+    );
+    let mut alice = ours("alice", &[BlockScope::Uploads]);
+    alice.addresses = vec!["203.0.113.0/24".to_string()];
+    blocks.set(&alice);
+    assert!(
+      at("203.0.113.7", BlockScope::Uploads),
+      "another user's remembered answer is worked out again"
+    );
+    assert!(!at("203.0.113.7", BlockScope::Messages), "only its scopes");
+    assert!(!at("198.51.100.7", BlockScope::Uploads));
+    assert!(!blocks.is_blocked("carol", None, BlockScope::Uploads));
+    blocks.set(&ours("alice", &[BlockScope::Uploads]));
+    assert!(
+      !at("203.0.113.7", BlockScope::Uploads),
+      "taking the address off lifts it at once"
+    );
+  }
+
+  #[test]
+  fn addresses_are_trimmed_kept_once_and_checked() {
+    let kept = addresses_of(vec![
+      " 203.0.113.7 ".to_string(),
+      "203.0.113.7".to_string(),
+      "2001:db8::/32".to_string(),
+    ]);
+    assert_eq!(kept.unwrap(), ["203.0.113.7", "2001:db8::/32"]);
+    let refused = addresses_of(vec!["alice".to_string()]).unwrap_err();
+    assert!(
+      refused.starts_with("Address 'alice' is invalid"),
+      "{refused}"
+    );
+    let many = (0..=ADDRESSES).map(|n| format!("192.0.2.{n}")).collect();
+    assert!(addresses_of(many).is_err());
   }
 
   #[test]

@@ -104,6 +104,12 @@ pub(super) fn check(options: &Options, context: &Context, report: &mut Report) {
       report.add("blocking.default_scopes", message);
     }
   }
+  if options.blocking.refusal_message.trim().is_empty() {
+    report.add(
+      "blocking.refusal_message",
+      "The field blocking.refusal_message must not be empty.",
+    );
+  }
   for room in &options.rooms {
     if let Err(reason) = soulseek_proto::validate_room_name(room) {
       report.add(

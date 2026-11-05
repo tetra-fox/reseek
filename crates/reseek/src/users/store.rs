@@ -15,7 +15,8 @@ pub static SCHEMA: Schema = db::schema!(
     "0001_initial",
     "0002_interests",
     "0003_picture_tag",
-    "0004_buddies"
+    "0004_buddies",
+    "0005_block_addresses"
   ]
 );
 

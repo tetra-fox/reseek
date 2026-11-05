@@ -88,6 +88,12 @@ pub struct Block {
   pub reason: String,
   /// what the block stops; every scope for a block from the configuration
   pub scopes: Vec<BlockScope>,
+  /// IP addresses, networks or ranges blocked with the user: anyone connecting from one of
+  /// them is blocked from the same scopes. Empty for a block from the configuration; always
+  /// written, and empty when an imported block leaves it out
+  #[serde(default)]
+  #[schema(required = true, example = json!(["203.0.113.7"]))]
+  pub addresses: Vec<String>,
   /// when the block was made, null for a block from the configuration
   pub created_at: Option<DateTime<Utc>>,
   /// when the block ends on its own, null for never
@@ -114,6 +120,11 @@ pub struct BlockRequest {
   #[serde(default)]
   #[schema(example = json!(["uploads", "searches", "browse", "messages", "rooms"]))]
   pub scopes: Option<Vec<BlockScope>>,
+  /// IP addresses, networks such as `203.0.113.0/24`, or ranges such as
+  /// `203.0.113.1-203.0.113.9` to block with the user, at most 16
+  #[serde(default)]
+  #[schema(example = json!(["203.0.113.7"]))]
+  pub addresses: Vec<String>,
   /// how long the block lasts, such as `"7d"`
   #[serde(default)]
   #[schema(example = "7d")]

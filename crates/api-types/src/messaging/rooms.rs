@@ -40,6 +40,9 @@ pub struct RoomTicker {
   pub username: String,
   /// the ticker's text
   pub ticker: String,
+  /// the user's room messages are hidden, by a block of the user or of their address, so the
+  /// ticker is too
+  pub hidden: bool,
 }
 
 /// One room message.

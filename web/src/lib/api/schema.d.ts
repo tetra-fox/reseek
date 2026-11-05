@@ -3580,6 +3580,15 @@ export interface components {
         /** @description A blocked user. */
         Block: {
             /**
+             * @description IP addresses, networks or ranges blocked with the user: anyone connecting from one of
+             *     them is blocked from the same scopes. Empty for a block from the configuration; always
+             *     written, and empty when an imported block leaves it out
+             * @example [
+             *       "203.0.113.7"
+             *     ]
+             */
+            addresses: string[];
+            /**
              * Format: date-time
              * @description when the block was made, null for a block from the configuration
              */
@@ -3621,6 +3630,14 @@ export interface components {
          *     one of `expiresIn` and `expiresAt` is given; with neither the block is permanent.
          */
         BlockRequest: {
+            /**
+             * @description IP addresses, networks such as `203.0.113.0/24`, or ranges such as
+             *     `203.0.113.1-203.0.113.9` to block with the user, at most 16
+             * @example [
+             *       "203.0.113.7"
+             *     ]
+             */
+            addresses?: string[];
             /**
              * @description cancel the user's queued uploads now, and with `downloads` our downloads from them
              * @default true
@@ -6458,6 +6475,11 @@ export interface components {
         };
         /** @description A user's ticker in a room, the short status line other clients show. */
         RoomTicker: {
+            /**
+             * @description the user's room messages are hidden, by a block of the user or of their address, so the
+             *     ticker is too
+             */
+            hidden: boolean;
             /** @description the ticker's text */
             ticker: string;
             /** @description the user */

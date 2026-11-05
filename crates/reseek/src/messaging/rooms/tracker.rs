@@ -225,7 +225,8 @@ impl Tracker {
     self.private.remove(name).is_some() || left
   }
 
-  /// The room `name` as the API shows it, without its messages.
+  /// The room `name` as the API shows it, without its messages and with no ticker marked
+  /// hidden; the messaging engine marks them.
   pub fn room(&self, name: &str) -> Option<Room> {
     let tracked = self.get(name)?;
     let private = self.private.get(name);
@@ -251,6 +252,7 @@ impl Tracker {
         .map(|(username, ticker)| RoomTicker {
           username: username.clone(),
           ticker: ticker.clone(),
+          hidden: false,
         })
         .collect(),
       messages: None,

@@ -15,8 +15,13 @@ describe("unblocking several users", () => {
 
   it("says so once, and its one Undo blocks each again as they were", async () => {
     const blocks: Record<string, unknown> = {
-      alice: { reason: "spam", scopes: ["uploads", "messages"], expiresAt: null },
-      bob: { reason: "", scopes: ["searches"], expiresAt: "2999-01-01T00:00:00Z" }
+      alice: {
+        reason: "spam",
+        scopes: ["uploads", "messages"],
+        addresses: ["203.0.113.7"],
+        expiresAt: null
+      },
+      bob: { reason: "", scopes: ["searches"], addresses: [], expiresAt: "2999-01-01T00:00:00Z" }
     };
     const net = fakeNetwork((url, method) => {
       const name = decodeURIComponent(url.pathname.split("/")[4]);
@@ -38,13 +43,20 @@ describe("unblocking several users", () => {
     expect(again).toEqual([
       [
         "alice",
-        { reason: "spam", scopes: ["uploads", "messages"], expiresAt: null, cancelTransfers: false }
+        {
+          reason: "spam",
+          scopes: ["uploads", "messages"],
+          addresses: ["203.0.113.7"],
+          expiresAt: null,
+          cancelTransfers: false
+        }
       ],
       [
         "bob",
         {
           reason: "",
           scopes: ["searches"],
+          addresses: [],
           expiresAt: "2999-01-01T00:00:00Z",
           cancelTransfers: false
         }

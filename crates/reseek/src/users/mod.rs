@@ -308,9 +308,14 @@ impl Directory {
     }
   }
 
-  /// Whether `username`, connecting from `ip` when known, is blocked from `scope`, by our
-  /// block or the configuration's blacklist.
+  /// Whether `username`, connecting from `ip`, is blocked from `scope`, by our block or the
+  /// configuration's blacklist. Without `ip` the address the client has cached for the user is
+  /// checked, so a blocked address counts for messages too.
   pub fn is_blocked(&self, username: &str, ip: Option<IpAddr>, scope: BlockScope) -> bool {
+    let ip = ip.or_else(|| {
+      let endpoint = self.client.get()?.cached_user_endpoint(username)?;
+      Some(endpoint.ip())
+    });
     self.blocks.is_blocked(username, ip, scope)
   }
 

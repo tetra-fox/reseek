@@ -27,6 +27,22 @@ export const ALSO_SCOPES: { scope: BlockScope; label: string }[] = [
 
 const ALL = [...STOP_SCOPES, ...ALSO_SCOPES].map((s) => s.scope);
 
+/** The scopes that hide what a user says and nothing else */
+export const CHAT_SCOPES: BlockScope[] = ["messages", "rooms"];
+
+/** The addresses typed in a box, split at spaces and commas */
+export const addressesIn = (text: string): string[] => text.split(/[\s,]+/).filter(Boolean);
+
+/** The address the server last gave for `username`, asked of it when none is cached */
+export const addressOf = async (username: string): Promise<string | null> => {
+  const cached = users.get(username)?.endpoint;
+  if (cached) return cached.address;
+  const outcome = await call(() =>
+    api.GET("/api/v0/users/{username}/endpoint", { params: byUser(username) })
+  );
+  return outcome.ok ? outcome.data.address : null;
+};
+
 /** The scopes a new block starts with: `blocking.default_scopes` from the options in effect */
 export const defaultScopes = (): BlockScope[] => {
   const configured = fields(fields(app.options).blocking).default_scopes;
@@ -83,7 +99,13 @@ const lift = async (username: string): Promise<{ ok: boolean; again: BlockReques
   return {
     ok: true,
     again: was
-      ? { reason: was.reason, scopes: was.scopes, expiresAt: ends, cancelTransfers: false }
+      ? {
+          reason: was.reason,
+          scopes: was.scopes,
+          addresses: was.addresses,
+          expiresAt: ends,
+          cancelTransfers: false
+        }
       : null
   };
 };

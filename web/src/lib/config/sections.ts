@@ -396,6 +396,7 @@ export const sections: Section[] = [
           control: "cidr-list"
         },
         { key: "blocking.default_scopes", label: "Default block scopes" },
+        { key: "blocking.refusal_message", label: "Message to blocked users" },
         { key: "blacklist.enabled", label: "Address blocklist" },
         {
           key: "blacklist.file",

@@ -398,6 +398,7 @@ async fn an_expired_block_is_swept_with_its_event() {
     username: "alice".into(),
     reason: String::new(),
     scopes: vec![BlockScope::Uploads],
+    addresses: Vec::new(),
     created_at: Some(Utc::now()),
     expires_at: Some(Utc::now() - chrono::Duration::seconds(1)),
     created_by: Some("admin".into()),

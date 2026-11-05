@@ -10,7 +10,7 @@ use api_types::users::{UserProfile, UserSummary, UserTransfers, UserTransfersQue
 use async_trait::async_trait;
 use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use sha2::{Digest, Sha256};
 use tracing::debug;
 
@@ -322,10 +322,12 @@ impl BlockingService for Directory {
     if !blocking::stands(expires_at, now) {
       return Err(ApiError::bad_request("A block must end in the future"));
     }
+    let addresses = blocking::addresses_of(request.addresses).map_err(ApiError::bad_request)?;
     let block = Block {
       username: username.to_string(),
       reason: request.reason,
       scopes: request.scopes.unwrap_or_else(|| self.default_scopes()),
+      addresses,
       created_at: Some(now),
       expires_at,
       created_by: Some(by.name.clone()),
@@ -369,15 +371,21 @@ impl BlockingService for Directory {
   ) -> Result<BlockImportResult, ApiError> {
     let now = Utc::now();
     let default_scopes = self.default_scopes();
-    let (offered, wanted): (
-      usize,
-      Vec<(String, String, Vec<BlockScope>, Option<DateTime<Utc>>)>,
-    ) = match import {
+    let (offered, wanted): (usize, Vec<Block>) = match import {
       BlockImport::Names(names) => (
         names.len(),
         names
           .into_iter()
-          .map(|name| (name, String::new(), default_scopes.clone(), None))
+          .map(|username| Block {
+            username,
+            reason: String::new(),
+            scopes: default_scopes.clone(),
+            addresses: Vec::new(),
+            created_at: None,
+            expires_at: None,
+            created_by: None,
+            source: BlockSource::Api,
+          })
           .collect(),
       ),
       BlockImport::Blocks(blocks) => (
@@ -389,23 +397,30 @@ impl BlockingService for Directory {
               && blocking::stands(b.expires_at, now)
               && blocking::reason_fits(&b.reason)
           })
-          .map(|b| (b.username, b.reason, b.scopes, b.expires_at))
+          .filter_map(|mut b| {
+            match blocking::addresses_of(std::mem::take(&mut b.addresses)) {
+              Ok(addresses) => b.addresses = addresses,
+              Err(reason) => {
+                debug!(username = b.username, reason, "imported block skipped");
+                return None;
+              }
+            }
+            Some(b)
+          })
           .collect(),
       ),
     };
     let mut result = BlockImportResult::default();
-    for (username, reason, scopes, expires_at) in wanted {
-      if username.is_empty() || self.is_us(&username) || self.blocked_by_us(&username).await? {
+    for wanted in wanted {
+      let username = &wanted.username;
+      if username.is_empty() || self.is_us(username) || self.blocked_by_us(username).await? {
         continue;
       }
       let block = Block {
-        username,
-        reason,
-        scopes,
         created_at: Some(now),
-        expires_at,
         created_by: Some(by.name.clone()),
         source: BlockSource::Api,
+        ..wanted
       };
       self.put_block(block, by).await?;
       result.added += 1;

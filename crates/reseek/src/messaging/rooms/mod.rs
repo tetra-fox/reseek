@@ -19,6 +19,7 @@ use api_types::messaging::NotifyLevel;
 use api_types::messaging::rooms::{
   JoinRoom, JoinedRoom, Room, RoomInfo, RoomMessagesQuery, RoomTicker, RoomUser,
 };
+use api_types::users::blocking::BlockScope;
 use chrono::Utc;
 use soulseek_client::{ClientError, RoomErrorKind};
 use soulseek_proto::RoomType;
@@ -146,7 +147,8 @@ impl Messaging {
         tracker.joined(&data, &us);
         tracker.room(name).expect("the room was just tracked")
       })
-    };
+    }
+    .map(|room| self.marked(room));
     let Some(room) = room else {
       debug!(
         room = name,
@@ -359,19 +361,27 @@ impl Messaging {
       .map_err(unsent)
   }
 
+  /// `room` with the tickers of users whose room messages are hidden marked hidden.
+  pub(super) fn marked(&self, mut room: Room) -> Room {
+    for ticker in &mut room.tickers {
+      ticker.hidden = self
+        .users
+        .is_blocked(&ticker.username, None, BlockScope::Rooms);
+    }
+    room
+  }
+
   pub(super) fn tickers(&self, room: &str) -> Result<Vec<RoomTicker>, ApiError> {
-    let tracker = self.rooms.tracker();
-    tracker
-      .room(room)
-      .map(|room| room.tickers)
+    let tracked = self.rooms.tracker().room(room);
+    tracked
+      .map(|room| self.marked(room).tickers)
       .ok_or_else(|| not_in(room))
   }
 
   pub(super) async fn room(&self, name: &str) -> Result<Room, ApiError> {
-    let mut room = self
-      .rooms
-      .tracker()
-      .room(name)
+    let tracked = self.rooms.tracker().room(name);
+    let mut room = tracked
+      .map(|room| self.marked(room))
       .ok_or_else(|| not_in(name))?;
     let query = RoomMessagesQuery {
       before: None,

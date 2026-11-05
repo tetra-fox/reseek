@@ -10,7 +10,7 @@ import { RoomMembers } from "./room.svelte";
 const jazz = (ticker: string): Schemas["Room"] => ({
   name: "jazz",
   isPrivate: false,
-  tickers: [{ username: "bob", ticker }],
+  tickers: [{ username: "bob", ticker, hidden: false }],
   users: []
 });
 

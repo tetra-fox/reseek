@@ -181,6 +181,12 @@
           <span role="gridcell" class="flex min-w-0 items-center gap-1.5">
             <Username name={b.username} />
             {#if b.source === "config"}<Badge tone="outline">configuration</Badge>{/if}
+            {#if b.addresses.length}
+              <span
+                class="truncate font-mono text-xs text-fg-muted"
+                title={`Also blocked from ${b.addresses.join(", ")}`}
+                >{b.addresses.join(", ")}</span>
+            {/if}
           </span>
           <span role="gridcell" class="truncate" title={b.reason}>{b.reason}</span>
           <span role="gridcell" class="truncate text-xs text-fg-muted">{b.scopes.join(", ")}</span>

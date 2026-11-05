@@ -186,6 +186,8 @@ pub struct Blacklist {
   )]
   pub enabled: bool,
   /// Blocklist file in CIDR, P2P or DAT format. Reloaded when a `blacklist` option changes.
+  /// Users at listed addresses also have their private messages dropped and their room messages
+  /// hidden, once their address is known.
   #[cascade(env = "RESEEK_BLACKLIST_FILE", cli = "--blacklist-file")]
   pub file: Option<std::path::PathBuf>,
 }
@@ -390,6 +392,9 @@ pub struct Blocking {
   /// `browse`, `messages`, `rooms`, `downloads` and `distributed`.
   #[cascade(env = "RESEEK_BLOCKING_DEFAULT_SCOPES")]
   pub default_scopes: Vec<String>,
+  /// What a user blocked from uploads is told when they ask to download from us.
+  #[cascade(env = "RESEEK_BLOCKING_REFUSAL_MESSAGE")]
+  pub refusal_message: String,
 }
 
 impl Default for Blocking {
@@ -399,6 +404,7 @@ impl Default for Blocking {
         .iter()
         .map(ToString::to_string)
         .collect(),
+      refusal_message: crate::transfers::uploads::NOT_SHARED.to_string(),
     }
   }
 }

@@ -63,6 +63,7 @@ describe("the block dialog", () => {
       {
         reason: "spam",
         scopes: ["browse", "uploads", "downloads"],
+        addresses: [],
         expiresIn: null,
         cancelTransfers: true
       }

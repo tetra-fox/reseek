@@ -9,15 +9,19 @@
   import Select from "#lib/components/ui/Select.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import {
+    addressesIn,
+    addressOf,
     ALSO_SCOPES,
     block,
     type BlockScope,
     blocking,
+    CHAT_SCOPES,
     defaultScopes,
     STOP_SCOPES
   } from "#lib/users/block.svelte.js";
 
-  // the page's one block dialog: reason, how long, and what the block stops
+  // the page's one block dialog: reason, how long, what the block stops, and for one user the
+  // addresses blocked with them
   const DURATIONS = [
     { value: "", label: "Until unblocked" },
     { value: "1h", label: "1 hour" },
@@ -31,6 +35,9 @@
   let duration = $state("");
   let custom = $state("");
   let scopes = $state<BlockScope[]>([]);
+  let addresses = $state("");
+  /** the user's address is being asked for */
+  let finding = $state(false);
   let error = $state("");
   let sending = $state(false);
 
@@ -46,10 +53,26 @@
     custom = "";
     error = "";
     scopes = [...new Set([...defaultScopes(), ...(asked.add ?? [])])];
+    addresses = "";
   });
 
   const tick = (scope: BlockScope, on: boolean) => {
     scopes = on ? [...scopes, scope] : scopes.filter((s) => s !== scope);
+  };
+
+  const listed = $derived(addressesIn(addresses));
+  const chatOnly = $derived(
+    scopes.length === CHAT_SCOPES.length && CHAT_SCOPES.every((s) => scopes.includes(s))
+  );
+  /** Adds the address the server gives for the one user, said when there is none */
+  const addTheirs = async () => {
+    const asked = blocking.asked;
+    finding = true;
+    const address = await addressOf(names[0]);
+    finding = false;
+    if (blocking.asked !== asked) return;
+    if (!address) error = `The address of ${names[0]} is not known; they may be offline.`;
+    else if (!listed.includes(address)) addresses = [...listed, address].join(" ");
   };
 
   const expiresIn = $derived(duration === "custom" ? custom.trim() : duration);
@@ -64,6 +87,7 @@
     const request = {
       reason: reason.trim(),
       scopes,
+      addresses: who.length === 1 ? listed : [],
       expiresIn: expiresIn || null,
       cancelTransfers: true
     };
@@ -107,6 +131,11 @@
       {#each STOP_SCOPES as { scope, label } (scope)}
         {@render scopeBox(scope, label)}
       {/each}
+      <Button
+        variant="link"
+        class="self-start text-xs"
+        disabled={chatOnly}
+        onclick={() => (scopes = [...CHAT_SCOPES])}>Only hide their messages</Button>
     </fieldset>
     <fieldset class="flex flex-col gap-1.5">
       <legend class="mb-1 text-sm font-medium">Also</legend>
@@ -114,6 +143,24 @@
         {@render scopeBox(scope, label)}
       {/each}
     </fieldset>
+    {#if names.length === 1}
+      <Field
+        label="Addresses"
+        for="block-addresses"
+        hint="IP addresses or networks such as 203.0.113.0/24, separated by spaces. Anyone connecting from them is blocked the same way.">
+        <Input
+          id="block-addresses"
+          class="font-mono"
+          placeholder="Optional"
+          autocomplete="off"
+          bind:value={addresses} />
+      </Field>
+      <Button
+        variant="link"
+        class="-mt-2 self-start text-xs"
+        disabled={finding}
+        onclick={() => void addTheirs()}>Add their current address</Button>
+    {/if}
     {#if !scopes.length}
       <p class="text-xs text-danger">Select at least one item to block.</p>
     {/if}
