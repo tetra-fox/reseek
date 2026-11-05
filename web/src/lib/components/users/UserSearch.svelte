@@ -9,11 +9,12 @@
   type Props = {
     /** the text a moment after typing stops, which the list under the box filters by */
     onsearch: (text: string) => void;
+    /** what is typed in the box */
+    typed?: string;
   };
 
-  let { onsearch }: Props = $props();
+  let { onsearch, typed = $bindable("") }: Props = $props();
 
-  let typed = $state("");
   let open = $state(false);
 
   const text = $derived(typed.trim());

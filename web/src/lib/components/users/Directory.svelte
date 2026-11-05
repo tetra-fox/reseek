@@ -9,7 +9,6 @@
   import UserCheckIcon from "@lucide/svelte/icons/user-check";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import UsersIcon from "@lucide/svelte/icons/users";
-  import XIcon from "@lucide/svelte/icons/x";
   import { untrack } from "svelte";
 
   import { api, type Schemas } from "#lib/api/client.js";
@@ -18,12 +17,14 @@
   import Button from "#lib/components/ui/Button.svelte";
   import Checkbox from "#lib/components/ui/Checkbox.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import * as Filter from "#lib/components/ui/filter/filter.js";
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Select from "#lib/components/ui/Select.svelte";
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, dateTime, plural } from "#lib/format.js";
+  import { type ActiveFilter, TEXT_FILTER, typedFilter } from "#lib/lists/filtered.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -167,7 +168,28 @@
     picked.filter((name) => canManage(name) && !configBlocked(known(name)?.block))
   );
   const admin = $derived(session.can("Administrator"));
-  const filtered = $derived(!!(q || blocked || pinned || hasTransfers || presence || group || tag));
+  /** what is typed in the search box, which sets `q` a moment after typing stops */
+  let typed = $state("");
+  let grid = $state<HTMLElement | null>(null);
+  const refocus = () => grid?.focus();
+  const USERS = ["user", "users"] as const;
+  /** a filter that is on while `on` holds, which `off` turns off */
+  const when = (on: unknown, id: string, label: string, off: () => void): ActiveFilter[] =>
+    on ? [{ id, label, clear: () => refilter(off) }] : [];
+  const filters = $derived<ActiveFilter[]>([
+    ...typedFilter(q, () =>
+      refilter(() => {
+        q = "";
+        typed = "";
+      })
+    ),
+    ...when(blocked, "blocked", "Blocked", () => (blocked = false)),
+    ...when(pinned, "pinned", BUDDY.plural, () => (pinned = false)),
+    ...when(hasTransfers, "hasTransfers", "Has transfers", () => (hasTransfers = false)),
+    ...when(presence, "presence", presence, () => (presence = "")),
+    ...when(group, "group", `Group ${group}`, () => (group = "")),
+    ...when(tag, "tag", `Tagged ${tag}`, () => (tag = ""))
+  ]);
 
   const sortBy = (by: Schemas["UserSort"]) => {
     const first = by === "username" ? "asc" : "desc";
@@ -213,59 +235,57 @@
 {/snippet}
 
 <div class="flex flex-wrap items-center gap-inline">
-  <UserSearch onsearch={search} />
-  <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Filters">
-    {#each [{ label: "Blocked", on: blocked, set: (v: boolean) => (blocked = v) }, { label: BUDDY.plural, on: pinned, set: (v: boolean) => (pinned = v) }, { label: "Has transfers", on: hasTransfers, set: (v: boolean) => (hasTransfers = v) }] as chip (chip.label)}
-      <Button
-        size="sm"
-        variant={chip.on ? "secondary" : "outline"}
-        aria-pressed={chip.on}
-        onclick={() => refilter(() => chip.set(!chip.on))}>{chip.label}</Button>
-    {/each}
-    <Select
-      class="h-control-sm w-36"
-      aria-label="Presence"
-      bind:value={() => presence, (v) => refilter(() => (presence = v))}
-      options={[
-        { value: "", label: "Any presence" },
-        { value: "Online", label: "Online" },
-        { value: "Away", label: "Away" },
-        { value: "Offline", label: "Offline" }
-      ]} />
-    <!-- a group's name is the user's own, so the box takes the width of the one chosen -->
-    <Select
-      class="h-control-sm w-fit max-w-48 min-w-32"
-      aria-label="Group"
-      bind:value={() => group, (v) => refilter(() => (group = v))}
-      options={[
-        { value: "", label: "Any group" },
-        ...[...BUILTIN_GROUPS, ...userGroups()].map((g) => ({ value: g, label: g }))
-      ]} />
-    {#if tag}
-      <Badge tone="accent">
-        tag: {tag}
-        <button type="button" aria-label="Clear the tag" onclick={() => refilter(() => (tag = ""))}>
-          <XIcon />
-        </button>
-      </Badge>
-    {/if}
-  </div>
-  <span class="ml-auto text-sm text-fg-muted">{plural(total, "user", "users")}</span>
+  <UserSearch onsearch={search} bind:typed />
+  <Filter.Panel filters={filters.filter((f) => f.id !== TEXT_FILTER)}>
+    <Filter.Group label="Show">
+      {#each [{ label: "Blocked", on: blocked, set: (v: boolean) => (blocked = v) }, { label: BUDDY.plural, on: pinned, set: (v: boolean) => (pinned = v) }, { label: "Has transfers", on: hasTransfers, set: (v: boolean) => (hasTransfers = v) }] as chip (chip.label)}
+        <Filter.Chip pressed={chip.on} onclick={() => refilter(() => chip.set(!chip.on))}
+          >{chip.label}</Filter.Chip>
+      {/each}
+      <Select
+        class={["h-control-sm w-36", presence && Filter.FILTERING]}
+        aria-label="Presence"
+        bind:value={() => presence, (v) => refilter(() => (presence = v))}
+        options={[
+          { value: "", label: "Any presence" },
+          { value: "Online", label: "Online" },
+          { value: "Away", label: "Away" },
+          { value: "Offline", label: "Offline" }
+        ]} />
+      <!-- a group's name is the user's own, so the box takes the width of the one chosen -->
+      <Select
+        class={["h-control-sm w-fit max-w-48 min-w-32", group && Filter.FILTERING]}
+        aria-label="Group"
+        bind:value={() => group, (v) => refilter(() => (group = v))}
+        options={[
+          { value: "", label: "Any group" },
+          ...[...BUILTIN_GROUPS, ...userGroups()].map((g) => ({ value: g, label: g }))
+        ]} />
+    </Filter.Group>
+  </Filter.Panel>
+  {#if !filters.length}
+    <span class="ml-auto text-sm text-fg-muted">{plural(total, "user", "users")}</span>
+  {/if}
 </div>
+
+{#if loaded}
+  <Filter.Summary {filters} shown={total} total={null} noun={USERS} {refocus} />
+{/if}
 
 <LoadError loader={{ error, load }} />
 
 {#if !loaded}
   <Skeleton class="h-64" />
+{:else if !shown.length && filters.length}
+  <Filter.Empty {filters} total={null} noun={USERS} {refocus} />
 {:else if !shown.length}
   <EmptyState
     icon={UsersIcon}
-    title={filtered ? "No users match" : "No users yet"}
-    description={filtered
-      ? undefined
-      : "Users from transfers, private messages and browsing are listed here."} />
+    title="No users yet"
+    description="Users from transfers, private messages and browsing are listed here." />
 {:else}
   <div
+    bind:this={grid}
     class="overflow-x-auto rounded-card border bg-surface text-sm shadow-card outline-none focus-visible:ring-2 focus-visible:ring-accent"
     role="grid"
     aria-label="Users"

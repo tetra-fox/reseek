@@ -45,7 +45,7 @@ test("the dashboard shows more at a glance, each figure a link to its list", asy
   await page.goto("./#/dashboard");
   await page.getByRole("link", { name: /Users transferred with/ }).click();
   await expect(page).toHaveURL(/#\/users\?has=transfers$/);
-  await expect(page.getByRole("button", { name: "Has transfers" })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Has transfers", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true"
   );
