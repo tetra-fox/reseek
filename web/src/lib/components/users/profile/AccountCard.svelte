@@ -73,7 +73,7 @@
     <Button variant="ghost" size="sm" href={href(SOULSEEK_SETTINGS)}>Soulseek settings</Button>
   </div>
   {#if allowed && !online}
-    <p class="text-xs text-fg-muted">The password can be changed while logged in to the server.</p>
+    <p class="text-xs text-fg-muted">Log in to the server to change the password.</p>
   {/if}
   {#if notice}<p class="text-xs text-fg-muted">{notice}</p>{/if}
 </Card>

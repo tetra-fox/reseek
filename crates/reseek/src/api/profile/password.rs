@@ -52,7 +52,7 @@ async fn change_password(
   let client = app.network.client();
   if client.state() != ClientState::READY {
     return Err(ApiError::unavailable(Some(
-      "The password can be changed while logged in to the Soulseek server".to_string(),
+      "Not logged in to the Soulseek server".to_string(),
     )));
   }
   let _writing = app.profile_writes.lock().await;
