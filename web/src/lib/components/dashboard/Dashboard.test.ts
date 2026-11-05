@@ -121,7 +121,7 @@ describe("the dashboard", () => {
     expect(chart()).toMatch(/: Download count peaks at 1, [^;]*$/);
     expect(dashboardPrefs.hidden).toEqual(["Upload"]);
     press("Error rate");
-    expect(chart()).toMatch(/: Download error rate peaks at 0.0%, [^;]*$/);
+    expect(chart()).toMatch(/: Download error rate flat at 0.0%$/);
     // a view with one line has no direction to turn off
     press("Queue wait");
     expect(chart()).toMatch(/: Upload queue wait peaks at 1s, [^;]*$/);

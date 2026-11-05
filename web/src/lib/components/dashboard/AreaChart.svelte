@@ -51,14 +51,17 @@
     return on.length === 1 ? on[0].direction : undefined;
   });
 
-  /** What the chart says to a screen reader: each series' peak and when it was */
+  /**
+   * What the chart says to a screen reader: each series' peak and when it was, or that it stays
+   * on the floor
+   */
   const summary = $derived(
     `${label}: ${shown
       .map((s) => {
         const peak = data.reduce((a, b) => (b[s.key] > a[s.key] ? b : a), data[0]);
-        return peak
-          ? `${s.name} peaks at ${format(peak[s.key])}, ${xLabel(peak.timestamp)}`
-          : s.name;
+        if (!peak) return s.name;
+        if (peak[s.key] <= 0) return `${s.name} flat at ${format(0)}`;
+        return `${s.name} peaks at ${format(peak[s.key])}, ${xLabel(peak.timestamp)}`;
       })
       .join("; ")}`
   );
