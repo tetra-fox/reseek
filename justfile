@@ -67,7 +67,10 @@ docker-smoke: docker
     "$runtime" volume create "$name" > /dev/null
     trap '"$runtime" rm -f "$name" "$name-open" > /dev/null; "$runtime" volume rm "$name" > /dev/null' EXIT
     flags=(-v "$name:/app" -e RESEEK_NO_CONNECT=true -e RESEEK_NO_VERSION_CHECK=true)
-    if "$runtime" run --name "$name-open" "${flags[@]}" reseek > /dev/null 2>&1; then
+    # a refusal exits at once; still running after the timeout (124) means it started
+    status=0
+    timeout 60 "$runtime" run --name "$name-open" "${flags[@]}" reseek > /dev/null 2>&1 || status=$?
+    if [ "$status" = 0 ] || [ "$status" = 124 ]; then
       echo "the image started with the default password" >&2
       exit 1
     fi
