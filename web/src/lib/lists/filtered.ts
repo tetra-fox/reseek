@@ -4,7 +4,7 @@ import { listText, plural } from "#lib/format.js";
 export type ActiveFilter = {
   /** the chip's key, the same for as long as the filter is on */
   id: string;
-  /** what the chip reads: "Failed", "Matching “flac”" */
+  /** what the chip reads, as Failed or Matching "flac" */
   label: string;
   /** turns this filter off and leaves the others */
   clear: () => void;
@@ -20,7 +20,7 @@ export const TEXT_FILTER = "text";
 
 /** The filter a list's text box sets, while it holds anything; `clear` empties the box */
 export const typedFilter = (text: string, clear: () => void): ActiveFilter[] =>
-  text.trim() ? [{ id: TEXT_FILTER, label: `Matching “${text.trim()}”`, clear }] : [];
+  text.trim() ? [{ id: TEXT_FILTER, label: `Matching "${text.trim()}"`, clear }] : [];
 
 /**
  * How much of a list the filters leave: "Showing 12 of 340 downloads". A list that counts only

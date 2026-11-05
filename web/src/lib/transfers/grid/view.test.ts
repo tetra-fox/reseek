@@ -91,7 +91,7 @@ describe("the transfers view", () => {
       "Active",
       "Failed",
       "Marked fake",
-      "Matching \u201cflac\u201d"
+      'Matching "flac"'
     ]);
     on()[1].clear();
     expect(filters.states).toEqual(["active"]);
