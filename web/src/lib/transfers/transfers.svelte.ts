@@ -36,10 +36,17 @@ export class Transfers {
   /** transfers removed on screen whose removal waits until it can no longer be undone */
   hidden = new SvelteSet<string>();
   /**
-   * Each transfer by `fileKey`, the newest when a file was transferred more than once. Made again
-   * only when a transfer comes or goes: a transfer's progress patches the row it finds in place
+   * Each transfer by `fileKey`, the newest when a file was transferred more than once, leaving
+   * out those removed on screen. Made again only when a transfer comes, goes or is hidden: a
+   * transfer's progress patches the row it finds in place
    */
-  byFile = $derived(new Map(this.list.rows.map((t) => [fileKey(t.username, t.filename), t])));
+  byFile = $derived(
+    new Map(
+      this.list.rows
+        .filter((t) => !this.hidden.has(t.id))
+        .map((t) => [fileKey(t.username, t.filename), t])
+    )
+  );
 
   constructor(direction: Direction) {
     this.direction = direction;

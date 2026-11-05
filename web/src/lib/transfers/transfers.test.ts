@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { toasts } from "#lib/feedback/toast.svelte.js";
+import { dismiss, toasts } from "#lib/feedback/toast.svelte.js";
 import { transfer } from "#lib/testing/fixtures.js";
 import { fakeNetwork } from "#lib/testing/network.js";
 
-import { Transfers } from "./transfers.svelte";
+import { fileKey, Transfers } from "./transfers.svelte";
 
 describe("the transfers store", () => {
   afterEach(() => {
@@ -32,5 +32,19 @@ describe("the transfers store", () => {
     await downloads.placeInQueue(t);
     expect(downloads.queueErrors.has(t.id)).toBe(false);
     expect(downloads.list.get(t.id)?.placeInQueue).toBe(4);
+  });
+
+  it("leaves a removal that can still be undone out of the lookup by file", () => {
+    vi.useFakeTimers();
+    const downloads = new Transfers("download");
+    const t = transfer();
+    downloads.list.upsert(t);
+    const key = fileKey(t.username, t.filename);
+    downloads.removeLater([t.id]);
+    expect(downloads.byFile.has(key)).toBe(false);
+    toasts[0].action!.run();
+    dismiss(toasts[0].id);
+    expect(downloads.byFile.get(key)?.id).toBe(t.id);
+    vi.useRealTimers();
   });
 });
