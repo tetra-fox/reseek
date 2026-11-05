@@ -517,7 +517,9 @@ async fn a_report_from_an_older_version_lists_as_stale_keeps_its_judgment_and_is
 #[tokio::test]
 async fn a_batch_past_the_queue_limit_joins_the_queue_as_it_drains() {
   let app = app(&format!("{TRUSTED}{ONE_WORKER}"), &[]).await;
-  let names: Vec<String> = (0..QUEUE_LIMIT + 20)
+  // the queue holds its limit and the worker one more, so three follow unless the worker
+  // finishes three analyses while the batch is queued; every file is analyzed in turn
+  let names: Vec<String> = (0..QUEUE_LIMIT + 4)
     .map(|n| format!("batch/{n:02}.flac"))
     .collect();
   for name in &names {
