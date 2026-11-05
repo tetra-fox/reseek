@@ -38,7 +38,7 @@ pub async fn browse(edges: &Edges, username: &str, endpoint: SocketAddr) -> Brow
   }
   edges.activity.record(Some(username), ActivityKind::Browse);
   let started = Instant::now();
-  let (sees, _) = edges.users.sees_from(username, Some(endpoint.ip())).await;
+  let sees = edges.users.sees_from(username, endpoint.ip()).await;
   let reply = listing(edges, &edges.shares.view(sees)).await;
   let elapsed = millis(started);
   metrics.response_latency.observe(elapsed);
@@ -133,7 +133,7 @@ async fn folder(
   endpoint: SocketAddr,
   directory: &RemoteFilename,
 ) -> Option<Vec<Directory>> {
-  let (sees, _) = edges.users.sees_from(username, Some(endpoint.ip())).await;
+  let sees = edges.users.sees_from(username, endpoint.ip()).await;
   let view = edges.shares.view(sees);
   match edges
     .shares

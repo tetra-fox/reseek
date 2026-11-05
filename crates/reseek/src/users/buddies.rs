@@ -2,14 +2,10 @@
 //! user knows at once which shares they see. A buddy may also be trusted, which shows them the
 //! shares only trusted buddies see, and we may ask to be told when their presence changes.
 //! Every buddy is watched at each login and when added, so the server tells us their presence
-//! from one login to the next.
-//!
-//! A peer can give any name when it connects, so a request in a buddy's name is answered as a
-//! buddy only when it comes from the address the server reports for that name; a buddy behind
-//! another address, such as one on our own network, sees what everyone sees.
+//! from one login to the next. Whether a request in a buddy's name comes from the buddy is
+//! decided in `identity`.
 
 use std::collections::HashMap;
-use std::net::IpAddr;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use api_types::events::{BuddyPresenceChanged, Event};
@@ -17,39 +13,14 @@ use api_types::live::LiveFrame;
 use api_types::shares::ShareVisibility;
 use api_types::users::{Buddy, BuddyChange, UserPresence};
 use rusqlite::Connection;
-use soulseek_client::{Client, ClientState, LogLimiter};
+use soulseek_client::{Client, ClientState};
 use soulseek_proto::SERVER_USERNAME;
-use tracing::{Instrument, debug, info, warn};
+use tracing::{Instrument, debug, info};
 
 use super::Directory;
 use super::store::{self, Change};
 use crate::api::error::ApiError;
 use crate::sync::lock;
-
-/// Requests in a buddy's name from another address than the server reports, which a peer
-/// claiming the name can repeat at any rate.
-static IMPERSONATED: LogLimiter = LogLimiter::new();
-
-/// Why a request in a buddy's name was not confirmed.
-#[derive(Debug, PartialEq, Eq)]
-enum Unconfirmed {
-  /// the server reports no address for the name
-  Unknown,
-  /// the request came from another address than the one the server reports
-  Elsewhere { reported: IpAddr, from: IpAddr },
-}
-
-/// The address that confirms a request in a buddy's name, given the address the server reports
-/// for them and the one the request came from: the reported one, when the request came from it
-/// or, with `from` unknown, its answer goes there. An IPv4 address and the same address mapped
-/// into IPv6 are one address.
-fn confirmation(reported: Option<IpAddr>, from: Option<IpAddr>) -> Result<IpAddr, Unconfirmed> {
-  let reported = reported.ok_or(Unconfirmed::Unknown)?.to_canonical();
-  match from.map(|ip| ip.to_canonical()) {
-    Some(from) if from != reported => Err(Unconfirmed::Elsewhere { reported, from }),
-    _ => Ok(reported),
-  }
-}
 
 /// Every buddy by name, as `users.db` has them.
 pub struct Buddies {
@@ -125,7 +96,7 @@ impl Directory {
 
   /// The narrowest shares `username` sees once their name is confirmed: a trusted buddy's, a
   /// buddy's or everyone's. A request in our own name could come from anyone, so it sees what
-  /// everyone sees. [`Directory::sees_from`] confirms the name.
+  /// everyone sees. [`Directory::sees_from`] confirms the name first.
   pub fn sees(&self, username: &str) -> ShareVisibility {
     if self.is_us(username) {
       return ShareVisibility::Everyone;
@@ -134,53 +105,6 @@ impl Directory {
       Some(Buddy { trusted: true, .. }) => ShareVisibility::Trusted,
       Some(_) => ShareVisibility::Buddies,
       None => ShareVisibility::Everyone,
-    }
-  }
-
-  /// The narrowest shares a request in `username`'s name sees, with the address that confirmed
-  /// the name when that is more than everyone's. `from` is the address the request came from,
-  /// or for a search, the address of the connection its answer goes out on, `None` when a new
-  /// one would be opened to the address the server reports. A buddy whose address the server
-  /// does not report, or who asks from another one, sees what everyone sees.
-  pub async fn sees_from(
-    &self,
-    username: &str,
-    from: Option<IpAddr>,
-  ) -> (ShareVisibility, Option<IpAddr>) {
-    let standing = self.sees(username);
-    if standing == ShareVisibility::Everyone {
-      return (standing, None);
-    }
-    let reported = match self.client.get() {
-      Some(client) => client
-        .get_user_endpoint(username)
-        .await
-        .ok()
-        .map(|endpoint| endpoint.ip()),
-      None => None,
-    };
-    match confirmation(reported, from) {
-      Ok(at) => (standing, Some(at)),
-      Err(Unconfirmed::Unknown) => {
-        debug!(
-          username,
-          "the server reports no address for a buddy; answered as everyone"
-        );
-        (ShareVisibility::Everyone, None)
-      }
-      Err(Unconfirmed::Elsewhere { reported, from }) => {
-        if let Some(suppressed) = IMPERSONATED.allow() {
-          warn!(
-            username,
-            %reported,
-            %from,
-            suppressed,
-            "a request in a buddy's name came from another address than the server reports; \
-             answered as everyone"
-          );
-        }
-        (ShareVisibility::Everyone, None)
-      }
     }
   }
 
@@ -257,42 +181,5 @@ impl Directory {
     };
     self.live.publish(LiveFrame::UsersPresence(changed.clone()));
     self.events.raise(Event::BuddyPresenceChanged(changed));
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn a_buddys_name_is_confirmed_only_from_the_address_the_server_reports() {
-    let ip = |text: &str| -> IpAddr { text.parse().unwrap() };
-    let reported = Some(ip("203.0.113.5"));
-    assert_eq!(
-      confirmation(reported, Some(ip("203.0.113.5"))),
-      Ok(ip("203.0.113.5"))
-    );
-    assert_eq!(
-      confirmation(reported, Some(ip("::ffff:203.0.113.5"))),
-      Ok(ip("203.0.113.5")),
-      "a dual-stack listener's mapped address"
-    );
-    assert_eq!(
-      confirmation(reported, None),
-      Ok(ip("203.0.113.5")),
-      "the answer goes there"
-    );
-    assert_eq!(
-      confirmation(reported, Some(ip("192.168.1.20"))),
-      Err(Unconfirmed::Elsewhere {
-        reported: ip("203.0.113.5"),
-        from: ip("192.168.1.20")
-      }),
-      "a buddy on our own network is not confirmed either"
-    );
-    assert_eq!(
-      confirmation(None, Some(ip("203.0.113.5"))),
-      Err(Unconfirmed::Unknown)
-    );
   }
 }

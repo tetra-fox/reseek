@@ -14,6 +14,7 @@ mod browse;
 mod buddies;
 mod group_cache;
 mod groups;
+mod identity;
 mod info;
 mod interests;
 mod known;
@@ -64,6 +65,7 @@ use blocking::Blocks;
 use blocklist::Blocklist;
 use buddies::Buddies;
 use group_cache::GroupCache;
+use identity::Impersonations;
 use known::Known;
 use store::Stored;
 use touch::Toucher;
@@ -100,6 +102,8 @@ pub struct Directory {
   known: Known,
   /// our buddies
   buddies: Buddies,
+  /// when a request in a buddy's name from another address was last warned of
+  impersonations: Impersonations,
   /// held while our interests are read or written and then sent, so a login's send and a
   /// change made during it cannot interleave
   interests_sending: tokio::sync::Mutex<()>,
@@ -161,6 +165,7 @@ impl Directory {
       summaries: Mutex::new(HashMap::new()),
       known,
       buddies,
+      impersonations: Impersonations::default(),
       interests_sending: tokio::sync::Mutex::new(()),
     });
     tokio::spawn(

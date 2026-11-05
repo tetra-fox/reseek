@@ -292,11 +292,9 @@ async fn matches(
   let limit = options.throttling.search.incoming.response_file_limit as usize;
   let open = network
     .client()
-    .message_connections()
-    .into_iter()
-    .find(|(name, _)| name == username)
-    .map(|(_, remote)| remote.ip());
-  let (sees, confined_to) = edges.users.sees_from(username, open).await;
+    .message_connection_address(username)
+    .map(|remote| remote.ip());
+  let (sees, confined_to) = edges.users.search_sees(username, open).await;
   let view = edges.shares.view(sees);
   let query = excluding(query, &excluded);
   let files = query_shares(edges, &query, limit, &view, QUERY_BUDGET).await?;
