@@ -79,11 +79,15 @@ describe("the activity dock", () => {
     live.start();
     component = mount(ActivityDock, { target: document.body });
     await flush();
-    [...document.querySelectorAll("button")].find((b) => b.textContent === "Uploads")!.click();
+    [...document.querySelectorAll("button")]
+      .find((b) => b.textContent?.trim() === "Uploads")!
+      .click();
     flushSync();
     expect(
       [...document.querySelectorAll("[data-line]")].map((r) => r.getAttribute("data-line"))
     ).toEqual(["1"]);
-    [...document.querySelectorAll("button")].find((b) => b.textContent === "Uploads")!.click();
+    [...document.querySelectorAll("button")]
+      .find((b) => b.textContent?.trim() === "Uploads")!
+      .click();
   });
 });

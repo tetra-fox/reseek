@@ -24,11 +24,13 @@
   import { activityParts, activityText, baseName, KINDS, kindOf } from "#lib/activity/text.js";
   import Button from "#lib/components/ui/Button.svelte";
   import EmptyState from "#lib/components/ui/EmptyState.svelte";
+  import * as Filter from "#lib/components/ui/filter/filter.js";
   import LogTime from "#lib/components/ui/LogTime.svelte";
   import Notice from "#lib/components/ui/Notice.svelte";
   import ResizeHandle from "#lib/components/ui/ResizeHandle.svelte";
   import Username from "#lib/components/users/Username.svelte";
   import { formatBytes } from "#lib/format.js";
+  import type { ActiveFilter } from "#lib/lists/filtered.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
   import { keepCurrent } from "#lib/live/keep.svelte.js";
@@ -55,6 +57,15 @@
     (activityPrefs.hidden = hidden.has(type)
       ? activityPrefs.hidden.filter((t) => t !== type)
       : [...activityPrefs.hidden, type]);
+
+  let grid = $state<HTMLElement | null>(null);
+  const filters = $derived<ActiveFilter[]>(
+    KINDS.filter((k) => hidden.has(k.type)).map((k) => ({
+      id: k.type,
+      label: `${k.label} hidden`,
+      clear: () => (activityPrefs.hidden = activityPrefs.hidden.filter((t) => t !== k.type))
+    }))
+  );
 
   const list = new ListControl<ActivityEntry>({
     lines: () => shown,
@@ -106,14 +117,16 @@
   {/if}
   <header class="flex flex-wrap items-center gap-2 border-b px-gutter py-1.5">
     <h2 class="text-sm font-semibold">Activity</h2>
-    <div class="ml-auto flex flex-wrap items-center gap-1" role="group" aria-label="Activity types">
-      {#each KINDS as k (k.type)}
-        <button
-          type="button"
-          aria-pressed={!hidden.has(k.type)}
-          class="h-6 rounded-full border px-2 text-xs text-fg-subtle line-through transition-colors duration-(--motion-fast) hover:text-fg aria-pressed:border-transparent aria-pressed:bg-surface-muted aria-pressed:text-fg-muted aria-pressed:no-underline"
-          onclick={() => toggle(k.type)}>{k.label}</button>
-      {/each}
+    <div class="ml-auto flex flex-wrap items-center gap-1">
+      <Filter.Group label="Show">
+        {#each KINDS as k (k.type)}
+          <Filter.Chip
+            pressed={!hidden.has(k.type)}
+            hides
+            class="h-6 pr-2 pl-1.5 text-xs"
+            onclick={() => toggle(k.type)}>{k.label}</Filter.Chip>
+        {/each}
+      </Filter.Group>
       <Button
         variant="ghost"
         size="icon-sm"
@@ -135,7 +148,15 @@
       {/snippet}
     </Notice>
   {/if}
+  <Filter.Summary
+    {filters}
+    shown={shown.length}
+    total={activity.shown.length}
+    noun={["entry", "entries"]}
+    refocus={() => grid?.focus()}
+    class="mx-gutter mt-1.5" />
   <div
+    bind:this={grid}
     class="min-h-0 flex-1 overflow-y-auto px-gutter py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
     role="grid"
     aria-label="Activity"
@@ -183,7 +204,15 @@
         </span>
       </div>
     {:else}
-      <EmptyState icon={FolderOpenIcon} title="No activity yet" />
+      {#if activity.shown.length}
+        <Filter.Empty
+          {filters}
+          total={activity.shown.length}
+          noun={["entry", "entries"]}
+          refocus={() => grid?.focus()} />
+      {:else}
+        <EmptyState icon={FolderOpenIcon} title="No activity yet" />
+      {/if}
     {/each}
   </div>
 </section>
