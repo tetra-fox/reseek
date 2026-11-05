@@ -64,6 +64,8 @@
     class="relative flex max-w-[50vw] shrink-0 flex-col border-l bg-surface"
     style:width={`${width}px`}
     data-inspector
+    tabindex="-1"
+    {@attach inspector.attachPane}
     transition:opening>
     <ResizeHandle
       bind:value={width}

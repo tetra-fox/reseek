@@ -484,6 +484,30 @@ describe("the transfers table", () => {
       unmount(header);
     });
 
+    it("give focus to the pane when its menu removes the last transfer", async () => {
+      const a = transfer();
+      listing = [a];
+      await start();
+      signIn();
+      press(grid(), "ArrowDown");
+      press(grid(), "i");
+      const more = pane()!.querySelector<HTMLButtonElement>('[aria-label="More actions"]')!;
+      more.focus();
+      press(more, "Enter");
+      await vi.runOnlyPendingTimersAsync();
+      flushSync();
+      const remove = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((i) =>
+        i.textContent?.includes("Remove")
+      )!;
+      remove.focus();
+      press(remove, "Enter");
+      // short of the Undo's countdown, which would carry the removal out
+      await vi.advanceTimersByTimeAsync(100);
+      flushSync();
+      expect(pane()?.textContent).toContain("Select a file to see its details.");
+      expect(document.activeElement).toBe(pane());
+    });
+
     it("leave the docked inspector open on Escape, a menu taking it first", async () => {
       const a = transfer();
       listing = [a];

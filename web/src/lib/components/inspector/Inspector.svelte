@@ -58,6 +58,11 @@
 
   const analyzed = new FileReport(() => analysis);
 
+  // the file can leave while focus is on its header or in its menu, as when the menu removes it.
+  // bits-ui gives focus back to the menu's trigger only while the trigger is in the document, and
+  // the header leaves before the menu's portal does, so focus is looked at once both have gone
+  $effect(() => () => queueMicrotask(() => inspector.recover()));
+
   /** Keeps focus where it is at a press, so the keys go on moving through the list after one */
   const keepsFocus = (node: HTMLElement) => {
     const hold = (e: MouseEvent) => e.preventDefault();

@@ -55,6 +55,8 @@ class Inspector {
   present = $state.raw<() => boolean>(() => false);
   /** gives DOM focus to the screen's list */
   focusList = $state.raw<() => void>(() => {});
+  /** the docked pane's element */
+  #pane: HTMLElement | null = null;
   /** whether a phone's sheet is up, which is not remembered: a screen never opens under one */
   sheet = $state(false);
 
@@ -79,6 +81,25 @@ class Inspector {
   close() {
     if (!viewport.phone) this.focusList();
     this.#hide();
+  }
+
+  /** For `{@attach}` on the docked pane, which takes focus the list has no line to take */
+  attachPane = (node: HTMLElement) => {
+    this.#pane = node;
+    return () => {
+      if (this.#pane === node) this.#pane = null;
+    };
+  };
+
+  /**
+   * Gives focus that fell to the page, with what the pane showed, to the list, or to the pane
+   * when the list has nothing left to take it
+   */
+  recover() {
+    // a phone's sheet is a dialog, which keeps focus inside itself
+    if (viewport.phone || document.activeElement !== document.body) return;
+    this.focusList();
+    if (document.activeElement === document.body) this.#pane?.focus({ preventScroll: true });
   }
 
   /** Shows or hides the inspector from a control that stays, which keeps focus */
