@@ -20,12 +20,10 @@ use uuid::Uuid;
 use super::list_query;
 use crate::api::error::ApiError;
 use crate::api::extract::{Json, Path, Query};
+use crate::api::validate::USERNAME_CHARS;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized, ReadWrite};
 use crate::safety::{non_traversing, relative_everywhere, traverses};
-
-/// The longest username a batch takes.
-const USERNAME_CHARS: usize = 500;
 
 /// The downloads routes.
 pub fn routes() -> OpenApiRouter<AppState> {

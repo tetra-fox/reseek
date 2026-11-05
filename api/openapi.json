@@ -1172,7 +1172,7 @@
         "tags": [
           "chat"
         ],
-        "summary": "Replaces the pinned chats with the list given, in its order, and answers the list with the\nrevision the change made. The server's notices cannot be pinned, and a chat is named once.",
+        "summary": "Replaces the pinned chats with the list given, in its order, and answers the list with the\nrevision the change made. The server's notices cannot be pinned, a chat is named once, and\nat most 100 chats are pinned.",
         "operationId": "set_pins",
         "requestBody": {
           "content": {

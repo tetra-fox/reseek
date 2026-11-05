@@ -11,6 +11,9 @@ use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
 use super::error::ApiError;
 use crate::safety::{self, Os};
 
+/// The longest username a request takes.
+pub const USERNAME_CHARS: usize = 500;
+
 /// Refuses a page size outside 1 to `max`.
 pub fn limit(name: &str, value: u32, max: u32) -> Result<(), ApiError> {
   if value == 0 {

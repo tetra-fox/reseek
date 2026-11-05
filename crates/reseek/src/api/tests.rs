@@ -349,6 +349,22 @@ async fn requests_are_checked_before_any_service_is_asked() {
       400,
     ),
     (
+      "PUT",
+      "/api/v0/chat/pins".into(),
+      Some(json!([{ "kind": "user", "name": "a".repeat(501) }])),
+      400,
+    ),
+    (
+      "PUT",
+      "/api/v0/chat/pins".into(),
+      Some(json!(
+        (0..101)
+          .map(|n| json!({ "kind": "room", "name": format!("room{n}") }))
+          .collect::<Vec<_>>()
+      )),
+      400,
+    ),
+    (
       "POST",
       "/api/v0/rooms/joined".into(),
       Some(json!("indie")),

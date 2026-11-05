@@ -10,8 +10,12 @@ use utoipa_axum::routes;
 
 use crate::api::error::ApiError;
 use crate::api::extract::Json;
+use crate::api::validate::USERNAME_CHARS;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized, ReadWrite};
+
+/// The most chats that can be pinned.
+const PINS: usize = 100;
 
 /// The pinned chats route.
 pub fn routes() -> OpenApiRouter<AppState> {
@@ -35,7 +39,8 @@ async fn pins(
 }
 
 /// Replaces the pinned chats with the list given, in its order, and answers the list with the
-/// revision the change made. The server's notices cannot be pinned, and a chat is named once.
+/// revision the change made. The server's notices cannot be pinned, a chat is named once, and
+/// at most 100 chats are pinned.
 #[utoipa::path(
   put, path = "/chat/pins", tag = "chat", request_body = Vec<ChatPin>,
   responses(
@@ -49,10 +54,20 @@ async fn set_pins(
   _caller: Authorized<ReadWrite>,
   Json(pins): Json<Vec<ChatPin>>,
 ) -> Result<Json<ChatPins>, ApiError> {
+  if pins.len() > PINS {
+    return Err(ApiError::bad_request(format!(
+      "At most {PINS} chats can be pinned"
+    )));
+  }
   let mut seen = HashSet::new();
   for pin in &pins {
     if pin.name.is_empty() {
       return Err(ApiError::bad_request("A pinned chat has no name"));
+    }
+    if pin.name.chars().count() > USERNAME_CHARS {
+      return Err(ApiError::bad_request(format!(
+        "A pinned chat's name has at most {USERNAME_CHARS} characters"
+      )));
     }
     if pin.kind == ChatKind::User && pin.name == SERVER_USERNAME {
       return Err(ApiError::bad_request(

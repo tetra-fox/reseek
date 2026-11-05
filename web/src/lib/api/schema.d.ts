@@ -331,7 +331,8 @@ export interface paths {
         get: operations["pins"];
         /**
          * Replaces the pinned chats with the list given, in its order, and answers the list with the
-         *     revision the change made. The server's notices cannot be pinned, and a chat is named once.
+         *     revision the change made. The server's notices cannot be pinned, a chat is named once, and
+         *     at most 100 chats are pinned.
          */
         put: operations["set_pins"];
         post?: never;
