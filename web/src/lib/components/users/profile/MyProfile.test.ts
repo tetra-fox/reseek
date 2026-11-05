@@ -140,6 +140,33 @@ describe("your own profile page", () => {
     expect(saveButton().disabled).toBe(false);
   });
 
+  it("sends again only what failed to save", async () => {
+    const view = asAdmin();
+    let refuse = true;
+    const net = fakeNetwork((url, method) => {
+      if (url.pathname.endsWith("/api/v0/options/view")) return view;
+      if (url.pathname.endsWith("/api/v0/interests")) return interests;
+      if (url.pathname.endsWith("/api/v0/profile") && method === "GET") return own;
+      if (url.pathname.endsWith("/api/v0/profile") && refuse)
+        return { status: 409, body: { error: "The configuration file changed on disk" } };
+      if (method === "PUT") return { status: 204 };
+      return undefined;
+    });
+    component = mount(MyProfile, { target: document.body });
+    await flush();
+    type("plays the tuba");
+    pickPicture();
+    saveButton().click();
+    await flush();
+    expect(document.body.textContent).toContain("The configuration file changed on disk");
+
+    refuse = false;
+    saveButton().click();
+    await flush();
+    const puts = net.requests.filter((r) => r.method === "PUT").map((r) => r.url.pathname);
+    expect(puts).toEqual(["/api/v0/profile/picture", "/api/v0/profile", "/api/v0/profile"]);
+  });
+
   it("saves interests as they change, each on one list only", async () => {
     session.principal = { name: "me", role: "Administrator" } as never;
     app.state = { user: { username: "me" }, server: { isLoggedIn: true } } as never;

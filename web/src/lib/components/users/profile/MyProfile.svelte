@@ -112,45 +112,55 @@
 
   /**
    * Saves the draft as it is now; what changes while it runs stays a change to save, and the
-   * save is over once the profile has been read again
+   * save is over once the profile has been read again. Each part is cleared as it is saved, so
+   * after a failure the next save sends only what is left
    */
   const save = async () => {
     saving = true;
     error = "";
-    const steps: (() => Promise<{ ok: boolean; error?: string }>)[] = [];
+    const steps: { send: () => Promise<{ ok: boolean; error?: string }>; sent: () => void }[] = [];
     const file = picked;
-    const removing = removed;
     const description = text;
     if (file) {
-      steps.push(() =>
-        call(() =>
-          api.PUT("/api/v0/profile/picture", {
-            body: file as never,
-            headers: { "Content-Type": file.type },
-            bodySerializer: (body) => body as BodyInit
-          })
-        )
-      );
+      steps.push({
+        send: () =>
+          call(() =>
+            api.PUT("/api/v0/profile/picture", {
+              body: file as never,
+              headers: { "Content-Type": file.type },
+              bodySerializer: (body) => body as BodyInit
+            })
+          ),
+        sent: () => {
+          if (picked === file) picked = null;
+        }
+      });
     } else if (removed && profile?.hasPicture) {
-      steps.push(() => call(() => api.DELETE("/api/v0/profile/picture")));
+      steps.push({
+        send: () => call(() => api.DELETE("/api/v0/profile/picture")),
+        sent: () => (removed = false)
+      });
+    } else if (removed) {
+      // the picture was taken away elsewhere already
+      removed = false;
     }
     if (saved !== null && description !== saved) {
-      steps.push(() => call(() => api.PUT("/api/v0/profile", { body: { description } })));
+      steps.push({
+        send: () => call(() => api.PUT("/api/v0/profile", { body: { description } })),
+        sent: () => (saved = description)
+      });
     }
-    for (const step of steps) {
-      const outcome = await step();
+    for (const { send, sent } of steps) {
+      const outcome = await send();
       if (!outcome.ok) {
         error = outcome.error ?? "Could not save the profile";
         break;
       }
+      sent();
     }
     await ownProfile.loader.load();
     saving = false;
-    if (error) return;
-    saved = description;
-    if (picked === file) picked = null;
-    if (removing) removed = false;
-    toast("Profile saved");
+    if (!error) toast("Profile saved");
   };
 
   beforeNavigate(({ cancel, type }) => {
