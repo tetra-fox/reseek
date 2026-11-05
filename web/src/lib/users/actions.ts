@@ -93,13 +93,18 @@ export const profileOf = (username: string, refresh: boolean) =>
     })
   );
 
-/** Pins `username` to the top of the directory, or unpins them when `on` is false */
-export const pin = (username: string, on: boolean) =>
-  call(() =>
-    on
-      ? api.PUT("/api/v0/users/{username}/pin", { params: byUser(username) })
-      : api.DELETE("/api/v0/users/{username}/pin", { params: byUser(username) })
-  );
+/**
+ * Makes `username` a buddy, or with `change` sets whether they are trusted and whether we are told
+ * of their presence; what `change` leaves out keeps its value
+ */
+export const befriend = (username: string, change: Schemas["BuddyChange"] = {}) =>
+  call(() => api.PUT("/api/v0/users/{username}/buddy", { params: byUser(username), body: change }));
+
+/** Makes `username` a buddy, or takes them off the buddy list when `on` is false */
+export const setBuddy = (username: string, on: boolean) =>
+  on
+    ? befriend(username)
+    : call(() => api.DELETE("/api/v0/users/{username}/buddy", { params: byUser(username) }));
 
 /** The names of the user-defined upload groups in the options in effect */
 export const userGroups = (): string[] =>

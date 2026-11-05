@@ -10,7 +10,7 @@ import { users } from "#lib/users/users.svelte.js";
 import { isNotifyMode, type NotifyMode, playsSound, showsDesktop } from "./modes";
 import notificationSound from "./notification.wav?url";
 
-/** The notification options, `chat.notifications` and `notifications.transfers` together */
+/** The notification options, `chat.notifications` and `notifications.*` together */
 export type NotifyOptions = {
   onlyWhenHidden: boolean;
   privateMessages: NotifyMode;
@@ -18,12 +18,15 @@ export type NotifyOptions = {
   roomMessages: NotifyMode;
   jobFinished: NotifyMode;
   uploadQueued: NotifyMode;
+  buddyPresence: NotifyMode;
 };
 
 /** The notification options in effect, their defaults where the options don't say */
 export const notifyOptions = (): NotifyOptions => {
   const chat = fields(fields(fields(app.options).chat).notifications);
-  const transfers = fields(fields(fields(app.options).notifications).transfers);
+  const others = fields(fields(app.options).notifications);
+  const transfers = fields(others.transfers);
+  const buddies = fields(others.buddies);
   const mode = (value: unknown, otherwise: NotifyMode) => (isNotifyMode(value) ? value : otherwise);
   return {
     onlyWhenHidden: typeof chat.only_when_hidden === "boolean" ? chat.only_when_hidden : true,
@@ -31,7 +34,8 @@ export const notifyOptions = (): NotifyOptions => {
     mentions: mode(chat.mentions, "both"),
     roomMessages: mode(chat.room_messages, "off"),
     jobFinished: mode(transfers.job_finished, "both"),
-    uploadQueued: mode(transfers.upload_queued, "off")
+    uploadQueued: mode(transfers.upload_queued, "off"),
+    buddyPresence: mode(buddies.presence, "both")
   };
 };
 

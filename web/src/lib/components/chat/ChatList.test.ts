@@ -216,10 +216,11 @@ describe("the chat list", () => {
 
   it("does not sort a buddy first", async () => {
     start();
-    fakeNetwork(() => ({ username: "bob", pinned: true }));
+    const buddy = { trusted: false, notifyPresence: false };
+    fakeNetwork(() => ({ username: "bob", buddy }));
     await users.load("bob");
     flushSync();
-    expect(users.get("bob")?.pinned).toBe(true);
+    expect(users.get("bob")?.buddy).toEqual(buddy);
     expect(shown().slice(-2)).toEqual(["user:alice", "user:bob"]);
   });
 

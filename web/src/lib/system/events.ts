@@ -10,6 +10,7 @@ const TYPES: Record<Schemas["EventType"], true> = {
   RoomMessageReceived: true,
   UserBlocked: true,
   UserUnblocked: true,
+  BuddyPresenceChanged: true,
   TokenCreated: true,
   TokenRevoked: true,
   SessionCreated: true,

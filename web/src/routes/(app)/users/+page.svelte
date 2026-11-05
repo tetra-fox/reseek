@@ -4,31 +4,41 @@
 
   import Crumbs from "#lib/components/shell/Crumbs.svelte";
   import BlockedList from "#lib/components/users/BlockedList.svelte";
+  import BuddyList from "#lib/components/users/BuddyList.svelte";
   import Directory from "#lib/components/users/Directory.svelte";
   import { href, route, userHref } from "#lib/nav.js";
+  import { BUDDY } from "#lib/wording.js";
 
   // /users is the directory; ?user=<name> goes to that user's profile, ?tag= filters by a tag,
-  // ?has=transfers those we transferred with, ?tab=blocked shows the blocked users
+  // ?has=transfers those we transferred with, ?tab=buddies shows the buddies and ?tab=blocked the
+  // blocked users
   const query = $derived(route(page.url).query);
   $effect(() => {
     const user = query.get("user");
     if (user) void goto(userHref(user), { replace: true });
   });
-  const tab = $derived(query.get("tab") === "blocked" ? "blocked" : "all");
+  const TABS = [
+    { id: "all", title: "All users", to: "/users" },
+    { id: "buddies", title: BUDDY.plural, to: "/users?tab=buddies" },
+    { id: "blocked", title: "Blocked users", to: "/users?tab=blocked" }
+  ];
+  const tab = $derived(TABS.find((t) => t.id === query.get("tab")) ?? TABS[0]);
 </script>
 
-{#if tab === "blocked"}<Crumbs steps={[{ label: "Blocked users" }]} />{/if}
+{#if tab.id !== "all"}<Crumbs steps={[{ label: tab.title }]} />{/if}
 
 <nav aria-label="Users" class="flex gap-1">
-  {#each [{ id: "all", title: "All users", to: "/users" }, { id: "blocked", title: "Blocked users", to: "/users?tab=blocked" }] as t (t.id)}
-    <a href={href(t.to)} aria-current={tab === t.id ? "page" : undefined} class="nav-tab">
+  {#each TABS as t (t.id)}
+    <a href={href(t.to)} aria-current={tab.id === t.id ? "page" : undefined} class="nav-tab">
       {t.title}
     </a>
   {/each}
 </nav>
 
-{#if tab === "blocked"}
+{#if tab.id === "blocked"}
   <BlockedList />
+{:else if tab.id === "buddies"}
+  <BuddyList />
 {:else}
   {#key `${query.get("tag")}|${query.get("has")}`}
     <Directory tag={query.get("tag")} withTransfers={query.get("has") === "transfers"} />

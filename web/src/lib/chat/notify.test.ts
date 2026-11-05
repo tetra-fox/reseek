@@ -23,7 +23,8 @@ const options: NotifyOptions = {
   mentions: "both",
   roomMessages: "off",
   jobFinished: "both",
-  uploadQueued: "off"
+  uploadQueued: "off",
+  buddyPresence: "both"
 };
 const arrival = (fields: Partial<Arrival>): Arrival => ({
   kind: "private",

@@ -34,7 +34,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { canManage, configBlocked, pin, reach, userGroups } from "#lib/users/actions.js";
+  import { canManage, configBlocked, reach, setBuddy, userGroups } from "#lib/users/actions.js";
   import { blocking, toggleBlock, unblockMany } from "#lib/users/block.svelte.js";
   import { type UserSummary, users as usersStore } from "#lib/users/users.svelte.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
@@ -69,7 +69,7 @@
   let error = $state("");
   let q = $state("");
   let blocked = $state(false);
-  let pinned = $state(false);
+  let buddies = $state(false);
   // svelte-ignore state_referenced_locally
   let hasTransfers = $state(withTransfers);
   let presence = $state<Schemas["UserPresence"] | "">("");
@@ -85,7 +85,7 @@
   const query = $derived({
     q: q || undefined,
     blocked: blocked || undefined,
-    pinned: pinned || undefined,
+    buddy: buddies || undefined,
     hasTransfers: hasTransfers || undefined,
     presence: presence || undefined,
     group: group || undefined,
@@ -142,10 +142,10 @@
   );
   $effect(() => live.on("users.removed", ({ username }) => rows.remove(username)));
 
-  /** the loaded users, pinned ones first within the sort */
+  /** the loaded users, buddies first within the sort */
   const shown = $derived.by(() => {
     const users = order.flatMap((name) => rows.get(name) ?? []);
-    return [...users.filter((u) => u.pinned), ...users.filter((u) => !u.pinned)];
+    return [...users.filter((u) => u.buddy), ...users.filter((u) => !u.buddy)];
   });
 
   const list = new ListControl<UserSummary>({
@@ -184,7 +184,7 @@
       })
     ),
     ...when(blocked, "blocked", "Blocked", () => (blocked = false)),
-    ...when(pinned, "pinned", BUDDY.plural, () => (pinned = false)),
+    ...when(buddies, "buddies", BUDDY.plural, () => (buddies = false)),
     ...when(hasTransfers, "hasTransfers", "Has transfers", () => (hasTransfers = false)),
     ...when(presence, "presence", presence, () => (presence = "")),
     ...when(group, "group", `Group ${group}`, () => (group = "")),
@@ -207,8 +207,8 @@
     if (text !== q) refilter(() => (q = text));
   };
 
-  const togglePin = async (u: UserSummary) => {
-    const outcome = await pin(u.username, !u.pinned);
+  const toggleBuddy = async (u: UserSummary) => {
+    const outcome = await setBuddy(u.username, !u.buddy);
     if (!outcome.ok) toast(outcome.error, "error");
   };
   const unblockAll = (names: string[]) => unblockMany(names.filter((name) => known(name)?.block));
@@ -238,7 +238,7 @@
   <UserSearch onsearch={search} bind:typed />
   <Filter.Panel {filters}>
     <Filter.Group label="Show">
-      {#each [{ label: "Blocked", on: blocked, set: (v: boolean) => (blocked = v) }, { label: BUDDY.plural, on: pinned, set: (v: boolean) => (pinned = v) }, { label: "Has transfers", on: hasTransfers, set: (v: boolean) => (hasTransfers = v) }] as chip (chip.label)}
+      {#each [{ label: "Blocked", on: blocked, set: (v: boolean) => (blocked = v) }, { label: BUDDY.plural, on: buddies, set: (v: boolean) => (buddies = v) }, { label: "Has transfers", on: hasTransfers, set: (v: boolean) => (hasTransfers = v) }] as chip (chip.label)}
         <Filter.Chip pressed={chip.on} onclick={() => refilter(() => chip.set(!chip.on))}
           >{chip.label}</Filter.Chip>
       {/each}
@@ -346,7 +346,7 @@
           <span role="gridcell" class="flex w-0 min-w-full items-center gap-2">
             <Avatar name={u.username} pictureUrl={u.info?.pictureUrl} class="size-7 text-xs" />
             <Username name={u.username} />
-            {#if u.pinned}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
+            {#if u.buddy}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
             {#if u.block}<Badge tone="danger">blocked</Badge>{/if}
           </span>
           <span role="gridcell" class="flex items-center gap-1.5 text-xs">
@@ -384,11 +384,11 @@
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label={u.pinned ? BUDDY.remove : BUDDY.add}
-                title={u.pinned ? BUDDY.remove : BUDDY.add}
-                aria-pressed={u.pinned}
-                onclick={() => void togglePin(u)}>
-                {#if u.pinned}<UserCheckIcon class="text-accent" />{:else}<UserPlusIcon />{/if}
+                aria-label={u.buddy ? BUDDY.remove : BUDDY.add}
+                title={u.buddy ? BUDDY.remove : BUDDY.add}
+                aria-pressed={!!u.buddy}
+                onclick={() => void toggleBuddy(u)}>
+                {#if u.buddy}<UserCheckIcon class="text-accent" />{:else}<UserPlusIcon />{/if}
               </Button>
               <Button
                 variant="ghost"

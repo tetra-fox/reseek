@@ -11,6 +11,7 @@
   import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import UserCheckIcon from "@lucide/svelte/icons/user-check";
+  import UserMinusIcon from "@lucide/svelte/icons/user-minus";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
 
   import { api, byUser, type Schemas } from "#lib/api/client.js";
@@ -35,10 +36,11 @@
   import { clock } from "#lib/ui/clock.svelte.js";
   import {
     assignGroup,
+    befriend,
     canManage,
     configBlocked,
-    pin,
     reach,
+    setBuddy,
     userGroups
   } from "#lib/users/actions.js";
   import { blocking, unblock } from "#lib/users/block.svelte.js";
@@ -131,7 +133,9 @@
             {/snippet}
           </Tooltip>
         {/if}
-        {#if p.pinned}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
+        {#if p.buddy}<Badge tone="info"
+            >{p.buddy.trusted ? `trusted ${BUDDY.badge}` : BUDDY.badge}</Badge
+          >{/if}
         {#each p.tags as tag (tag)}
           <a class="inline-flex" href={href(`/users?tag=${encodeURIComponent(tag)}`)}>
             <Badge tone="outline">{tag}</Badge>
@@ -190,9 +194,35 @@
           <Button variant="outline" size="sm" onclick={() => blocking.ask(name)}
             ><BanIcon />Block</Button>
         {/if}
-        <Button variant="outline" size="sm" onclick={() => void run(() => pin(name, !p.pinned))}>
-          {#if p.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
-        </Button>
+        {#if p.buddy}
+          {@const buddy = p.buddy}
+          <Menu.Root>
+            <Menu.Trigger>
+              {#snippet child({ props })}
+                <Button {...props} variant="outline" size="sm"
+                  ><UserCheckIcon />{BUDDY.noun}<ChevronDownIcon /></Button>
+              {/snippet}
+            </Menu.Trigger>
+            <Menu.Content align="start">
+              <Menu.CheckboxItem
+                checked={buddy.trusted}
+                title={BUDDY.trustedHint}
+                onCheckedChange={(on) => void run(() => befriend(name, { trusted: on }))}
+                >{BUDDY.trusted}</Menu.CheckboxItem>
+              <Menu.CheckboxItem
+                checked={buddy.notifyPresence}
+                title={BUDDY.notifyHint}
+                onCheckedChange={(on) => void run(() => befriend(name, { notifyPresence: on }))}
+                >{BUDDY.notify}</Menu.CheckboxItem>
+              <Menu.Separator />
+              <Menu.Item onSelect={() => void run(() => setBuddy(name, false))}
+                ><UserMinusIcon />{BUDDY.remove}</Menu.Item>
+            </Menu.Content>
+          </Menu.Root>
+        {:else}
+          <Button variant="outline" size="sm" onclick={() => void run(() => setBuddy(name, true))}
+            ><UserPlusIcon />{BUDDY.add}</Button>
+        {/if}
       {/if}
       <Button variant="outline" size="sm" onclick={() => void run(() => mute(!p.muted))}>
         {#if p.muted}<BellIcon />Unmute{:else}<BellOffIcon />Mute{/if}

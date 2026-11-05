@@ -16,7 +16,7 @@
   import { ago, formatSpeed, plural } from "#lib/format.js";
   import { userHref } from "#lib/nav.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { canManage, configBlocked, pin, reach, USER_ACTIONS } from "#lib/users/actions.js";
+  import { canManage, configBlocked, reach, setBuddy, USER_ACTIONS } from "#lib/users/actions.js";
   import { nameColor } from "#lib/users/colors.js";
   import { firstLines, ownProfile } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users } from "#lib/users/users.svelte.js";
@@ -74,10 +74,10 @@
     return text === null || text === undefined ? user?.description : firstLines(text, 3) || null;
   });
   const manageable = $derived(canManage(name));
-  const pinning = new Busy();
-  const togglePin = () =>
-    pinning.run(async () => {
-      const outcome = await pin(name, !user?.pinned);
+  const befriending = new Busy();
+  const toggleBuddy = () =>
+    befriending.run(async () => {
+      const outcome = await setBuddy(name, !user?.buddy);
       if (outcome.ok) await users.load(name, { fresh: true });
       else toast(outcome.error, "error");
       return outcome;
@@ -121,7 +121,7 @@
           </Tooltip>
         {/if}
         {#if user.isPrivileged}<Badge tone="warning">privileged</Badge>{/if}
-        {#if user.pinned}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
+        {#if user.buddy}<Badge tone="info">{BUDDY.badge}</Badge>{/if}
         {#each tags.slice(0, 3) as tag (tag)}
           <Badge tone="outline">{tag}</Badge>
         {/each}
@@ -164,10 +164,10 @@
       <Button
         size="sm"
         variant="outline"
-        aria-pressed={!!user?.pinned}
-        disabled={pinning.running}
-        onclick={togglePin}>
-        {#if user?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
+        aria-pressed={!!user?.buddy}
+        disabled={befriending.running}
+        onclick={toggleBuddy}>
+        {#if user?.buddy}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
       </Button>
     {/if}
     <span class="ml-auto flex">

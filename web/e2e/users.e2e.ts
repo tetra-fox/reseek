@@ -22,7 +22,7 @@ const alice = {
   description: null,
   tags: ["jazz"],
   muted: false,
-  pinned: false,
+  buddy: null,
   conversation: null,
   endpoint: null,
   figures: { downloads: counts, uploads: counts, messages: { in: 1, out: 1, unread: 0 } },
@@ -211,17 +211,18 @@ test("the dropdown fits a phone at the largest text size", async ({ page }) => {
 });
 
 test("a user's card and row offer Message, Browse shares and Add buddy", async ({ page }) => {
-  let pinned = false;
+  let buddy: { trusted: boolean; notifyPresence: boolean } | null = null;
   await page.route("**/api/v0/users?**", (route) =>
-    route.fulfill({ json: { users: [{ ...alice, pinned }], total: 1 } })
+    route.fulfill({ json: { users: [{ ...alice, buddy }], total: 1 } })
   );
   await page.route("**/api/v0/users/alice/**", (route) => {
     const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/pin")) {
-      pinned = route.request().method() === "PUT";
+    if (url.pathname.endsWith("/buddy")) {
+      const added = route.request().method() === "PUT";
+      buddy = added ? { trusted: false, notifyPresence: false } : null;
       return route.fulfill({ status: 204 });
     }
-    return route.fulfill({ json: { ...alice, pinned } });
+    return route.fulfill({ json: { ...alice, buddy } });
   });
   await login(page, "/users");
   const row = page.locator('[data-line="alice"]');

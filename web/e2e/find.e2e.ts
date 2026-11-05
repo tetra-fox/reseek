@@ -18,7 +18,7 @@ const directory = (page: Page) =>
       group: { name: "default", source: "builtin", priority: 1, color: null },
       tags: [],
       muted: false,
-      pinned: false,
+      buddy: null,
       lastSeenAt: null,
       figures: {
         uploads: { succeeded: 0, failed: 0, active: 0, queued: 0 },

@@ -5,12 +5,17 @@ export const UNTIL_RESTART = "until restart";
 export const gapNotice = (span: string) =>
   `Chat history unavailable ${span} (disconnected from Soulseek)`;
 
-/** The words for pinning a user, which keeps them first in lists and is the buddy list */
+/** The words for the buddy list and what a buddy can be */
 export const BUDDY = {
   add: "Add buddy",
   remove: "Remove buddy",
   badge: "buddy",
-  plural: "Buddies"
+  noun: "Buddy",
+  plural: "Buddies",
+  trusted: "Trusted",
+  trustedHint: "Also sees the folders shared with trusted buddies only",
+  notify: "Notify when online",
+  notifyHint: "Tells you when they come online, go away or go offline"
 } as const;
 
 /** Why Unblock is unavailable for a user the configuration blocks */

@@ -22,7 +22,7 @@ const summary = (username: string, fields: Partial<Schemas["UserSummary"]> = {})
     group: { name: "default", source: "builtin", priority: 1, color: null },
     tags: [],
     muted: false,
-    pinned: false,
+    buddy: null,
     lastSeenAt: "2026-10-26T10:00:00Z",
     figures: {
       downloads: { succeeded: 0, failed: 0, active: 0, queued: 0 },
@@ -61,8 +61,11 @@ describe("the users directory", () => {
   const grid = () => document.querySelector("[role=grid]")!;
   const line = (name: string) => document.querySelector(`[data-line="${name}"]`)!;
 
-  it("lists pinned users first and patches a row in place", async () => {
-    const net = await start([summary("bob"), summary("carol", { pinned: true })]);
+  it("lists buddies first and patches a row in place", async () => {
+    const net = await start([
+      summary("bob"),
+      summary("carol", { buddy: { trusted: false, notifyPresence: false } })
+    ]);
     expect(
       [...document.querySelectorAll("[data-line]")].map((l) => l.getAttribute("data-line"))
     ).toEqual(["carol", "bob"]);

@@ -6,29 +6,37 @@
 
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
-  import { configBlocked, pin } from "#lib/users/actions.js";
+  import { befriend, configBlocked, setBuddy } from "#lib/users/actions.js";
   import { toggleBlock } from "#lib/users/block.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
   import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
-  // a menu's buddy and block items, for a user `canManage` allows
+  // a menu's buddy and block items, for a user `canManage` allows; a buddy also has the notify
+  // choice
   let { name }: { name: string } = $props();
 
   const user = $derived(users.get(name));
   $effect(() => void users.load(name));
 
   const busy = new Busy();
-  const togglePin = () =>
+  const write = (change: () => ReturnType<typeof befriend>) =>
     busy.run(async () => {
-      const outcome = await pin(name, !user?.pinned);
+      const outcome = await change();
       if (outcome.ok) await users.load(name, { fresh: true });
       return outcome;
     });
 </script>
 
-<Menu.Item onSelect={togglePin}>
-  {#if user?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
+<Menu.Item onSelect={() => write(() => setBuddy(name, !user?.buddy))}>
+  {#if user?.buddy}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
 </Menu.Item>
+{#if user?.buddy}
+  <Menu.CheckboxItem
+    checked={user.buddy.notifyPresence}
+    title={BUDDY.notifyHint}
+    onCheckedChange={(on) => write(() => befriend(name, { notifyPresence: on }))}
+    >{BUDDY.notify}</Menu.CheckboxItem>
+{/if}
 <Menu.Item
   disabled={configBlocked(user?.block)}
   title={configBlocked(user?.block) ? CONFIG_BLOCKED : undefined}

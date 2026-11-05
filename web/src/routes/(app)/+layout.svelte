@@ -34,6 +34,7 @@
   import { togglesActivity } from "#lib/ui/keys.js";
   // listens for transfer frames from the start, so its notifications follow every screen
   import "#lib/transfers/notices.svelte.js";
+  import "#lib/users/presence.svelte.js";
   import { SCREEN_FAILED } from "#lib/wording.js";
 
   let { children } = $props();

@@ -16,7 +16,7 @@ const summary = {
   info: { hasPicture: true, pictureUrl: "/api/v0/users/alice/picture?v=ab" },
   tags: [],
   muted: false,
-  pinned: false,
+  buddy: null,
   figures: {
     downloads: { succeeded: 1, failed: 0, active: 0, queued: 0 },
     uploads: { succeeded: 2, failed: 0, active: 0, queued: 0 },

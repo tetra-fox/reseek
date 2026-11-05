@@ -286,6 +286,8 @@ export const sections: Section[] = [
         }
       },
       { key: "shares.share_downloads", label: "Share the downloads folder" },
+      { key: "shares.buddies_only", label: "Shares only buddies see, by alias" },
+      { key: "shares.trusted_only", label: "Shares only trusted buddies see, by alias" },
       { key: "shares.filters", label: "Excluded files", control: "regex-list" },
       { key: "shares.follow_symlinks", label: "Follow symbolic links" },
       { key: "shares.cache.retention", label: "Rescan interval", placeholder: "never" },
@@ -428,6 +430,12 @@ export const sections: Section[] = [
       ...under("Transfers", [
         { key: "notifications.transfers.job_finished", label: "Downloads finished" },
         { key: "notifications.transfers.upload_queued", label: "An upload was queued" }
+      ]),
+      ...under("Buddies", [
+        {
+          key: "notifications.buddies.presence",
+          label: "A buddy came online, went away or offline"
+        }
       ])
     ]
   },
