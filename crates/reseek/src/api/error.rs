@@ -169,10 +169,10 @@ impl ApiError {
   pub fn detail(&self) -> Option<&str> {
     self.detail.as_deref()
   }
-}
 
-impl IntoResponse for ApiError {
-  fn into_response(self) -> Response {
+  /// The body that answers the error, logged as a response with it is, for an error sent as
+  /// part of a larger answer.
+  pub fn into_body(self) -> ErrorBody {
     let status = self.status;
     // the request's span, which every handler runs in, names the request
     match (&self.internal, self.logged) {
@@ -182,12 +182,19 @@ impl IntoResponse for ApiError {
         tracing::debug!(%status, error = self.error, detail = self.detail, "request refused");
       }
     }
-    let body = ErrorBody {
+    ErrorBody {
       error: self.error,
       detail: self.detail,
-    };
-    let mut response = (status, Json(body)).into_response();
-    if let Some(seconds) = self.retry_after {
+    }
+  }
+}
+
+impl IntoResponse for ApiError {
+  fn into_response(self) -> Response {
+    let status = self.status;
+    let retry_after = self.retry_after;
+    let mut response = (status, Json(self.into_body())).into_response();
+    if let Some(seconds) = retry_after {
       response
         .headers_mut()
         .insert(header::RETRY_AFTER, HeaderValue::from(seconds));

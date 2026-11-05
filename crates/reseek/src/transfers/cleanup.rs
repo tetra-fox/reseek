@@ -19,8 +19,8 @@ use crate::db::{Database, DbError, timestamp};
 /// Why a transfer left unfinished at the last stop ended.
 pub const SHUT_DOWN: &str = "Application shut down";
 
-/// The downloads to resume: the files of each user and batch.
-pub type Resumable = BTreeMap<(String, Option<Uuid>), Vec<FileRequest>>;
+/// The downloads to resume: the files of each user, batch and job.
+pub type Resumable = BTreeMap<(String, Option<Uuid>, Option<Uuid>), Vec<FileRequest>>;
 
 /// Ends every transfer left unfinished, removed ones included, as `Completed, Errored` with
 /// [`SHUT_DOWN`] at the time of this call, marking the downloads among them resumable. Returns
@@ -68,14 +68,14 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
 }
 
 /// Takes the downloads marked resumable that were not removed since, as files to enqueue
-/// grouped by user and batch, and clears the mark of every marked download, removed or not.
+/// grouped by user, batch and job, and clears the mark of every marked download, removed or not.
 pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
   db.write(move |conn| {
     let tx = conn.transaction()?;
     let mut groups = Resumable::new();
     {
       let mut select = tx.prepare(
-        "SELECT Username, BatchId, Filename, Size FROM Transfers WHERE Resumable = 1 \
+        "SELECT Username, BatchId, Filename, Size, JobId FROM Transfers WHERE Resumable = 1 \
          AND Direction = ?1 AND Removed = 0 ORDER BY RequestedAt, Id",
       )?;
       let rows = select.query_map(
@@ -86,15 +86,18 @@ pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
             row.get::<_, Option<String>>(1)?,
             text_at(row, 2)?,
             row.get::<_, i64>(3)?,
+            row.get::<_, Option<String>>(4)?,
           ))
         },
       )?;
       for row in rows {
-        let (username, batch, filename, size) = row?;
-        // batch ids are written by the download engine as UUIDs; another one resumes alone
+        let (username, batch, filename, size, job) = row?;
+        // batch and job ids are written by the download engine as UUIDs; another one resumes
+        // alone
         let batch = batch.and_then(|id| id.parse().ok());
+        let job = job.and_then(|id| id.parse().ok());
         groups
-          .entry((username, batch))
+          .entry((username, batch, job))
           .or_default()
           .push(FileRequest {
             filename,
@@ -193,7 +196,7 @@ mod tests {
     let taken = take_resumable(&db).await.unwrap();
     let files: Vec<(&str, &str)> = taken
       .iter()
-      .flat_map(|((user, _), files)| {
+      .flat_map(|((user, _, _), files)| {
         files
           .iter()
           .map(move |f| (user.as_str(), f.filename.as_str()))

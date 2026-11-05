@@ -24,7 +24,7 @@ use crate::db::{self, Database, DbError, Location, Schema};
 pub use record::{COLUMNS, Record, transfer};
 
 /// `transfers.db`: the `Transfers` and `Batches` tables and each transfer's state history.
-pub static SCHEMA: Schema = db::schema!("transfers", ["0001_initial"]);
+pub static SCHEMA: Schema = db::schema!("transfers", ["0001_initial", "0002_jobs"]);
 
 /// Opens `transfers.db` in `location`.
 pub async fn open(location: &Location) -> Result<Database, DbError> {

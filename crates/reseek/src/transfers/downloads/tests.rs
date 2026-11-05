@@ -1,7 +1,7 @@
 //! The download calls of the API against the in-memory daemon, which is not connected: finding
 //! a download by its peer and id, canceling and removing one no task runs, removing completed
-//! ones, a finished download's file served from where it was moved, and the removals and
-//! updates pushed on the `transfers` topic.
+//! ones, a finished download's file served from where it was moved, the removals and updates
+//! pushed on the `transfers` topic, and a job told of once its last download ended.
 
 use api_types::transfers::{TransferStates, UserResponse};
 use serde_json::{Value, json};
@@ -229,4 +229,57 @@ async fn removals_and_updates_are_pushed_on_the_transfers_topic() {
   let updated = stream.next().await.unwrap();
   assert_eq!(updated.event, "transfers.updated");
   assert_eq!(updated.data["state"], "Completed, Cancelled");
+}
+
+#[tokio::test]
+async fn a_job_is_told_once_by_the_cancel_that_ends_its_last_download() {
+  let app = app(TRUSTED, &[]).await;
+  let job = Uuid::new_v4();
+  let in_job = |record: Record| Record {
+    job_id: Some(job),
+    ..record
+  };
+  let first = in_job(done("alice", "@@a\\Album\\1.flac"));
+  let second = in_job(Record::download("alice", "@@a\\Album\\2.flac", 10, None));
+  let third = in_job(Record::download("alice", "@@a\\Album\\3.flac", 10, None));
+  for record in [&first, &second, &third] {
+    insert(&app, record).await;
+  }
+  let mut stream = app
+    .stream_from(
+      "127.0.0.1:1",
+      request("GET", "/api/v0/live?topics=transfers", None),
+    )
+    .await;
+  assert_eq!(stream.next().await.unwrap().event, "hello");
+  for record in [&third, &second] {
+    let uri = format!("/api/v0/transfers/downloads/alice/{}", record.id);
+    let (status, _) = app.call("DELETE", &uri, None).await;
+    assert_eq!(status, 204);
+  }
+  let mut frames = Vec::new();
+  for _ in 0..3 {
+    frames.push(stream.next().await.unwrap());
+  }
+  let events: Vec<&str> = frames.iter().map(|f| f.event.as_str()).collect();
+  assert_eq!(
+    events,
+    [
+      "transfers.updated",
+      "transfers.updated",
+      "transfers.job_finished"
+    ],
+    "the first cancel leaves a download of the job to end"
+  );
+  let told = &frames[2].data;
+  assert_eq!(told["id"], json!(job));
+  assert_eq!(told["folder"], "@@a\\Album");
+  assert_eq!(
+    [
+      &told["fileCount"],
+      &told["succeededCount"],
+      &told["canceledCount"]
+    ],
+    [3, 1, 2]
+  );
 }

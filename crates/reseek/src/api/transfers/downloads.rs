@@ -1,13 +1,14 @@
-//! The downloads routes: listing, enqueueing one by one or as a batch, the place in a peer's
-//! queue, canceling and removing.
+//! The downloads routes: listing, enqueueing one by one, as a batch or as a job of batches, the
+//! place in a peer's queue, canceling and removing.
 
 use std::collections::HashSet;
 
 use api_types::Page;
 use api_types::transfers::{
   Batch, BulkRequest, BulkResult, CancelQuery, EnqueueDownloadBatchRequest,
-  EnqueueDownloadBatchResponse, IncludeRemovedQuery, QueueDownloadRequest, QueueDownloadResponse,
-  Transfer, TransferListQuery, TransferQuery, UserResponse,
+  EnqueueDownloadBatchResponse, EnqueueDownloadJobRequest, EnqueueDownloadJobResponse,
+  IncludeRemovedQuery, QueueDownloadRequest, QueueDownloadResponse, Transfer, TransferListQuery,
+  TransferQuery, UserResponse,
 };
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -34,6 +35,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(download, cancel))
     .routes(routes!(place_in_queue))
     .routes(routes!(enqueue_batch))
+    .routes(routes!(enqueue_job))
     .routes(routes!(batch))
     .routes(routes!(remove_completed))
     .routes(routes!(bulk))
@@ -251,6 +253,65 @@ async fn enqueue_batch(
   let status = if answer.failures.is_empty() {
     StatusCode::CREATED
   } else if answer.failures.len() < count {
+    StatusCode::MULTI_STATUS
+  } else {
+    StatusCode::OK
+  };
+  Ok((status, Json(answer)).into_response())
+}
+
+/// Enqueues batches as one job, told of once when every download of it has ended. Each batch
+/// is checked as the batch call checks it, and the job is refused whole when one is not valid;
+/// a batch refused when it is enqueued, such as one whose user is offline, carries why and
+/// leaves the others enqueued. Answered 201 when every file was enqueued, 207 when some were,
+/// and 200 when none was.
+#[utoipa::path(
+  post, path = "/transfers/downloads/jobs", tag = "transfers",
+  request_body = EnqueueDownloadJobRequest,
+  responses(
+    (status = 201, body = EnqueueDownloadJobResponse),
+    (status = 207, body = EnqueueDownloadJobResponse),
+    (status = 200, body = EnqueueDownloadJobResponse),
+    (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
+    (status = 403, body = api_types::ErrorBody), (status = 429, body = api_types::ErrorBody),
+    (status = 503, body = api_types::ErrorBody)
+  )
+)]
+async fn enqueue_job(
+  State(app): State<AppState>,
+  caller: Authorized<ReadWrite>,
+  Json(request): Json<EnqueueDownloadJobRequest>,
+) -> Result<Response, ApiError> {
+  if request.batches.is_empty() {
+    return Err(ApiError::bad_request(
+      "The field Batches must contain at least one batch",
+    ));
+  }
+  for batch in &request.batches {
+    batch_request(batch)?;
+  }
+  let sizes: Vec<usize> = request.batches.iter().map(|b| b.files.len()).collect();
+  let answer = app.services.transfers.enqueue_job(request).await?;
+  let asked: usize = sizes.iter().sum();
+  let enqueued: usize = answer
+    .batches
+    .iter()
+    .zip(&sizes)
+    .filter(|(b, _)| b.error.is_none())
+    .map(|(b, size)| size - b.failures.len())
+    .sum();
+  info!(
+    by = caller.principal.subject,
+    job = %answer.id,
+    batches = answer.batches.len(),
+    refused = answer.batches.iter().filter(|b| b.error.is_some()).count(),
+    asked,
+    enqueued,
+    "download job enqueued"
+  );
+  let status = if enqueued == asked {
+    StatusCode::CREATED
+  } else if enqueued > 0 {
     StatusCode::MULTI_STATUS
   } else {
     StatusCode::OK

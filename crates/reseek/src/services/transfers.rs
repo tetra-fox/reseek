@@ -3,8 +3,9 @@
 use api_types::Page;
 use api_types::transfers::{
   Batch, BulkRequest, BulkResult, DebugTransfers, EnqueueDownloadBatchRequest,
-  EnqueueDownloadBatchResponse, QueueDownloadRequest, QueueDownloadResponse, Transfer,
-  TransferListQuery, UploadQueueStatus, UploadsQuery, UserResponse,
+  EnqueueDownloadBatchResponse, EnqueueDownloadJobRequest, EnqueueDownloadJobResponse,
+  QueueDownloadRequest, QueueDownloadResponse, Transfer, TransferListQuery, UploadQueueStatus,
+  UploadsQuery, UserResponse,
 };
 use async_trait::async_trait;
 use uuid::Uuid;
@@ -71,6 +72,16 @@ pub trait TransferService: Send + Sync {
     &self,
     request: EnqueueDownloadBatchRequest,
   ) -> Result<EnqueueDownloadBatchResponse, ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// Enqueues each batch of `request` as above, together as one job, and says what came of
+  /// each; a batch that is refused leaves the others enqueued. `request` has passed the API's
+  /// checks; two enqueues already running is a 429.
+  async fn enqueue_job(
+    &self,
+    request: EnqueueDownloadJobRequest,
+  ) -> Result<EnqueueDownloadJobResponse, ApiError> {
     Err(not_yet(DOMAIN))
   }
 

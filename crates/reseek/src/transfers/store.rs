@@ -19,9 +19,9 @@ pub fn insert(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
   conn.execute(
     "INSERT INTO Transfers (Id, BatchId, Username, Direction, Filename, Size, State, \
      StateDescription, RequestedAt, EnqueuedAt, StartedAt, EndedAt, BytesTransferred, \
-     AverageSpeed, PlaceInQueue, Exception, Removed, Attempts, NextAttemptAt, LocalPath) \
+     AverageSpeed, PlaceInQueue, Exception, Removed, Attempts, NextAttemptAt, LocalPath, JobId) \
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, \
-     ?19, ?20)",
+     ?19, ?20, ?21)",
     params![
       record.id.to_string(),
       record.batch_id.map(|id| id.to_string()),
@@ -43,6 +43,7 @@ pub fn insert(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
       record.attempts,
       time_text(record.next_attempt_at),
       record.local_path,
+      record.job_id.map(|id| id.to_string()),
     ],
   )?;
   entered(conn, record.id, record.state, record.requested_at)

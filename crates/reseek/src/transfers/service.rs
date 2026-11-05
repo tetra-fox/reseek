@@ -6,8 +6,9 @@ use std::sync::Arc;
 use api_types::Page;
 use api_types::transfers::{
   Batch, BulkRequest, BulkResult, DebugTransfers, EnqueueDownloadBatchRequest,
-  EnqueueDownloadBatchResponse, QueueDownloadRequest, QueueDownloadResponse, Transfer,
-  TransferListQuery, UploadQueueStatus, UploadsQuery, UserResponse,
+  EnqueueDownloadBatchResponse, EnqueueDownloadJobRequest, EnqueueDownloadJobResponse,
+  QueueDownloadRequest, QueueDownloadResponse, Transfer, TransferListQuery, UploadQueueStatus,
+  UploadsQuery, UserResponse,
 };
 use async_trait::async_trait;
 use uuid::Uuid;
@@ -65,6 +66,13 @@ impl TransferService for Transfers {
     request: EnqueueDownloadBatchRequest,
   ) -> Result<EnqueueDownloadBatchResponse, ApiError> {
     self.downloads.enqueue_batch(request).await
+  }
+
+  async fn enqueue_job(
+    &self,
+    request: EnqueueDownloadJobRequest,
+  ) -> Result<EnqueueDownloadJobResponse, ApiError> {
+    self.downloads.enqueue_job(request).await
   }
 
   async fn batch(&self, id: Uuid, include_removed: bool) -> Result<Batch, ApiError> {

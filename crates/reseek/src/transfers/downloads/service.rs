@@ -6,8 +6,9 @@ use std::collections::BTreeMap;
 use api_types::Page;
 use api_types::transfers::{
   Batch, BulkAction, BulkFailure, BulkRequest, BulkResult, ClientTransfers, DebugTransfers,
-  EnqueueDownloadBatchRequest, EnqueueDownloadBatchResponse, QueueDownloadRequest,
-  QueueDownloadResponse, Transfer, TransferDirection, TransferListQuery, UserResponse,
+  EnqueueDownloadBatchRequest, EnqueueDownloadBatchResponse, EnqueueDownloadJobRequest,
+  EnqueueDownloadJobResponse, EnqueuedJobBatch, QueueDownloadRequest, QueueDownloadResponse,
+  Transfer, TransferDirection, TransferListQuery, UserResponse,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -15,7 +16,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use super::batches::{self, BatchRow};
-use super::{Batching, Downloads, FileRequest, NewBatch, internal};
+use super::{Batching, Downloads, Enqueued, FileRequest, Group, NewBatch, internal};
 use crate::api::error::ApiError;
 use crate::services::TransferService;
 use crate::transfers::{Record, listing, removal, store};
@@ -54,8 +55,8 @@ impl Downloads {
       .map_err(|_| ApiError::too_many(BUSY))
   }
 
-  /// Enqueues the completed downloads of `records` again, each in its batch, and says for each
-  /// whether it was.
+  /// Enqueues the completed downloads of `records` again, each in its batch, as one new job,
+  /// and says for each whether it was.
   async fn retry(&self, records: Vec<Record>) -> Vec<Result<Uuid, BulkFailure>> {
     let mut results = Vec::new();
     let mut groups: BTreeMap<(String, Option<Uuid>), Vec<Record>> = BTreeMap::new();
@@ -79,16 +80,26 @@ impl Downloads {
       }
       group.push(record);
     }
-    for ((username, batch), records) in groups {
-      let files = records
-        .iter()
-        .map(|r| FileRequest {
-          filename: r.filename.clone(),
-          size: r.size,
-        })
-        .collect();
-      let batching = batch.map_or(Batching::Single, Batching::Existing);
-      match self.enqueue(&username, files, batching).await {
+    let (asked, retried): (Vec<_>, Vec<_>) = groups
+      .into_iter()
+      .map(|((username, batch), records)| {
+        let group = Group {
+          username,
+          files: records
+            .iter()
+            .map(|r| FileRequest {
+              filename: r.filename.clone(),
+              size: r.size,
+            })
+            .collect(),
+          batching: batch.map_or(Batching::Single, Batching::Existing),
+        };
+        (group, records)
+      })
+      .unzip();
+    let outcomes = self.enqueue(Uuid::new_v4(), asked).await;
+    for (records, outcome) in retried.into_iter().zip(outcomes) {
+      match outcome {
         Ok(enqueued) => {
           for record in records {
             match enqueued
@@ -114,6 +125,44 @@ impl Downloads {
     }
     results
   }
+
+  /// Enqueues `group` as a job of its own and says what came of it.
+  async fn enqueue_one(&self, group: Group) -> Result<Enqueued, ApiError> {
+    self
+      .enqueue(Uuid::new_v4(), vec![group])
+      .await
+      .pop()
+      .expect("a job of one group has one outcome")
+  }
+}
+
+/// The group a batch of the API enqueues: its files, into a new batch made with them.
+fn new_batch(request: EnqueueDownloadBatchRequest) -> (Uuid, Group) {
+  let id = request.id.unwrap_or_else(Uuid::new_v4);
+  let files = request
+    .files
+    .iter()
+    .map(|f| FileRequest {
+      filename: f.filename.clone(),
+      size: f.size,
+    })
+    .collect();
+  let batch = NewBatch {
+    row: BatchRow {
+      id,
+      search_id: request.search_id,
+      username: request.username.clone(),
+      created_at: Utc::now(),
+      options: request.options,
+    },
+    files: request.files,
+  };
+  let group = Group {
+    username: request.username,
+    files,
+    batching: Batching::New(Box::new(batch)),
+  };
+  (id, group)
 }
 
 #[async_trait]
@@ -178,7 +227,12 @@ impl TransferService for Downloads {
         size: f.size,
       })
       .collect();
-    let enqueued = Downloads::enqueue(self, username, files, Batching::Single).await?;
+    let group = Group {
+      username: username.to_string(),
+      files,
+      batching: Batching::Single,
+    };
+    let enqueued = self.enqueue_one(group).await?;
     Ok(QueueDownloadResponse {
       enqueued: enqueued.enqueued,
       failed: enqueued.failed,
@@ -190,32 +244,8 @@ impl TransferService for Downloads {
     request: EnqueueDownloadBatchRequest,
   ) -> Result<EnqueueDownloadBatchResponse, ApiError> {
     let _call = self.enqueue_call()?;
-    let id = request.id.unwrap_or_else(Uuid::new_v4);
-    let files = request
-      .files
-      .iter()
-      .map(|f| FileRequest {
-        filename: f.filename.clone(),
-        size: f.size,
-      })
-      .collect();
-    let batch = NewBatch {
-      row: BatchRow {
-        id,
-        search_id: request.search_id,
-        username: request.username.clone(),
-        created_at: Utc::now(),
-        options: request.options,
-      },
-      files: request.files,
-    };
-    let enqueued = Downloads::enqueue(
-      self,
-      &request.username,
-      files,
-      Batching::New(Box::new(batch)),
-    )
-    .await?;
+    let (id, group) = new_batch(request);
+    let enqueued = self.enqueue_one(group).await?;
     let batch = batches::read(&self.db, id, false)
       .await
       .map_err(internal)?
@@ -224,6 +254,37 @@ impl TransferService for Downloads {
       batch,
       failures: enqueued.failed,
     })
+  }
+
+  async fn enqueue_job(
+    &self,
+    request: EnqueueDownloadJobRequest,
+  ) -> Result<EnqueueDownloadJobResponse, ApiError> {
+    let _call = self.enqueue_call()?;
+    let job = Uuid::new_v4();
+    let (ids, groups): (Vec<_>, Vec<_>) = request.batches.into_iter().map(new_batch).unzip();
+    let usernames: Vec<String> = groups.iter().map(|g| g.username.clone()).collect();
+    let outcomes = self.enqueue(job, groups).await;
+    let batches = ids
+      .into_iter()
+      .zip(usernames)
+      .zip(outcomes)
+      .map(|((id, username), outcome)| match outcome {
+        Ok(enqueued) => EnqueuedJobBatch {
+          username,
+          batch_id: Some(id),
+          failures: enqueued.failed,
+          error: None,
+        },
+        Err(e) => EnqueuedJobBatch {
+          username,
+          batch_id: None,
+          failures: Vec::new(),
+          error: Some(e.into_body()),
+        },
+      })
+      .collect();
+    Ok(EnqueueDownloadJobResponse { id: job, batches })
   }
 
   async fn batch(&self, id: Uuid, include_removed: bool) -> Result<Batch, ApiError> {

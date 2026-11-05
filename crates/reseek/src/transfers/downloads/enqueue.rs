@@ -1,7 +1,8 @@
-//! Enqueueing downloads: the request and the peer are checked, then, in the user's turn, a
-//! record is written for every file not downloading already, in one transaction with the
-//! batch the files belong to, and a task is started for each. A record for a file that
-//! finished earlier is superseded by the new one.
+//! Enqueueing downloads, as a job of one or more groups of files from one user each: the job is
+//! opened, then for each group the request and the peer are checked and, in the user's turn, a
+//! record is written for every file not downloading already, in one transaction with the batch
+//! the files belong to, and a task is started for each; then the job is closed. A record for a
+//! file that finished earlier is superseded by the new one.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -61,7 +62,17 @@ pub enum Batching {
   New(Box<NewBatch>),
 }
 
-/// What an enqueue did.
+/// Files from one user to enqueue together, one group of a job.
+pub struct Group {
+  /// the user the files come from
+  pub username: String,
+  /// the files
+  pub files: Vec<FileRequest>,
+  /// the batch they go into
+  pub batching: Batching,
+}
+
+/// What an enqueue of a group did.
 pub struct Enqueued {
   /// the downloads made
   pub enqueued: Vec<Transfer>,
@@ -117,36 +128,57 @@ fn unreachable(username: &str, error: ClientError) -> ApiError {
 }
 
 impl Downloads {
-  /// Enqueues `files` from `username` into `batching`. A user blocked from downloads through
-  /// the API is a conflict; one offline or blocked by the configuration a 404. Files already
-  /// downloading are listed as failed and the rest enqueued; a new batch is made with them,
-  /// and a batch id already taken is a conflict.
-  pub async fn enqueue(
-    &self,
-    username: &str,
-    files: Vec<FileRequest>,
-    batching: Batching,
-  ) -> Result<Enqueued, ApiError> {
-    check(username, &files)?;
-    self.reachable(username).await?;
-    // the records and their tasks are made on a task of their own, so a caller that stops
-    // waiting, such as a request whose connection drops, leaves no record without its task
+  /// Enqueues `groups` as the job `job`, each group as its own enqueue, and says for each what
+  /// came of it. A user blocked from downloads through the API is a conflict; one offline or
+  /// blocked by the configuration a 404. Files already downloading are listed as failed and the
+  /// rest enqueued; a new batch is made with them, and a batch id already taken is a conflict.
+  /// The job is open until every group was tried, so it is not over before all its files are in.
+  pub async fn enqueue(&self, job: Uuid, groups: Vec<Group>) -> Vec<Result<Enqueued, ApiError>> {
+    // the job runs on a task of its own, so a caller that stops waiting, such as a request
+    // whose connection drops, leaves no record without its task and no job open
     let this = self.this();
-    let username = username.to_string();
-    let made = self
-      .tasks
-      .spawn(async move { this.make(&username, files, batching).await }.in_current_span());
-    match made.await {
-      Ok(made) => made,
+    let count = groups.len();
+    let ran = self.tasks.spawn(
+      async move {
+        this.open_job(job);
+        let mut results = Vec::with_capacity(groups.len());
+        for group in groups {
+          results.push(this.enqueue_group(job, group).await);
+        }
+        this.close_job(job).await;
+        results
+      }
+      .in_current_span(),
+    );
+    match ran.await {
+      Ok(results) => results,
       Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
-      Err(e) => Err(ApiError::internal(e)),
+      Err(e) => {
+        let message = e.to_string();
+        (0..count)
+          .map(|_| Err(ApiError::internal(&message)))
+          .collect()
+      }
     }
   }
 
+  /// Enqueues one group of the job `job`.
+  async fn enqueue_group(&self, job: Uuid, group: Group) -> Result<Enqueued, ApiError> {
+    let Group {
+      username,
+      files,
+      batching,
+    } = group;
+    check(&username, &files)?;
+    self.reachable(&username).await?;
+    self.make(job, &username, files, batching).await
+  }
+
   /// In `username`'s turn, writes a record for every file of `files` not downloading already
-  /// into `batching`, and starts a task for each.
+  /// into `batching` and the job `job`, and starts a task for each.
   async fn make(
     &self,
+    job: Uuid,
     username: &str,
     files: Vec<FileRequest>,
     batching: Batching,
@@ -167,7 +199,10 @@ impl Downloads {
       .collect();
     let candidates: Vec<Record> = files
       .iter()
-      .map(|file| Record::download(username, &file.filename, file.size, batch_id))
+      .map(|file| Record {
+        job_id: Some(job),
+        ..Record::download(username, &file.filename, file.size, batch_id)
+      })
       .collect();
     let ids: Vec<Uuid> = candidates.iter().map(|record| record.id).collect();
     // the handles exist before the records can be seen, so a cancel always finds them

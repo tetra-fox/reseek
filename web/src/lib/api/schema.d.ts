@@ -2135,6 +2135,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/transfers/downloads/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enqueues batches as one job, told of once when every download of it has ended. Each batch
+         *     is checked as the batch call checks it, and the job is refused whole when one is not valid;
+         *     a batch refused when it is enqueued, such as one whose user is offline, carries why and
+         *     leaves the others enqueued. Answered 201 when every file was enqueued, 207 when some were,
+         *     and 200 when none was.
+         */
+        post: operations["enqueue_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/transfers/downloads/list": {
         parameters: {
             query?: never;
@@ -4204,6 +4227,51 @@ export interface components {
              */
             version: number;
         };
+        /**
+         * @description A download job ended: every download queued in one go has succeeded, failed or been
+         *     canceled. Sent once per job, as the `transfers.job_finished` frame; a job left with no
+         *     download, every one removed, is not told of.
+         */
+        DownloadJobFinished: {
+            /**
+             * Format: int32
+             * @description how many were canceled
+             */
+            canceledCount: number;
+            /**
+             * Format: int32
+             * @description how many failed, canceled ones left out
+             */
+            failedCount: number;
+            /**
+             * Format: int32
+             * @description how many downloads the job has, removed ones left out
+             */
+            fileCount: number;
+            /**
+             * @description the first file asked for, as the peer shares it
+             * @example @@abcde\Music\Artist\Album\01 - Track.flac
+             */
+            filename: string;
+            /**
+             * @description the deepest remote folder holding every file, when they all come from one user; empty
+             *     when they do not, or share no folder
+             * @example @@abcde\Music\Artist\Album
+             */
+            folder: string;
+            /**
+             * Format: uuid
+             * @description the job's id
+             */
+            id: string;
+            /**
+             * Format: int32
+             * @description how many of them succeeded
+             */
+            succeededCount: number;
+            /** @description the users the files came from, in the order they were asked of */
+            usernames: string[];
+        };
         /** @description An encoder profile the measured cutoff matches. */
         EncoderGuess: {
             /**
@@ -4264,12 +4332,45 @@ export interface components {
             /** @description the files that were not enqueued, and why */
             failures: components["schemas"]["EnqueueFailure"][];
         };
+        /**
+         * @description Downloads several batches as one job: everything picked in one go, such as an album whose
+         *     discs go to folders of their own, or files from several users picked from one search. The
+         *     job is told of once, by a `transfers.job_finished` frame, when every one of its downloads
+         *     has ended.
+         */
+        EnqueueDownloadJobRequest: {
+            /** @description the batches, at least one, enqueued in this order */
+            batches: components["schemas"]["EnqueueDownloadBatchRequest"][];
+        };
+        /** @description What enqueueing a job did. */
+        EnqueueDownloadJobResponse: {
+            /** @description what came of each batch, in the order of the request */
+            batches: components["schemas"]["EnqueuedJobBatch"][];
+            /**
+             * Format: uuid
+             * @description the job's id, which its `transfers.job_finished` frame carries
+             */
+            id: string;
+        };
         /** @description A file that was not enqueued. */
         EnqueueFailure: {
             /** @description the remote filename as it was asked for */
             filename: string;
             /** @description why it was not enqueued, such as `Skipped: Already in progress` */
             message: string;
+        };
+        /** @description What came of one batch of a job. */
+        EnqueuedJobBatch: {
+            /**
+             * Format: uuid
+             * @description the batch made, null when it was not
+             */
+            batchId?: string | null;
+            error?: null | components["schemas"]["ErrorBody"];
+            /** @description the files of the batch made that were not enqueued, and why */
+            failures: components["schemas"]["EnqueueFailure"][];
+            /** @description the user the batch's files come from */
+            username: string;
         };
         /** @description One field of the elements of a list of tables or the entries of a user-keyed map. */
         EntryView: {
@@ -5085,6 +5186,11 @@ export interface components {
             data: components["schemas"]["TransferRemoved"];
             /** @enum {string} */
             type: "transfers.removed";
+        } | {
+            /** @description every download queued in one go has ended; sent once per job */
+            data: components["schemas"]["DownloadJobFinished"];
+            /** @enum {string} */
+            type: "transfers.job_finished";
         } | {
             /** @description a file was queued for audio analysis, by anyone */
             data: components["schemas"]["AnalysisJob"];
@@ -15732,6 +15838,85 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    enqueue_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnqueueDownloadJobRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueDownloadJobResponse"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueDownloadJobResponse"];
+                };
+            };
+            207: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueDownloadJobResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

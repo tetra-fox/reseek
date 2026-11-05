@@ -10723,6 +10723,107 @@
         }
       }
     },
+    "/api/v0/transfers/downloads/jobs": {
+      "post": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Enqueues batches as one job, told of once when every download of it has ended. Each batch\nis checked as the batch call checks it, and the job is refused whole when one is not valid;\na batch refused when it is enqueued, such as one whose user is offline, carries why and\nleaves the others enqueued. Answered 201 when every file was enqueued, 207 when some were,\nand 200 when none was.",
+        "operationId": "enqueue_job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueDownloadJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueDownloadJobResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueDownloadJobResponse"
+                }
+              }
+            }
+          },
+          "207": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueDownloadJobResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v0/transfers/downloads/list": {
       "get": {
         "tags": [
@@ -18100,6 +18201,68 @@
           }
         }
       },
+      "DownloadJobFinished": {
+        "type": "object",
+        "description": "A download job ended: every download queued in one go has succeeded, failed or been\ncanceled. Sent once per job, as the `transfers.job_finished` frame; a job left with no\ndownload, every one removed, is not told of.",
+        "required": [
+          "id",
+          "usernames",
+          "filename",
+          "folder",
+          "fileCount",
+          "succeededCount",
+          "failedCount",
+          "canceledCount"
+        ],
+        "properties": {
+          "canceledCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many were canceled",
+            "minimum": 0
+          },
+          "failedCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many failed, canceled ones left out",
+            "minimum": 0
+          },
+          "fileCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many downloads the job has, removed ones left out",
+            "minimum": 0
+          },
+          "filename": {
+            "type": "string",
+            "description": "the first file asked for, as the peer shares it",
+            "example": "@@abcde\\Music\\Artist\\Album\\01 - Track.flac"
+          },
+          "folder": {
+            "type": "string",
+            "description": "the deepest remote folder holding every file, when they all come from one user; empty\nwhen they do not, or share no folder",
+            "example": "@@abcde\\Music\\Artist\\Album"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "the job's id"
+          },
+          "succeededCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "how many of them succeeded",
+            "minimum": 0
+          },
+          "usernames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "the users the files came from, in the order they were asked of"
+          }
+        }
+      },
       "EncoderGuess": {
         "type": "object",
         "description": "An encoder profile the measured cutoff matches.",
@@ -18211,6 +18374,44 @@
           }
         }
       },
+      "EnqueueDownloadJobRequest": {
+        "type": "object",
+        "description": "Downloads several batches as one job: everything picked in one go, such as an album whose\ndiscs go to folders of their own, or files from several users picked from one search. The\njob is told of once, by a `transfers.job_finished` frame, when every one of its downloads\nhas ended.",
+        "required": [
+          "batches"
+        ],
+        "properties": {
+          "batches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnqueueDownloadBatchRequest"
+            },
+            "description": "the batches, at least one, enqueued in this order"
+          }
+        }
+      },
+      "EnqueueDownloadJobResponse": {
+        "type": "object",
+        "description": "What enqueueing a job did.",
+        "required": [
+          "id",
+          "batches"
+        ],
+        "properties": {
+          "batches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnqueuedJobBatch"
+            },
+            "description": "what came of each batch, in the order of the request"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "the job's id, which its `transfers.job_finished` frame carries"
+          }
+        }
+      },
       "EnqueueFailure": {
         "type": "object",
         "description": "A file that was not enqueued.",
@@ -18226,6 +18427,46 @@
           "message": {
             "type": "string",
             "description": "why it was not enqueued, such as `Skipped: Already in progress`"
+          }
+        }
+      },
+      "EnqueuedJobBatch": {
+        "type": "object",
+        "description": "What came of one batch of a job.",
+        "required": [
+          "username",
+          "failures"
+        ],
+        "properties": {
+          "batchId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the batch made, null when it was not"
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ErrorBody",
+                "description": "why the batch was not made, such as its user being offline; null when it was"
+              }
+            ]
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnqueueFailure"
+            },
+            "description": "the files of the batch made that were not enqueued, and why"
+          },
+          "username": {
+            "type": "string",
+            "description": "the user the batch's files come from"
           }
         }
       },
@@ -20294,6 +20535,26 @@
                 "type": "string",
                 "enum": [
                   "transfers.removed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "every download queued in one go has ended; sent once per job",
+            "required": [
+              "data",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/DownloadJobFinished",
+                "description": "every download queued in one go has ended; sent once per job"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "transfers.job_finished"
                 ]
               }
             }

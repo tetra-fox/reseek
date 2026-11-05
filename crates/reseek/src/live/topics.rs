@@ -125,6 +125,7 @@ pub fn routes(frame: &LiveFrame) -> Vec<Topic> {
     F::TransfersAdded(_)
     | F::TransfersUpdated(_)
     | F::TransfersRemoved(_)
+    | F::TransfersJobFinished(_)
     | F::FilesAnalysisQueued(_)
     | F::FilesAnalysis(_) => Topic::Transfers,
     F::ConversationsList(_) | F::ConversationsMessage(_) | F::ConversationsUpdate(_) => {

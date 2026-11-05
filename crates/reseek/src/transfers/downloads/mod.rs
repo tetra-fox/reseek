@@ -13,13 +13,14 @@ mod batches;
 mod complete;
 mod destination;
 mod enqueue;
+mod jobs;
 mod queue;
 mod service;
 mod task;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -54,7 +55,7 @@ use crate::sync::lock;
 use crate::telemetry::Telemetry;
 use crate::turns::{Turn, Turns};
 use crate::users::Directory;
-pub use enqueue::{Batching, Enqueued, FileRequest, NewBatch};
+pub use enqueue::{Batching, Enqueued, FileRequest, Group, NewBatch};
 
 /// How long the tasks of running downloads get to end at shutdown before their records are
 /// ended anyway.
@@ -103,6 +104,8 @@ pub struct Downloads {
   in_flight: Mutex<HashMap<Uuid, InFlight>>,
   /// one enqueue per user at a time
   turns: Turns,
+  /// the jobs whose files are still being enqueued
+  open_jobs: jobs::Open,
   /// the enqueue calls of the API that may run at once
   enqueue_calls: Semaphore,
   /// whether the downloads a stop interrupted were resumed, which the first login does
@@ -155,6 +158,7 @@ impl Downloads {
       tasks: TaskTracker::new(),
       in_flight: Mutex::new(HashMap::new()),
       turns: Turns::default(),
+      open_jobs: jobs::Open::default(),
       enqueue_calls: Semaphore::new(ENQUEUE_CALLS),
       resumed: AtomicBool::new(false),
       asked: Mutex::new(HashMap::new()),
@@ -175,26 +179,39 @@ impl Downloads {
   }
 
   /// Writes `record` whole, adds its state to its history when it `entered` it, and pushes it:
-  /// as updated, or, for a record removed, as removed once, with the state it ended in. A failed
-  /// write is logged; the download goes on.
+  /// as updated, or, for a record removed, as removed once, with the state it ended in. A write
+  /// that ends the last download of its job tells of the job after. A failed write is logged;
+  /// the download goes on.
   async fn save(&self, record: &Record, entered: bool) {
     let written = record.clone();
+    let open = self.open_jobs.clone();
     let result = self
       .db
       .write(move |conn| {
         let tx = conn.transaction()?;
+        let ending = written.job_id.is_some() && written.state.contains(TransferStates::Completed);
+        let unfinished = ending && jobs::unfinished(&tx, written.id)?;
         let found = store::save(&tx, &written)?;
         if found && entered {
           store::entered(&tx, written.id, written.state, Utc::now())?;
         }
+        let finished = if found {
+          jobs::ended_by(&tx, &written, unfinished, &open)?
+        } else {
+          None
+        };
         tx.commit()?;
-        Ok(found)
+        Ok((found, finished))
       })
       .await;
     match result {
-      Ok(true) if record.removed && !entered => {}
-      Ok(true) => self.push(record),
-      Ok(false) => warn!(id = %record.id, "download record gone; not written"),
+      Ok((true, finished)) => {
+        if !record.removed || entered {
+          self.push(record);
+        }
+        self.tell(finished);
+      }
+      Ok((false, _)) => warn!(id = %record.id, "download record gone; not written"),
       Err(e) => warn!(id = %record.id, error = %e, "download record not written"),
     }
   }
@@ -235,27 +252,33 @@ impl Downloads {
       // it was read keeps how it ended
       let canceled = TransferStates::Completed | TransferStates::Cancelled;
       let at = Utc::now();
-      let ended = self
+      record.state = canceled;
+      record.ended_at = Some(at);
+      record.exception = Some(CANCELED.to_string());
+      record.next_attempt_at = None;
+      record.place_in_queue = None;
+      let written = record.clone();
+      let open = self.open_jobs.clone();
+      let (ended, finished) = self
         .db
         .write(move |conn| {
           let tx = conn.transaction()?;
           let ended = store::end_unless_ended(&tx, id, canceled, at, CANCELED)?;
-          if ended {
+          let finished = if ended {
             store::entered(&tx, id, canceled, at)?;
-          }
+            jobs::ended_by(&tx, &written, true, &open)?
+          } else {
+            None
+          };
           tx.commit()?;
-          Ok(ended)
+          Ok((ended, finished))
         })
         .await
         .map_err(ApiError::internal)?;
       if ended {
         info!(%id, username, "download without a running task ended as canceled");
-        record.state = canceled;
-        record.ended_at = Some(at);
-        record.exception = Some(CANCELED.to_string());
-        record.next_attempt_at = None;
-        record.place_in_queue = None;
         self.push(&record);
+        self.tell(finished);
       }
     }
     if remove {
@@ -316,33 +339,53 @@ impl Downloads {
   }
 
   /// Enqueues again the downloads a stop interrupted that were not removed since, each user's
-  /// together and each in its batch, as new downloads that supersede the old records. Only the
-  /// first call after a start does anything, which is after the first login; the marks are
-  /// cleared before the enqueues, so a user that cannot be reached is logged, not tried again.
+  /// together and each in its batch and job, as new downloads that supersede the old records,
+  /// so a job goes on and is told of once all of it has ended. A download from before jobs were
+  /// kept goes into a new job with the others of its user and batch. Only the first call after a
+  /// start does anything, which is after the first login; the marks are cleared before the
+  /// enqueues, so a user that cannot be reached is logged, not tried again.
   pub async fn resume(&self) {
     if self.resumed.swap(true, Ordering::AcqRel) {
       return;
     }
-    let groups = match cleanup::take_resumable(&self.db).await {
-      Ok(groups) => groups,
+    let resumable = match cleanup::take_resumable(&self.db).await {
+      Ok(resumable) => resumable,
       Err(e) => return warn!(error = %e, "interrupted downloads not resumed"),
     };
-    for ((username, batch), files) in groups {
-      let count = files.len();
-      let batching = batch.map_or(Batching::Single, Batching::Existing);
-      match self.enqueue(&username, files, batching).await {
-        Ok(enqueued) => info!(
+    let mut jobs: BTreeMap<Uuid, Vec<Group>> = BTreeMap::new();
+    for ((username, batch, job), files) in resumable {
+      jobs
+        .entry(job.unwrap_or_else(Uuid::new_v4))
+        .or_default()
+        .push(Group {
           username,
-          resumed = enqueued.enqueued.len(),
-          failed = enqueued.failed.len(),
-          "interrupted downloads resumed"
-        ),
-        Err(e) => warn!(
-          username,
-          downloads = count,
-          error = e.message(),
-          "interrupted downloads not resumed; the user is likely offline"
-        ),
+          files,
+          batching: batch.map_or(Batching::Single, Batching::Existing),
+        });
+    }
+    for (job, groups) in jobs {
+      let asked: Vec<(String, usize)> = groups
+        .iter()
+        .map(|g| (g.username.clone(), g.files.len()))
+        .collect();
+      let results = self.enqueue(job, groups).await;
+      for ((username, count), result) in asked.into_iter().zip(results) {
+        match result {
+          Ok(enqueued) => info!(
+            username,
+            %job,
+            resumed = enqueued.enqueued.len(),
+            failed = enqueued.failed.len(),
+            "interrupted downloads resumed"
+          ),
+          Err(e) => warn!(
+            username,
+            %job,
+            downloads = count,
+            error = e.message(),
+            "interrupted downloads not resumed; the user is likely offline"
+          ),
+        }
       }
     }
   }

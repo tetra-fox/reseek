@@ -13,7 +13,8 @@ use crate::db::{self, read_timestamp};
 /// The columns [`Record::read`] reads, in its order, for a `SELECT` of `Transfers`.
 pub const COLUMNS: &str = "Id, BatchId, Username, Direction, Filename, Size, State, RequestedAt, \
                            EnqueuedAt, StartedAt, EndedAt, BytesTransferred, AverageSpeed, \
-                           PlaceInQueue, Exception, Attempts, NextAttemptAt, Removed, LocalPath";
+                           PlaceInQueue, Exception, Attempts, NextAttemptAt, Removed, LocalPath, \
+                           JobId";
 
 /// One transfer's row.
 #[derive(Clone, Debug, PartialEq)]
@@ -22,6 +23,8 @@ pub struct Record {
   pub id: Uuid,
   /// the batch a download was enqueued in
   pub batch_id: Option<Uuid>,
+  /// the job a download was enqueued in: everything queued with it in one go
+  pub job_id: Option<Uuid>,
   /// the peer
   pub username: String,
   /// which way the file moves
@@ -64,6 +67,7 @@ impl Record {
     Self {
       id: Uuid::new_v4(),
       batch_id,
+      job_id: None,
       username: username.to_string(),
       direction: TransferDirection::Download,
       filename: filename.to_string(),
@@ -111,6 +115,7 @@ impl Record {
     Ok(Self {
       id: uuid(0, &row.get::<_, String>(0)?)?,
       batch_id: text(1)?.map(|value| uuid(1, &value)).transpose()?,
+      job_id: text(19)?.map(|value| uuid(19, &value)).transpose()?,
       username: text_at(row, 2)?,
       direction: direction_at(row, 3)?,
       filename: text_at(row, 4)?,
