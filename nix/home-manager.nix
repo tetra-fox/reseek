@@ -23,6 +23,13 @@ let
     cfg.dataDir
   ];
   environmentFiles = lib.optional (cfg.environmentFile != null) cfg.environmentFile;
+  inherit (import ./module-lib.nix { inherit lib; })
+    refusesDefaultLogin
+    refusedDefaultLogin
+    uncheckedDefaultLogin
+    ;
+  # the settings keep a default login others reach, and no environment file sets a password
+  refuses = cfg.environmentFile == null && refusesDefaultLogin cfg.settings;
 in
 {
   options.services.reseek = {
@@ -74,6 +81,18 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # without an environment file or a laid-over configuration file, only the settings can set a
+    # password or move a listener
+    assertions = [
+      {
+        assertion = !(refuses && cfg.extraConfigFiles == [ ]);
+        message = refusedDefaultLogin "reseek";
+      }
+    ];
+    warnings = lib.optional (refuses && cfg.extraConfigFiles != [ ]) (
+      uncheckedDefaultLogin "reseek" "extraConfigFiles"
+    );
+
     xdg.configFile = {
       "reseek/config.toml".source = configFile;
     }
@@ -99,6 +118,8 @@ in
         Restart = "on-failure";
         # the daemon exits 75 when a restart is asked for through the API
         RestartForceExitStatus = 75;
+        # the daemon exits 3 when it refuses its configuration, which another start does not change
+        RestartPreventExitStatus = 3;
       };
       Install.WantedBy = [ "default.target" ];
     };

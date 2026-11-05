@@ -34,6 +34,7 @@ runCommand "reseek-home-manager" { } ''
   grep -q '^Environment=RESEEK_CONFIG_MANAGED_BY=home-manager' ${unit}
   grep -q '^EnvironmentFile=/run/user/1000/reseek.env' ${unit}
   grep -q '^RestartForceExitStatus=75' ${unit}
+  grep -q '^RestartPreventExitStatus=3' ${unit}
   grep -q 'username = "someone"' ${files}/.config/reseek/config.toml
   touch $out
 ''

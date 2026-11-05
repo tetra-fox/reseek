@@ -24,6 +24,9 @@ let
     sharePath
     readOnlyShares
     etcFiles
+    refusesDefaultLogin
+    refusedDefaultLogin
+    uncheckedDefaultLogin
     ;
 
   # the options of one daemon; `name` is its unit, user and directory name, `enabled` whether
@@ -373,6 +376,8 @@ let
         RestartSec = 5;
         # the daemon exits 75 when a restart is asked for through the API
         RestartForceExitStatus = 75;
+        # the daemon exits 3 when it refuses its configuration, which another start does not change
+        RestartPreventExitStatus = 3;
         ProtectSystem = "strict";
         ProtectHome = "read-only";
         PrivateTmp = true;
@@ -406,6 +411,9 @@ let
     let
       inherit (instance) settings unit;
       noSecrets = instance.environmentFile == null && instance.environmentFiles == [ ];
+      # nothing but the settings can set a password or move a listener
+      settingsAlone = noSecrets && instance.extraConfigFiles == [ ] && instance.extraArgs == [ ];
+      refuses = refusesDefaultLogin (settingsOf instance);
     in
     {
       assertions = [
@@ -416,6 +424,10 @@ let
         {
           assertion = settings.web.https.disabled || settings.web.port != settings.web.https.port;
           message = "services.${unit}: settings.web.port and settings.web.https.port are the same port.";
+        }
+        {
+          assertion = !(settingsAlone && refuses);
+          message = refusedDefaultLogin unit;
         }
       ];
       # what an environment file holds is not known here, so a missing account only warns
@@ -429,10 +441,11 @@ let
           lib.optional
             (settings.remote_configuration && settings.web.authentication.password_hash == null && noSecrets)
             "services.${unit}: remote_configuration is on and the administrator still has the default password; set web.authentication.password_hash or RESEEK_PASSWORD in environmentFile."
-        ++
-          lib.optional
-            (instance.reverseProxy != null && settings.web.authentication.password_hash == null && noSecrets)
-            "services.${unit}: reverseProxy serves the daemon to other machines and the administrator still has the default password, which the daemon refuses to start with; set web.authentication.password_hash or RESEEK_PASSWORD in environmentFile.";
+        # an environment file is where the password is meant to go, so a service with one is not
+        # warned about
+        ++ lib.optional (noSecrets && !settingsAlone && refuses) (
+          uncheckedDefaultLogin unit "extraArgs or extraConfigFiles"
+        );
     };
 
   ports =
