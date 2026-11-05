@@ -78,7 +78,7 @@ fn history() -> Vec<Record> {
     };
     let size = 1 + dice.below(50_000_000);
     let mut record = if dice.below(2) == 0 {
-      Record::download(username, &filename, size, None)
+      Record::download(username, &filename, size)
     } else {
       Record::upload(username, &filename, size)
     };

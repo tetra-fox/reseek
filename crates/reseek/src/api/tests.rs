@@ -115,7 +115,7 @@ async fn each_route_takes_its_least_role() {
     (Method::POST, "/api/v0/searches", write),
     (Method::DELETE, "/api/v0/searches/{id}", write),
     (Method::GET, "/api/v0/transfers/downloads", read),
-    (Method::POST, "/api/v0/transfers/downloads/batches", write),
+    (Method::POST, "/api/v0/transfers/downloads/jobs", write),
     (
       Method::DELETE,
       "/api/v0/transfers/uploads/all/completed",
@@ -222,13 +222,13 @@ async fn each_route_takes_its_least_role() {
 #[tokio::test]
 async fn requests_are_checked_before_any_service_is_asked() {
   let app = app(CONFIG, &[]).await;
-  let batch = |extra: Value| {
-    let mut body = json!({ "username": "alice", "files": [{ "filename": "a\\b", "size": 1 }] });
-    body
+  let job = |extra: Value| {
+    let mut group = json!({ "username": "alice", "files": [{ "filename": "a\\b", "size": 1 }] });
+    group
       .as_object_mut()
       .unwrap()
       .extend(extra.as_object().unwrap().clone());
-    body
+    json!({ "groups": [group] })
   };
   let histogram = "/api/v0/telemetry/reports/transfers/histogram";
   let leaderboard = "/api/v0/telemetry/reports/transfers/leaderboard";
@@ -261,21 +261,21 @@ async fn requests_are_checked_before_any_service_is_asked() {
     ),
     (
       "POST",
-      "/api/v0/transfers/downloads/batches".into(),
-      Some(batch(json!({ "id": "" }))),
+      "/api/v0/transfers/downloads/jobs".into(),
+      Some(job(json!({ "searchId": "" }))),
       400,
     ),
     (
       "POST",
-      "/api/v0/transfers/downloads/batches".into(),
-      Some(batch(json!({}))),
-      503,
+      "/api/v0/transfers/downloads/jobs".into(),
+      Some(job(json!({ "destination": "/srv" }))),
+      400,
     ),
     (
       "POST",
-      "/api/v0/transfers/downloads/alice".into(),
-      Some(json!([null])),
-      400,
+      "/api/v0/transfers/downloads/jobs".into(),
+      Some(job(json!({}))),
+      200,
     ),
     (
       "GET",

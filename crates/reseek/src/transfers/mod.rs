@@ -23,8 +23,11 @@ use rusqlite::types::Type;
 use crate::db::{self, Database, DbError, Location, Schema};
 pub use record::{COLUMNS, Record, transfer};
 
-/// `transfers.db`: the `Transfers` and `Batches` tables and each transfer's state history.
-pub static SCHEMA: Schema = db::schema!("transfers", ["0001_initial", "0002_jobs"]);
+/// `transfers.db`: the `Transfers` table and each transfer's state history.
+pub static SCHEMA: Schema = db::schema!(
+  "transfers",
+  ["0001_initial", "0002_jobs", "0003_fold_batches"]
+);
 
 /// Opens `transfers.db` in `location`.
 pub async fn open(location: &Location) -> Result<Database, DbError> {

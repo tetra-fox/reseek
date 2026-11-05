@@ -4,7 +4,7 @@
 //! deleted every five minutes.
 //!
 //! [`Searches`] is the engine; it answers the API's search calls and the search topic's
-//! snapshot, and tells the download engine what a batch's search was for.
+//! snapshot, and tells the download engine what a download's search was for.
 
 mod running;
 mod store;

@@ -32,7 +32,7 @@ async fn read(app: &TestApp, id: Uuid) -> Record {
 }
 
 fn done(username: &str, filename: &str) -> Record {
-  let mut record = Record::download(username, filename, 3, None);
+  let mut record = Record::download(username, filename, 3);
   record.state = TransferStates::Completed | TransferStates::Succeeded;
   record.ended_at = Some(chrono::Utc::now());
   record
@@ -41,7 +41,7 @@ fn done(username: &str, filename: &str) -> Record {
 #[tokio::test]
 async fn a_download_is_found_by_its_peer_and_id_with_its_history() {
   let app = app(TRUSTED, &[]).await;
-  let record = Record::download("alice", "@@abcde\\Music\\01.flac", 10, None);
+  let record = Record::download("alice", "@@abcde\\Music\\01.flac", 10);
   insert(&app, &record).await;
   let id = record.id;
   let (status, _) = app
@@ -72,7 +72,7 @@ async fn a_download_is_found_by_its_peer_and_id_with_its_history() {
 #[tokio::test]
 async fn canceling_a_download_no_task_runs_ends_it_and_can_remove_it() {
   let app = app(TRUSTED, &[]).await;
-  let stuck = Record::download("alice", "a.flac", 10, None);
+  let stuck = Record::download("alice", "a.flac", 10);
   insert(&app, &stuck).await;
   let id = stuck.id;
   let uri = format!("/api/v0/transfers/downloads/alice/{id}?remove=true");
@@ -103,7 +103,7 @@ async fn canceling_a_download_no_task_runs_ends_it_and_can_remove_it() {
 #[tokio::test]
 async fn canceling_a_download_no_task_runs_ends_its_wait_and_spares_one_that_ended() {
   let app = app(TRUSTED, &[]).await;
-  let mut waiting = Record::download("alice", "a.flac", 10, None);
+  let mut waiting = Record::download("alice", "a.flac", 10);
   waiting.next_attempt_at = Some(chrono::Utc::now());
   waiting.place_in_queue = Some(4);
   insert(&app, &waiting).await;
@@ -143,7 +143,7 @@ async fn canceling_a_download_no_task_runs_ends_its_wait_and_spares_one_that_end
 async fn removing_completed_downloads_leaves_running_ones() {
   let app = app(TRUSTED, &[]).await;
   let finished = done("alice", "a.flac");
-  let waiting = Record::download("alice", "b.flac", 10, None);
+  let waiting = Record::download("alice", "b.flac", 10);
   insert(&app, &finished).await;
   insert(&app, &waiting).await;
   let (status, _) = app
@@ -204,7 +204,7 @@ async fn a_finished_downloads_file_is_served_from_where_it_was_moved() {
 async fn removals_and_updates_are_pushed_on_the_transfers_topic() {
   let app = app(TRUSTED, &[]).await;
   let finished = done("alice", "a.flac");
-  let stuck = Record::download("alice", "b.flac", 10, None);
+  let stuck = Record::download("alice", "b.flac", 10);
   insert(&app, &finished).await;
   insert(&app, &stuck).await;
   let mut stream = app
@@ -240,8 +240,8 @@ async fn a_job_is_told_once_by_the_cancel_that_ends_its_last_download() {
     ..record
   };
   let first = in_job(done("alice", "@@a\\Album\\1.flac"));
-  let second = in_job(Record::download("alice", "@@a\\Album\\2.flac", 10, None));
-  let third = in_job(Record::download("alice", "@@a\\Album\\3.flac", 10, None));
+  let second = in_job(Record::download("alice", "@@a\\Album\\2.flac", 10));
+  let third = in_job(Record::download("alice", "@@a\\Album\\3.flac", 10));
   for record in [&first, &second, &third] {
     insert(&app, record).await;
   }
@@ -294,7 +294,7 @@ async fn a_download_removed_by_its_cancel_is_left_out_of_the_job_it_ends() {
   };
   let stuck = Record {
     job_id: Some(job),
-    ..Record::download("alice", "@@a\\Album\\2.flac", 10, None)
+    ..Record::download("alice", "@@a\\Album\\2.flac", 10)
   };
   insert(&app, &kept).await;
   insert(&app, &stuck).await;

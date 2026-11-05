@@ -22,7 +22,8 @@ pub enum BulkAction {
   Cancel,
   /// remove the transfer from the listings, canceling it first if it is running
   Remove,
-  /// enqueue a completed download again, as a new transfer in the same batch
+  /// enqueue a completed download again, as a new transfer with the same destination and search;
+  /// the downloads retried in one call make one new download job
   Retry,
 }
 

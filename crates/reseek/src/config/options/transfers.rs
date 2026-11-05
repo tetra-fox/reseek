@@ -126,9 +126,9 @@ impl Default for Retry {
 #[serde(default)]
 pub struct Destination {
   /// Directory under the downloads directory that a finished file is moved to, relative to
-  /// it. `${SOURCE_USERNAME}`, `${SOURCE_PATH}`, `${SOURCE_DIRECTORY}`, `${BATCH_ID}`,
-  /// `${BATCH_EXTERNAL_ID}`, `${SEARCH_ID}` and `${SEARCH_TEXT}` are replaced with their
-  /// values.
+  /// it. `${SOURCE_USERNAME}`, `${SOURCE_PATH}`, `${SOURCE_DIRECTORY}`, `${JOB_ID}` (the
+  /// download job: everything queued with the file in one go), `${SEARCH_ID}` and
+  /// `${SEARCH_TEXT}` are replaced with their values.
   pub subdirectory: Option<String>,
   /// Action when the file already exists: `rename` or `overwrite`.
   pub exists: DestinationExists,

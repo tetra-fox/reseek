@@ -11,20 +11,23 @@ use super::{direction_at, text_at};
 use crate::db::{self, read_timestamp};
 
 /// The columns [`Record::read`] reads, in its order, for a `SELECT` of `Transfers`.
-pub const COLUMNS: &str = "Id, BatchId, Username, Direction, Filename, Size, State, RequestedAt, \
+pub const COLUMNS: &str = "Id, JobId, Username, Direction, Filename, Size, State, RequestedAt, \
                            EnqueuedAt, StartedAt, EndedAt, BytesTransferred, AverageSpeed, \
                            PlaceInQueue, Exception, Attempts, NextAttemptAt, Removed, LocalPath, \
-                           JobId";
+                           Destination, SearchId";
 
 /// One transfer's row.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Record {
   /// the transfer's id
   pub id: Uuid,
-  /// the batch a download was enqueued in
-  pub batch_id: Option<Uuid>,
-  /// the job a download was enqueued in: everything queued with it in one go
+  /// the download job a download was enqueued in: everything queued with it in one go
   pub job_id: Option<Uuid>,
+  /// the relative directory under the downloads directory a download's file goes to in place
+  /// of the one the download pattern gives
+  pub destination: Option<String>,
+  /// the search a download's file was found by
+  pub search_id: Option<Uuid>,
   /// the peer
   pub username: String,
   /// which way the file moves
@@ -63,11 +66,12 @@ pub struct Record {
 
 impl Record {
   /// A new download of `filename` from `username`, asked for now and waiting here.
-  pub fn download(username: &str, filename: &str, size: u64, batch_id: Option<Uuid>) -> Self {
+  pub fn download(username: &str, filename: &str, size: u64) -> Self {
     Self {
       id: Uuid::new_v4(),
-      batch_id,
       job_id: None,
+      destination: None,
+      search_id: None,
       username: username.to_string(),
       direction: TransferDirection::Download,
       filename: filename.to_string(),
@@ -95,7 +99,7 @@ impl Record {
       direction: TransferDirection::Upload,
       requested_at: now,
       enqueued_at: Some(now),
-      ..Self::download(username, filename, size, None)
+      ..Self::download(username, filename, size)
     }
   }
 
@@ -114,8 +118,9 @@ impl Record {
       |i: usize| -> rusqlite::Result<u64> { Ok(row.get::<_, i64>(i)?.max(0).unsigned_abs()) };
     Ok(Self {
       id: uuid(0, &row.get::<_, String>(0)?)?,
-      batch_id: text(1)?.map(|value| uuid(1, &value)).transpose()?,
-      job_id: text(19)?.map(|value| uuid(19, &value)).transpose()?,
+      job_id: text(1)?.map(|value| uuid(1, &value)).transpose()?,
+      destination: text(19)?,
+      search_id: text(20)?.map(|value| uuid(20, &value)).transpose()?,
       username: text_at(row, 2)?,
       direction: direction_at(row, 3)?,
       filename: text_at(row, 4)?,
@@ -157,7 +162,7 @@ impl Record {
       .then(|| (bytes_remaining as f64 / self.average_speed * 1000.0) as u64);
     Transfer {
       id: self.id,
-      batch_id: self.batch_id,
+      job_id: self.job_id,
       username: self.username.clone(),
       direction: self.direction,
       filename: self.filename.clone(),

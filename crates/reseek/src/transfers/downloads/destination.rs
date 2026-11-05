@@ -1,7 +1,7 @@
 //! Where a download's file lives: the incomplete file it is written to, under a directory of
 //! the peer's own, and the directory under the downloads directory it is moved to once it has
-//! arrived, from the configured pattern or the batch's own destination. Every name that came
-//! from the peer, the batch or the search is made safe before it becomes part of a path.
+//! arrived, from the configured pattern or the download's own destination. Every name that came
+//! from the peer, the destination or the search is made safe before it becomes part of a path.
 
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -9,7 +9,6 @@ use std::sync::LazyLock;
 use regex::{Captures, Regex};
 use uuid::Uuid;
 
-use super::batches::BatchRow;
 use crate::safety::{
   Os, combine_safely, creatable, creatable_path, directory_name_safely, file_name_safely,
   is_absolute, sanitize_filename, sanitize_path_segment, too_long, traverses,
@@ -24,7 +23,7 @@ const DOWNLOADS_ITSELF: &str = "{}";
 /// One `${NAME}` in a pattern.
 static TOKEN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\{([^{}]*)\}").unwrap());
 
-/// The search a batch was made from, as the pattern reads it.
+/// The search a download was found by, as the pattern reads it.
 #[derive(Clone, Debug)]
 pub struct SearchFound {
   /// the search's id
@@ -39,9 +38,11 @@ pub struct Source<'a> {
   pub username: &'a str,
   /// the remote filename
   pub filename: &'a str,
-  /// the batch the download was enqueued in
-  pub batch: Option<&'a BatchRow>,
-  /// the search the batch was made from, when it is still known
+  /// the download job the download was enqueued in
+  pub job: Option<Uuid>,
+  /// the download's own destination
+  pub destination: Option<&'a str>,
+  /// the search the download was found by, when it is still known
   pub search: Option<&'a SearchFound>,
 }
 
@@ -61,7 +62,7 @@ fn file_name(name: &str, os: Os) -> String {
 }
 
 /// The relative directory under the downloads directory the download of `source` goes to,
-/// empty for the downloads directory itself: the batch's destination when it has one, else
+/// empty for the downloads directory itself: the download's own destination when it has one, else
 /// `pattern` with its `${NAME}`s filled in, made safe. Fails only when the result would leave
 /// the downloads directory, which making it safe rules out.
 pub fn subdirectory(pattern: Option<&str>, source: &Source<'_>, os: Os) -> Result<String, String> {
@@ -70,11 +71,10 @@ pub fn subdirectory(pattern: Option<&str>, source: &Source<'_>, os: Os) -> Resul
     return Ok(String::new());
   }
   if let Some(destination) = source
-    .batch
-    .and_then(|batch| batch.options.destination.as_deref())
+    .destination
     .filter(|destination| !destination.trim().is_empty())
   {
-    // the batch's own destination is taken as written, its `${NAME}`s left as they are
+    // the download's own destination is taken as written, its `${NAME}`s left as they are
     return contained(creatable_path(destination, os), os);
   }
   let source_path = directory_name_safely(source.filename, false, true, os).unwrap_or_default();
@@ -83,23 +83,15 @@ pub fn subdirectory(pattern: Option<&str>, source: &Source<'_>, os: Os) -> Resul
     .next()
     .unwrap_or_default()
     .to_string();
-  let batch = source.batch;
   let value = |name: &str| -> Option<String> {
     Some(match name.to_ascii_uppercase().as_str() {
       "SOURCE_USERNAME" => file_name(source.username, os),
       "SOURCE_PATH" => source_path.clone(),
       "SOURCE_DIRECTORY" => source_directory.clone(),
-      "BATCH_ID" => batch
-        .map(|b| b.id)
+      "JOB_ID" => source
+        .job
         .filter(|id| !id.is_nil())
-        .map_or_else(|| "unknown_batch_id".to_string(), |id| id.to_string()),
-      "BATCH_EXTERNAL_ID" => batch
-        .and_then(|b| b.options.external_id.as_deref())
-        .filter(|id| !id.trim().is_empty())
-        .map_or_else(
-          || "unknown_batch_external_id".to_string(),
-          |id| file_name(id, os),
-        ),
+        .map_or_else(|| "unknown_job_id".to_string(), |id| id.to_string()),
       "SEARCH_ID" => source
         .search
         .map(|s| s.id)
@@ -190,35 +182,20 @@ pub fn destination_directory(
 
 #[cfg(test)]
 mod tests {
-  use api_types::transfers::BatchOptions;
-  use chrono::Utc;
-
   use super::*;
 
   fn source<'a>(username: &'a str, filename: &'a str) -> Source<'a> {
     Source {
       username,
       filename,
-      batch: None,
+      job: None,
+      destination: None,
       search: None,
     }
   }
 
   fn unix(pattern: &str, source: &Source<'_>) -> String {
     subdirectory(Some(pattern), source, Os::Unix).unwrap()
-  }
-
-  fn batch(destination: Option<&str>, external_id: Option<&str>) -> BatchRow {
-    BatchRow {
-      id: "a3b5d7f9-1111-4222-8333-944455566677".parse().unwrap(),
-      search_id: None,
-      username: "alice".to_string(),
-      created_at: Utc::now(),
-      options: BatchOptions {
-        destination: destination.map(str::to_string),
-        external_id: external_id.map(str::to_string),
-      },
-    }
   }
 
   #[test]
@@ -274,43 +251,55 @@ mod tests {
   }
 
   #[test]
-  fn a_batch_gives_its_own_tokens_and_destination() {
-    let explicit = batch(Some("Artist/../Album/${SOURCE_USERNAME}"), None);
-    fn with_batch(batch: &BatchRow) -> Source<'_> {
-      Source {
-        batch: Some(batch),
-        ..source("alice", "@@abcde\\Music\\album\\01.flac")
-      }
-    }
+  fn a_download_gives_its_own_job_search_and_destination() {
+    let track = "@@abcde\\Music\\album\\01.flac";
+    let explicit = Source {
+      destination: Some("Artist/../Album/${SOURCE_USERNAME}"),
+      ..source("alice", track)
+    };
     assert_eq!(
-      unix("${SOURCE_DIRECTORY}", &with_batch(&explicit)),
+      unix("${SOURCE_DIRECTORY}", &explicit),
       "Artist/_/Album/${SOURCE_USERNAME}",
       "taken as written, made safe"
     );
-    let tagged = batch(None, Some("ext/1"));
+    let found = SearchFound {
+      id: "0b5d7f91-1111-4222-8333-944455566677".parse().unwrap(),
+      text: "AC/DC live".to_string(),
+    };
+    let queued = Source {
+      job: Some("a3b5d7f9-1111-4222-8333-944455566677".parse().unwrap()),
+      search: Some(&found),
+      ..source("alice", track)
+    };
     assert_eq!(
-      unix("${BATCH_ID}/${BATCH_EXTERNAL_ID}", &with_batch(&tagged)),
-      "a3b5d7f9-1111-4222-8333-944455566677/ext_1"
+      unix("${JOB_ID}/${SEARCH_ID}/${SEARCH_TEXT}", &queued),
+      "a3b5d7f9-1111-4222-8333-944455566677/0b5d7f91-1111-4222-8333-944455566677/AC_DC live"
+    );
+    let blank = Source {
+      destination: Some("  "),
+      ..queued
+    };
+    assert_eq!(
+      unix("${SOURCE_DIRECTORY}", &blank),
+      "album",
+      "a blank destination is the pattern's"
     );
     let none = source("alice", "a.flac");
     assert_eq!(
-      unix(
-        "${BATCH_ID}-${BATCH_EXTERNAL_ID}-${SEARCH_ID}-${SEARCH_TEXT}",
-        &none
-      ),
-      "unknown_batch_id-unknown_batch_external_id-unknown_search_id-unknown_search_text"
+      unix("${JOB_ID}-${SEARCH_ID}-${SEARCH_TEXT}", &none),
+      "unknown_job_id-unknown_search_id-unknown_search_text"
     );
-    let found = SearchFound {
+    let forgotten = SearchFound {
       id: Uuid::nil(),
-      text: "AC/DC live".to_string(),
+      text: " ".to_string(),
     };
     let searched = Source {
-      search: Some(&found),
+      search: Some(&forgotten),
       ..none
     };
     assert_eq!(
       unix("${SEARCH_ID}/${SEARCH_TEXT}", &searched),
-      "unknown_search_id/AC_DC live"
+      "unknown_search_id/unknown_search_text"
     );
   }
 

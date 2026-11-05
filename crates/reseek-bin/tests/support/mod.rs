@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use api_client::Client;
 use api_types::state::State;
-use api_types::transfers::{QueueDownloadRequest, Transfer, TransferDirection, TransferStates};
+use api_types::transfers::{Transfer, TransferDirection, TransferStates};
 use soulfind::{PASSWORD, Soulfind};
 use uuid::Uuid;
 
@@ -28,6 +28,9 @@ pub use client::{free_port, options as quiet, peer, soulfind, soulseek_rs, trans
 
 /// The smoke run through the API, shared with the smoke program.
 pub mod smoke;
+
+#[allow(unused_imports, reason = "each test binary uses a part of it")]
+pub use smoke::{enqueue, job};
 
 /// How long a test waits for something that should happen promptly.
 pub const PATIENCE: Duration = Duration::from_secs(20);
@@ -393,18 +396,6 @@ pub async fn scripted_login_with(dir: &Path, extra: &[&str]) -> (Daemon, client:
   let running = Daemon::start(dir, &args, &ACCOUNT);
   let server = fake.accept().await;
   (running, server)
-}
-
-/// Asks the daemon to download `filename` of `size` bytes from `username`, and returns the
-/// download's id.
-pub async fn enqueue(api: &Client, username: &str, filename: &str, size: u64) -> Uuid {
-  let files = [QueueDownloadRequest {
-    filename: filename.to_string(),
-    size,
-  }];
-  let answer = api.enqueue(username, &files).await.unwrap();
-  assert!(answer.failed.is_empty(), "{:?}", answer.failed);
-  answer.enqueued[0].id
 }
 
 /// The download `id` from `username`, with its history, once `ready` holds for it.

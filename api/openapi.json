@@ -10430,219 +10430,6 @@
         }
       }
     },
-    "/api/v0/transfers/downloads/batches": {
-      "post": {
-        "tags": [
-          "transfers"
-        ],
-        "summary": "Enqueues files from one user as a batch. Answered 201 when every file was enqueued, 207 when\nsome were, and 200 when none was; the batch exists in every case.",
-        "operationId": "enqueue_batch",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EnqueueDownloadBatchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnqueueDownloadBatchResponse"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnqueueDownloadBatchResponse"
-                }
-              }
-            }
-          },
-          "207": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnqueueDownloadBatchResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v0/transfers/downloads/batches/{id}": {
-      "get": {
-        "tags": [
-          "transfers"
-        ],
-        "summary": "One batch with its downloads; `includeRemoved` lists removed ones too.",
-        "operationId": "batch",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "the batch's id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "includeRemoved",
-            "in": "query",
-            "description": "also list transfers that were removed",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Batch"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v0/transfers/downloads/bulk": {
       "post": {
         "tags": [
@@ -10719,7 +10506,7 @@
         "tags": [
           "transfers"
         ],
-        "summary": "Enqueues batches as one job, told of once when every download of it has ended. Each batch\nis checked as the batch call checks it, and the job is refused whole when one is not valid;\na batch refused when it is enqueued, such as one whose user is offline, carries why and\nleaves the others enqueued. Answered 201 when every file was enqueued, 207 when some were,\nand 200 when none was.",
+        "summary": "Enqueues files as one download job, in groups of files from one user each, told of once when\nevery download of it has ended. The job is refused whole when a group is not valid; a group\nrefused when it is enqueued, such as one whose user is offline, carries why and leaves the\nothers enqueued. Answered 201 when every file was enqueued, 207 when some were, and 200 when\nnone was.",
         "operationId": "enqueue_job",
         "requestBody": {
           "content": {
@@ -10842,16 +10629,6 @@
             "required": false,
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "batchId",
-            "in": "query",
-            "description": "only downloads of this batch",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
             }
           },
           {
@@ -10999,139 +10776,6 @@
             }
           },
           "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "transfers"
-        ],
-        "summary": "Enqueues files from one user. Answered 201 when at least one file was enqueued and 200 when\nnone was; the files that were not are listed with why.",
-        "operationId": "enqueue",
-        "parameters": [
-          {
-            "name": "username",
-            "in": "path",
-            "description": "the peer",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/QueueDownloadRequest"
-                }
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/QueueDownloadResponse"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/QueueDownloadResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          },
-          "502": {
             "description": "",
             "content": {
               "application/json": {
@@ -12902,16 +12546,6 @@
             "required": false,
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "batchId",
-            "in": "query",
-            "description": "only downloads of this batch",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
             }
           },
           {
@@ -16609,128 +16243,6 @@
           }
         }
       },
-      "Batch": {
-        "type": "object",
-        "description": "Downloads from one user enqueued together. A batch is never changed after it is made; its\ncounts and state are worked out from its transfers when it is read.",
-        "required": [
-          "id",
-          "username",
-          "direction",
-          "createdAt",
-          "transfers",
-          "options",
-          "fileCount",
-          "completedCount",
-          "failedCount",
-          "bytesTotal",
-          "bytesTransferred",
-          "state"
-        ],
-        "properties": {
-          "bytesTotal": {
-            "type": "integer",
-            "format": "int64",
-            "description": "the sizes of the transfers added up, in bytes",
-            "minimum": 0
-          },
-          "bytesTransferred": {
-            "type": "integer",
-            "format": "int64",
-            "description": "the bytes moved by the transfers added up",
-            "minimum": 0
-          },
-          "completedCount": {
-            "type": "integer",
-            "format": "int32",
-            "description": "how many of them completed, whatever the outcome",
-            "minimum": 0
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "when the batch was made"
-          },
-          "direction": {
-            "$ref": "#/components/schemas/TransferDirection",
-            "description": "always `Download`"
-          },
-          "failedCount": {
-            "type": "integer",
-            "format": "int32",
-            "description": "how many of them completed other than successfully",
-            "minimum": 0
-          },
-          "fileCount": {
-            "type": "integer",
-            "format": "int32",
-            "description": "how many transfers the batch has",
-            "minimum": 0
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "the batch's id"
-          },
-          "options": {
-            "$ref": "#/components/schemas/BatchOptions",
-            "description": "where the files go and how the caller tagged the batch"
-          },
-          "searchId": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid",
-            "description": "the search the files were found by, null when there is none"
-          },
-          "state": {
-            "$ref": "#/components/schemas/BatchState",
-            "description": "where the batch is as a whole"
-          },
-          "transfers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Transfer"
-            },
-            "description": "the batch's transfers, without removed ones unless they were asked for"
-          },
-          "username": {
-            "type": "string",
-            "description": "the user the files come from"
-          }
-        }
-      },
-      "BatchOptions": {
-        "type": "object",
-        "description": "Where a batch's files go and how the caller tags it.",
-        "properties": {
-          "destination": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "a relative path under the downloads directory that every file of the batch goes to,\nin place of the directory the download pattern gives; null for the pattern",
-            "example": "Artist/Album"
-          },
-          "externalId": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "a tag of the caller's choosing, given to the download pattern; null for none"
-          }
-        }
-      },
-      "BatchState": {
-        "type": "string",
-        "description": "Where a batch is as a whole.",
-        "enum": [
-          "Pending",
-          "InProgress",
-          "Completed",
-          "Failed"
-        ]
-      },
       "BlacklistRules": {
         "type": "object",
         "description": "The configuration's rules that block users by pattern, address or file.",
@@ -18274,21 +17786,13 @@
           }
         }
       },
-      "EnqueueDownloadBatchItem": {
+      "EnqueueDownloadFile": {
         "type": "object",
-        "description": "One file of a batch.",
+        "description": "One file to download.",
         "required": [
-          "filename",
-          "size"
+          "filename"
         ],
         "properties": {
-          "attributes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FileAttribute"
-            },
-            "description": "the file's attributes as the response gave them, kept to be shown with the download"
-          },
           "filename": {
             "type": "string",
             "description": "the remote filename exactly as a search or browse response gave it",
@@ -18297,37 +17801,33 @@
           "size": {
             "type": "integer",
             "format": "int64",
-            "description": "the file's size in bytes as the response gave it",
+            "description": "the file's size in bytes as the response gave it, 0 when unknown",
             "minimum": 0
           }
         }
       },
-      "EnqueueDownloadBatchRequest": {
+      "EnqueueDownloadGroup": {
         "type": "object",
-        "description": "Downloads several files from one user as one batch, which can give them a common\ndestination.",
+        "description": "Files from one user, one group of a download job. Each of its downloads keeps the group's\ndestination and search.",
         "required": [
           "username",
           "files"
         ],
         "properties": {
-          "files": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EnqueueDownloadBatchItem"
-            },
-            "description": "the files, at least one, no filename twice"
-          },
-          "id": {
+          "destination": {
             "type": [
               "string",
               "null"
             ],
-            "format": "uuid",
-            "description": "the batch's id, not the nil id; a new one is made when null"
+            "description": "a relative path under the downloads directory that every file of the group goes to, in\nplace of the directory the download pattern gives; null for the pattern",
+            "example": "Artist/Album"
           },
-          "options": {
-            "$ref": "#/components/schemas/BatchOptions",
-            "description": "where the files go and how the caller tags the batch"
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnqueueDownloadFile"
+            },
+            "description": "the files, at least one, no filename twice"
           },
           "searchId": {
             "type": [
@@ -18344,62 +17844,41 @@
           }
         }
       },
-      "EnqueueDownloadBatchResponse": {
-        "type": "object",
-        "description": "What enqueueing a batch did.",
-        "required": [
-          "batch",
-          "failures"
-        ],
-        "properties": {
-          "batch": {
-            "$ref": "#/components/schemas/Batch",
-            "description": "the batch with the downloads that were created"
-          },
-          "failures": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EnqueueFailure"
-            },
-            "description": "the files that were not enqueued, and why"
-          }
-        }
-      },
       "EnqueueDownloadJobRequest": {
         "type": "object",
-        "description": "Downloads several batches as one job: everything picked in one go, such as an album whose\ndiscs go to folders of their own, or files from several users picked from one search. The\njob is told of once, by a `transfers.job_finished` frame, when every one of its downloads\nhas ended.",
+        "description": "Downloads everything picked in one go as one download job, such as a file, an album whose\ndiscs go to folders of their own, or files from several users picked from one search. The\njob is told of once, by a `transfers.job_finished` frame, when every one of its downloads\nhas ended.",
         "required": [
-          "batches"
+          "groups"
         ],
         "properties": {
-          "batches": {
+          "groups": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/EnqueueDownloadBatchRequest"
+              "$ref": "#/components/schemas/EnqueueDownloadGroup"
             },
-            "description": "the batches, at least one, enqueued in this order"
+            "description": "the groups, at least one, enqueued in this order"
           }
         }
       },
       "EnqueueDownloadJobResponse": {
         "type": "object",
-        "description": "What enqueueing a job did.",
+        "description": "What enqueueing a download job did.",
         "required": [
           "id",
-          "batches"
+          "groups"
         ],
         "properties": {
-          "batches": {
+          "groups": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/EnqueuedJobBatch"
+              "$ref": "#/components/schemas/EnqueuedDownloadGroup"
             },
-            "description": "what came of each batch, in the order of the request"
+            "description": "what came of each group, in the order of the request"
           },
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "the job's id, which its `transfers.job_finished` frame carries"
+            "description": "the job's id, which its downloads and its `transfers.job_finished` frame carry"
           }
         }
       },
@@ -18421,21 +17900,21 @@
           }
         }
       },
-      "EnqueuedJobBatch": {
+      "EnqueuedDownloadGroup": {
         "type": "object",
-        "description": "What came of one batch of a job.",
+        "description": "What came of one group of a download job.",
         "required": [
           "username",
+          "enqueued",
           "failures"
         ],
         "properties": {
-          "batchId": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid",
-            "description": "the batch made, null when it was not"
+          "enqueued": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transfer"
+            },
+            "description": "the downloads made"
           },
           "error": {
             "oneOf": [
@@ -18444,7 +17923,7 @@
               },
               {
                 "$ref": "#/components/schemas/ErrorBody",
-                "description": "why the batch was not made, such as its user being offline; null when it was"
+                "description": "why none of the group's files was enqueued, such as its user being offline; null when\nthe group was tried"
               }
             ]
           },
@@ -18453,11 +17932,11 @@
             "items": {
               "$ref": "#/components/schemas/EnqueueFailure"
             },
-            "description": "the files of the batch made that were not enqueued, and why"
+            "description": "the files of the group that were not enqueued, and why"
           },
           "username": {
             "type": "string",
-            "description": "the user the batch's files come from"
+            "description": "the user the group's files come from"
           }
         }
       },
@@ -21838,14 +21317,6 @@
                   "format": "double",
                   "description": "the average speed in bytes per second, 0 until the first sample"
                 },
-                "batchId": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "format": "uuid",
-                  "description": "the batch the download was enqueued in, null for downloads enqueued one by one and for\nuploads"
-                },
                 "bytesRemaining": {
                   "type": "integer",
                   "format": "int64",
@@ -21903,6 +21374,14 @@
                   "type": "string",
                   "format": "uuid",
                   "description": "the transfer's id, never reused"
+                },
+                "jobId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "the download job the download was queued in: everything queued with it in one go; null\nfor uploads"
                 },
                 "localPath": {
                   "type": [
@@ -22435,50 +21914,6 @@
           "enabled": {
             "type": "boolean",
             "description": "the proxy's identity headers are honored"
-          }
-        }
-      },
-      "QueueDownloadRequest": {
-        "type": "object",
-        "description": "One file to download from the user named in the path. The body of the call is a list of\nthese.",
-        "required": [
-          "filename"
-        ],
-        "properties": {
-          "filename": {
-            "type": "string",
-            "description": "the remote filename exactly as a search or browse response gave it",
-            "example": "@@abcde\\Music\\Artist\\Album\\01 - Track.flac"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64",
-            "description": "the file's size in bytes as the response gave it, 0 when unknown",
-            "minimum": 0
-          }
-        }
-      },
-      "QueueDownloadResponse": {
-        "type": "object",
-        "description": "What enqueueing a list of files did.",
-        "required": [
-          "enqueued",
-          "failed"
-        ],
-        "properties": {
-          "enqueued": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Transfer"
-            },
-            "description": "the downloads that were created"
-          },
-          "failed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EnqueueFailure"
-            },
-            "description": "the files that were not enqueued, and why"
           }
         }
       },
@@ -24663,14 +24098,6 @@
             "format": "double",
             "description": "the average speed in bytes per second, 0 until the first sample"
           },
-          "batchId": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid",
-            "description": "the batch the download was enqueued in, null for downloads enqueued one by one and for\nuploads"
-          },
           "bytesRemaining": {
             "type": "integer",
             "format": "int64",
@@ -24728,6 +24155,14 @@
             "type": "string",
             "format": "uuid",
             "description": "the transfer's id, never reused"
+          },
+          "jobId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "the download job the download was queued in: everything queued with it in one go; null\nfor uploads"
           },
           "localPath": {
             "type": [

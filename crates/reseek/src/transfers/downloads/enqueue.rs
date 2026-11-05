@@ -1,14 +1,14 @@
 //! Enqueueing downloads, as a job of one or more groups of files from one user each: the job is
 //! opened, then for each group the request and the peer are checked and, in the user's turn, a
-//! record is written for every file not downloading already, in one transaction with the batch
-//! the files belong to, and a task is started for each; then the job is closed. A record for a
-//! file that finished earlier is superseded by the new one.
+//! record is written for every file not downloading already, in one transaction, carrying the
+//! job, the group's destination and its search, and a task is started for each; then the job is
+//! closed. A record for a file that finished earlier is superseded by the new one.
 
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use api_types::live::LiveFrame;
-use api_types::transfers::{EnqueueDownloadBatchItem, EnqueueFailure, Transfer, TransferDirection};
+use api_types::transfers::{EnqueueFailure, Transfer, TransferDirection};
 use api_types::users::blocking::BlockScope;
 use rusqlite::params;
 use soulseek_client::ClientError;
@@ -16,7 +16,6 @@ use tokio::sync::Semaphore;
 use tracing::{Instrument, debug, info, warn};
 use uuid::Uuid;
 
-use super::batches::{self, BatchRow, InsertError};
 use super::{Downloads, InFlight};
 use crate::api::error::ApiError;
 use crate::safety::traverses;
@@ -44,32 +43,49 @@ pub struct FileRequest {
   pub size: u64,
 }
 
-/// A batch to make with the files, and the files as the request gave them.
-pub struct NewBatch {
-  /// the batch
-  pub row: BatchRow,
-  /// the files with their attributes, kept with the batch
-  pub files: Vec<EnqueueDownloadBatchItem>,
-}
-
-/// The batch the files go into.
-pub enum Batching {
-  /// none
-  Single,
-  /// one that exists
-  Existing(Uuid),
-  /// one made with them
-  New(Box<NewBatch>),
-}
-
-/// Files from one user to enqueue together, one group of a job.
+/// Files from one user to enqueue together, one group of a job, with where they go and what
+/// found them, which each of their downloads keeps.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Group {
   /// the user the files come from
   pub username: String,
   /// the files
   pub files: Vec<FileRequest>,
-  /// the batch they go into
-  pub batching: Batching,
+  /// the relative directory under the downloads directory the files go to, in place of the one
+  /// the download pattern gives
+  pub destination: Option<String>,
+  /// the search the files were found by
+  pub search_id: Option<Uuid>,
+}
+
+impl FileRequest {
+  /// The file of the download `record`.
+  pub fn of(record: &Record) -> Self {
+    Self {
+      filename: record.filename.clone(),
+      size: record.size,
+    }
+  }
+}
+
+impl Group {
+  /// A group holding the file of the download `record`, with its user, destination and search.
+  pub fn of(record: &Record) -> Self {
+    Self {
+      username: record.username.clone(),
+      files: vec![FileRequest::of(record)],
+      destination: record.destination.clone(),
+      search_id: record.search_id,
+    }
+  }
+
+  /// Whether the file of `record` belongs in this group: it comes from the same user, goes to
+  /// the same destination and was found by the same search.
+  pub fn holds(&self, record: &Record) -> bool {
+    self.username == record.username
+      && self.destination == record.destination
+      && self.search_id == record.search_id
+  }
 }
 
 /// What an enqueue of a group did.
@@ -131,8 +147,8 @@ impl Downloads {
   /// Enqueues `groups` as the job `job`, each group as its own enqueue, and says for each what
   /// came of it. A user blocked from downloads through the API is a conflict; one offline or
   /// blocked by the configuration a 404. Files already downloading are listed as failed and the
-  /// rest enqueued; a new batch is made with them, and a batch id already taken is a conflict.
-  /// The job is open until every group was tried, so it is not over before all its files are in.
+  /// rest enqueued. The job is open until every group was tried, so it is not over before all
+  /// its files are in.
   pub async fn enqueue(&self, job: Uuid, groups: Vec<Group>) -> Vec<Result<Enqueued, ApiError>> {
     // the job runs on a task of its own, so a caller that stops waiting, such as a request
     // whose connection drops, leaves no record without its task and no job open
@@ -164,31 +180,22 @@ impl Downloads {
 
   /// Enqueues one group of the job `job`.
   async fn enqueue_group(&self, job: Uuid, group: Group) -> Result<Enqueued, ApiError> {
+    check(&group.username, &group.files)?;
+    self.reachable(&group.username).await?;
+    self.make(job, group).await
+  }
+
+  /// In the turn of the user of `group`, writes a record in the job `job` for every file of
+  /// `group` not downloading already, and starts a task for each.
+  async fn make(&self, job: Uuid, group: Group) -> Result<Enqueued, ApiError> {
     let Group {
       username,
       files,
-      batching,
+      destination,
+      search_id,
     } = group;
-    check(&username, &files)?;
-    self.reachable(&username).await?;
-    self.make(job, &username, files, batching).await
-  }
-
-  /// In `username`'s turn, writes a record for every file of `files` not downloading already
-  /// into `batching` and the job `job`, and starts a task for each.
-  async fn make(
-    &self,
-    job: Uuid,
-    username: &str,
-    files: Vec<FileRequest>,
-    batching: Batching,
-  ) -> Result<Enqueued, ApiError> {
+    let username = username.as_str();
     let _turn = self.turn(username).await;
-    let batch_id = match &batching {
-      Batching::Single => None,
-      Batching::Existing(id) => Some(*id),
-      Batching::New(batch) => Some(batch.row.id),
-    };
     let tracked: HashSet<String> = self
       .network
       .client()
@@ -201,7 +208,9 @@ impl Downloads {
       .iter()
       .map(|file| Record {
         job_id: Some(job),
-        ..Record::download(username, &file.filename, file.size, batch_id)
+        destination: destination.clone(),
+        search_id,
+        ..Record::download(username, &file.filename, file.size)
       })
       .collect();
     let ids: Vec<Uuid> = candidates.iter().map(|record| record.id).collect();
@@ -222,17 +231,9 @@ impl Downloads {
     let name = username.to_string();
     let written = self
       .db
-      .write(move |conn| Ok(write(conn, &name, candidates, batching, &tracked)))
+      .write(move |conn| write(conn, &name, candidates, &tracked))
       .await
-      .map_err(ApiError::internal)
-      .and_then(|written| {
-        written.map_err(|e| match e {
-          InsertError::Exists(id) => {
-            ApiError::conflict(format!("A batch with ID {id} already exists"), None)
-          }
-          InsertError::Db(e) => ApiError::internal(e),
-        })
-      });
+      .map_err(ApiError::internal);
     let written = match written {
       Ok(written) => written,
       Err(e) => {
@@ -314,19 +315,15 @@ impl Downloads {
   }
 }
 
-/// Writes, in one transaction, the batch to make and every candidate record whose file is not
-/// downloading already, superseding the user's earlier records of the same file.
+/// Writes, in one transaction, every candidate record whose file is not downloading already,
+/// superseding the user's earlier records of the same file.
 fn write(
   conn: &mut rusqlite::Connection,
   username: &str,
   candidates: Vec<Record>,
-  batching: Batching,
   tracked: &HashSet<String>,
-) -> Result<Written, InsertError> {
+) -> rusqlite::Result<Written> {
   let mut tx = conn.transaction()?;
-  if let Batching::New(batch) = &batching {
-    batches::insert(&tx, &batch.row, &batch.files)?;
-  }
   let running: HashSet<String> = {
     let mut statement = tx.prepare(&format!(
       "SELECT Filename FROM Transfers WHERE Username = ?1 AND Direction = ?2 AND Removed = 0 \

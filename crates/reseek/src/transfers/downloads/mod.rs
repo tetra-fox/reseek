@@ -9,7 +9,6 @@
 //! run one at a time. Every record written is pushed to the `transfers` topic.
 
 mod attempt;
-mod batches;
 mod complete;
 mod destination;
 mod enqueue;
@@ -20,7 +19,7 @@ mod task;
 #[cfg(test)]
 mod tests;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -55,7 +54,7 @@ use crate::sync::lock;
 use crate::telemetry::Telemetry;
 use crate::turns::{Turn, Turns};
 use crate::users::Directory;
-pub use enqueue::{Batching, Enqueued, FileRequest, Group, NewBatch};
+pub use enqueue::{Enqueued, FileRequest, Group};
 
 /// How long the tasks of running downloads get to end at shutdown before their records are
 /// ended anyway.
@@ -116,8 +115,8 @@ pub struct Downloads {
 
 impl Downloads {
   /// The engine over `transfers.db`, reaching peers through `network`, asking `users` who is
-  /// blocked, marking the files it writes in `files`, reading what a batch searched for from
-  /// `searches`, raising its events on `events`, pushing its records to `live`, counting the
+  /// blocked, marking the files it writes in `files`, reading what a download's search was for
+  /// from `searches`, raising its events on `events`, pushing its records to `live`, counting the
   /// downloads that end in `telemetry` and telling `relay` and `analysis` of each that
   /// finished. Its tasks end when `shutdown` is canceled.
   #[allow(
@@ -346,12 +345,12 @@ impl Downloads {
     info!(username, canceled, "downloads from a blocked user canceled");
   }
 
-  /// Enqueues again the downloads a stop interrupted that were not removed since, each user's
-  /// together and each in its batch and job, as new downloads that supersede the old records,
-  /// so a job goes on and is told of once all of it has ended. A download from before jobs were
-  /// kept goes into a new job with the others of its user and batch. Only the first call after a
-  /// start does anything, which is after the first login; the marks are cleared before the
-  /// enqueues, so a user that cannot be reached is logged, not tried again.
+  /// Enqueues again the downloads a stop interrupted that were not removed since, each in its
+  /// job and with its destination and search, as new downloads that supersede the old records,
+  /// so a job goes on and is told of once all of it has ended. Downloads from before jobs were
+  /// kept go into one new job. Only the first call after a start does anything, which is after
+  /// the first login; the marks are cleared before the enqueues, so a user that cannot be
+  /// reached is logged, not tried again.
   pub async fn resume(&self) {
     if self.resumed.swap(true, Ordering::AcqRel) {
       return;
@@ -360,18 +359,8 @@ impl Downloads {
       Ok(resumable) => resumable,
       Err(e) => return warn!(error = %e, "interrupted downloads not resumed"),
     };
-    let mut jobs: BTreeMap<Uuid, Vec<Group>> = BTreeMap::new();
-    for ((username, batch, job), files) in resumable {
-      jobs
-        .entry(job.unwrap_or_else(Uuid::new_v4))
-        .or_default()
-        .push(Group {
-          username,
-          files,
-          batching: batch.map_or(Batching::Single, Batching::Existing),
-        });
-    }
-    for (job, groups) in jobs {
+    for (job, groups) in resumable {
+      let job = job.unwrap_or_else(Uuid::new_v4);
       let asked: Vec<(String, usize)> = groups
         .iter()
         .map(|g| (g.username.clone(), g.files.len()))

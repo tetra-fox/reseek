@@ -1,5 +1,5 @@
-//! Transfers: downloads and uploads, their states, batches and the bodies of the transfer
-//! calls.
+//! Transfers: downloads and uploads, their states, download jobs and the bodies of the
+//! transfer calls.
 
 mod actions;
 mod downloads;
@@ -86,9 +86,9 @@ impl From<soulseek_proto::TransferDirection> for TransferDirection {
 pub struct Transfer {
   /// the transfer's id, never reused
   pub id: Uuid,
-  /// the batch the download was enqueued in, null for downloads enqueued one by one and for
-  /// uploads
-  pub batch_id: Option<Uuid>,
+  /// the download job the download was queued in: everything queued with it in one go; null
+  /// for uploads
+  pub job_id: Option<Uuid>,
   /// the peer
   #[schema(example = "alice")]
   pub username: String,

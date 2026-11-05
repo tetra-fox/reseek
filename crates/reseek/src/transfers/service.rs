@@ -5,10 +5,8 @@ use std::sync::Arc;
 
 use api_types::Page;
 use api_types::transfers::{
-  Batch, BulkRequest, BulkResult, DebugTransfers, EnqueueDownloadBatchRequest,
-  EnqueueDownloadBatchResponse, EnqueueDownloadJobRequest, EnqueueDownloadJobResponse,
-  QueueDownloadRequest, QueueDownloadResponse, Transfer, TransferListQuery, UploadQueueStatus,
-  UploadsQuery, UserResponse,
+  BulkRequest, BulkResult, DebugTransfers, EnqueueDownloadJobRequest, EnqueueDownloadJobResponse,
+  Transfer, TransferListQuery, UploadQueueStatus, UploadsQuery, UserResponse,
 };
 use async_trait::async_trait;
 use uuid::Uuid;
@@ -53,30 +51,11 @@ impl TransferService for Transfers {
     TransferService::place_in_queue(&*self.downloads, username, id).await
   }
 
-  async fn enqueue(
-    &self,
-    username: &str,
-    files: Vec<QueueDownloadRequest>,
-  ) -> Result<QueueDownloadResponse, ApiError> {
-    TransferService::enqueue(&*self.downloads, username, files).await
-  }
-
-  async fn enqueue_batch(
-    &self,
-    request: EnqueueDownloadBatchRequest,
-  ) -> Result<EnqueueDownloadBatchResponse, ApiError> {
-    self.downloads.enqueue_batch(request).await
-  }
-
   async fn enqueue_job(
     &self,
     request: EnqueueDownloadJobRequest,
   ) -> Result<EnqueueDownloadJobResponse, ApiError> {
     self.downloads.enqueue_job(request).await
-  }
-
-  async fn batch(&self, id: Uuid, include_removed: bool) -> Result<Batch, ApiError> {
-    self.downloads.batch(id, include_removed).await
   }
 
   async fn cancel_download(&self, username: &str, id: Uuid, remove: bool) -> Result<(), ApiError> {

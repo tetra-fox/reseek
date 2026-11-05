@@ -17,14 +17,15 @@ pub const HISTORY_KEPT: u32 = 64;
 /// Writes a new record, and the state it starts in to its history.
 pub fn insert(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
   conn.execute(
-    "INSERT INTO Transfers (Id, BatchId, Username, Direction, Filename, Size, State, \
+    "INSERT INTO Transfers (Id, JobId, Username, Direction, Filename, Size, State, \
      StateDescription, RequestedAt, EnqueuedAt, StartedAt, EndedAt, BytesTransferred, \
-     AverageSpeed, PlaceInQueue, Exception, Removed, Attempts, NextAttemptAt, LocalPath, JobId) \
+     AverageSpeed, PlaceInQueue, Exception, Removed, Attempts, NextAttemptAt, LocalPath, \
+     Destination, SearchId) \
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, \
-     ?19, ?20, ?21)",
+     ?19, ?20, ?21, ?22)",
     params![
       record.id.to_string(),
-      record.batch_id.map(|id| id.to_string()),
+      record.job_id.map(|id| id.to_string()),
       record.username,
       direction_text(record.direction),
       record.filename,
@@ -43,7 +44,8 @@ pub fn insert(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
       record.attempts,
       time_text(record.next_attempt_at),
       record.local_path,
-      record.job_id.map(|id| id.to_string()),
+      record.destination,
+      record.search_id.map(|id| id.to_string()),
     ],
   )?;
   entered(conn, record.id, record.state, record.requested_at)
@@ -198,7 +200,7 @@ mod tests {
   #[tokio::test]
   async fn a_record_is_written_whole_and_reads_back_the_same() {
     let db = transfers().await;
-    let mut record = Record::download("alice", "@@a\\b.flac", 10, None);
+    let mut record = Record::download("alice", "@@a\\b.flac", 10);
     record.requested_at = "2026-05-06T10:00:00.123456Z".parse().unwrap();
     let written = record.clone();
     db.write(move |conn| insert(conn, &written)).await.unwrap();
@@ -228,7 +230,7 @@ mod tests {
   #[tokio::test]
   async fn a_state_written_leaves_a_removal_made_meanwhile() {
     let db = transfers().await;
-    let mut record = Record::download("alice", "a.flac", 10, None);
+    let mut record = Record::download("alice", "a.flac", 10);
     let written = record.clone();
     db.write(move |conn| insert(conn, &written)).await.unwrap();
     let id = record.id;
@@ -256,7 +258,7 @@ mod tests {
   #[tokio::test]
   async fn progress_never_touches_a_transfer_that_is_not_in_progress() {
     let db = transfers().await;
-    let mut record = Record::download("alice", "a.flac", 10, None);
+    let mut record = Record::download("alice", "a.flac", 10);
     record.state = TransferStates::InProgress;
     let written = record.clone();
     db.write(move |conn| insert(conn, &written)).await.unwrap();
@@ -283,7 +285,7 @@ mod tests {
   #[tokio::test]
   async fn the_history_keeps_the_newest_sixty_four_states() {
     let db = transfers().await;
-    let record = Record::download("alice", "a.flac", 10, None);
+    let record = Record::download("alice", "a.flac", 10);
     let id = record.id;
     db.write(move |conn| {
       insert(conn, &record)?;

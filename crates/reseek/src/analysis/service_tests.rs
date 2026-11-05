@@ -84,7 +84,7 @@ fn count_events(app: &TestApp) -> Arc<AtomicUsize> {
 async fn a_download_is_analyzed_reported_drawn_and_announced_once() {
   let app = app(TRUSTED, &[]).await;
   lossless(&app, "Album/01.flac");
-  let mut record = Record::download("alice", "@@share\\Album\\01.flac", 3, None);
+  let mut record = Record::download("alice", "@@share\\Album\\01.flac", 3);
   record.state = TransferStates::Completed | TransferStates::Succeeded;
   let local = app.state.paths.downloads.join("Album/01.flac");
   record.local_path = Some(local.to_string_lossy().into_owned());
@@ -311,7 +311,7 @@ async fn the_judgment_is_kept_across_a_restart_and_beside_a_new_analysis() {
 async fn a_report_and_its_judgment_outlive_the_file() {
   let app = app(TRUSTED, &[]).await;
   lossless(&app, "Album/02.flac");
-  let mut record = Record::download("alice", "@@share\\Album\\02.flac", 3, None);
+  let mut record = Record::download("alice", "@@share\\Album\\02.flac", 3);
   record.state = TransferStates::Completed | TransferStates::Succeeded;
   let local = app.state.paths.downloads.join("Album/02.flac");
   record.local_path = Some(local.to_string_lossy().into_owned());

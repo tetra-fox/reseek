@@ -17,15 +17,15 @@ use api_types::analysis::{AnalysisReportQuery, AudioAnalysis};
 use api_types::files::ContentQuery;
 use api_types::options::OptionsPatch;
 use api_types::transfers::{
-  BatchOptions, EnqueueDownloadBatchItem, EnqueueDownloadBatchRequest, QueueDownloadRequest,
-  Transfer, TransferDirection, TransferStates,
+  EnqueueDownloadFile, EnqueueDownloadGroup, EnqueueDownloadJobRequest, Transfer,
+  TransferDirection, TransferListQuery, TransferStates,
 };
 use serde_json::json;
 use soulseek_client::{ClientOptions, UploadInput, UploadRequest};
 use support::soulfind::{self, Soulfind, User};
 use support::transfers::{self, Asked, asked, content, file, scratch};
 use support::{
-  Daemon, PATIENCE, completed, daemon, download_when, enqueue, events, free_port, logged_in,
+  Daemon, PATIENCE, completed, daemon, download_when, enqueue, events, free_port, job, logged_in,
   signed_in, until,
 };
 use tokio_util::sync::CancellationToken;
@@ -207,16 +207,14 @@ async fn a_cancel_removes_once_ended_and_a_block_cancels_with_its_reason() {
   assert_eq!(ended.state, completed(TransferStates::Cancelled));
   assert_eq!(ended.exception.as_deref(), Some("Blocked"));
   let refused = api
-    .enqueue(
-      &peer,
-      &[QueueDownloadRequest {
-        filename: "@@share\\a\\3.flac".to_string(),
-        size: 1,
-      }],
-    )
+    .enqueue_download_job(&job(&peer, "@@share\\a\\3.flac", 1))
     .await
-    .unwrap_err();
-  assert_eq!(refused.status().map(|s| s.as_u16()), Some(409));
+    .unwrap();
+  let error = refused.groups[0]
+    .error
+    .as_ref()
+    .expect("a blocked user is refused");
+  assert_eq!(error.error, "The user is blocked");
   assert!(
     events(&api, "DownloadFileFailed", 0).await.is_empty(),
     "a cancel raises nothing"
@@ -224,76 +222,52 @@ async fn a_cancel_removes_once_ended_and_a_block_cancels_with_its_reason() {
 }
 
 #[tokio::test]
-async fn a_batch_is_made_whole_or_not_at_all() {
+async fn a_job_enqueues_the_groups_whose_users_it_reaches() {
   let Some(server) = soulfind::server() else {
     return;
   };
   let (uploader, mut requests) = uploader(&server).await;
   let dir = tempfile::tempdir().unwrap();
   let (_daemon, api) = started(dir.path(), &server, &soulfind::username("daemon")).await;
-  let batch = |username: &str, id: Uuid| EnqueueDownloadBatchRequest {
-    id: Some(id),
-    search_id: None,
-    username: username.to_string(),
-    files: vec![EnqueueDownloadBatchItem {
-      filename: "@@share\\b\\1.flac".to_string(),
-      size: 10,
-      attributes: Vec::new(),
-    }],
-    options: BatchOptions::default(),
-  };
-  let offline = Uuid::new_v4();
-  let refused = api
-    .enqueue_batch(&batch("nobody-logged-in", offline))
-    .await
-    .unwrap_err();
-  assert_eq!(refused.status().map(|s| s.as_u16()), Some(404));
-  let missing = api.batch(offline, false).await.unwrap_err();
+  let mut request = job("nobody-logged-in", "@@share\\b\\1.flac", 10);
+  request
+    .groups
+    .extend(job(&uploader.username, "@@share\\b\\1.flac", 10).groups);
+  let answer = api.enqueue_download_job(&request).await.unwrap();
+  let offline = &answer.groups[0];
   assert_eq!(
-    missing.status().map(|s| s.as_u16()),
-    Some(404),
-    "no batch is left"
+    offline.error.as_ref().map(|e| e.error.as_str()),
+    Some("User nobody-logged-in appears to be offline")
   );
-
-  let id = Uuid::new_v4();
-  let made = api
-    .enqueue_batch(&batch(&uploader.username, id))
-    .await
-    .unwrap();
-  assert_eq!(made.batch.transfers.len(), 1);
+  assert!(offline.enqueued.is_empty());
+  let reached = &answer.groups[1];
+  assert!(reached.error.is_none(), "{reached:?}");
+  assert_eq!(reached.enqueued.len(), 1);
+  assert_eq!(reached.enqueued[0].job_id, Some(answer.id));
   asked(&mut requests).await;
-  let again = api
-    .enqueue_batch(&batch(&uploader.username, id))
-    .await
-    .unwrap_err();
-  assert_eq!(again.status().map(|s| s.as_u16()), Some(409));
-  assert_eq!(api.batch(id, true).await.unwrap().file_count, 1);
 }
 
-/// Enqueues [`ALBUM`] from `peer` in a batch of its own, waits for the peer to queue it and
-/// stops the daemon. Returns the batch and the download.
+/// Enqueues [`ALBUM`] from `peer` in a job of its own with a destination of its own, waits for
+/// the peer to queue it and stops the daemon. Returns the job and the download.
 async fn stopped_while_queued(
   mut daemon: Daemon,
   api: &Client,
   requests: &mut Asked,
   peer: &str,
 ) -> (Uuid, Uuid) {
-  let batch = Uuid::new_v4();
-  let request = EnqueueDownloadBatchRequest {
-    id: Some(batch),
-    search_id: None,
-    username: peer.to_string(),
-    files: vec![EnqueueDownloadBatchItem {
-      filename: ALBUM.to_string(),
-      size: SIZE as u64,
-      attributes: Vec::new(),
-    }],
-    options: BatchOptions {
+  let request = EnqueueDownloadJobRequest {
+    groups: vec![EnqueueDownloadGroup {
+      username: peer.to_string(),
+      files: vec![EnqueueDownloadFile {
+        filename: ALBUM.to_string(),
+        size: SIZE as u64,
+      }],
       destination: Some("Kept/Here".to_string()),
-      external_id: None,
-    },
+      search_id: None,
+    }],
   };
-  let first = api.enqueue_batch(&request).await.unwrap().batch.transfers[0].id;
+  let answer = api.enqueue_download_job(&request).await.unwrap();
+  let first = answer.groups[0].enqueued[0].id;
   asked(requests).await;
   download_when(api, peer, first, "queued", |t| {
     t.state == TransferStates::Queued | TransferStates::Remotely
@@ -305,28 +279,33 @@ async fn stopped_while_queued(
     assert!(stopping.elapsed() < PATIENCE, "the daemon stops");
     tokio::time::sleep(Duration::from_millis(50)).await;
   }
-  (batch, first)
+  (answer.id, first)
 }
 
-/// Waits for the download that takes over `first` in `batch` after a start to succeed, checks
-/// that its file landed under the daemon in `dir` as the batch asked, and that `first` ended
-/// with the stop and is superseded.
-async fn resumed(api: &Client, dir: &Path, peer: &str, batch: Uuid, first: Uuid) {
+/// Waits for the download that takes over `first` in `job` after a start to succeed, checks
+/// that its file landed under the daemon in `dir` at the destination it was asked with, and
+/// that `first` ended with the stop and is superseded.
+async fn resumed(api: &Client, dir: &Path, peer: &str, job: Uuid, first: Uuid) {
+  let query: TransferListQuery =
+    serde_json::from_value(json!({ "username": peer, "includeRemoved": true })).unwrap();
   let started_at = Instant::now();
   let resumed = loop {
-    let batch = api.batch(batch, true).await.unwrap();
-    if let Some(resumed) = batch
-      .transfers
+    let listed = api
+      .transfer_list(TransferDirection::Download, &query)
+      .await
+      .unwrap();
+    if let Some(resumed) = listed
+      .items
       .iter()
       .find(|t| t.id != first && t.local_path.is_some())
     {
       break resumed.clone();
     }
-    assert!(started_at.elapsed() < PATIENCE * 2, "{batch:?}");
+    assert!(started_at.elapsed() < PATIENCE * 2, "{listed:?}");
     tokio::time::sleep(Duration::from_millis(50)).await;
   };
   assert_eq!(resumed.state, completed(TransferStates::Succeeded));
-  assert_eq!(resumed.batch_id, Some(batch), "resumed in its batch");
+  assert_eq!(resumed.job_id, Some(job), "resumed in its job");
   let landed = dir
     .join("data")
     .join("downloads")
@@ -360,12 +339,12 @@ async fn a_download_a_stop_interrupted_resumes_after_the_next_start() {
   let name = soulfind::username("daemon");
   let (daemon, api) = started(dir.path(), &server, &name).await;
   let peer = uploader.username.clone();
-  let (batch, first) = stopped_while_queued(daemon, &api, &mut requests, &peer).await;
+  let (job, first) = stopped_while_queued(daemon, &api, &mut requests, &peer).await;
 
   let (_daemon, api) = started(dir.path(), &server, &name).await;
   let source = file(&scratch(), "one.flac", SIZE);
   serve(&uploader, &mut requests, ALBUM, &source).await;
-  resumed(&api, dir.path(), &peer, batch, first).await;
+  resumed(&api, dir.path(), &peer, job, first).await;
 }
 
 #[tokio::test]
@@ -378,7 +357,7 @@ async fn a_download_whole_at_a_stop_is_moved_at_the_next_start_without_asking_ag
   let name = soulfind::username("daemon");
   let (daemon, api) = started(dir.path(), &server, &name).await;
   let peer = uploader.username.clone();
-  let (batch, first) = stopped_while_queued(daemon, &api, &mut requests, &peer).await;
+  let (job, first) = stopped_while_queued(daemon, &api, &mut requests, &peer).await;
   // every byte arrived and the stop came before the move
   let incomplete = dir
     .path()
@@ -390,7 +369,7 @@ async fn a_download_whole_at_a_stop_is_moved_at_the_next_start_without_asking_ag
   file(&incomplete, "01 song.flac", SIZE);
 
   let (_daemon, api) = started(dir.path(), &server, &name).await;
-  resumed(&api, dir.path(), &peer, batch, first).await;
+  resumed(&api, dir.path(), &peer, job, first).await;
   assert!(requests.try_recv().is_err(), "the peer is not asked again");
 }
 

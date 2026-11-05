@@ -175,7 +175,7 @@ fn blank_transfer() -> Transfer {
     .and_utc();
   Transfer {
     id: Uuid::nil(),
-    batch_id: None,
+    job_id: None,
     username: String::new(),
     direction: TransferDirection::Download,
     filename: String::new(),

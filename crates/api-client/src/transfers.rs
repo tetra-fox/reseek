@@ -2,10 +2,9 @@
 
 use api_types::Page;
 use api_types::transfers::{
-  Batch, BulkRequest, BulkResult, CancelQuery, EnqueueDownloadBatchRequest,
-  EnqueueDownloadBatchResponse, IncludeRemovedQuery, QueueDownloadRequest, QueueDownloadResponse,
-  Transfer, TransferDirection, TransferListQuery, TransferQuery, UploadQueueStatus, UploadsQuery,
-  UserResponse,
+  BulkRequest, BulkResult, CancelQuery, EnqueueDownloadJobRequest, EnqueueDownloadJobResponse,
+  IncludeRemovedQuery, Transfer, TransferDirection, TransferListQuery, TransferQuery,
+  UploadQueueStatus, UploadsQuery, UserResponse,
 };
 use uuid::Uuid;
 
@@ -104,32 +103,14 @@ impl Client {
     json(self.get(route)).await
   }
 
-  /// `POST /transfers/downloads/{username}`: enqueues files from a user.
-  pub async fn enqueue(
+  /// `POST /transfers/downloads/jobs`: enqueues files as one download job, in groups of files
+  /// from one user each.
+  pub async fn enqueue_download_job(
     &self,
-    username: &str,
-    files: &[QueueDownloadRequest],
-  ) -> Result<QueueDownloadResponse> {
-    let route = transfers(TransferDirection::Download).segment(username);
-    json(self.post(route).json(files)).await
-  }
-
-  /// `POST /transfers/downloads/batches`: enqueues files from a user as a batch.
-  pub async fn enqueue_batch(
-    &self,
-    request: &EnqueueDownloadBatchRequest,
-  ) -> Result<EnqueueDownloadBatchResponse> {
-    let route = transfers(TransferDirection::Download).then("batches");
+    request: &EnqueueDownloadJobRequest,
+  ) -> Result<EnqueueDownloadJobResponse> {
+    let route = transfers(TransferDirection::Download).then("jobs");
     json(self.post(route).json(request)).await
-  }
-
-  /// `GET /transfers/downloads/batches/{id}`: one batch with its downloads.
-  pub async fn batch(&self, id: Uuid, include_removed: bool) -> Result<Batch> {
-    let route = transfers(TransferDirection::Download)
-      .then("batches")
-      .segment(&id.to_string())
-      .query(&IncludeRemovedQuery { include_removed })?;
-    json(self.get(route)).await
   }
 
   /// `GET /transfers/uploads/{username}/{id}/why`: why a queued upload waits.

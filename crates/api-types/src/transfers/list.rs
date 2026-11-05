@@ -4,7 +4,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
-use uuid::Uuid;
 
 use super::{Transfer, TransferStates};
 
@@ -139,8 +138,6 @@ pub struct TransferListQuery {
   pub state: Vec<TransferStateFilter>,
   /// only transfers with this peer
   pub username: Option<String>,
-  /// only downloads of this batch
-  pub batch_id: Option<Uuid>,
   /// also list transfers that were removed
   #[serde(default)]
   pub include_removed: bool,

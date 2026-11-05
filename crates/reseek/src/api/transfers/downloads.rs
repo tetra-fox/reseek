@@ -1,14 +1,13 @@
-//! The downloads routes: listing, enqueueing one by one, as a batch or as a job of batches, the
-//! place in a peer's queue, canceling and removing.
+//! The downloads routes: listing, enqueueing as a download job, the place in a peer's queue,
+//! canceling and removing.
 
 use std::collections::HashSet;
 
 use api_types::Page;
 use api_types::transfers::{
-  Batch, BulkRequest, BulkResult, CancelQuery, EnqueueDownloadBatchRequest,
-  EnqueueDownloadBatchResponse, EnqueueDownloadJobRequest, EnqueueDownloadJobResponse,
-  IncludeRemovedQuery, QueueDownloadRequest, QueueDownloadResponse, Transfer, TransferListQuery,
-  TransferQuery, UserResponse,
+  BulkRequest, BulkResult, CancelQuery, EnqueueDownloadGroup, EnqueueDownloadJobRequest,
+  EnqueueDownloadJobResponse, IncludeRemovedQuery, Transfer, TransferListQuery, TransferQuery,
+  UserResponse,
 };
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -24,19 +23,17 @@ use crate::api::extract::{Json, Path, Query};
 use crate::api::validate::USERNAME_CHARS;
 use crate::app::AppState;
 use crate::auth::{AnyRole, Authorized, ReadWrite};
-use crate::safety::{non_traversing, relative_everywhere, traverses};
+use crate::safety::{non_traversing, relative_everywhere};
 
 /// The downloads routes.
 pub fn routes() -> OpenApiRouter<AppState> {
   OpenApiRouter::new()
     .routes(routes!(list))
     .routes(routes!(page))
-    .routes(routes!(user_downloads, enqueue))
+    .routes(routes!(user_downloads))
     .routes(routes!(download, cancel))
     .routes(routes!(place_in_queue))
-    .routes(routes!(enqueue_batch))
     .routes(routes!(enqueue_job))
-    .routes(routes!(batch))
     .routes(routes!(remove_completed))
     .routes(routes!(bulk))
 }
@@ -158,113 +155,11 @@ async fn place_in_queue(
     .map(Json)
 }
 
-/// Enqueues files from one user. Answered 201 when at least one file was enqueued and 200 when
-/// none was; the files that were not are listed with why.
-#[utoipa::path(
-  post, path = "/transfers/downloads/{username}", tag = "transfers",
-  request_body = Vec<QueueDownloadRequest>,
-  params(("username" = String, Path, description = "the peer")),
-  responses(
-    (status = 201, body = QueueDownloadResponse), (status = 200, body = QueueDownloadResponse),
-    (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
-    (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
-    (status = 409, body = api_types::ErrorBody), (status = 429, body = api_types::ErrorBody),
-    (status = 502, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
-  )
-)]
-async fn enqueue(
-  State(app): State<AppState>,
-  caller: Authorized<ReadWrite>,
-  Path(username): Path<String>,
-  Json(files): Json<Vec<Option<QueueDownloadRequest>>>,
-) -> Result<Response, ApiError> {
-  let files = queue_requests(files)?;
-  let count = files.len();
-  let answer = app.services.transfers.enqueue(&username, files).await?;
-  info!(
-    by = caller.principal.subject,
-    username,
-    asked = count,
-    enqueued = answer.enqueued.len(),
-    "downloads enqueued"
-  );
-  let status = if answer.enqueued.is_empty() {
-    StatusCode::OK
-  } else {
-    StatusCode::CREATED
-  };
-  Ok((status, Json(answer)).into_response())
-}
-
-/// Refuses an empty list, a null entry and a filename that is empty or steps outside its
-/// directory.
-fn queue_requests(
-  files: Vec<Option<QueueDownloadRequest>>,
-) -> Result<Vec<QueueDownloadRequest>, ApiError> {
-  if files.is_empty() {
-    return Err(ApiError::bad_request("At least one file is required"));
-  }
-  let files: Vec<QueueDownloadRequest> = files
-    .into_iter()
-    .collect::<Option<_>>()
-    .ok_or_else(|| ApiError::bad_request("One or more files in the request are null"))?;
-  if files.iter().any(|file| file.filename.trim().is_empty()) {
-    return Err(ApiError::bad_request("The Filename field is required"));
-  }
-  if files.iter().any(|file| traverses(&file.filename)) {
-    return Err(ApiError::bad_request(
-      "One or more files in the request contain a dangerous path traversal segment",
-    ));
-  }
-  Ok(files)
-}
-
-/// Enqueues files from one user as a batch. Answered 201 when every file was enqueued, 207 when
-/// some were, and 200 when none was; the batch exists in every case.
-#[utoipa::path(
-  post, path = "/transfers/downloads/batches", tag = "transfers",
-  request_body = EnqueueDownloadBatchRequest,
-  responses(
-    (status = 201, body = EnqueueDownloadBatchResponse),
-    (status = 207, body = EnqueueDownloadBatchResponse),
-    (status = 200, body = EnqueueDownloadBatchResponse),
-    (status = 400, body = api_types::ErrorBody), (status = 401, body = api_types::ErrorBody),
-    (status = 403, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
-    (status = 409, body = api_types::ErrorBody), (status = 429, body = api_types::ErrorBody),
-    (status = 502, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
-  )
-)]
-async fn enqueue_batch(
-  State(app): State<AppState>,
-  caller: Authorized<ReadWrite>,
-  Json(request): Json<EnqueueDownloadBatchRequest>,
-) -> Result<Response, ApiError> {
-  batch_request(&request)?;
-  let count = request.files.len();
-  let answer = app.services.transfers.enqueue_batch(request).await?;
-  info!(
-    by = caller.principal.subject,
-    batch = %answer.batch.id,
-    username = answer.batch.username,
-    asked = count,
-    failed = answer.failures.len(),
-    "download batch enqueued"
-  );
-  let status = if answer.failures.is_empty() {
-    StatusCode::CREATED
-  } else if answer.failures.len() < count {
-    StatusCode::MULTI_STATUS
-  } else {
-    StatusCode::OK
-  };
-  Ok((status, Json(answer)).into_response())
-}
-
-/// Enqueues batches as one job, told of once when every download of it has ended. Each batch
-/// is checked as the batch call checks it, and the job is refused whole when one is not valid;
-/// a batch refused when it is enqueued, such as one whose user is offline, carries why and
-/// leaves the others enqueued. Answered 201 when every file was enqueued, 207 when some were,
-/// and 200 when none was.
+/// Enqueues files as one download job, in groups of files from one user each, told of once when
+/// every download of it has ended. The job is refused whole when a group is not valid; a group
+/// refused when it is enqueued, such as one whose user is offline, carries why and leaves the
+/// others enqueued. Answered 201 when every file was enqueued, 207 when some were, and 200 when
+/// none was.
 #[utoipa::path(
   post, path = "/transfers/downloads/jobs", tag = "transfers",
   request_body = EnqueueDownloadJobRequest,
@@ -282,29 +177,22 @@ async fn enqueue_job(
   caller: Authorized<ReadWrite>,
   Json(request): Json<EnqueueDownloadJobRequest>,
 ) -> Result<Response, ApiError> {
-  if request.batches.is_empty() {
+  if request.groups.is_empty() {
     return Err(ApiError::bad_request(
-      "The field Batches must contain at least one batch",
+      "The field Groups must contain at least one group",
     ));
   }
-  for batch in &request.batches {
-    batch_request(batch)?;
+  for group in &request.groups {
+    group_request(group)?;
   }
-  let sizes: Vec<usize> = request.batches.iter().map(|b| b.files.len()).collect();
+  let asked: usize = request.groups.iter().map(|g| g.files.len()).sum();
   let answer = app.services.transfers.enqueue_job(request).await?;
-  let asked: usize = sizes.iter().sum();
-  let enqueued: usize = answer
-    .batches
-    .iter()
-    .zip(&sizes)
-    .filter(|(b, _)| b.error.is_none())
-    .map(|(b, size)| size - b.failures.len())
-    .sum();
+  let enqueued: usize = answer.groups.iter().map(|g| g.enqueued.len()).sum();
   info!(
     by = caller.principal.subject,
     job = %answer.id,
-    batches = answer.batches.len(),
-    refused = answer.batches.iter().filter(|b| b.error.is_some()).count(),
+    groups = answer.groups.len(),
+    refused = answer.groups.iter().filter(|g| g.error.is_some()).count(),
     asked,
     enqueued,
     "download job enqueued"
@@ -319,15 +207,10 @@ async fn enqueue_job(
   Ok((status, Json(answer)).into_response())
 }
 
-/// Refuses a batch whose ids are nil, whose username is blank or too long, whose files are
+/// Refuses a group whose search id is nil, whose username is blank or too long, whose files are
 /// none, repeated, unnamed, too large or step outside their directory, or whose destination is
 /// not a relative path that stays inside the downloads directory.
-fn batch_request(request: &EnqueueDownloadBatchRequest) -> Result<(), ApiError> {
-  if request.id == Some(Uuid::nil()) {
-    return Err(ApiError::bad_request(
-      "The Id field must not contain an empty GUID/UUID",
-    ));
-  }
+fn group_request(request: &EnqueueDownloadGroup) -> Result<(), ApiError> {
   if request.search_id == Some(Uuid::nil()) {
     return Err(ApiError::bad_request(
       "The SearchId field must not contain an empty GUID/UUID",
@@ -364,7 +247,7 @@ fn batch_request(request: &EnqueueDownloadBatchRequest) -> Result<(), ApiError> 
       ));
     }
   }
-  if let Some(destination) = &request.options.destination {
+  if let Some(destination) = &request.destination {
     if destination.is_empty() {
       return Err(ApiError::bad_request(
         "The Destination field must contain at least one character",
@@ -379,30 +262,6 @@ fn batch_request(request: &EnqueueDownloadBatchRequest) -> Result<(), ApiError> 
     non_traversing("Destination", destination).map_err(ApiError::bad_request)?;
   }
   Ok(())
-}
-
-/// One batch with its downloads; `includeRemoved` lists removed ones too.
-#[utoipa::path(
-  get, path = "/transfers/downloads/batches/{id}", tag = "transfers",
-  params(("id" = Uuid, Path, description = "the batch's id"), IncludeRemovedQuery),
-  responses(
-    (status = 200, body = Batch), (status = 400, body = api_types::ErrorBody),
-    (status = 401, body = api_types::ErrorBody), (status = 404, body = api_types::ErrorBody),
-    (status = 503, body = api_types::ErrorBody)
-  )
-)]
-async fn batch(
-  State(app): State<AppState>,
-  _caller: Authorized<AnyRole>,
-  Path(id): Path<Uuid>,
-  Query(query): Query<IncludeRemovedQuery>,
-) -> Result<Json<Batch>, ApiError> {
-  app
-    .services
-    .transfers
-    .batch(id, query.include_removed)
-    .await
-    .map(Json)
 }
 
 /// Cancels a download; `remove` also removes it from the listings once it has completed.
@@ -483,43 +342,32 @@ async fn bulk(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use api_types::transfers::{BatchOptions, EnqueueDownloadBatchItem};
+  use api_types::transfers::EnqueueDownloadFile;
 
-  fn file(filename: &str, size: u64) -> EnqueueDownloadBatchItem {
-    EnqueueDownloadBatchItem {
+  fn file(filename: &str, size: u64) -> EnqueueDownloadFile {
+    EnqueueDownloadFile {
       filename: filename.to_string(),
       size,
-      attributes: Vec::new(),
     }
   }
 
-  fn batch_of(
-    files: Vec<EnqueueDownloadBatchItem>,
-    destination: Option<&str>,
-  ) -> EnqueueDownloadBatchRequest {
-    EnqueueDownloadBatchRequest {
-      id: None,
-      search_id: None,
+  fn group_of(files: Vec<EnqueueDownloadFile>, destination: Option<&str>) -> EnqueueDownloadGroup {
+    EnqueueDownloadGroup {
       username: "alice".to_string(),
       files,
-      options: BatchOptions {
-        destination: destination.map(str::to_string),
-        external_id: None,
-      },
+      destination: destination.map(str::to_string),
+      search_id: None,
     }
   }
 
-  fn refusal(request: &EnqueueDownloadBatchRequest) -> String {
-    format!("{:?}", batch_request(request).unwrap_err())
+  fn refusal(request: &EnqueueDownloadGroup) -> String {
+    format!("{:?}", group_request(request).unwrap_err())
   }
 
   #[test]
-  fn batches_refuse_what_cannot_be_downloaded_safely() {
-    let fine = batch_of(vec![file("@@a\\Music\\01.flac", 1)], Some("Artist/Album"));
-    assert!(batch_request(&fine).is_ok());
-    let mut nil = fine.clone();
-    nil.id = Some(Uuid::nil());
-    assert!(refusal(&nil).contains("Id field must not contain an empty"));
+  fn groups_refuse_what_cannot_be_downloaded_safely() {
+    let fine = group_of(vec![file("@@a\\Music\\01.flac", 1)], Some("Artist/Album"));
+    assert!(group_request(&fine).is_ok());
     let mut nil_search = fine.clone();
     nil_search.search_id = Some(Uuid::nil());
     assert!(refusal(&nil_search).contains("SearchId field"));
@@ -529,12 +377,12 @@ mod tests {
     let mut long = fine.clone();
     long.username = "x".repeat(501);
     assert!(refusal(&long).contains("between 1 and 500"));
-    assert!(refusal(&batch_of(vec![], None)).contains("at least one file"));
-    let repeated = batch_of(vec![file("a\\b", 1), file("a\\b", 2)], None);
+    assert!(refusal(&group_of(vec![], None)).contains("at least one file"));
+    let repeated = group_of(vec![file("a\\b", 1), file("a\\b", 2)], None);
     assert!(refusal(&repeated).contains("repeated"));
-    let traversing = batch_of(vec![file("a\\..\\b", 1)], None);
+    let traversing = group_of(vec![file("a\\..\\b", 1)], None);
     assert!(refusal(&traversing).contains("field Filename contains one or more unsafe"));
-    let huge = batch_of(vec![file("a", u64::MAX)], None);
+    let huge = group_of(vec![file("a", u64::MAX)], None);
     assert!(refusal(&huge).contains("Size must be between 0 and 9223372036854775807"));
     for (destination, message) in [
       ("", "at least one character"),
@@ -546,24 +394,8 @@ mod tests {
         "field Destination contains one or more unsafe",
       ),
     ] {
-      let request = batch_of(vec![file("a", 1)], Some(destination));
+      let request = group_of(vec![file("a", 1)], Some(destination));
       assert!(refusal(&request).contains(message), "{destination:?}");
     }
-  }
-
-  #[test]
-  fn single_enqueues_refuse_empty_null_and_traversing_files() {
-    let ok = |name: &str| {
-      Some(QueueDownloadRequest {
-        filename: name.to_string(),
-        size: 0,
-      })
-    };
-    assert!(queue_requests(vec![ok("a\\b.flac")]).is_ok());
-    let message = |files| format!("{:?}", queue_requests(files).unwrap_err());
-    assert!(message(vec![]).contains("At least one file is required"));
-    assert!(message(vec![ok("a"), None]).contains("are null"));
-    assert!(message(vec![ok("")]).contains("Filename field is required"));
-    assert!(message(vec![ok("..\\secret")]).contains("dangerous path traversal"));
   }
 }

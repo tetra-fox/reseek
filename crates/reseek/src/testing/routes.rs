@@ -149,11 +149,8 @@ fn body(method: &Method, route: &str) -> Option<Payload> {
   let downloads = "/api/v0/transfers/downloads";
   match (method.as_str(), route) {
     ("POST", "/api/v0/searches") => json(json!({ "searchText": "animals" })),
-    ("POST", r) if r == format!("{downloads}/{{username}}") => {
-      json(json!([{ "filename": "a\\b.flac", "size": 1 }]))
-    }
-    ("POST", r) if r == format!("{downloads}/batches") => json(json!({
-      "username": "alice", "files": [{ "filename": "a\\b.flac", "size": 1 }]
+    ("POST", r) if r == format!("{downloads}/jobs") => json(json!({
+      "groups": [{ "username": "alice", "files": [{ "filename": "a\\b.flac", "size": 1 }] }]
     })),
     ("POST", r) if r.ends_with("/bulk") => json(json!({ "ids": [ID], "action": "cancel" })),
     ("POST", "/api/v0/users/{username}/directory") => json(json!({ "directory": "@@a\\Music" })),

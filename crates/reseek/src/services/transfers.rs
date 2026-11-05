@@ -2,10 +2,8 @@
 
 use api_types::Page;
 use api_types::transfers::{
-  Batch, BulkRequest, BulkResult, DebugTransfers, EnqueueDownloadBatchRequest,
-  EnqueueDownloadBatchResponse, EnqueueDownloadJobRequest, EnqueueDownloadJobResponse,
-  QueueDownloadRequest, QueueDownloadResponse, Transfer, TransferListQuery, UploadQueueStatus,
-  UploadsQuery, UserResponse,
+  BulkRequest, BulkResult, DebugTransfers, EnqueueDownloadJobRequest, EnqueueDownloadJobResponse,
+  Transfer, TransferListQuery, UploadQueueStatus, UploadsQuery, UserResponse,
 };
 use async_trait::async_trait;
 use uuid::Uuid;
@@ -55,38 +53,15 @@ pub trait TransferService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// Enqueues `files` from `username`, each checked by the API. The user being offline or
-  /// blocked by the configuration is a 404 with the same message for both, a user blocked
-  /// from downloads through the API a conflict; two enqueues already running is a 429.
-  async fn enqueue(
-    &self,
-    username: &str,
-    files: Vec<QueueDownloadRequest>,
-  ) -> Result<QueueDownloadResponse, ApiError> {
-    Err(not_yet(DOMAIN))
-  }
-
-  /// Makes a batch and enqueues its files, as one change: a failure leaves no batch behind.
-  /// `request` has passed the API's checks; a batch with its id already existing is a conflict.
-  async fn enqueue_batch(
-    &self,
-    request: EnqueueDownloadBatchRequest,
-  ) -> Result<EnqueueDownloadBatchResponse, ApiError> {
-    Err(not_yet(DOMAIN))
-  }
-
-  /// Enqueues each batch of `request` as above, together as one job, and says what came of
-  /// each; a batch that is refused leaves the others enqueued. `request` has passed the API's
-  /// checks; two enqueues already running is a 429.
+  /// Enqueues the groups of `request` as one download job and says what came of each. A group
+  /// whose user is offline or blocked by the configuration is refused with a 404, one whose
+  /// user is blocked from downloads through the API with a conflict, and the others are
+  /// enqueued still. `request` has passed the API's checks; two enqueues already running is a
+  /// 429.
   async fn enqueue_job(
     &self,
     request: EnqueueDownloadJobRequest,
   ) -> Result<EnqueueDownloadJobResponse, ApiError> {
-    Err(not_yet(DOMAIN))
-  }
-
-  /// One batch with its downloads.
-  async fn batch(&self, id: Uuid, include_removed: bool) -> Result<Batch, ApiError> {
     Err(not_yet(DOMAIN))
   }
 

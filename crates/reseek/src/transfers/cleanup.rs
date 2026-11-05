@@ -12,15 +12,16 @@ use tracing::{debug, info};
 use uuid::Uuid;
 
 use super::categories::UNFINISHED;
-use super::downloads::FileRequest;
-use super::{direction_at, direction_text, text_at};
+use super::downloads::{FileRequest, Group};
+use super::{COLUMNS, Record, direction_at, direction_text};
 use crate::db::{Database, DbError, timestamp};
 
 /// Why a transfer left unfinished at the last stop ended.
 pub const SHUT_DOWN: &str = "Application shut down";
 
-/// The downloads to resume: the files of each user, batch and job.
-pub type Resumable = BTreeMap<(String, Option<Uuid>, Option<Uuid>), Vec<FileRequest>>;
+/// The downloads to resume by job, in groups of one user, destination and search each, in the
+/// order they were asked for; downloads from before jobs were kept are under none.
+pub type Resumable = BTreeMap<Option<Uuid>, Vec<Group>>;
 
 /// Ends every transfer left unfinished, removed ones included, as `Completed, Errored` with
 /// [`SHUT_DOWN`] at the time of this call, marking the downloads among them resumable. Returns
@@ -68,46 +69,33 @@ pub async fn end_unfinished(db: &Database) -> Result<usize, DbError> {
 }
 
 /// Takes the downloads marked resumable that were not removed since, as files to enqueue
-/// grouped by user, batch and job, and clears the mark of every marked download, removed or not.
+/// grouped by job, then by user, destination and search, and clears the mark of every marked
+/// download, removed or not.
 pub async fn take_resumable(db: &Database) -> Result<Resumable, DbError> {
   db.write(move |conn| {
     let tx = conn.transaction()?;
-    let mut groups = Resumable::new();
+    let mut jobs = Resumable::new();
     {
-      let mut select = tx.prepare(
-        "SELECT Username, BatchId, Filename, Size, JobId FROM Transfers WHERE Resumable = 1 \
-         AND Direction = ?1 AND Removed = 0 ORDER BY RequestedAt, Id",
-      )?;
-      let rows = select.query_map(
+      let mut select = tx.prepare(&format!(
+        "SELECT {COLUMNS} FROM Transfers WHERE Resumable = 1 AND Direction = ?1 AND Removed = 0 \
+         ORDER BY RequestedAt, Id"
+      ))?;
+      let records = select.query_map(
         params![direction_text(TransferDirection::Download)],
-        |row| {
-          Ok((
-            text_at(row, 0)?,
-            row.get::<_, Option<String>>(1)?,
-            text_at(row, 2)?,
-            row.get::<_, i64>(3)?,
-            row.get::<_, Option<String>>(4)?,
-          ))
-        },
+        Record::read,
       )?;
-      for row in rows {
-        let (username, batch, filename, size, job) = row?;
-        // batch and job ids are written by the download engine as UUIDs; another one resumes
-        // alone
-        let batch = batch.and_then(|id| id.parse().ok());
-        let job = job.and_then(|id| id.parse().ok());
-        groups
-          .entry((username, batch, job))
-          .or_default()
-          .push(FileRequest {
-            filename,
-            size: size.max(0).unsigned_abs(),
-          });
+      for record in records {
+        let record = record?;
+        let groups = jobs.entry(record.job_id).or_default();
+        match groups.iter_mut().find(|group| group.holds(&record)) {
+          Some(group) => group.files.push(FileRequest::of(&record)),
+          None => groups.push(Group::of(&record)),
+        }
       }
     }
     tx.execute("UPDATE Transfers SET Resumable = 0 WHERE Resumable = 1", [])?;
     tx.commit()?;
-    Ok(groups)
+    Ok(jobs)
   })
   .await
 }
@@ -196,11 +184,13 @@ mod tests {
     end_unfinished(&db).await.unwrap();
     let taken = take_resumable(&db).await.unwrap();
     let files: Vec<(&str, &str)> = taken
-      .iter()
-      .flat_map(|((user, _, _), files)| {
-        files
+      .values()
+      .flatten()
+      .flat_map(|group| {
+        group
+          .files
           .iter()
-          .map(move |f| (user.as_str(), f.filename.as_str()))
+          .map(|f| (group.username.as_str(), f.filename.as_str()))
       })
       .collect();
     assert_eq!(
@@ -220,18 +210,27 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn interrupted_downloads_of_one_job_are_taken_under_that_job() {
+  async fn interrupted_downloads_come_back_in_their_job_with_their_destination_and_search() {
     let db = transfers().await;
     let job = Uuid::new_v4();
-    let in_job = |filename: &str| Record {
+    let search = Uuid::new_v4();
+    let in_job = |filename: &str, destination: &str| Record {
       job_id: Some(job),
-      ..Record::download("alice", filename, 1, None)
+      destination: Some(destination.to_string()),
+      search_id: Some(search),
+      ..Record::download("alice", filename, 1)
     };
-    let records = [
-      in_job("a\\1.flac"),
-      in_job("a\\2.flac"),
-      Record::download("alice", "b\\old.flac", 1, None),
+    let mut records = [
+      in_job("a\\Disc 1\\1.flac", "Album/Disc 1"),
+      in_job("a\\Disc 2\\1.flac", "Album/Disc 2"),
+      in_job("a\\Disc 1\\2.flac", "Album/Disc 1"),
+      Record::download("alice", "b\\old.flac", 1),
     ];
+    // asked for a second apart, so the order they are taken in is the order above
+    let asked: chrono::DateTime<Utc> = "2026-05-06T10:00:00Z".parse().unwrap();
+    for (record, seconds) in records.iter_mut().zip(0..) {
+      record.requested_at = asked + chrono::Duration::seconds(seconds);
+    }
     db.write(move |conn| {
       for record in &records {
         store::insert(conn, record)?;
@@ -242,19 +241,35 @@ mod tests {
     .unwrap();
     end_unfinished(&db).await.unwrap();
     let resumable = take_resumable(&db).await.unwrap();
-    let mut taken: Vec<(Option<Uuid>, Vec<&str>)> = resumable
-      .iter()
-      .map(|((_, _, job), files)| (*job, files.iter().map(|f| f.filename.as_str()).collect()))
-      .collect();
-    let mut expected = vec![
-      (Some(job), vec!["a\\1.flac", "a\\2.flac"]),
-      (None, vec!["b\\old.flac"]),
-    ];
-    expected.sort();
-    taken.sort();
+    let group = |destination: Option<&str>, search_id, filenames: &[&str]| Group {
+      username: "alice".to_string(),
+      files: filenames
+        .iter()
+        .map(|filename| FileRequest {
+          filename: (*filename).to_string(),
+          size: 1,
+        })
+        .collect(),
+      destination: destination.map(str::to_string),
+      search_id,
+    };
+    let expected = Resumable::from([
+      (
+        Some(job),
+        vec![
+          group(
+            Some("Album/Disc 1"),
+            Some(search),
+            &["a\\Disc 1\\1.flac", "a\\Disc 1\\2.flac"],
+          ),
+          group(Some("Album/Disc 2"), Some(search), &["a\\Disc 2\\1.flac"]),
+        ],
+      ),
+      (None, vec![group(None, None, &["b\\old.flac"])]),
+    ]);
     assert_eq!(
-      taken, expected,
-      "a download from before jobs comes back under none"
+      resumable, expected,
+      "each destination keeps its files, and a download from before jobs comes back under none"
     );
   }
 }

@@ -155,10 +155,6 @@ pub async fn page(
       conditions.push("Username = ?".to_string());
       values.push(Value::Text(username));
     }
-    if let Some(batch) = query.batch_id {
-      conditions.push("BatchId = ?".to_string());
-      values.push(Value::Text(batch.to_string()));
-    }
     if let Some(since) = query.since {
       conditions.push("RequestedAt >= ?".to_string());
       values.push(Value::Text(timestamp(since)));
@@ -367,7 +363,6 @@ mod tests {
     let query = |state: Vec<TransferStateFilter>, offset: u64| TransferListQuery {
       state,
       username: None,
-      batch_id: None,
       include_removed: false,
       since: None,
       sort: TransferSort::Size,

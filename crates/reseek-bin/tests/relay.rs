@@ -16,12 +16,14 @@ use std::time::{Duration, Instant};
 use api_client::{Client, Credential, RelayReceived};
 use api_types::relay::{LoginFailure, RELAY_PROTOCOL, RelayEnvelope, RelayMessage};
 use api_types::state::State;
-use api_types::transfers::{QueueDownloadRequest, TransferDirection, TransferStates};
+use api_types::transfers::{TransferDirection, TransferStates};
 use reseek_relay_proto::credential::{Key, Purpose};
 use soulseek_client::{ClientOptions, DownloadOutput, DownloadRequest, UploadInput, UploadRequest};
 use support::soulfind::{self, Soulfind};
 use support::transfers::{self, asked, content, file, scratch};
-use support::{ACCOUNT, AGENT, Daemon, PATIENCE, Process, daemon_on, free_port, signed_in, until};
+use support::{
+  ACCOUNT, AGENT, Daemon, PATIENCE, Process, daemon_on, enqueue, free_port, signed_in, until,
+};
 use tokio_util::sync::CancellationToken;
 
 const KEY: &str = "agents-key-0123456789";
@@ -288,12 +290,7 @@ async fn a_finished_download_is_copied_to_an_agent_that_asks_for_them() {
   let source = scratch().join("song.flac");
   std::fs::write(&source, content(size)).unwrap();
   let remote = "@@share\\album\\01 song.flac";
-  let files = [QueueDownloadRequest {
-    filename: remote.to_string(),
-    size: size as u64,
-  }];
-  let enqueued = api.enqueue(&uploader.username, &files).await.unwrap();
-  let id = enqueued.enqueued[0].id;
+  let id = enqueue(&api, &uploader.username, remote, size as u64).await;
   let (username, filename) = asked(&mut requests).await;
   let client = uploader.client.clone();
   tokio::spawn(async move {

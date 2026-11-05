@@ -192,7 +192,7 @@ mod tests {
   const CANCELED: TransferStates = TransferStates::Completed.union(TransferStates::Cancelled);
 
   fn queued(job: Uuid, username: &str, filename: &str) -> Record {
-    let mut record = Record::download(username, filename, 1, None);
+    let mut record = Record::download(username, filename, 1);
     record.job_id = Some(job);
     record
   }

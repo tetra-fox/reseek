@@ -14,11 +14,44 @@ use api_client::{Client, LocalFile};
 use api_types::files::ContentQuery;
 use api_types::search::{SearchRequest, SearchResponse};
 use api_types::state::State;
-use api_types::transfers::{QueueDownloadRequest, Transfer, TransferDirection, TransferStates};
+use api_types::transfers::{
+  EnqueueDownloadFile, EnqueueDownloadGroup, EnqueueDownloadJobRequest, Transfer,
+  TransferDirection, TransferStates,
+};
 use api_types::users::UserPresence;
 use tracing::info;
 
 use super::soulseek_rs::Peer;
+
+/// A download job of `filename`, `size` bytes, from `username`.
+pub fn job(username: &str, filename: &str, size: u64) -> EnqueueDownloadJobRequest {
+  EnqueueDownloadJobRequest {
+    groups: vec![EnqueueDownloadGroup {
+      username: username.to_string(),
+      files: vec![EnqueueDownloadFile {
+        filename: filename.to_string(),
+        size,
+      }],
+      destination: None,
+      search_id: None,
+    }],
+  }
+}
+
+/// Asks the daemon to download `filename` of `size` bytes from `username` as a job of its own,
+/// and returns the download's id.
+pub async fn enqueue(api: &Client, username: &str, filename: &str, size: u64) -> uuid::Uuid {
+  let answer = api
+    .enqueue_download_job(&job(username, filename, size))
+    .await
+    .unwrap();
+  let group = &answer.groups[0];
+  assert!(
+    group.error.is_none() && group.failures.is_empty(),
+    "not enqueued: {group:?}"
+  );
+  group.enqueued[0].id
+}
 
 /// The word both sides' shared files are found by.
 pub const PROBE: &str = "reseekprobe";
@@ -146,21 +179,6 @@ async fn ended(
     }
     tokio::time::sleep(Duration::from_millis(500)).await;
   }
-}
-
-/// Enqueues the download of `filename` from `username`.
-async fn enqueue(api: &Client, username: &str, filename: &str, size: u64) -> uuid::Uuid {
-  let files = [QueueDownloadRequest {
-    filename: filename.to_string(),
-    size,
-  }];
-  let answer = api.enqueue(username, &files).await.unwrap();
-  assert!(
-    answer.failed.is_empty(),
-    "not enqueued: {:?}",
-    answer.failed
-  );
-  answer.enqueued[0].id
 }
 
 /// The smoke run on a test server: the daemon `api` talks to, logged in as `ours` and sharing

@@ -16,7 +16,6 @@ use rusqlite::params;
 use tracing::{debug, error, info, warn};
 
 use super::Downloads;
-use super::batches::{self, BatchRow};
 use super::destination::{SearchFound, Source, destination_directory, subdirectory};
 use crate::config::enums::DestinationExists;
 use crate::files::mode::to_unix_file_mode;
@@ -87,22 +86,15 @@ impl Downloads {
     incomplete: &Path,
     pattern: Option<&str>,
   ) -> Result<PathBuf, String> {
-    let batch: Option<BatchRow> = match record.batch_id {
-      Some(id) => self
-        .db
-        .read(move |conn| batches::get(conn, id))
-        .await
-        .map_err(|e| format!("the batch was not read: {e}"))?,
-      None => None,
-    };
-    let search = match batch.as_ref().and_then(|b| b.search_id) {
+    let search = match record.search_id {
       Some(id) => self.search_of(id).await,
       None => None,
     };
     let source = Source {
       username: &record.username,
       filename: &record.filename,
-      batch: batch.as_ref(),
+      job: record.job_id,
+      destination: record.destination.as_deref(),
       search: search.as_ref(),
     };
     let relative = subdirectory(pattern, &source, Os::CURRENT)?;
@@ -123,13 +115,13 @@ impl Downloads {
     Ok(directory)
   }
 
-  /// The search a batch was made from, when it is still kept; a search deleted since, or one
+  /// The search a download was found by, when it is still kept; a search deleted since, or one
   /// that could not be read, is none.
   async fn search_of(&self, id: uuid::Uuid) -> Option<SearchFound> {
     match self.searches.text_of(id).await {
       Ok(text) => text.map(|text| SearchFound { id, text }),
       Err(e) => {
-        warn!(search = %id, error = %e, "the batch's search not read");
+        warn!(search = %id, error = %e, "the download's search not read");
         None
       }
     }
