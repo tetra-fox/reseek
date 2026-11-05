@@ -19,7 +19,7 @@
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import SplitButton from "#lib/components/ui/SplitButton.svelte";
-  import { formatBytes, formatSpeed } from "#lib/format.js";
+  import { formatBytes, formatSpeed, plural } from "#lib/format.js";
   import { type ActiveFilter, TEXT_FILTER } from "#lib/lists/filtered.js";
   import { session } from "#lib/session.svelte.js";
   import { type BulkAction, SCOPES } from "#lib/transfers/bulk.js";
@@ -135,6 +135,14 @@
         placeholder={TRANSFER_PLACEHOLDER}
         class={["h-control-sm", text.trim() && Filter.FILTERING]} />
     </div>
+    <!-- with a filter on, the line of filters under the toolbar carries the count -->
+    {#if !filters.length}
+      <span class="text-sm text-fg-muted tabular-nums">
+        {direction === "download"
+          ? plural(counts.all, "download", "downloads")
+          : plural(counts.all, "upload", "uploads")}
+      </span>
+    {/if}
   </div>
   <div class="flex flex-wrap items-center gap-inline">
     <Segmented options={GROUPINGS} bind:value={view.groupBy} label="Group by" size="sm" />
