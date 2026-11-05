@@ -48,11 +48,15 @@
   class="relative z-20 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 border-t bg-surface/90 px-gutter py-1.5 text-xs backdrop-blur-md md:gap-x-4">
   <!-- our name, and whether others see us online or away, which a click changes -->
   <Tooltip
-    text={canSet
-      ? away
-        ? "Others see you as away. Click to show as online."
-        : "Others see you as online. Click to show as away."
-      : undefined}>
+    text={!canSet
+      ? undefined
+      : !connected
+        ? away
+          ? "You will show as away once connected. Click to show as online."
+          : "Click to show as away once connected."
+        : away
+          ? "Others see you as away. Click to show as online."
+          : "Others see you as online. Click to show as away."}>
     {#snippet child({ props })}
       <button
         {...props}
