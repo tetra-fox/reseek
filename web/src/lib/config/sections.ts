@@ -511,7 +511,8 @@ export const sections: Section[] = [
       },
       { key: "analysis.sampled_windows", label: "Windows in a sampled file", min: 20, max: 2000 },
       { key: "analysis.cache_max_bytes", label: "Spectrogram storage" },
-      { key: "analysis.upload_max_bytes", label: "Largest upload" },
+      { key: "analysis.upload_cache_max_bytes", label: "Uploaded file storage" },
+      { key: "analysis.upload_max_bytes", label: "Largest uploaded file" },
       { key: "analysis.spectrogram.scale", label: "Default frequency scale" }
     ]
   },

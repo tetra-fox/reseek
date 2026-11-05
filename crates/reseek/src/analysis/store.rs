@@ -321,18 +321,6 @@ pub(super) async fn used(
   .await
 }
 
-/// What the spectrogram and waveform files recorded take.
-pub(super) async fn kept_bytes(db: &Database) -> Result<u64, DbError> {
-  db.read(|conn| {
-    let bytes: i64 = conn.query_row("SELECT COALESCE(SUM(bytes), 0) FROM spectra", [], |row| {
-      row.get(0)
-    })?;
-    // written from u64s, so never negative
-    Ok(u64::try_from(bytes).unwrap_or_default())
-  })
-  .await
-}
-
 /// Removes the report of the upload at `relative`, or every upload's.
 pub(super) async fn forget_temporary(db: &Database, relative: Option<&str>) -> Result<(), DbError> {
   let relative = relative.map(str::to_string);

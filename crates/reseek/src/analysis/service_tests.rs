@@ -822,8 +822,8 @@ async fn an_aiff_upload_plays_through_the_wav_route() {
 }
 
 #[tokio::test]
-async fn uploads_past_the_cache_limit_go_oldest_first_with_their_reports() {
-  let config = format!("{TRUSTED}{ONE_WORKER}cache_max_bytes = \"1B\"\n");
+async fn uploads_past_their_cache_limit_go_oldest_first_with_their_reports() {
+  let config = format!("{TRUSTED}{ONE_WORKER}upload_cache_max_bytes = \"1B\"\n");
   let app = app(&config, &[]).await;
   lossless(&app, "real.flac");
   let file = std::fs::read(app.state.paths.downloads.join("real.flac")).unwrap();
@@ -850,4 +850,45 @@ async fn uploads_past_the_cache_limit_go_oldest_first_with_their_reports() {
     202,
     "the newest is held"
   );
+}
+
+/// What the spectrograms and waveforms of real files take on disk.
+fn pictures_bytes(app: &TestApp) -> u64 {
+  std::fs::read_dir(app.state.paths.data.join("analysis"))
+    .unwrap()
+    .map(|entry| entry.unwrap().metadata().unwrap())
+    .filter(std::fs::Metadata::is_file)
+    .map(|metadata| metadata.len())
+    .sum()
+}
+
+#[tokio::test]
+async fn uploads_over_their_budget_leave_the_pictures_of_real_files() {
+  let config =
+    format!("remote_configuration = true\n{TRUSTED}{ONE_WORKER}upload_cache_max_bytes = \"1B\"\n");
+  let app = app(&config, &[]).await;
+  for name in ["a.flac", "b.flac"] {
+    lossless(&app, name);
+    app.call("POST", &route(name), None).await;
+    settled(&app).await;
+  }
+  // the real files' pictures fill their budget: an upload counted against it would push one out
+  let full = format!("{}B", pictures_bytes(&app));
+  let full = json!({ "set": { "analysis.cache_max_bytes": full } });
+  let (status, body) = app.call("PATCH", "/api/v0/options", Some(full)).await;
+  assert_eq!(status, 200, "{body}");
+
+  let file = std::fs::read(app.state.paths.downloads.join("a.flac")).unwrap();
+  for name in ["x.flac", "y.flac", "z.flac"] {
+    let (status, answer) = upload(&app, name, Body::from(file.clone())).await;
+    assert_eq!(status, 201, "{answer}");
+    assert_eq!(app.call("POST", &uploaded(&answer), None).await.0, 202);
+    settled(&app).await;
+  }
+  uploads_settle(&app, 2).await;
+  for name in ["a.flac", "b.flac"] {
+    let spectrogram = format!("{}/spectrogram", route(name));
+    let served = app.send(request("GET", &spectrogram, None)).await;
+    assert_eq!(served.status, 200, "{name}");
+  }
 }

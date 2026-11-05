@@ -209,8 +209,13 @@ pub(super) async fn dispatch(analysis: Arc<Analysis>) {
       () = analysis.wake.notified() => {}
       change = changes.recv() => match change {
         Ok(change) => {
-          let limit = |options: &Options| options.analysis.cache_max_bytes;
-          if limit(&change.current.values) < limit(&change.previous.values) {
+          let limits = |options: &Options| {
+            let analysis = &options.analysis;
+            (analysis.cache_max_bytes, analysis.upload_cache_max_bytes)
+          };
+          let (pictures, uploads) = limits(&change.current.values);
+          let (were_pictures, were_uploads) = limits(&change.previous.values);
+          if pictures < were_pictures || uploads < were_uploads {
             analysis.evict().await;
           }
         }
@@ -346,7 +351,7 @@ async fn finish(analysis: &Analysis, job: &Job, started: Instant) {
   match bytes {
     Some(bytes) if temporary => {
       lock(&analysis.held).drawn(&job.file.relative, bytes);
-      analysis.evict().await;
+      analysis.evict_uploads(None).await;
     }
     Some(bytes) => keep(analysis, &name, bytes).await,
     None => {}
@@ -397,20 +402,20 @@ async fn keep(analysis: &Analysis, name: &str, bytes: u64) {
     error!(error = %e, "spectrogram not recorded");
     return;
   }
-  analysis.evict().await;
+  analysis.evict_pictures().await;
 }
 
 impl Analysis {
-  /// Removes what the cache holds beyond `analysis.cache_max_bytes`: uploads first, then the
-  /// least recently viewed spectrogram and waveform files.
+  /// Removes the oldest uploads beyond `analysis.upload_cache_max_bytes` and the least recently
+  /// viewed spectrogram and waveform files beyond `analysis.cache_max_bytes`.
   pub(super) async fn evict(&self) {
-    self.evict_admitting(None).await;
+    self.evict_uploads(None).await;
+    self.evict_pictures().await;
   }
 
-  /// [`Analysis::evict`], first holding `admitted`, an upload's path and size once all of it
-  /// arrived. It joins the uploads under the lock their eviction takes, so it is the newest
-  /// there and its own eviction keeps it, however many others arrive at the same time.
-  pub(super) async fn evict_admitting(&self, admitted: Option<(String, u64)>) {
+  /// Removes the least recently viewed spectrogram and waveform files of real files beyond
+  /// `analysis.cache_max_bytes`.
+  async fn evict_pictures(&self) {
     let limit = self
       .config
       .current()
@@ -418,18 +423,7 @@ impl Analysis {
       .analysis
       .cache_max_bytes
       .as_u64();
-    let pictures = match store::kept_bytes(&self.db).await {
-      Ok(bytes) => bytes,
-      Err(e) => {
-        error!(error = %e, "the size of the analysis cache not read");
-        if let Some((relative, bytes)) = admitted {
-          lock(&self.held).add(relative, bytes);
-        }
-        return;
-      }
-    };
-    let uploads = self.evict_uploads(limit, pictures, admitted).await;
-    let gone = match store::evict(&self.db, limit.saturating_sub(uploads)).await {
+    let gone = match store::evict(&self.db, limit).await {
       Ok(gone) => gone,
       Err(e) => {
         error!(error = %e, "spectrograms over the limit not removed");

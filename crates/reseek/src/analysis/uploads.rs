@@ -1,9 +1,9 @@
 //! Files uploaded from a browser for one analysis, kept apart from everything a user owns: each
 //! lives in a folder of its own under the analysis directory with its spectrogram and waveform,
-//! its report is never listed, it takes no judgment and raises no event. They share
-//! `analysis.cache_max_bytes` with the pictures of real files and go first when the cache is
-//! full, except the two newest, which the Analysis page can be showing side by side. A restart
-//! removes them all.
+//! its report is never listed, it takes no judgment and raises no event. They have
+//! `analysis.upload_cache_max_bytes` to themselves, apart from the pictures of real files, and go
+//! oldest first when it is full, except the two newest, which the Analysis page can be showing
+//! side by side. A restart removes them all.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -89,10 +89,10 @@ impl Uploads {
     self.held.iter().map(|h| h.bytes + h.pictures).sum()
   }
 
-  /// Takes the oldest uploads off, the newest two left, until they and `others` bytes fit
-  /// `limit`; returns the paths of those taken.
-  pub fn over(&mut self, limit: u64, others: u64) -> Vec<String> {
-    let mut total = self.bytes() + others;
+  /// Takes the oldest uploads off, the newest two left, until they fit `limit`; returns the paths
+  /// of those taken.
+  pub fn over(&mut self, limit: u64) -> Vec<String> {
+    let mut total = self.bytes();
     let mut gone = Vec::new();
     while total > limit && self.held.len() > ALWAYS_KEPT {
       let held = self.held.remove(0);
@@ -198,7 +198,7 @@ impl Analysis {
     partial.keep();
     let path = format!("{id}/{name}");
     info!(by, bytes = size, "a file uploaded for analysis");
-    self.evict_admitting(Some((path.clone(), size))).await;
+    self.evict_uploads(Some((path.clone(), size))).await;
     Ok(AnalysisUpload {
       root: FileRoot::Temporary,
       path,
@@ -206,24 +206,27 @@ impl Analysis {
     })
   }
 
-  /// Takes the oldest uploads out of the cache until it fits `limit` with `others` bytes of other
-  /// files, `admitted` held first as the newest, and gives what the uploads left take.
-  pub(super) async fn evict_uploads(
-    &self,
-    limit: u64,
-    others: u64,
-    admitted: Option<(String, u64)>,
-  ) -> u64 {
-    let (gone, left) = {
+  /// Takes the oldest uploads out of the cache until they fit `analysis.upload_cache_max_bytes`,
+  /// first holding `admitted`, an upload's path and size once all of it arrived. It joins the
+  /// uploads under the lock their eviction takes, so it is the newest there and its own eviction
+  /// keeps it, however many others arrive at the same time.
+  pub(super) async fn evict_uploads(&self, admitted: Option<(String, u64)>) {
+    let limit = self
+      .config
+      .current()
+      .values
+      .analysis
+      .upload_cache_max_bytes
+      .as_u64();
+    let gone = {
       let mut held = lock(&self.held);
       if let Some((relative, bytes)) = admitted {
         held.add(relative, bytes);
       }
-      let gone = held.over(limit, others);
-      (gone, held.bytes())
+      held.over(limit)
     };
     if gone.is_empty() {
-      return left;
+      return;
     }
     debug!(files = gone.len(), limit, "uploads over the limit removed");
     for relative in &gone {
@@ -241,7 +244,6 @@ impl Analysis {
     if let Err(e) = removed.await {
       warn!(error = %e, "removing uploads failed");
     }
-    left
   }
 
   /// Removes every upload and its report, as nothing can name one after a restart.
@@ -270,19 +272,19 @@ mod tests {
     }
     uploads.drawn("d", 10);
     assert_eq!(uploads.bytes(), 410);
-    assert_eq!(uploads.over(215, 0), ["a", "b"]);
+    assert_eq!(uploads.over(215), ["a", "b"]);
     assert_eq!(held(&uploads), ["c", "d"]);
-    assert!(uploads.over(0, 0).is_empty(), "two stay whatever they take");
+    assert!(uploads.over(0).is_empty(), "two stay whatever they take");
   }
 
   #[test]
-  fn a_viewed_upload_counts_as_new_and_other_files_take_room() {
+  fn a_viewed_upload_counts_as_new() {
     let mut uploads = Uploads::default();
     for name in ["a", "b", "c"] {
       uploads.add(name.to_string(), 100);
     }
     uploads.touch("a");
-    assert_eq!(uploads.over(300, 50), ["b"]);
+    assert_eq!(uploads.over(250), ["b"]);
     assert_eq!(held(&uploads), ["c", "a"]);
   }
 }
