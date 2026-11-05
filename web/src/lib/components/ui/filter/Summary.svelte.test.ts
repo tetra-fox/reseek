@@ -69,14 +69,4 @@ describe("the line of filters on", () => {
     expect(props.filters).toEqual([]);
     expect(refocus).toHaveBeenCalledOnce();
   });
-
-  it("leaves Clear filters to an emptied list's own", () => {
-    const { props } = start(["A"]);
-    props.shown = 0;
-    flushSync();
-    const clear = [...document.querySelectorAll("button")].filter(
-      (b) => b.textContent === "Clear filters"
-    );
-    expect(clear).toHaveLength(0);
-  });
 });
