@@ -37,7 +37,7 @@ mod visibility;
 mod walk;
 mod watcher;
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
@@ -248,6 +248,8 @@ pub struct Shares {
   /// the views other than everything whose browse cache was written, rewritten whenever the
   /// shares change
   browse_views: Mutex<BTreeSet<View>>,
+  /// the aliases of the visibility lists warned of for matching no share, lower case
+  unmatched: Mutex<HashSet<String>>,
   /// grows each time the local index changed
   changed: watch::Sender<u64>,
 }
@@ -311,6 +313,7 @@ impl Shares {
       hosts_settling: AtomicBool::new(false),
       local_counts: Mutex::new(Counted::default()),
       browse_views: Mutex::new(BTreeSet::new()),
+      unmatched: Mutex::new(HashSet::new()),
       changed: watch::Sender::new(0),
       applied: Mutex::new(startup.clone()),
     });
@@ -345,9 +348,40 @@ impl Shares {
   }
 
   /// What a user who sees the shares visible to `sees` sees, under the share options in
-  /// effect.
+  /// effect. An alias the visibility lists name that no share on any host has is warned of,
+  /// once: a share meant to be hidden whose alias is spelled otherwise is seen by everyone.
   pub fn view(&self, sees: ShareVisibility) -> View {
-    View::of(&lock(&self.applied), sees)
+    let (view, listed) = {
+      let applied = lock(&self.applied);
+      let listed: Vec<String> = applied
+        .buddies_only
+        .iter()
+        .chain(&applied.trusted_only)
+        .cloned()
+        .collect();
+      (View::of(&applied, sees), listed)
+    };
+    if !listed.is_empty() {
+      self.warn_unmatched(listed);
+    }
+    view
+  }
+
+  /// Warns once of each alias of `listed` that no share on any host has.
+  fn warn_unmatched(&self, listed: Vec<String>) {
+    let mut warned = lock(&self.unmatched);
+    for alias in listed {
+      let key = alias.to_lowercase();
+      if warned.contains(&key) || self.has_alias(&key) {
+        continue;
+      }
+      warn!(
+        alias,
+        "a share listed as buddy-only or trusted-only matches no share's alias on any host; \
+         it hides nothing"
+      );
+      warned.insert(key);
+    }
   }
 
   /// The files matching an incoming search that `view` sees, the local ones first, then each
@@ -562,6 +596,7 @@ impl Shares {
         })
         .collect(),
     );
+    let options = lock(&self.applied).clone();
     let mut shares = lock(&self.shares);
     for share in shares.iter_mut() {
       if let Some((directories, files)) = counted.get(&share.raw) {
@@ -569,7 +604,6 @@ impl Shares {
         share.files = Some(*files);
       }
     }
-    let options = lock(&self.applied).clone();
     let api: Vec<_> = shares
       .iter()
       .map(|share| share.to_api(visibility::of(&options, &share.alias)))

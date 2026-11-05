@@ -281,6 +281,15 @@ impl Shares {
     (names, sum)
   }
 
+  /// Whether a local share or an agent's has the alias `lower`, given in lower case.
+  pub(super) fn has_alias(&self, lower: &str) -> bool {
+    let named = |alias: &str| alias.to_lowercase() == lower;
+    lock(&self.shares).iter().any(|share| named(&share.alias))
+      || lock(&self.hosts)
+        .iter()
+        .any(|h| h.shares.iter().any(|share| named(&share.alias)))
+  }
+
   /// The totals over the agents' shares `view` sees, as each agent counted them.
   pub(super) fn agent_counts(&self, view: &View) -> SharedCounts {
     lock(&self.hosts)
