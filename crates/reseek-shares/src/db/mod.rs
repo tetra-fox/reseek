@@ -84,6 +84,20 @@ impl Location {
       log_sql: false,
     }
   }
+
+  /// Databases in files under `dir`, in the `data` and `backups` directories it makes there,
+  /// for tests that reopen a database or migrate one from an older schema.
+  pub fn on_disk(dir: &std::path::Path) -> Self {
+    let location = Self {
+      data: dir.join("data"),
+      backups: dir.join("backups"),
+      volatile: false,
+      log_sql: false,
+    };
+    std::fs::create_dir_all(&location.data).unwrap();
+    std::fs::create_dir_all(&location.backups).unwrap();
+    location
+  }
 }
 
 /// One SQLite database. Cloning gives another handle to the same connections.

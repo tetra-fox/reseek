@@ -220,15 +220,6 @@ pub(super) mod tests {
 
   use PRIVATE as TEST;
 
-  fn location(dir: &Path) -> Location {
-    Location {
-      data: dir.join("data"),
-      backups: dir.join("backups"),
-      volatile: false,
-      log_sql: false,
-    }
-  }
-
   #[test]
   fn every_migration_file_is_built_in_and_numbered_in_order() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations");
@@ -258,9 +249,7 @@ pub(super) mod tests {
   #[tokio::test]
   async fn a_fresh_database_is_migrated_and_reopens_without_changes() {
     let dir = tempfile::tempdir().unwrap();
-    let location = location(dir.path());
-    std::fs::create_dir_all(&location.data).unwrap();
-    std::fs::create_dir_all(&location.backups).unwrap();
+    let location = Location::on_disk(dir.path());
     let db = Database::open(&TEST, &location).await.unwrap();
     let tables: Vec<String> = db
       .read(|conn| {
@@ -299,8 +288,7 @@ pub(super) mod tests {
   #[tokio::test]
   async fn foreign_files_and_edited_migrations_are_refused() {
     let dir = tempfile::tempdir().unwrap();
-    let location = location(dir.path());
-    std::fs::create_dir_all(&location.data).unwrap();
+    let location = Location::on_disk(dir.path());
     let foreign = Connection::open(location.data.join("auth.db")).unwrap();
     foreign
       .execute_batch("CREATE TABLE Events (Id TEXT)")
@@ -357,9 +345,7 @@ pub(super) mod tests {
       }],
     };
     let dir = tempfile::tempdir().unwrap();
-    let location = location(dir.path());
-    std::fs::create_dir_all(&location.data).unwrap();
-    std::fs::create_dir_all(&location.backups).unwrap();
+    let location = Location::on_disk(dir.path());
     let db = Database::open(&ONE, &location).await.unwrap();
     db.write(|conn| conn.execute("INSERT INTO a VALUES (7)", []))
       .await
@@ -391,7 +377,7 @@ pub(super) mod tests {
   #[tokio::test]
   async fn a_volatile_database_lives_in_memory() {
     let dir = tempfile::tempdir().unwrap();
-    let mut location = location(dir.path());
+    let mut location = Location::on_disk(dir.path());
     location.volatile = true;
     let db = Database::open(&TEST, &location).await.unwrap();
     let count: i64 = db
@@ -399,6 +385,10 @@ pub(super) mod tests {
       .await
       .unwrap();
     assert_eq!(count, 0);
-    assert!(!location.data.exists());
+    assert_eq!(
+      std::fs::read_dir(&location.data).unwrap().count(),
+      0,
+      "nothing reaches the disk"
+    );
   }
 }

@@ -240,14 +240,7 @@ mod tests {
   #[tokio::test]
   async fn a_database_with_end_reasons_keeps_its_sessions_and_gaps() {
     let dir = tempfile::tempdir().unwrap();
-    let location = Location {
-      data: dir.path().join("data"),
-      backups: dir.path().join("backups"),
-      volatile: false,
-      log_sql: false,
-    };
-    std::fs::create_dir_all(&location.data).unwrap();
-    std::fs::create_dir_all(&location.backups).unwrap();
+    let location = Location::on_disk(dir.path());
     let first = Database::open(&FIRST, &location).await.unwrap();
     first
       .write(|conn| {
