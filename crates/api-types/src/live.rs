@@ -8,7 +8,7 @@ use utoipa::{IntoParams, ToSchema};
 use crate::activity::ActivityEntry;
 use crate::analysis::{AnalysisCompleted, AnalysisJob};
 use crate::auth::PrincipalSummary;
-use crate::events::EventRecord;
+use crate::events::{BuddyPresenceChanged, EventRecord};
 use crate::logs::LogRecord;
 use crate::messaging::conversations::{Conversation, ConversationMessage, ConversationUpdate};
 use crate::messaging::rooms::{
@@ -135,6 +135,10 @@ pub enum LiveFrame {
   /// a user was removed from the directory
   #[serde(rename = "users.removed")]
   UsersRemoved(UserRemoved),
+  /// a buddy we asked to be told about came online, went away or went offline; also on the
+  /// `application` topic, so every open page can tell of it
+  #[serde(rename = "users.presence")]
+  UsersPresence(BuddyPresenceChanged),
   /// unread counts, on open and on change
   #[serde(rename = "chat.unread")]
   ChatUnread(ChatUnread),

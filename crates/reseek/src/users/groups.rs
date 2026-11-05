@@ -143,7 +143,7 @@ mod tests {
       tags: Vec::new(),
       group_override: None,
       muted: false,
-      pinned: false,
+      buddy: None,
     }
   }
 

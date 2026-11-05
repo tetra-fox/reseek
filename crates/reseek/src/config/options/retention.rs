@@ -26,8 +26,8 @@ pub struct Retention {
   pub logs: Duration,
   /// Chat history.
   pub messages: MessageRetention,
-  /// Time without being seen after which a user is removed from the users directory. Pinned,
-  /// noted, tagged, blocked and grouped users are kept.
+  /// Time without being seen after which a user is removed from the users directory. Buddies
+  /// and noted, tagged, blocked and grouped users are kept.
   #[cascade(env = "RESEEK_RETENTION_USERS")]
   #[serde(with = "crate::config::duration")]
   pub users: Option<Duration>,

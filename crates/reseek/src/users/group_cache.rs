@@ -95,6 +95,14 @@ impl GroupCache {
   }
 }
 
+/// What a status the server sent tells beside itself.
+pub struct StatusReceived {
+  /// it answered our own request
+  pub asked: bool,
+  /// the user's presence before it, when it was known
+  pub previous: Option<UserPresence>,
+}
+
 /// Statistics as the server said them, now.
 fn snapshot(stats: &UserStats) -> StatisticsSnapshot {
   StatisticsSnapshot {
@@ -317,19 +325,20 @@ impl Directory {
   }
 
   /// A status the server sent of `username`: kept when we know them, and counted off when it
-  /// answered our own request. Returns whether we asked for it.
+  /// answered our own request. Says whether we asked for it and the presence known before.
   pub fn status_received(
     &self,
     username: &str,
     presence: UserPresence,
     is_privileged: bool,
-  ) -> bool {
+  ) -> StatusReceived {
+    let mut previous = None;
     self.groups.update(username, false, |facts| {
-      facts.presence = Some(presence);
+      previous = facts.presence.replace(presence);
       facts.privileged = is_privileged;
     });
     let mut asked = lock(&self.groups.asked);
-    match asked.get_mut(username) {
+    let asked = match asked.get_mut(username) {
       Some(count) => {
         *count -= 1;
         if *count == 0 {
@@ -338,7 +347,8 @@ impl Directory {
         true
       }
       None => false,
-    }
+    };
+    StatusReceived { asked, previous }
   }
 
   /// Statistics the server sent of `username` on its own: kept when we know them.

@@ -5,7 +5,7 @@ use api_types::users::blocking::{
   Block, BlockImportResult, BlockRequest, BlockedQuery, BlockedUsers,
 };
 use api_types::users::{
-  BrowseProgress, BrowseResponse, CachedUser, DeleteUserQuery, Directory, DirectoryRequest,
+  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, DeleteUserQuery, Directory, DirectoryRequest,
   GroupAssignment, ProfileQuery, StatisticsSnapshot, UserEndpoint, UserInfo, UserList,
   UserListQuery, UserNotes, UserProfile, UserStatus, UserSummary, UserTags, UserTransfers,
   UserTransfersQuery,
@@ -114,15 +114,14 @@ impl Client {
     done(self.put(about(username, "tags")).json(&body)).await
   }
 
-  /// `PUT` or `DELETE /users/{username}/pin`: pins or unpins a user.
-  pub async fn set_pinned(&self, username: &str, pinned: bool) -> Result<()> {
-    let route = about(username, "pin");
-    done(if pinned {
-      self.put(route)
-    } else {
-      self.delete(route)
-    })
-    .await
+  /// `PUT /users/{username}/buddy`: makes a user our buddy, or changes how.
+  pub async fn set_buddy(&self, username: &str, change: &BuddyChange) -> Result<()> {
+    done(self.put(about(username, "buddy")).json(change)).await
+  }
+
+  /// `DELETE /users/{username}/buddy`: takes a user off our buddy list.
+  pub async fn remove_buddy(&self, username: &str) -> Result<()> {
+    done(self.delete(about(username, "buddy"))).await
   }
 
   /// `PUT` or `DELETE /users/{username}/mute`: mutes or unmutes a user.

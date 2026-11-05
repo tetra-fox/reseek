@@ -187,8 +187,8 @@ pub struct CachedUser {
   pub status: Option<UserStatus>,
 }
 
-/// A user's presence changed, the data of a `users.status` frame. Sent only for users with an
-/// open conversation or a transfer.
+/// A user's presence changed, the data of a `users.status` frame. Sent only for our buddies and
+/// users with an open conversation or a transfer.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserStatusChanged {

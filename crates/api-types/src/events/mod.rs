@@ -68,6 +68,8 @@ event_catalog! {
   UserBlocked(UserBlocked),
   /// a user's block was removed or expired
   UserUnblocked(UserUnblocked),
+  /// a buddy we asked to be told about came online, went away or went offline
+  BuddyPresenceChanged(BuddyPresenceChanged),
   /// an API token was created
   TokenCreated(TokenChanged),
   /// an API token was revoked

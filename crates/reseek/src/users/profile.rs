@@ -40,7 +40,7 @@ pub fn known(
     block,
     tags: stored.map(|s| s.tags.clone()).unwrap_or_default(),
     muted: stored.is_some_and(|s| s.muted),
-    pinned: stored.is_some_and(|s| s.pinned),
+    buddy: stored.and_then(|s| s.buddy),
     endpoint: None,
     conversation: None,
   }
@@ -161,7 +161,7 @@ mod tests {
       tags: Vec::new(),
       group_override: None,
       muted: false,
-      pinned: false,
+      buddy: None,
     };
     let options = Options::default();
     let user = known(&options, "alice", Some(&stored), None);

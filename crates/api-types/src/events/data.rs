@@ -11,6 +11,7 @@ use crate::auth::{Role, Via};
 use crate::messaging::conversations::PrivateMessage;
 use crate::messaging::rooms::RoomMessage;
 use crate::transfers::Transfer;
+use crate::users::UserPresence;
 use crate::users::blocking::BlockScope;
 
 /// The data of an event that has no fields of its own.
@@ -343,4 +344,18 @@ pub struct RelayAgentSharesUpdated {
   pub files: u32,
   /// directories over the agent's shares
   pub directories: u32,
+}
+
+/// The data of `BuddyPresenceChanged`, and of the `users.presence` frame.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BuddyPresenceChanged {
+  /// the shape version of this event type, 0
+  pub version: u32,
+  /// the buddy
+  pub username: String,
+  /// their presence now
+  pub presence: UserPresence,
+  /// their presence before
+  pub previous: UserPresence,
 }

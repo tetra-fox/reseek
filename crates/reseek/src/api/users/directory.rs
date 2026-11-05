@@ -1,9 +1,9 @@
 //! The users directory: every user we have dealt with, their profile and picture, our notes,
-//! tags, pins and mutes for them, the upload group we put them in, their transfers, and
+//! tags and mutes for them, our buddies, the upload group we put them in, their transfers, and
 //! forgetting them.
 
 use api_types::users::{
-  DeleteUserQuery, GroupAssignment, ProfileQuery, UserList, UserListQuery, UserNotes, UserProfile,
+  BuddyChange, DeleteUserQuery, GroupAssignment, ProfileQuery, UserList, UserListQuery, UserNotes, UserProfile,
   UserSummary, UserTags, UserTransfers, UserTransfersQuery, UsernameQuery,
 };
 use axum::extract::State;
@@ -37,7 +37,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     .routes(routes!(picture))
     .routes(routes!(set_notes))
     .routes(routes!(set_tags))
-    .routes(routes!(pin, unpin))
+    .routes(routes!(set_buddy, remove_buddy))
     .routes(routes!(mute, unmute))
     .routes(routes!(set_group))
     .routes(routes!(transfers))
@@ -190,39 +190,44 @@ fn tags(tags: Vec<String>) -> Result<Vec<String>, ApiError> {
     .collect()
 }
 
-/// Pins a user to the top of the directory.
+/// Makes a user our buddy, or changes whether they are trusted and whether we are told of their
+/// presence; a field left out keeps its value, and an empty body makes a buddy with neither.
+/// Our own account and the server's notices cannot be a buddy.
 #[utoipa::path(
-  put, path = "/users/{username}/pin", tag = "users",
+  put, path = "/users/{username}/buddy", tag = "users", request_body = Option<BuddyChange>,
   params(("username" = String, Path, description = "the user"), UsernameQuery),
   responses(
-    (status = 204, description = "pinned"), (status = 401, body = api_types::ErrorBody),
-    (status = 403, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
+    (status = 204, description = "a buddy"), (status = 400, body = api_types::ErrorBody),
+    (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
+    (status = 409, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
 )]
-async fn pin(
+async fn set_buddy(
   State(app): State<AppState>,
   _caller: Authorized<ReadWrite>,
   NamedUser(username): NamedUser,
+  change: Option<Json<BuddyChange>>,
 ) -> Result<StatusCode, ApiError> {
-  app.services.users.set_pinned(&username, true).await?;
+  let change = change.map(|Json(change)| change).unwrap_or_default();
+  app.services.users.set_buddy(&username, change).await?;
   Ok(StatusCode::NO_CONTENT)
 }
 
-/// Unpins a user.
+/// Takes a user off our buddy list.
 #[utoipa::path(
-  delete, path = "/users/{username}/pin", tag = "users",
+  delete, path = "/users/{username}/buddy", tag = "users",
   params(("username" = String, Path, description = "the user"), UsernameQuery),
   responses(
-    (status = 204, description = "unpinned"), (status = 401, body = api_types::ErrorBody),
+    (status = 204, description = "no longer a buddy"), (status = 401, body = api_types::ErrorBody),
     (status = 403, body = api_types::ErrorBody), (status = 503, body = api_types::ErrorBody)
   )
 )]
-async fn unpin(
+async fn remove_buddy(
   State(app): State<AppState>,
   _caller: Authorized<ReadWrite>,
   NamedUser(username): NamedUser,
 ) -> Result<StatusCode, ApiError> {
-  app.services.users.set_pinned(&username, false).await?;
+  app.services.users.remove_buddy(&username).await?;
   Ok(StatusCode::NO_CONTENT)
 }
 

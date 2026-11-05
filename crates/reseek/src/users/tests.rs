@@ -11,7 +11,7 @@ use crate::transfers::fixtures::{Row, insert};
 use api_types::events::EventType;
 use api_types::transfers::{SortOrder, TransferDirection};
 use api_types::users::blocking::BlockSource;
-use api_types::users::{UserList, UserListQuery};
+use api_types::users::{Buddy, UserList, UserListQuery};
 use api_types::users::{UserPresence, UserSort};
 use serde_json::{Value, json};
 
@@ -30,7 +30,7 @@ fn names(list: UserList) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn the_directory_filters_and_sorts_with_pinned_users_first() {
+async fn the_directory_filters_and_sorts_with_buddies_first() {
   let app = app(CONFIG, &[]).await;
   let directory = &app.state.users;
   for (name, notes) in [("alice", ""), ("Bob", "Plays JAZZ"), ("carol", "")] {
@@ -44,7 +44,7 @@ async fn the_directory_filters_and_sorts_with_pinned_users_first() {
     .await
     .unwrap();
   directory
-    .change("alice", Change::Pinned(true))
+    .change("alice", Change::Buddy(Some(Buddy::default())))
     .await
     .unwrap();
   let away = touch::Pending {
@@ -70,7 +70,7 @@ async fn the_directory_filters_and_sorts_with_pinned_users_first() {
   assert_eq!(
     names(directory.list(by_name.clone()).await.unwrap()),
     ["alice", "Bob", "carol"],
-    "pinned first, then by name"
+    "buddies first, then by name"
   );
   by_name.order = Some(SortOrder::Desc);
   assert_eq!(
@@ -113,9 +113,9 @@ async fn the_directory_filters_and_sorts_with_pinned_users_first() {
   let mut tagged = query();
   tagged.tag = Some("jazzy".into());
   assert_eq!(names(directory.list(tagged).await.unwrap()), ["carol"]);
-  let mut pinned = query();
-  pinned.pinned = Some(true);
-  assert_eq!(names(directory.list(pinned).await.unwrap()), ["alice"]);
+  let mut buddies = query();
+  buddies.buddy = Some(true);
+  assert_eq!(names(directory.list(buddies).await.unwrap()), ["alice"]);
   let (status, _) = app
     .call("PUT", "/api/v0/users/carol/block", Some(json!({})))
     .await;
@@ -137,7 +137,7 @@ async fn the_directory_filters_and_sorts_with_pinned_users_first() {
   assert_eq!(
     names(directory.list(first).await.unwrap()),
     ["alice", "Bob", "carol"],
-    "pinned first, then in the order they were first seen"
+    "buddies first, then in the order they were first seen"
   );
   insert(
     &app.state.transfers,
@@ -149,7 +149,7 @@ async fn the_directory_filters_and_sorts_with_pinned_users_first() {
   assert_eq!(
     names(directory.list(downloads).await.unwrap()),
     ["alice", "carol", "Bob"],
-    "most succeeded downloads first after the pinned"
+    "most succeeded downloads first after the buddies"
   );
 }
 
@@ -158,7 +158,7 @@ async fn the_directory_never_lists_the_servers_reserved_name() {
   let app = app(CONFIG, &[]).await;
   let directory = &app.state.users;
   for name in ["server", "serverfan"] {
-    directory.change(name, Change::Pinned(true)).await.unwrap();
+    directory.change(name, Change::Buddy(Some(Buddy::default()))).await.unwrap();
   }
   let mut asked = query();
   asked.q = Some("server".into());
@@ -552,5 +552,45 @@ async fn a_picture_has_a_url_only_while_it_is_stored_under_it() {
     profile_info(&unkept, "alice").await,
     (json!(true), Value::Null),
     "pictures are not kept"
+  );
+}
+
+#[tokio::test]
+async fn a_buddy_change_keeps_what_it_leaves_out_and_sets_what_they_see() {
+  let app = app(CONFIG, &[]).await;
+  let buddy = async |body: Option<Value>| {
+    let (status, _) = app.call("PUT", "/api/v0/users/alice/buddy", body).await;
+    assert_eq!(status, 204);
+    let (_, summary) = app.call("GET", "/api/v0/users/alice/summary", None).await;
+    summary["buddy"].clone()
+  };
+  let neither = json!({ "trusted": false, "notifyPresence": false });
+  assert_eq!(buddy(None).await, neither, "a new buddy has neither");
+  assert_eq!(
+    app.state.users.sees("alice"),
+    api_types::shares::ShareVisibility::Buddies
+  );
+  assert_eq!(
+    buddy(Some(json!({ "trusted": true }))).await,
+    json!({ "trusted": true, "notifyPresence": false })
+  );
+  assert_eq!(
+    buddy(Some(json!({ "notifyPresence": true }))).await,
+    json!({ "trusted": true, "notifyPresence": true })
+  );
+  assert_eq!(
+    app.state.users.sees("alice"),
+    api_types::shares::ShareVisibility::Trusted
+  );
+  let (status, _) = app.call("PUT", "/api/v0/users/me/buddy", None).await;
+  assert_eq!(status, 409, "our own account is no buddy");
+  let (status, _) = app.call("DELETE", "/api/v0/users/alice/buddy", None).await;
+  assert_eq!(status, 204);
+  let (_, summary) = app.call("GET", "/api/v0/users/alice/summary", None).await;
+  assert_eq!(summary["buddy"], Value::Null);
+  assert_eq!(buddy(None).await, neither, "added again from scratch");
+  assert_eq!(
+    app.state.users.sees("me"),
+    api_types::shares::ShareVisibility::Everyone
   );
 }

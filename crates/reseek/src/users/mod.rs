@@ -1,6 +1,6 @@
 //! The directory of users we dealt with: the row kept for each in `users.db`, touched as we
-//! deal with them, our notes, tags, pins, mutes and groups for them, the figures of their
-//! transfers, and who is blocked from what.
+//! deal with them, our notes, tags, mutes and groups for them, our buddies, the figures of
+//! their transfers, and who is blocked from what.
 //!
 //! [`Directory`] is the engine: the API's users directory and blocking calls, and what the
 //! network engines ask of it: [`Directory::touch`], [`Directory::is_blocked`], each user's
@@ -11,6 +11,7 @@
 mod blocking;
 mod blocklist;
 mod browse;
+mod buddies;
 mod group_cache;
 mod groups;
 mod info;
@@ -49,6 +50,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
+pub use group_cache::StatusReceived;
 pub use network::Users;
 pub(crate) use service::{picture_response, picture_tag};
 pub use touch::Touch;
@@ -60,6 +62,7 @@ use crate::live::Live;
 use crate::sync::lock;
 use blocking::Blocks;
 use blocklist::Blocklist;
+use buddies::Buddies;
 use group_cache::GroupCache;
 use known::Known;
 use store::Stored;
@@ -94,6 +97,8 @@ pub struct Directory {
   summaries: Mutex<HashMap<String, (Instant, UserSummary)>>,
   /// who has a row, with their country
   known: Known,
+  /// our buddies
+  buddies: Buddies,
   /// held while our interests are read or written and then sent, so a login's send and a
   /// change made during it cannot interleave
   interests_sending: tokio::sync::Mutex<()>,
@@ -116,12 +121,13 @@ impl Directory {
     let db = Database::open(&store::SCHEMA, location)
       .await
       .map_err(|e| format!("users.db: {e}"))?;
-    let (ours, overrides, known) = db
+    let (ours, overrides, known, buddies) = db
       .read(|conn| {
         Ok((
           blocking::stored(conn, Utc::now())?,
           store::overrides(conn)?,
           Known::read(conn)?,
+          Buddies::read(conn)?,
         ))
       })
       .await
@@ -153,6 +159,7 @@ impl Directory {
       figures: FigureCache::default(),
       summaries: Mutex::new(HashMap::new()),
       known,
+      buddies,
       interests_sending: tokio::sync::Mutex::new(()),
     });
     tokio::spawn(

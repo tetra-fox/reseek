@@ -1,7 +1,7 @@
 //! `users.db`: the row kept for every user we dealt with, read and written.
 
 use api_types::state::UserStatistics;
-use api_types::users::UserPresence;
+use api_types::users::{Buddy, UserPresence};
 use chrono::{DateTime, Utc};
 use rusqlite::types::Type;
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -11,7 +11,7 @@ use crate::db::{self, Schema, read_timestamp, timestamp};
 /// `users.db`: the `users`, `blocks` and `interests` tables.
 pub static SCHEMA: Schema = db::schema!(
   "users",
-  ["0001_initial", "0002_interests", "0003_picture_tag"]
+  ["0001_initial", "0002_interests", "0003_picture_tag", "0004_buddies"]
 );
 
 /// What the peer last said about itself.
@@ -60,8 +60,8 @@ pub struct Stored {
   pub group_override: Option<String>,
   /// their notifications are off
   pub muted: bool,
-  /// listed first
-  pub pinned: bool,
+  /// they are our buddy, and how
+  pub buddy: Option<Buddy>,
 }
 
 /// The columns [`stored`] reads, in its order.
@@ -69,13 +69,30 @@ pub const COLUMNS: &str = "username, first_seen_at, last_seen_at, last_presence,
                            is_privileged, average_speed, upload_count, file_count, \
                            directory_count, statistics_at, country_code, description, \
                            has_picture, upload_slots, queue_length, has_free_slot, info_at, \
-                           notes, tags, group_override, muted, pinned, picture_tag";
+                           notes, tags, group_override, muted, buddy, picture_tag, \
+                           trusted, notify_presence";
 
 /// Every user we put in a user-defined group, with the group.
 pub fn overrides(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
   conn
     .prepare("SELECT username, group_override FROM users WHERE group_override IS NOT NULL")?
     .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+    .collect()
+}
+
+/// Every buddy, by name.
+pub fn buddies(conn: &Connection) -> rusqlite::Result<Vec<(String, Buddy)>> {
+  conn
+    .prepare("SELECT username, trusted, notify_presence FROM users WHERE buddy = 1")?
+    .query_map([], |row| {
+      Ok((
+        row.get(0)?,
+        Buddy {
+          trusted: row.get(1)?,
+          notify_presence: row.get(2)?,
+        },
+      ))
+    })?
     .collect()
 }
 
@@ -153,7 +170,15 @@ pub fn stored(row: &Row) -> rusqlite::Result<Stored> {
     tags: serde_json::from_str(&tags).map_err(|e| conversion(19, e.to_string()))?,
     group_override: row.get(20)?,
     muted: row.get(21)?,
-    pinned: row.get(22)?,
+    buddy: row
+      .get::<_, bool>(22)?
+      .then(|| {
+        Ok::<_, rusqlite::Error>(Buddy {
+          trusted: row.get(24)?,
+          notify_presence: row.get(25)?,
+        })
+      })
+      .transpose()?,
   })
 }
 
@@ -188,8 +213,8 @@ pub enum Change {
   Notes(String),
   /// our labels, lower case and unique
   Tags(Vec<String>),
-  /// listed first or not
-  Pinned(bool),
+  /// our buddy, and how, or not
+  Buddy(Option<Buddy>),
   /// notifications off or on
   Muted(bool),
   /// the user-defined group, or none
@@ -217,9 +242,14 @@ pub fn change(
         serde_json::to_string(tags).expect("strings are JSON")
       ],
     )?,
-    Change::Pinned(pinned) => tx.execute(
-      "UPDATE users SET pinned = ?2 WHERE username = ?1",
-      params![username, pinned],
+    Change::Buddy(buddy) => tx.execute(
+      "UPDATE users SET buddy = ?2, trusted = ?3, notify_presence = ?4 WHERE username = ?1",
+      params![
+        username,
+        buddy.is_some(),
+        buddy.is_some_and(|b| b.trusted),
+        buddy.is_some_and(|b| b.notify_presence)
+      ],
     )?,
     Change::Muted(muted) => tx.execute(
       "UPDATE users SET muted = ?2 WHERE username = ?1",

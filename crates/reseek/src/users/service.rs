@@ -72,11 +72,18 @@ impl Directory {
   /// Applies `change` to `username`'s row and pushes the new summary.
   pub(super) async fn change(&self, username: &str, change: Change) -> Result<(), ApiError> {
     let name = username.to_string();
+    let buddy = match &change {
+      Change::Buddy(buddy) => Some(*buddy),
+      _ => None,
+    };
     self
       .db
       .write(move |conn| store::change(conn, &name, &change, Utc::now()))
       .await
       .map_err(internal)?;
+    if let Some(buddy) = buddy {
+      self.buddies.set(username, buddy);
+    }
     self.changed(username).await;
     Ok(())
   }
@@ -96,7 +103,7 @@ impl Directory {
   }
 
   /// Whether `username` is the account we log in as.
-  fn is_us(&self, username: &str) -> bool {
+  pub(super) fn is_us(&self, username: &str) -> bool {
     self.config.current().values.soulseek.username.as_deref() == Some(username)
   }
 
@@ -190,11 +197,6 @@ impl Directory {
     self.change(username, Change::Tags(unique)).await
   }
 
-  /// Pins or unpins `username`.
-  pub(crate) async fn set_pinned(&self, username: &str, pinned: bool) -> Result<(), ApiError> {
-    self.change(username, Change::Pinned(pinned)).await
-  }
-
   /// Mutes or unmutes `username`.
   pub(crate) async fn set_muted(&self, username: &str, muted: bool) -> Result<(), ApiError> {
     self.change(username, Change::Muted(muted)).await
@@ -249,6 +251,7 @@ impl Directory {
       )));
     }
     self.blocks.unset(username);
+    self.buddies.set(username, None);
     self.group_changed(username, None);
     if purge {
       let removed = transfers::remove_all(&self.transfers, username)

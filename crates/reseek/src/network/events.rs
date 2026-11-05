@@ -406,14 +406,14 @@ async fn handle(app: &AppState, event: Event, session: &mut Session) {
 /// A user's presence, which the server sends for watched users, for room members and in reply
 /// to our own requests. A watched user's row is touched with it, and their statistics are
 /// asked for again when the server sent it on its own, since it pushes their presence and not
-/// what they share; it is pushed as `users.status` for a user we have a conversation or a
-/// transfer with.
+/// what they share; a buddy whose presence it moved is told of. It is pushed as
+/// `users.status` for a buddy and for a user we have a conversation or a transfer with.
 async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus) {
   let username = &status.username;
   let presence = UserPresence::from(status.presence);
   trace!(username, ?presence, "user status changed");
   app.messaging.member_status(username, presence);
-  let asked = app
+  let received = app
     .users
     .status_received(username, presence, status.is_privileged);
   if !app.users.is_watched(username) {
@@ -424,8 +424,13 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
     is_privileged: status.is_privileged,
   };
   app.users.touch(username, touch).await;
-  if !asked {
+  if !received.asked {
     app.users.refetch_statistics(username);
+    if let Some(previous) = received.previous
+      && previous != presence
+    {
+      app.users.presence_moved(username, previous, presence);
+    }
   }
   let client = app.network.client();
   let transferring = client
@@ -433,7 +438,7 @@ async fn user_status(app: &AppState, status: &soulseek_proto::server::UserStatus
     .iter()
     .chain(client.downloads().iter())
     .any(|transfer| transfer.username == *username);
-  if transferring || app.messaging.is_open(username) {
+  if transferring || app.messaging.is_open(username) || app.users.buddy(username).is_some() {
     app.live.publish(LiveFrame::UsersStatus(UserStatusChanged {
       username: username.clone(),
       status: UserStatus {
@@ -494,8 +499,8 @@ fn logged_in(app: &AppState, username: &str) {
 }
 
 /// Once the shares are initialized: the server is told what we share and what we like and hate,
-/// our statistics are fetched, the users with queued uploads and the members of the user-defined
-/// groups are watched, and, after the first login, the downloads a stop interrupted are enqueued
+/// our statistics are fetched, the users with queued uploads, the members of the user-defined
+/// groups and our buddies are watched, and, after the first login, the downloads a stop interrupted are enqueued
 /// again. The messaging engine joins the rooms.
 async fn after_login(app: AppState) {
   app.shares.initialized().await;
@@ -513,6 +518,8 @@ async fn after_login(app: AppState) {
   }
   let uploads = app.uploads.clone();
   tokio::spawn(async move { uploads.logged_in().await }.in_current_span());
+  let (users, watching) = (app.users.clone(), client.clone());
+  tokio::spawn(async move { users.watch_buddies(&watching).await }.in_current_span());
   app.downloads.resume().await;
 }
 

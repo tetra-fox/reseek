@@ -57,6 +57,28 @@ impl Default for ChatNotifications {
 pub struct Notifications {
   /// Transfer notifications.
   pub transfers: TransferNotifications,
+  /// Buddy notifications.
+  pub buddies: BuddyNotifications,
+}
+
+/// Buddy notifications, under the same browser permission and tab visibility rules as chat
+/// notifications. Each type is `off`, or announced by `sound`, by a `desktop` notification, or by
+/// `both`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Cascade)]
+#[serde(default)]
+pub struct BuddyNotifications {
+  /// How a buddy coming online, going away or going offline is announced, for the buddies set
+  /// to tell of it.
+  #[cascade(env = "RESEEK_NOTIFICATIONS_BUDDIES_PRESENCE")]
+  pub presence: NotificationMode,
+}
+
+impl Default for BuddyNotifications {
+  fn default() -> Self {
+    Self {
+      presence: NotificationMode::Both,
+    }
+  }
 }
 
 /// Transfer notifications, under the same browser permission and tab visibility rules as chat

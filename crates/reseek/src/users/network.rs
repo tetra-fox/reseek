@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use api_types::users::{
-  BrowseProgress, BrowseResponse, CachedUser, Directory as SharedDirectory, StatisticsSnapshot,
+  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory as SharedDirectory, StatisticsSnapshot,
   UserEndpoint, UserInfo, UserList, UserListQuery, UserProfile, UserStatus, UserSummary,
   UserTransfers, UserTransfersQuery,
 };
@@ -391,8 +391,12 @@ impl UserService for Users {
     self.directory.set_tags(username, tags).await
   }
 
-  async fn set_pinned(&self, username: &str, pinned: bool) -> Result<(), ApiError> {
-    self.directory.set_pinned(username, pinned).await
+  async fn set_buddy(&self, username: &str, change: BuddyChange) -> Result<(), ApiError> {
+    self.directory.set_buddy(username, change).await
+  }
+
+  async fn remove_buddy(&self, username: &str) -> Result<(), ApiError> {
+    self.directory.remove_buddy(username).await
   }
 
   async fn set_muted(&self, username: &str, muted: bool) -> Result<(), ApiError> {

@@ -16,12 +16,13 @@ use api_types::events::{
   EventType, FileAnalysisComplete, LoginFailed, NoFields, PrivateMessageReceived,
   RelayAgentConnected, RelayAgentDisconnected, RelayAgentSharesUpdated, RoomMessageReceivedEvent,
   SessionCreated, SessionRevokeReason, SessionRevoked, SoulseekClientDisconnected, TokenChanged,
-  UnblockReason, UploadFileComplete, UserBlocked, UserUnblocked,
+  UnblockReason, UploadFileComplete, UserBlocked, UserUnblocked, BuddyPresenceChanged,
 };
 use api_types::files::FileRoot;
 use api_types::messaging::conversations::{MessageDirection, PrivateMessage};
 use api_types::messaging::rooms::RoomMessage;
 use api_types::transfers::{Transfer, TransferDirection, TransferStates};
+use api_types::users::UserPresence;
 use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
 
@@ -107,6 +108,12 @@ pub fn sample(kind: EventType, d: &str, now: DateTime<Utc>) -> Option<Event> {
       username: text("username"),
       reason: UnblockReason::Manual,
       by: Some(text("by")),
+    }),
+    EventType::BuddyPresenceChanged => Event::BuddyPresenceChanged(BuddyPresenceChanged {
+      version: 0,
+      username: text("username"),
+      presence: UserPresence::Online,
+      previous: UserPresence::Offline,
     }),
     EventType::TokenCreated | EventType::TokenRevoked => {
       let changed = TokenChanged {

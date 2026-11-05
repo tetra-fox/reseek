@@ -158,6 +158,27 @@ pub struct SummaryFigures {
   pub last_message_at: Option<DateTime<Utc>>,
 }
 
+/// A user on our buddy list: listed first, their presence followed from one login to the next.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Buddy {
+  /// they also see the shares only trusted buddies see
+  pub trusted: bool,
+  /// we are told when they come online, go away or go offline
+  pub notify_presence: bool,
+}
+
+/// The body of `PUT /users/{username}/buddy`, which makes a user our buddy or changes how. A
+/// field left out keeps its value, false for a new buddy.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BuddyChange {
+  /// they also see the shares only trusted buddies see
+  pub trusted: Option<bool>,
+  /// we are told when they come online, go away or go offline
+  pub notify_presence: Option<bool>,
+}
+
 /// What the known-users directory holds about a user, shared by the summary and the profile.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -194,8 +215,9 @@ pub struct KnownUser {
   pub tags: Vec<String>,
   /// chat notifications for the user are off
   pub muted: bool,
-  /// the user is listed first
-  pub pinned: bool,
+  /// the user is our buddy, with what that buddy may do and what we hear of them; null for a
+  /// user who is not
+  pub buddy: Option<Buddy>,
   /// the user's address from the endpoint cache, null when not cached; never a round trip
   pub endpoint: Option<UserEndpoint>,
   /// our private conversation with the user, null when there is none
@@ -274,8 +296,8 @@ pub struct UserListQuery {
   pub tag: Option<String>,
   /// only users in this group
   pub group: Option<String>,
-  /// only pinned users, or only users not pinned
-  pub pinned: Option<bool>,
+  /// only our buddies, or only users who are not
+  pub buddy: Option<bool>,
   /// only users last seen with this presence
   pub presence: Option<UserPresence>,
   /// only users with transfers, or only users without

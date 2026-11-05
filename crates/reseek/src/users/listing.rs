@@ -1,5 +1,5 @@
-//! A page of the directory: the users matching every filter, pinned ones first within the
-//! chosen order.
+//! A page of the directory: the users matching every filter, buddies first within the chosen
+//! order.
 
 use api_types::transfers::SortOrder;
 use api_types::users::{UserList, UserListQuery, UserSort};
@@ -31,8 +31,8 @@ impl Directory {
       Value::Text(timestamp(Utc::now())),
       Value::Text(SERVER_USERNAME.to_string()),
     ];
-    if let Some(pinned) = query.pinned {
-      filter.push(format!("pinned = {}", i32::from(pinned)));
+    if let Some(buddy) = query.buddy {
+      filter.push(format!("buddy = {}", i32::from(buddy)));
     }
     if let Some(presence) = query.presence {
       values.push(Value::Text(presence_text(presence).to_string()));
@@ -56,7 +56,7 @@ impl Directory {
       .read(move |conn| {
         let mut statement = conn.prepare(&sql)?;
         let rows = statement.query_map(params_from_iter(&values), |row| {
-          Ok((stored(row)?, row.get::<_, bool>(24)?))
+          Ok((stored(row)?, row.get::<_, bool>(26)?))
         })?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
       })
@@ -116,8 +116,9 @@ impl Directory {
         SortOrder::Desc => by.reverse(),
       };
       b.stored
-        .pinned
-        .cmp(&a.stored.pinned)
+        .buddy
+        .is_some()
+        .cmp(&a.stored.buddy.is_some())
         .then(by)
         .then_with(|| a.stored.username.cmp(&b.stored.username))
     });

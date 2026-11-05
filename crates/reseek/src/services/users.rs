@@ -1,7 +1,7 @@
 //! Other users: what the network says about them, and the directory of users we know.
 
 use api_types::users::{
-  BrowseProgress, BrowseResponse, CachedUser, Directory, StatisticsSnapshot, UserEndpoint,
+  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory, StatisticsSnapshot, UserEndpoint,
   UserInfo, UserList, UserListQuery, UserProfile, UserStatus, UserSummary, UserTransfers,
   UserTransfersQuery,
 };
@@ -107,8 +107,14 @@ pub trait UserService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// Pins a user to the top of the directory, or unpins them.
-  async fn set_pinned(&self, username: &str, pinned: bool) -> Result<(), ApiError> {
+  /// Makes a user our buddy, or changes how; a field the change leaves out keeps its value.
+  /// Our own account is a conflict.
+  async fn set_buddy(&self, username: &str, change: BuddyChange) -> Result<(), ApiError> {
+    Err(not_yet(DOMAIN))
+  }
+
+  /// Takes a user off our buddy list.
+  async fn remove_buddy(&self, username: &str) -> Result<(), ApiError> {
     Err(not_yet(DOMAIN))
   }
 
