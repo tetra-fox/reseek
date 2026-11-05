@@ -22,7 +22,8 @@
   import SpectrogramView from "./SpectrogramView.svelte";
 
   // one of the page's two rows, always there: empty, receiving a file, or showing one with its
-  // judgment and reading beside it. All of it is a drop area, which a filled row is too
+  // judgment and reading beside it. All of it is a drop area, which a filled row is too. A row
+  // showing a plot is tall enough for one as tall as a phone shows it
   type Props = { id: SlotId; analyzed: FileReport };
 
   let { id, analyzed }: Props = $props();
@@ -33,6 +34,7 @@
   const local = $derived(slots.local(id));
   const report = $derived(analyzed.report);
   const scope = $derived(analyzed.scope);
+  const plotted = $derived(!!scope && !analyzed.error);
   const job = $derived(analyzed.job);
   const write = $derived(session.can("ReadWrite"));
   const path = $derived(
@@ -87,7 +89,8 @@
   tabindex="-1"
   aria-label={`Slot ${letter}`}
   class={[
-    "relative flex min-w-0 flex-col max-md:min-h-72 md:min-h-0",
+    "relative flex min-w-0 flex-col max-md:min-h-72",
+    plotted ? "md:min-h-120" : "md:min-h-60",
     over && "outline-2 -outline-offset-2 outline-accent"
   ]}
   ondragenter={entered}

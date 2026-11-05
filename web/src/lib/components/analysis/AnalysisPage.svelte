@@ -9,9 +9,9 @@
   import AnalysisSlot from "./AnalysisSlot.svelte";
   import AnalysisToolbar from "./AnalysisToolbar.svelte";
 
-  // two equal rows edge to edge, a file or an empty placeholder in each, with the toolbar between
-  // them. Each row fits its half of the window; on a phone, or in a window too short for that, the
-  // rows keep a usable height and the page scrolls
+  // two rows edge to edge, a file or an empty placeholder in each, with the toolbar between them.
+  // Each row takes half of the window, but never less than its slot asks for, so a plot stays
+  // readable and the page scrolls when the window is too short for both
   const first = new FileReport(() => slots.a?.target ?? null, true);
   const second = new FileReport(() => slots.b?.target ?? null, true);
 
@@ -38,7 +38,7 @@
 <svelte:window ondragover={beside} ondrop={beside} />
 
 <div
-  class="flex flex-col md:grid md:h-full md:grid-cols-[minmax(0,1fr)] md:grid-rows-[minmax(15rem,1fr)_auto_minmax(15rem,1fr)]">
+  class="flex flex-col md:grid md:h-full md:grid-cols-[minmax(0,1fr)] md:grid-rows-[1fr_auto_1fr]">
   <AnalysisSlot id="a" analyzed={first} />
   <AnalysisToolbar {compared} />
   <AnalysisSlot id="b" analyzed={second} />

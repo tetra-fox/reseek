@@ -811,9 +811,7 @@ test("opens a file, compares a second, and clears them, with the address followi
   await expect(page).toHaveURL(/#\/analysis$/);
 });
 
-test("two equal rows fill the content area and the plots grow with the window", async ({
-  page
-}) => {
+test("a file's plot keeps a readable height and the rows fill a tall window", async ({ page }) => {
   await fakeDownloads(page);
   await fakeAnalysis(page);
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -822,23 +820,36 @@ test("two equal rows fill the content area and the plots grow with the window", 
   const b = page.getByRole("region", { name: "Slot B" });
   const scrolls = () =>
     page.locator("[data-content]").evaluate((e) => e.scrollHeight - e.clientHeight);
-  const height = async (slot: Locator) => (await slot.boundingBox())!.height;
+  const height = async (box: Locator) => (await box.boundingBox())!.height;
+  const upload = (slot: Locator, letter: string) =>
+    slot
+      .getByLabel(`Upload a file to slot ${letter}`)
+      .setInputFiles({ name: "mine.flac", mimeType: "audio/flac", buffer: Buffer.alloc(2048) });
   // with nothing loaded both rows are there, half each, and the page does not scroll
   await expect(a.getByRole("button", { name: "Upload file" })).toBeVisible();
   await expect(b.getByRole("button", { name: "Upload file" })).toBeVisible();
   expect(await height(a)).toBe(await height(b));
   expect(await scrolls()).toBe(0);
 
-  await a
-    .getByLabel("Upload a file to slot A")
-    .setInputFiles({ name: "mine.flac", mimeType: "audio/flac", buffer: Buffer.alloc(2048) });
-  const plot = a.getByRole("slider", { name: "Cursor" });
-  await expect(plot).toBeVisible();
+  // a plot is at least as tall as a phone shows it, and a short window scrolls to make room
+  await upload(a, "A");
+  const plotA = a.getByRole("slider", { name: "Cursor" });
+  await expect(plotA).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const phone = await height(plotA);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  expect(await height(plotA)).toBeGreaterThanOrEqual(phone);
+  expect(await scrolls()).toBeGreaterThan(0);
+  await upload(b, "B");
+  const plotB = b.getByRole("slider", { name: "Cursor" });
+  await expect(plotB).toBeVisible();
+  expect(await height(plotB)).toBeGreaterThanOrEqual(phone);
   expect(await height(a)).toBe(await height(b));
-  expect(await scrolls()).toBe(0);
-  const short = (await rect(plot)).height;
-  await page.setViewportSize({ width: 1280, height: 1000 });
-  await expect.poll(async () => (await rect(plot)).height).toBeGreaterThan(short + 100);
+
+  // a window tall enough for both splits it in half, and the plots grow with it
+  const short = await height(plotA);
+  await page.setViewportSize({ width: 1280, height: 1600 });
+  await expect.poll(() => height(plotA)).toBeGreaterThan(short + 100);
   expect(await height(a)).toBe(await height(b));
   expect(await scrolls()).toBe(0);
 });
