@@ -190,7 +190,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn pins_from_before_the_revision_keep_their_order() {
+  async fn pins_from_before_the_revision_keep_their_order_and_refuse_another_kind() {
     let dir = tempfile::tempdir().unwrap();
     let location = Location::on_disk(dir.path());
     let before = Database::open(&UNREVISED, &location).await.unwrap();
@@ -220,6 +220,15 @@ mod tests {
         pins: order
       }
     );
+    let other = db
+      .write(|conn| {
+        conn.execute(
+          "INSERT INTO chat_pins (kind, name, position) VALUES ('group', 'x', 9)",
+          [],
+        )
+      })
+      .await;
+    assert!(other.is_err(), "the table takes rooms and users only");
   }
 
   #[tokio::test]
