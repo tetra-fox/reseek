@@ -5,7 +5,7 @@
 //! the server exclude. Files found are offered to a requester who is online and not blocked at
 //! their address, with our upload speed and the place they would take in our upload queue.
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, PoisonError, RwLock};
 use std::time::{Duration, Instant};
@@ -170,17 +170,25 @@ pub async fn search(
   };
   drop(waiting);
   let started = Instant::now();
-  let response = answer(edges, &options.values, username, token, query, started).await;
+  let reply = answer(edges, &options.values, username, token, query, started).await;
   let elapsed = millis(started);
   metrics.response_latency.observe(elapsed);
   metrics.response_latency_current.update(elapsed);
-  let response = response?;
+  let reply = reply?;
   metrics.responses_sent.inc();
   metrics.response_send_rate.count_up(1);
-  Some(SearchReply::Response(response))
+  Some(reply)
 }
 
-/// The response to `username`'s search, worked out by a worker since `started`.
+/// The files a search is answered with, and when they are more than everyone sees, the only
+/// address the answer may go to.
+struct Matches {
+  files: Vec<File>,
+  confined_to: Option<IpAddr>,
+}
+
+/// The answer to `username`'s search, worked out by a worker since `started`. An answer with
+/// more than everyone sees goes only to the address the server reports for the searcher.
 async fn answer(
   edges: &Edges,
   options: &Options,
@@ -188,8 +196,9 @@ async fn answer(
   token: u32,
   query: &SearchQuery,
   started: Instant,
-) -> Option<SearchResponse> {
-  let files = matches(edges, options, username, token, query, started).await?;
+) -> Option<SearchReply> {
+  let Matches { files, confined_to } =
+    matches(edges, options, username, token, query, started).await?;
   // the network goes only when the daemon stops
   let network = edges.network.upgrade()?;
   let client = network.client();
@@ -214,7 +223,7 @@ async fn answer(
     query = query.search_text(),
     "Sending search response"
   );
-  Some(SearchResponse {
+  let reply = SearchReply::Response(SearchResponse {
     username: own,
     token,
     files,
@@ -222,11 +231,20 @@ async fn answer(
     upload_speed,
     queue_length: forecast.position,
     locked_files: Vec::new(),
+  });
+  Some(match confined_to {
+    Some(to) => SearchReply::Confined {
+      reply: Box::new(reply),
+      to,
+    },
+    None => reply,
   })
 }
 
 /// The files we would offer for `username`'s search, `None` when the requester is known to be
 /// blocked, a request filter matches, the query names nothing to look for or nothing matches.
+/// A buddy's search sees more than everyone's only when its answer is bound for the address the
+/// server reports for them: a connection open in their name must come from it.
 async fn matches(
   edges: &Edges,
   options: &Options,
@@ -234,7 +252,7 @@ async fn matches(
   token: u32,
   query: &SearchQuery,
   started: Instant,
-) -> Option<Vec<File>> {
+) -> Option<Matches> {
   let metrics = &edges.telemetry.metrics().search;
   if edges
     .users
@@ -269,9 +287,17 @@ async fn matches(
   metrics.filter_latency.observe(filtering);
   metrics.filter_latency_current.update(filtering);
   // the network goes only when the daemon stops
-  let excluded = edges.network.upgrade()?.excluded_phrases();
+  let network = edges.network.upgrade()?;
+  let excluded = network.excluded_phrases();
   let limit = options.throttling.search.incoming.response_file_limit as usize;
-  let view = edges.shares.view(edges.users.sees(username));
+  let open = network
+    .client()
+    .message_connections()
+    .into_iter()
+    .find(|(name, _)| name == username)
+    .map(|(_, remote)| remote.ip());
+  let (sees, confined_to) = edges.users.sees_from(username, open).await;
+  let view = edges.shares.view(sees);
   let query = excluding(query, &excluded);
   let files = query_shares(edges, &query, limit, &view, QUERY_BUDGET).await?;
   let querying = millis(started) - filtering;
@@ -281,7 +307,7 @@ async fn matches(
     trace!(username, token, query = text, "no shared file matches");
     return None;
   }
-  Some(files)
+  Some(Matches { files, confined_to })
 }
 
 /// `query` with the phrases the server excludes added to its exclusions, each once.
@@ -372,9 +398,10 @@ mod tests {
   async fn found(edges: &Edges, username: &str, text: &str) -> Option<Vec<String>> {
     let options = edges.config.current();
     let query = SearchQuery::parse(text);
-    let files = matches(edges, &options.values, username, 1, &query, Instant::now()).await?;
+    let found = matches(edges, &options.values, username, 1, &query, Instant::now()).await?;
     Some(
-      files
+      found
+        .files
         .into_iter()
         .map(|file| file.filename.as_str().to_string())
         .collect(),
@@ -587,5 +614,27 @@ mod tests {
     );
     release.send(()).unwrap();
     holding.await.unwrap().unwrap();
+  }
+
+  #[tokio::test]
+  async fn a_buddy_name_whose_answer_could_reach_someone_else_is_answered_as_everyone() {
+    let dir = tempfile::tempdir().unwrap();
+    let album = dir.path().join("Music").join("Abbey Road");
+    std::fs::create_dir_all(&album).unwrap();
+    std::fs::write(album.join("01 - Come Together.mp3"), "one").unwrap();
+    let config = format!(
+      "[shares]\ndirectories = [\"{}\"]\nbuddies_only = [\"Music\"]\n",
+      dir.path().join("Music").display()
+    );
+    let app = app(&config, &[]).await;
+    app
+      .state
+      .users
+      .set_buddy("alice", Default::default())
+      .await
+      .unwrap();
+    let edges = edges(&app);
+    // logged out, the server tells nothing of alice, so where an answer would go is unknown
+    assert_eq!(found(&edges, "alice", "abbey").await, None);
   }
 }

@@ -118,7 +118,10 @@ impl Uploads {
     };
     self.users.watch(&client, &record.username).await;
     info!(filename = record.filename, "Initializing upload");
-    let located = match self.locate(&record.username, &record.filename).await {
+    // the request was confirmed when it was queued, and the file goes to the user the server
+    // knows by the name; whether they still see the file is decided again
+    let sees = self.users.sees(&record.username);
+    let located = match self.locate(sees, &record.filename).await {
       Ok(Some(found)) => found,
       Ok(None) => {
         let gone = ClientError::NotFound(FILE_GONE.to_string());

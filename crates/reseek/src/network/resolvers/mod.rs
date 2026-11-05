@@ -191,7 +191,8 @@ pub async fn enqueue_download(
     uploads.request_refused();
     return Err(ClientError::DownloadEnqueue(NOT_SHARED.into()));
   }
-  uploads.request(username, filename.as_str()).await?;
+  let (sees, _) = edges.users.sees_from(username, Some(endpoint.ip())).await;
+  uploads.request(username, filename.as_str(), sees).await?;
   edges.activity.queued(username, filename.as_str());
   Ok(())
 }

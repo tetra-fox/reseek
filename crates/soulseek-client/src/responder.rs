@@ -159,11 +159,11 @@ impl Client {
     query: &str,
     reply: Arc<SearchReply>,
   ) -> bool {
-    let response = match reply.as_ref() {
+    let response = match reply.plain() {
       SearchReply::Response(response) => response.clone(),
-      SearchReply::Encoded(frame) => {
+      encoded => {
         let limits = self.options().limits.frame_limits();
-        match PeerMessage::decode_with(frame, &limits) {
+        match PeerMessage::decode_with(&encoded.frame(), &limits) {
           Ok(PeerMessage::SearchResponse(response)) => response,
           Ok(other) => {
             tracing::warn!(
@@ -224,6 +224,16 @@ impl Client {
       self.emit(Event::SearchResponseDeliveryFailed(delivery));
       return false;
     };
+    let remote = conn.handle().remote();
+    if !kept.reply.may_reach(remote.ip()) {
+      tracing::debug!(
+        username = kept.username,
+        %remote,
+        "kept search response confined to another address; not delivered"
+      );
+      self.emit(Event::SearchResponseDeliveryFailed(delivery));
+      return false;
+    }
     match conn.write(kept.reply.frame()).await {
       Ok(()) => {
         tracing::debug!(
@@ -295,6 +305,22 @@ impl Client {
     query: &str,
     reply: Arc<SearchReply>,
   ) -> bool {
+    let remote = conn.handle().remote();
+    if !reply.may_reach(remote.ip()) {
+      tracing::debug!(
+        username,
+        %remote,
+        query,
+        "search response confined to another address; not delivered"
+      );
+      self.emit(Event::SearchResponseDeliveryFailed(SearchDelivery {
+        username: username.to_owned(),
+        token,
+        query: query.to_owned(),
+        search_response: reply,
+      }));
+      return false;
+    }
     match conn.write(reply.frame()).await {
       Ok(()) => {
         tracing::debug!(query, "search response delivered");

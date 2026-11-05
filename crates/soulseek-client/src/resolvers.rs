@@ -4,7 +4,7 @@
 
 use std::fmt;
 use std::future::Future;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -56,6 +56,14 @@ pub enum SearchReply {
   Response(SearchResponse),
   /// a complete `SearchResponse` frame the application encoded itself, sent as it is
   Encoded(Vec<u8>),
+  /// an answer meant for the searcher at the address `to` only: on a connection from any
+  /// other address it is not sent, since a peer can give any name when it connects
+  Confined {
+    /// the answer itself
+    reply: Box<SearchReply>,
+    /// the only address it may go to
+    to: IpAddr,
+  },
 }
 
 impl SearchReply {
@@ -64,6 +72,26 @@ impl SearchReply {
     match self {
       Self::Response(response) => Some(response.files.len() + response.locked_files.len()),
       Self::Encoded(_) => None,
+      Self::Confined { reply, .. } => reply.file_count(),
+    }
+  }
+
+  /// the answer without the address it is confined to: a `Response` or an `Encoded`
+  pub(crate) fn plain(&self) -> &SearchReply {
+    match self {
+      Self::Confined { reply, .. } => reply.plain(),
+      other => other,
+    }
+  }
+
+  /// whether the answer may go out on a connection from `remote`; an IPv4 address and the same
+  /// address mapped into IPv6, as a dual-stack listener sees it, are one address
+  pub(crate) fn may_reach(&self, remote: IpAddr) -> bool {
+    match self {
+      Self::Confined { reply, to } => {
+        to.to_canonical() == remote.to_canonical() && reply.may_reach(remote)
+      }
+      _ => true,
     }
   }
 
@@ -74,6 +102,7 @@ impl SearchReply {
         soulseek_proto::PeerMessage::SearchResponse(response.clone()).encode()
       }
       Self::Encoded(frame) => frame.clone(),
+      Self::Confined { reply, .. } => reply.frame(),
     }
   }
 }

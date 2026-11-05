@@ -1,7 +1,8 @@
 //! Our share listing for a peer that browses us, streamed from the browse cache the shares keep
 //! so a large listing is neither built nor held in memory per request, and the contents of one
 //! shared directory for a peer that asks for a folder. Both are what the peer's user sees of
-//! our shares, which depends on whether they are our buddy.
+//! our shares, which depends on whether they are our buddy and ask from the address the server
+//! reports for them.
 
 use std::net::SocketAddr;
 use std::path::Path;
@@ -37,8 +38,8 @@ pub async fn browse(edges: &Edges, username: &str, endpoint: SocketAddr) -> Brow
   }
   edges.activity.record(Some(username), ActivityKind::Browse);
   let started = Instant::now();
-  let view = edges.shares.view(edges.users.sees(username));
-  let reply = listing(edges, &view).await;
+  let (sees, _) = edges.users.sees_from(username, Some(endpoint.ip())).await;
+  let reply = listing(edges, &edges.shares.view(sees)).await;
   let elapsed = millis(started);
   metrics.response_latency.observe(elapsed);
   metrics.response_latency_current.update(elapsed);
@@ -120,18 +121,20 @@ pub async fn directory_contents(
       files: Vec::new(),
     }]);
   }
-  folder(edges, username, directory).await
+  folder(edges, username, endpoint, directory).await
 }
 
 /// The shared directory `directory` and every directory below it, each with its own files; a
-/// directory we do not share, or that `username` does not see, comes back empty. `None`, and no
-/// answer, when the index cannot be read.
+/// directory we do not share, or that `username` asking from `endpoint` does not see, comes back
+/// empty. `None`, and no answer, when the index cannot be read.
 async fn folder(
   edges: &Edges,
   username: &str,
+  endpoint: SocketAddr,
   directory: &RemoteFilename,
 ) -> Option<Vec<Directory>> {
-  let view = edges.shares.view(edges.users.sees(username));
+  let (sees, _) = edges.users.sees_from(username, Some(endpoint.ip())).await;
+  let view = edges.shares.view(sees);
   match edges
     .shares
     .folder(username, directory.as_str(), &view)
@@ -253,5 +256,44 @@ mod tests {
       .unwrap();
     assert_eq!(folder.len(), 1);
     assert!(folder[0].files.is_empty());
+  }
+
+  #[tokio::test]
+  async fn a_buddy_name_on_an_unconfirmed_connection_is_answered_as_everyone() {
+    let dir = tempfile::tempdir().unwrap();
+    let album = dir.path().join("Music").join("Album");
+    std::fs::create_dir_all(&album).unwrap();
+    std::fs::write(album.join("01.mp3"), "one").unwrap();
+    let config = format!(
+      "[shares]\ndirectories = [\"{}\"]\nbuddies_only = [\"Music\"]\n",
+      dir.path().join("Music").display()
+    );
+    let app = app(&config, &[]).await;
+    app
+      .state
+      .users
+      .set_buddy("alice", Default::default())
+      .await
+      .unwrap();
+    let edges = edges(&app);
+    // logged out, the server tells nothing of alice, so a connection in her name proves nothing
+    let peer = from("198.51.100.7");
+    let PeerMessage::BrowseResponse(listing) =
+      PeerMessage::decode(&bytes(browse(&edges, "alice", peer).await).await).unwrap()
+    else {
+      panic!("not a browse response");
+    };
+    assert!(listing.directories.is_empty(), "{:?}", listing.directories);
+    let album = RemoteFilename::from("Music\\Album");
+    let folder = directory_contents(&edges, "alice", peer, &album)
+      .await
+      .unwrap();
+    assert!(folder.iter().all(|d| d.files.is_empty()), "{folder:?}");
+    let file = RemoteFilename::from("Music\\Album\\01.mp3");
+    let queued = super::super::enqueue_download(&edges, "alice", peer, &file).await;
+    assert!(
+      matches!(&queued, Err(soulseek_client::ClientError::DownloadEnqueue(r)) if r == super::super::NOT_SHARED),
+      "{queued:?}"
+    );
   }
 }

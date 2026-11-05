@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use api_types::shares::ShareVisibility;
 use chrono::Utc;
 use soulseek_client::{ClientError, LogLimiter};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, SemaphorePermit};
@@ -182,14 +183,20 @@ impl Uploads {
     true
   }
 
-  /// Decides the request of `username` for `filename`, which passed the network's edge, and
-  /// queues the upload when it is accepted. A refusal is the reason the peer is told.
-  pub async fn request(&self, username: &str, filename: &str) -> Result<(), ClientError> {
+  /// Decides the request of `username`, who sees the shares visible to `sees`, for `filename`,
+  /// which passed the network's edge, and queues the upload when it is accepted. A refusal is
+  /// the reason the peer is told.
+  pub async fn request(
+    &self,
+    username: &str,
+    filename: &str,
+    sees: ShareVisibility,
+  ) -> Result<(), ClientError> {
     let (_turn, waiting) = self.intake.turn(username).await;
     let enqueue = &self.telemetry.metrics().enqueue;
     enqueue.queue_depth.set(waiting as f64);
     let started = Instant::now();
-    let decision = self.decide(username, filename).await;
+    let decision = self.decide(username, filename, sees).await;
     let decided = millis(started);
     enqueue.decision_latency.observe(decided);
     enqueue.decision_latency_current.update(decided);
@@ -228,9 +235,14 @@ impl Uploads {
 
   /// Whether `username` may have `filename`: shared with them, on disk, and within the limits
   /// of their group unless they are privileged.
-  async fn decide(&self, username: &str, filename: &str) -> Result<Located, Refusal> {
+  async fn decide(
+    &self,
+    username: &str,
+    filename: &str,
+    sees: ShareVisibility,
+  ) -> Result<Located, Refusal> {
     let located = self
-      .locate(username, filename)
+      .locate(sees, filename)
       .await
       .map_err(Refusal::Failed)?
       .ok_or(Refusal::Peer(NOT_SHARED))?;
@@ -261,15 +273,15 @@ impl Uploads {
   }
 
   /// Where the shared file `filename` is, with its size on disk; `None` when it is not shared,
-  /// `username` does not see its share, or it is gone from disk. A local file gone, or whose size changed, asks the shares for a
+  /// is in a share not visible to `sees`, or is gone from disk. A local file gone, or whose size changed, asks the shares for a
   /// scan; one that changed is taken at its size on disk. A relay agent's file is taken at its
   /// indexed size when the options trust agents' listings, else the agent is asked.
   pub(super) async fn locate(
     &self,
-    username: &str,
+    sees: ShareVisibility,
     filename: &str,
   ) -> Result<Option<Located>, ClientError> {
-    let view = self.shares.view(self.users.sees(username));
+    let view = self.shares.view(sees);
     let resolved = self
       .shares
       .resolve_file(filename, &view)

@@ -36,13 +36,17 @@ pub struct Shares {
   /// always opened through a link.
   pub follow_symlinks: bool,
   /// Aliases of the shares only buddies see, matched ignoring case; trusted buddies see them
-  /// too. Everyone else is answered as if they were not shared. The server's list also covers
-  /// a relay agent's shares by their alias; an agent's own list is not used.
+  /// too. Everyone else is answered as if they were not shared. A buddy is recognized only when
+  /// they connect from the address the server reports for them, so one on our own network sees
+  /// what everyone sees. The server's list also covers a relay agent's shares by their alias;
+  /// an agent's own list is not used.
   #[cascade(env = "RESEEK_SHARE_BUDDIES_ONLY")]
   pub buddies_only: Vec<String>,
   /// Aliases of the shares only trusted buddies see, matched ignoring case. Everyone else is
-  /// answered as if they were not shared. The server's list also covers a relay agent's
-  /// shares by their alias; an agent's own list is not used.
+  /// answered as if they were not shared. A buddy is recognized only when they connect from the
+  /// address the server reports for them, so one on our own network sees what everyone sees.
+  /// The server's list also covers a relay agent's shares by their alias; an agent's own list
+  /// is not used.
   #[cascade(env = "RESEEK_SHARE_TRUSTED_ONLY")]
   pub trusted_only: Vec<String>,
   /// Index of shared files.
