@@ -3,6 +3,12 @@
 # npm once it passes. The web hash follows the lockfile, which dependabot cannot change, so the
 # test job works it out and the merge job commits it. An action's bump is left for review: its
 # code runs where the release signing key is.
+#
+# The test builds the pull request's head, and dependabot rebases it only on a conflict or at its
+# weekly run; it has no setting to rebase when main has merely moved. So a merge can land a tree
+# no job built, and the squash, pushed with this workflow's token, starts no ci run of its own.
+# The next push to main runs ci on it. For a repository with one committer that is accepted
+# rather than holding every bump for a manual rebase.
 name: deps
 
 on: pull_request
