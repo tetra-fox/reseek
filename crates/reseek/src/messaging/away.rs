@@ -11,7 +11,7 @@ use std::time::Duration;
 use api_types::state::OwnStatus;
 use rusqlite::OptionalExtension;
 use soulseek_proto::UserPresence;
-
+use tokio::sync::Notify;
 use tokio::time::{Instant, sleep_until};
 use tracing::{debug, info, warn};
 
@@ -41,6 +41,9 @@ enum Away {
 #[derive(Default)]
 pub(super) struct Status {
   inner: Mutex<Inner>,
+  /// woken when the status is set by hand, after which the wait for nobody at the UI starts
+  /// over: an away set by hand may have ended while nobody was there
+  set_by_hand: Notify,
 }
 
 #[derive(Default)]
@@ -87,15 +90,30 @@ impl Messaging {
       .await
       .map_err(ApiError::internal)?;
     self.change_status(away.then_some(Away::ByHand), by).await;
+    self.status.set_by_hand.notify_one();
     Ok(())
   }
 
-  /// Makes `next` our status, for `by`: who asked, or what changed it. Going from online to away
-  /// or back is shown in the state and told to the server; coming back forgets who was answered.
+  /// Makes `next` our status, for `by`: who asked, or what changed it.
   async fn change_status(&self, next: Option<Away>, by: &str) {
+    self.change_status_if(|_| true, next, by).await;
+  }
+
+  /// Makes `next` our status, for `by`, when `when` holds for the status as it is, both read and
+  /// set in one hold of the lock. Going from online to away or back is shown in the state and
+  /// told to the server; coming back forgets who was answered.
+  async fn change_status_if(
+    &self,
+    when: impl FnOnce(Option<Away>) -> bool,
+    next: Option<Away>,
+    by: &str,
+  ) {
     let changed = {
       let mut inner = lock(&self.status.inner);
       let was = inner.away;
+      if !when(was) {
+        return;
+      }
       inner.away = next;
       if next.is_none() {
         inner.answered.clear();
@@ -110,7 +128,7 @@ impl Messaging {
     } else {
       OwnStatus::Online
     };
-    info!(?status, why = ?next, by, "our status changed");
+    info!(?status, by, "our status changed");
     self.state.update(|state| state.user.status = status);
     self.tell_status().await;
   }
@@ -214,12 +232,13 @@ impl Messaging {
             self.end_idle_away().await;
           }
         }
+        () = self.status.set_by_hand.notified() => deadline = arm(people, after),
         () = sleep_until(deadline.unwrap_or_else(Instant::now)), if deadline.is_some() => {
           deadline = None;
-          if lock(&self.status.inner).away.is_none() {
-            debug!(after = ?after, "nobody has had the UI open");
-            self.change_status(Some(Away::Idle), IDLE).await;
-          }
+          debug!(after = ?after, "nobody has had the UI open");
+          self
+            .change_status_if(|away| away.is_none(), Some(Away::Idle), IDLE)
+            .await;
         }
       }
     }
@@ -227,9 +246,9 @@ impl Messaging {
 
   /// Ends an away that came from nobody being at the UI; one set by hand stays.
   async fn end_idle_away(&self) {
-    if lock(&self.status.inner).away == Some(Away::Idle) {
-      self.change_status(None, IDLE).await;
-    }
+    self
+      .change_status_if(|away| away == Some(Away::Idle), None, IDLE)
+      .await;
   }
 
   /// The connection ended: the next session starts with nobody answered.
@@ -334,5 +353,42 @@ mod tests {
       () = away => {}
       () = churn => unreachable!("the churn runs until away"),
     }
+  }
+
+  #[tokio::test]
+  async fn ending_an_away_set_by_hand_with_nobody_at_the_ui_waits_again() {
+    let config = format!(
+      "{TRUSTED}[web.authentication.api_keys.script]\nkey = \"script-key-0123456789\"\n\
+       role = \"readonly\"\n[chat]\nauto_away = \"300ms\"\n"
+    );
+    let app = app(&config, &[]).await;
+    let opened = request("GET", "/api/v0/live?topics=application", None);
+    let mut script = app
+      .stream_from(
+        "10.0.0.1:40000",
+        with(opened, "x-api-key", "script-key-0123456789"),
+      )
+      .await;
+    let mut status = async |wanted: &str| loop {
+      let frame = script.until("application.state").await.pop().unwrap();
+      if frame.data["user"]["status"] == wanted {
+        return;
+      }
+    };
+    // a request is no one at the UI: only an open event stream is
+    let set = |status: &str| {
+      let body = serde_json::json!({ "status": status });
+      app.send_from(
+        "127.0.0.1:40000",
+        request("PUT", "/api/v0/application/status", Some(body)),
+      )
+    };
+    set("Away").await;
+    status("Away").await;
+    // the wait runs out while we are away by hand, which it leaves as it is
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+    set("Online").await;
+    status("Online").await;
+    status("Away").await;
   }
 }
