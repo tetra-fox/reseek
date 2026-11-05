@@ -75,6 +75,7 @@
   let asking = $state<string | null>(null);
   let flat = $state<{ username: string; folder: string; files: Schemas["File"][] } | null>(null);
   let flatOpen = $state(false);
+  let tree = $state<ReturnType<typeof FileTree<Item>> | null>(null);
 
   followDownloads();
 
@@ -175,6 +176,9 @@
     flat = { username, folder, files: outcome.data.flatMap((d) => d.files) };
     flatOpen = true;
   };
+
+  /** Gives the tree DOM focus, without scrolling */
+  export const focus = () => tree?.focus();
 </script>
 
 {#snippet userLine(node: FolderNode<Item>, result: Result)}
@@ -245,6 +249,7 @@
 {/snippet}
 
 <FileTree
+  bind:this={tree}
   {lines}
   {expansion}
   label="Search results"

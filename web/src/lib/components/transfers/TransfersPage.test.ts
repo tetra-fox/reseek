@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "#lib/api/client.js";
 import InspectorPane from "#lib/components/inspector/InspectorPane.svelte";
+import Header from "#lib/components/shell/Header.svelte";
 import { toasts } from "#lib/feedback/toast.svelte.js";
 import { UNDO_MS } from "#lib/feedback/undo.js";
 import { inspectorPrefs, SETTLE_MS } from "#lib/inspector/inspector.svelte.js";
@@ -18,6 +19,8 @@ import type { Transfer } from "#lib/transfers/states.js";
 import { downloads } from "#lib/transfers/transfers.svelte.js";
 
 import TransfersPage from "./TransfersPage.svelte";
+
+vi.mock("$app/state", () => ({ page: { url: new URL("http://localhost/#/downloads") } }));
 
 /** the grouped listing the daemon answers, one directory per transfer */
 const grouped = (rows: Transfer[]) =>
@@ -445,6 +448,40 @@ describe("the transfers table", () => {
       press(grid(), " ", { shiftKey: true });
       expect(ticked()).toEqual([b.id]);
       expect(pane()).toBeNull();
+    });
+
+    it("give focus back to the table when the inspector closes from inside", async () => {
+      const a = transfer();
+      listing = [a];
+      await start();
+      press(grid(), "ArrowDown");
+      press(grid(), "i");
+      const close = pane()!.querySelector<HTMLButtonElement>('[aria-label="Close details"]')!;
+      close.focus();
+      close.click();
+      await vi.runOnlyPendingTimersAsync();
+      flushSync();
+      expect(pane()).toBeNull();
+      expect(document.activeElement).toBe(grid());
+    });
+
+    it("give focus back to the table when the breadcrumb closes the inspector", async () => {
+      const a = transfer({ username: "alice" });
+      listing = [a];
+      await start();
+      const header = mount(Header, { target: document.body });
+      press(grid(), "ArrowDown");
+      press(grid(), "i");
+      const crumb = [...document.querySelectorAll("nav button")].find(
+        (b) => b.textContent === "alice"
+      ) as HTMLButtonElement;
+      crumb.focus();
+      crumb.click();
+      await vi.runOnlyPendingTimersAsync();
+      flushSync();
+      expect(pane()).toBeNull();
+      expect(document.activeElement).toBe(grid());
+      unmount(header);
     });
 
     it("leave the docked inspector open on Escape, a menu taking it first", async () => {

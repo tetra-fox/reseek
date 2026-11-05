@@ -59,6 +59,7 @@
   const listings = new SvelteMap<string, Schemas["FilesystemDirectory"]>();
   const expansion = new Expansion(false);
   const selected = new SvelteSet<string>();
+  let tree = $state<ReturnType<typeof FileTree<Entry>> | null>(null);
   let error = $state("");
   let loading = $state(false);
   let sort = $state<{ by: SortBy; dir: "asc" | "desc" }>({ by: "name", dir: "asc" });
@@ -160,7 +161,11 @@
   /** the key of the file the inspector shows, which follows focus in the tree */
   let shownKey = $state<string | null>(null);
   const shown = $derived(shownKey === null ? undefined : byKey.get(shownKey));
-  useInspector(inspected, () => !!shown);
+  useInspector(
+    inspected,
+    () => !!shown,
+    () => tree?.focus()
+  );
   $effect(() => {
     void root;
     shownKey = null;
@@ -417,6 +422,7 @@
   </div>
 {:else}
   <FileTree
+    bind:this={tree}
     class={["shadow-card", loading && "opacity-60"]}
     {lines}
     {expansion}

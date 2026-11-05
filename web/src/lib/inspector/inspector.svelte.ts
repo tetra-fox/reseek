@@ -53,6 +53,8 @@ class Inspector {
   content = $state.raw<Snippet | null>(null);
   /** whether the screen has a file to show */
   present = $state.raw<() => boolean>(() => false);
+  /** gives DOM focus to the screen's list */
+  focusList = $state.raw<() => void>(() => {});
   /** whether a phone's sheet is up, which is not remembered: a screen never opens under one */
   sheet = $state(false);
 
@@ -65,13 +67,23 @@ class Inspector {
     else inspectorPrefs.open = true;
   }
 
-  close() {
+  #hide() {
     if (viewport.phone) this.sheet = false;
     else inspectorPrefs.open = false;
   }
 
+  /**
+   * Hides the inspector from a control that leaves with it, its own Close or the breadcrumb, so
+   * focus goes to the list first. The phone's sheet is a dialog, which gives focus back itself
+   */
+  close() {
+    if (!viewport.phone) this.focusList();
+    this.#hide();
+  }
+
+  /** Shows or hides the inspector from a control that stays, which keeps focus */
   toggle() {
-    if (this.open) this.close();
+    if (this.open) this.#hide();
     else this.show();
   }
 }
@@ -80,15 +92,18 @@ export const inspector = new Inspector();
 
 /**
  * Puts `content` in the inspector for as long as the calling component is mounted; `present` says
- * whether it has a file to show. Call it while the component is being set up
+ * whether it has a file to show, and `focus` gives the screen's list focus when the pane closes
+ * under it. Call it while the component is being set up
  */
-export const useInspector = (content: Snippet, present: () => boolean) => {
+export const useInspector = (content: Snippet, present: () => boolean, focus: () => void) => {
   $effect(() => {
     inspector.content = content;
     inspector.present = present;
+    inspector.focusList = focus;
     return () => {
       if (inspector.content !== content) return;
       inspector.content = null;
+      inspector.focusList = () => {};
       inspector.sheet = false;
     };
   });

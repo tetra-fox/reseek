@@ -62,7 +62,13 @@
 
   /** the file the inspector shows, which follows focus in the results */
   let picked = $state.raw<Picked | null>(null);
-  useInspector(inspected, () => !!picked);
+  let dense = $state<DenseResults | null>(null);
+  let tree = $state<ResultsTree | null>(null);
+  useInspector(
+    inspected,
+    () => !!picked,
+    () => (dense ?? tree)?.focus()
+  );
 
   const search = $derived(searches.list.get(id));
   const refused = $derived(searches.refused.get(id));
@@ -310,6 +316,7 @@
     {#if searchOptions.view === "dense"}
       {#if rows.length}
         <DenseResults
+          bind:this={dense}
           {rows}
           searchId={id}
           canDownload={canWrite && connected}
@@ -317,6 +324,7 @@
       {/if}
     {:else if view.length}
       <ResultsTree
+        bind:this={tree}
         {view}
         searchId={id}
         {expansion}

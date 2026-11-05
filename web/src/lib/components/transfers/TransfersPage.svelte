@@ -142,7 +142,11 @@
   const shown = $derived(
     shownId && !store.hidden.has(shownId) ? store.list.get(shownId) : undefined
   );
-  useInspector(inspected, () => !!shown);
+  useInspector(
+    inspected,
+    () => !!shown,
+    () => table?.focus()
+  );
 
   // the users on screen are looked up for their group, color and block
   $effect(() => {
