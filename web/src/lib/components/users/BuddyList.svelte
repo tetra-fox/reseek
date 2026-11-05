@@ -14,7 +14,7 @@
   import Skeleton from "#lib/components/ui/Skeleton.svelte";
   import Switch from "#lib/components/ui/Switch.svelte";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { ago, dateTime, formatSpeed, plural } from "#lib/format.js";
+  import { chatTime, dateTime, formatSpeed, plural } from "#lib/format.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -104,11 +104,13 @@
     if (!outcome.ok) toast(outcome.error, "error");
   };
 
-  /** the presence and how long it has held, in words */
+  /** the presence and since when it holds: the time of day for today, with the date before */
   const since = (u: UserSummary) =>
-    u.presence && u.presenceAt ? `${u.presence}, ${ago(u.presenceAt, clock.now)}` : "Unknown";
+    u.presence && u.presenceAt
+      ? `${u.presence} since ${chatTime(u.presenceAt, clock.now)}`
+      : "Unknown";
 
-  const COLUMNS = "minmax(11rem,1fr) 10rem 6rem 6rem minmax(8rem,1fr) 5rem 5rem 6rem";
+  const COLUMNS = "minmax(11rem,1fr) 14rem 6rem 6rem minmax(8rem,1fr) 5rem 5rem 6rem";
 </script>
 
 <div class="flex flex-wrap items-center gap-inline">
