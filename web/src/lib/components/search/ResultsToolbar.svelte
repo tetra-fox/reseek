@@ -13,7 +13,7 @@
   import Switch from "#lib/components/ui/Switch.svelte";
   import { FILTER_PLACEHOLDER } from "#lib/files/filters.js";
   import { plural } from "#lib/format.js";
-  import { type ActiveFilter, TEXT_FILTER } from "#lib/lists/filtered.js";
+  import type { ActiveFilter } from "#lib/lists/filtered.js";
   import { HIDING } from "#lib/search/results.js";
   import { type ResultSort, searchOptions } from "#lib/settings.svelte.js";
 
@@ -53,9 +53,6 @@
     { value: "queueLength", label: "Shortest queue" }
   ];
 
-  /** the filters behind the phone's Filters button: the chips', not the text box's */
-  const toggles = $derived(filters.filter((f) => f.id !== TEXT_FILTER));
-
   const VIEWS = [
     { id: "cards", label: "Tree", icon: FolderTreeIcon },
     { id: "dense", label: "Dense", icon: Rows3Icon }
@@ -91,7 +88,7 @@
     </p>
   </div>
   <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-    <Filter.Panel filters={toggles}>
+    <Filter.Panel {filters}>
       <Filter.Group label="Hide">
         {#each HIDING as h (h.key)}
           <Filter.Chip

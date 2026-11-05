@@ -20,7 +20,7 @@
   import Segmented from "#lib/components/ui/Segmented.svelte";
   import SplitButton from "#lib/components/ui/SplitButton.svelte";
   import { formatBytes, formatSpeed, plural } from "#lib/format.js";
-  import { type ActiveFilter, TEXT_FILTER } from "#lib/lists/filtered.js";
+  import type { ActiveFilter } from "#lib/lists/filtered.js";
   import { session } from "#lib/session.svelte.js";
   import { type BulkAction, SCOPES } from "#lib/transfers/bulk.js";
   import { COLUMNS, columnsFor } from "#lib/transfers/grid/columns.js";
@@ -88,9 +88,6 @@
   );
   const sortLabel = $derived(SORTS.find((s) => s.id === view.sort.id)?.label ?? view.sort.id);
 
-  /** the filters behind the phone's Filters button: the chips', not the text box's beside it */
-  const chipFilters = $derived(filters.filter((f) => f.id !== TEXT_FILTER));
-
   const reset = () => Object.assign(view, defaults(direction));
 
   const toggleChip = (id: ChipId) => {
@@ -106,7 +103,7 @@
 
 <div class="flex flex-col gap-2">
   <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-    <Filter.Panel filters={chipFilters}>
+    <Filter.Panel {filters}>
       <Filter.Group label="State">
         {#each STATE_CHIPS as chip (chip.id)}
           <Filter.Chip

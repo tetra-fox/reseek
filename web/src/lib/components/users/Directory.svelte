@@ -24,7 +24,7 @@
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
   import { ago, dateTime, plural } from "#lib/format.js";
-  import { type ActiveFilter, TEXT_FILTER, typedFilter } from "#lib/lists/filtered.js";
+  import { type ActiveFilter, typedFilter } from "#lib/lists/filtered.js";
   import { freezesWhileUsed } from "#lib/lists/interaction.svelte.js";
   import { Keyed } from "#lib/lists/keyed.svelte.js";
   import { ListControl } from "#lib/lists/list.svelte.js";
@@ -236,7 +236,7 @@
 
 <div class="flex flex-wrap items-center gap-inline">
   <UserSearch onsearch={search} bind:typed />
-  <Filter.Panel filters={filters.filter((f) => f.id !== TEXT_FILTER)}>
+  <Filter.Panel {filters}>
     <Filter.Group label="Show">
       {#each [{ label: "Blocked", on: blocked, set: (v: boolean) => (blocked = v) }, { label: BUDDY.plural, on: pinned, set: (v: boolean) => (pinned = v) }, { label: "Has transfers", on: hasTransfers, set: (v: boolean) => (hasTransfers = v) }] as chip (chip.label)}
         <Filter.Chip pressed={chip.on} onclick={() => refilter(() => chip.set(!chip.on))}

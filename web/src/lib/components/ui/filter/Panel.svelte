@@ -4,7 +4,7 @@
 
   import Button from "#lib/components/ui/Button.svelte";
   import Dialog from "#lib/components/ui/Dialog.svelte";
-  import { type ActiveFilter, clearAll } from "#lib/lists/filtered.js";
+  import { type ActiveFilter, clearAll, TEXT_FILTER } from "#lib/lists/filtered.js";
   import { viewport } from "#lib/ui/viewport.svelte.js";
 
   import { FILTERING } from "./tint";
@@ -12,12 +12,17 @@
   // a screen's filter controls: in line on a wide screen, and on a phone, which has no room for
   // them beside the list, behind a Filters button that says how many are on and opens them
   type Props = {
-    /** the filters the controls inside set, which the button counts and Clear filters clears */
+    /**
+     * the screen's filters; the button counts and Clear filters clears all but the text box's,
+     * which stays beside the button rather than inside
+     */
     filters: ActiveFilter[];
     children: Snippet;
   };
 
-  let { filters, children }: Props = $props();
+  let { filters: all, children }: Props = $props();
+
+  const filters = $derived(all.filter((f) => f.id !== TEXT_FILTER));
 
   let open = $state(false);
 </script>
