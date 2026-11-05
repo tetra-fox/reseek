@@ -53,6 +53,10 @@ const pinned = async (page: Page) => {
 const setPins = (page: Page, data: { kind: string; name: string }[]) =>
   page.request.put("api/v0/chat/pins", { data, headers: { origin: new URL(page.url()).origin } });
 
+/** The daemon's pins, without their revision */
+const daemonPins = async (page: Page) =>
+  (await (await page.request.get("api/v0/chat/pins")).json()).pins;
+
 const pin = async (page: Page, key: string, name: string) => {
   await line(page, key).hover();
   await line(page, key)
@@ -143,7 +147,7 @@ test("pins hold their place through a drag, the keys and a reload", async ({ pag
   );
 
   await expect
-    .poll(async () => (await page.request.get("api/v0/chat/pins")).json())
+    .poll(() => daemonPins(page))
     .toEqual([
       { kind: "room", name: "jazz" },
       { kind: "room", name: "ambient" },
@@ -173,7 +177,7 @@ test("other tabs are told of the pins, on open and on a change", async ({ page }
     while (!text.includes("event: chat.pins")) text += (await reader.read()).value;
     return reader;
   });
-  expect((await setPins(page, [{ kind: "room", name: "jazz" }])).status()).toBe(204);
+  expect((await setPins(page, [{ kind: "room", name: "jazz" }])).status()).toBe(200);
   const heard = await stream.evaluate(async (reader) => {
     let text = "";
     while (!text.includes('"jazz"')) text += (await reader.read()).value;

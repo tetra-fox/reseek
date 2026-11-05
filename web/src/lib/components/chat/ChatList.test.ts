@@ -31,8 +31,8 @@ describe("the chat list", () => {
   let network: ReturnType<typeof fakeNetwork>;
   const start = (role = "ReadWrite") => {
     session.principal = { name: "me", role } as never;
-    network = fakeNetwork((url) =>
-      url.pathname.endsWith("/chat/pins") ? { status: 204 } : undefined
+    network = fakeNetwork((url, _method, body) =>
+      url.pathname.endsWith("/chat/pins") ? { revision: 1, pins: body } : undefined
     );
     chat.rooms.reconcile([
       joinedRoom("indie", { lastMessageAt: "2026-10-26T10:00:00Z" }),
@@ -264,6 +264,7 @@ describe("the chat list", () => {
     let up = false;
     fakeNetwork((url) => {
       if (!up) return { status: 500, body: { error: "database is locked" } };
+      if (url.pathname.endsWith("/chat/pins")) return { revision: 0, pins: [] };
       return url.pathname.endsWith("/conversations") ? [conversation("alice")] : [];
     });
     component = mount(ChatList, {

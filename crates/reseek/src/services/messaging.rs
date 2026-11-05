@@ -8,7 +8,7 @@ use api_types::messaging::rooms::{
   RoomTicker, RoomUser,
 };
 use api_types::messaging::{
-  ChatPin, ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel,
+  ChatPin, ChatPins, ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel,
 };
 use async_trait::async_trait;
 use axum::response::Response;
@@ -104,13 +104,14 @@ pub trait MessagingService: Send + Sync {
     Err(not_yet(DOMAIN))
   }
 
-  /// The pinned chats in the user's order.
-  async fn pins(&self) -> Result<Vec<ChatPin>, ApiError> {
+  /// The pinned chats in the user's order, with their revision.
+  async fn pins(&self) -> Result<ChatPins, ApiError> {
     Err(not_yet(DOMAIN))
   }
 
-  /// Makes `pins` the pinned chats, in that order, and tells open streams.
-  async fn set_pins(&self, pins: Vec<ChatPin>) -> Result<(), ApiError> {
+  /// Makes `pins` the pinned chats, in that order, tells open streams, and gives the list with
+  /// the revision the change made.
+  async fn set_pins(&self, pins: Vec<ChatPin>) -> Result<ChatPins, ApiError> {
     Err(not_yet(DOMAIN))
   }
 

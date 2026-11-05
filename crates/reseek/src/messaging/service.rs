@@ -8,7 +8,7 @@ use api_types::messaging::rooms::{
   RoomTicker, RoomUser,
 };
 use api_types::messaging::{
-  ChatPin, ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel,
+  ChatPin, ChatPins, ExportFormat, MessageSearchQuery, MessageSearchResults, NotifyLevel,
 };
 use async_trait::async_trait;
 use axum::response::Response;
@@ -78,11 +78,11 @@ impl MessagingService for Messaging {
     Messaging::set_draft(self, username, draft).await
   }
 
-  async fn pins(&self) -> Result<Vec<ChatPin>, ApiError> {
+  async fn pins(&self) -> Result<ChatPins, ApiError> {
     Messaging::pins(self).await
   }
 
-  async fn set_pins(&self, pins: Vec<ChatPin>) -> Result<(), ApiError> {
+  async fn set_pins(&self, pins: Vec<ChatPin>) -> Result<ChatPins, ApiError> {
     Messaging::set_pins(self, pins).await
   }
 

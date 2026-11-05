@@ -49,8 +49,8 @@ pub enum ChatKind {
   User,
 }
 
-/// A chat pinned above the others in the chat list. A list of these in the user's order is what
-/// `GET /chat/pins` answers, the body of `PUT /chat/pins`, and the data of a `chat.pins` frame.
+/// A chat pinned above the others in the chat list. A list of these in the user's order is the
+/// body of `PUT /chat/pins`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatPin {
@@ -58,6 +58,19 @@ pub struct ChatPin {
   pub kind: ChatKind,
   /// the room's name or the other user's name
   pub name: String,
+}
+
+/// The pinned chats in the user's order and the revision of that list, which grows by one with
+/// every change. `GET /chat/pins` answers it, `PUT /chat/pins` answers it with the list it set,
+/// and it is the data of a `chat.pins` frame. Answers and frames can arrive in any order, so a
+/// client keeps the list of the highest revision it has seen.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatPins {
+  /// the number of changes the list has had
+  pub revision: i64,
+  /// the pinned chats, the first on top
+  pub pins: Vec<ChatPin>,
 }
 
 /// Unread counts over every conversation and room, the data of a `chat.unread` frame.

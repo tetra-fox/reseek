@@ -2,9 +2,8 @@
 
 use std::collections::HashSet;
 
-use api_types::messaging::{ChatKind, ChatPin};
+use api_types::messaging::{ChatKind, ChatPin, ChatPins};
 use axum::extract::State;
-use axum::http::StatusCode;
 use soulseek_proto::SERVER_USERNAME;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -19,27 +18,28 @@ pub fn routes() -> OpenApiRouter<AppState> {
   OpenApiRouter::new().routes(routes!(pins, set_pins))
 }
 
-/// The pinned chats in the user's order, those of a room left or a conversation closed included.
+/// The pinned chats in the user's order, those of a room left or a conversation closed included,
+/// with the list's revision.
 #[utoipa::path(
   get, path = "/chat/pins", tag = "chat",
   responses(
-    (status = 200, body = Vec<ChatPin>), (status = 401, body = api_types::ErrorBody),
+    (status = 200, body = ChatPins), (status = 401, body = api_types::ErrorBody),
     (status = 503, body = api_types::ErrorBody)
   )
 )]
 async fn pins(
   State(app): State<AppState>,
   _caller: Authorized<AnyRole>,
-) -> Result<Json<Vec<ChatPin>>, ApiError> {
+) -> Result<Json<ChatPins>, ApiError> {
   app.services.messaging.pins().await.map(Json)
 }
 
-/// Replaces the pinned chats with the list given, in its order. The server's notices cannot be
-/// pinned, and a chat is named once.
+/// Replaces the pinned chats with the list given, in its order, and answers the list with the
+/// revision the change made. The server's notices cannot be pinned, and a chat is named once.
 #[utoipa::path(
   put, path = "/chat/pins", tag = "chat", request_body = Vec<ChatPin>,
   responses(
-    (status = 204, description = "set"), (status = 400, body = api_types::ErrorBody),
+    (status = 200, body = ChatPins), (status = 400, body = api_types::ErrorBody),
     (status = 401, body = api_types::ErrorBody), (status = 403, body = api_types::ErrorBody),
     (status = 503, body = api_types::ErrorBody)
   )
@@ -48,7 +48,7 @@ async fn set_pins(
   State(app): State<AppState>,
   _caller: Authorized<ReadWrite>,
   Json(pins): Json<Vec<ChatPin>>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<ChatPins>, ApiError> {
   let mut seen = HashSet::new();
   for pin in &pins {
     if pin.name.is_empty() {
@@ -66,6 +66,5 @@ async fn set_pins(
       )));
     }
   }
-  app.services.messaging.set_pins(pins).await?;
-  Ok(StatusCode::NO_CONTENT)
+  app.services.messaging.set_pins(pins).await.map(Json)
 }

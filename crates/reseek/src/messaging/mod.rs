@@ -52,7 +52,8 @@ pub static SCHEMA: Schema = db::schema!(
   [
     "0001_initial",
     "0002_drop_session_end_reason",
-    "0003_chat_pins"
+    "0003_chat_pins",
+    "0004_chat_pins_revision"
   ]
 );
 

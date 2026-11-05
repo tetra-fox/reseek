@@ -14,7 +14,7 @@ use crate::messaging::conversations::{Conversation, ConversationMessage, Convers
 use crate::messaging::rooms::{
   HistoryGap, JoinedRoom, Room, RoomMessageReceived, RoomUserJoined, RoomUserLeft, RoomUserStatus,
 };
-use crate::messaging::{ChatPin, ChatUnread, ServerMessage};
+use crate::messaging::{ChatPins, ChatUnread, ServerMessage};
 use crate::options::OptionsDocument;
 use crate::search::{Search, SearchResponseReceived};
 use crate::state::{State, VersionInfo};
@@ -131,9 +131,9 @@ pub enum LiveFrame {
   /// unread counts, on open and on change
   #[serde(rename = "chat.unread")]
   ChatUnread(ChatUnread),
-  /// the pinned chats in the user's order, on open and on change
+  /// the pinned chats in the user's order with their revision, on open and on change
   #[serde(rename = "chat.pins")]
-  ChatPins(Vec<ChatPin>),
+  ChatPins(ChatPins),
   /// an event was raised
   #[serde(rename = "events.raised")]
   EventsRaised(Box<EventRecord>),

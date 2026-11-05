@@ -101,7 +101,8 @@ async fn a_configured_room_keeps_its_history_and_its_gaps_across_a_restart() {
       name: room.clone(),
     },
   ];
-  api.set_chat_pins(&pins).await.unwrap();
+  let set = api.set_chat_pins(&pins).await.unwrap();
+  assert_eq!(set.pins, pins);
 
   api.shut_down().await.unwrap();
   let mut stopped = running;
@@ -130,8 +131,8 @@ async fn a_configured_room_keeps_its_history_and_its_gaps_across_a_restart() {
   );
   assert_eq!(
     api.chat_pins().await.unwrap(),
-    pins,
-    "the pins stayed, in their order"
+    set,
+    "the pins stayed, in their order, with their revision"
   );
 }
 

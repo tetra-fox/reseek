@@ -324,11 +324,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The pinned chats in the user's order, those of a room left or a conversation closed included. */
+        /**
+         * The pinned chats in the user's order, those of a room left or a conversation closed included,
+         *     with the list's revision.
+         */
         get: operations["pins"];
         /**
-         * Replaces the pinned chats with the list given, in its order. The server's notices cannot be
-         *     pinned, and a chat is named once.
+         * Replaces the pinned chats with the list given, in its order, and answers the list with the
+         *     revision the change made. The server's notices cannot be pinned, and a chat is named once.
          */
         put: operations["set_pins"];
         post?: never;
@@ -3675,14 +3678,29 @@ export interface components {
          */
         ChatKind: "room" | "user";
         /**
-         * @description A chat pinned above the others in the chat list. A list of these in the user's order is what
-         *     `GET /chat/pins` answers, the body of `PUT /chat/pins`, and the data of a `chat.pins` frame.
+         * @description A chat pinned above the others in the chat list. A list of these in the user's order is the
+         *     body of `PUT /chat/pins`.
          */
         ChatPin: {
             /** @description a room or a conversation */
             kind: components["schemas"]["ChatKind"];
             /** @description the room's name or the other user's name */
             name: string;
+        };
+        /**
+         * @description The pinned chats in the user's order and the revision of that list, which grows by one with
+         *     every change. `GET /chat/pins` answers it, `PUT /chat/pins` answers it with the list it set,
+         *     and it is the data of a `chat.pins` frame. Answers and frames can arrive in any order, so a
+         *     client keeps the list of the highest revision it has seen.
+         */
+        ChatPins: {
+            /** @description the pinned chats, the first on top */
+            pins: components["schemas"]["ChatPin"][];
+            /**
+             * Format: int64
+             * @description the number of changes the list has had
+             */
+            revision: number;
         };
         /** @description Unread counts over every conversation and room, the data of a `chat.unread` frame. */
         ChatUnread: {
@@ -5155,8 +5173,8 @@ export interface components {
             /** @enum {string} */
             type: "chat.unread";
         } | {
-            /** @description the pinned chats in the user's order, on open and on change */
-            data: components["schemas"]["ChatPin"][];
+            /** @description the pinned chats in the user's order with their revision, on open and on change */
+            data: components["schemas"]["ChatPins"];
             /** @enum {string} */
             type: "chat.pins";
         } | {
@@ -8828,7 +8846,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChatPin"][];
+                    "application/json": components["schemas"]["ChatPins"];
                 };
             };
             401: {
@@ -8862,12 +8880,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description set */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ChatPins"];
+                };
             };
             400: {
                 headers: {

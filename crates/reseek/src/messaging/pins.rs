@@ -3,7 +3,7 @@
 //! closed, the list then leaving it out until the chat is back.
 
 use api_types::live::LiveFrame;
-use api_types::messaging::{ChatKind, ChatPin};
+use api_types::messaging::{ChatKind, ChatPin, ChatPins};
 use rusqlite::{Connection, params};
 use tracing::debug;
 
@@ -31,9 +31,14 @@ fn chat_kind(text: &str) -> rusqlite::Result<ChatKind> {
   }
 }
 
-/// The pinned chats in the user's order.
-fn list(conn: &Connection) -> rusqlite::Result<Vec<ChatPin>> {
-  conn
+/// The pinned chats in the user's order, with their revision.
+fn list(conn: &Connection) -> rusqlite::Result<ChatPins> {
+  // one read transaction, so the revision is the one of the list read with it
+  let tx = conn.unchecked_transaction()?;
+  let revision = tx.query_row("SELECT revision FROM chat_pins_revision", [], |row| {
+    row.get(0)
+  })?;
+  let pins = tx
     .prepare_cached("SELECT kind, name FROM chat_pins ORDER BY position")?
     .query_map([], |row| {
       Ok(ChatPin {
@@ -41,11 +46,14 @@ fn list(conn: &Connection) -> rusqlite::Result<Vec<ChatPin>> {
         name: row.get(1)?,
       })
     })?
-    .collect()
+    .collect::<rusqlite::Result<_>>()?;
+  tx.commit()?;
+  Ok(ChatPins { revision, pins })
 }
 
-/// Makes `pins`, each named once, the pinned chats in that order.
-fn replace(conn: &mut Connection, pins: &[ChatPin]) -> rusqlite::Result<()> {
+/// Makes `pins`, each named once, the pinned chats in that order, and gives the revision the
+/// change made. Revisions follow the order the writes commit in.
+fn replace(conn: &mut Connection, pins: &[ChatPin]) -> rusqlite::Result<i64> {
   let tx = conn.transaction()?;
   tx.execute("DELETE FROM chat_pins", [])?;
   {
@@ -55,26 +63,37 @@ fn replace(conn: &mut Connection, pins: &[ChatPin]) -> rusqlite::Result<()> {
       insert.execute(params![kind_text(pin.kind), pin.name, position])?;
     }
   }
-  tx.commit()
+  let revision = tx.query_row(
+    "UPDATE chat_pins_revision SET revision = revision + 1 RETURNING revision",
+    [],
+    |row| row.get(0),
+  )?;
+  tx.commit()?;
+  Ok(revision)
 }
 
 impl Messaging {
-  pub(super) async fn pins(&self) -> Result<Vec<ChatPin>, ApiError> {
+  pub(super) async fn pins(&self) -> Result<ChatPins, ApiError> {
     self.db.read(list).await.map_err(ApiError::internal)
   }
 
-  pub(super) async fn set_pins(&self, pins: Vec<ChatPin>) -> Result<(), ApiError> {
-    let pins = self
+  pub(super) async fn set_pins(&self, pins: Vec<ChatPin>) -> Result<ChatPins, ApiError> {
+    let set = self
       .db
       .write(move |conn| {
-        replace(conn, &pins)?;
-        Ok(pins)
+        let revision = replace(conn, &pins)?;
+        Ok(ChatPins { revision, pins })
       })
       .await
       .map_err(ApiError::internal)?;
-    debug!(pins = pins.len(), "chat pins set");
-    self.live.publish(LiveFrame::ChatPins(pins));
-    Ok(())
+    debug!(
+      pins = set.pins.len(),
+      revision = set.revision,
+      "chat pins set"
+    );
+    // the frame and the answer each carry the list
+    self.live.publish(LiveFrame::ChatPins(set.clone()));
+    Ok(set)
   }
 }
 
@@ -83,6 +102,7 @@ mod tests {
   use super::*;
   use crate::db::{self, Database, Location, Schema};
   use crate::messaging::SCHEMA;
+  use crate::testing::{app, request};
 
   /// `messaging.db` as it was before pins.
   static BEFORE: Schema = db::schema!(
@@ -90,17 +110,15 @@ mod tests {
     ["0001_initial", "0002_drop_session_end_reason"]
   );
 
-  fn location(dir: &tempfile::TempDir) -> Location {
-    let location = Location {
-      data: dir.path().join("data"),
-      backups: dir.path().join("backups"),
-      volatile: false,
-      log_sql: false,
-    };
-    std::fs::create_dir_all(&location.data).unwrap();
-    std::fs::create_dir_all(&location.backups).unwrap();
-    location
-  }
+  /// `messaging.db` as it was before the pins had a revision.
+  static UNREVISED: Schema = db::schema!(
+    "messaging",
+    [
+      "0001_initial",
+      "0002_drop_session_end_reason",
+      "0003_chat_pins"
+    ]
+  );
 
   fn room(name: &str) -> ChatPin {
     ChatPin {
@@ -119,13 +137,13 @@ mod tests {
   #[tokio::test]
   async fn pins_keep_their_order_across_a_reorder_and_a_reopen() {
     let dir = tempfile::tempdir().unwrap();
-    let location = location(&dir);
+    let location = Location::on_disk(dir.path());
     let db = Database::open(&SCHEMA, &location).await.unwrap();
     // a room and a user of the same name are two chats
     let order = vec![room("jazz"), user("alice"), room("indie"), user("jazz")];
     let first = order.clone();
     db.write(move |conn| replace(conn, &first)).await.unwrap();
-    assert_eq!(db.read(list).await.unwrap(), order);
+    assert_eq!(db.read(list).await.unwrap().pins, order);
 
     let moved = vec![user("jazz"), room("jazz"), room("indie")];
     let second = moved.clone();
@@ -134,13 +152,20 @@ mod tests {
     drop(db);
 
     let db = Database::open(&SCHEMA, &location).await.unwrap();
-    assert_eq!(db.read(list).await.unwrap(), moved);
+    assert_eq!(
+      db.read(list).await.unwrap(),
+      ChatPins {
+        revision: 2,
+        pins: moved
+      },
+      "the revision is kept with the list"
+    );
   }
 
   #[tokio::test]
   async fn a_database_from_before_pins_keeps_its_rooms_and_has_no_pins() {
     let dir = tempfile::tempdir().unwrap();
-    let location = location(&dir);
+    let location = Location::on_disk(dir.path());
     let before = Database::open(&BEFORE, &location).await.unwrap();
     before
       .write(|conn| conn.execute("INSERT INTO room_state (room_name) VALUES ('indie')", []))
@@ -150,11 +175,90 @@ mod tests {
     drop(before);
 
     let db = Database::open(&SCHEMA, &location).await.unwrap();
-    assert_eq!(db.read(list).await.unwrap(), []);
+    assert_eq!(
+      db.read(list).await.unwrap(),
+      ChatPins {
+        revision: 0,
+        pins: Vec::new()
+      }
+    );
     let rooms: i64 = db
       .read(|conn| conn.query_row("SELECT count(*) FROM room_state", [], |row| row.get(0)))
       .await
       .unwrap();
     assert_eq!(rooms, 1);
+  }
+
+  #[tokio::test]
+  async fn pins_from_before_the_revision_keep_their_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let location = Location::on_disk(dir.path());
+    let before = Database::open(&UNREVISED, &location).await.unwrap();
+    let order = vec![user("alice"), room("jazz"), room("indie")];
+    let first = order.clone();
+    before
+      .write(move |conn| {
+        let tx = conn.transaction()?;
+        for (position, pin) in (0_i64..).zip(&first) {
+          tx.execute(
+            "INSERT INTO chat_pins (kind, name, position) VALUES (?1, ?2, ?3)",
+            params![kind_text(pin.kind), pin.name, position],
+          )?;
+        }
+        tx.commit()
+      })
+      .await
+      .unwrap();
+    before.close().await;
+    drop(before);
+
+    let db = Database::open(&SCHEMA, &location).await.unwrap();
+    assert_eq!(
+      db.read(list).await.unwrap(),
+      ChatPins {
+        revision: 0,
+        pins: order
+      }
+    );
+  }
+
+  #[tokio::test]
+  async fn the_newest_revision_streamed_is_the_list_written_last() {
+    let config = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
+    let app = app(config, &[]).await;
+    let mut stream = app
+      .stream_from(
+        "127.0.0.1:40000",
+        request("GET", "/api/v0/live?topics=rooms", None),
+      )
+      .await;
+    stream.until("hello").await;
+    let snapshot = stream.until("chat.pins").await;
+    assert_eq!(snapshot.last().unwrap().data["revision"], 0);
+
+    let messaging = &app.state.messaging;
+    let (first, second) = tokio::join!(
+      messaging.set_pins(vec![room("jazz")]),
+      messaging.set_pins(vec![user("alice"), room("indie")]),
+    );
+    let mut heard = Vec::new();
+    for _ in 0..2 {
+      let frame = stream.until("chat.pins").await.pop().unwrap();
+      heard.push(serde_json::from_value::<ChatPins>(frame.data).unwrap());
+    }
+    // the frames may come in either order, each with the revision its write committed with
+    heard.sort_by_key(|pins| pins.revision);
+    let mut answered = vec![first.unwrap(), second.unwrap()];
+    answered.sort_by_key(|pins| pins.revision);
+    assert_eq!(heard, answered);
+    assert_eq!(
+      heard.iter().map(|pins| pins.revision).collect::<Vec<_>>(),
+      [1, 2]
+    );
+    assert_eq!(
+      messaging.pins().await.unwrap(),
+      heard[1],
+      "the highest revision is what the database holds"
+    );
   }
 }

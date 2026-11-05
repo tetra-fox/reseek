@@ -1133,7 +1133,7 @@
         "tags": [
           "chat"
         ],
-        "summary": "The pinned chats in the user's order, those of a room left or a conversation closed included.",
+        "summary": "The pinned chats in the user's order, those of a room left or a conversation closed included,\nwith the list's revision.",
         "operationId": "pins",
         "responses": {
           "200": {
@@ -1141,10 +1141,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ChatPin"
-                  }
+                  "$ref": "#/components/schemas/ChatPins"
                 }
               }
             }
@@ -1175,7 +1172,7 @@
         "tags": [
           "chat"
         ],
-        "summary": "Replaces the pinned chats with the list given, in its order. The server's notices cannot be\npinned, and a chat is named once.",
+        "summary": "Replaces the pinned chats with the list given, in its order, and answers the list with the\nrevision the change made. The server's notices cannot be pinned, and a chat is named once.",
         "operationId": "set_pins",
         "requestBody": {
           "content": {
@@ -1191,8 +1188,15 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "set"
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatPins"
+                }
+              }
+            }
           },
           "400": {
             "description": "",
@@ -17067,7 +17071,7 @@
       },
       "ChatPin": {
         "type": "object",
-        "description": "A chat pinned above the others in the chat list. A list of these in the user's order is what\n`GET /chat/pins` answers, the body of `PUT /chat/pins`, and the data of a `chat.pins` frame.",
+        "description": "A chat pinned above the others in the chat list. A list of these in the user's order is the\nbody of `PUT /chat/pins`.",
         "required": [
           "kind",
           "name"
@@ -17080,6 +17084,28 @@
           "name": {
             "type": "string",
             "description": "the room's name or the other user's name"
+          }
+        }
+      },
+      "ChatPins": {
+        "type": "object",
+        "description": "The pinned chats in the user's order and the revision of that list, which grows by one with\nevery change. `GET /chat/pins` answers it, `PUT /chat/pins` answers it with the list it set,\nand it is the data of a `chat.pins` frame. Answers and frames can arrive in any order, so a\nclient keeps the list of the highest revision it has seen.",
+        "required": [
+          "revision",
+          "pins"
+        ],
+        "properties": {
+          "pins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatPin"
+            },
+            "description": "the pinned chats, the first on top"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the number of changes the list has had"
           }
         }
       },
@@ -20600,18 +20626,15 @@
           },
           {
             "type": "object",
-            "description": "the pinned chats in the user's order, on open and on change",
+            "description": "the pinned chats in the user's order with their revision, on open and on change",
             "required": [
               "data",
               "type"
             ],
             "properties": {
               "data": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ChatPin"
-                },
-                "description": "the pinned chats in the user's order, on open and on change"
+                "$ref": "#/components/schemas/ChatPins",
+                "description": "the pinned chats in the user's order with their revision, on open and on change"
               },
               "type": {
                 "type": "string",
