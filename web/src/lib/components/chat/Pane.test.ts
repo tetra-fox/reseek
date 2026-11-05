@@ -359,8 +359,11 @@ describe("a chat pane", () => {
   });
 
   it("draws a long history in a window and keeps the drawn rows as messages arrive", async () => {
+    // a second apart at noon on the browser's clock, so the history and the message that arrives
+    // are on one day and the arrival adds no day line
+    const at = (second: number) => new Date(2026, 9, 26, 12, 0, second).toISOString();
     const history = Array.from({ length: 100 }, (_, n) =>
-      privateMessage(n + 1, { timestamp: `2026-10-26T10:00:${String(n % 60).padStart(2, "0")}Z` })
+      privateMessage(n + 1, { timestamp: at(n) })
     );
     const net = fakeNetwork((url, method) => {
       if (url.pathname.endsWith("/conversations/alice/messages")) return history;
@@ -377,7 +380,10 @@ describe("a chat pane", () => {
     expect(drawn.length).toBeGreaterThan(5);
     expect(drawn.length).toBeLessThan(100);
     const first = row(Number(drawn[0]));
-    net.frame("conversations.message", { username: "alice", message: privateMessage(101) });
+    net.frame("conversations.message", {
+      username: "alice",
+      message: privateMessage(101, { timestamp: at(100) })
+    });
     await flush();
     expect(row(Number(drawn[0]))).toBe(first);
   });
