@@ -3,7 +3,7 @@ import MessageSquareIcon from "@lucide/svelte/icons/message-square";
 import SearchIcon from "@lucide/svelte/icons/search";
 import UserIcon from "@lucide/svelte/icons/user";
 
-import { api, byUser } from "#lib/api/client.js";
+import { api, byUser, type Schemas } from "#lib/api/client.js";
 import { app } from "#lib/app.svelte.js";
 import { SERVER } from "#lib/chat/notices.js";
 import { chatHref, href, sharesHref, userHref } from "#lib/nav.js";
@@ -80,6 +80,10 @@ export const canManage = (username: string) =>
   username !== SERVER &&
   !!app.state &&
   app.state.user.username !== username;
+
+/** Whether `block` comes from the configuration, which the API cannot lift */
+export const configBlocked = (block: Schemas["Block"] | null | undefined) =>
+  block?.source === "config";
 
 /** A user's profile as stored, or with `refresh` after asking the network about them */
 export const profileOf = (username: string, refresh: boolean) =>

@@ -6,10 +6,10 @@
 
   import * as Menu from "#lib/components/ui/menu/menu.js";
   import { Busy } from "#lib/feedback/busy.svelte.js";
-  import { pin } from "#lib/users/actions.js";
+  import { configBlocked, pin } from "#lib/users/actions.js";
   import { toggleBlock } from "#lib/users/block.svelte.js";
   import { users } from "#lib/users/users.svelte.js";
-  import { BUDDY } from "#lib/wording.js";
+  import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
   // a menu's buddy and block items, for a user `canManage` allows
   let { name }: { name: string } = $props();
@@ -29,6 +29,9 @@
 <Menu.Item onSelect={togglePin}>
   {#if user?.pinned}<UserCheckIcon />{BUDDY.remove}{:else}<UserPlusIcon />{BUDDY.add}{/if}
 </Menu.Item>
-<Menu.Item onSelect={() => toggleBlock(name, !!user?.block)}>
+<Menu.Item
+  disabled={configBlocked(user?.block)}
+  title={configBlocked(user?.block) ? CONFIG_BLOCKED : undefined}
+  onSelect={() => toggleBlock(name, !!user?.block)}>
   {#if user?.block}<ShieldCheckIcon />Unblock{:else}<BanIcon />Block{/if}
 </Menu.Item>

@@ -33,10 +33,17 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { assignGroup, canManage, pin, reach, userGroups } from "#lib/users/actions.js";
+  import {
+    assignGroup,
+    canManage,
+    configBlocked,
+    pin,
+    reach,
+    userGroups
+  } from "#lib/users/actions.js";
   import { blocking, unblock } from "#lib/users/block.svelte.js";
   import { nameColor } from "#lib/users/colors.js";
-  import { BUDDY } from "#lib/wording.js";
+  import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
   type Props = {
     profile: Schemas["UserProfile"];
@@ -176,8 +183,8 @@
           <Button
             variant="outline"
             size="sm"
-            disabled={p.block.source === "config"}
-            title={p.block.source === "config" ? "Blocked by the configuration" : undefined}
+            disabled={configBlocked(p.block)}
+            title={configBlocked(p.block) ? CONFIG_BLOCKED : undefined}
             onclick={() => void unblock(name).then(onchanged)}><ShieldCheckIcon />Unblock</Button>
         {:else}
           <Button variant="outline" size="sm" onclick={() => blocking.ask(name)}

@@ -13,6 +13,9 @@ export const BUDDY = {
   plural: "Buddies"
 } as const;
 
+/** Why Unblock is unavailable for a user the configuration blocks */
+export const CONFIG_BLOCKED = "Blocked by the configuration";
+
 /** The action that asks the browser for permission to notify */
 export const TURN_ON_NOTIFICATIONS = "Turn on notifications";
 

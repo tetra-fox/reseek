@@ -89,6 +89,24 @@ describe("the users directory", () => {
     expect(bar().textContent).not.toContain("Block");
   });
 
+  it("offers no live Unblock for a block the configuration made", async () => {
+    session.principal = { name: "me", role: "ReadWrite" } as never;
+    app.state = { user: { username: "me" } } as never;
+    const block = { username: "bob", reason: "", scopes: [], expiresAt: null, source: "config" };
+    await start([summary("bob", { block } as never), summary("carol")]);
+    const unblock = line("bob").querySelector<HTMLButtonElement>('button[aria-label="Unblock"]')!;
+    expect(unblock.disabled).toBe(true);
+    expect(unblock.title).toBe("Blocked by the configuration");
+    line("bob").querySelector<HTMLElement>("[role=checkbox]")!.click();
+    await flushFaked();
+    const bar = () => document.querySelector("[role=toolbar]")!;
+    expect(bar().textContent).toContain("1 selected");
+    expect(bar().textContent).not.toContain("Unblock");
+    line("carol").querySelector<HTMLElement>("[role=checkbox]")!.click();
+    await flushFaked();
+    expect(bar().textContent).toContain("Unblock");
+  });
+
   it("moves, selects and opens with the list's keys", async () => {
     await start([summary("alice"), summary("bob"), summary("carol")]);
     press(grid(), "ArrowDown");

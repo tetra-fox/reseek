@@ -33,10 +33,10 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { canManage, pin, reach, userGroups } from "#lib/users/actions.js";
+  import { canManage, configBlocked, pin, reach, userGroups } from "#lib/users/actions.js";
   import { blocking, toggleBlock, unblockMany } from "#lib/users/block.svelte.js";
   import { type UserSummary, users as usersStore } from "#lib/users/users.svelte.js";
-  import { BUDDY } from "#lib/wording.js";
+  import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
   import Avatar from "./Avatar.svelte";
   import GroupBadge from "./GroupBadge.svelte";
@@ -158,7 +158,14 @@
   const chosen = $derived(shown.filter((u) => list.selected.has(u.username)));
   /** every user selected, those a filter now hides too, as the transfers grid counts them */
   const picked = $derived([...list.selected]);
-  const blockable = $derived(picked.filter(canManage));
+  /** what is known of a user, shown here or loaded elsewhere */
+  const known = (name: string) => rows.get(name) ?? usersStore.get(name);
+  /**
+   * the selected users the bar can block and unblock, leaving out a user the configuration blocks
+   */
+  const blockable = $derived(
+    picked.filter((name) => canManage(name) && !configBlocked(known(name)?.block))
+  );
   const admin = $derived(session.can("Administrator"));
   const filtered = $derived(!!(q || blocked || pinned || hasTransfers || presence || group || tag));
 
@@ -182,8 +189,7 @@
     const outcome = await pin(u.username, !u.pinned);
     if (!outcome.ok) toast(outcome.error, "error");
   };
-  const unblockAll = (names: string[]) =>
-    unblockMany(names.filter((name) => (rows.get(name) ?? usersStore.get(name))?.block));
+  const unblockAll = (names: string[]) => unblockMany(names.filter((name) => known(name)?.block));
 
   // the columns; below a very wide screen the group column is left out, so the table fits
   // beside the sidebar without a sideways scroll. The group shows on the user's card
@@ -368,6 +374,8 @@
                 variant="ghost"
                 size="icon-sm"
                 aria-label={u.block ? "Unblock" : "Block"}
+                disabled={configBlocked(u.block)}
+                title={configBlocked(u.block) ? CONFIG_BLOCKED : undefined}
                 onclick={() => toggleBlock(u.username, !!u.block)}>
                 {#if u.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
               </Button>

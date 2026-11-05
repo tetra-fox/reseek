@@ -16,11 +16,11 @@
   import { ago, formatSpeed, plural } from "#lib/format.js";
   import { userHref } from "#lib/nav.js";
   import { clock } from "#lib/ui/clock.svelte.js";
-  import { canManage, pin, reach, USER_ACTIONS } from "#lib/users/actions.js";
+  import { canManage, configBlocked, pin, reach, USER_ACTIONS } from "#lib/users/actions.js";
   import { nameColor } from "#lib/users/colors.js";
   import { firstLines, ownProfile } from "#lib/users/profile.svelte.js";
   import { type UserSummary, users } from "#lib/users/users.svelte.js";
-  import { BUDDY } from "#lib/wording.js";
+  import { BUDDY, CONFIG_BLOCKED } from "#lib/wording.js";
 
   import Avatar from "./Avatar.svelte";
   import GroupBadge from "./GroupBadge.svelte";
@@ -172,13 +172,16 @@
     {/if}
     <span class="ml-auto flex">
       {#if manageable}
-        <Tooltip text={user?.block ? "Unblock" : "Block"}>
+        {@const byConfig = configBlocked(user?.block)}
+        <Tooltip text={byConfig ? undefined : user?.block ? "Unblock" : "Block"}>
           {#snippet child({ props })}
             <Button
               {...props}
               variant="ghost"
               size="icon-sm"
               aria-label={user?.block ? "Unblock" : "Block"}
+              disabled={byConfig}
+              title={byConfig ? CONFIG_BLOCKED : undefined}
               onclick={onblock}>
               {#if user?.block}<ShieldCheckIcon />{:else}<BanIcon />{/if}
             </Button>

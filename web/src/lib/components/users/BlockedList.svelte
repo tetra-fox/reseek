@@ -23,6 +23,7 @@
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
   import { clock } from "#lib/ui/clock.svelte.js";
+  import { configBlocked } from "#lib/users/actions.js";
   import { unblock, unblockMany } from "#lib/users/block.svelte.js";
 
   import Username from "./Username.svelte";
@@ -47,7 +48,7 @@
     lines: () => entries,
     key: (b) => b.username,
     // a block the configuration makes can't be lifted here, so it isn't selectable
-    id: (b) => (b.source === "config" ? null : b.username)
+    id: (b) => (configBlocked(b) ? null : b.username)
   });
   const chosen = $derived(entries.filter((b) => list.selected.has(b.username)));
   const write = $derived(session.can("ReadWrite"));
@@ -165,7 +166,7 @@
           class="grid min-w-max items-center gap-2 list-row px-2 py-1.5"
           style:grid-template-columns={COLUMNS}>
           <span role="gridcell">
-            {#if b.source !== "config"}
+            {#if !configBlocked(b)}
               <Checkbox
                 aria-label={`Select ${b.username}`}
                 checked={list.selected.has(b.username)}
@@ -196,7 +197,7 @@
             {b.createdAt ? ago(b.createdAt, clock.now) : ""}
           </span>
           <span role="gridcell" class="flex justify-end">
-            {#if write && b.source === "api"}
+            {#if write && !configBlocked(b)}
               <Button
                 variant="ghost"
                 size="icon-sm"
