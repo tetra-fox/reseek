@@ -60,7 +60,7 @@ export const reach = (
   const write = session.can("ReadWrite");
   const open = {
     profile: to.profile,
-    message: write && app.state?.user.username !== username ? to.message : null,
+    message: write && !!app.state && app.state.user.username !== username ? to.message : null,
     shares: to.browse,
     search: write ? to.search : null
   };
@@ -72,10 +72,14 @@ export const reach = (
 
 /**
  * Whether this session can make `username` a buddy or block them: it takes ReadWrite, nobody does
- * either to themselves, and `server` is no user
+ * either to themselves, and `server` is no user. False until the daemon's state arrives, since
+ * before it nobody can tell whether `username` is ours
  */
 export const canManage = (username: string) =>
-  session.can("ReadWrite") && username !== SERVER && app.state?.user.username !== username;
+  session.can("ReadWrite") &&
+  username !== SERVER &&
+  !!app.state &&
+  app.state.user.username !== username;
 
 /** A user's profile as stored, or with `refresh` after asking the network about them */
 export const profileOf = (username: string, refresh: boolean) =>

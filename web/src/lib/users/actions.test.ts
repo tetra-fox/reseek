@@ -15,6 +15,7 @@ describe("the ways to reach a user", () => {
 
   it("are all there for someone else, in one order, the links going where they say", () => {
     session.principal = { name: "me", role: "ReadWrite" } as never;
+    app.state = { user: { username: "me" } } as never;
     expect(reach("al ice", { folder: "Album" }).map((a) => [a.id, a.href])).toEqual([
       ["profile", "#/users/al%20ice"],
       ["message", "#/chat/al%20ice"],
@@ -51,5 +52,13 @@ describe("who can be a buddy or blocked", () => {
     expect(canManage("server")).toBe(false);
     session.principal = { name: "me", role: "ReadOnly" } as never;
     expect(canManage("alice")).toBe(false);
+  });
+
+  it("is nobody before the daemon's state arrives, and anyone while it names no user", () => {
+    session.principal = { name: "me", role: "ReadWrite" } as never;
+    expect(canManage("me")).toBe(false);
+    expect(canManage("alice")).toBe(false);
+    app.state = { user: { username: null } } as never;
+    expect(canManage("alice")).toBe(true);
   });
 });
