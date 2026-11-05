@@ -20,8 +20,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 
 use super::{Edges, blocked, forecast, log_refused};
-use crate::shares::View;
 use crate::config::{Options, patterns};
+use crate::shares::View;
 use crate::telemetry::catalog::SearchMetrics;
 use crate::telemetry::millis;
 use crate::telemetry::registry::Gauge;
@@ -572,7 +572,14 @@ mod tests {
     });
     tokio::time::sleep(Duration::from_millis(50)).await;
     let query = SearchQuery::parse("abbey");
-    let files = query_shares(&edges, &query, 10, &View::everything(), Duration::from_millis(100)).await;
+    let files = query_shares(
+      &edges,
+      &query,
+      10,
+      &View::everything(),
+      Duration::from_millis(100),
+    )
+    .await;
     assert_eq!(files, None);
     assert_eq!(
       app.state.telemetry.metrics().search.requests_dropped.get(),

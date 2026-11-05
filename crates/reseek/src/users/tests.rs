@@ -158,7 +158,10 @@ async fn the_directory_never_lists_the_servers_reserved_name() {
   let app = app(CONFIG, &[]).await;
   let directory = &app.state.users;
   for name in ["server", "serverfan"] {
-    directory.change(name, Change::Buddy(Some(Buddy::default()))).await.unwrap();
+    directory
+      .change(name, Change::Buddy(Some(Buddy::default())))
+      .await
+      .unwrap();
   }
   let mut asked = query();
   asked.q = Some("server".into());

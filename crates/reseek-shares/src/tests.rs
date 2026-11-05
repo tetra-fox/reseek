@@ -230,7 +230,13 @@ async fn a_share_hidden_from_a_user_is_answered_as_one_we_do_not_have() {
   let seen = shares.folder("bob", "Music\\Album", &buddies).await;
   assert_eq!(listed(seen.unwrap()), [("Music\\Album".to_string(), 1)]);
   let file = "Music\\Album\\01.mp3";
-  assert!(shares.resolve_file(file, &everyone).await.unwrap().is_none());
+  assert!(
+    shares
+      .resolve_file(file, &everyone)
+      .await
+      .unwrap()
+      .is_none()
+  );
   assert!(shares.resolve_file(file, &buddies).await.unwrap().is_some());
   let browsed = async |view: &View| {
     shares.rebuild_browse_cache(view).await.unwrap();

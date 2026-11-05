@@ -15,8 +15,8 @@ use soulseek_proto::peer::{BrowseResponse, Directory};
 use tracing::{debug, error, trace, warn};
 
 use super::{Edges, blocked, suspicious};
-use crate::shares::View;
 use crate::safety::traverses;
+use crate::shares::View;
 use crate::telemetry::millis;
 
 /// Browses that found the cache missing, which repeat while it cannot be written.
@@ -132,7 +132,11 @@ async fn folder(
   directory: &RemoteFilename,
 ) -> Option<Vec<Directory>> {
   let view = edges.shares.view(edges.users.sees(username));
-  match edges.shares.folder(username, directory.as_str(), &view).await {
+  match edges
+    .shares
+    .folder(username, directory.as_str(), &view)
+    .await
+  {
     Ok(directories) => {
       trace!(username, %directory, directories = directories.len(), "folder contents found");
       Some(directories)

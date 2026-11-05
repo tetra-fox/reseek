@@ -10,7 +10,11 @@ use crate::options::Shares;
 
 /// The visibility the share options give the share `alias`, matched ignoring case.
 pub fn of(options: &Shares, alias: &str) -> ShareVisibility {
-  let listed = |list: &[String]| list.iter().any(|a| a.to_lowercase() == alias.to_lowercase());
+  let listed = |list: &[String]| {
+    list
+      .iter()
+      .any(|a| a.to_lowercase() == alias.to_lowercase())
+  };
   if listed(&options.trusted_only) {
     ShareVisibility::Trusted
   } else if listed(&options.buddies_only) {
@@ -87,7 +91,10 @@ mod tests {
     let everyone = View::of(&options, ShareVisibility::Everyone);
     assert!(everyone.hides("rare\\a.flac"), "matched ignoring case");
     assert!(everyone.hides("Private"));
-    assert!(!everyone.hides("Music\\Rare\\a.flac"), "only the alias counts");
+    assert!(
+      !everyone.hides("Music\\Rare\\a.flac"),
+      "only the alias counts"
+    );
     let buddies = View::of(&options, ShareVisibility::Buddies);
     assert!(!buddies.hides("Rare\\a.flac"));
     assert!(buddies.hides("Private\\a.flac"));

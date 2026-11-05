@@ -5,10 +5,10 @@ use api_types::users::blocking::{
   Block, BlockImportResult, BlockRequest, BlockedQuery, BlockedUsers,
 };
 use api_types::users::{
-  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, DeleteUserQuery, Directory, DirectoryRequest,
-  GroupAssignment, ProfileQuery, StatisticsSnapshot, UserEndpoint, UserInfo, UserList,
-  UserListQuery, UserNotes, UserProfile, UserStatus, UserSummary, UserTags, UserTransfers,
-  UserTransfersQuery,
+  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, DeleteUserQuery, Directory,
+  DirectoryRequest, GroupAssignment, ProfileQuery, StatisticsSnapshot, UserEndpoint, UserInfo,
+  UserList, UserListQuery, UserNotes, UserProfile, UserStatus, UserSummary, UserTags,
+  UserTransfers, UserTransfersQuery,
 };
 use bytes::Bytes;
 

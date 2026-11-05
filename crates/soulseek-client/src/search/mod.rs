@@ -50,7 +50,9 @@ impl SearchScope {
       Self::Rooms(rooms) if rooms.is_empty() => Err(ClientError::InvalidArgument(
         "A room search needs at least one room".into(),
       )),
-      Self::Rooms(rooms) => rooms.iter().try_for_each(|room| non_blank("room name", room)),
+      Self::Rooms(rooms) => rooms
+        .iter()
+        .try_for_each(|room| non_blank("room name", room)),
       Self::User(usernames) if usernames.is_empty() => Err(ClientError::InvalidArgument(
         "A user search needs at least one username".into(),
       )),

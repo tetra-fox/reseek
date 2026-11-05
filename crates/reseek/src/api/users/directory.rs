@@ -3,8 +3,8 @@
 //! forgetting them.
 
 use api_types::users::{
-  BuddyChange, DeleteUserQuery, GroupAssignment, ProfileQuery, UserList, UserListQuery, UserNotes, UserProfile,
-  UserSummary, UserTags, UserTransfers, UserTransfersQuery, UsernameQuery,
+  BuddyChange, DeleteUserQuery, GroupAssignment, ProfileQuery, UserList, UserListQuery, UserNotes,
+  UserProfile, UserSummary, UserTags, UserTransfers, UserTransfersQuery, UsernameQuery,
 };
 use axum::extract::State;
 use axum::http::StatusCode;

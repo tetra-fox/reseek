@@ -270,10 +270,11 @@ impl Uploads {
     filename: &str,
   ) -> Result<Option<Located>, ClientError> {
     let view = self.shares.view(self.users.sees(username));
-    let resolved =
-      self.shares.resolve_file(filename, &view).await.map_err(|e| {
-        ClientError::client(format!("the share index could not be read: {e}"), None)
-      })?;
+    let resolved = self
+      .shares
+      .resolve_file(filename, &view)
+      .await
+      .map_err(|e| ClientError::client(format!("the share index could not be read: {e}"), None))?;
     let Some(resolved) = resolved else {
       trace!(filename, "requested file not shared");
       return Ok(None);

@@ -9,9 +9,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use api_types::users::{
-  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory as SharedDirectory, StatisticsSnapshot,
-  UserEndpoint, UserInfo, UserList, UserListQuery, UserProfile, UserStatus, UserSummary,
-  UserTransfers, UserTransfersQuery,
+  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory as SharedDirectory,
+  StatisticsSnapshot, UserEndpoint, UserInfo, UserList, UserListQuery, UserProfile, UserStatus,
+  UserSummary, UserTransfers, UserTransfersQuery,
 };
 use async_trait::async_trait;
 use axum::response::Response;

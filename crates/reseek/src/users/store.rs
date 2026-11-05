@@ -11,7 +11,12 @@ use crate::db::{self, Schema, read_timestamp, timestamp};
 /// `users.db`: the `users`, `blocks` and `interests` tables.
 pub static SCHEMA: Schema = db::schema!(
   "users",
-  ["0001_initial", "0002_interests", "0003_picture_tag", "0004_buddies"]
+  [
+    "0001_initial",
+    "0002_interests",
+    "0003_picture_tag",
+    "0004_buddies"
+  ]
 );
 
 /// What the peer last said about itself.

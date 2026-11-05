@@ -28,7 +28,9 @@ pub struct Buddies(Mutex<HashMap<String, Buddy>>);
 impl Buddies {
   /// The buddies of `users.db` as `conn` reads them.
   pub fn read(conn: &Connection) -> rusqlite::Result<Self> {
-    Ok(Self(Mutex::new(store::buddies(conn)?.into_iter().collect())))
+    Ok(Self(Mutex::new(
+      store::buddies(conn)?.into_iter().collect(),
+    )))
   }
 
   fn all(&self) -> MutexGuard<'_, HashMap<String, Buddy>> {
@@ -135,9 +137,9 @@ impl Directory {
       return;
     }
     let (this, username) = (self.clone(), username.to_string());
-    self.tasks.spawn(
-      async move { this.watch(&client, &username).await }.in_current_span(),
-    );
+    self
+      .tasks
+      .spawn(async move { this.watch(&client, &username).await }.in_current_span());
   }
 
   /// After a login: every buddy is watched, so the server tells us their presence.
@@ -163,10 +165,7 @@ impl Directory {
       presence,
       previous,
     };
-    self
-      .live
-      .publish(LiveFrame::UsersPresence(changed.clone()));
+    self.live.publish(LiveFrame::UsersPresence(changed.clone()));
     self.events.raise(Event::BuddyPresenceChanged(changed));
   }
 }
-

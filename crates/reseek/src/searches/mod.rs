@@ -36,8 +36,8 @@ use crate::config::Options;
 use crate::db::{Database, DbError, Location, shifted};
 use crate::live::Live;
 use crate::network::Network;
-use crate::state::StateOwner;
 use crate::services::{Canceled, SearchService};
+use crate::state::StateOwner;
 use crate::sync::lock;
 use crate::users::Directory;
 use running::Running;
@@ -268,7 +268,9 @@ impl Searches {
       SearchScopeType::Rooms => {
         let joined = self.state.current().rooms.clone();
         if let Some(room) = scope.subjects.iter().find(|room| !joined.contains(room)) {
-          return Err(ApiError::bad_request(format!("The room {room} is not joined")));
+          return Err(ApiError::bad_request(format!(
+            "The room {room} is not joined"
+          )));
         }
         if scope.subjects.is_empty() && joined.is_empty() {
           return Err(ApiError::conflict(
@@ -567,7 +569,10 @@ mod tests {
         subjects: subjects.iter().map(|s| s.to_string()).collect(),
       })
     };
-    assert!(reached(SearchScopeType::Rooms, &[]).is_err(), "no room joined");
+    assert!(
+      reached(SearchScopeType::Rooms, &[]).is_err(),
+      "no room joined"
+    );
     app
       .state
       .state

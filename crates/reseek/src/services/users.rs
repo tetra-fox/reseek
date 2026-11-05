@@ -1,9 +1,9 @@
 //! Other users: what the network says about them, and the directory of users we know.
 
 use api_types::users::{
-  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory, StatisticsSnapshot, UserEndpoint,
-  UserInfo, UserList, UserListQuery, UserProfile, UserStatus, UserSummary, UserTransfers,
-  UserTransfersQuery,
+  BrowseProgress, BrowseResponse, BuddyChange, CachedUser, Directory, StatisticsSnapshot,
+  UserEndpoint, UserInfo, UserList, UserListQuery, UserProfile, UserStatus, UserSummary,
+  UserTransfers, UserTransfersQuery,
 };
 use async_trait::async_trait;
 use axum::response::Response;

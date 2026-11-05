@@ -45,7 +45,18 @@ pub struct Share {
 /// download from it. Ordered from the widest audience to the narrowest, so a user who sees
 /// shares of one visibility also sees those of every wider one.
 #[derive(
-  Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
+  Clone,
+  Copy,
+  Debug,
+  Default,
+  PartialEq,
+  Eq,
+  PartialOrd,
+  Ord,
+  Hash,
+  Serialize,
+  Deserialize,
+  ToSchema,
 )]
 #[serde(rename_all = "lowercase")]
 pub enum ShareVisibility {

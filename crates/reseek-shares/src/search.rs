@@ -73,7 +73,13 @@ pub fn search(
     .filter(|e| !e.is_empty())
     .map(|e| e.to_lowercase())
     .collect();
-  run(conn, &expression, &excluded, limit.unwrap_or(usize::MAX), view)
+  run(
+    conn,
+    &expression,
+    &excluded,
+    limit.unwrap_or(usize::MAX),
+    view,
+  )
 }
 
 fn run(

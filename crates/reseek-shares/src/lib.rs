@@ -30,10 +30,10 @@ mod scanning;
 mod search;
 mod share;
 mod storage;
-mod visibility;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 pub mod validate;
+mod visibility;
 mod walk;
 mod watcher;
 
@@ -94,7 +94,10 @@ struct Counted(Vec<(String, SharedCounts)>);
 impl Counted {
   /// The totals over every share.
   fn total(&self) -> SharedCounts {
-    self.0.iter().fold(SharedCounts::default(), |sum, (_, c)| sum.add(*c))
+    self
+      .0
+      .iter()
+      .fold(SharedCounts::default(), |sum, (_, c)| sum.add(*c))
   }
 
   /// The totals over the shares `view` sees.
@@ -434,7 +437,11 @@ impl Shares {
       return Ok(Vec::new());
     }
     if view.hides(name) {
-      trace!(username, directory = name, "folder of a share hidden from the user");
+      trace!(
+        username,
+        directory = name,
+        "folder of a share hidden from the user"
+      );
       return Ok(vec![Directory {
         name: name.to_string().into(),
         files: Vec::new(),

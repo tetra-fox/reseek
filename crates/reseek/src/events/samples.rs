@@ -12,11 +12,12 @@ use api_types::analysis::{
 };
 use api_types::auth::{Role, Via};
 use api_types::events::{
-  DownloadDirectoryComplete, DownloadFailureStage, DownloadFileComplete, DownloadFileFailed, Event,
-  EventType, FileAnalysisComplete, LoginFailed, NoFields, PrivateMessageReceived,
-  RelayAgentConnected, RelayAgentDisconnected, RelayAgentSharesUpdated, RoomMessageReceivedEvent,
-  SessionCreated, SessionRevokeReason, SessionRevoked, SoulseekClientDisconnected, TokenChanged,
-  UnblockReason, UploadFileComplete, UserBlocked, UserUnblocked, BuddyPresenceChanged,
+  BuddyPresenceChanged, DownloadDirectoryComplete, DownloadFailureStage, DownloadFileComplete,
+  DownloadFileFailed, Event, EventType, FileAnalysisComplete, LoginFailed, NoFields,
+  PrivateMessageReceived, RelayAgentConnected, RelayAgentDisconnected, RelayAgentSharesUpdated,
+  RoomMessageReceivedEvent, SessionCreated, SessionRevokeReason, SessionRevoked,
+  SoulseekClientDisconnected, TokenChanged, UnblockReason, UploadFileComplete, UserBlocked,
+  UserUnblocked,
 };
 use api_types::files::FileRoot;
 use api_types::messaging::conversations::{MessageDirection, PrivateMessage};
