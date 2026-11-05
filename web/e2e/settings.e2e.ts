@@ -104,6 +104,7 @@ test("sets how a notification is announced, and offers the permission Desktop ne
   await choose("Private messages", "Sound");
   await choose("Mentions", "Off");
   await choose("Downloads finished", "Sound");
+  await choose("A buddy came online, went away or offline", "Sound");
   await expect(notice).toBeHidden();
   await choose("An upload was queued", "Desktop");
   await expect(notice).toBeVisible();
@@ -115,6 +116,7 @@ test("sets how a notification is announced, and offers the permission Desktop ne
   await choose("Private messages", "Both");
   await choose("Mentions", "Both");
   await choose("Downloads finished", "Both");
+  await choose("A buddy came online, went away or offline", "Both");
   await section.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Notifications: 1 setting saved")).toBeVisible();
   await page.reload();

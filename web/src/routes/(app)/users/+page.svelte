@@ -27,7 +27,8 @@
 
 {#if tab.id !== "all"}<Crumbs steps={[{ label: tab.title }]} />{/if}
 
-<nav aria-label="Users" class="flex gap-1">
+<!-- the tabs wrap where a large text size leaves no room for all three on a phone -->
+<nav aria-label="Users" class="flex flex-wrap gap-1">
   {#each TABS as t (t.id)}
     <a href={href(t.to)} aria-current={tab.id === t.id ? "page" : undefined} class="nav-tab">
       {t.title}
