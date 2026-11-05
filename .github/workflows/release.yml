@@ -59,6 +59,7 @@ jobs:
           MINISIGN_KEY: ${{ secrets.MINISIGN_KEY }}
           MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
         run: |
+          sudo apt-get update
           sudo apt-get install -y minisign
           sha256sum reseek-* > SHA256SUMS
           printf '%s\n' "$MINISIGN_KEY" > release.key
