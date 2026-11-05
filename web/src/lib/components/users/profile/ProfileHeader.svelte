@@ -29,7 +29,7 @@
   import { Busy } from "#lib/feedback/busy.svelte.js";
   import { copyText } from "#lib/feedback/clipboard.svelte.js";
   import { toast } from "#lib/feedback/toast.svelte.js";
-  import { ago, formatBytes, formatSpeed, plural } from "#lib/format.js";
+  import { ago, chatTime, formatBytes, formatSpeed, plural } from "#lib/format.js";
   import { href, userHref } from "#lib/nav.js";
   import { call } from "#lib/request.js";
   import { session } from "#lib/session.svelte.js";
@@ -102,7 +102,10 @@
     <Avatar {name} pictureUrl={p.info?.pictureUrl} class="size-16 text-2xl" />
     <div class="flex min-w-0 flex-1 flex-col gap-1.5">
       <div class="flex flex-wrap items-center gap-2">
-        <span title={p.presenceAt ? `since ${ago(p.presenceAt, clock.now)}` : undefined}>
+        <span
+          title={p.presence && p.presenceAt
+            ? `${p.presence} since ${chatTime(p.presenceAt, clock.now)}`
+            : undefined}>
           <Presence presence={p.presence} />
         </span>
         <h1 class="truncate font-mono text-lg font-semibold" style:color={nameColor(name)}>
