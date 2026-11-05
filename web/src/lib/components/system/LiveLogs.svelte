@@ -146,7 +146,7 @@
         pressed={on}
         hides
         count={counts[l.level] ?? 0}
-        class="font-mono text-xs"
+        class="pr-2 pl-1.5 font-mono text-xs"
         title={on
           ? `Hide ${l.level} lines. Alt-click to show only these.`
           : `Show ${l.level} lines`}
@@ -160,7 +160,7 @@
   </Filter.Group>
   <Input
     type="search"
-    wrapperClass="w-56"
+    wrapperClass="min-w-32 flex-1"
     class={["h-control-sm", text.trim() && Filter.FILTERING]}
     placeholder="Filter"
     aria-label="Filter the log"
