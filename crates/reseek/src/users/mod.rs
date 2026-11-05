@@ -13,6 +13,7 @@ mod blocklist;
 mod browse;
 mod group_cache;
 mod groups;
+mod info;
 mod interests;
 mod known;
 mod listing;
@@ -50,7 +51,7 @@ use tracing::{Instrument, debug, error, info, info_span, warn};
 
 pub use network::Users;
 pub(crate) use service::{picture_response, picture_tag};
-pub use touch::{PeerInfo, Touch};
+pub use touch::Touch;
 
 use crate::config::{Options, RETENTION_SWEEP};
 use crate::db::{Database, DbError, Location};
@@ -99,10 +100,10 @@ pub struct Directory {
 }
 
 impl Directory {
-  /// Opens `users.db` in `location` and loads the blocks, the groups we put users in and the
-  /// blocklist file, then starts the touch writer, the expiry and retention sweeps and the
-  /// follower of the configuration, which all stop when `shutdown` is canceled. A user's
-  /// figures are read from `transfers` and `messaging`.
+  /// Opens `users.db` in `location`, tags the stored pictures that have no tag, and loads the
+  /// blocks, the groups we put users in and the blocklist file, then starts the touch writer,
+  /// the expiry and retention sweeps and the follower of the configuration, which all stop
+  /// when `shutdown` is canceled. A user's figures are read from `transfers` and `messaging`.
   pub async fn open(
     location: &Location,
     transfers: Database,
@@ -113,6 +114,9 @@ impl Directory {
     shutdown: CancellationToken,
   ) -> Result<Arc<Self>, String> {
     let db = Database::open(&store::SCHEMA, location)
+      .await
+      .map_err(|e| format!("users.db: {e}"))?;
+    db.write(info::tag_pictures)
       .await
       .map_err(|e| format!("users.db: {e}"))?;
     let (ours, overrides, known) = db
@@ -268,23 +272,8 @@ impl Directory {
 
   /// Marks that we dealt with `username` for the reason `touch` gives, storing what came with
   /// it; makes the user's row when there is none, except for a room message. The write
-  /// happens within a second. A picture is kept only while `users.cache_pictures` is on and
-  /// it is no larger than `users.picture_max_bytes`.
+  /// happens within a second.
   pub async fn touch(&self, username: &str, touch: Touch) {
-    let touch = match touch {
-      Touch::Info(mut info) => {
-        let users = &self.config.current().values.users;
-        let fits = info
-          .picture
-          .as_ref()
-          .is_some_and(|p| p.len() as u64 <= users.picture_max_bytes.as_u64());
-        if !(users.cache_pictures && fits) {
-          info.picture = None;
-        }
-        Touch::Info(info)
-      }
-      other => other,
-    };
     // a touch dropped for a full channel is logged where it is dropped
     self.toucher.send(username, touch).await;
   }

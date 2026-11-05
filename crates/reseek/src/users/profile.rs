@@ -46,8 +46,9 @@ pub fn known(
   }
 }
 
-/// The path a user's stored picture is fetched from.
-pub fn picture_url(username: &str) -> String {
+/// The path `username`'s stored picture with `tag` is fetched from. The tag changes with the
+/// picture, so a copy cached under the path is never shown for another picture.
+pub fn picture_url(username: &str, tag: &str) -> String {
   let mut encoded = String::new();
   for byte in username.bytes() {
     if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'~') {
@@ -56,13 +57,16 @@ pub fn picture_url(username: &str) -> String {
       encoded.push_str(&format!("%{byte:02X}"));
     }
   }
-  format!("/api/v0/users/{encoded}/picture")
+  format!("/api/v0/users/{encoded}/picture?v={tag}")
 }
 
 fn info_summary(username: &str, info: &Info) -> StoredInfoSummary {
   StoredInfoSummary {
     has_picture: info.has_picture,
-    picture_url: info.has_picture.then(|| picture_url(username)),
+    picture_url: info
+      .picture_tag
+      .as_deref()
+      .map(|tag| picture_url(username, tag)),
     upload_slots: info.upload_slots,
     queue_length: info.queue_length,
     has_free_upload_slot: info.has_free_slot,
@@ -100,12 +104,19 @@ pub fn summary(user: KnownUser, stored: Option<&Stored>, figures: &UserFigures) 
   }
 }
 
+/// `username`'s info as a profile shows it.
+pub fn stored_info(username: &str, info: &Info) -> StoredInfo {
+  StoredInfo {
+    description: info.description.clone(),
+    info: info_summary(username, info),
+  }
+}
+
 /// The whole profile of a user.
 pub fn profile(user: KnownUser, stored: Option<&Stored>, figures: UserFigures) -> UserProfile {
-  let info = stored.and_then(|s| s.info.as_ref()).map(|info| StoredInfo {
-    description: info.description.clone(),
-    info: info_summary(&user.username, info),
-  });
+  let info = stored
+    .and_then(|s| s.info.as_ref())
+    .map(|info| stored_info(&user.username, info));
   UserProfile {
     info,
     notes: stored.map(|s| s.notes.clone()).unwrap_or_default(),
@@ -151,6 +162,7 @@ mod tests {
         queue_length: 0,
         has_free_slot: true,
         at,
+        picture_tag: None,
       }),
       notes: "met in #indie\nfast\nslow at night".to_string(),
       tags: Vec::new(),
@@ -172,8 +184,14 @@ mod tests {
 
   #[test]
   fn picture_urls_escape_what_a_path_segment_can_not_hold() {
-    assert_eq!(picture_url("alice"), "/api/v0/users/alice/picture");
-    assert_eq!(picture_url(".."), "/api/v0/users/%2E%2E/picture");
-    assert_eq!(picture_url("a b/c"), "/api/v0/users/a%20b%2Fc/picture");
+    assert_eq!(
+      picture_url("alice", "ab"),
+      "/api/v0/users/alice/picture?v=ab"
+    );
+    assert_eq!(picture_url("..", "ab"), "/api/v0/users/%2E%2E/picture?v=ab");
+    assert_eq!(
+      picture_url("a b/c", "ab"),
+      "/api/v0/users/a%20b%2Fc/picture?v=ab"
+    );
   }
 }

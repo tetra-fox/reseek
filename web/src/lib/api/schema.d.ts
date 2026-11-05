@@ -6929,8 +6929,9 @@ export interface components {
             /** @description the peer sent a picture */
             hasPicture: boolean;
             /**
-             * @description where to fetch the picture, null without one
-             * @example /api/v0/users/alice/picture
+             * @description where the stored picture is fetched, a URL that changes whenever the picture does; null
+             *     when none is stored, as when pictures are not kept or this one is too large
+             * @example /api/v0/users/alice/picture?v=2cea274d0bedc39ec4ab6ba9e59ec889e3ed6fb56a1cf088a64d9b383378dc97
              */
             pictureUrl?: string | null;
             /**

@@ -9,7 +9,10 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 use crate::db::{self, Schema, read_timestamp, timestamp};
 
 /// `users.db`: the `users`, `blocks` and `interests` tables.
-pub static SCHEMA: Schema = db::schema!("users", ["0001_initial", "0002_interests"]);
+pub static SCHEMA: Schema = db::schema!(
+  "users",
+  ["0001_initial", "0002_interests", "0003_picture_tag"]
+);
 
 /// What the peer last said about itself.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,6 +29,8 @@ pub struct Info {
   pub has_free_slot: bool,
   /// when it said so
   pub at: DateTime<Utc>,
+  /// the tag of the picture we keep of it, none when we keep none
+  pub picture_tag: Option<String>,
 }
 
 /// A user's row, without the picture.
@@ -64,7 +69,7 @@ pub const COLUMNS: &str = "username, first_seen_at, last_seen_at, last_presence,
                            is_privileged, average_speed, upload_count, file_count, \
                            directory_count, statistics_at, country_code, description, \
                            has_picture, upload_slots, queue_length, has_free_slot, info_at, \
-                           notes, tags, group_override, muted, pinned";
+                           notes, tags, group_override, muted, pinned, picture_tag";
 
 /// Every user we put in a user-defined group, with the group.
 pub fn overrides(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
@@ -128,6 +133,7 @@ pub fn stored(row: &Row) -> rusqlite::Result<Stored> {
       queue_length: row.get::<_, Option<u32>>(15)?.unwrap_or(0),
       has_free_slot: row.get::<_, Option<bool>>(16)?.unwrap_or(false),
       at,
+      picture_tag: row.get(23)?,
     }),
     None => None,
   };
@@ -162,12 +168,14 @@ pub fn get(conn: &Connection, username: &str) -> rusqlite::Result<Option<Stored>
     .optional()
 }
 
-/// Makes sure `username` has a row, seen at `now`.
+/// Makes sure `username` has a row, seen at `now` unless they were seen later. Writes do not
+/// come in the order of what they record, as touches wait up to a second and info does not.
 pub fn ensure(conn: &Connection, username: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
   let now = timestamp(now);
   conn.execute(
     "INSERT INTO users (username, first_seen_at, last_seen_at) VALUES (?1, ?2, ?2) \
-     ON CONFLICT (username) DO UPDATE SET last_seen_at = excluded.last_seen_at",
+     ON CONFLICT (username) DO UPDATE SET \
+     last_seen_at = max(last_seen_at, excluded.last_seen_at)",
     params![username, now],
   )?;
   Ok(())

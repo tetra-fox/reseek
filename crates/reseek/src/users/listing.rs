@@ -56,7 +56,7 @@ impl Directory {
       .read(move |conn| {
         let mut statement = conn.prepare(&sql)?;
         let rows = statement.query_map(params_from_iter(&values), |row| {
-          Ok((stored(row)?, row.get::<_, bool>(23)?))
+          Ok((stored(row)?, row.get::<_, bool>(24)?))
         })?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
       })

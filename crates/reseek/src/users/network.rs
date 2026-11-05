@@ -22,7 +22,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
 use super::browse::Browses;
-use super::{Directory, PeerInfo, Touch};
+use super::info::PeerInfo;
+use super::store::Info;
+use super::{Directory, Touch};
 use crate::api::error::ApiError;
 use crate::config::Options;
 use crate::live::Live;
@@ -128,24 +130,24 @@ impl Users {
     Ok(())
   }
 
-  /// Asks `username`'s client for its info, keeping and touching what it said.
-  async fn fetch_info(&self, username: &str) -> Result<UserInfo, ClientError> {
+  /// Asks `username`'s client for its info and stores what it said, before returning it as the
+  /// API shows it and as it was stored.
+  async fn fetch_info(&self, username: &str) -> Result<(UserInfo, Info), ClientError> {
     let fetched = self
       .network
       .client()
       .get_user_info(username, &CancellationToken::new())
       .await?;
     let shown = info(&fetched);
-    let kept = PeerInfo {
+    let said = PeerInfo {
       description: fetched.description.clone(),
-      has_picture: fetched.has_picture(),
       picture: fetched.picture,
       upload_slots: fetched.upload_slots,
       queue_length: fetched.queue_length,
       has_free_slot: fetched.has_free_upload_slot,
     };
-    self.directory.touch(username, Touch::Info(kept)).await;
-    Ok(shown)
+    let stored = self.directory.store_info(username, said).await;
+    Ok((shown, stored))
   }
 
   /// `username`'s profile after asking the network for their status, statistics and info,
@@ -197,21 +199,8 @@ impl Users {
       (None, None) => {}
     }
     match (fetched, profile.info.as_mut()) {
-      (Some(fresh), _) => {
-        profile.info = Some(api_types::users::StoredInfo {
-          description: fresh.description,
-          info: api_types::users::StoredInfoSummary {
-            has_picture: fresh.has_picture,
-            picture_url: fresh
-              .has_picture
-              .then(|| super::profile::picture_url(username)),
-            upload_slots: fresh.upload_slots,
-            queue_length: fresh.queue_length,
-            has_free_upload_slot: fresh.has_free_upload_slot,
-            fetched_at: now,
-            stale: false,
-          },
-        });
+      (Some((_, stored)), _) => {
+        profile.info = Some(super::profile::stored_info(username, &stored));
       }
       (None, Some(stored)) => stored.info.stale = true,
       (None, None) => {}
@@ -324,6 +313,7 @@ impl UserService for Users {
     self
       .fetch_info(username)
       .await
+      .map(|(shown, _)| shown)
       .map_err(|e| unanswered(username, e))
   }
 

@@ -170,7 +170,8 @@ impl Directory {
       .await
       .map_err(internal)?
       .ok_or_else(|| ApiError::not_found(format!("No picture of {username} is stored")))?;
-    Ok(picture_response(picture, "private, max-age=3600"))
+    // profiles name it by a URL that changes with it, so a copy kept a day is never stale
+    Ok(picture_response(picture, "private, max-age=86400"))
   }
 
   /// Replaces our notes on `username`.

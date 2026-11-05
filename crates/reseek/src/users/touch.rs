@@ -47,25 +47,6 @@ pub enum Touch {
   },
   /// the server gave their statistics
   Statistics(UserStatistics),
-  /// they said what they share and how busy they are
-  Info(PeerInfo),
-}
-
-/// What a peer said about itself.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PeerInfo {
-  /// its free text
-  pub description: String,
-  /// it has a picture
-  pub has_picture: bool,
-  /// the picture's bytes, when they are to be kept
-  pub picture: Option<Vec<u8>>,
-  /// its upload slots
-  pub upload_slots: u32,
-  /// how many uploads it has queued
-  pub queue_length: u32,
-  /// it has an upload slot free
-  pub has_free_slot: bool,
 }
 
 /// One touch on its way to the writer: who, why and when.
@@ -118,8 +99,6 @@ pub struct Pending {
   pub status: Option<(UserPresence, bool, DateTime<Utc>)>,
   /// the last statistics, with when
   pub statistics: Option<(UserStatistics, DateTime<Utc>)>,
-  /// the last info, with when
-  pub info: Option<(PeerInfo, DateTime<Utc>)>,
 }
 
 impl Pending {
@@ -137,10 +116,6 @@ impl Pending {
       Touch::Statistics(statistics) => {
         self.creates = true;
         self.statistics = Some((statistics, at));
-      }
-      Touch::Info(info) => {
-        self.creates = true;
-        self.info = Some((info, at));
       }
       Touch::Transfer | Touch::MessageIn | Touch::MessageOut | Touch::Browse => {
         self.creates = true;
@@ -217,22 +192,6 @@ pub fn write(
           i64::try_from(statistics.upload_count).unwrap_or(i64::MAX),
           statistics.file_count,
           statistics.directory_count,
-          timestamp(*at)
-        ],
-      )?;
-    }
-    if let Some((info, at)) = &pending.info {
-      tx.execute(
-        "UPDATE users SET description = ?2, has_picture = ?3, picture = ?4, upload_slots = ?5, \
-         queue_length = ?6, has_free_slot = ?7, info_at = ?8 WHERE username = ?1",
-        params![
-          username,
-          info.description,
-          info.has_picture,
-          info.picture,
-          info.upload_slots,
-          info.queue_length,
-          info.has_free_slot,
           timestamp(*at)
         ],
       )?;

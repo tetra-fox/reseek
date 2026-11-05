@@ -4,7 +4,7 @@
 
 mod support;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use api_types::live::LiveFrame;
@@ -74,6 +74,58 @@ async fn looking_up_a_name_nobody_has_keeps_nothing_of_them() {
   assert!(!profile.user.known, "stored: {profile:?}");
   let cached = api.user_cache().await.unwrap();
   assert!(cached.iter().all(|u| u.username != nobody), "{cached:?}");
+}
+
+#[tokio::test]
+async fn a_profile_names_its_picture_by_a_url_that_serves_it_at_once() {
+  let Some(server) = soulfind::server() else {
+    return;
+  };
+  let dir = tempfile::tempdir().unwrap();
+  let name = soulfind::username("daemon");
+  let running = daemon(dir.path(), &server, &name, &[]);
+  let api = signed_in(&running).await;
+  until(&api, "logged in", logged_in).await;
+
+  let picture = Arc::new(Mutex::new(b"\x89PNG\r\n\x1a\nfirst".to_vec()));
+  let mut options = ClientOptions {
+    listen_port: free_port(),
+    ..ClientOptions::default()
+  };
+  let sent = picture.clone();
+  options.resolvers.user_info_resolver = Some(Arc::new(move |_, _| {
+    let picture = sent.lock().unwrap().clone();
+    Box::pin(async move {
+      Ok(UserInfo {
+        description: String::new(),
+        picture: Some(picture),
+        upload_slots: 1,
+        queue_length: 0,
+        has_free_upload_slot: true,
+        upload_permitted: None,
+      })
+    })
+  }));
+  let peer = server.login("peer", options).await;
+
+  let url = |profile: api_types::users::UserProfile| {
+    let info = profile.info.expect("the info was fetched");
+    assert!(info.info.has_picture);
+    info.info.picture_url.expect("a stored picture has a URL")
+  };
+  let first = url(api.user_profile(&peer.username, true).await.unwrap());
+  let served = api.user_picture(&peer.username).await.unwrap();
+  assert_eq!(&served[..], b"\x89PNG\r\n\x1a\nfirst");
+  assert!(
+    first.starts_with(&format!("/api/v0/users/{}/picture?v=", peer.username)),
+    "{first}"
+  );
+
+  *picture.lock().unwrap() = b"\x89PNG\r\n\x1a\nsecond".to_vec();
+  let second = url(api.user_profile(&peer.username, true).await.unwrap());
+  assert_ne!(first, second, "a new picture is a new URL");
+  let served = api.user_picture(&peer.username).await.unwrap();
+  assert_eq!(&served[..], b"\x89PNG\r\n\x1a\nsecond");
 }
 
 #[tokio::test]

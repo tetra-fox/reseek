@@ -58,8 +58,11 @@ pub struct StoredStatistics {
 pub struct StoredInfoSummary {
   /// the peer sent a picture
   pub has_picture: bool,
-  /// where to fetch the picture, null without one
-  #[schema(example = "/api/v0/users/alice/picture")]
+  /// where the stored picture is fetched, a URL that changes whenever the picture does; null
+  /// when none is stored, as when pictures are not kept or this one is too large
+  #[schema(
+    example = "/api/v0/users/alice/picture?v=2cea274d0bedc39ec4ab6ba9e59ec889e3ed6fb56a1cf088a64d9b383378dc97"
+  )]
   pub picture_url: Option<String>,
   /// the peer's upload slots
   pub upload_slots: u32,
