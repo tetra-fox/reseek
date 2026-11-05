@@ -1,5 +1,6 @@
 import { goto } from "$app/navigation";
 import { navigating, page } from "$app/state";
+import { untrack } from "svelte";
 
 import { app } from "#lib/app.svelte.js";
 import { toast } from "#lib/feedback/toast.svelte.js";
@@ -50,11 +51,15 @@ class Slots {
     return !!this[id] && isLocal(this[id].target);
   }
 
-  /** Takes what the address says: a slot it leaves out empties, unless a local file is there */
+  /**
+   * Takes what the address says: a slot it leaves out empties, unless a local file is there. The
+   * slots are read untracked, so an effect that follows the address runs again only when the
+   * address changes, and a change here is not undone before its own address lands
+   */
   follow(query: URLSearchParams) {
     for (const id of ["a", "b"] as const) {
       const named = parseTarget(query.get(id));
-      const held = this[id];
+      const held = untrack(() => this[id]);
       if (!named && held && isLocal(held.target)) continue;
       if (!named) this[id] = null;
       else if (!held || targetKey(held.target) !== targetKey(named)) {
