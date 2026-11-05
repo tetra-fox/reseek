@@ -85,10 +85,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "chore(deps): update the web hash"
           git push
+      # the title names what was bumped, and the release notes take it from the subject
       - name: Merge
         run: |
           gh pr merge "$PR" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)" \
-            --subject "chore(deps): bump minor and patch versions" --body ""
+            --subject "$TITLE" --body ""
         env:
           PR: ${{ github.event.pull_request.html_url }}
+          TITLE: ${{ github.event.pull_request.title }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
