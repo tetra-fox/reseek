@@ -84,7 +84,8 @@ pub struct Directory {
   messaging: Database,
   /// the Soulseek client, once the network is built
   client: OnceLock<Client>,
-  /// the statistics fetched again in the background, so the stop waits for them
+  /// the statistics fetched again and the buddies watched in the background, so the stop waits
+  /// for them
   tasks: TaskTracker,
   config: Watcher<Options>,
   live: Live,
@@ -195,7 +196,7 @@ impl Directory {
     }
   }
 
-  /// Waits, at shutdown, for the statistics being fetched again.
+  /// Waits, at shutdown, for the statistics being fetched again and the buddies being watched.
   pub async fn stop(&self) {
     self.tasks.close();
     if tokio::time::timeout(STOPPING, self.tasks.wait())
