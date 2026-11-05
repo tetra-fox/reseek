@@ -67,8 +67,9 @@ const QUALITY: u8 = 85;
 /// The largest width or height an upload may decode to: a small file can describe a huge image,
 /// which would take gigabytes to decode.
 const MAX_DECODED_SIDE: u32 = 10_000;
-/// The most memory decoding one upload may take.
-const MAX_DECODE_ALLOCATION: u64 = 256 * 1024 * 1024;
+/// The most memory the decoded image may take, the decoder's own working buffers not counted:
+/// 4096 by 4096 pixels with transparency, more than a 1 MiB upload needs.
+const MAX_DECODE_ALLOCATION: u64 = 64 * 1024 * 1024;
 
 /// Where the picture is kept, under the data directory `data`.
 pub fn stored_path(data: &Path) -> PathBuf {
