@@ -860,6 +860,36 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn a_refused_table_value_is_quoted_unless_its_own_field_is_secret() {
+    let app = app(TRUSTED, &[]).await;
+    let check = |provider: &str| {
+      request(
+        "POST",
+        "/api/v0/options/file/validate",
+        Some(json!({
+          "text": format!("{TRUSTED}[web.authentication.oidc.home]\n{provider}\n")
+        })),
+      )
+    };
+    let answer = app.send(check("session_ttl = \"forever\"")).await.json();
+    let message = answer["errors"][0]["message"].as_str().unwrap();
+    assert!(
+      message.contains("forever") && !message.contains("secret"),
+      "{message}"
+    );
+    assert!(
+      message.ends_with("(at web.authentication.oidc.home.session_ttl)"),
+      "{message}"
+    );
+    let answer = app.send(check("client_secret = 123456")).await.json();
+    let message = answer["errors"][0]["message"].as_str().unwrap();
+    assert!(
+      message.contains("secret") && !message.contains("123456"),
+      "{message}"
+    );
+  }
+
+  #[tokio::test]
   async fn an_api_key_may_read_but_not_touch_the_files() {
     let app = app(TRUSTED, &[]).await;
     let with_key = |method: &str, uri: &str, body| {

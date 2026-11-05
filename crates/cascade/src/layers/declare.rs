@@ -579,6 +579,10 @@ mod tests {
       matches!(&e, Error::Value { key, message, .. } if key == "api_keys" && message.contains("(at api_keys.mine.role")),
       "{e}"
     );
+    assert!(
+      e.to_string().contains("invalid type: integer `5`"),
+      "a field of an entry that is not secret is quoted: {e}"
+    );
 
     write(dir.path(), "config.toml", "[server]\npassword = 12345\n");
     let e = error(example_layers(dir.path()));
@@ -589,5 +593,14 @@ mod tests {
     write(dir.path(), "config.toml", "[api_keys.mine]\nkey = 12345\n");
     let e = error(example_layers(dir.path()));
     assert!(!e.to_string().contains("12345"), "{e}");
+    write(dir.path(), "config.toml", "[api_keys]\nmine = 12345\n");
+    let e = error(example_layers(dir.path()));
+    assert!(
+      !e.to_string().contains("12345"),
+      "an entry that holds a secret is not quoted whole: {e}"
+    );
+    write(dir.path(), "config.toml", "[[webhooks]]\nurl = 5\n");
+    let e = error(example_layers(dir.path()));
+    assert!(e.to_string().contains("integer `5`"), "{e}");
   }
 }

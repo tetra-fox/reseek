@@ -341,7 +341,7 @@ impl<T: Root> Layers<T> {
           .get(&key)
           .map_or("the defaults", Source::describe)
           .to_string();
-        let mut message = if self.schema.may_hold_secret(&path) {
+        let mut message = if self.schema.may_hold_secret(&path, &tree) {
           SECRET_VALUE.to_string()
         } else {
           e.inner().to_string()

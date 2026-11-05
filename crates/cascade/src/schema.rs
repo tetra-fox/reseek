@@ -86,6 +86,75 @@ impl Field {
     self.secret || self.entries.iter().any(Field::may_hold_secret)
   }
 
+  /// Whether the value at `rest`, the part of a path below the field such as `.home.session_ttl`
+  /// or `[1].token`, may hold a secret. `value` is the field's value: a map's entry names are
+  /// read from it, since a name may hold dots. Inside an entry the field the path names counts;
+  /// a path that stops above a field counts everything below it, and one that names nothing the
+  /// entries have counts all of them.
+  fn holds_secret(&self, rest: &str, value: Option<&Value>) -> bool {
+    if self.secret || rest.is_empty() || !self.may_hold_secret() {
+      return self.may_hold_secret();
+    }
+    // each reading of the path as an entry and the path inside it, which may be empty
+    let readings: Vec<(Option<&Value>, &str)> = if let Some(after) = rest.strip_prefix('[') {
+      let Some((index, inside)) = after.split_once(']') else {
+        return true;
+      };
+      let entry = index.parse().ok().and_then(|i: usize| value?.get(i));
+      vec![(entry, inside)]
+    } else if let Some(after) = rest.strip_prefix('.')
+      && self.kind == Kind::Map
+    {
+      value
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter_map(|(name, entry)| {
+          let inside = after.strip_prefix(name.as_str())?;
+          (inside.is_empty() || inside.starts_with('.')).then_some((Some(entry), inside))
+        })
+        .collect()
+    } else {
+      Vec::new()
+    };
+    if readings.is_empty() {
+      return true;
+    }
+    readings.into_iter().any(|(entry, inside)| {
+      let Some(inside) = inside.strip_prefix('.') else {
+        return true;
+      };
+      self.entry_holds_secret(inside, entry)
+    })
+  }
+
+  /// [`Field::holds_secret`] for `inside`, a path inside one of the field's entries, `entry`.
+  fn entry_holds_secret(&self, inside: &str, entry: Option<&Value>) -> bool {
+    let named = self
+      .entries
+      .iter()
+      .filter(|e| {
+        inside
+          .strip_prefix(e.key.as_str())
+          .is_some_and(|tail| tail.is_empty() || tail.starts_with(['.', '[']))
+      })
+      .max_by_key(|e| e.key.len());
+    if let Some(field) = named {
+      let value = entry.and_then(|entry| tree::get(entry, &field.key));
+      return field.holds_secret(&inside[field.key.len()..], value);
+    }
+    let section = format!("{inside}.");
+    let mut below = self
+      .entries
+      .iter()
+      .filter(|e| e.key.starts_with(&section))
+      .peekable();
+    if below.peek().is_none() {
+      return true;
+    }
+    below.any(Field::may_hold_secret)
+  }
+
   /// The variable names that set the key, in the order they win when several are set.
   pub fn env_names(&self) -> impl Iterator<Item = &str> {
     self.env_aliases.iter().chain(&self.env).map(String::as_str)
@@ -186,9 +255,11 @@ impl Schema {
   }
 
   /// Whether a path into the configuration may hold a secret, so a message about its value
-  /// must not quote it.
-  pub(crate) fn may_hold_secret(&self, path: &str) -> bool {
-    self.field_under(path).is_some_and(Field::may_hold_secret)
+  /// must not quote it. `tree` is the configuration the path is into.
+  pub(crate) fn may_hold_secret(&self, path: &str, tree: &Value) -> bool {
+    self.field_under(path).is_some_and(|field| {
+      field.holds_secret(&path[field.key.len()..], tree::get(tree, &field.key))
+    })
   }
 
   /// The leaf keys whose values differ between `old` and `new`, compared as serialized. A list
