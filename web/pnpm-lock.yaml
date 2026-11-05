@@ -43,8 +43,8 @@ importers:
         specifier: ^6.43.15
         version: 6.43.15
       '@lucide/svelte':
-        specifier: ^1.65.0
-        version: 1.65.0(svelte@5.57.3)
+        specifier: ^1.66.0
+        version: 1.66.0(svelte@5.57.3)
       '@playwright/test':
         specifier: ^1.64.1
         version: 1.64.1
@@ -64,8 +64,8 @@ importers:
         specifier: 9.3.1
         version: 9.3.1(svelte@5.57.3)
       '@tanstack/virtual-core':
-        specifier: 3.19.9
-        version: 3.19.9
+        specifier: 3.19.10
+        version: 3.19.10
       '@types/d3-shape':
         specifier: 3.2.0
         version: 3.2.0
@@ -73,8 +73,8 @@ importers:
         specifier: ^26.6.6
         version: 26.6.6
       bits-ui:
-        specifier: ^2.20.2
-        version: 2.20.2(@internationalized/date@3.12.4)(@sveltejs/kit@3.1.1(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.5(@types/node@26.6.6)(jiti@2.7.0)))(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(jiti@2.7.0)))(svelte@5.57.3)
+        specifier: ^2.20.3
+        version: 2.20.3(@internationalized/date@3.12.4)(@sveltejs/kit@3.1.1(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.5(@types/node@26.6.6)(jiti@2.7.0)))(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(jiti@2.7.0)))(svelte@5.57.3)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -97,14 +97,14 @@ importers:
         specifier: ^1.90.0
         version: 1.90.0
       oxlint-tailwindcss:
-        specifier: ^1.17.0
-        version: 1.17.0
+        specifier: ^1.17.1
+        version: 1.17.1
       svelte:
         specifier: ^5.57.3
         version: 5.57.3
       svelte-check:
-        specifier: ^4.7.7
-        version: 4.7.7(picomatch@4.0.7)(svelte@5.57.3)(typescript@6.0.3)
+        specifier: ^4.7.8
+        version: 4.7.8(picomatch@4.0.7)(svelte@5.57.3)(typescript@6.0.3)
       tailwind-merge:
         specifier: ^3.7.0
         version: 3.7.0
@@ -267,8 +267,8 @@ packages:
   '@lezer/lr@1.4.12':
     resolution: {integrity: sha512-On9HU4oMMiHPMkQDgoTnGahjgG5n/MkN38CgG77sMraKLL+3JBbeQNi1FcCXV9QRqwF9/BUXP3caHyJC1fBOTQ==}
 
-  '@lucide/svelte@1.65.0':
-    resolution: {integrity: sha512-VfM4Ej7JFYz33WXm/JdqtOsOqRtfca5H9eFcyfcbFthWvbOnvvCerY/YkEk0ZiAvOvqo5hpK3u+opC0zY7Caxw==}
+  '@lucide/svelte@1.66.0':
+    resolution: {integrity: sha512-G2qFyutQpgk9TY0QYgqXk9rQtUt8p509mFpQzmTpyc894hfRSFhGNcGAVAUgB8znAyVsp5WTF/2vmCwprnNQ/w==}
     peerDependencies:
       svelte: ^5
 
@@ -794,8 +794,8 @@ packages:
     resolution: {integrity: sha512-zQvlxSNi2qGM3L4jh85Z6hqMfdIR5qOfD9KHOU32nuKFJGN0RlJ7UvV1lsPb1fPVhpFYI0VP3jJGxLdLDpTKjQ==}
     engines: {node: '>=20'}
 
-  '@tanstack/virtual-core@3.19.9':
-    resolution: {integrity: sha512-Syiaf3w69dFyYv4o2mqJ1/2VtBJTNq5Hu5cVXfnzOuJKFpUojukQR13ZW+5NvdMJM7GFHeNPmveMNhoIubiFyA==}
+  '@tanstack/virtual-core@3.19.10':
+    resolution: {integrity: sha512-/ltpH0qUCs5XQYE7fIhgA+aqgC5NzSfLTDQkC+N1wOOdvIYx1FH/kz2LGfSeanNbekqy3WBu6mNIbqXhxE/pew==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -872,8 +872,8 @@ packages:
   bidi-js@1.1.0:
     resolution: {integrity: sha512-fX1Onk0tdVPC7obPWB5EbJ1z7NVhLq4m2xZLq2YXBkxzMXIGRpNMU88n0EPgWseKl12J7zXs7qrDxPK4sRs2fg==}
 
-  bits-ui@2.20.2:
-    resolution: {integrity: sha512-cb1eQD1wZEhJWb1dTLiAdYWqeUI5v7f+7EAHmetxBuELI9lo4cpAIfGEjald/PR4wTR80Fu5DFH+IaY1OKn+tg==}
+  bits-ui@2.20.3:
+    resolution: {integrity: sha512-KwcmD/DQwzUKk6zxiYhNfBQgYlBCqmUIwHkbeTOEYb+vbx2ZQ3VkbPgnVIXh6RBmS3OqUQOObfP4yZrJCWPLMg==}
     engines: {node: '>=20'}
     peerDependencies:
       '@internationalized/date': ^3.8.1
@@ -1430,8 +1430,8 @@ packages:
       vite-plus:
         optional: true
 
-  oxlint-tailwindcss@1.17.0:
-    resolution: {integrity: sha512-N7T/rwqBpGgfSykpoZJIPWQZbN8K6FhbEOmXgxKEPXuw3KYHJIan2S8Pi6WanFjAVukixJ92AUpw6pOY3yI4nA==}
+  oxlint-tailwindcss@1.17.1:
+    resolution: {integrity: sha512-fIsTVO97ruLU7GK8mNfQiE0TsjcnOccVz/w+C/lvbo54Hb/0ZZvT4cw3a0TCxM/buREd09enI+h7zfm6cG8OzA==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
   oxlint@1.90.0:
@@ -1568,8 +1568,8 @@ packages:
     resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
     engines: {node: '>=18'}
 
-  svelte-check@4.7.7:
-    resolution: {integrity: sha512-Ge2IMdeTpbJuzNFGRiiMg0RWgbScysKQu7xwcyFJ22+DU9F5nPX51+Q3gHmGqRxYQMx2knreVWt5oCtfe0vf2g==}
+  svelte-check@4.7.8:
+    resolution: {integrity: sha512-laZ49GFHZ3b0z2PWinJWL0syehc/PTR8aHaUaTiBkWJ+4Y38nhxjmXsSz7CbGa3VdKopViVbrBH3bGNqIAI0bQ==}
     engines: {node: '>= 18.0.0'}
     hasBin: true
     peerDependencies:
@@ -1961,7 +1961,7 @@ snapshots:
     dependencies:
       '@lezer/common': 1.5.5
 
-  '@lucide/svelte@1.65.0(svelte@5.57.3)':
+  '@lucide/svelte@1.66.0(svelte@5.57.3)':
     dependencies:
       svelte: 5.57.3
 
@@ -2285,7 +2285,7 @@ snapshots:
     dependencies:
       '@tanstack/store': 0.11.2
 
-  '@tanstack/virtual-core@3.19.9': {}
+  '@tanstack/virtual-core@3.19.10': {}
 
   '@types/chai@5.2.3':
     dependencies:
@@ -2346,7 +2346,7 @@ snapshots:
     dependencies:
       require-from-string: 2.0.2
 
-  bits-ui@2.20.2(@internationalized/date@3.12.4)(@sveltejs/kit@3.1.1(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.5(@types/node@26.6.6)(jiti@2.7.0)))(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(jiti@2.7.0)))(svelte@5.57.3):
+  bits-ui@2.20.3(@internationalized/date@3.12.4)(@sveltejs/kit@3.1.1(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.5(@types/node@26.6.6)(jiti@2.7.0)))(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(jiti@2.7.0)))(svelte@5.57.3):
     dependencies:
       '@floating-ui/core': 1.8.0
       '@floating-ui/dom': 1.8.0
@@ -2862,7 +2862,7 @@ snapshots:
       '@oxfmt/binding-win32-x64-msvc': 0.75.0
       svelte: 5.57.3
 
-  oxlint-tailwindcss@1.17.0:
+  oxlint-tailwindcss@1.17.1:
     dependencies:
       '@tailwindcss/node': 4.3.3
       tailwindcss: 4.3.3
@@ -3006,7 +3006,7 @@ snapshots:
 
   supports-color@10.2.2: {}
 
-  svelte-check@4.7.7(picomatch@4.0.7)(svelte@5.57.3)(typescript@6.0.3):
+  svelte-check@4.7.8(picomatch@4.0.7)(svelte@5.57.3)(typescript@6.0.3):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@sveltejs/load-config': 0.2.3
