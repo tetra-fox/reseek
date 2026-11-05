@@ -41,7 +41,7 @@ enum Away {
 #[derive(Default)]
 pub(super) struct Status {
   inner: Mutex<Inner>,
-  /// woken when the status is set by hand, after which the wait for nobody at the UI starts
+  /// woken when the status is changed by hand, after which the wait for nobody at the UI starts
   /// over: an away set by hand may have ended while nobody was there
   set_by_hand: Notify,
 }
@@ -265,122 +265,32 @@ impl Messaging {
 mod tests {
   use std::time::Duration;
 
-  use crate::testing::{TestApp, app, request, with};
+  use crate::testing::{Stream, TestApp, app, request, with};
 
   const TRUSTED: &str = "[web.authentication]\ntrusted_networks = [\"127.0.0.0/8\"]\n";
 
-  #[tokio::test]
-  async fn the_first_message_from_each_user_while_away_is_answered_once() {
-    let config = format!("{TRUSTED}[chat]\nauto_reply = \"back tonight\"\n");
-    let app = app(&config, &[]).await;
-    let messaging = &app.state.messaging;
-    let set = |status: &str| {
-      request(
-        "PUT",
-        "/api/v0/application/status",
-        Some(serde_json::json!({ "status": status })),
-      )
-    };
-    assert_eq!(messaging.reply_for("alice"), None, "online");
-    let away = app.send_from("127.0.0.1:40000", set("Away")).await;
-    assert_eq!(away.status, 204);
-    assert_eq!(
-      app.state.state.current().user.status,
-      api_types::state::OwnStatus::Away
-    );
-    let reply = Some("[Automatic Message] back tonight".to_string());
-    assert_eq!(messaging.reply_for("alice"), reply);
-    assert_eq!(messaging.reply_for("alice"), None, "answered already");
-    assert_eq!(messaging.reply_for("bob"), reply);
-    app.send_from("127.0.0.1:40000", set("Online")).await;
-    assert_eq!(messaging.reply_for("alice"), None, "back");
-    app.send_from("127.0.0.1:40000", set("Away")).await;
-    assert_eq!(messaging.reply_for("alice"), reply, "a new away period");
-  }
-
-  #[tokio::test]
-  async fn nobody_at_the_ui_sets_away_until_someone_opens_it() {
-    let config = format!(
-      "{TRUSTED}[web.authentication.api_keys.script]\nkey = \"script-key-0123456789\"\n\
-       role = \"readonly\"\n[chat]\nauto_away = \"200ms\"\n"
-    );
-    let app = app(&config, &[]).await;
-    let watch = |from| {
-      let opened = request("GET", "/api/v0/live?topics=application", None);
-      app.stream_from(from, with(opened, "x-api-key", "script-key-0123456789"))
-    };
-    // a script's stream is no one at the UI
-    let mut script = watch("10.0.0.1:40000").await;
-    let status = async |stream: &mut crate::testing::Stream, wanted: &str| loop {
-      let frame = stream.until("application.state").await.pop().unwrap();
-      if frame.data["user"]["status"] == wanted {
-        return;
-      }
-    };
-    status(&mut script, "Away").await;
-    let mut person = app
-      .stream_from(
-        "127.0.0.1:40000",
-        request("GET", "/api/v0/live?topics=application", None),
-      )
-      .await;
-    person.until("hello").await;
-    status(&mut script, "Online").await;
-  }
-
-  #[tokio::test]
-  async fn streams_of_scripts_opening_and_closing_do_not_hold_off_away() {
+  /// A daemon whose away comes after `auto_away` of 300 ms, and the stream of a script watching
+  /// our status, which counts as nobody at the UI.
+  async fn watched() -> (TestApp, Stream) {
     let config = format!(
       "{TRUSTED}[web.authentication.api_keys.script]\nkey = \"script-key-0123456789\"\n\
        role = \"readonly\"\n[chat]\nauto_away = \"300ms\"\n"
     );
     let app = app(&config, &[]).await;
-    let watch = |from| {
-      let opened = request("GET", "/api/v0/live?topics=application", None);
-      app.stream_from(from, with(opened, "x-api-key", "script-key-0123456789"))
-    };
-    let mut script = watch("10.0.0.1:40000").await;
-    let away = async {
-      loop {
-        let frame = script.until("application.state").await.pop().unwrap();
-        if frame.data["user"]["status"] == "Away" {
-          return;
-        }
-      }
-    };
-    // another script opens a stream and closes it, again and again, well within the wait
-    let churn = async {
-      loop {
-        drop(watch("10.0.0.2:40000").await);
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-      }
-    };
-    tokio::select! {
-      () = away => {}
-      () = churn => unreachable!("the churn runs until away"),
-    }
-  }
-
-  /// A daemon whose away comes after `auto_away` of 300 ms, a stream of a script watching our
-  /// status, which counts as nobody at the UI, and a way to set the status by request, which
-  /// does not count either.
-  async fn watched() -> (TestApp, crate::testing::Stream) {
-    let config = format!(
-      "{TRUSTED}[web.authentication.api_keys.script]\nkey = \"script-key-0123456789\"\n\
-       role = \"readonly\"\n[chat]\nauto_away = \"300ms\"\n"
-    );
-    let app = app(&config, &[]).await;
-    let opened = request("GET", "/api/v0/live?topics=application", None);
-    let script = app
-      .stream_from(
-        "10.0.0.1:40000",
-        with(opened, "x-api-key", "script-key-0123456789"),
-      )
-      .await;
+    let script = script_from(&app, "10.0.0.1:40000").await;
     (app, script)
   }
 
-  async fn shown(stream: &mut crate::testing::Stream, wanted: &str) {
+  /// A stream of the script's, opened from `from`.
+  async fn script_from(app: &TestApp, from: &str) -> Stream {
+    let opened = request("GET", "/api/v0/live?topics=application", None);
+    app
+      .stream_from(from, with(opened, "x-api-key", "script-key-0123456789"))
+      .await
+  }
+
+  /// Reads `stream` until it shows us as `wanted`.
+  async fn shown(stream: &mut Stream, wanted: &str) {
     loop {
       let frame = stream.until("application.state").await.pop().unwrap();
       if frame.data["user"]["status"] == wanted {
@@ -389,17 +299,64 @@ mod tests {
     }
   }
 
+  /// Sets our status by request, which is not someone at the UI: only an open event stream is.
   async fn set(app: &TestApp, status: &str) {
     let body = serde_json::json!({ "status": status });
     let set = request("PUT", "/api/v0/application/status", Some(body));
     assert_eq!(app.send_from("127.0.0.1:40000", set).await.status, 204);
   }
 
-  async fn person(app: &TestApp) -> crate::testing::Stream {
+  /// The stream of someone at the UI, open once it greeted.
+  async fn person(app: &TestApp) -> Stream {
     let opened = request("GET", "/api/v0/live?topics=application", None);
     let mut stream = app.stream_from("127.0.0.1:40000", opened).await;
     stream.until("hello").await;
     stream
+  }
+
+  #[tokio::test]
+  async fn the_first_message_from_each_user_while_away_is_answered_once() {
+    let config = format!("{TRUSTED}[chat]\nauto_reply = \"back tonight\"\n");
+    let app = app(&config, &[]).await;
+    let messaging = &app.state.messaging;
+    assert_eq!(messaging.reply_for("alice"), None, "online");
+    set(&app, "Away").await;
+    assert_eq!(
+      app.state.state.current().user.status,
+      api_types::state::OwnStatus::Away
+    );
+    let reply = Some("[Automatic Message] back tonight".to_string());
+    assert_eq!(messaging.reply_for("alice"), reply);
+    assert_eq!(messaging.reply_for("alice"), None, "answered already");
+    assert_eq!(messaging.reply_for("bob"), reply);
+    set(&app, "Online").await;
+    assert_eq!(messaging.reply_for("alice"), None, "back");
+    set(&app, "Away").await;
+    assert_eq!(messaging.reply_for("alice"), reply, "a new away period");
+  }
+
+  #[tokio::test]
+  async fn nobody_at_the_ui_sets_away_until_someone_opens_it() {
+    let (app, mut script) = watched().await;
+    shown(&mut script, "Away").await;
+    let _someone = person(&app).await;
+    shown(&mut script, "Online").await;
+  }
+
+  #[tokio::test]
+  async fn streams_of_scripts_opening_and_closing_do_not_hold_off_away() {
+    let (app, mut script) = watched().await;
+    // another script opens a stream and closes it, again and again, well within the wait
+    let churn = async {
+      loop {
+        drop(script_from(&app, "10.0.0.2:40000").await);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+      }
+    };
+    tokio::select! {
+      () = shown(&mut script, "Away") => {}
+      () = churn => unreachable!("the churn runs until away"),
+    }
   }
 
   // paused time runs the timers in order: the wait runs out while we are away by hand, before
@@ -407,7 +364,7 @@ mod tests {
   #[tokio::test(start_paused = true)]
   async fn ending_an_away_set_by_hand_with_nobody_at_the_ui_waits_again() {
     let (app, mut script) = watched().await;
-    // the wait armed at the start runs out during the start's database work
+    // the wait armed at the start runs out first, so the test takes that away as its first step
     shown(&mut script, "Away").await;
     let someone = person(&app).await;
     shown(&mut script, "Online").await;
@@ -427,10 +384,11 @@ mod tests {
     let someone = person(&app).await;
     shown(&mut script, "Online").await;
     drop(someone);
+    // a period that does not divide the 300 ms wait, so no set falls on the tick it runs out
     let again = async {
       loop {
         set(&app, "Online").await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(70)).await;
       }
     };
     tokio::select! {
