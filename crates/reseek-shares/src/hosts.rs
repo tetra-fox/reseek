@@ -15,7 +15,7 @@ use std::time::Duration;
 use api_types::shares::Share as ApiShare;
 use tracing::{debug, info, warn};
 
-use super::{LOCAL_HOST, SharedCounts, Shares, browse, repository, storage};
+use super::{LOCAL_HOST, SharedCounts, Shares, View, repository, storage, visibility};
 use crate::db::{Database, DbError, Location, remove_database};
 use crate::lock;
 
@@ -131,12 +131,13 @@ impl Shares {
     storage::dump(&self.db, path).await
   }
 
-  /// The local shares as the API shows them.
+  /// The local shares as the API shows them, each with its visibility.
   pub fn local_shares(&self) -> Vec<ApiShare> {
+    let options = lock(&self.applied).clone();
     self
       .listed()
       .iter()
-      .map(super::share::Share::to_api)
+      .map(|share| share.to_api(visibility::of(&options, &share.alias)))
       .collect()
   }
 
@@ -232,11 +233,23 @@ impl Shares {
     removed
   }
 
-  /// The agents' shares by host, in the order they were loaded.
+  /// The agents' shares by host, in the order they were loaded, each with the visibility the
+  /// share options in effect give its alias.
   pub fn agent_shares(&self) -> Vec<(String, Vec<ApiShare>)> {
+    let options = lock(&self.applied).clone();
     lock(&self.hosts)
       .iter()
-      .map(|h| (h.name.clone(), h.shares.clone()))
+      .map(|h| {
+        let shares = h
+          .shares
+          .iter()
+          .map(|share| ApiShare {
+            visibility: visibility::of(&options, &share.alias),
+            ..share.clone()
+          })
+          .collect();
+        (h.name.clone(), shares)
+      })
       .collect()
   }
 
@@ -268,21 +281,25 @@ impl Shares {
     (names, sum)
   }
 
-  /// `local` with the agents' totals added.
-  pub(super) fn with_agents(&self, local: SharedCounts) -> SharedCounts {
-    let (_, agents) = self.agent_totals();
-    SharedCounts {
-      directories: local.directories.saturating_add(agents.directories),
-      files: local.files.saturating_add(agents.files),
-    }
+  /// The totals over the agents' shares `view` sees, as each agent counted them.
+  pub(super) fn agent_counts(&self, view: &View) -> SharedCounts {
+    lock(&self.hosts)
+      .iter()
+      .flat_map(|h| &h.shares)
+      .filter(|share| !view.hides_share(&share.alias))
+      .fold(SharedCounts::default(), |sum, share| {
+        sum.add(SharedCounts {
+          directories: share.directories.unwrap_or(0),
+          files: share.files.unwrap_or(0),
+        })
+      })
   }
 
   /// After an agent's host came or went: the state and the server's counts follow at once, the
   /// browse cache once the hosts have been still for a moment.
   fn hosts_changed(self: &Arc<Self>) {
     self.publish(|_| {});
-    let local = *lock(&self.local_counts);
-    self.counts.send_replace(self.with_agents(local));
+    self.counts.send_replace(self.server_counts());
     if self
       .hosts_settling
       .swap(true, std::sync::atomic::Ordering::AcqRel)
@@ -298,7 +315,7 @@ impl Shares {
       shares
         .hosts_settling
         .store(false, std::sync::atomic::Ordering::Release);
-      browse::refresh(&shares.databases(), &shares.browse_cache()).await;
+      shares.refresh_browse_caches().await;
     });
   }
 }

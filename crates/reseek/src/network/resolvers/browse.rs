@@ -1,6 +1,7 @@
 //! Our share listing for a peer that browses us, streamed from the browse cache the shares keep
 //! so a large listing is neither built nor held in memory per request, and the contents of one
-//! shared directory for a peer that asks for a folder.
+//! shared directory for a peer that asks for a folder. Both are what the peer's user sees of
+//! our shares, which depends on whether they are our buddy.
 
 use std::net::SocketAddr;
 use std::path::Path;
@@ -14,6 +15,7 @@ use soulseek_proto::peer::{BrowseResponse, Directory};
 use tracing::{debug, error, trace, warn};
 
 use super::{Edges, blocked, suspicious};
+use crate::shares::View;
 use crate::safety::traverses;
 use crate::telemetry::millis;
 
@@ -26,7 +28,7 @@ static UNREAD: LogLimiter = LogLimiter::new();
 /// Folder requests the index could not answer.
 static UNLISTED: LogLimiter = LogLimiter::new();
 
-/// A peer browses us: a blocked user sees an empty share.
+/// A peer browses us: a blocked user sees an empty share, anyone else the shares they see.
 pub async fn browse(edges: &Edges, username: &str, endpoint: SocketAddr) -> BrowseReply {
   let metrics = &edges.telemetry.metrics().browse;
   metrics.requests_received.inc();
@@ -35,7 +37,8 @@ pub async fn browse(edges: &Edges, username: &str, endpoint: SocketAddr) -> Brow
   }
   edges.activity.record(Some(username), ActivityKind::Browse);
   let started = Instant::now();
-  let reply = listing(edges).await;
+  let view = edges.shares.view(edges.users.sees(username));
+  let reply = listing(edges, &view).await;
   let elapsed = millis(started);
   metrics.response_latency.observe(elapsed);
   metrics.response_latency_current.update(elapsed);
@@ -44,10 +47,10 @@ pub async fn browse(edges: &Edges, username: &str, endpoint: SocketAddr) -> Brow
   reply
 }
 
-/// Our share listing from the browse cache. A missing cache is written first; a cache that can
-/// be neither read nor written gives an empty listing.
-async fn listing(edges: &Edges) -> BrowseReply {
-  let file = edges.shares.browse_cache();
+/// Our share listing as `view` sees it, from its browse cache. A missing cache is written
+/// first; a cache that can be neither read nor written gives an empty listing.
+async fn listing(edges: &Edges, view: &View) -> BrowseReply {
+  let file = edges.shares.browse_cache(view);
   match cached(&file).await {
     Ok(frame) => return BrowseReply::Encoded(frame),
     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -61,7 +64,7 @@ async fn listing(edges: &Edges) -> BrowseReply {
   if let Some(suppressed) = UNCACHED.allow() {
     warn!(suppressed, "Browse response not cached. Rebuilding...");
   }
-  if let Err(e) = edges.shares.rebuild_browse_cache().await {
+  if let Err(e) = edges.shares.rebuild_browse_cache(view).await {
     if let Some(suppressed) = UNWRITTEN.allow() {
       error!(error = %e, suppressed, "Error caching browse response");
     }
@@ -121,14 +124,15 @@ pub async fn directory_contents(
 }
 
 /// The shared directory `directory` and every directory below it, each with its own files; a
-/// directory we do not share comes back empty. `None`, and no answer, when the index cannot be
-/// read.
+/// directory we do not share, or that `username` does not see, comes back empty. `None`, and no
+/// answer, when the index cannot be read.
 async fn folder(
   edges: &Edges,
   username: &str,
   directory: &RemoteFilename,
 ) -> Option<Vec<Directory>> {
-  match edges.shares.folder(username, directory.as_str()).await {
+  let view = edges.shares.view(edges.users.sees(username));
+  match edges.shares.folder(username, directory.as_str(), &view).await {
     Ok(directories) => {
       trace!(username, %directory, directories = directories.len(), "folder contents found");
       Some(directories)
@@ -180,7 +184,7 @@ mod tests {
     let dir = tempfile::tempdir().unwrap();
     let app = shared(dir.path()).await;
     let edges = edges(&app);
-    let cache = app.state.shares.browse_cache();
+    let cache = app.state.shares.browse_cache(&View::everything());
     let peer = from("198.51.100.7");
     assert_eq!(
       bytes(browse(&edges, "alice", peer).await).await,

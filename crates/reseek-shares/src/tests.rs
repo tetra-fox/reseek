@@ -138,12 +138,17 @@ async fn eventually(mut check: impl AsyncFnMut() -> bool) {
 }
 
 async fn names(shares: &Shares, term: &str) -> Vec<String> {
+  names_seen(shares, term, &View::everything()).await
+}
+
+/// The files a search for `term` finds that `view` sees.
+async fn names_seen(shares: &Shares, term: &str, view: &View) -> Vec<String> {
   let query = SearchQuery {
     terms: vec![term.to_string()],
     exclusions: Vec::new(),
   };
   shares
-    .search(&query, None)
+    .search(&query, None, view)
     .await
     .into_iter()
     .map(|f| f.filename.as_str().to_string())
@@ -183,7 +188,10 @@ async fn the_startup_scan_fills_the_index() {
   assert_eq!(contents[1].name.as_str(), "Music\\Album");
   assert_eq!(contents[1].files[0].filename.as_str(), "01.mp3");
   assert_eq!(names(shares, "album").await, ["Music\\Album\\01.mp3"]);
-  let found = shares.resolve_file("Music\\Album\\01.mp3").await.unwrap();
+  let found = shares
+    .resolve_file("Music\\Album\\01.mp3", &View::everything())
+    .await
+    .unwrap();
   assert_eq!(found.unwrap().size, 3);
   assert_eq!(
     *shares.shared_counts().borrow(),
@@ -192,7 +200,54 @@ async fn the_startup_scan_fills_the_index() {
       files: 1
     }
   );
-  assert!(shares.browse_cache().exists());
+  assert!(shares.browse_cache(&View::everything()).exists());
+}
+
+#[tokio::test]
+async fn a_share_hidden_from_a_user_is_answered_as_one_we_do_not_have() {
+  let (files, engine) = shared_engine().await;
+  let shares = &engine.shares;
+  let text = format!("{}buddies_only = [\"music\"]\n", config(files.path()));
+  engine.reconfigure(&text).await;
+  eventually(async || shares.shared_counts().borrow().files == 0).await;
+  let everyone = shares.view(ShareVisibility::Everyone);
+  let buddies = shares.view(ShareVisibility::Buddies);
+  assert!(names_seen(shares, "album", &everyone).await.is_empty());
+  assert_eq!(
+    names_seen(shares, "album", &buddies).await,
+    ["Music\\Album\\01.mp3"]
+  );
+  let listed = |folder: Vec<Directory>| -> Vec<(String, usize)> {
+    folder
+      .iter()
+      .map(|d| (d.name.as_str().to_string(), d.files.len()))
+      .collect()
+  };
+  let hidden = shares.folder("bob", "Music\\Album", &everyone).await;
+  let unknown = shares.folder("bob", "Elsewhere", &buddies).await;
+  assert_eq!(listed(hidden.unwrap()), [("Music\\Album".to_string(), 0)]);
+  assert_eq!(listed(unknown.unwrap()), [("Elsewhere".to_string(), 0)]);
+  let seen = shares.folder("bob", "Music\\Album", &buddies).await;
+  assert_eq!(listed(seen.unwrap()), [("Music\\Album".to_string(), 1)]);
+  let file = "Music\\Album\\01.mp3";
+  assert!(shares.resolve_file(file, &everyone).await.unwrap().is_none());
+  assert!(shares.resolve_file(file, &buddies).await.unwrap().is_some());
+  let browsed = async |view: &View| {
+    shares.rebuild_browse_cache(view).await.unwrap();
+    let bytes = std::fs::read(shares.browse_cache(view)).unwrap();
+    let soulseek_proto::PeerMessage::BrowseResponse(listing) =
+      soulseek_proto::PeerMessage::decode(&bytes).unwrap()
+    else {
+      panic!("not a browse response");
+    };
+    listing.directories.len()
+  };
+  assert_eq!(browsed(&everyone).await, 0);
+  assert_eq!(browsed(&buddies).await, 2);
+  assert_eq!(
+    shares.local_shares()[1].visibility,
+    ShareVisibility::Buddies
+  );
 }
 
 #[tokio::test]
@@ -639,13 +694,13 @@ async fn serves_an_agent(extra: &str) {
     "the agent's files are searched"
   );
   let found = shares
-    .resolve_file("Music\\Other\\02.flac")
+    .resolve_file("Music\\Other\\02.flac", &View::everything())
     .await
     .unwrap()
     .unwrap();
   assert_eq!((found.host.as_str(), found.size), ("nas", 5));
   let local = shares
-    .resolve_file("Music\\Album\\01.mp3")
+    .resolve_file("Music\\Album\\01.mp3", &View::everything())
     .await
     .unwrap()
     .unwrap();

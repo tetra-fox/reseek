@@ -389,7 +389,10 @@ pub(super) async fn apply(
 /// Counts the shares the index was filled from after a change and lets the totals, the
 /// server's counts and the browse cache follow, the last two at most once a minute.
 async fn counted(shares: &Arc<Shares>) -> Result<(), DbError> {
-  let totals = shares.count_shares(&shares.filled_from().shares).await?;
+  let totals = shares
+    .count_shares(&shares.filled_from().shares)
+    .await?
+    .total();
   shares.publish(|status| {
     if !status.scanning {
       status.directories = totals.directories;
@@ -403,12 +406,7 @@ async fn counted(shares: &Arc<Shares>) -> Result<(), DbError> {
       match shares.count_shares(&shares.filled_from().shares).await {
         Ok(local) => {
           *lock(&shares.local_counts) = local;
-          let now = shares.with_agents(local);
-          shares.counts.send_if_modified(|sent| {
-            let changed = *sent != now;
-            *sent = now;
-            changed
-          });
+          shares.recount_for_server();
         }
         Err(e) => warn!(error = %e, "shared counts not read for the server"),
       }
@@ -417,7 +415,7 @@ async fn counted(shares: &Arc<Shares>) -> Result<(), DbError> {
   shares.throttled(
     |s| &s.browse_throttle,
     |shares| async move {
-      super::browse::refresh(&shares.databases(), &shares.browse_cache()).await;
+      shares.refresh_browse_caches().await;
       shares.changed.send_modify(|n| *n += 1);
     },
   );

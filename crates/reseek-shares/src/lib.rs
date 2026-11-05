@@ -4,9 +4,10 @@
 //!
 //! [`Shares`] is the engine. It owns the local host's index and the indexes relay agents
 //! uploaded, runs one scan at a time, reports its state as it changes, and offers the queries
-//! the network side calls over every host: [`Shares::search`], [`Shares::browse`],
-//! [`Shares::folder`], [`Shares::resolve_file`] and [`Shares::shared_counts`]. Its options are
-//! the `[shares]` section, [`options::Shares`], checked by [`validate::check`].
+//! the network side calls over every host: [`Shares::search`], [`Shares::browse_cache`],
+//! [`Shares::folder`], [`Shares::resolve_file`] and [`Shares::shared_counts`]. Each answer to
+//! another user is made as the [`View`] of what that user sees, which [`Shares::view`] gives.
+//! Its options are the `[shares]` section, [`options::Shares`], checked by [`validate::check`].
 //!
 //! The crate also holds what the share index is built on and the daemon shares: the SQLite
 //! databases ([`db`]), the entries a walk leaves out ([`entries`]), the patterns users write
@@ -29,19 +30,20 @@ mod scanning;
 mod search;
 mod share;
 mod storage;
+mod visibility;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 pub mod validate;
 mod walk;
 mod watcher;
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use std::time::{Duration, Instant};
 
-use api_types::shares::ShareFolders;
+use api_types::shares::{ShareFolders, ShareVisibility};
 use api_types::state::SharesState;
 use cascade::Watcher;
 use soulseek_client::LogLimiter;
@@ -49,13 +51,14 @@ use soulseek_proto::SearchQuery;
 use soulseek_proto::peer::{Directory, File};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use tracing::{Instrument, debug, info, info_span, warn};
+use tracing::{Instrument, debug, info, info_span, trace, warn};
 
 use crate::db::{Database, DbError};
 pub use folders::FolderError;
 pub use hosts::{HostError, remove_agent_hosts};
 use scanner::{Outcome, Settings};
 use share::Share;
+pub use visibility::View;
 
 /// Failed share queries, which arrive at the network's search rate.
 static QUERY_FAILED: LogLimiter = LogLimiter::new();
@@ -73,6 +76,35 @@ pub struct SharedCounts {
   pub directories: u32,
   /// shared files
   pub files: u32,
+}
+
+impl SharedCounts {
+  fn add(self, other: SharedCounts) -> SharedCounts {
+    SharedCounts {
+      directories: self.directories.saturating_add(other.directories),
+      files: self.files.saturating_add(other.files),
+    }
+  }
+}
+
+/// What each local share holds, by alias, as last counted.
+#[derive(Clone, Debug, Default)]
+struct Counted(Vec<(String, SharedCounts)>);
+
+impl Counted {
+  /// The totals over every share.
+  fn total(&self) -> SharedCounts {
+    self.0.iter().fold(SharedCounts::default(), |sum, (_, c)| sum.add(*c))
+  }
+
+  /// The totals over the shares `view` sees.
+  fn seen_by(&self, view: &View) -> SharedCounts {
+    self
+      .0
+      .iter()
+      .filter(|(alias, _)| !view.hides_share(alias))
+      .fold(SharedCounts::default(), |sum, (_, c)| sum.add(*c))
+  }
 }
 
 /// Where a file a peer asked for is.
@@ -208,8 +240,11 @@ pub struct Shares {
   hosts: Mutex<Vec<hosts::Host>>,
   /// a browse cache rebuild after a host change is waiting
   hosts_settling: AtomicBool,
-  /// the local shares' totals as last counted
-  local_counts: Mutex<SharedCounts>,
+  /// what each local share holds as last counted
+  local_counts: Mutex<Counted>,
+  /// the views other than everything whose browse cache was written, rewritten whenever the
+  /// shares change
+  browse_views: Mutex<BTreeSet<View>>,
   /// grows each time the local index changed
   changed: watch::Sender<u64>,
 }
@@ -271,7 +306,8 @@ impl Shares {
       counts_throttle: Throttle::default(),
       hosts: Mutex::new(Vec::new()),
       hosts_settling: AtomicBool::new(false),
-      local_counts: Mutex::new(SharedCounts::default()),
+      local_counts: Mutex::new(Counted::default()),
+      browse_views: Mutex::new(BTreeSet::new()),
       changed: watch::Sender::new(0),
       applied: Mutex::new(startup.clone()),
     });
@@ -305,15 +341,22 @@ impl Shares {
     self.counts.subscribe()
   }
 
-  /// The files matching an incoming search, the local ones first, then each relay agent's, at
-  /// most `limit` from each host; nothing from a host whose index is not loaded.
-  pub async fn search(&self, query: &SearchQuery, limit: Option<usize>) -> Vec<File> {
+  /// What a user who sees the shares visible to `sees` sees, under the share options in
+  /// effect.
+  pub fn view(&self, sees: ShareVisibility) -> View {
+    View::of(&lock(&self.applied), sees)
+  }
+
+  /// The files matching an incoming search that `view` sees, the local ones first, then each
+  /// relay agent's, at most `limit` from each host; nothing from a host whose index is not
+  /// loaded.
+  pub async fn search(&self, query: &SearchQuery, limit: Option<usize>, view: &View) -> Vec<File> {
     let text = query.search_text();
     let mut found = Vec::new();
     for db in self.databases() {
-      let query = query.clone();
+      let (query, view) = (query.clone(), view.clone());
       match db
-        .read(move |conn| search::search(conn, &query, limit))
+        .read(move |conn| search::search(conn, &query, limit, &view))
         .await
       {
         Ok(files) => found.extend(files),
@@ -327,8 +370,8 @@ impl Shares {
     found
   }
 
-  /// Everything we share, the relay agents' shares included, as a browsing peer sees it,
-  /// ordered by directory name.
+  /// Everything we share, the relay agents' shares included, hiding none, ordered by directory
+  /// name.
   pub async fn browse(&self) -> Result<Vec<Directory>, DbError> {
     browse::listing(&self.databases(), None).await
   }
@@ -348,20 +391,40 @@ impl Shares {
       .map_err(|e| FolderError::Failed(e.to_string()))?
   }
 
-  /// The browse cache file, the encoded browse response a peer is sent; rebuilt after every
-  /// scan, and by [`Shares::rebuild_browse_cache`] when it is missing.
-  pub fn browse_cache(&self) -> PathBuf {
-    browse::path(&self.cache)
+  /// The browse cache file of `view`, the encoded browse response a peer with that view is
+  /// sent; written by [`Shares::rebuild_browse_cache`] when it is missing, and rewritten
+  /// whenever the shares change.
+  pub fn browse_cache(&self, view: &View) -> PathBuf {
+    browse::path(&self.cache, view)
   }
 
-  /// Writes the browse cache again from the index.
-  pub async fn rebuild_browse_cache(&self) -> Result<(), browse::CacheError> {
-    browse::rebuild(&self.databases(), &self.browse_cache()).await
+  /// Writes the browse cache of `view` again from the index.
+  pub async fn rebuild_browse_cache(&self, view: &View) -> Result<(), browse::CacheError> {
+    if !view.is_everything() {
+      lock(&self.browse_views).insert(view.clone());
+    }
+    browse::rebuild(&self.databases(), &self.browse_cache(view), view).await
   }
 
-  /// The contents of the directory `name` a peer asked `username` for: that directory and each
-  /// one under it with its own files. A name with a `.` or `..` part gets nothing.
-  pub async fn folder(&self, username: &str, name: &str) -> Result<Vec<Directory>, DbError> {
+  /// Rewrites the browse cache of every view a peer browsed with, and of the view that hides
+  /// nothing, after the shares changed; a failure is logged.
+  async fn refresh_browse_caches(&self) {
+    let views = std::iter::once(View::everything()).chain(lock(&self.browse_views).clone());
+    let dbs = self.databases();
+    for view in views {
+      browse::refresh(&dbs, &self.browse_cache(&view), &view).await;
+    }
+  }
+
+  /// The contents of the directory `name` a peer asked `username` for, as `view` sees it: that
+  /// directory and each one under it with its own files. A name with a `.` or `..` part gets
+  /// nothing; a directory `view` hides is answered as one we do not share.
+  pub async fn folder(
+    &self,
+    username: &str,
+    name: &str,
+    view: &View,
+  ) -> Result<Vec<Directory>, DbError> {
     if traverses(name) {
       warn!(
         username,
@@ -369,6 +432,13 @@ impl Shares {
         "Suspicious attempt to list a directory containing unsafe path segments"
       );
       return Ok(Vec::new());
+    }
+    if view.hides(name) {
+      trace!(username, directory = name, "folder of a share hidden from the user");
+      return Ok(vec![Directory {
+        name: name.to_string().into(),
+        files: Vec::new(),
+      }]);
     }
     let mut listings = Vec::new();
     for db in self.databases() {
@@ -380,8 +450,12 @@ impl Shares {
   }
 
   /// Where the file a peer asked for by its exact remote name `masked` is: the local shares
-  /// first, then each relay agent's in the order they were loaded; `None` when no host has it.
-  pub async fn resolve_file(&self, masked: &str) -> Result<Option<Resolved>, DbError> {
+  /// first, then each relay agent's in the order they were loaded; `None` when no host has it
+  /// or `view` hides it.
+  pub async fn resolve_file(&self, masked: &str, view: &View) -> Result<Option<Resolved>, DbError> {
+    if view.hides(masked) {
+      return Ok(None);
+    }
     if let Some(found) = self.resolve_local(masked).await? {
       return Ok(Some(found));
     }
@@ -454,10 +528,10 @@ impl Shares {
   }
 
   /// Counts what each share of `covering`, the shares the index was filled from, holds in the
-  /// index and returns the totals. The counts are written back to the configured shares by
-  /// entry, so a share added since the index was filled keeps no counts until a scan covers
-  /// it.
-  async fn count_shares(&self, covering: &[Share]) -> Result<SharedCounts, DbError> {
+  /// index and returns the counts by alias. The counts are written back to the configured
+  /// shares by entry, so a share added since the index was filled keeps no counts until a scan
+  /// covers it.
+  async fn count_shares(&self, covering: &[Share]) -> Result<Counted, DbError> {
     let counting: Vec<(String, String)> = covering
       .iter()
       .filter(|s| !s.excluded)
@@ -472,11 +546,15 @@ impl Shares {
           .collect::<rusqlite::Result<HashMap<_, _>>>()
       })
       .await?;
-    let mut totals = SharedCounts::default();
-    for (directories, files) in counted.values() {
-      totals.directories = totals.directories.saturating_add(*directories);
-      totals.files = totals.files.saturating_add(*files);
-    }
+    let by_alias = Counted(
+      covering
+        .iter()
+        .filter_map(|share| {
+          let (directories, files) = *counted.get(&share.raw)?;
+          Some((share.alias.clone(), SharedCounts { directories, files }))
+        })
+        .collect(),
+    );
     let mut shares = lock(&self.shares);
     for share in shares.iter_mut() {
       if let Some((directories, files)) = counted.get(&share.raw) {
@@ -484,9 +562,33 @@ impl Shares {
         share.files = Some(*files);
       }
     }
-    let api: Vec<_> = shares.iter().map(Share::to_api).collect();
+    let options = lock(&self.applied).clone();
+    let api: Vec<_> = shares
+      .iter()
+      .map(|share| share.to_api(visibility::of(&options, &share.alias)))
+      .collect();
     debug!(shares = ?api, "Share statistics updated");
-    Ok(totals)
+    Ok(by_alias)
+  }
+
+  /// What the server is told we share: the totals over the shares everyone sees, the local
+  /// ones as last counted and each relay agent's.
+  fn server_counts(&self) -> SharedCounts {
+    let view = self.view(ShareVisibility::Everyone);
+    lock(&self.local_counts)
+      .seen_by(&view)
+      .add(self.agent_counts(&view))
+  }
+
+  /// Tells the server's counts again when they moved, such as after a share became hidden
+  /// from everyone.
+  fn recount_for_server(&self) {
+    let now = self.server_counts();
+    self.counts.send_if_modified(|sent| {
+      let changed = *sent != now;
+      *sent = now;
+      changed
+    });
   }
 }
 

@@ -1,5 +1,6 @@
 //! What the share options must satisfy: each shared directory's grammar, unique aliases and
-//! paths, filters that compile, and the index's workers and rescan interval in range.
+//! paths, filters that compile, no share both buddy-only and trusted-only, and the index's
+//! workers and rescan interval in range.
 //!
 //! An entry is an optional `!` or `-` that excludes it, an optional `[alias]`, and an absolute
 //! path. Without an alias the alias is the path's last segment. The first `]` ends the alias,
@@ -119,6 +120,18 @@ pub fn check(shares: &Shares, downloads: &Path, case_sensitive: bool) -> Vec<Inv
       report.push(Invalid::new(
         "shares.filters",
         format!("Share filter '{filter}' is not a valid regular expression."),
+      ));
+    }
+  }
+  for alias in &shares.trusted_only {
+    if shares
+      .buddies_only
+      .iter()
+      .any(|other| other.to_lowercase() == alias.to_lowercase())
+    {
+      report.push(Invalid::new(
+        "shares.trusted_only",
+        format!("Share '{alias}' is listed as both buddy-only and trusted-only. Keep one."),
       ));
     }
   }

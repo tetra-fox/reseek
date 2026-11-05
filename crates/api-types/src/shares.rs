@@ -34,6 +34,27 @@ pub struct Share {
   /// the option that made this share when it is not an entry of the configured directories,
   /// such as `shares.share_downloads`; null for a configured share
   pub derived_from: Option<String>,
+  /// who other users must be to see the share; a relay agent leaves it to the server, which
+  /// fills it in from its own options
+  #[serde(default)]
+  pub visibility: ShareVisibility,
+}
+
+/// Who sees a shared folder in our browse listing, folder contents and search answers, and may
+/// download from it. Ordered from the widest audience to the narrowest, so a user who sees
+/// shares of one visibility also sees those of every wider one.
+#[derive(
+  Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum ShareVisibility {
+  /// every user
+  #[default]
+  Everyone,
+  /// our buddies, trusted or not
+  Buddies,
+  /// our trusted buddies
+  Trusted,
 }
 
 /// The shares of every host by host name: `local` for this instance, always present, and each

@@ -226,11 +226,11 @@ impl Uploads {
     Ok(())
   }
 
-  /// Whether `username` may have `filename`: shared, on disk, and within the limits of their
-  /// group unless they are privileged.
+  /// Whether `username` may have `filename`: shared with them, on disk, and within the limits
+  /// of their group unless they are privileged.
   async fn decide(&self, username: &str, filename: &str) -> Result<Located, Refusal> {
     let located = self
-      .locate(filename)
+      .locate(username, filename)
       .await
       .map_err(Refusal::Failed)?
       .ok_or(Refusal::Peer(NOT_SHARED))?;
@@ -260,13 +260,18 @@ impl Uploads {
     }
   }
 
-  /// Where the shared file `filename` is, with its size on disk; `None` when it is not shared
-  /// or is gone from disk. A local file gone, or whose size changed, asks the shares for a
+  /// Where the shared file `filename` is, with its size on disk; `None` when it is not shared,
+  /// `username` does not see its share, or it is gone from disk. A local file gone, or whose size changed, asks the shares for a
   /// scan; one that changed is taken at its size on disk. A relay agent's file is taken at its
   /// indexed size when the options trust agents' listings, else the agent is asked.
-  pub(super) async fn locate(&self, filename: &str) -> Result<Option<Located>, ClientError> {
+  pub(super) async fn locate(
+    &self,
+    username: &str,
+    filename: &str,
+  ) -> Result<Option<Located>, ClientError> {
+    let view = self.shares.view(self.users.sees(username));
     let resolved =
-      self.shares.resolve_file(filename).await.map_err(|e| {
+      self.shares.resolve_file(filename, &view).await.map_err(|e| {
         ClientError::client(format!("the share index could not be read: {e}"), None)
       })?;
     let Some(resolved) = resolved else {

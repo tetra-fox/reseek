@@ -91,8 +91,8 @@ impl Share {
     }
   }
 
-  /// The share as the API shows it.
-  pub fn to_api(&self) -> api_types::shares::Share {
+  /// The share as the API shows it, with the visibility the share options give it.
+  pub fn to_api(&self, visibility: api_types::shares::ShareVisibility) -> api_types::shares::Share {
     api_types::shares::Share {
       id: self.id.clone(),
       alias: self.alias.clone(),
@@ -103,6 +103,7 @@ impl Share {
       directories: self.directories,
       files: self.files,
       derived_from: self.derived_from.map(str::to_string),
+      visibility,
     }
   }
 }

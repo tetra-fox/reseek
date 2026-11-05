@@ -4,7 +4,7 @@
 mod service;
 
 pub use reseek_shares::{
-  FolderError, HostError, LOCAL_HOST, Resolved, ScanConflict, SharedCounts, Shares,
+  FolderError, HostError, LOCAL_HOST, Resolved, ScanConflict, SharedCounts, Shares, View,
 };
 
 use crate::config::Options;

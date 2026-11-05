@@ -9,6 +9,7 @@ use soulseek_proto::SearchQuery;
 use soulseek_proto::peer;
 
 use super::repository::shared_file;
+use super::visibility::View;
 
 /// Whether the filename index takes `c` as part of a word: letters, numbers and private-use
 /// characters; everything else separates words.
@@ -55,12 +56,13 @@ pub fn expression(query: &SearchQuery) -> Option<String> {
   })
 }
 
-/// The files matching `query`, ordered by remote name, each named by its whole remote name; at
-/// most `limit` of them, counted after the exclusions are applied.
+/// The files matching `query` that `view` sees, ordered by remote name, each named by its whole
+/// remote name; at most `limit` of them, counted after the exclusions and the view are applied.
 pub fn search(
   conn: &Connection,
   query: &SearchQuery,
   limit: Option<usize>,
+  view: &View,
 ) -> rusqlite::Result<Vec<peer::File>> {
   let Some(expression) = expression(query) else {
     return Ok(Vec::new());
@@ -71,7 +73,7 @@ pub fn search(
     .filter(|e| !e.is_empty())
     .map(|e| e.to_lowercase())
     .collect();
-  run(conn, &expression, &excluded, limit.unwrap_or(usize::MAX))
+  run(conn, &expression, &excluded, limit.unwrap_or(usize::MAX), view)
 }
 
 fn run(
@@ -79,6 +81,7 @@ fn run(
   expression: &str,
   excluded: &[String],
   limit: usize,
+  view: &View,
 ) -> rusqlite::Result<Vec<peer::File>> {
   let mut statement = conn.prepare_cached(
     "SELECT files.maskedFilename, files.size, files.extension, files.attributeJson \
@@ -92,7 +95,7 @@ fn run(
   {
     let masked: String = row.get(0)?;
     let lower = masked.to_lowercase();
-    if excluded.iter().any(|e| lower.contains(e.as_str())) {
+    if view.hides(&masked) || excluded.iter().any(|e| lower.contains(e.as_str())) {
       continue;
     }
     files.push(shared_file(
@@ -151,7 +154,7 @@ mod tests {
           ],
         );
         let names = |q: SearchQuery, limit| {
-          search(conn, &q, limit)
+          search(conn, &q, limit, &View::everything())
             .unwrap()
             .into_iter()
             .map(|f| f.filename.as_str().to_string())

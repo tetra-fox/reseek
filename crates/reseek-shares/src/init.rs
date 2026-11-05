@@ -153,10 +153,11 @@ impl Shares {
     if recorded != settings.snapshot.get("content").cloned() {
       return Err("Share options changed since previous scan".into());
     }
-    let totals = self
+    let counted = self
       .count_shares(&settings.shares)
       .await
       .map_err(|e| e.to_string())?;
+    let totals = counted.total();
     *lock(&self.covered) = Some(settings.clone());
     self.publish(|status| {
       status.scanning = false;
@@ -173,10 +174,10 @@ impl Shares {
       files = totals.files,
       "Share cache loaded from disk successfully"
     );
-    *lock(&self.local_counts) = totals;
-    self.counts.send_replace(self.with_agents(totals));
+    *lock(&self.local_counts) = counted;
+    self.counts.send_replace(self.server_counts());
     self.changed.send_modify(|n| *n += 1);
-    super::browse::refresh(&self.databases(), &self.browse_cache()).await;
+    self.refresh_browse_caches().await;
     Ok(settings)
   }
 
@@ -281,6 +282,12 @@ impl Shares {
         "File filter configuration changed.  Shares must be re-scanned for changes to take effect."
       );
       pending = true;
+    }
+    if previous.buddies_only != current.buddies_only
+      || previous.trusted_only != current.trusted_only
+    {
+      info!("Share visibility changed");
+      self.recount_for_server();
     }
     if previous.follow_symlinks != current.follow_symlinks {
       info!(

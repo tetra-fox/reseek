@@ -104,7 +104,8 @@ impl Shares {
           warn!(error = %e, "shared file cache not backed up");
         }
         match self.count_shares(&settings.shares).await {
-          Ok(totals) => {
+          Ok(counted) => {
+            let totals = counted.total();
             *lock(&self.covered) = Some(settings.clone());
             let current = self.covers_current(&settings);
             if !current {
@@ -127,8 +128,8 @@ impl Shares {
               ms = started.elapsed().as_millis() as u64,
               "Shares scanned successfully"
             );
-            *lock(&self.local_counts) = totals;
-            self.counts.send_replace(self.with_agents(totals));
+            *lock(&self.local_counts) = counted;
+            self.counts.send_replace(self.server_counts());
             *lock(&self.counts_throttle.last) = Some(Instant::now());
             self.changed.send_modify(|n| *n += 1);
             true
@@ -157,7 +158,7 @@ impl Shares {
         false
       }
     };
-    browse::refresh(&self.databases(), &self.browse_cache()).await;
+    self.refresh_browse_caches().await;
     *lock(&self.browse_throttle.last) = Some(Instant::now());
     if completed {
       self.watch_shares(settings).await;

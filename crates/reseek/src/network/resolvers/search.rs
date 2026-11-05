@@ -20,6 +20,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 
 use super::{Edges, blocked, forecast, log_refused};
+use crate::shares::View;
 use crate::config::{Options, patterns};
 use crate::telemetry::catalog::SearchMetrics;
 use crate::telemetry::millis;
@@ -270,7 +271,9 @@ async fn matches(
   // the network goes only when the daemon stops
   let excluded = edges.network.upgrade()?.excluded_phrases();
   let limit = options.throttling.search.incoming.response_file_limit as usize;
-  let files = query_shares(edges, &excluding(query, &excluded), limit, QUERY_BUDGET).await?;
+  let view = edges.shares.view(edges.users.sees(username));
+  let query = excluding(query, &excluded);
+  let files = query_shares(edges, &query, limit, &view, QUERY_BUDGET).await?;
   let querying = millis(started) - filtering;
   metrics.query_latency.observe(querying);
   metrics.query_latency_current.update(querying);
@@ -295,15 +298,16 @@ fn excluding(query: &SearchQuery, phrases: &[String]) -> SearchQuery {
   }
 }
 
-/// The files `query` matches, at most `limit` of them; `None` when the shares take longer than
-/// `budget` to answer, which drops the request.
+/// The files `query` matches that `view` sees, at most `limit` of them; `None` when the shares
+/// take longer than `budget` to answer, which drops the request.
 async fn query_shares(
   edges: &Edges,
   query: &SearchQuery,
   limit: usize,
+  view: &View,
   budget: Duration,
 ) -> Option<Vec<File>> {
-  match tokio::time::timeout(budget, edges.shares.search(query, Some(limit))).await {
+  match tokio::time::timeout(budget, edges.shares.search(query, Some(limit), view)).await {
     Ok(files) => Some(files),
     Err(_) => {
       dropped(&edges.telemetry.metrics().search);
@@ -568,7 +572,7 @@ mod tests {
     });
     tokio::time::sleep(Duration::from_millis(50)).await;
     let query = SearchQuery::parse("abbey");
-    let files = query_shares(&edges, &query, 10, Duration::from_millis(100)).await;
+    let files = query_shares(&edges, &query, 10, &View::everything(), Duration::from_millis(100)).await;
     assert_eq!(files, None);
     assert_eq!(
       app.state.telemetry.metrics().search.requests_dropped.get(),

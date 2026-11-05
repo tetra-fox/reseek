@@ -1,5 +1,6 @@
-//! The browse cache: our whole share listing as the encoded message a peer that browses us is
-//! sent, kept in a file so a browse is streamed from it instead of being built each time.
+//! The browse caches: our share listing as the encoded message a peer that browses us is sent,
+//! kept in a file so a browse is streamed from it instead of being built each time. Each view of
+//! the shares has a file of its own, written the first time a peer with that view browses.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -12,17 +13,26 @@ use tracing::{debug, error, info, warn};
 
 use super::hosts::Index;
 use super::repository;
+use super::visibility::View;
 use crate::db::DbError;
 
-/// The name of the browse cache file.
+/// The name of the browse cache file of the view that hides nothing.
 const FILE: &str = "browse.cache";
+
+/// How the names of the browse cache files begin and end.
+const PREFIX: &str = "browse.";
+const SUFFIX: &str = ".cache";
 
 /// How the files a rebuild writes before it renames one into place begin.
 const TEMPORARY: &str = "browse.cache.tmp-";
 
-/// The file the browse cache is kept in, in the cache directory.
-pub fn path(cache: &Path) -> PathBuf {
-  cache.join(FILE)
+/// The file the browse cache of `view` is kept in, in the cache directory.
+pub fn path(cache: &Path, view: &View) -> PathBuf {
+  if view.is_everything() {
+    cache.join(FILE)
+  } else {
+    cache.join(format!("{PREFIX}{}{SUFFIX}", view.key()))
+  }
 }
 
 /// Why the browse cache was not written.
@@ -67,13 +77,14 @@ pub async fn listing(dbs: &[Arc<Index>], alias: Option<String>) -> Result<Vec<Di
   Ok(merge(listings))
 }
 
-/// Writes the listing of `dbs`, the local index and the relay agents', to the browse cache at
-/// `file`, through a file of its own beside it that replaces it whole, so a peer never reads
-/// half of one.
-pub async fn rebuild(dbs: &[Arc<Index>], file: &Path) -> Result<(), CacheError> {
+/// Writes the listing of `dbs`, the local index and the relay agents', as `view` sees it, to
+/// the browse cache at `file`, through a file of its own beside it that replaces it whole, so
+/// a peer never reads half of one.
+pub async fn rebuild(dbs: &[Arc<Index>], file: &Path, view: &View) -> Result<(), CacheError> {
   let started = Instant::now();
   info!("Warming browse response cache...");
-  let directories = listing(dbs, None).await?;
+  let mut directories = listing(dbs, None).await?;
+  directories.retain(|directory| !view.hides(directory.name.as_str()));
   let file = file.to_path_buf();
   tokio::task::spawn_blocking(move || -> Result<(), std::io::Error> {
     let message = PeerMessage::BrowseResponse(BrowseResponse {
@@ -101,14 +112,9 @@ pub async fn rebuild(dbs: &[Arc<Index>], file: &Path) -> Result<(), CacheError> 
   Ok(())
 }
 
-/// Deletes the browse cache a last run left in `cache`, which may list shares configured
+/// Deletes the browse caches a last run left in `cache`, which may list shares configured
 /// differently, and any file a rebuild was writing when that run stopped.
 pub async fn remove_stale(cache: &Path) {
-  match tokio::fs::remove_file(path(cache)).await {
-    Ok(()) => debug!("browse cache of the last run removed"),
-    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-    Err(e) => warn!(error = %e, "browse cache of the last run not removed"),
-  }
   let mut entries = match tokio::fs::read_dir(cache).await {
     Ok(entries) => entries,
     Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
@@ -120,24 +126,24 @@ pub async fn remove_stale(cache: &Path) {
       Ok(None) => return,
       Err(e) => return warn!(error = %e, "cache directory not read for unfinished browse caches"),
     };
-    if !entry.file_name().to_string_lossy().starts_with(TEMPORARY) {
+    let name = entry.file_name().to_string_lossy().into_owned();
+    let cached = name.starts_with(PREFIX) && name.ends_with(SUFFIX);
+    if !cached && !name.starts_with(TEMPORARY) {
       continue;
     }
     let leftover = entry.path();
     match tokio::fs::remove_file(&leftover).await {
-      Ok(()) => {
-        debug!(path = %leftover.display(), "unfinished browse cache of the last run removed")
-      }
+      Ok(()) => debug!(path = %leftover.display(), "browse cache of the last run removed"),
       Err(e) => {
-        warn!(path = %leftover.display(), error = %e, "unfinished browse cache of the last run not removed")
+        warn!(path = %leftover.display(), error = %e, "browse cache of the last run not removed")
       }
     }
   }
 }
 
 /// [`rebuild`], logging a failure.
-pub async fn refresh(dbs: &[Arc<Index>], file: &Path) {
-  if let Err(e) = rebuild(dbs, file).await {
+pub async fn refresh(dbs: &[Arc<Index>], file: &Path, view: &View) {
+  if let Err(e) = rebuild(dbs, file, view).await {
     error!(error = %e, "Error caching browse response");
   }
 }
@@ -158,8 +164,10 @@ mod tests {
     .await
     .unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let file = path(dir.path());
-    rebuild(&[Index::kept(db)], &file).await.unwrap();
+    let file = path(dir.path(), &View::everything());
+    rebuild(&[Index::kept(db)], &file, &View::everything())
+      .await
+      .unwrap();
     let bytes = std::fs::read(&file).unwrap();
     let PeerMessage::BrowseResponse(read) = PeerMessage::decode(&bytes).unwrap() else {
       panic!("not a browse response");
@@ -214,6 +222,7 @@ mod tests {
     let kept = dir.path().join("shares.db");
     for name in [
       FILE,
+      "browse.0123456789abcdef.cache",
       "browse.cache.tmp-00000000000000ff",
       "browse.cache.tmp-1",
       "shares.db",
